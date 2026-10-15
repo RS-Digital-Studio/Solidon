@@ -205,12 +205,24 @@ def bare_local_imports(graph: ImportGraph) -> list[str]:
         for name, path in graph.modules.items()
         if name.count(".") == 1 and name.split(".")[0] in ("tests", "tools")
     } - _BARE_BY_DESIGN
+    # Erst der Text, dann der Baum: Eine Importanweisung beginnt eine logische Zeile, und
+    # ohne eine, die einen dieser Namen nennt, gibt es nichts zu finden. Alle 700 Dateien
+    # zu parsen kostete 14 s je Aufruf.
+    names = "|".join(re.escape(stem) for stem in sorted(local)) or "(?!)"
+    statement = re.compile(
+        rf"(?:^|[;:])[ \t]*(?:from[ \t]+(?:{names})\b"
+        rf"|import[ \t]+(?:[\w.]+(?:[ \t]+as[ \t]+\w+)?[ \t]*,[ \t]*)*(?:{names})\b)",
+        re.MULTILINE,
+    )
     found: list[str] = []
     for name, path in graph.modules.items():
         if name.split(".")[0] not in ("tests", "tools"):
             continue
+        text = path.read_text(encoding="utf-8")
+        if not statement.search(text):
+            continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            tree = ast.parse(text, filename=str(path))
         except SyntaxError:
             continue
         for node in ast.walk(tree):

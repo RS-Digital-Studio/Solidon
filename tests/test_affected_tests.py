@@ -74,6 +74,16 @@ def _names(files: set[Path], root: Path) -> set[str]:
     return {path.relative_to(root).as_posix() for path in files}
 
 
+@pytest.fixture(scope="module")
+def real_graph() -> ImportGraph:
+    """Der Importgraph des echten Baums, einmal je Modul gebaut.
+
+    Ein Bau liest jede Datei unter ``app/``, ``tools/`` und ``tests/`` und kostet 15 bis
+    25 s; sechs Fälle bauten ihn je einmal. Keiner ändert Graph oder Baum.
+    """
+    return ImportGraph()
+
+
 def test_module_name_strips_init_and_uses_the_given_root(tmp_path: Path) -> None:
     """Ein Paket heißt nach seinem Ordner, ein Modul nach seiner Datei — relativ zur genannten
     Wurzel.
@@ -232,7 +242,7 @@ def test_a_tool_or_a_deleted_module_named_by_a_helper_selects_the_tests_behind_i
     assert all(path.name.startswith("test_") for path in files), sorted(files)
 
 
-def test_the_real_guards_are_chosen_for_any_change_under_app() -> None:
+def test_the_real_guards_are_chosen_for_any_change_under_app(real_graph: ImportGraph) -> None:
     """Gegen den echten Baum (E5, RM-725): Die Wächter, die den Baum über
     ``tools/code_index.py``, ``tests/source_tree.py`` oder eine andere Testdatei lesen,
     laufen bei einer Änderung an einem Modul mit, das sie nicht importieren — und kein
@@ -242,7 +252,7 @@ def test_the_real_guards_are_chosen_for_any_change_under_app() -> None:
     Geändert ist ein Modul, das es nicht gibt — gelöscht oder noch nicht angelegt —
     und das deshalb niemand importiert: So hängt die Auswahl an keiner Importkante
     des heutigen Baums, nur am Lesen."""
-    graph = ImportGraph()
+    graph = real_graph
     changed = graph.root / "app" / "core" / "perceive" / "zz_not_yet_imported.py"
     assert not changed.exists()
 
@@ -265,12 +275,14 @@ def test_the_real_guards_are_chosen_for_any_change_under_app() -> None:
     assert all(path.name.startswith("test_") for path in files)
 
 
-def test_the_real_guards_over_tests_are_chosen_for_a_change_to_a_test() -> None:
+def test_the_real_guards_over_tests_are_chosen_for_a_change_to_a_test(
+    real_graph: ImportGraph,
+) -> None:
     """Gegen den echten Baum: Eine reine Teständerung wählt die Wächter, die ``tests/``
     lesen — Querimporte und doppelte Definitionen, Sperrklinke, Verzeichniskarten und W4.
     Bis Codestruktur Schritt 0 nannte die Auswahl nur die geänderte Datei und ihre
     Importeure, und diese Wächter liefen erst im Tor."""
-    graph = ImportGraph()
+    graph = real_graph
     changed = graph.root / "tests" / "test_wording.py"
     assert changed.is_file()
 
@@ -528,13 +540,13 @@ def test_a_script_outside_the_packages_selects_the_test_that_loads_it(tree: Path
         assert reasons[tree / "tests" / "test_matrix.py"] == f"nennt {script}"
 
 
-def test_the_real_graph_finds_the_test_of_the_shared_hook() -> None:
+def test_the_real_graph_finds_the_test_of_the_shared_hook(real_graph: ImportGraph) -> None:
     """Gegen den echten Baum: Der Hook unter ``.claude/hooks/`` hat seinen Test.
 
     ``test_solidon3d_hooks.py`` lädt ihn über seinen Pfad; eine Änderung am
     Hook ohne diesen Test wäre ein grüner Stand, der keiner ist.
     """
-    graph = ImportGraph()
+    graph = real_graph
     hook = graph.root / ".claude" / "hooks" / "solidon3d_hooks.py"
     assert hook.is_file()
 
@@ -554,9 +566,9 @@ def test_a_syntax_error_in_the_tree_does_not_stop_the_selection(tree: Path) -> N
     assert "tests/test_direct.py" in _names(files, tree)
 
 
-def test_the_real_graph_knows_this_file() -> None:
+def test_the_real_graph_knows_this_file(real_graph: ImportGraph) -> None:
     """Gegen den echten Baum: Das Werkzeug findet sich selbst über seinen Test."""
-    graph = ImportGraph()
+    graph = real_graph
     files, reasons = affected([graph.root / "tools" / "affected_tests.py"], graph)
 
     assert graph.root / "tests" / "test_affected_tests.py" in files
@@ -572,33 +584,48 @@ def test_a_bare_import_of_a_local_module_is_found(tree: Path) -> None:
     _write(tree, "tests/fakes.py", "FAKE = 1\n")
     _write(tree, "tests/test_bare.py", "def f():\n    from fakes import FAKE\n")
     _write(tree, "tests/test_prefixed.py", "import conftest\nfrom tests.fakes import FAKE\n")
+    # Jede Form, die die Textvorauswahl durchlassen muss: nach Semikolon, nach Doppelpunkt,
+    # in einer Liste mit Alias. Ein Name nur in einem Text ist kein Import.
+    _write(
+        tree,
+        "tests/test_forms.py",
+        "x = 1; import fakes\nif x: import fakes\nimport os as o, fakes as f\n"
+        "TEXT = 'import fakes'\n",
+    )
     graph = ImportGraph(tree)
 
     files, _ = affected([tree / "tests" / "fakes.py"], graph)
 
     # Der Baumleser liest auch tests/ und läuft deshalb mit; test_bare fehlt.
     assert _names(files, tree) == {"tests/test_prefixed.py", "tests/test_reader.py"}
-    assert bare_local_imports(graph) == ["tests/test_bare.py:2: fakes"]
+    assert bare_local_imports(graph) == [
+        "tests/test_bare.py:2: fakes",
+        "tests/test_forms.py:1: fakes",
+        "tests/test_forms.py:2: fakes",
+        "tests/test_forms.py:3: fakes",
+    ]
 
 
-def test_tests_and_tools_import_their_neighbours_with_the_package_prefix() -> None:
+def test_tests_and_tools_import_their_neighbours_with_the_package_prefix(
+    real_graph: ImportGraph,
+) -> None:
     """Wer einen Nachbarn aus ``tests/`` oder ``tools/`` ohne Präfix importiert, fehlt in jeder
     Auswahl zu dessen Änderung (``bare_local_imports``). Der Präfix ist die ganze Abhilfe.
     """
-    graph = ImportGraph()
+    graph = real_graph
     assert sum(name.startswith("tests.test_") for name in graph.modules) > 300
 
     assert bare_local_imports(graph) == []
 
 
-def test_a_tool_its_tests_load_by_path_selects_those_tests() -> None:
+def test_a_tool_its_tests_load_by_path_selects_those_tests(real_graph: ImportGraph) -> None:
     """Review 06.10.2026, M3: Ein Werkzeug, das beim Import ``sys.argv`` liest,
     laden seine Tests über den Pfad — ohne Importkante. Seit die Matrix in
     ``tools/`` liegt, fehlte ``test_delivery_matrix_review.py`` in jeder
     Auswahl zu ihr."""
     root = Path(__file__).resolve().parents[1]
 
-    files, reasons = affected([root / "tools" / "matrix_unit.py"], ImportGraph())
+    files, reasons = affected([root / "tools" / "matrix_unit.py"], real_graph)
 
     names = {path.name for path in files}
     assert {"test_delivery_matrix_review.py", "test_delivery_tools.py"} <= names
