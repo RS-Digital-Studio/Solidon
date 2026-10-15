@@ -27,7 +27,7 @@
 #   insert_before die Einfügemarke der Sitzung vor diesem Schritt (sichtbare Nummer)
 #   cause         was der Prüfstand vor der Zeile auslöst: {kind = "export", format}
 #                 oder {kind = "auto_split", object}
-#   built         Quellkennung → Generator (``tools/function_meshes.py``): die Datei
+#   built         Quellkennung → Generator (``function_scenes.GENERATORS``): die Datei
 #                 entsteht beim Bau, zu groß für tests/data
 #   recognition   "declined": die Frage vor der langen Vollerkennung ist im
 #                 Ladeschritt abgelehnt gespeichert (§21.1)
@@ -1147,7 +1147,7 @@ params = { edge = 2.0 }
 # *Alle Merkmale erkennen* holt nach, was beim Laden ausgelassen wurde: Die Wahl
 # steht am Ladeschritt (history.recognition_reopenable). Ein Quader, der erst
 # nach dem Laden über die Grenze wuchs, trug keine, und die Zusage stimmte nicht
-# (FD-101). Das Netz entsteht beim Bau der Szene (function_meshes), zu groß für
+# (FD-101). Das Netz entsteht beim Bau der Szene (function_scenes.GENERATORS), zu groß für
 # tests/data.
 [scene.ueber_erkennungsgrenze]
 summary = "Eine geladene Platte mit 1,54 Millionen Dreiecken, über FEATURE_LIMIT_TRIANGLES; die Vollerkennung beim Laden abgelehnt (§21.1)."

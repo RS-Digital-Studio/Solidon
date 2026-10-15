@@ -12,15 +12,15 @@ from __future__ import annotations
 import io
 
 from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES
-from tools import function_meshes
+from tools import function_scenes
 
 
 def test_the_dense_plate_is_closed_the_same_every_time_and_between_both_limits() -> None:
     import trimesh
 
-    payload, suffix = function_meshes.dense_plate()
+    payload, suffix = function_scenes.dense_plate()
     assert suffix == ".ply"
-    assert function_meshes.dense_plate()[0] == payload, "der Generator rät"
+    assert function_scenes.dense_plate()[0] == payload, "der Generator rät"
     body = trimesh.load(io.BytesIO(payload), file_type="ply", process=False)
     assert FEATURE_LIMIT_TRIANGLES < len(body.faces) <= CONFIRMED_FEATURE_LIMIT_TRIANGLES
     assert body.is_watertight and body.is_winding_consistent
@@ -33,7 +33,6 @@ def test_the_recognition_scene_keeps_its_declined_choice_at_the_load_step() -> N
     etwas nachzuholen (``history.recognition_reopenable``)."""
     from app.core.perceive.match_records import recognition_answer_key
     from app.core.scene.history import recognition_reopenable
-    from tools import function_scenes
 
     project = function_scenes.build_scene("ueber_erkennungsgrenze")
     load = next(entry for entry in project.document.ops if entry.op == "load")

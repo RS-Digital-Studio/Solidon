@@ -22,7 +22,7 @@ Register stehen hier, damit ``function_list`` darauf aufbaut und kein Kreis ents
 from __future__ import annotations
 
 import tomllib
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -144,7 +144,7 @@ class Scene:
     cause: Mapping[str, str] = field(default_factory=dict)
     """Was vor der Zeile ausgelöst wird (:data:`CAUSE_KEYS`)."""
     built: Mapping[str, str] = field(default_factory=dict)
-    """Quellkennung → Generator aus ``function_meshes.GENERATORS``: Die Datei entsteht
+    """Quellkennung → Generator aus :data:`GENERATORS`: Die Datei entsteht
     beim Bau der Szene, zu groß für ``tests/data``."""
     recognition: str = ""
     """``declined``: Die Frage nach der vollständigen Merkmalserkennung (§21.1) ist im
@@ -361,8 +361,6 @@ def _built_problems(
     scene: Scene, sources: Mapping[str, str], steps: Sequence[SceneStep]
 ) -> list[str]:
     """Erzeugte Quellen und die gespeicherte Erkennungsantwort (``built``, ``recognition``)."""
-    from tools.function_meshes import GENERATORS
-
     issues = [
         f"Quelle {name}: Generator {generator!r} gibt es nicht"
         for name, generator in scene.built.items()
@@ -450,7 +448,6 @@ def build_scene(key: str, scenes: Mapping[str, Scene] | None = None) -> Project:
     from app.core.scene import History, OperationDraft
     from app.core.scene.project import load, new_project
     from app.core.types import Parameter, Source, Suppression
-    from tools.function_meshes import GENERATORS
 
     catalogue = scenes if scenes is not None else load_scenes()
     scene = catalogue[key]
@@ -545,6 +542,82 @@ def _store_recognition_answers(project: Project, *, allowed: bool) -> None:
         else entry
         for entry in document.ops
     ]
+
+
+# --- Quellen, die beim Bau entstehen (``built``, FD-101) ---------------------------
+#
+# Ein Netz über der automatischen Erkennungsgrenze (anderthalb Millionen Dreiecke,
+# ``perceive.local.FEATURE_LIMIT_TRIANGLES``) wäre als Datei zig Megabyte groß und
+# gehört nicht in tests/data. Erzeugt wird es aus einer festen Vorschrift ohne
+# Zufall — gleiche Eingabe, gleiche Bytes. Hier und nicht in einem eigenen Modul:
+# Die Funktionsliste importiert nur ``function_scan`` und ``function_scenes``
+# (``test_function_report``), damit kein Kreis zu den Urteilsmodulen entsteht.
+
+#: Kanten der Oberseite und der Unterseite der dichten Platte. 4 · n² + 8 · n
+#: Dreiecke: bei 620 sind es 1 542 560 — über der automatischen Grenze von
+#: 1 500 000 und unter der bestätigbaren von 5 000 000 (§21.1).
+DENSE_PLATE_CELLS: Final = 620
+
+
+def dense_plate() -> tuple[bytes, str]:
+    """Eine geschlossene Platte 200 x 200 x 10 mm, Ober- und Unterseite fein gerastert.
+
+    Gibt die Datei als binäres PLY und ihre Endung zurück. Die Seiten verbinden
+    die Randpunkte beider Raster; alle Dreiecke zeigen nach außen.
+    """
+    import io
+
+    import numpy as np
+    import trimesh
+
+    cells = DENSE_PLATE_CELLS
+    side = cells + 1
+    axis = np.linspace(-100.0, 100.0, side)
+    xs, ys = np.meshgrid(axis, axis, indexing="xy")
+    flat = np.column_stack([xs.ravel(), ys.ravel()])
+    top = np.column_stack([flat, np.full(len(flat), 10.0)])
+    bottom = np.column_stack([flat, np.zeros(len(flat))])
+    vertices = np.vstack([top, bottom])
+    offset = side * side
+
+    rows, columns = np.meshgrid(np.arange(cells), np.arange(cells), indexing="ij")
+    a = (rows * side + columns).ravel()
+    b = a + 1
+    c = a + side
+    d = c + 1
+    top_faces = np.vstack([np.column_stack([a, b, d]), np.column_stack([a, d, c])])
+    bottom_faces = np.vstack([np.column_stack([a, d, b]), np.column_stack([a, c, d])]) + offset
+
+    # Der Rand im Umlauf gegen den Uhrzeigersinn, von oben gesehen.
+    steps = np.arange(cells)
+    ring = np.concatenate(
+        [
+            steps,  # unten: y = -100, x wächst
+            cells + steps * side,  # rechts: x = +100, y wächst
+            side * side - 1 - steps,  # oben: y = +100, x fällt
+            (cells - steps) * side,  # links: x = -100, y fällt
+        ]
+    )
+    following = np.roll(ring, -1)
+    upper, upper_next = ring, following
+    lower, lower_next = ring + offset, following + offset
+    side_faces = np.vstack(
+        [
+            np.column_stack([lower, lower_next, upper_next]),
+            np.column_stack([lower, upper_next, upper]),
+        ]
+    )
+    faces = np.vstack([top_faces, bottom_faces, side_faces]).astype(np.int64)
+    body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    payload = io.BytesIO()
+    body.export(payload, file_type="ply", encoding="binary")
+    return payload.getvalue(), ".ply"
+
+
+#: Name → Generator; :func:`build_scene` ruft ihn beim Bau der Szene.
+GENERATORS: Final[dict[str, Callable[[], tuple[bytes, str]]]] = {
+    "dichte_platte": dense_plate,
+}
 
 
 def _carried_printer(like: str) -> dict[str, Any]:

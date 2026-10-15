@@ -50,7 +50,7 @@ class Setup:
 
 
 def setup_of(row: Mapping[str, Any]) -> Setup:
-    """Die Einrichtung einer Zeile: Vorbedingungen und eigene Bausteine ihrer Startszenen.
+    """Die Einrichtung einer Zeile: Vorbedingungen und Nutzerdaten ihrer Startszenen.
 
     Wie beim Funktionsfall (``file_acceptance.function_cases``): Die Szene der
     Zeile geht der des Fehlfalls vor, die Szenen gehen der Spezifikation vor. Aus
