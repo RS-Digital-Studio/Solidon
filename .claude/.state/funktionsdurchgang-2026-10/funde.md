@@ -1876,6 +1876,18 @@ Auskunft.
 - Wirkung beim Kunden: Kein Produktfehler; *gut nach Fix* war eine Lesart statt einer Folge der Funddatei.
 - Stand: offen RM-737
 
+### FD-154 Fallprozess stirbt nach dem Abbau an einem noch laufenden Arbeiter
+
+- Art: Stabilität
+- Schwere: mittel
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: Fall 001 `resize_hole` offscreen, Exit 0xC0000409 nach `shutdown_complete: true`, `QtFatalMsg QThread: Destroyed while thread '' is still running` (`F:\tmp-suche\review-d0rest-claude\r2\qthread-beleg\`, Review RD-10); dieselbe Signatur in zwei nativen Fällen aus `fd83-claude.md`. Nachgestellt deterministisch mit einem 3-s-Arbeiter am echten Fenster über `shutdown_window` (0xC0000409 nach 2,04 s) und an einer Minimalsonde; Kundenwege Beenden, Dialog schließen, Projektwechsel und `quit` am Original Exit 0 (`output/konsolidierung-2026-10-12/fd154-claude.md`).
+- Ursache: PySides `atexit`-Haken zerstört jedes Python-eigene QObject; `shutdown_window` gab `MainWindow.release` 2 s für alle Arbeiter, wer länger rechnete, lief beim Prozessende noch, und kein Weg im Prozess wartete vorher auf alle Fäden.
+- Vorschlag: ein Abbauweg in der Leine: ein `atexit`-Haken vor dem von PySide wartet über `finish_before_exit` bis `EXIT_WAIT_MS` und beendet sonst benannt mit `STRAGGLER_EXIT_CODE`; `shutdown_window` wartet dort vor Renderer und Fenster.
+- Wirkung beim Kunden: keine belegte, das Hauptfenster schließt erst nach dem letzten Arbeiter; in der Abnahme falsche rote Fälle, deren Ursache weit vom Fall entfernt steht.
+- Stand: behoben `a177d903d`; `tests/test_leash.py::test_a_process_that_ends_while_a_worker_runs_waits_for_it` war am Original mit genau der Signatur rot; Prüfstandsweg mit 3-s-Arbeiter 3/3 Exit 0, Fall 001 zehnmal Exit 0; in welle4 `81a63d962`.
+
 ### FD-155 Parameter anlegen lehnt einen Namen ohne Handlung und abseits des Felds ab
 
 - Art: Verständlichkeit
