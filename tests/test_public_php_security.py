@@ -2215,13 +2215,29 @@ def test_stats_rolling_windows_compare_with_the_period_before(tmp_path: Path) ->
     assert anonymous_status == 401, "die JSON-Ausgabe liegt hinter derselben Anmeldung"
     report = json.loads(body)
 
-    assert report["now"]["today"] == {"p": 4, "d": 2, "u": 2, "visits": 3}
+    # Heute beginnt ein Besuch auf / und bleibt bei Deutsch (reddit, aaaa0001).
+    assert report["now"]["today"] == {
+        "p": 4,
+        "d": 2,
+        "u": 2,
+        "visits": 3,
+        "home": 1,
+        "switched": 0,
+    }
     week, month = report["now"]["windows"]
     assert (week["days"], week["now"], week["before"]) == (
         7,
-        {"p": 7, "d": 3, "u": 3, "visits": 6},
-        {"p": 6, "d": 1, "u": 6, "visits": 6},
+        # Auf / beginnen heute aaaa0001, gestern bbbb0001 und davor die sechs
+        # dddd-Besuche; keiner wechselt die Sprache.
+        {"p": 7, "d": 3, "u": 3, "visits": 6, "home": 2, "switched": 0},
+        {"p": 6, "d": 1, "u": 6, "visits": 6, "home": 6, "switched": 0},
     )
+    # Zwei bzw. sechs Besuche auf / sind zu wenig für eine Wechselquote.
+    assert not [
+        item
+        for item in report["findings"]
+        if item["text"].startswith("Von der deutschen Startseite")
+    ]
     # Dreißig Tage ohne Vergleich: Die Daten reichen nicht sechzig Tage zurück,
     # und eine Veränderung gegen einen halb vorhandenen Zeitraum wäre gelogen.
     assert (month["days"], month["before"]) == (30, None)
@@ -2229,6 +2245,106 @@ def test_stats_rolling_windows_compare_with_the_period_before(tmp_path: Path) ->
     assert "+17 %" in now_block and "±0 %" in now_block  # 6 → 7 Aufrufe, 6 → 6 Besuche
     assert "vorher 0" not in now_block
     assert now_block.count("Kein Vergleich") == 4, "je Spalte ein Strich mit Grund"
+
+
+@pytest.mark.parametrize(
+    ("now_home", "before_home", "finding"),
+    [
+        (
+            20,
+            20,
+            "6 von 20 Besuchen der letzten 7 Tage (30 %), in den 7 Tagen davor 1 von 20 (5 %)",
+        ),
+        (20, 19, "6 von 20 Besuchen der letzten 7 Tage (30 %)"),
+        (19, 20, ""),
+    ],
+    ids=["vergleich-ab-20", "ohne-vergleich-unter-20", "stumm-unter-20"],
+)
+def test_stats_shows_language_switches_from_the_german_start_page(
+    tmp_path: Path, now_home: int, before_home: int, finding: str
+) -> None:
+    """Der Sprachhinweis der deutschen Startseite wirkt nur messbar, wenn der
+    Wechsel in der Auswertung steht.
+
+    Gezählt wird nichts Neues: Ein Besuch, der auf ``/`` beginnt und danach eine
+    andere Sprachfassung öffnet, ist ein Wechsel — über den Hinweis oder die
+    Sprachverweise in Kopf- und Fußzeile, alle führen auf dieselbe Adresse. Ein Besuch,
+    der anderswo beginnt, zählt nicht mit, auch wenn er später ``/`` öffnet.
+    Der Befund vergleicht die letzten sieben Tage mit den sieben davor; das ist
+    der Vorher-nachher-Vergleich um den Tag, an dem der Hinweis online geht.
+    Beide Fenster stehen an der Schwelle von 20 Besuchen: Unter 20 im älteren
+    fällt der Vergleich weg, unter 20 im jüngeren schweigt der Satz ganz.
+    """
+    today = _display_today()
+    day = timedelta(days=1)
+    minute = timedelta(minutes=1)
+    recent = today - day
+    earlier = today - 9 * day
+
+    def visit(when: datetime, mark: str, paths: list[str], download: str = "") -> list[dict]:
+        rows = [_stats_row(when + i * minute, "p", path, "", mark) for i, path in enumerate(paths)]
+        if download:
+            rows.append(_stats_row(when + len(paths) * minute, "d", download, "", mark))
+        return rows
+
+    rows: list[dict] = []
+    # Letzte sieben Tage: 20 oder 19 Besuche beginnen auf /. Fünf wechseln
+    # nach /en/, zwei davon laden; einer kommt über eine Unterseite nach /fr/.
+    for index in range(now_home):
+        paths = ["/"]
+        if index < 5:
+            paths.append("/en/")
+        elif index == 5:
+            paths += ["/funktionen.html", "/fr/features.html"]
+        download = "Solidon3D-Setup-0.4.1.exe" if index < 2 else ""
+        rows += visit(recent, f"aaaa{index:04d}", paths, download)
+    # Beginnt auf /en/ und öffnet danach / — kein Wechsel von der Startseite.
+    rows += visit(recent, "bbbb0001", ["/en/", "/"])
+    # Die sieben Tage davor: 20 oder 19 Besuche auf /, einer wechselt nach /es/.
+    for index in range(before_home):
+        rows += visit(earlier, f"cccc{index:04d}", ["/", "/es/"] if index == 0 else ["/"])
+    # Ein Aufruf vor beiden Fenstern, damit der Vergleichszeitraum ganz
+    # abgedeckt ist — sonst lässt die Auswertung den Vergleich zu Recht weg.
+    rows += visit(today - 15 * day, "dddd0001", ["/datenschutz.html"])
+    stats = tmp_path / "stats"
+    stats.mkdir(mode=0o700)
+    _write_stats_rows(stats, rows)
+    environment, headers = _stats_test_access(tmp_path)
+    shown = recent.strftime("%Y-%m")
+    with php_server(tmp_path, environment) as base:
+        status, _headers, body = _request(
+            f"{base}/stats.php?format=json&m={shown}", headers=headers
+        )
+        page_status, _page_headers, page = _request(f"{base}/stats.php?m={shown}", headers=headers)
+    assert status == 200 and page_status == 200 and "</html>" in page
+    report = json.loads(body)
+
+    opening = "Von der deutschen Startseite in eine andere Sprachfassung gewechselt: "
+    said = [item["text"] for item in report["findings"] if item["text"].startswith(opening)]
+    assert said == ([f"{opening}{finding}."] if finding else [])
+    if finding:
+        assert f"{opening}{finding}." in page
+    week = report["now"]["windows"][0]
+    assert (week["now"]["home"], week["now"]["switched"]) == (now_home, 6)
+    assert (week["before"]["home"], week["before"]["switched"]) == (before_home, 1)
+
+    # Der Monat des jüngeren Fensters; das ältere liegt je nach Datum darin
+    # oder im Monat davor.
+    same_month = earlier.strftime("%Y-%m") == shown
+    switches = report["reach"]["language_switches"]
+    assert switches["home_visits"] == now_home + (before_home if same_month else 0)
+    assert switches["languages"]["en"] == {"visits": 5, "downloaded": 2}
+    assert switches["languages"]["fr"] == {"visits": 1, "downloaded": 0}
+    assert ("es" in switches["languages"]) is same_month
+    stayed = now_home - 6 + (before_home - 1 if same_month else 0)
+    assert switches["stayed"] == {"visits": stayed, "downloaded": 0}
+    table = page.split("<h3>Wechsel von der deutschen Startseite</h3>")[1].split("</table>")[0]
+    assert re.search(
+        r"<td>Englisch</td>\s*<td class=\"n\">5</td>\s*<td class=\"n\">[\d,]+ %</td>"
+        r"\s*<td class=\"n\">2</td>",
+        table,
+    )
+    assert "blieben auf Deutsch" in table
 
 
 def test_stats_derives_conversion_sources_and_pages_from_the_five_fields(
@@ -3083,6 +3199,8 @@ def test_the_month_comparison_carries_its_completeness(tmp_path: Path) -> None:
                 "entries",
                 "month_rows",
                 "visits_of",
+                "language_of",
+                "language_switch",
                 "per_day",
                 "window_sum",
                 "month_totals",
