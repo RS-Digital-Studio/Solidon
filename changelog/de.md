@@ -77,6 +77,9 @@ Nutzen da und sonst nichts.
 - Ein Bildschirmleser liest an jedem Zahlenfeld eines Dialogs Namen und Erklärung vor.
 - Nach einer Handlung im Prüfbericht bleibt der Bericht vorn, und Strg+Z nimmt sie gleich zurück. Bisher sprang der Reiter *Auswahl* nach vorn.
 - Hinweise zu Druckbett und Haftung nutzen die gewählte Einheit. Beim Wechsel mm/Zoll bleiben Befundauswahl, offene Details, Reiter und der Klappzustand der Körper erhalten.
+- Die Maßzahlen am Druckbett folgen der gewählten Einheit und nennen sie. In Version 0.6.0 standen dort auch bei Zoll Millimeter.
+- In der Ansicht *Orthografisch* zeigt ein Klick auf einen Befund die Stelle in passender Größe. Bisher blieb der Zoom davor stehen.
+- Eine gewählte Bohrung bleibt samt Rand sichtbar. Die Ziehknöpfe stehen außen am Rand, die Pfeile beginnen erst dahinter.
 - Strg+Z und Strg+Y wirken auch, wenn der Cursor in einem leeren Feld steht, etwa im Suchfeld. Wer dort getippt hat, nimmt zuerst sein Tippen zurück.
 - Ohne Freischaltung sind ändernde Handlungen in Prüfbericht, Reiter *Auswahl*, Kontextmenüs und Filamentwahl grau und nennen den Grund. Bisher kam die Absage erst nach dem Klick.
 - Ohne Freischaltung sind auch *Parameter anlegen …*, *Bewegen*, *Teilen*, die Tasten im Verlauf und die Maße im Bild grau. Jeder Grund nennt den Weg, etwa *Hilfe → Solidon freischalten …*.

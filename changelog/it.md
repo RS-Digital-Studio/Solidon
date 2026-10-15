@@ -52,6 +52,9 @@ scrive in `website/version.json`.
 - Uno screen reader legge il nome e la spiegazione di ogni campo numerico di una finestra di dialogo.
 - Dopo un'azione nel *Rapporto di verifica* il rapporto resta in primo piano e Ctrl+Z la annulla subito. Finora passava davanti la scheda *Selezione*.
 - Gli avvisi su piano e adesione usano l’unità scelta. Il cambio mm/pollici conserva segnalazione scelta, dettagli aperti, scheda e stato espanso dei corpi.
+- I numeri lungo il piano di stampa seguono l’unità scelta e la indicano. La versione 0.6.0 mostrava millimetri anche con i pollici impostati.
+- Nella vista *Ortografica*, un clic su una segnalazione mostra il punto a una dimensione adatta. Finora restava lo zoom precedente.
+- Un foro selezionato resta visibile insieme al bordo. Le maniglie stanno fuori dal bordo e le frecce partono oltre.
 - Ctrl+Z e Ctrl+Y funzionano anche con il cursore in un campo vuoto, per esempio nel campo di ricerca. Se lì ha scritto qualcosa, viene annullato prima il testo digitato.
 - Senza attivazione, le azioni che modificano qualcosa in *Rapporto di verifica*, *Selezione*, menu contestuali e filamento sono in grigio con il motivo. Prima il rifiuto arrivava dopo il clic.
 - Senza attivazione sono in grigio anche *Crea parametro …*, *Sposta*, *Dividi*, i tasti della cronologia e le misure nella vista. Ogni motivo indica la strada, come *Aiuto → Sblocca Solidon …*.

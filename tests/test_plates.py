@@ -1010,39 +1010,54 @@ def test_an_unchanged_build_volume_is_not_built_again(
 def test_every_reason_to_build_the_bed_again_still_builds_it(
     profile: Profile, qt_app: QApplication
 ) -> None:
-    """Vier Gründe, und jeder muss durchkommen (RM-124).
+    """Fünf Gründe, und jeder muss durchkommen (RM-124).
 
-    Ein anderer Bauraum, eine Platte mehr, andere Farben aus dem Thema, ein
-    anderer Renderer. Ein Wächter, der einen davon verschluckt, lässt eine
-    Kulisse stehen, die etwas anderes zeigt als die Szene.
+    Ein anderer Bauraum, eine Platte mehr, andere Farben aus dem Thema, eine
+    andere Anzeigeeinheit für die Maßzahlen (FD-92), ein anderer Renderer. Ein
+    Wächter, der einen davon verschluckt, lässt eine Kulisse stehen, die etwas
+    anderes zeigt als die Szene.
     """
+    from app.ui.labels import display_unit, set_display_unit
     from tests.render_fakes import RecordingRenderer
 
+    # Je Bett: Grund, Neben- und Hauptlinien des Rasters, Bauraumkanten, Maßzahlen.
+    per_bed = 5
     viewport, renderer = _with_recorder(profile)
 
     larger = dataclasses.replace(
         profile,
         printer=dataclasses.replace(profile.printer, build_volume=(300.0, 300.0, 400.0)),
     )
-    assert _rebuilds(viewport, renderer, lambda: viewport.show_build_volume(larger)) == 4, (
+    assert _rebuilds(viewport, renderer, lambda: viewport.show_build_volume(larger)) == per_bed, (
         "ein anderer Bauraum"
     )
 
     viewport._plate_count = lambda: 3  # type: ignore[method-assign]
-    assert _rebuilds(viewport, renderer, lambda: viewport.show_build_volume(larger)) == 12, (
-        "drei Platten, drei Betten"
-    )
+    assert (
+        _rebuilds(viewport, renderer, lambda: viewport.show_build_volume(larger)) == 3 * per_bed
+    ), "drei Platten, drei Betten"
 
     # Der Themenwechsel baut die Kulisse selbst neu — er ruft
     # ``show_build_volume``, und genau das muss durchkommen, sonst stünde ein
     # fast schwarzes Bett auf hellem Grund.
-    assert _rebuilds(viewport, renderer, lambda: viewport.set_theme("light")) == 12, "andere Farben"
+    assert _rebuilds(viewport, renderer, lambda: viewport.set_theme("light")) == 3 * per_bed, (
+        "andere Farben"
+    )
+
+    unit = display_unit()
+    try:
+        set_display_unit("in" if unit != "in" else "mm")
+        assert _rebuilds(viewport, renderer, viewport.refresh_labels) == 3 * per_bed, (
+            "eine andere Einheit schreibt die Maßzahlen neu"
+        )
+    finally:
+        set_display_unit(unit)
 
     zweiter = RecordingRenderer(size=(900, 600))
     viewport.renderer = zweiter
-    assert _rebuilds(viewport, zweiter, lambda: viewport.show_build_volume(larger)) == 12, (
-        "ein anderer Renderer braucht seine eigenen Aktoren"
-    )
+    assert (
+        _rebuilds(viewport, zweiter, lambda: viewport.show_build_volume(larger)) == 3 * per_bed
+    ), "ein anderer Renderer braucht seine eigenen Aktoren"
 
 
 def test_the_bed_keeps_what_was_hidden_and_gets_it_back(
