@@ -68,6 +68,16 @@ PRINTERS: Final[dict[str, tuple[str, str]]] = {
     "resin": ("generic-resin-130", "resin"),
 }
 
+#: Der einmalige Druckhinweis (``app.ui.print_disclosure``) als Vorbedingung
+#: eines Falls (FD-121): ``gesehen`` ohne Angabe, ``offen`` nur im Fall seiner
+#: eigenen Zeile. Die Zustände führt die Liste der Spezifikation
+#: (``function_list.PRECONDITIONS``); ``profile_settings`` setzt sie ins Profil.
+PRINT_HINT: Final = "druckhinweis"
+PRINT_HINT_STATES: Final = ("gesehen", "offen")
+#: Wann das Profil den Druckhinweis gesehen hat — fest, damit zwei Läufe
+#: dasselbe Profil schreiben.
+PROFILE_MOMENT: Final = "2026-01-01T00:00:00Z"
+
 #: Die Fenstergröße aus Z6: die kleinste Fläche (``function_checks.SMALLEST_WINDOW``).
 #: Größere misst jeder Satz, der maximiert auf einem größeren Schirm läuft.
 WINDOW_SIZES: Final[tuple[str, ...]] = (f"{SMALLEST_WINDOW[0]}x{SMALLEST_WINDOW[1]}",)
@@ -238,7 +248,8 @@ def spec_variants(spec: Mapping[str, Any] | None) -> tuple[dict[str, Any], list[
     others: list[dict[str, Any]] = []
     for name, state in sorted(preconditions.items()):
         states = PRECONDITIONS.get(str(name), ())
-        if name == "printer" or len(states) != 2:
+        # Der Druckhinweis hat keinen Gegenlauf: Gesehen gibt es seine Zeile nicht.
+        if name in ("printer", PRINT_HINT) or len(states) != 2:
             continue
         other = states[1] if state == states[0] else states[0]
         others.append(
@@ -349,13 +360,20 @@ def profile_settings(variant: Variant) -> Any:
 
     Sprache, Thema, Einheit und Drucker kommen aus der Variante. Die
     Ersteinrichtung gilt als erledigt und die Updateprüfung ist aus: Beides ist
-    eine eigene Zeile (D12) und gehört nicht in jeden Fall. Die Hinweise zu KI und
-    Druck bleiben unbestätigt — sie sind Teil des Kundenwegs (Z2).
+    eine eigene Zeile (D12) und gehört nicht in jeden Fall. Der KI-Hinweis
+    bleibt unbestätigt — er ist Teil des Kundenwegs (Z2).
+
+    **Der Druckhinweis gilt als gesehen** (FD-121): Er erscheint einmal, vor den
+    ersten Druckeinstellungen, und lag in jedem Fall über der Zielfläche —
+    gemessen wurde der Hinweis statt *Drucker wählen*. Er ist eine eigene Zeile
+    (``dialog:print_disclosure_dialog``); ihr Fall verlangt ihn mit der
+    Vorbedingung ``druckhinweis = "offen"`` (:data:`PRINT_HINT`).
     """
+    from app.ui.print_disclosure import remember_disclosure
     from app.ui.settings import UiSettings
 
     printer, material = PRINTERS[variant.printing]
-    return UiSettings(
+    settings = UiSettings(
         language=variant.language,
         theme=variant.theme,
         display_unit=variant.unit,
@@ -365,6 +383,9 @@ def profile_settings(variant: Variant) -> Any:
         check_for_updates=False,
         update_default_lifted=True,
     )
+    if variant.preconditions.get(PRINT_HINT, PRINT_HINT_STATES[0]) == PRINT_HINT_STATES[0]:
+        remember_disclosure(settings, now=PROFILE_MOMENT)
+    return settings
 
 
 def write_profile(variant: Variant, recent: Sequence[Path] = ()) -> Path:
@@ -471,7 +492,8 @@ def apply_preconditions(preconditions: Mapping[str, str]) -> dict[str, str]:
 
     applied: dict[str, str] = {}
     for name, state in preconditions.items():
-        if name == "printer":
+        if name in ("printer", PRINT_HINT):
+            # Druckart und Druckhinweis stehen schon im Profil (``profile_settings``).
             applied[name] = state
             continue
         if state == "fehlt":

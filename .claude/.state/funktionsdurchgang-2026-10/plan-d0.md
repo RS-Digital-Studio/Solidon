@@ -212,7 +212,7 @@ In `app/core/guides.py`: `TARGET_PROPERTY = "guideTarget"`, `menubar_name(msgid,
 | `search_probes` | ja für Prüfpunkt 1 | `[{word, origin}]`, `origin` ∈ slicer, cad, fragebogen; dazu `questions` für I6; keine Kundenkennungen (der Korpus wird veröffentlicht) |
 | `expectation` | ja für Prüfpunkt 4 | Kennzahlen mit `tolerance` und `origin` (Konstruktion oder Formel, `tests.md` „Korpus“) |
 | `fault_case` | ja für Prüfpunkt 7 | Eingabe oder Auswahl und erwartete Art der Absage |
-| `preconditions` | nein | ki, comfyui, slicer: vorhanden oder fehlt; licence: demo, gekauft, abgelaufen; printer: filament oder resin |
+| `preconditions` | nein | ki, comfyui, slicer: vorhanden oder fehlt; licence: demo, gekauft, abgelaufen; printer: filament oder resin; druckhinweis: gesehen (Vorgabe im Profil jedes Falls) oder offen (nur die Zeile des Hinweises, ohne Gegenlauf) |
 | `not_applicable` | nein | `{prüfpunkt = grund}`, Grund aus der geschlossenen Liste |
 | `budget_s`, `budget_ref` | nein | nur mit §31-Beleg, sonst „kein Budget“ |
 | `manual`, `website` | ja für Prüfpunkt 11 außerhalb des Registers | Handbuchseite (`<seite>` oder `<ref-seite>#<anker>`) und Abschnitte der Funktionsseite (`["funktionen.html#<anker>"]`, die Übersetzungen an derselben Stelle); eine Stelle, die es nicht gibt, macht P11 nicht prüfbar (`tools/function_promises.py`) |
