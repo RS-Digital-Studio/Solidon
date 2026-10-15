@@ -5,7 +5,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | | |
 |---|---|
 | Paket | D10 |
-| Prüfsumme | 60dd32fc7c07f9c60afac513234ab1dbe675ab021110590093d8e242ff061ced |
+| Prüfsumme | de3c59062b5166c0568a868513f2bce776f7cd176af5c75ec9ce3abb7a037952 |
 | Commit | 2ec37b23bbc18bd76fc604c794ecd0c7231adaec |
 | Datum | 2026-10-15 |
 | Laufordner | `probelauf-d0-final-2ec37b23b-fortsetzung-03` |
@@ -24,24 +24,24 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | assign_slot | operation | quader.exakt | offen | FD-131 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-19 | offen RM-737, RM-747 | FD-19, FD-131 |
 | clear_filament | operation | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-136 | offen RM-747 | FD-136, FD-138 |
 | create_label | operation | leer | offen | offen | offen | offen | offen | offen | FD-95 | FD-9 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-9, FD-95, FD-134 |
-| inlay_text | operation | merkmal.face.exakt | offen | offen | offen | FD-2 | offen | offen | offen | FD-137 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-2, FD-137 |
-| label_text | operation | merkmal.face.exakt | offen | offen | offen | FD-1 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-1 |
-| paint_slot | operation | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-43 | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-136 | offen RM-747 | FD-43, FD-132, FD-136, FD-138 |
+| inlay_text | operation | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | FD-137 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-2, FD-137 |
+| label_text | operation | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-1 |
+| paint_slot | operation | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-136 | offen RM-747 | FD-43, FD-132, FD-136, FD-138 |
 | slots_from_texture | operation | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-135 | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-135 |
 | Bearbeiten/Material kalibrieren … | fensterbefehl | leer | offen | offen | offen | offen | offen | offen | offen | FD-8 | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-747 | FD-8, FD-10, FD-13, FD-14 |
 | Bearbeiten/Parameter anlegen … | fensterbefehl | quader.exakt | FD-17 | offen | — | offen | FD-128 | ja | FD-155 | FD-11 | FD-125 | FD-94 | ja | FD-127 | offen | — | offen | FD-128 | — | FD-26 | FD-126 | offen RM-737, RM-747 | FD-11, FD-17, FD-26, FD-39, FD-41, FD-94, FD-125, FD-126, FD-127, FD-128, FD-129, FD-137, FD-139, FD-155 |
-| Erzeugen/Bausteine/Gegenstücke setzen … | fensterbefehl | zwei_koerper.exakt | offen | offen | offen | offen | offen | offen | offen | FD-50 | FD-133 | offen | offen | offen | offen | offen | offen | offen | — | offen | FD-52 | offen RM-747 | FD-42, FD-50, FD-52, FD-66, FD-133 |
-| dialog:binding_dialog | bedienflaeche | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
-| dialog:calibration_dialog | bedienflaeche | leer | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
-| dialog:counterpart_dialog | bedienflaeche | zwei_koerper.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
-| dialog:parameter_dialog | bedienflaeche | leer | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-129 |
-| dialog:recipe_dialog | bedienflaeche | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
-| dialog:slicer_filament_dialog | bedienflaeche | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
+| Erzeugen/Bausteine/Gegenstücke setzen … | fensterbefehl | zwei_koerper.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-133 | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-747 | FD-42, FD-50, FD-52, FD-66, FD-133 |
+| dialog:binding_dialog | bedienflaeche | merkmal.hole.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101 |
+| dialog:calibration_dialog | bedienflaeche | leer | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101 |
+| dialog:counterpart_dialog | bedienflaeche | zwei_koerper.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101 |
+| dialog:parameter_dialog | bedienflaeche | leer | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101, FD-129 |
+| dialog:recipe_dialog | bedienflaeche | quader.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101 |
+| dialog:slicer_filament_dialog | bedienflaeche | quader.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101 |
 | filament.picker | bedienflaeche | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-77 | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-747 | FD-19, FD-77 |
 | filament.section | bedienflaeche | quader.exakt | offen | offen | — | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | — | offen | offen | — | offen | offen | offen RM-747 | FD-132 |
-| meldung:_pick_colour | bedienflaeche | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-22 |
-| meldung:_replacement_slot | bedienflaeche | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
-| meldung:action_counterpart | bedienflaeche | zwei_koerper.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
+| meldung:_pick_colour | bedienflaeche | quader.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-22, FD-101 |
+| meldung:_replacement_slot | bedienflaeche | quader.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101 |
+| meldung:action_counterpart | bedienflaeche | zwei_koerper.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101 |
 | menu:parameters.edit | bedienflaeche | parameter.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101 |
 | parameters | bedienflaeche | leer | offen | offen | — | offen | offen | offen | offen | FD-130 | offen | offen | offen | — | offen | — | offen | offen | — | offen | FD-126 | offen RM-737, RM-747 | FD-126, FD-130 |
 | parameters.first | bedienflaeche | parameter.exakt | offen | offen | offen | offen | offen | offen | offen | FD-130 | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-747 | FD-130 |

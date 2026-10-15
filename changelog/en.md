@@ -61,6 +61,7 @@ it into `website/version.json`.
 - Without activation, *Create parameter …*, *Move*, *Split*, the history keys and the dimensions in the view are greyed out too. Every reason names the way, such as *Help → Unlock Solidon …*.
 - When an action in the *Report* waits for the running calculation, it says that it becomes available afterwards, to screen readers as well.
 - On an empty scene, greyed-out tools such as *Section* and *Measure* give their reason: they need a body. Until now the tooltip only showed their name.
+- When the view gets crowded, all dimension fields stay visible and leave the move handle free. Previously a field could slip below the edge of the view or cover the handle's arrows.
 - Messages in the status bar no longer put a colon after a complete sentence.
 - With a single body the object tree is only as tall as its content, and so is the history with one step. Version 0.6.0 left empty space below.
 - The newest step stays visible in the history when new bodies make the object tree grow. In version 0.6.0 it slipped below the edge of the panel.

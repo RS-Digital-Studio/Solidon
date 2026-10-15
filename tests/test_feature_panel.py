@@ -1254,9 +1254,10 @@ def test_a_refusal_hides_with_its_field_and_returns_with_it(qt_app: QApplication
                 bounded = isinstance(editor, (BoundedSpin, BoundedLengthSpin))
                 if not bounded or field.maximum is None:
                     continue
-                panel._arm(row.key)
+                # Wie der Kunde: Zeile auf, und steht das Feld unter „Weitere Werte“,
+                # die Klappe dazu (seit FD-63 liegen Feinwerte hinten, ``04cc12671``).
+                assert panel.focus_field(op, name), (op, name)
                 line = editor.lineEdit()
-                line.setFocus()
                 line.selectAll()
                 QTest.keyClicks(line, editor.textFromValue(float(field.maximum) + 5.0))
                 refusal = row.refusals[name]

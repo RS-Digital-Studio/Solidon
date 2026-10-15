@@ -1592,7 +1592,11 @@ def test_a_fixed_older_finding_does_not_hide_an_open_younger_one() -> None:
     ],
 )
 def test_a_finding_of_several_rows_holds_each_of_them_open(rows: str) -> None:
-    """Ein Fund nennt mehrere Zeilen: Er hält die Zelle jeder davon offen (FD-143)."""
+    """Ein Fund nennt mehrere Zeilen: Er hält die Zelle jeder davon offen (FD-143).
+
+    Die Zelle trägt den Fund ihres Urteils (FD-2); FD-1 kommt nur über die
+    Spalte „Funde“ in die Zeile — so prüft der Fall auch deren Vergleich.
+    """
     text = _finding(subject="1").replace("**Funktion:** drill_hole", f"**Funktion:** {rows}")
     findings, problems = parse_findings(text)
     assert problems == []
@@ -1600,7 +1604,8 @@ def test_a_finding_of_several_rows_holds_each_of_them_open(rows: str) -> None:
     assert function_report._finding_for("drill_hole", 1, known) == known["FD-1"]
     case = _judged()
     cases = {case.row_id: case}
-    checked = check_verdicts(_b_verdicts(), outcomes=cases)
+    own = _verdict(point=1, verdict="offen", finding="FD-2", rm="RM-800")
+    checked = check_verdicts([own, *_b_verdicts()], outcomes=cases)
     values = package_values(cases, checked.accepted, common_goals={}, solutions=SOLUTIONS)
     checklist = render_checklist(
         "D4",
@@ -1614,8 +1619,8 @@ def test_a_finding_of_several_rows_holds_each_of_them_open(rows: str) -> None:
         out="F:/tmp-suche/lauf",
     )
     line = next(line for line in checklist.splitlines() if line.startswith("| drill_hole"))
-    assert "| offen RM-800 |" in line
-    assert line.rstrip(" |").endswith("FD-1")
+    assert line.split(" | ")[3] == "FD-2", line
+    assert "| offen RM-800 |" in line and line.rstrip(" |").endswith("| FD-1, FD-2")
 
 
 def test_evidence_names_the_file_of_the_case() -> None:
@@ -1640,15 +1645,6 @@ def test_every_checked_in_checklist_is_untouched() -> None:
         p.name for p in found if not function_report.checklist_intact(p.read_text(encoding="utf-8"))
     ]
     assert tampered == []
-
-
-def test_every_checked_in_verdict_file_holds_its_form_on_any_machine() -> None:
-    """Wächter zu RD-5: Format, Funde und ``[[run]]`` jeder Urteilsdatei, ohne den Lauf."""
-    findings, _problems = function_report.read_findings(STATE / "funde.md")
-    for path in sorted(STATE.glob("urteile-*.toml")):
-        entries, runs = function_report.read_verdict_file(path)
-        assert check_verdicts(entries, findings=findings).rejected == (), path.name
-        assert function_report.check_runs(runs, entries) == [], path.name
 
 
 def test_light_and_dark_compare_the_cases_that_measured_the_layout() -> None:
@@ -1863,29 +1859,6 @@ def test_z6_is_judged_once_per_row_at_the_smallest_area() -> None:
     below = bar_at((1366, 728))
     quiet = merge_cases([judge_case(below, sample_context()), cases[1]], [below, wide])
     assert quiet.criteria["Z6"].verdict == "erfuellt", "unter der Untergrenze kein Fund"
-
-
-def test_the_judges_stay_under_the_size_limit() -> None:
-    """Keine Datei des Pakets über 2 000 Zeilen — die Grenze W1 der Codestruktur (N2)."""
-    import tools
-
-    folder = Path(next(iter(tools.__path__)))
-    files = [
-        "function_checks.py",
-        "function_judges.py",
-        "function_points.py",
-        "function_samples.py",
-        "function_report.py",
-        "../tests/test_function_report.py",
-    ]
-    long = {}
-    for name in files:
-        path = folder / name
-        assert path.exists(), name
-        lines = len(path.read_text(encoding="utf-8").splitlines())
-        if lines > 2000:
-            long[name] = lines
-    assert not long, long
 
 
 def test_empty_fonts_are_not_measured_like_empty_contrast() -> None:

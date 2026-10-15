@@ -123,7 +123,7 @@ def test_a_plain_circle_outline_has_the_same_points_everywhere() -> None:
 # --- Die Rechenwege, nicht nur ihre Bausteine (RM-187, 22.09.2026) ------------------
 #
 # Die Tests darüber schreiben die Bits der Bausteine fest — und belegen damit
-# erst auf drei Maschinen etwas. Die Tests darunter belegen es auf **einer**:
+# erst im Vergleich mehrerer Maschinen etwas. Die Tests darunter belegen es auf **einer**:
 # Jede Rechnung, die eine andere Maschine in der letzten Stelle anders runden
 # darf, bekommt hier ein Rauschen von einer Einheit der letzten Stelle, und der
 # Fingerabdruck am Ende eines Weges darf sich davon nicht rühren. Rührt er

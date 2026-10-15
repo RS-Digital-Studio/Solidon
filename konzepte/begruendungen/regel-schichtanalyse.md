@@ -343,7 +343,7 @@ und Bambu Studio −18,8 und −18,5 %). Der Kunde las „weichen deutlich ab“
 
 **Die Fassung gehört zur Messung** (Review P2 Rest, Z2): `SLICER_DEVIATION`
 ist die gemessene Abweichung desselben Codes, ein Änderungswächter. Eine
-andere Slicerfassung auf einem der drei Rechner hätte das Tor rot gemacht,
+andere Slicerfassung auf einem anderen Rechner oder Läufer hätte das Tor rot gemacht,
 ohne dass sich Code änderte; deshalb trägt jede Zeile ihre Fassung, und eine
 andere wird übersprungen statt rot.
 

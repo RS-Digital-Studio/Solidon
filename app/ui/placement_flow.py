@@ -6190,7 +6190,7 @@ class PlacementFlow(QObject):
             Anordnung löst einen ungünstigen früheren Platz, statt ein weiteres
             Feld am unteren Rand zu stapeln."""
             # **Auch die Notlage hält frei, was frei bleiben muss — solange im
-            # Bild noch Platz ist.** Die vom Kunden gelegte Karte immer; Setzpunkt,
+            # Bild noch Platz ist.** Die vom Kunden gelegte Karte zuerst; Setzpunkt,
             # Bewegungsgriff und Vorschauband erst mit ihrem Abstand, dann ohne
             # ihn, und erst zuletzt gar nicht. Sonst gälte die Zusage „man
             # sieht, wohin man setzt" genau dort nicht, wo es eng wird, und ein

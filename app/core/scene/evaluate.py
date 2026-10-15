@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import importlib
 import math
-import sys
 import threading
 from collections import Counter, OrderedDict
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
@@ -4535,12 +4535,24 @@ def _next_generation() -> int:
 
 
 def _step_ways() -> tuple[Any, ...]:
-    """Jede Funktion, an der die Antwort eines gemerkten Schritts hängt — einmal je Auswertung."""
+    """Jede Funktion, an der die Antwort eines gemerkten Schritts hängt — einmal je Auswertung.
+
+    Jeder Name aus :data:`_STEP_WAY_MODULES` wird importiert und trägt
+    mindestens eine eigene Funktion bei. Ein fehlendes Modul bricht mit
+    ``ModuleNotFoundError`` ab, eines ohne eigene Funktion mit
+    ``InternalError``: Übersprungen verlöre der Merker still die Rechenwege,
+    und ein Test, der dort eine Funktion ersetzt, bekäme einen Schritt, der
+    unter der alten entstand (CS-10).
+    """
     ways: list[Any] = []
     for name in _STEP_WAY_MODULES:
-        module = sys.modules.get(name)
-        if module is not None:
-            ways.extend(value for value in vars(module).values() if callable(value))
+        found = [value for value in vars(importlib.import_module(name)).values() if callable(value)]
+        if not any(getattr(value, "__module__", None) == name for value in found):
+            raise InternalError(
+                detail="a module of the remembered step ways defines no function",
+                values={"name": name},
+            )
+        ways.extend(found)
     return tuple(ways)
 
 

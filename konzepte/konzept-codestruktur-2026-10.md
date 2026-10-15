@@ -114,8 +114,8 @@ großen Dateien entfallen, ebenfalls ohne Merges:
 | `app/ui/viewport.py` | 164 |
 | `app/core/perceive/features.py` | 145 |
 
-Jeder zehnte Commit ändert `main_window.py`. Bei drei Maschinen und mehreren
-Sitzungen je Welle ändern fast alle Zweige dieselben sechs Dateien.
+Jeder zehnte Commit ändert `main_window.py`. Bei mehreren Sitzungen je Welle
+ändern fast alle Zweige dieselben sechs Dateien.
 
 **Karten am Anschlag.** Die Grenze je Karte ist 25 KB (25 600 Byte,
 `tests/test_directory_docs.py`):
@@ -745,7 +745,7 @@ Sperrklinke kürzer als heute.
   erst nach dem Attributgraphen bekannt.
 - **Rund 25 neue Karten** wollen gepflegt werden. `test_directory_docs`
   verlangt sie und prüft ihre Verweise; die Elternkarten werden dafür kürzer.
-- **Alte Pfade außerhalb des Repositorys** (Erinnerungen auf drei Maschinen,
+- **Alte Pfade außerhalb des Repositorys** (Erinnerungen je Maschine,
   Konzepte im Archiv) veralten. Wo ein Paket den Modulnamen übernimmt, bleibt
   der Name richtig; nur `….py`-Pfade werden falsch.
 - **Eigene Bausteine der Kunden** importieren aus `knowledge.parts` und

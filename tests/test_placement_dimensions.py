@@ -819,7 +819,9 @@ def test_dimension_fields_do_not_overlap_at_zoomed_view_edges(
         viewport.close()
 
 
-def test_the_dimension_fields_leave_the_movement_handle_alone(qt_app: QApplication) -> None:
+def test_the_dimension_fields_leave_the_movement_handle_alone(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Pfeile und Ringe bleiben greifbar — kein Feld liegt über dem Griff.
 
     Ein Qt-Widget über der Renderfläche nimmt die Zeigerereignisse an, und die
@@ -828,51 +830,94 @@ def test_the_dimension_fields_leave_the_movement_handle_alone(qt_app: QApplicati
     Maße genau dort standen, wo der Griff hängt (Robert, 10.09.2026: „ich kann
     die pfeile und das drehen nicht mehr bedienen").
 
-    Die Gegenprobe dazu ist der zweite Teil: Ohne gemeldeten Griff darf dieselbe
-    Fläche belegt werden — sonst prüft der Test eine Anordnung und keine Regel.
+    Zwei Wege, beide geprüft. Bei 900 × 600 findet die Nähe-Suche Platz neben
+    dem Griff; die Gegenprobe dazu: Ohne gemeldeten Griff darf dieselbe Fläche
+    belegt werden — sonst prüft der Test eine Anordnung und keine Regel. Bei
+    700 × 460 ist es zu eng, und die Notanordnung muss den Griff als Hindernis
+    bekommen, erst mit, dann ohne Abstand (FD-84); geprüft wird die Übergabe
+    selbst, denn dort deckt sie ihn zwangsläufig.
+
+    **Mit echter Schrift und im Thema des Kunden** (``tests.md``, „Isolation
+    heißt Betriebslage“): Ob die Felder in die Notanordnung geraten, entscheidet
+    ihre Schriftbreite. Mit Windows' schriftloser Offscreen-Lage rechnete die
+    Notanordnung schon bei 900 × 600, mit der DejaVu Sans der Linux-CI gar nicht
+    — dort blieb der Fall grün, auch als sie den Griff nicht mehr kannte
+    (Schlussreview D0, RF-15). Zurückgegeben wird das Aussehen in ``conftest.py``.
     """
-    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 6.0, "bottom")
-    try:
-        # Mitten ins Bild, sonst klemmt der Rand die Felder ohnehin weg und die
-        # Gegenprobe unten misst die Bildgrenze statt der Regel.
-        viewport.renderer.world_to_display = lambda point: (
-            450 + (point[0] - 10) * 6.0,
-            300 + (point[1] - 10) * 6.0,
-            0.5,
-        )
-        flow.redraw()
-        qt_app.processEvents()
-        widgets = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
-        frei = [widget.geometry() for widget in widgets]
+    from app.ui import placement_flow
+    from app.ui.style import apply_style
+    from app.ui.theme import apply_theme
+    from tests.bundled_fonts import bundled_font
 
-        # Der Griff reicht über den Körper samt seinem Freiraum hinaus (36 mm bei
-        # 20 mm halber Platte und 10 mm Freiraum): Seit dem 22.09.2026 stehen
-        # die Felder neben dem ganz sichtbaren Körper, und ein kleinerer Griff
-        # träfe dort gar kein Feld — die Gegenprobe unten misst dann nichts.
-        viewport.handle = ((10.0, 10.0, 0.0), 36.0)
-        flow.redraw()
-        qt_app.processEvents()
-        mitte = viewport.renderer.world_to_display((10.0, 10.0, 0.0))
-        rand = viewport.renderer.world_to_display((46.0, 10.0, 0.0))
-        weite = round(math.hypot(rand[0] - mitte[0], rand[1] - mitte[1]))
-        griff = QRect(
-            round(mitte[0]) - weite, round(mitte[1]) - weite, 2 * weite + 1, 2 * weite + 1
-        )
-        for widget in widgets:
-            assert not widget.geometry().intersects(griff), (
-                widget.objectName(),
-                widget.geometry(),
-                griff,
-            )
+    handed: list[tuple[list[QRect], ...]] = []
+    emergency = placement_flow.emergency_places
 
-        assert any(rechteck.intersects(griff) for rechteck in frei), (
-            "ohne gemeldeten Griff lagen die Felder gar nicht dort — der Test misst nichts"
-        )
-    finally:
-        flow.dispose()
-        session.release()
-        dialog.close()
-        viewport.close()
+    def spy(
+        sizes: list[object], bounds: QRect, fixed: list[QRect], tiers: list[list[QRect]]
+    ) -> list[QRect]:
+        handed.append(tuple(list(tier) for tier in tiers))
+        return emergency(sizes, bounds, fixed, tiers)
+
+    monkeypatch.setattr(placement_flow, "emergency_places", spy)
+    with bundled_font(qt_app, 9):
+        apply_theme(qt_app, "dark")
+        apply_style(qt_app, "dark")
+        for size in ((900, 600), (700, 460)):
+            flow, session, viewport, dialog = placement_layout(qt_app, size, 6.0, "bottom")
+            try:
+                # Mitten ins Bild, sonst klemmt der Rand die Felder ohnehin weg
+                # und die Gegenprobe misst die Bildgrenze statt der Regel.
+                middle = (size[0] // 2, size[1] // 2)
+                viewport.renderer.world_to_display = lambda point, middle=middle: (
+                    middle[0] + (point[0] - 10) * 6.0,
+                    middle[1] + (point[1] - 10) * 6.0,
+                    0.5,
+                )
+                flow.redraw()
+                qt_app.processEvents()
+                widgets = [
+                    *flow._reference_boxes[:2],
+                    *flow._centre_measures,
+                    flow._reference_boxes[2],
+                ]
+                frei = [widget.geometry() for widget in widgets]
+
+                # Der Griff reicht über den Körper samt seinem Freiraum hinaus
+                # (36 mm bei 20 mm halber Platte und 10 mm Freiraum): Die Felder
+                # stehen neben dem ganz sichtbaren Körper, und ein kleinerer
+                # Griff träfe dort gar kein Feld — die Gegenprobe misst dann nichts.
+                viewport.handle = ((10.0, 10.0, 0.0), 36.0)
+                handed.clear()
+                flow.redraw()
+                qt_app.processEvents()
+                mitte = viewport.renderer.world_to_display((10.0, 10.0, 0.0))
+                rand = viewport.renderer.world_to_display((46.0, 10.0, 0.0))
+                weite = round(math.hypot(rand[0] - mitte[0], rand[1] - mitte[1]))
+                griff = QRect(
+                    round(mitte[0]) - weite, round(mitte[1]) - weite, 2 * weite + 1, 2 * weite + 1
+                )
+                if size == (900, 600):
+                    assert not handed, "Voraussetzung: Platz für die Nähe-Suche"
+                    for widget in widgets:
+                        assert not widget.geometry().intersects(griff), (
+                            widget.objectName(),
+                            widget.geometry(),
+                            griff,
+                        )
+                    assert any(rechteck.intersects(griff) for rechteck in frei), (
+                        "ohne gemeldeten Griff lagen die Felder gar nicht dort — "
+                        "der Test misst nichts"
+                    )
+                else:
+                    assert handed, "Voraussetzung: die Notanordnung rechnet"
+                    strict, bare, _last = handed[-1]
+                    assert any(rect.contains(griff) for rect in strict), (griff, strict)
+                    assert any(rect.intersects(griff) for rect in bare), (griff, bare)
+            finally:
+                flow.dispose()
+                session.release()
+                dialog.close()
+                viewport.close()
 
 
 def test_the_dimension_lines_leave_the_movement_handle_alone(qt_app: QApplication) -> None:

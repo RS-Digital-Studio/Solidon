@@ -486,7 +486,7 @@ und ihr Ende nimmt sofort die jüngste Stelle.
   (`for_a_worker`, `WORKER_COPIES_KEPT`); jede Rechnung an ihr läuft unter
   ihrem Schloss (`on_the_copy`). Kopien für Nebenfäden entstehen mit
   `features.copy_with_answers`, nie mit `raw.copy(include_cache=True)` allein
-  (was geteilt wird: `kern.md`); eine umgebaute Kopie (`repair`) nimmt
+  (`kern.md`); eine umgebaute Kopie (`repair`) nimmt
   `copy()` und erbt nichts.
 * Unter `placement_flow.AT_ONCE_BELOW` Dreiecken rechnet der Fluss im
   Hauptfaden am Original; getippte Werte und große Körper bleiben beim
@@ -495,8 +495,8 @@ und ihr Ende nimmt sofort die jüngste Stelle.
   wird nur, was noch gewählt ist, und ein Absturz ist ein Fehlerbericht.
 * **Ein Filter an der Anwendung, nicht einer je Anliegen:** `app_events.listen`
   und `app_events.forget` (`test_app_events` prüft den Quelltext). Der
-  Verteiler hält seine Zuhörer schwach wie `installEventFilter`; ein Zuhörer
-  braucht deshalb einen Elternteil oder einen Besitzer.
+  Verteiler hält Zuhörer schwach wie `installEventFilter` (mit Elternteil
+  oder Besitzer) und läuft über `_listeners` nur als Schnappschuss (FD-167).
 * **Die Vorbereitung zählt, statt zu verschneiden:** `placement._patch_area`
   baut die Fläche aus ihrem Rand und prüft sie; nur Abgelehntes geht durch
   `union_all`.

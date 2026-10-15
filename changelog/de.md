@@ -86,6 +86,7 @@ Nutzen da und sonst nichts.
 - Ohne Freischaltung sind auch *Parameter anlegen …*, *Bewegen*, *Teilen*, die Tasten im Verlauf und die Maße im Bild grau. Jeder Grund nennt den Weg, etwa *Hilfe → Solidon freischalten …*.
 - Wartet eine Handlung im Prüfbericht auf die laufende Berechnung, sagt sie, dass sie danach wieder frei ist, auch einem Bildschirmleser.
 - Auf einer leeren Szene nennen die grauen Werkzeuge wie *Schnitt* und *Messen* ihren Grund: Sie brauchen einen Körper. Bisher stand im Hinweis nur ihr Name.
+- Wird es im Bild eng, bleiben alle Maßfelder sichtbar und lassen den Griff zum Verschieben frei. Bisher konnte ein Feld unter den Bildrand rutschen oder die Pfeile des Griffs verdecken.
 - Meldungen in der Statuszeile setzen keinen Doppelpunkt mehr hinter einen ganzen Satz.
 - Mit nur einem Körper ist der Objektbaum so hoch wie sein Inhalt, ebenso der Verlauf mit einem Schritt. In Version 0.6.0 blieb darunter leerer Platz.
 - Der neueste Schritt bleibt im Verlauf zu sehen, wenn neue Körper den Objektbaum wachsen lassen. In Version 0.6.0 rutschte er unter den Rand der Karte.

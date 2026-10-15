@@ -1447,7 +1447,7 @@ def test_the_mark_at_a_slot_is_the_slot_and_not_its_bore(qt_app: object) -> None
 def test_slot_grip_snap_labels_and_clearance_follow_the_preview(qt_app: object) -> None:
     """Rastung, Beschriftung und freier Raum gehören zum aktuellen Griffstand."""
     from app.ui.labels import length
-    from app.ui.viewport import Viewport, slot_measure_seat
+    from app.ui.viewport import GIZMO_LABEL_GAP, Viewport, slot_measure_seat
 
     load_operations()
     viewport = Viewport()
@@ -1487,6 +1487,50 @@ def test_slot_grip_snap_labels_and_clearance_follow_the_preview(qt_app: object) 
         for point, way in zip(viewport._gizmo_label_base[-3:-1], outward, strict=True):
             beyond = float((np.asarray(point, dtype=float) - middle) @ way)
             assert beyond >= float(way @ way) - 1e-9, "das L steht hinter seinem Knopf"
+        # Jedes L steht bei seinem Knopf des aktuellen Zugs und neben dessen Hülle
+        # im Bild, nicht mehr fest auf dem Weltpunkt der Lücke: Seit ``a408a0620``
+        # weicht es der projizierten Knopfhülle aus (FD-73).
+        seats = [np.asarray(renderer.world_to_display(seat)[:2]) for seat in handle.knob_seats]
+        letters = [
+            np.asarray(renderer.world_to_display(tuple(point))[:2])
+            for point in viewport._gizmo_label_base[-3:-1]
+        ]
+        for own, letter in enumerate(letters):
+            nearest = min(range(len(seats)), key=lambda one: np.linalg.norm(letter - seats[one]))
+            assert nearest == own, (letter, seats)
+            gap_point = np.asarray(centre) + (np.asarray(handle.knob_seats[own]) - centre) * (
+                GIZMO_LABEL_GAP
+            )
+            outward = np.asarray(renderer.world_to_display(tuple(gap_point))[:2]) - seats[own]
+            assert np.dot(letter - seats[own], outward) > 0, "vom Knopf aus nach außen"
+        # Das deckende Textfeld des L samt Leseabstand liegt neben jeder Knopfhülle.
+        from PySide6.QtGui import QFont, QFontMetricsF
+
+        from app.ui.style import TIGHT
+
+        style = viewport._gizmo_labels.style
+        font = QFont(viewport.font())
+        font.setPixelSize(style.font_size)
+        font.setBold(style.bold)
+        metrics = QFontMetricsF(font)
+        ratio = renderer.device_ratio()
+        half = np.asarray(
+            [
+                (metrics.horizontalAdvance("L") / 2 + style.margin + TIGHT) * ratio,
+                (metrics.height() / 2 + style.margin + TIGHT) * ratio,
+            ]
+        )
+        for knob in handle.knobs:
+            pixels = np.asarray(
+                [
+                    renderer.world_to_display(tuple(point))[:2]
+                    for point in knob.points + np.asarray(knob.position())
+                ]
+            )
+            low, high = pixels.min(axis=0), pixels.max(axis=0)
+            for letter in letters:
+                apart = (letter + half <= low) | (letter - half >= high)
+                assert apart.any(), (letter, low, high)
         np.testing.assert_allclose(
             viewport._gizmo_label_base[-1], slot_measure_seat(handle), atol=1e-9
         )

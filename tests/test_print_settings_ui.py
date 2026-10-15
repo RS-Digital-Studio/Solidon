@@ -425,7 +425,12 @@ def test_late_slicer_profile_outcomes_keep_the_outer_frame(
             for _ in range(3):
                 qt_app.processEvents()
             assert toggle.isChecked() is expected_checked
-            assert queued and queued[-1] == "explicit"
+            # Der Klick verlangt ausdrücklich; die Messung selbst stellt ihre
+            # Layoutanfragen zu, und der Inhalt meldet danach ein passives Echo
+            # (``_refit_sections``). Ob es vor dem Ende der Runden ankommt, hängt an
+            # der Rechnerlast — 1 von 12 Läufen. Es ändert den Rahmen nicht, das prüft
+            # die Zeile darunter.
+            assert "explicit" in queued, queued
             assert dialog.frameGeometry().topLeft() == folded_frame.topLeft()
     finally:
         dialog.reject()
