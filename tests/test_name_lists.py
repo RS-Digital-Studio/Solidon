@@ -61,16 +61,24 @@ MATCHING = "app.core.perceive.matching"
 #: (``test_import_resolution.py``) ein echter, unauflösbarer Bezug.
 ABSENT = "cs0_name_lists_absent"
 
-#: Die Grundmengen aus dem Plan (2.6, Anhang A S15 bis S17). ``RAW_WINDOW_PACKAGES``
-#: hatte dort 26 Schlüssel mit Modulstamm; seit D0 (E10) nennt eine Kennung nur
-#: die Funktion, und es sind 21.
+#: Untergrenzen der Grundmengen, je mit ihrer Herkunft. Wo der Plan keine Zahl
+#: nennt, heißt die Untergrenze nur „nicht leer“: Der heutige Ist-Wert als
+#: Untergrenze machte jede berechtigte Streichung eines Eintrags rot (Regel 8).
 GROUND_SETS = {
+    # Plan 2.6 a)
     "_OPERATION_MODULES": 31,
-    "SHIPPED_MODULES": 13,
+    # Plan 2.6 b) nennt keine Zahl
+    "SHIPPED_MODULES": 1,
+    # Plan 1.3
     "_STEP_WAY_MODULES": 8,
-    "_MATCH_WAYS": 22,
+    # Plan 2.6 d) nennt keine Zahl
+    "_MATCH_WAYS": 1,
+    # Plan 2.0 (``_EXPORTS`` in 7 Paketen)
     "Lazy-Pakete": 7,
+    # Plan 2.6 g), Anhang A S15
     "app-Zeichenketten": 52,
+    # Plan 2.6 h) zählte 26 Schlüssel mit Modulstamm; seit D0 (E10) nennt eine
+    # Kennung nur die Funktion — Zählung an ``fc597cac9``
     "Meldungsfenster": 21,
 }
 
@@ -240,7 +248,7 @@ def test_every_list_has_its_ground_set(scan: function_scan.UiScan) -> None:
         "Meldungsfenster": len(scan.raw_windows),
     }
     short = {name: size for name, size in sizes.items() if size < GROUND_SETS[name]}
-    assert not short, f"kleiner als im Plan: {short} (Plan {GROUND_SETS})"
+    assert not short, f"unter der Untergrenze: {short} (Untergrenzen {GROUND_SETS})"
 
 
 # ------------------------------------------------------------------------- a) und b)
