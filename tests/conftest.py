@@ -16,7 +16,7 @@ import shutil
 import sys
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -1313,6 +1313,27 @@ def qt_app() -> object:
     # Hauptfaden ab (RM-021), sonst verklemmt sich ein Arbeiter mit ihm.
     collect_in_main_thread(application)
     return application
+
+
+@pytest.fixture
+def record_trace(request: pytest.FixtureRequest) -> Callable[[str, object], None]:
+    """Befunddaten eines Falls an seinen Bericht — ``record_property`` ohne JUnit.
+
+    ``record_property`` schreibt nur in den JUnit-Bericht, und der ist in jedem
+    Lauf ``xunit2``: ``tools/run_suite_isolated.py`` und ``build.yml`` setzen
+    ``--junitxml`` ohne Familie, und pytest lehnt die Fixture dort mit einer
+    Warnung ab — unter ``filterwarnings = error`` ein Setup-Fehler. Die
+    Fensterauswahl ohne JUnit blieb grün, der Release-Job ``windows`` wäre an
+    jedem solchen Fall rot gewesen (RD-9). Hier wird jeder Wert ein eigener
+    Abschnitt des Berichts: Ein roter Fall zeigt ihn als „Captured trace
+    <name> call“, ein grüner mit ``-rP``. ``test_suite_isolation.py`` hält,
+    dass kein Test ``record_property`` anfordert.
+    """
+
+    def record(name: str, value: object) -> None:
+        request.node.add_report_section("call", f"trace {name}", str(value))
+
+    return record
 
 
 @pytest.fixture

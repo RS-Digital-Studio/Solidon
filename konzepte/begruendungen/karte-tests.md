@@ -278,6 +278,7 @@ von weiterhin zwei unabhängigen Bauten für den Determinismusvergleich.
 | Kommt ein Backslash in einem Pfad als Backslash an statt als Steuerzeichen? | `test_source_escapes.py` — jedes Oktal-Escape außer `\0` und jedes rohe Steuerzeichen in einer nicht rohen Zeichenkette unter `app/`, `tests/`, `tools/`, `website/`, `packaging/`; Hex-Escapes sind die gewollte Form |
 | Bleiben Musteränderung und -entfernung auf STL-gerundeten Zylinderfacetten dicht und frei von Selbstschnitten? | `test_pattern_features.py` — binärer STL-Rundlauf in beiden Güten, getrennte Importfelder und deren unabhängige Bearbeitung, Schnittprüfung, Wiedererkennung, Winkelnaht, Abbruch und Attributerhalt; `test_platform_identity.py` prüft die Ausrichtung aufrecht und gekippt gegen Plattformrauschen. *Aus der Karte verschoben, als die Suche (RM-735) ihre Zeile bekam.* |
 | Findet die Suche, was der Kunde tippt? | `test_search.py` — drei Runden, Güte, Vorauswahl und Kundenwörter in jeder Sprache, ohne Fenster; das Suchfeld der Karte mit Trefferliste, Tasten und Hinweiszeile in `test_selection_operations.py` |
+| Verträgt jeder Fall den JUnit-Bericht der CI? | `test_suite_isolation.py` — kein Fall fordert `record_property` oder `record_xml_attribute` an (im `xunit2`-Bericht von `run_suite_isolated.py` ein Setup-Fehler), mit Gegenprobe; Befunddaten legt `record_trace` aus `conftest.py` als Berichtsabschnitt ab |
 
 ## Helfer
 

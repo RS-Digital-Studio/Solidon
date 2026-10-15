@@ -362,7 +362,7 @@ def test_fitting_field_at_scroll_end_is_not_reported_as_visible(wheel_scene: Whe
 
 
 def test_two_scrollable_areas_reveal_the_whole_target_without_turning_back(
-    wheel_scene: WheelScene, record_property: Any
+    wheel_scene: WheelScene, record_trace: Any
 ) -> None:
     """RF77-M1: H80 in H100 braucht den äußeren Empfänger und einen kurzen Radweg."""
     from tools.function_walk import MOST_WAY_CLICKS
@@ -401,8 +401,8 @@ def test_two_scrollable_areas_reveal_the_whole_target_without_turning_back(
                 "target": _target_in(target, outer).getRect(),
             }
         )
-    record_property("wheel_trace", str(trace))
-    record_property("received_angles", str(outer_events.angles))
+    record_trace("wheel_trace", str(trace))
+    record_trace("received_angles", str(outer_events.angles))
     assert trace, "Die treffbare Mitte ist noch kein vollständig sichtbares Feld."
     assert ports.next_click("setting:probe").why == "ziel", trace
     assert inner.verticalScrollBar().value() == 0, trace
@@ -439,7 +439,7 @@ def test_unusable_scroll_step_does_not_send_input(wheel_scene: WheelScene, step:
 
 @pytest.mark.parametrize("missing", [1, 2, 19, 30])
 def test_short_wheel_remainder_stops_with_both_edges_visible(
-    wheel_scene: WheelScene, missing: int, record_property: Any
+    wheel_scene: WheelScene, missing: int, record_trace: Any
 ) -> None:
     """Auch eine einzelne fehlende Pixelzeile braucht eine echte kurze Radeingabe."""
     top, outer, content = wheel_scene
@@ -454,7 +454,7 @@ def test_short_wheel_remainder_stops_with_both_edges_visible(
     assert before.bottom() - outer.viewport().rect().bottom() == missing
     row = _roll_next(ports)
     after = _target_in(target, outer)
-    record_property(
+    record_trace(
         "short_wheel",
         str(
             {
@@ -504,7 +504,7 @@ def test_fake_walk_preserves_the_positive_wheel_amount(angle: int) -> None:
 
 @pytest.mark.parametrize("kind", ["field", "feature.field", "measure.field"])
 def test_scrolling_a_value_field_keeps_the_scrollbar_receiver(
-    wheel_scene: WheelScene, kind: str, record_property: Any
+    wheel_scene: WheelScene, kind: str, record_trace: Any
 ) -> None:
     """Der Rollweg eines ValueField darf nicht zu dessen Zahlenkästchen umgelenkt werden."""
     from app.core import guides
@@ -528,7 +528,7 @@ def test_scrolling_a_value_field_keeps_the_scrollbar_receiver(
     assert step.why == "rollen" and step.wheel_angle < 120
     assert ports.aim(step, step.rect.center()) == step.rect.center()
     row = _roll_next(ports, name)
-    record_property("field_wheel", str(row))
+    record_trace("field_wheel", str(row))
     assert row["widget_at"]["class"] == "QScrollBar"
     assert observer.angles == [-step.wheel_angle]
     assert outer.viewport().rect().contains(_target_in(target, outer))
@@ -541,7 +541,7 @@ def test_scrolling_a_value_field_keeps_the_scrollbar_receiver(
 
 
 def test_nested_scroll_reveals_inner_viewport_before_its_lower_field(
-    wheel_scene: WheelScene, record_property: Any
+    wheel_scene: WheelScene, record_trace: Any
 ) -> None:
     """RF77-M1: Innen passt das Feld gerade; außen muss erst dieser Ausschnitt frei werden."""
     from tools.function_walk import MOST_WAY_CLICKS, Walk
@@ -592,8 +592,8 @@ def test_nested_scroll_reveals_inner_viewport_before_its_lower_field(
         assert inner_events.angles and outer_events.angles
         assert len(rows) <= MOST_WAY_CLICKS
     finally:
-        record_property("nested_lower_states", str(states))
-        record_property("nested_lower_events", str(rows))
-        record_property(
+        record_trace("nested_lower_states", str(states))
+        record_trace("nested_lower_events", str(rows))
+        record_trace(
             "nested_received", str({"inner": inner_events.angles, "outer": outer_events.angles})
         )
