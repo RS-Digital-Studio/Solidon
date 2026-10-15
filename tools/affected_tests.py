@@ -21,8 +21,11 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
    Kerntrennung, Fehlertexte, Verzeichniskarten —, selbst oder über ein
    Modul unter ``tests/`` oder ``tools/``, das Python-Quellen sucht
    (``tests/source_tree.py``, ``tools/code_facts.py``). Diese Wächter sehen
-   jede Änderung an ``app/`` oder ``tools/`` und gehören deshalb zu jeder
-   dazu; oder
+   jede Änderung an Python unter ``app/``, ``tools/`` oder ``tests/`` und
+   gehören deshalb zu jeder dazu — auch zu einer reinen Teständerung, denn
+   private Querimporte, Definitionen in einer Datei der Sperrklinke und flache
+   Globs entstehen gerade dort (``test_toolchain``, ``test_size_ratchet``,
+   ``test_source_readers``); oder
 4. eine geänderte Nicht-Python-Datei oder ein Skript außerhalb der Pakete
    bei ihrem Namen genannt wird — ``ROADMAP.md``, ``constraints.txt``, ein
    Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/`` —, auch über
@@ -182,8 +185,9 @@ class ImportGraph:
 
 
 #: ``tests/conftest.py`` lädt pytest als Plugin unter seinem bloßen Namen;
-#: ``import conftest`` erreicht genau dieses Modul, ``tests.conftest`` führte
-#: es ein zweites Mal aus. Eine Änderung daran betrifft ohnehin jeden Test.
+#: ``import conftest`` erreicht genau dieses geladene Modul und lädt keine
+#: zweite Kopie wie der bloße Import eines anderen Helfers. Eine Änderung
+#: daran betrifft ohnehin jeden Test.
 _BARE_BY_DESIGN = frozenset({"conftest"})
 
 
@@ -394,14 +398,17 @@ def affected(
                 changed_modules.add(name)
                 if name.startswith("tests.") and path.name.startswith("test_"):
                     reasons.setdefault(graph.modules[name], "selbst geändert")
-                if name.startswith(("app.", "tools.")) or name in ("app", "tools"):
-                    touches_code = True
+                # Jedes Modul des Graphen ist Code unter app/, tools/ oder tests/,
+                # und die Baumleser lesen alle drei: Welcher davon auch tests/
+                # liest, steht nicht im Quelltext — test_directory_docs nennt
+                # den Ordner nirgends.
+                touches_code = True
                 if name.startswith("tools."):
                     named_tools.append(path.name)
             elif name.split(".", 1)[0] in PACKAGES:
                 # Gelöschte Module und Paketinitialisierer bleiben über ihre
                 # Importkanten erreichbar, auch Helfer unter tests/.
-                touches_code |= name.split(".", 1)[0] in {"app", "tools"}
+                touches_code = True
                 changed_modules.add(name)
                 deleted_modules.add(name)
                 _note_readers(
