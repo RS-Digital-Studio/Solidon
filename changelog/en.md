@@ -71,6 +71,7 @@ it into `website/version.json`.
 - Counterparts ask for pair and size first and explain both halves. Shape and fit are under “More settings”. The initial dialog height fits its content.
 - After a preview is refused, the next preview's text remains fully readable.
 - The status line with material and print time now says “since the last step” only for what a step changed. While the slicer profile values are still being read, it says “provisional”.
+- Material and print time always show in full in the status bar. When the bar is full, the message beside them is shortened, and its full sentence is in the tooltip.
 
 ### Printing and slicer handover
 

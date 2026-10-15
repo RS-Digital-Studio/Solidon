@@ -99,6 +99,7 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 | Ort / Frage | Vertrag |
 |---|---|
 | `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export samt `_warm_the_slicer`, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
+| `status_line.py` | `StatusLine`, die Meldung der Statusleiste: `text()` bleibt der ganze Satz, gezeichnet wird gekürzt, gekürzt steht er in der Kurzhilfe. Sie gibt als Erste nach; die Zahlenzeile (`facts.PrintFacts`) ist nie schmaler als ihre zwei Zeilen (FD-90) |
 
 *Früher unter „Die Karte › Rahmen und Einstieg“, HEAD-Fassung.*
 

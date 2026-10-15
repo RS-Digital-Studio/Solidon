@@ -71,6 +71,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os elementos correspondentes pedem par e tamanho e explicam ambas as metades. Forma e ajuste ficam em «Mais definições». A altura inicial do diálogo adapta-se ao conteúdo.
 - Após a recusa de uma pré-visualização, os textos da seguinte continuam totalmente legíveis.
 - A linha com material e duração da impressão só indica «desde o último passo» o que um passo alterou. Enquanto os valores do perfil de slicer ainda estão a ser lidos, mostra «provisório».
+- O material e a duração da impressão aparecem sempre por inteiro na barra de estado. Se a barra estiver cheia, a mensagem ao lado encurta-se, e a frase completa fica na dica.
 
 ### Imprimir e entregar ao slicer
 

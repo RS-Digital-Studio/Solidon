@@ -28,7 +28,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QWidget
 from app.core.slice.estimate import Estimate
 from app.i18n import tr
 from app.ui.labels import localised
-from app.ui.style import NORMAL, set_level
+from app.ui.style import NORMAL, TIGHT, set_level
 
 
 def duration(seconds: float) -> str:
@@ -92,7 +92,9 @@ class PrintFacts(QToolButton):
         set_level(self.delta, "caption")
 
         row = QHBoxLayout(self)
-        row.setContentsMargins(0, 0, 0, 0)
+        # Innen ein Abstand zur Kante des flachen Knopfs: ohne ihn stand die
+        # Zahl auf seinem Rahmen, und „12 g“ las sich als „2 g“ (FD-90).
+        row.setContentsMargins(TIGHT, 0, TIGHT, 0)
         row.setSpacing(NORMAL)
         row.addWidget(self.summary)
         row.addWidget(self.delta)
@@ -122,6 +124,14 @@ class PrintFacts(QToolButton):
             return hint
         content = layout.sizeHint()
         return QSize(max(hint.width(), content.width()), max(hint.height(), content.height()))
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        """Nie schmaler als beide Zeilen (FD-90): In der Statusleiste kürzt die Meldung.
+
+        Neben einem langen Satz stand sonst „14 g ·“, und die Differenz endete
+        in „Schrit…“ — Material und Dauer sind die Auskunft, die immer dasteht.
+        """
+        return self.sizeHint()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 — Qt-Name
         """Eingabe aktiviert dieselbe Handlung wie Leertaste und Klick."""

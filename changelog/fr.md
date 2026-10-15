@@ -72,6 +72,7 @@ dans `website/version.json`.
 - Les contreparties demandent paire et taille et expliquent les deux moitiés. Forme et ajustement sont dans « Autres réglages ». La hauteur initiale du dialogue suit le contenu.
 - Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
 - La ligne de matière et de durée d'impression n'indique plus « depuis la dernière étape » que ce qu'une étape a changé. Tant que les valeurs du profil de slicer sont en cours de lecture, elle affiche « provisoire ».
+- La matière et la durée d'impression s'affichent toujours en entier dans la barre d'état. Si la barre est pleine, le message à côté se raccourcit, et sa phrase complète figure dans l'infobulle.
 
 ### Imprimer et transmettre au slicer
 

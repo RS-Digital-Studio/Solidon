@@ -96,6 +96,7 @@ Nutzen da und sonst nichts.
 - Gegenstücke fragen zuerst nach Paar und Größe; die Auswahl erklärt beide Hälften. Form und Passung stehen unter „Weitere Einstellungen“. Die Anfangshöhe passt zum Inhalt.
 - Nach einer Vorschauabsage bleiben die Texte der nächsten Vorschau vollständig lesbar.
 - Die Zahlenzeile mit Material und Druckdauer nennt „seit dem letzten Schritt“ nur noch, was ein Schritt geändert hat. Solange die Werte des Slicerprofils noch gelesen werden, steht „vorläufig“ daneben.
+- Material und Druckdauer stehen in der Statusleiste immer ganz da. Ist die Leiste voll, kürzt sich die Meldung daneben, ihr ganzer Satz steht in der Kurzhilfe.
 
 ### Drucken und Übergabe an den Slicer
 

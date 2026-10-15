@@ -71,6 +71,7 @@ scrive in `website/version.json`.
 - Le controparti chiedono coppia e dimensioni e spiegano entrambe le metà. Forma e accoppiamento sono in «Altre impostazioni». L’altezza iniziale del dialogo segue il contenuto.
 - Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
 - La riga con materiale e durata di stampa indica «dall'ultimo passaggio» solo ciò che un passaggio ha cambiato. Finché i valori del profilo dello slicer sono ancora in lettura, riporta «provvisorio».
+- Materiale e durata di stampa sono sempre interi nella barra di stato. Se la barra è piena, il messaggio accanto si accorcia e la frase intera compare nel suggerimento.
 
 ### Stampare e passare allo slicer
 

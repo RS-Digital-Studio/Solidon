@@ -458,6 +458,7 @@ from app.ui.sketch_editor import (
 from app.ui.spacemouse import SpaceMouseController
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_paths, accepted_url, dropped_file
+from app.ui.status_line import StatusLine
 from app.ui.style import (
     NORMAL,
     ROOMY,
@@ -4648,7 +4649,7 @@ class MainWindow(QMainWindow):
 
     def _build_status_bar(self) -> None:
         self.measurements = MeasurementLabel(self)
-        self.status_message = QLabel("", self)
+        self.status_message = StatusLine(self)
         # **Keine Zahl im Balken.** Sie steht mittig, und der Rand der
         # Füllung wandert darunter hindurch: bei 45 % lag sie halb auf
         # Bernstein und halb auf der Spur, ab 60 % ganz auf Bernstein — mit
