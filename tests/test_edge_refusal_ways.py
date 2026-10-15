@@ -15,6 +15,7 @@ import pytest
 
 from app.core.errors import CANCEL, CHANGE_EDGES, CHANGE_FEATURE, CHANGE_SELECTION, GeometryError
 from app.core.geom.edges import too_large_for_the_faces, wanted
+from tests.helpers import exact_kernel
 
 
 def _refusal(make: Callable[[], object]) -> GeometryError:
@@ -84,3 +85,21 @@ def test_every_refusal_of_a_rounding_offers_another_feature() -> None:
     }
     assert len(found) >= 4, found
     assert all(ways.split(",")[0].strip() == "CHANGE_FEATURE" for ways in found.values()), found
+
+
+def test_no_edge_refusal_in_either_kernel_offers_other_objects() -> None:
+    """Die Kantenmodule beider Kerne kennen *Andere Objekte wählen* nicht mehr (RB-4).
+
+    Die Direktaufrufe oben erreichen nicht jede Stelle — ``check_varying_radius``,
+    ``_without_an_angle``, ``_check_corner_region``, ``_grouped_edge_work`` nennt
+    kein Test beim Namen. Eine zurückgedrehte Stelle braucht den Import wieder.
+    """
+    import inspect
+
+    from app.core.geom import edges
+
+    exact_kernel()
+    from app.core.brep import edit
+
+    for module in (edges, edit):
+        assert "CHANGE_SELECTION" not in inspect.getsource(module), module.__name__
