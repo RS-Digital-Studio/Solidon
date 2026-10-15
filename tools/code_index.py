@@ -108,6 +108,7 @@ from tools.code_facts import (  # noqa: E402
     live,
     load_cache,
     lookup,
+    query_alias,
     save_cache,
     source_files,
     stamp,
@@ -182,6 +183,9 @@ _NEEDS_ARGUMENTS = _SEQUENCE_CALLS | {
 _PATH_METHODS = frozenset({"resolve", "absolute", "expanduser", "joinpath", "with_suffix"})
 
 _REF_KINDS = {"attr": "attribute", "store": "store", "del": "delete"}
+
+#: Die Abfragen, deren Alias aus einem anderen Modul CS-34 meldet.
+_QUERIES = frozenset({"builtins.getattr", "builtins.hasattr"})
 
 
 # --------------------------------------------------------------------------- öffentliche Werte
@@ -306,6 +310,7 @@ class Index:
         self._import_readers: dict[tuple[str, str], set[str]] = {}
         #: Je Patch-Stelle die Module, die ihr Test danach neu lädt.
         self._reloaded: dict[tuple[str, int, int], frozenset[str]] = {}
+        self._aliases: list[tuple[str, str, str, int]] = []
 
     # ---- Bau
 
@@ -1267,7 +1272,25 @@ class Index:
         self._patch_sites.sort()
         self._unresolved = sorted(set(self._unresolved))
         self._heads.sort()
+        self._aliases = self._query_aliases()
         self.timings["resolve"] = time.perf_counter() - started
+
+    def _query_aliases(self) -> list[tuple[str, str, str, int]]:
+        """CS-34: ``has = hasattr`` auf Modulebene, das ein anderes Modul bezieht. Dort sieht der
+        Auszug den Aufruf nicht als Abfrage (nur ein Alias derselben Datei, CS-27)."""
+        found = []
+        for facts in self.files.values():
+            for name, binds in facts.scopes[0].binds.items():
+                for bind in effective(binds, facts.stub):
+                    if not query_alias(bind.value):
+                        continue
+                    values = {v.ref for _e, v in self._fold(facts, bind.value) if v.kind == "ext"}
+                    if not values & _QUERIES:
+                        continue
+                    refs = self._references.get((facts.module, name), ())
+                    if any(ref.path != facts.path for ref in refs):
+                        found.append((facts.module, name, facts.path, bind.line))
+        return sorted(set(found))
 
     def _count(self, key: str) -> None:
         self.counts[key] = self.counts.get(key, 0) + 1
@@ -1735,6 +1758,12 @@ class Index:
             for key in sorted(self.patched_names())
         }
 
+    def query_aliases(self) -> tuple[tuple[str, str, str, int], ...]:
+        """Jeder Alias von ``getattr``/``hasattr`` auf Modulebene, den ein anderes Modul bezieht:
+        Modul, Name, Datei, Zeile (CS-34). Seine Aufrufe dort sind für den Index keine Abfrage."""
+        self._analyse()
+        return tuple(self._aliases)
+
     def import_count(self) -> int:
         """Wie viele Importe die Dateien des Baums haben (Grundmenge von W5, Plan 2.5)."""
         self._analyse()
@@ -1752,6 +1781,7 @@ class Index:
             {key: tuple(sorted(set(found))) for key, found in self._references.items()},
             dict(self.counts),
             dict(self.timings),
+            tuple(self._aliases),
         )
 
     @classmethod
@@ -1775,6 +1805,7 @@ class Index:
         index._references = {key: list(found) for key, found in results.references.items()}
         index.counts = dict(results.counts)
         index.timings = dict(results.timings)
+        index._aliases = list(results.aliases)
         index._analysed = True
         return index
 

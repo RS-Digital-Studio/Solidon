@@ -6,12 +6,15 @@ als Bezug: Ein Schnitt, der ``N`` aus ``M`` verschiebt, ließe ``hasattr(M, "N")
 den nur ein ``hasattr`` liest, für ungelesen. Auch unter anderem Namen (``has = hasattr``,
 ``from builtins import hasattr as has``, ``builtins.hasattr``) ist es dieselbe Frage. Fragt der
 Code nach einem Namen, den es nicht gibt, ist das weiter kein Fund (W5).
+
+Einen Alias aus einem **anderen** Modul (``from tests.helfer import has``) erkennt der Auszug
+nicht als Abfrage; im Baum gibt es keinen, und ein Wächter hält das fest (CS-34).
 """
 
 from __future__ import annotations
 
 from tests.code_index_helpers import build_index
-from tools.code_index import Index
+from tools.code_index import Index, shared
 
 PATCH = """
 from app import mod
@@ -104,3 +107,43 @@ def test_a_function_that_only_shares_the_name_is_no_query() -> None:
     )
     assert not _kinds(index)
     assert not index.readers("app.mod", "FLAG")
+
+
+def test_no_module_draws_an_alias_of_getattr_or_hasattr_from_another_one() -> None:
+    """CS-34, Wächter am echten Baum: Bezieht ein Modul ``has = hasattr`` aus einem anderen,
+    sind seine Aufrufe für den Auflöser keine Abfrage — kein Bezug, kein Leser, nach einem
+    Schnitt still ``False``. Statt die Auflösung dafür zu bauen, gibt es die Form im Baum nicht;
+    taucht sie auf, ist hier die Stelle. Ausweg: ``hasattr``/``getattr`` selbst schreiben oder
+    den Alias in der Datei binden, die ihn ruft."""
+    found = shared().query_aliases()
+    assert not found, "\n".join(
+        f"{path}:{line}: {module}.{name} ist ein Alias von getattr/hasattr, den ein anderes "
+        "Modul bezieht"
+        for module, name, path, line in found
+    )
+
+
+def test_an_alias_drawn_from_another_module_is_found() -> None:
+    """Gegenprobe zum Wächter: über ``from … import`` und über das Modul als Attribut; ein
+    Alias, den nur seine eigene Datei ruft, und einer, den niemand bezieht, sind kein Fund."""
+    index = build_index(
+        {
+            "tests/query_alias.py": "has = hasattr\nlook = getattr\nunused = hasattr\n"
+            "mine = hasattr\n\n\n"
+            "def own(module):\n"
+            "    import tests.query_alias as me\n\n"
+            "    return me.mine(module, 'target')\n",
+            "tests/test_user.py": "import tests.query_alias as aliases\n"
+            "from app import mod\n"
+            "from tests.query_alias import has\n\n\n"
+            "def test_queries():\n"
+            "    assert has(mod, 'target')\n"
+            "    assert aliases.look(mod, 'target', None)\n",
+            "app/own.py": "from builtins import hasattr as ask\n\n\n"
+            "def probe(module):\n    return ask(module, 'target')\n",
+        }
+    )
+    assert index.query_aliases() == (
+        ("tests.query_alias", "has", "tests/query_alias.py", 1),
+        ("tests.query_alias", "look", "tests/query_alias.py", 2),
+    )

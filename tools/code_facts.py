@@ -1281,7 +1281,7 @@ class _Extractor:
             name
             for scope in self.f.scopes
             for name, binds in scope.binds.items()
-            if any(_query_alias(bind.value) for bind in binds)
+            if any(query_alias(bind.value) for bind in binds)
         }
         for node, number, runtime, checking in self.maybe:
             func = node.func
@@ -1354,7 +1354,7 @@ def _text_is(node: ast.expr | None, text: str) -> bool:
     return isinstance(node, ast.Constant) and node.value == text
 
 
-def _query_alias(value: IR) -> bool:
+def query_alias(value: IR) -> bool:
     """Ob eine Bindung ``getattr``/``hasattr`` unter anderem Namen sein kann."""
     queries = ("getattr", "hasattr")
     if isinstance(value, Use):

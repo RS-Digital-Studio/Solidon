@@ -140,6 +140,9 @@ class Results(NamedTuple):
     references: dict[tuple[str, str], tuple[Reference, ...]]
     counts: dict[str, int]
     timings: dict[str, float]
+    #: Je Alias von ``getattr``/``hasattr``, den ein anderes Modul bezieht: Modul, Name, Datei,
+    #: Zeile (CS-34, ``Index.query_aliases``).
+    aliases: tuple[tuple[str, str, str, int], ...] = ()
 
 
 def constant(value: object) -> Val:
