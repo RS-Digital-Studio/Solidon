@@ -50,6 +50,8 @@ def test_a_length_row_speaks_inches_and_stores_millimetres(qt_app: QApplication)
             if box.property("parameterName") == "breite"
         )
         assert unit._compact_text() == "in", "die Einheit daneben sagt Zoll"
+        # Auch die geöffnete Liste sagt Zoll, nicht „mm — Länge“ (RA-5).
+        assert unit.itemText(unit.findData("mm")) == "in — Länge", unit.itemText(0)
         derived = [label.text() for label in panel.findChildren(QLabel) if label.text() == "2,0000"]
         assert derived, "auch das abgeleitete Maß in Zoll"
 

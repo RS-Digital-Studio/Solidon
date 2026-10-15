@@ -4022,7 +4022,7 @@ class ParameterPanel(QWidget):
         """Die kompakte, nicht editierbare Einheitenauswahl einer Zeile."""
         editor = _CompactParameterUnitBox(self)
         wheel_needs_focus(editor)
-        fill_parameter_units(editor, selected)
+        fill_parameter_units(editor, selected, display_unit())
         editor.setProperty("parameterName", name)
         editor.setAccessibleName(tr("Einheit"))
         editor.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)

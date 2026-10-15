@@ -13,7 +13,7 @@ from collections.abc import Iterator
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QLabel
+from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QComboBox, QLabel
 
 from app.core.types import Parameter
 from app.ui.labels import set_display_unit
@@ -64,6 +64,10 @@ def test_switching_to_inches_rewrites_derived_measures_and_limits(
         if widget.accessibleName() == "Breite"
     )
     assert spin.value() == pytest.approx(1.0)
+    unit = next(
+        box for box in panel.findChildren(QComboBox) if box.property("parameterName") == "breite"
+    )
+    assert unit.itemText(unit.findData("mm")) == "in — Länge", "die Einheitenliste ebenso (RA-5)"
     line = spin.lineEdit()
     line.setFocus()
     line.selectAll()
