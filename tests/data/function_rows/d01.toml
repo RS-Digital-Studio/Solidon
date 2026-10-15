@@ -1,0 +1,17 @@
+# Zeilenspezifikationen für D1 — Start, Öffnen, Speichern, Einfügen, Export.
+# Format: Bauplan D0 §2.4. Eine Zeile ohne Eintrag hier ist „ungeprüft“.
+
+# *Modell aus dem Netz …* fragt die Adresse; ins Netz geht erst *Herunterladen*
+# (FD-175).
+[row."meldung:action_import_url"]
+route = [{ target = "menu:menubar.modell_aus_dem_netz" }]
+
+# Die Speicherfrage: Eine Änderung (*Löschen* wirkt ohne Werte), dann *Neu* und
+# auf dem Startbildschirm *Leeres Projekt*. *Datei → Neu* selbst fragt nicht,
+# erst der Wechsel zum neuen Projekt.
+[row."meldung:confirm_unsaved"]
+route = [
+  { target = "operation:delete_object" },
+  { target = "menu:menubar.neu" },
+  { target = "start.new" },
+]

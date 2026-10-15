@@ -5,3 +5,19 @@
 # (FD-101).
 [row."filament.add"]
 route = [{ target = "menu:menubar.filamentlager" }]
+
+# Die neue Spule legt *Spule von Hand anlegen* im Filamentlager an (FD-175).
+[row."dialog:new_filament_dialog"]
+route = [{ target = "menu:menubar.filamentlager" }, { target = "filament.add" }]
+
+# Der Druckdialog: *An den Slicer übergeben …* mit dem gewählten Körper; der
+# Druckhinweis gilt im Profil als gesehen (FD-121, FD-175).
+[row."dialog:print_settings_dialog"]
+route = [{ target = "menu:menubar.an_den_slicer_uebergeben" }]
+
+# Die Farbwahl des Filaments im Druckdialog (``_ColourButton._choose``).
+[row."meldung:_choose"]
+route = [
+  { target = "menu:menubar.an_den_slicer_uebergeben" },
+  { target = "print:filament.colour" },
+]

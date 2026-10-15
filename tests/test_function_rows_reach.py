@@ -120,6 +120,114 @@ REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
     ),
     # D12: Der Druckhinweis vor dem Druckdialog, im eigenen Sprachfall mit offenem Hinweis.
     "dialog:print_disclosure_dialog": ("quader.exakt", ("menu:menubar.an_den_slicer_uebergeben",)),
+    # FD-175: die Fenster ohne Weg in D1, D2, D7, D9, D11 und D12, offscreen erreicht
+    # (Bericht ``fix-rest-c-claude.md``). Hilfe und Bearbeiten im leeren Projekt.
+    "dialog:about_dialog": ("leer", ("menu:menubar.ueber_solidon",)),
+    "dialog:activation_dialog": ("leer", ("menu:menubar.solidon_freischalten",)),
+    "dialog:changes_dialog": ("leer", ("menu:menubar.neuerungen",)),
+    "dialog:donation_dialog": ("leer", ("menu:menubar.app_unterstuetzen",)),
+    "dialog:install_dialog": ("leer", ("menu:menubar.zusaetzliche_programme",)),
+    "dialog:key_dialog": ("leer", ("menu:menubar.chat_einrichten",)),
+    "dialog:manual_window": ("leer", ("menu:menubar.handbuch",)),
+    "dialog:settings_dialog": ("leer", ("menu:menubar.einstellungen",)),
+    "dialog:shortcuts_window": ("leer", ("menu:menubar.tastenkuerzel",)),
+    "dialog:support_dialog": ("leer", ("menu:menubar.rueckmeldung_senden",)),
+    "dialog:first_run_dialog": ("startbildschirm", ("menu:menubar.erste_schritte",)),
+    "dialog:input_dialog": ("leer", ("menu:menubar.modell_aus_dem_netz",)),
+    "dialog:ask_dialog": (
+        "gewinde_zwei_reihen.netz",
+        ("tree.row:obj_1.thread_1", "tree.row:obj_2.face_1", "menu:menubar.gegenstuecke_setzen"),
+    ),
+    "dialog:message_dialog": (
+        "duenne_huelse.netz",
+        ("finding:perceive.thin_wall", "finding.action:show_details"),
+    ),
+    "meldung:show_details": (
+        "duenne_huelse.netz",
+        ("finding:perceive.thin_wall", "finding.action:show_details"),
+    ),
+    "dialog:operation_dialog": ("quader.exakt", ("tree.row:obj_1", "history.row:1")),
+    "dialog": ("quader.exakt", ("tree.row:obj_1", "history.row:1")),
+    "meldung:show_error": ("einfuegen.netz", ("tree.row:obj_1", "command:edit.auto_split")),
+    "dialog:main_window": ("leer", ("report",)),
+    "dialog:new_filament_dialog": ("leer", ("menu:menubar.filamentlager", "filament.add")),
+    "dialog:print_settings_dialog": (
+        "quader.exakt",
+        ("tree.row:obj_1", "menu:menubar.an_den_slicer_uebergeben"),
+    ),
+    "meldung:_choose": (
+        "quader.exakt",
+        ("tree.row:obj_1", "menu:menubar.an_den_slicer_uebergeben", "print:filament.colour"),
+    ),
+    "meldung:action_import_url": ("leer", ("menu:menubar.modell_aus_dem_netz",)),
+    "meldung:confirm_unsaved": (
+        "quader.exakt",
+        ("tree.row:obj_1", "operation:delete_object", "menu:menubar.neu", "start.new"),
+    ),
+    "part:*": ("leer", ("menu:menubar.bausteinkatalog",)),
+    "dialog:part_catalog": ("leer", ("menu:menubar.bausteinkatalog",)),
+    "dialog:generate_dialog": ("leer", ("menu:menubar.modell_erzeugen",)),
+    "dialog:organizer_dialog": ("leer", ("operation:create_organizer", "field:layout")),
+    "dialog:rebuild_dialog": ("quader.exakt", ("tree.row:obj_1", "selection.rebuild")),
+    "dialog:variants_dialog": (
+        "parameter.exakt",
+        ("tree.row:obj_1", "menu:menubar.varianten_erzeugen"),
+    ),
+    "dialog:sketch_editor_dialog": (
+        "quader.exakt",
+        (
+            "menu:menubar.bausteinkatalog",
+            "part:seal_gasket",
+            "dialog.accept",
+            "field:path_sketch",
+        ),
+    ),
+    "meldung:confirm_discard": (
+        "kasten_runden.exakt",
+        (
+            "tree.row:obj_1",
+            "menu:menubar.rueckgaengig",
+            "menu:menubar.rueckgaengig",
+            "history.row:2",
+            "history:insert",
+        ),
+    ),
+    "meldung:remove_history_operations": (
+        "quader.exakt",
+        ("tree.row:obj_1", "history.row:1", "history:delete"),
+    ),
+}
+
+#: Zeilen, die der Sprachfall noch nicht erreicht, je mit dem Grund (FD-175). Der
+#: Wächter unten hält die Liste genau: Eine Zeile, die einen Weg bekommt, muss hier
+#: heraus, und keine neue Zeile ohne Weg kommt still dazu.
+STILL_WITHOUT: dict[str, str] = {
+    "dialog:ai_disclosure_dialog": "Chat-Starter ohne Wortschatznamen",
+    "dialog:local_privacy_dialog": "Verweis im KI-Hinweis ohne Wortschatznamen",
+    "dialog:offline_activation_dialog": "Zustand „nicht aktiviert“ im Sprachfall",
+    "dialog:update_dialog": "neue Version nur über das Netz",
+    "dialog:donation_open_error_dialog": "Browser, der nicht öffnet",
+    "meldung:open_donation": "Browser, der nicht öffnet",
+    "meldung:open_link": "Browser, der nicht öffnet",
+    "meldung:_choose_address": "Ort eines Dienstes ohne Wortschatznamen",
+    "meldung:_show_details": "Installation, die scheitert",
+    "dialog:filament_override_dialog": "Filamentzeile im Kopf ohne Wortschatznamen",
+    "dialog:slicer_spool_dialog": "Übernahme aus dem Slicer ohne Wortschatznamen",
+    "dialog:usage_dialog": "Spule am Projekt und Export ohne Tippen",
+    "meldung:_assign_inventory_spool": "Spule in der Schnellwahl",
+    "meldung:_show_slicer_output": "Slicer, der beim Schneiden abbricht",
+    "dialog:outline_dialog": "Szene mit SVG-Quelle",
+    "dialog:step_bodies_dialog": "Szene mit mehrteiliger STEP-Datei",
+    "meldung:_ask_recovery": "Sicherung neben dem zuletzt geöffneten Projekt",
+    "meldung:_go_on_despite": "Export mit Befund über den Speicherdialog",
+    "dialog:comfy_setup_dialog": "ComfyUI ohne Modell",
+    "meldung:confirm_generation_loss": "laufende Erzeugung",
+    "dialog:expression_dialog": "Skizzenwortschatz",
+    "dialog:point_dialog": "Skizzenwortschatz",
+    "dialog:new_plane_dialog": "Skizzenwortschatz",
+    "meldung:change_constraint_value": "Skizzenwortschatz",
+    "dialog:panel_window": "Reiter rechts ohne Wortschatznamen",
+    "startup.expired_demo": "Startfall nur auf Deutsch",
 }
 
 
@@ -150,6 +258,23 @@ def test_every_row_of_the_list_has_its_scene_and_its_way(
     assert _way(row) == way, _way(row)
     assert function_surface.without_way(row) == "", function_surface.without_way(row)
     assert walk_target(row) not in way
+
+
+def test_no_row_of_any_package_is_without_a_way(rows: dict[str, dict[str, Any]]) -> None:
+    """Keine Zeile ohne erreichte Fläche, in allen Paketen (FD-175).
+
+    Vorher hielt der Wächter nur die Liste aus FD-101 (D4, D8, D10); 37 Zeilen in D9
+    und D12 und 22 in D1, D2, D7 und D11 hatten keinen Weg, und ihr Sprachfall maß
+    sie nie. Was noch fehlt, steht mit Grund in :data:`STILL_WITHOUT` — genau das.
+    """
+    without = {
+        row_id: reason
+        for row_id, row in rows.items()
+        if (reason := function_surface.without_way(row))
+    }
+    assert sorted(set(without) - set(STILL_WITHOUT)) == [], without
+    assert sorted(set(STILL_WITHOUT) - set(without)) == [], "hat jetzt einen Weg"
+    assert not set(REACHED) & set(STILL_WITHOUT)
 
 
 def test_an_operation_over_the_whole_scene_is_walked_without_a_selection(

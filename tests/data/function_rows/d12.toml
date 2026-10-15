@@ -7,3 +7,83 @@
 start_scene = "quader.exakt"
 preconditions = { druckhinweis = "offen" }
 route = [{ target = "menu:menubar.an_den_slicer_uebergeben" }]
+
+# Die Fenster des Hilfemenüs und der Bearbeiten-Leiste: je ein Menüeintrag in
+# einem leeren Projekt (FD-175).
+[row."dialog:about_dialog"]
+route = [{ target = "menu:menubar.ueber_solidon" }]
+
+[row."dialog:activation_dialog"]
+route = [{ target = "menu:menubar.solidon_freischalten" }]
+
+[row."dialog:changes_dialog"]
+route = [{ target = "menu:menubar.neuerungen" }]
+
+[row."dialog:donation_dialog"]
+route = [{ target = "menu:menubar.app_unterstuetzen" }]
+
+[row."dialog:install_dialog"]
+route = [{ target = "menu:menubar.zusaetzliche_programme" }]
+
+[row."dialog:key_dialog"]
+route = [{ target = "menu:menubar.chat_einrichten" }]
+
+[row."dialog:manual_window"]
+route = [{ target = "menu:menubar.handbuch" }]
+
+[row."dialog:settings_dialog"]
+route = [{ target = "menu:menubar.einstellungen" }]
+
+[row."dialog:shortcuts_window"]
+route = [{ target = "menu:menubar.tastenkuerzel" }]
+
+[row."dialog:support_dialog"]
+route = [{ target = "menu:menubar.rueckmeldung_senden" }]
+
+# *Erste Schritte …* zeigt die Ersteinrichtung auch nach dem ersten Start; das
+# Profil jedes Falls hat sie erledigt (``function_setup.profile_settings``).
+[row."dialog:first_run_dialog"]
+route = [{ target = "menu:menubar.erste_schritte" }]
+
+# *Modell aus dem Netz …* fragt die Adresse in der Eingabe im Hausstil; ins Netz
+# geht erst *Herunterladen*.
+[row."dialog:input_dialog"]
+route = [{ target = "menu:menubar.modell_aus_dem_netz" }]
+
+# Die Rückfrage im Hausstil: *Gegenstücke setzen …* an einem Gewinde, das M4 und
+# #8-36 UNF nicht trennt (Szene wie ``meldung:action_counterpart``).
+[row."dialog:ask_dialog"]
+start_scene = "gewinde_zwei_reihen.netz"
+route = [
+  { target = "tree.row:obj_1.thread_1" },
+  { target = "tree.row:obj_2.face_1", modifier = "ctrl" },
+  { target = "menu:menubar.gegenstuecke_setzen" },
+]
+
+# Die Meldung im Hausstil: *Einzelheiten* zum Befund der dünnen Wand.
+[row."dialog:message_dialog"]
+start_scene = "duenne_huelse.netz"
+route = [{ target = "finding:perceive.thin_wall" }, { target = "finding.action:show_details" }]
+
+[row."meldung:show_details"]
+start_scene = "duenne_huelse.netz"
+route = [{ target = "finding:perceive.thin_wall" }, { target = "finding.action:show_details" }]
+
+# Der Operationsdialog eines Schritts: Doppelklick auf seine Zeile im Verlauf.
+# Derselbe Weg führt zum offenen Dialog als Rahmen (``dialog``).
+[row."dialog:operation_dialog"]
+route = [{ target = "history.row:1", button = "double" }]
+
+[row."dialog"]
+route = [{ target = "history.row:1", button = "double" }]
+
+# Die Fehlermeldung: *Automatisch teilen* an der Einfügemarke vor einem Schritt
+# sagt ab (``session._inserting_refusal``).
+[row."meldung:show_error"]
+start_scene = "einfuegen.netz"
+route = [{ target = "tree.row:obj_1" }, { target = "command:edit.auto_split" }]
+
+# Das Hauptfenster selbst steht immer; sein Weg ist der Reiter, den jeder Fall
+# vorn hat (``function_language.LanguageFlow.grounded``).
+[row."dialog:main_window"]
+route = [{ target = "report" }]

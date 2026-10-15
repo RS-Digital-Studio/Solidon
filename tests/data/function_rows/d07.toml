@@ -1,0 +1,14 @@
+# Zeilenspezifikationen für D7 — Skizzen, Ebenen, Bedingungen.
+# Format: Bauplan D0 §2.4. Eine Zeile ohne Eintrag hier ist „ungeprüft“.
+
+# Der Skizzeneditor: die Dichtung aus dem Bausteinkatalog öffnet ihren
+# Operationsdialog, und das Feld *Dichtweg* mit seinem einen Knopf *Zeichnen …*
+# öffnet den Editor (FD-175). Einsetzen braucht einen Körper.
+[row."dialog:sketch_editor_dialog"]
+start_scene = "quader.exakt"
+route = [
+  { target = "menu:menubar.bausteinkatalog" },
+  { target = "part:seal_gasket" },
+  { target = "dialog.accept" },
+  { target = "field:path_sketch" },
+]
