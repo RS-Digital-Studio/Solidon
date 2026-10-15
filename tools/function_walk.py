@@ -789,7 +789,9 @@ class QtPorts:
             )
             after = rolled_values(widget)
             towards = 1 if button == "wheel_down" else -1
-            return any((late - early) * towards > 0 for early, late in zip(before, after))
+            # Wandert der Treffer in eine andere Kette, zählt der gemeinsame Anfang.
+            pairs = zip(before, after, strict=False)
+            return any((late - early) * towards > 0 for early, late in pairs)
         if button == "double":
             # Ein Doppelklick des Kunden ist erst ein Klick, dann der zweite
             # Druck: ``mouseDClick`` allein schickt nur das Doppelklickereignis,

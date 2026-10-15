@@ -64,7 +64,7 @@ def test_rolling_without_progress_still_stops() -> None:
 
 
 def test_a_port_that_cannot_tell_keeps_the_old_limit() -> None:
-    """Weiß die Oberfläche nicht, ob ein Schritt rollte, gilt die Grenze der Wegklicks wie bisher."""
+    """Sagt die Oberfläche nicht, ob ein Schritt rollte, gilt die alte Grenze der Wegklicks."""
     timer = FakeTimer()
     ports = FakePorts(timer, _rolls_then_target(25))
     walker = function_walk.Walk(ports, [], 0.0)

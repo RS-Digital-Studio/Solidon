@@ -39,7 +39,6 @@ from tools.function_checks import (
     WITHOUT_DIALOG,
 )
 from tools.function_gestures import GesturePhases
-from tools.function_matrix import MatrixPhase
 from tools.function_machine import (
     MOST_UNSTICKS,
     PHASE_TIMEOUT_S,
@@ -53,6 +52,7 @@ from tools.function_machine import (
     qt_schedule,
     until_step,
 )
+from tools.function_matrix import MatrixPhase
 from tools.function_protocol import (
     abort_entry,
     bodies_digest,
