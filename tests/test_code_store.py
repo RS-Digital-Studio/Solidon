@@ -117,6 +117,7 @@ def _answers(index: Index) -> dict[str, object]:
         "packages": sorted(index.packages),
         "module_exists": {module: index.module_exists(module) for module, _name in keys},
         "aliases": index.query_aliases(),
+        "exports": {module: index.exports(module) for module in index.module_names},
     }
 
 
@@ -208,6 +209,50 @@ def test_without_the_extract_cache_a_stored_index_reads_the_source_if_unchanged(
     (root / "app/mod.py").write_text("CONST = 2\n", encoding="utf-8")
     with pytest.raises(RuntimeError, match="neu starten"):
         stored.modules["app.mod"]
+
+
+def test_a_stored_index_answers_lazy_exports_without_an_extract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RR2-9: W6 e) fragt die Lazy-Exporte eines Pakets. Hat ein anderer Prozess inzwischen für
+    einen neuen Stand gebaut, fehlt der alte Auszug, und die Quelle ist eine andere — der
+    gelesene Index antwortet trotzdem aus dem Speicher, wie der gebaute."""
+    root = _tree(tmp_path / "baum")
+    fresh = Index.build(root, cache=False)
+    assert fresh.exports("app.pkg")
+    code_store.load(root)
+    loads = _count_loads(monkeypatch)
+    stored = code_store.load(root)
+    (root / code_index.CACHE).unlink()
+    init = root / "app/pkg/__init__.py"
+    init.write_text(init.read_text(encoding="utf-8") + "\nX = 1\n", encoding="utf-8")
+    assert stored.exports("app.pkg") == fresh.exports("app.pkg")
+    assert stored.exports("app.mod") == fresh.exports("app.mod") == {}
+    assert loads == [], "die Exporte haben einen Auszug geladen"
+
+
+def test_a_waiting_process_reads_what_the_builder_built_for_the_new_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RR2-9: Ändert sich eine Datei, während ein anderer Prozess baut, rechnet der Wartende den
+    Baumstand nach dem Erwerb der Sperre neu und liest, was der Bauer für ihn schrieb — sonst
+    baute jeder Wartende nacheinander selbst."""
+    root = _tree(tmp_path / "baum")
+    refused = _watch_the_lock(monkeypatch)
+    builds = _count_builds(monkeypatch)
+    found: dict[str, Index] = {}
+    with code_store.exclusive(root / code_store.LOCK, 5.0) as locked:
+        assert locked
+        waiting = threading.Thread(target=lambda: found.update(index=code_store.load(root)))
+        waiting.start()
+        assert refused.wait(60), "der zweite Bewerber kam nie an die Sperre"
+        unread = root / "app/unread.py"
+        unread.write_text(unread.read_text(encoding="utf-8") + "\nX = 1\n", encoding="utf-8")
+        code_store.write(root / code_store.RESULT, code_store.snapshot(Index.build(root)))
+    waiting.join(60)
+    assert not waiting.is_alive()
+    assert len(builds) == 1, "der Wartende hat selbst gebaut"
+    assert found["index"].exists("app.unread", "X")
 
 
 def test_a_changed_tree_or_resolver_builds_anew(

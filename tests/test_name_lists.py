@@ -180,7 +180,7 @@ def _export_problems(index: Index, package: str) -> list[str]:
     ``activation.Licence`` über das Paket.
     """
     problems = []
-    for name, (submodule, attribute) in index.modules[package].exports.items():
+    for name, (submodule, attribute) in index.exports(package).items():
         origin = f"{package}.{submodule}"
         if not index.exists(origin, attribute):
             problems.append(f"{package}.{name}: {origin} bindet {attribute} nicht")
@@ -375,7 +375,7 @@ def test_d_an_unused_or_missing_match_way_is_found(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("package", _lazy_packages())
 def test_e_every_lazy_export_is_bound_and_referenced(index: Index, package: str) -> None:
-    assert index.modules[package].exports, f"{package}: der Auflöser sieht kein _EXPORTS"
+    assert index.exports(package), f"{package}: der Auflöser sieht kein _EXPORTS"
     problems = _export_problems(index, package)
     assert not problems, "\n".join(problems)
 

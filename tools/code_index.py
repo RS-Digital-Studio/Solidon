@@ -296,6 +296,8 @@ class Index:
         self.module_names = _name_table(modules) if names is None else names
         #: Inhaltshash je Pfad, wie :meth:`build` ihn las (leer bei einem Index aus Auszügen).
         self.digests: dict[str, str] = {}
+        #: Die Lazy-Exporte je Paket aus dem Ergebnisspeicher; ``None``: aus den Auszügen.
+        self._exports: dict[str, dict[str, tuple[str, str]]] | None = None
         self._findings: dict[str, tuple[Finding, ...]] | None = None
         self.timings: dict[str, float] = {}
         self.counts: dict[str, int] = {}
@@ -1770,6 +1772,15 @@ class Index:
         self._analyse()
         return tuple(self._aliases)
 
+    def exports(self, module: str) -> dict[str, tuple[str, str]]:
+        """Die Lazy-Exporte eines Pakets (``_EXPORTS`` mit ``install``): Name → Untermodul und
+        Name dort. Ein gelesener Index antwortet aus dem Speicher, ohne Auszug — hat ein anderer
+        Prozess inzwischen für einen neuen Stand gebaut, fehlt der alte (RR2-9)."""
+        if self._exports is not None:
+            return dict(self._exports.get(module, {}))
+        facts = self.modules.get(module)
+        return {} if facts is None else dict(facts.exports)
+
     def import_count(self) -> int:
         """Wie viele Importe die Dateien des Baums haben (Grundmenge von W5, Plan 2.5)."""
         self._analyse()
@@ -1799,10 +1810,12 @@ class Index:
         packages: set[str],
         names: dict[str, Names],
         results: Results,
+        exports: dict[str, dict[str, tuple[str, str]]],
     ) -> Index:
         """Ein Index aus gespeicherten Ergebnissen: Die Abfragen antworten aus ``results``,
         ``files`` und ``modules`` laden einen Auszug erst, wenn eine Frage ihn braucht."""
         index = cls(root, files, modules=modules, packages=packages, names=names)
+        index._exports = exports
         index._patch_sites = list(results.sites)
         index._heads = list(results.heads)
         index._unresolved = list(results.unresolved)

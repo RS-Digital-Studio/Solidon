@@ -71,7 +71,8 @@ _STAMP = hashlib.sha256(
 class Stored(NamedTuple):
     """Ein gespeicherter Index: ``files`` je Pfad Inhaltshash und Modul, ``modules`` je Modul
     seine Datei (``x.py`` vor ``x.pyi``), ``names`` je Modul die Namen zur Laufzeit und für die
-    Typprüfung und ob es ein Paket ist."""
+    Typprüfung und ob es ein Paket ist, ``exports`` je Paket mit ``_EXPORTS`` seine
+    Lazy-Exporte (W6 e) fragt sie, ohne einen Auszug zu laden)."""
 
     tree: str
     files: dict[str, tuple[str, str]]
@@ -79,6 +80,7 @@ class Stored(NamedTuple):
     packages: tuple[str, ...]
     names: dict[str, tuple[tuple[str, ...], tuple[str, ...], bool]]
     results: Results
+    exports: dict[str, dict[str, tuple[str, str]]]
 
 
 def stamp() -> str:
@@ -153,6 +155,7 @@ def snapshot(index: Index) -> Stored:
         tuple(sorted(index.packages)),
         names,
         results,
+        {module: dict(facts.exports) for module, facts in index.modules.items() if facts.exports},
     )
 
 
@@ -222,6 +225,7 @@ def restore(root: Path, stored: Stored) -> Index:
         set(stored.packages),
         names,
         stored.results,
+        stored.exports,
     )
 
 
@@ -278,6 +282,9 @@ def load(root: Path) -> Index:
     stored = read(base / RESULT, tree)
     if stored is None:
         with exclusive(base / LOCK, WAIT_SECONDS):
+            # Der Stand nach dem Warten: Änderte sich eine Datei während des Baus eines
+            # anderen, gilt dessen Ergebnis für den neuen Stand (RR2-9).
+            tree = tree_key(tree_digests(base))
             stored = read(base / RESULT, tree)
             if stored is None:
                 stored = snapshot(Index.build(base))
