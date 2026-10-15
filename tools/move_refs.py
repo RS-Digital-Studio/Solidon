@@ -451,12 +451,14 @@ class FileRewrite:
         if literal is not None:
             return literal(module)
         if self.ctx.shadowed(module):
-            self.ctx.problem(
-                f"{self.path}:{getattr(base, 'lineno', '?')}: {module} liegt hinter dem "
-                "gleichnamigen trägen Export seines Pakets — ein Import bände den Namen, nicht "
-                "das Modul; vor dem Schnitt hier importlib.import_module mit festem Text verwenden"
-            )
-            return None
+            text = self._loaded_by_name(base, module, rule)
+            if text is not None and isinstance(base, ast.Name):
+                binders = import_binders(self.source, base.id, base)
+                self._watch(binders, base.id, old_module, plain=False)
+                for assign in assignment_binders(self.source, base.id, base) if not binders else []:
+                    if self.ctx.is_module(self.path, assign.value, old_module):
+                        self.assign_watches.append(AssignWatch(assign, base.id, old_module))
+            return text
         if isinstance(base, ast.Name):
             binders = import_binders(self.source, base.id, base)
             if not binders:
@@ -534,6 +536,39 @@ class FileRewrite:
         func = self.source.node_text(base.func)
         argument = base.args[0]
         return lambda module: f"{func}({quoted(self.source, argument, module)})"
+
+    def _loaded_by_name(self, base: ast.expr, module: str, rule: str) -> str | None:
+        """``importlib.import_module("M")`` für ein Modul hinter einem gleichnamigen trägen
+        Export: ein Import bände den Namen, nicht das Modul. ``importlib`` kommt, wo es noch
+        fehlt, in den Importkopf."""
+        binders = import_binders(self.source, "importlib", base)
+        plain = [
+            b
+            for b in binders
+            if isinstance(b, ast.Import)
+            and any(a.name.partition(".")[0] == "importlib" and a.asname is None for a in b.names)
+        ]
+        if binders and len(plain) == len(binders):
+            return f'importlib.import_module("{module}")'
+        if binders or "importlib" in self.identifiers:
+            self.ctx.problem(
+                f"{self.path}:{getattr(base, 'lineno', '?')}: {module} liegt hinter einem "
+                "gleichnamigen trägen Export und ist nur über importlib.import_module zu "
+                "erreichen, der Name importlib ist hier aber anders gebunden — vorher klären"
+            )
+            return None
+        anchor = self.head_anchor()
+        if anchor is None:
+            self.ctx.problem(
+                f"{self.path}: kein Importkopf für import importlib — vor dem Schnitt einen "
+                "Import an den Kopf stellen"
+            )
+            return None
+        plan = self.plan(anchor)
+        if "import importlib" not in plan.after:
+            plan.after.append("import importlib")
+            plan.rules.append(rule)
+        return f'importlib.import_module("{module}")'
 
     def _assigned_module(
         self, base: ast.Name, module: str, old_module: str, rule: str

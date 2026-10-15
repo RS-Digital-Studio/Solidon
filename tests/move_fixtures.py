@@ -947,6 +947,17 @@ COMPONENT_OLD: dict[str, str] = BASE | {
         class Session(QObject):
             changed = Signal()
     ''',
+    "app/ui/flow.py": '''
+        """Ein Fluss, der seinen Wirt kennt (wie ``DrawFlow``)."""
+
+
+        class Flow:
+            def __init__(self, host: object) -> None:
+                self.host = host
+
+            def start(self) -> None:
+                self.started = True
+    ''',
     "app/ui/toast.py": '''
         """Eine Meldung mit eigenem ``notify`` — derselbe Name wie am Wirt."""
 
@@ -1021,6 +1032,7 @@ COMPONENT_OLD: dict[str, str] = BASE | {
         from PySide6.QtWidgets import QMenu
 
         from app.ui.board_area import Area
+        from app.ui.flow import Flow
         from app.ui.leash import WorkerLeash, weak_slot
 
         if TYPE_CHECKING:
@@ -1072,6 +1084,8 @@ COMPONENT_OLD: dict[str, str] = BASE | {
 
             def attach(self) -> None:
                 self.session.changed.connect(self.bump)
+                self._flow = Flow(self)
+                Flow(self).start()
 
             def eventFilter(self, watched: QObject, event: object) -> bool:
                 return False
@@ -1146,7 +1160,7 @@ component = "app.ui.board_area:Area"
 host_attribute = "area"
 host_protocol = "AreaHost"
 methods = ["refresh", "notify", "bump", "attach", "eventFilter"]
-own_attributes = ["count", "_leash"]
+own_attributes = ["count", "_leash", "_flow"]
 host_members = ["document", "session", "changed", "statusBar"]
 parent_members = ["findChild"]
 
@@ -1155,6 +1169,12 @@ scope = "Board.refresh"
 call = "QMenu"
 argument = 0
 role = "qt_parent"
+
+[[self_roles]]
+scope = "Board.attach"
+call = "Flow"
+argument = 0
+role = "flow_host"
 
 [[accesses]]
 path = "app/ui/board_tools.py"
@@ -1182,6 +1202,7 @@ COMPONENT_NEW: dict[str, str | None] = {
         from PySide6.QtCore import QObject, QTimer
         from PySide6.QtWidgets import QMenu
 
+        from app.ui.flow import Flow
         from app.ui.leash import WorkerLeash, weak_slot
 
         if TYPE_CHECKING:
@@ -1257,6 +1278,8 @@ COMPONENT_NEW: dict[str, str | None] = {
 
             def attach(self) -> None:
                 self._host.session.changed.connect(self.bump)
+                self._flow = Flow(self)
+                Flow(self._host).start()
 
             def eventFilter(self, watched: QObject, event: object) -> bool:
                 return False

@@ -109,6 +109,31 @@ def test_list_copies_proposes_the_originals_w2_flags(tmp_path: Path) -> None:
     assert [(b.module, b.name) for b in cut.bindings] == found
 
 
+def test_a_hidden_original_is_read_through_its_lazy_package(tmp_path: Path) -> None:
+    """``app.core.kit.measure`` liegt hinter dem gleichnamigen trägen Export: Ein Halter, der
+    direkt daraus importiert, liest danach über das träge Paket, und ein Patch auf eine Kopie
+    trifft das Original über ``importlib.import_module`` — ein Import bände die Funktion."""
+    holder = (
+        '"""Ein Halter am verdeckten Modul."""\n\nfrom app.core.kit.measure import measure\n\n\n'
+        "def gauge(text: str) -> int:\n    return measure(text)\n"
+    )
+    patch = (
+        "from app.core import consumer\n\n\ndef test_kit(monkeypatch):\n"
+        '    monkeypatch.setattr(consumer, "measure", len)\n'
+    )
+    files = fx.COPIES_OLD | {"app/core/gauge.py": holder, "tests/test_kit.py": patch}
+    root, result = _run(tmp_path, files)
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    assert (root / "app/core/gauge.py").read_text(encoding="utf-8") == (
+        '"""Ein Halter am verdeckten Modul."""\n\nfrom app.core import kit\n\n\n'
+        "def gauge(text: str) -> int:\n    return kit.measure(text)\n"
+    )
+    assert (root / "tests/test_kit.py").read_text(encoding="utf-8") == (
+        "import importlib\n\n\ndef test_kit(monkeypatch):\n"
+        '    monkeypatch.setattr(importlib.import_module("app.core.kit.measure"), "measure", len)\n'
+    )
+
+
 def _aliased(name: str) -> str:
     return fx.COPIES_CUT.replace(
         'mode = "copies"\n',
@@ -363,13 +388,13 @@ def _with_test(text: str) -> dict[str, str]:
             "app.core.engine.scale hat keine Kopfkopie",
         ),
         (
-            "verdecktes-original",
+            "verdecktes-original-als-text",
             _with_test(
-                "from app.core import consumer\n\n\n"
                 "def test_kit(monkeypatch):\n"
-                '    monkeypatch.setattr(consumer, "measure", len)\n'
+                '    monkeypatch.setattr("app.core.consumer.measure", len)\n'
             ),
-            "app.core.kit.measure liegt hinter dem gleichnamigen trägen Export",
+            "der Pfad app.core.kit.measure.measure als Text endete beim gleichnamigen trägen "
+            "Export",
         ),
         (
             "geladene-kopie",

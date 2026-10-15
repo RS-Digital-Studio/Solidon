@@ -709,7 +709,10 @@ class ReaderComparison(Comparison):
                     f"{', '.join(b.text() for b in previous)} → {binding.text()}"
                 )
                 continue
-            if not self.allowed_module_alias(binding):
+            # ``import importlib``: der Weg zu einem Modul hinter einem gleichnamigen trägen
+            # Export; jede Stelle, die es liest, vergleicht ``_reference`` über R.
+            loader = binding == ImportBinding("import", "importlib", "", "importlib")
+            if not loader and not self.allowed_module_alias(binding):
                 self.errors.append(
                     f"{self.path}:{new[0].lineno}: neuer Import {binding.text()} gehört nicht zum "
                     "Schnitt"

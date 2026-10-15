@@ -36,6 +36,7 @@ from tools.move_compare import (
 )
 from tools.move_copies import Copy, families
 from tools.move_cut import Cut
+from tools.move_source import Source, path_of
 from tools.move_trees import Mapping, Proof, Trees
 
 
@@ -88,7 +89,7 @@ class CopiesProof:
         self.proof = proof
         self.trees = trees
         self.cut = cut
-        self.copies, problems = families(trees.old_index, cut)
+        self.copies, problems = families(trees.old_index, cut, self._package)
         for problem in problems:
             proof.error(problem)
         self.mapping = CopiesMapping(self.copies)
@@ -97,6 +98,10 @@ class CopiesProof:
         self.modules = {c.access[0] for c in self.copies.values()} | {
             c.origin[0] for c in self.copies.values()
         }
+
+    def _package(self, package: str) -> Source | None:
+        path = path_of(package, package=True)
+        return self.trees.old(path) if path in self.trees.old_files else None
 
     def run(self) -> Mapping:
         if not self.copies:

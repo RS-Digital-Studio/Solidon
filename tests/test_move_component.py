@@ -239,6 +239,16 @@ def _mutants() -> list[tuple[str, dict[str, str], str]]:
             "_parent.findChild",
         ),
         (
+            "fluss-beim-wirt-zur-komponente",
+            fx.edit(EXPECTED, AREA, "Flow(self._host).start()", "Flow(self).start()"),
+            "Wirt eines Flusses, der beim Wirt bleibt",
+        ),
+        (
+            "fluss-der-komponente-zum-wirt",
+            fx.edit(EXPECTED, AREA, "self._flow = Flow(self)", "self._flow = Flow(self._host)"),
+            "Wirt eines Flusses, der in die Komponente zieht",
+        ),
+        (
             "besitzer-an-den-wirt",
             fx.edit(EXPECTED, AREA, "WorkerLeash(self)", "WorkerLeash(self._host)"),
             "Besitzer",
@@ -385,8 +395,8 @@ def _rejected(
         ),
         (
             "member-in-zwei-rollen",
-            'own_attributes = ["count", "_leash"]',
-            'own_attributes = ["count", "_leash", "bump"]',
+            'own_attributes = ["count", "_leash", "_flow"]',
+            'own_attributes = ["count", "_leash", "_flow", "bump"]',
             "",
         ),
     ],

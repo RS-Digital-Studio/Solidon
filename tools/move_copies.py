@@ -28,6 +28,7 @@ nennt, ohne Patch-Stelle zu sein.
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from tools.code_index import HeadCopy, Index
@@ -66,9 +67,12 @@ class Copy:
         return self.head.holder, self.head.bound
 
 
-def families(index: Index, cut: Cut) -> tuple[dict[tuple[str, str], Copy], list[str]]:
+def families(
+    index: Index, cut: Cut, package: Callable[[str], Source | None]
+) -> tuple[dict[tuple[str, str], Copy], list[str]]:
     """Die Kopfkopien der erklärten Originale je ``(Halter, Name)`` und die Funde in den
-    Erklärungen. Planer und Beweis leiten die Familien gleich aus dem Auflöser ab."""
+    Erklärungen. Planer und Beweis leiten die Familien gleich aus dem Auflöser ab; ``package``
+    liefert das ``__init__`` eines Pakets (für einen verdeckten Leseweg, :func:`route`)."""
     problems: list[str] = []
     heads = index.head_copies()
     by_key: dict[tuple[str, str], HeadCopy] = {}
@@ -98,9 +102,27 @@ def families(index: Index, cut: Cut) -> tuple[dict[tuple[str, str], Copy], list[
         origin = head.chain[-1]
         if origin not in selected:
             continue
-        access = next(link for link in head.chain if link not in by_key)
+        access = route(next(link for link in head.chain if link not in by_key), package)
         copies[(head.holder, head.bound)] = Copy(head, access, origin)
     return copies, problems
+
+
+def route(access: tuple[str, str], package: Callable[[str], Source | None]) -> tuple[str, str]:
+    """Liegt das Modul des Lesewegs hinter einem gleichnamigen trägen Export seines Pakets
+    (``app.core.scene.evaluate``), führt der Leseweg über das Paket, wenn es den Namen träge
+    exportiert: ``scene.evaluate`` liest bei jedem Zugriff ``app.core.scene.evaluate.evaluate``."""
+    module, name = access
+    parent, _, last = module.rpartition(".")
+    source = package(parent) if parent else None
+    if source is None:
+        return access
+    table = {k: (a.value, b.value) for k, (a, b) in lazy_table(source).items()}
+    if last not in table:
+        return access
+    for key, entry in sorted(table.items()):
+        if entry == (last, name):
+            return parent, key
+    return access
 
 
 def list_copies(index: Index) -> list[tuple[str, str]]:
@@ -126,12 +148,16 @@ class CopiesPlanner:
     def __init__(self, ctx: Context) -> None:
         self.ctx = ctx
         self.cut = ctx.cut
-        self.copies, problems = families(ctx.index, ctx.cut)
+        self.copies, problems = families(ctx.index, ctx.cut, self._package)
         for problem in problems:
             ctx.problem(problem)
         self.statements: set[tuple[str, int]] = {
             (c.head.path, c.head.line) for c in self.copies.values()
         }
+
+    def _package(self, package: str) -> Source | None:
+        path = path_of(package, package=True)
+        return self.ctx.source(path) if (self.ctx.root / path).is_file() else None
 
     def plan(self) -> dict[str, list[Edit]]:
         self.ctx.raise_problems()

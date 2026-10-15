@@ -24,15 +24,19 @@ abgewiesen.
   ``[[targets]]`` (``module``, ``docstring``, ``definitions``, ``over_limit``), ``duplicate``
   (Namen, die in jedes lesende Ziel kopiert werden, etwa ein Logger), ``[[renames]]`` (``name``,
   ``to``), ``[[identity]]`` (``name``, ``reason``: eine Definition, die ``__name__`` oder
-  ``globals()`` liest), ``[[name_lists]]`` (``path``, ``value``, ``to``: Modul- und Namenslisten
-  als Text, W6), ``[[source_readers]]`` (``path``, ``scope``, ``module``: Leser von
-  ``Path(M.__file__)``).
+  ``globals()`` liest), ``[[name_lists]]`` (``path``, ``value``, ``to``: Zeichenketten mit Modul,
+  Datei oder Namen der Quelle, W6; ``to = [value]`` erklärt, dass sie bleibt),
+  ``[[source_readers]]`` (``path``, ``scope``, ``module``: Leser von ``Path(M.__file__)``).
 * ``copies``: ``[[bindings]]`` (``module``, ``name``) — die Originale, deren Kopfkopien
-  Modulzugriffe werden.
-* ``component``: ``source``, ``host``, ``component`` (``modul:Klasse``), ``host_attribute``,
-  ``host_protocol``, ``methods``, ``own_attributes``, ``host_members``, ``parent_members``,
-  ``[[self_roles]]`` (``scope``, ``call``, ``argument``, ``role``), ``[[accesses]]`` (``path``,
-  ``scope``, ``member``, ``decision``).
+  Modulzugriffe werden (Vorschlag: ``--list-copies``).
+* ``component``: ``source`` (Datei des Wirts), ``host`` (Klasse), ``component``
+  (``modul:Klasse`` aus dem Gerüst-Commit), ``host_attribute`` (``self.<attr>`` im Wirt),
+  ``host_protocol``, ``methods`` (wandern), ``own_attributes`` (Zustand der Komponente),
+  ``host_members`` (über ``_host``), ``parent_members`` (von Qt ererbt, über ``_parent``),
+  ``[[self_roles]]`` (``scope`` = ``Wirt.methode``, ``call`` wie im Quelltext, ``argument``
+  Position oder Schlüsselwort, ``role`` = ``qt_parent``, ``owner``, ``event_filter`` oder
+  ``flow_host``), ``[[accesses]]`` (``path``, ``scope`` als Qualname oder ``<module>``,
+  ``member``, ``decision`` = ``component`` oder ``keep``).
 
 Jedes Feld ist eine Erklärung, keine Ausnahme: Was sie nicht trifft, ist ein Fehler, und es gibt
 keinen Schalter, der einen Fund übergeht (Konzept Codestruktur 4.1).
