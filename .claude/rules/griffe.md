@@ -8,6 +8,7 @@ paths:
   - "app/ui/render/gizmo.py"
   - "app/ui/scale_widget.py"
   - "app/ui/placement_flow.py"
+  - "app/ui/measure_field_places.py"
 ---
 
 # Regeln für die Griffe in der Szene
@@ -293,6 +294,16 @@ wieder her (`_drag_kind` bleibt `"slot"`).
 * **Maße bleiben im Bild:** Länge wächst um die Mitte, Kantenmaße gelten weiter.
   `PlacementFlow.redraw` erhält Linien/Felder der gebundenen Maßgruppe auch bei
   Kameradrehung; nur der runde Umriss weicht. Ohne Maßgruppe tritt Platzierung zurück.
+
+* **Bei Platzmangel bleibt jedes Maßfeld im Bild** (`measure_field_places`).
+  Nur die große Fachkarte darf den Rand des Körpers überdecken; die kurzen
+  Maßfelder behalten ihre Plätze außerhalb, und ein Platzmangel der Karte
+  schiebt nicht alle Maße in eine Notreihe. Die Karte hält so viele
+  Feldzeilen frei, wie die Maße nebeneinander brauchen (`rows_height`), nicht
+  fest eine. Die Notanordnung (`emergency_places`) lässt die Nutzerkarte immer
+  frei, Setzpunkt, Bewegungsgriff und Vorschauband erst mit, dann ohne
+  Abstand: Überdecken ist das kleinere Übel, ein Feld außerhalb des Bildes
+  keines.
 
 * **Nach Übernehmen Maße/Griffe wiederherstellen:**
   `MainWindow._measures_to_resume` → `_show_feature_fields` (Konzept
