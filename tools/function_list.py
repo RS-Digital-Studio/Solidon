@@ -1463,6 +1463,11 @@ SPEC_KEYS: Final[frozenset[str]] = frozenset(
         "not_applicable",
         "budget_s",
         "budget_ref",
+        # Prüfpunkt 11 auch für Zeilen ohne Operation (FD-150): die Handbuchstelle
+        # ``<seite>#<anker>`` und die Website-Stellen; ihre Werte prüft
+        # ``tools/function_promises.py``.
+        "manual",
+        "website",
     }
 )
 PROBE_ORIGINS: Final[tuple[str, ...]] = ("slicer", "cad", "fragebogen")
