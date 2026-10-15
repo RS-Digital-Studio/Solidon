@@ -117,6 +117,7 @@ Nutzen da und sonst nichts.
 - Die *Einzelheiten* nennen Körper und Schritt beim Namen und die Stelle in der gewählten Einheit. *Werte ansehen* zeigt die Namen der Felder und ist nur so hoch wie nötig.
 - Die Felder der Leisten *Analyse* und *Teilen*, die Beschreibung in *Modell erzeugen*, die Wahl *Typ* und der Haken „Werte mitgeben“ sagen in der Kurzhilfe und dem Bildschirmleser, was sie bewirken.
 - Von einem Reiter der rechten Karte führt die Tabulatortaste in die Seite, die vorn steht, und geht sie von oben nach unten durch.
+- Ein Projektmaß ohne Einheit bleibt im Verlauf und in der Parameterleiste eine Zahl, auch bei Zoll. Version 0.6.0 schrieb im Verlauf „mm“ dazu.
 
 ### Drucken und Übergabe an den Slicer
 

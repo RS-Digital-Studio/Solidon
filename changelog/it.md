@@ -92,6 +92,7 @@ scrive in `website/version.json`.
 - La finestra *Dettagli* nomina corpo e passaggio e dà il punto nell'unità scelta. *Mostra i valori* mostra i nomi dei campi ed è alto solo quanto serve.
 - I campi delle barre *Analisi* e *Dividi*, la descrizione in *Genera modello*, la scelta *Tipo* e la casella «Includi i valori» si spiegano nel suggerimento e allo screen reader.
 - Da una linguetta del riquadro a destra, il tasto Tab entra nella pagina in primo piano e la percorre dall'alto in basso.
+- Una misura di progetto senza unità resta un numero nella cronologia e nella barra dei parametri, anche in pollici. La versione 0.6.0 aggiungeva «mm» nella cronologia.
 
 ### Stampare e passare allo slicer
 

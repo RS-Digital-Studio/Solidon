@@ -45,6 +45,7 @@ from app.ui.labels import (
     wheel_needs_focus,
 )
 from app.ui.leash import weak_slot
+from app.ui.parameter_length import LENGTH_CODE, is_length
 from app.ui.style import (
     NORMAL,
     SPACE,
@@ -68,14 +69,9 @@ PARAMETER_MARKER = expressions.REFERENCE_PREFIX
 _SPELLED_OUT: Final = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"}
 
 
-#: Der Code einer Länge im Dokument (§13): gespeichert in Millimetern (Regel 6),
-#: gezeigt und getippt in der Anzeigeeinheit (§19.3, FD-125).
-LENGTH_CODE: Final = "mm"
-
-
 def shown_number(value_mm: float, code: str) -> float:
     """Eine gespeicherte Zahl, wie das Feld sie zeigt — eine Länge in der Anzeigeeinheit."""
-    return from_mm(value_mm, display_unit()) if code == LENGTH_CODE else value_mm
+    return from_mm(value_mm, display_unit()) if is_length(code) else value_mm
 
 
 def stored_number(shown: float, code: str) -> float:
@@ -85,12 +81,12 @@ def stored_number(shown: float, code: str) -> float:
     (``ParameterDialog._stored``, ``recipe_dialog._ParamRow._stored``) — sonst
     käme aus 40 mm über 1,5748 in 39,99992 mm zurück.
     """
-    return to_mm(shown, display_unit()) if code == LENGTH_CODE else shown
+    return to_mm(shown, display_unit()) if is_length(code) else shown
 
 
 def number_places(code: str, least: int) -> int:
     """Wie viele Stellen ein Feld für diese Bedeutung braucht — Zoll braucht mehr."""
-    if code == LENGTH_CODE:
+    if is_length(code):
         return max(least, decimals_for(display_unit()))
     return least
 

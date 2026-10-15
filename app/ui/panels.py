@@ -1296,7 +1296,7 @@ def _op_title(name: str) -> str:
 
 def _parameter_value(parameter: Parameter) -> str:
     """Der Wert eines Projektmaßes, wie die Leiste ihn schreibt — Länge in der Anzeigeeinheit."""
-    if (parameter.unit or "mm") == "mm":
+    if is_length(parameter.unit):
         return length(parameter.value)
     return localised(f"{parameter.value:g}") + (f" {parameter.unit}" if parameter.unit else "")
 

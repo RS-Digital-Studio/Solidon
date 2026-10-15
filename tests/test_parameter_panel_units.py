@@ -64,3 +64,52 @@ def test_a_length_row_speaks_inches_and_stores_millimetres(qt_app: QApplication)
     finally:
         panel.deleteLater()
         set_display_unit("mm")
+
+
+def test_a_measure_without_unit_stays_a_number_in_inches(qt_app: QApplication) -> None:
+    """Ein Maß ohne Einheit ist keine Länge (RA-1): Anzahl und Faktor bleiben Zahlen.
+
+    Die Leiste nahm „ohne Angabe“ als Millimeter; in Zoll stand aus 4 dann 0,1575,
+    und eine getippte 5 kam als 127 ins Dokument. Dieselbe Frage beantwortet
+    ``parameter_length.is_length`` jetzt für Leiste und *Parameter anlegen …*.
+    """
+    from app.ui.panels import ParameterPanel, _parameter_value
+    from app.ui.parameter_dialog import shown_number, stored_number
+    from app.ui.parameter_length import is_length
+
+    assert not is_length("") and not is_length(None) and is_length("mm")
+    set_display_unit("in")
+    assert shown_number(4.0, "") == 4.0 and stored_number(5.0, "") == 5.0
+    # Auch die Zeile im Verlauf schreibt keine Millimeter dazu.
+    assert _parameter_value(Parameter(name="n", value=4.0, unit="")) == "4"
+    document = Document(format_version=1, app_version="0.0.1")
+    document.parameters["anzahl"] = Parameter(name="anzahl", value=4.0, title="Anzahl", unit="")
+    document.parameters["doppelt"] = Parameter(
+        name="doppelt", value=8.0, title="Doppelt", unit="", expression="@anzahl * 2"
+    )
+    panel = ParameterPanel()
+    edits: list[tuple[str, float]] = []
+    panel.parameterEdited.connect(lambda name, value: edits.append((name, value)))
+    try:
+        panel.show_document(document)
+        panel.show()
+        qt_app.processEvents()
+        spin = next(
+            widget
+            for widget in panel.findChildren(QAbstractSpinBox)
+            if widget.accessibleName() == "Anzahl"
+        )
+        assert spin.value() == pytest.approx(4.0), "eine Anzahl wird nicht umgerechnet"
+        derived = [label.text() for label in panel.findChildren(QLabel) if label.text() == "8,00"]
+        assert derived, "das abgeleitete Maß bleibt eine Zahl"
+
+        line = spin.lineEdit()
+        line.selectAll()
+        QTest.keyClicks(line, "5")
+        QTest.keyClick(line, Qt.Key.Key_Return)
+        qt_app.processEvents()
+        qt_app.processEvents()
+        assert edits and edits[-1] == ("anzahl", pytest.approx(5.0)), edits
+    finally:
+        panel.deleteLater()
+        set_display_unit("mm")

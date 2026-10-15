@@ -92,6 +92,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A janela *Pormenores* nomeia o corpo e o passo e dá o ponto na unidade escolhida. *Mostrar os valores* mostra os nomes dos campos e só é tão alto quanto necessário.
 - Os campos das barras *Análise* e *Dividir*, a descrição em *Gerar modelo*, a escolha *Tipo* e a caixa «Incluir valores» explicam-se na dica e ao leitor de ecrã.
 - A partir de um separador do cartão da direita, a tecla Tab entra na página da frente e percorre-a de cima para baixo.
+- Uma medida do projeto sem unidade continua a ser um número no histórico e na barra de parâmetros, também em polegadas. A versão 0.6.0 acrescentava «mm» no histórico.
 
 ### Imprimir e entregar ao slicer
 

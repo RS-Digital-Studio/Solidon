@@ -14,17 +14,27 @@ ob Länge oder nicht; so bleibt jede Stelle, die Werte liest oder setzt, eine.
 
 from __future__ import annotations
 
-from typing import override
+from typing import Final, override
 
 from PySide6.QtWidgets import QDoubleSpinBox
 
 from app.core.units import decimals_for, from_mm
 from app.ui.labels import BoundedLengthSpin, LengthSpin, display_unit, localised
 
+#: Der Code einer Länge im Dokument (§13): gespeichert in Millimetern (Regel 6),
+#: gezeigt und getippt in der Anzeigeeinheit (§19.3, FD-125).
+LENGTH_CODE: Final = "mm"
+
 
 def is_length(unit: str | None) -> bool:
-    """Ob ein Projektmaß mit dieser Einheit eine Länge ist — „mm“ oder ohne Angabe."""
-    return (unit or "mm") == "mm"
+    """Ob ein Projektmaß mit dieser Einheit eine Länge ist — genau „mm“.
+
+    Eine Antwort für Leiste und Dialoge (RA-1): „ohne Einheit“ ist eine Anzahl
+    oder ein Faktor, und als Länge stand aus 4 in Zoll 0,1575, aus einer
+    getippten 5 wurden 127. Ein neues Maß ist eine Länge, weil
+    ``Parameter.unit`` mit „mm“ beginnt, nicht weil leer Länge hieße.
+    """
+    return unit == LENGTH_CODE
 
 
 class ParameterLengthSpin(BoundedLengthSpin):
