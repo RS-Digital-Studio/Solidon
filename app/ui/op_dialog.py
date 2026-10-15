@@ -65,6 +65,7 @@ from app.ui.change_lock import change_refusal
 from app.ui.dialog_footer import DialogFooter
 from app.ui.dialogs import ErrorNotice, align_to_the_front
 from app.ui.feature_set_field import FeatureSetField
+from app.ui.first_focus import select_on_first_focus
 from app.ui.form_fields import explain, name_rows
 from app.ui.labels import (
     BoundedSpin,
@@ -4096,6 +4097,9 @@ class OperationDialog(QDialog):
         line = QLineEdit(self)
         if start:
             line.setText(str(start))
+        # Ein vorgegebener Text (der Name beim Umbenennen) ist beim ersten
+        # Fokus markiert: Tippen ersetzt ihn, Ende ergänzt ihn (FD-114).
+        select_on_first_focus(line)
         return line
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
@@ -4223,6 +4227,8 @@ class OperationDialog(QDialog):
         if inner is not None:
             inner.setFocus(Qt.FocusReason.OtherFocusReason)
             inner.selectAll()
+        elif isinstance(editor, QLineEdit):
+            editor.selectAll()
         self._scroll.ensureWidgetVisible(editor)
         return True
 
