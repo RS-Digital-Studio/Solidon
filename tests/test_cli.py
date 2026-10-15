@@ -191,7 +191,8 @@ def test_the_first_run_speaks_the_language_from_the_installer(
         assert printed.splitlines()[0] == "Impresora", (
             f"deutsche Ausgabe trotz Installer-Wahl: {printed[:80]!r}"
         )
-        assert "valores de partida" in printed or "calibrado" in printed
+        # Der Kalibrierstand heißt seit FD-8 „aún sin calibrar“ statt „valores de partida“.
+        assert "aún sin calibrar" in printed or "calibrado" in printed
     finally:
         install_language(SOURCE_LANGUAGE)
         set_language(SOURCE_LANGUAGE)

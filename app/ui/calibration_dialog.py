@@ -69,12 +69,9 @@ class CalibrationDialog(QDialog):
         self.setMinimumWidth(420)
 
         current = profiles.material(material)
-        state = (
-            tr("kalibriert") if current.calibrated else tr("Startwert", context="Kalibrierstand")
-        )
         # Der Titel, den der Kunde überall sonst liest — nicht die Kennung des
-        # Profils („resin — Startwert" über einem „Standardharz").
-        heading = QLabel(f"{current.title} — {state}", self)
+        # Profils —, und ein Stand, der sagt, ob gemessen wurde (FD-8).
+        heading = QLabel(f"{current.title} — {calibration.state_text(current)}", self)
         heading.setWordWrap(True)
         set_level(heading, "section")
         # **Ein Satz, der Rest als Kurzhilfe** (FD-13): zwei Absätze über
