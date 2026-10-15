@@ -12,6 +12,9 @@ search_probes = [
 ]
 questions = ["Wie lege ich ein Maß an, das ich mehrfach verwende?"]
 fault_case = { inputs = { "field:name" = "breite außen" }, expected = "meldung" }
+# Prüfpunkt 11 an einer Zeile ohne eigene Operation (FD-150, Werte von F8).
+manual = "parameters"
+website = ["funktionen.html#parametrisch"]
 
 [row."Bearbeiten/Parameter anlegen …".expectation]
 "parameter.breite" = { value = 40.0, tolerance = 0.0005, origin = "Konstruktion: getippte 40 mm; Toleranz = halbe letzte Stelle des Wertfelds (drei Nachkommastellen, dialogs.ParameterDialog)" }
@@ -25,6 +28,7 @@ route = [
   { target = "tree.row:obj_1.face_1" },
   { target = "tree.row:obj_2.face_1", modifier = "ctrl" },
 ]
+manual = "parts"
 
 # Die Fenster der Parameter, des Kalibrierens und der Gegenstücke öffnet ihr
 # Menüeintrag; ohne Weg lief die Zeile im Sprachfall nie (FD-101).
