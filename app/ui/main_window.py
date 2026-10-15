@@ -23792,6 +23792,13 @@ class MainWindow(QMainWindow):
             """Auch Nebenmeldungen tragen denselben Eigentümer und dieselbe Revision."""
 
             def receive(value: Any) -> None:
+                # **Ein abgebautes Fenster hört nichts mehr** (FD-158): Die
+                # Vorschau rechnet im Arbeiter weiter, und ihre Antwort kam
+                # nach dem Abbau an — ``_preview_is_current`` las dann den
+                # Objektbaum, den es nicht mehr gab. Gefragt wird hier, an der
+                # einen Stelle, über die jeder Vorschaurückruf eintrifft.
+                if not isValid(self) or self._close_requested:
+                    return
                 if self._preview_is_current(approval):
                     callback(value)
 
