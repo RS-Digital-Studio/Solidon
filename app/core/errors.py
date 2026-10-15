@@ -72,6 +72,12 @@ CHOOSE = Action("choose", _("Auswählen"), primary=True)
 #: ist keine Zeile im Formular. Ein Knopf, der den Dialog öffnete, zeigte auf
 #: ein Feld, das es nicht gibt.
 CHANGE_SELECTION = Action("change_selection", _("Andere Objekte wählen"), primary=True)
+#: Andere **Kanten** für eine Rundung oder Fase — im Dialog des Schritts, wo
+#: *Kanten* und *Einzelne Kanten* stehen; eingelöst wie *Größe ändern*
+#: (``change_step``). *Andere Objekte wählen* gab dem Schritt den im Baum
+#: markierten Körper, und an einem Kantenfehler wählte der Kunde damit einen
+#: anderen Körper statt einer anderen Kante (FD-123).
+CHANGE_EDGES = Action("change_step", _("Andere Kanten wählen"), primary=True)
 #: Eine Zeichenebene, die sich nicht lesen lässt (``sketch.planes._unreadable``):
 #: den Schritt mit dem Cursor in seinem Ebenenfeld öffnen — derselbe Weg wie
 #: *Eingabe korrigieren*, mit dem Satz, der sagt, was dort zu tun ist. Bis zum
