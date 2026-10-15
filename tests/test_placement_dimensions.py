@@ -830,7 +830,19 @@ def test_the_dimension_fields_leave_the_movement_handle_alone(qt_app: QApplicati
 
     Die Gegenprobe dazu ist der zweite Teil: Ohne gemeldeten Griff darf dieselbe
     Fläche belegt werden — sonst prüft der Test eine Anordnung und keine Regel.
+
+    **Im Thema des Kunden** (``tests.md``, „Isolation heißt Betriebslage“): Die
+    Feldgrößen hängen am Stylesheet, und mit ihnen, ob die Felder in die
+    Notanordnung geraten, die dem Griff ausweichen muss (FD-84). Ohne Thema
+    blieb der Fall grün, auch als die Notanordnung den Griff nicht mehr kannte.
+    Zurückgegeben wird das Aussehen in ``conftest.py``.
     """
+    from app.ui.style import apply_style
+    from app.ui.theme import apply_theme
+
+    apply_theme(qt_app, "dark")
+    apply_style(qt_app, "dark")
+    assert qt_app.styleSheet(), "Voraussetzung: die Lage des Kunden, mit seinem Thema"
     flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 6.0, "bottom")
     try:
         # Mitten ins Bild, sonst klemmt der Rand die Felder ohnehin weg und die
