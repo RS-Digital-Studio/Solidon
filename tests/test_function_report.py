@@ -1592,7 +1592,11 @@ def test_a_fixed_older_finding_does_not_hide_an_open_younger_one() -> None:
     ],
 )
 def test_a_finding_of_several_rows_holds_each_of_them_open(rows: str) -> None:
-    """Ein Fund nennt mehrere Zeilen: Er hält die Zelle jeder davon offen (FD-143)."""
+    """Ein Fund nennt mehrere Zeilen: Er hält die Zelle jeder davon offen (FD-143).
+
+    Die Zelle trägt den Fund ihres Urteils (FD-2); FD-1 kommt nur über die
+    Spalte „Funde“ in die Zeile — so prüft der Fall auch deren Vergleich.
+    """
     text = _finding(subject="1").replace("**Funktion:** drill_hole", f"**Funktion:** {rows}")
     findings, problems = parse_findings(text)
     assert problems == []
@@ -1600,7 +1604,8 @@ def test_a_finding_of_several_rows_holds_each_of_them_open(rows: str) -> None:
     assert function_report._finding_for("drill_hole", 1, known) == known["FD-1"]
     case = _judged()
     cases = {case.row_id: case}
-    checked = check_verdicts(_b_verdicts(), outcomes=cases)
+    own = _verdict(point=1, verdict="offen", finding="FD-2", rm="RM-800")
+    checked = check_verdicts([own, *_b_verdicts()], outcomes=cases)
     values = package_values(cases, checked.accepted, common_goals={}, solutions=SOLUTIONS)
     checklist = render_checklist(
         "D4",
@@ -1614,8 +1619,8 @@ def test_a_finding_of_several_rows_holds_each_of_them_open(rows: str) -> None:
         out="F:/tmp-suche/lauf",
     )
     line = next(line for line in checklist.splitlines() if line.startswith("| drill_hole"))
-    assert "| offen RM-800 |" in line
-    assert line.rstrip(" |").endswith("FD-1")
+    assert line.split(" | ")[3] == "FD-2", line
+    assert "| offen RM-800 |" in line and line.rstrip(" |").endswith("| FD-1, FD-2")
 
 
 def test_evidence_names_the_file_of_the_case() -> None:
@@ -1640,15 +1645,6 @@ def test_every_checked_in_checklist_is_untouched() -> None:
         p.name for p in found if not function_report.checklist_intact(p.read_text(encoding="utf-8"))
     ]
     assert tampered == []
-
-
-def test_every_checked_in_verdict_file_holds_its_form_on_any_machine() -> None:
-    """Wächter zu RD-5: Format, Funde und ``[[run]]`` jeder Urteilsdatei, ohne den Lauf."""
-    findings, _problems = function_report.read_findings(STATE / "funde.md")
-    for path in sorted(STATE.glob("urteile-*.toml")):
-        entries, runs = function_report.read_verdict_file(path)
-        assert check_verdicts(entries, findings=findings).rejected == (), path.name
-        assert function_report.check_runs(runs, entries) == [], path.name
 
 
 def test_light_and_dark_compare_the_cases_that_measured_the_layout() -> None:

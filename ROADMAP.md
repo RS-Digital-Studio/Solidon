@@ -54,7 +54,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Macs mit macOS 26: Hardened Runtime ohne `allow-unsigned-executable-memory` lässt schon das `import ctypes` in PyInstallers Bootstrap in Apples libffi kreisen (Quelltext, fremde Berichte); Signierschritt korrigiert, wörtlich samt Rücklesung ad hoc am Runner gefahren (Lauf 37530339300), Developer-ID-Signatur, Notarisierung, Installer und macOS-Releaseakte beider Architekturen im Handstart grün (Lauf 37530876754); eine Gegenprobe von Hand (Nachtrag, ohne Skript) am Intel-Mac des Kunden spricht für die Ursache (08.10.: ohne die Berechtigung hing es, mit ihr startete es). 0.6.0 trägt die Korrektur, die Forensik aller 382 Mach-O fand nichts, was den Start verhindert (12.10.); offen der Doppelklick des Kunden auf 0.6.0, vorher alle Kopien derselben Kennung suchen (lag keine in *Programme*, kann das Paket eine andere aktualisiert haben, RM-800). Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Der Arbeiter stirbt nach dem Overlay-Ziehtest, die Overlay-Datei allein ist grün; nächster Schritt: die Testfolge des abgestürzten Arbeiters nachstellen und halbieren |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
-| [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
+| [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen der Arbeitsplatz |
 | [RM-682 — Die mitgelieferten Schriften fehlen in Lizenzbeilage, Über-Dialog und SBOM](#rm-682) | Plattformen, Pakete und Grafik | Nachprüfung RM-471 09.10.: für DejaVu formal Regression gegenüber v0.5.1; Schriftsippen als eigene Komponenten aus einer Quelle |
 | [RM-694 — Am echten Fenster endeten zwei Läufe mit dem Spiderman ohne Python-Spur](#rm-694) | Plattformen, Pakete und Grafik | Unter Volllast auf dem i9 gesehen, alter und neuer Stand; auf ruhiger Maschine mit nativem Abbild nachstellen, bevor eine Ursache zugeordnet wird |
 | [RM-770 — Weitere x86_64-Räder tragen denselben Fehler, in C-Bibliotheken](#rm-770) | Plattformen, Pakete und Grafik | Pillow `libavif` liegt im Intel-Paket, FFmpeg aus PySide6_Addons nicht (Forensik 12.10.); ohne C++-Ausnahmen ohne Wirkung, offen die Meldung an Pillow |
@@ -983,10 +983,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   stimmt) nennt CPython runtime 3.14.8, OpenSSL 3.5.9 und libffi 3.4.4; die mitgelieferte
   `python314.dll` trägt Datei- und Produktversion 3.14.8. Die Releaseakte-Prüfung liest
   dieselbe Stückliste.
-  **Offen:** die drei Arbeitsplätze. Deren Installation
+  **Offen:** der Arbeitsplatz. Dessen Installation
   ersetzt `python314.dll` unter jeder laufenden Umgebung und geht nur, wenn keine Sitzung rechnet.
   **Abnahme:** Taglauf oder Vollstart mit allen Paketen grün, die Releaseakte nennt 3.14.8;
-  `check_env` meldet auf jedem Arbeitsplatz 3.14.8.
+  `check_env` meldet am Arbeitsplatz 3.14.8.
 
 <a id="rm-682"></a>
 

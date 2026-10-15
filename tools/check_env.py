@@ -395,8 +395,8 @@ def hooks_are_wired() -> bool | None:
 
     **Warum das eine Prüfung wert ist.** ``CLAUDE.md`` sagt zu: *„Jeder Commit
     geht sofort hinaus, ``.githooks/post-commit`` pusht ihn"* — begründet damit,
-    dass auf drei Maschinen gearbeitet wird und ein liegengebliebener Commit auf
-    den anderen zweien nicht existiert. Am 23.08.2026 zeigte sich, dass Git
+    dass die Gegenstelle die Sicherung ist und erst der Push nach main die CI
+    startet. Am 23.08.2026 zeigte sich, dass Git
     diesen Hook nie angesehen hat: ``core.hooksPath`` war auf keiner Ebene
     gesetzt, und ohne ihn sucht Git in ``.git/hooks/``, wo nichts liegt.
 
