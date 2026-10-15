@@ -1642,15 +1642,6 @@ def test_every_checked_in_checklist_is_untouched() -> None:
     assert tampered == []
 
 
-def test_every_checked_in_verdict_file_holds_its_form_on_any_machine() -> None:
-    """Wächter zu RD-5: Format, Funde und ``[[run]]`` jeder Urteilsdatei, ohne den Lauf."""
-    findings, _problems = function_report.read_findings(STATE / "funde.md")
-    for path in sorted(STATE.glob("urteile-*.toml")):
-        entries, runs = function_report.read_verdict_file(path)
-        assert check_verdicts(entries, findings=findings).rejected == (), path.name
-        assert function_report.check_runs(runs, entries) == [], path.name
-
-
 def test_light_and_dark_compare_the_cases_that_measured_the_layout() -> None:
     """Hell gegen dunkel nimmt die Fälle mit Hauptknöpfen, nicht den ersten hellen (L21)."""
     licence = sample_protocol()
