@@ -6,7 +6,7 @@ sie im echten Maßfluss nutzt, prüft ``tests/test_measure_card_placement.py``.
 
 from itertools import combinations
 
-from PySide6.QtCore import QRect, QSize
+from PySide6.QtCore import QPoint, QRect, QSize
 
 from app.ui.measure_field_places import distance_reserve, emergency_places, rows_height
 from app.ui.style import SPACE
@@ -32,7 +32,7 @@ def test_the_card_keeps_at_least_one_row_and_otherwise_as_many_as_the_fields_nee
 
 
 def test_the_emergency_places_stay_in_view_and_give_up_distance_before_freedom() -> None:
-    """Die Notanordnung hält Karte und Bild immer, Griff und Setzpunkt so lange es geht.
+    """Die Notanordnung hält das Bild immer, Karte, Griff und Setzpunkt so lange es geht.
 
     Bis FD-84 brachen die Notreihen das letzte Feld unter den Bildrand um und
     wichen dem Bewegungsgriff gar nicht aus.
@@ -60,3 +60,20 @@ def test_the_emergency_places_stay_in_view_and_give_up_distance_before_freedom()
     # Selbst ohne jeden freien Platz bleibt es im Bild und nicht darunter.
     (place,) = emergency_places([field], bounds, [bounds], ([],))
     assert bounds.contains(place)
+
+
+def test_a_field_without_room_covers_another_field_rather_than_the_card() -> None:
+    """Unter der vom Kunden gelegten Karte verschwände ein Maß ganz; über einem anderen
+    Feld bleiben beide zu sehen. Ist neben der Karte kein freier Platz mehr, rückt das
+    Feld deshalb zu den Feldern und nicht auf die Karte (Schlussreview D0, RF-12).
+
+    Unter der Karte bleibt eine Zeile für genau ein Feld: Das erste nimmt sie, das
+    zweite findet weder mit noch ohne Abstand Platz.
+    """
+    bounds = QRect(0, 0, 400, 300)
+    card = QRect(0, 0, 400, 240)
+    field = QSize(400, 40)
+    first, second = emergency_places([field, field], bounds, [card], ([],))
+    below = card.bottom() + SPACE + 1
+    assert first == QRect(QPoint(0, below), field)
+    assert second == first and not second.intersects(card)

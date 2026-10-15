@@ -73,13 +73,16 @@ def emergency_places(
 ) -> list[QRect]:
     """Die Notanordnung: jedes Feld der Reihe nach an den ersten freien Platz im Bild.
 
-    ``fixed`` bleibt immer frei — die vom Kunden gelegte Karte, unter der kein
-    Maß verschwinden darf. ``tiers`` sind die übrigen Hindernisse von streng
-    nach nachgiebig: erst mit Abstand, dann ohne, zuletzt keine. Ein Feld nimmt
-    den ersten Platz der strengsten Stufe, in der es einen gibt; Überdecken ist
-    das kleinere Übel, ein Feld außerhalb des Bildes ist keines. Erst wenn
-    selbst neben den gelegten Feldern und der Karte nichts frei ist, rückt es
-    an die linke obere Ecke — im Bild, nie darunter.
+    ``fixed`` bleibt frei, solange im Bild neben ihr Platz für das Feld ist —
+    die vom Kunden gelegte Karte, unter der ein Maß ganz verschwände.
+    ``tiers`` sind die übrigen Hindernisse von streng nach nachgiebig: erst mit
+    Abstand, dann ohne, zuletzt keine. Ein Feld nimmt den ersten Platz der
+    strengsten Stufe, in der es einen gibt; Überdecken ist das kleinere Übel,
+    ein Feld außerhalb des Bildes ist keines. Ist neben Karte und gelegten
+    Feldern nichts mehr frei, überdeckt es eher ein Feld als die Karte — beide
+    Felder bleiben zu sehen —, und füllt die Karte das Bild, rückt es an den
+    ersten Platz neben den Feldern oder an die linke obere Ecke: im Bild, nie
+    darunter.
     """
     placed: list[QRect] = []
     for size in sizes:
@@ -92,6 +95,10 @@ def emergency_places(
             None,
         )
         if rect is None:
-            rect = _first_free(size, bounds, placed) or QRect(bounds.topLeft(), size)
+            rect = (
+                _first_free(size, bounds, fixed)
+                or _first_free(size, bounds, placed)
+                or QRect(bounds.topLeft(), size)
+            )
         placed.append(rect)
     return placed
