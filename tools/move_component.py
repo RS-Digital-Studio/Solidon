@@ -57,6 +57,7 @@ from __future__ import annotations
 import ast
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from tools.code_index import Index, Val
 from tools.move_compare import FileScopes, Scopes, TopLevel, qualname_of, string_constants
@@ -99,6 +100,12 @@ OWNER_CALLS = frozenset(
 )
 #: Aufrufe, deren zweites Argument ein Attributname des ersten ist.
 NAMED_CALLS = frozenset({"getattr", "hasattr", "setattr", "delattr"})
+#: Die Member eingebauter Typen und von ``Path``: Ein Zugriff ``x.<name>`` mit unbekanntem
+#: Empfänger kann ihnen gelten (``items.count(1)``) — der Name ist dann nicht eindeutig.
+BUILTIN_MEMBERS = {
+    kind.__name__: frozenset(n for n in dir(kind) if not n.startswith("__"))
+    for kind in (str, bytes, list, tuple, dict, set, int, float, Path)
+}
 #: ``monkeypatch.setattr``/``delattr`` und ``patch.object``: der letzte Teil des Aufrufs.
 PATCH_CALLS = frozenset({"setattr", "delattr", "object"})
 
@@ -141,6 +148,8 @@ class Shape:
         self.protocol = _class(component, cut.host_protocol)
         self.methods: dict[str, Moved] = {}
         self.unique: dict[str, list[str]] = {}
+        #: Die Namen der Qt-Basen von Wirt und Komponente (:meth:`_qt_overrides`).
+        self.qt_names: frozenset[str] = frozenset()
         if self.host_class is None:
             self.problems.append(f"{cut.source}: keine Klasse {cut.host} auf Modulebene — prüfen")
             return
@@ -252,6 +261,7 @@ class Shape:
                 "überschreibt, ist so nicht prüfbar; vorher die Basis als Import schreiben"
             )
         members, failed = qt_members(refs)
+        self.qt_names = members
         for text in failed:
             self.problems.append(
                 f"Qt-Basis {text} lässt sich nicht laden — ob eine verschobene Methode Qt "
@@ -350,6 +360,14 @@ class Shape:
                     found[node.arg].append(f"{path}:{node.lineno} (Schlüsselwort)")
                 elif isinstance(node, ast.Call) and "eventFilter" in self.methods:
                     self._host_filter(path, node)
+        for name, places in found.items():
+            # Kein Ort im Baum, aber ein eingebauter Typ oder die Qt-Basis kennt den Namen auch:
+            # Ein Empfänger, den der Auflöser nicht kennt, kann einer von ihnen sein.
+            kinds = [kind for kind, members in BUILTIN_MEMBERS.items() if name in members]
+            if kinds:
+                places.append(f"eingebauten Typen ({', '.join(kinds)})")
+            if name in self.qt_names:
+                places.append("der Qt-Basis")
         self.unique = {name: places for name, places in found.items() if places}
         self._subclasses(classes)
 

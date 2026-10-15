@@ -617,6 +617,11 @@ def _with(path: str, text: str) -> dict[str, str]:
             "Zeichenkette 'bump' (<module>) nennt ein verschobenes Member",
         ),
         (
+            "name-eines-eingebauten-typs",
+            _with("tools/counter.py", "def tally(items):\n    return items.count(1)\n"),
+            "Zugriff auf count (tally) — 'count' gibt es auch in eingebauten Typen",
+        ),
+        (
             "kein-release",
             fx.edit(
                 fx.COMPONENT_OLD,

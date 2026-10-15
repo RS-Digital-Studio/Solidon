@@ -1207,6 +1207,12 @@ path = "app/ui/board_tools.py"
 scope = "ring"
 member = "notify"
 decision = "component"
+
+[[accesses]]
+path = "app/ui/board_tools.py"
+scope = "poke"
+member = "count"
+decision = "component"
 """
 
 #: Der Sollbaum nach dem Schnitt der Komponente, von Hand geschrieben.
