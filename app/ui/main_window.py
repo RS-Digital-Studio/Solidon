@@ -22487,6 +22487,12 @@ class MainWindow(QMainWindow):
                 naming_default=self.settings.name_dimensions,
             )
             dialog.spoolChosen.connect(remember_spool)
+            if spec.unchanged_effect == "name" and "name" in values:
+                # Mit dem jetzigen Namen vorgegeben, wartet *Übernehmen* auf einen
+                # neuen (RA-13, FD-114): kein leerer Schritt „Objekt umbenennen“.
+                dialog._opened_with = (spec.name, dialog.values())
+                dialog.valuesChanged.connect(dialog._follow_source_pending)
+                dialog._follow_source_pending()
             if spec.name == "apply_texture":
                 self._follow_printable_pitch(dialog, values)
             if seat is not None:

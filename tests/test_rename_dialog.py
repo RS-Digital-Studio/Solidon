@@ -68,3 +68,38 @@ def test_a_given_name_still_wins(two_bodies: MainWindow, monkeypatch: pytest.Mon
     dialog = two_bodies._op_dialog
     assert dialog is not None
     assert dialog.values()["name"] == "Haube"
+
+
+def test_rename_waits_for_a_new_name(
+    two_bodies: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Übernehmen erst nach einer echten Änderung (RA-13): kein leerer Schritt.
+
+    Mit dem jetzigen Namen vorgegeben legte Enter einen Schritt „Objekt
+    umbenennen“ auf denselben Namen an. Dieselbe Regel wie in der Maßgruppe
+    (FD-31): grau, und der Satz nennt das Feld.
+    """
+    from PySide6.QtWidgets import QLineEdit
+
+    monkeypatch.setattr(two_bodies, "_wire_preview", lambda *args, **kwargs: None)
+    two_bodies.object_tree.select_object(_body(two_bodies, "Boden"))
+    steps = len(two_bodies.session.project.document.ops)
+
+    two_bodies.run_operation(REGISTRY.get("rename_object"))
+
+    dialog = two_bodies._op_dialog
+    assert dialog is not None
+    button = dialog._accept_button
+    assert not button.isEnabled(), "derselbe Name ist nichts zum Übernehmen"
+    assert "Name" in button.toolTip() and button.toolTip() == button.accessibleDescription()
+    assert not dialog.can_accept()
+    field = next(line for line in dialog.findChildren(QLineEdit) if line.text() == "Boden")
+    field.setText("Bodenplatte")
+    QApplication.processEvents()
+    assert button.isEnabled(), "ein neuer Name gibt den Knopf frei"
+    field.setText("Boden")
+    QApplication.processEvents()
+    assert not button.isEnabled(), "zurück auf den alten Namen: wieder nichts zu tun"
+    dialog.accept()
+    QApplication.processEvents()
+    assert len(two_bodies.session.project.document.ops) == steps, "kein leerer Schritt"

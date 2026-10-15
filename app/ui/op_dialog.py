@@ -66,6 +66,7 @@ from app.ui.change_lock import change_refusal
 from app.ui.dialog_footer import DialogFooter
 from app.ui.dialogs import ErrorNotice, align_to_the_front
 from app.ui.feature_list import FeatureList
+from app.ui.first_change import first_change_sentence
 from app.ui.labels import (
     BoundedSpin,
     LengthSpin,
@@ -2092,6 +2093,10 @@ class OperationDialog(QDialog):
         self._editors: dict[str, QWidget] = {}
         self._feature_focus = ""
         self._first_focus_given = False
+        self._opened_with: tuple[str, dict[str, Any]] | None = None
+        """Variante und Werte, mit denen der Dialog beim heutigen Stand aufging."""
+        self._waits_for_change = False
+        """Ob *Übernehmen* auf die erste Änderung wartet (:meth:`_follow_source_pending`)."""
         self.source_objects = tuple(source_objects)
         self._centre_objects = tuple(centre_objects)
         self._centre_row: QWidget | None = None
@@ -2689,6 +2694,17 @@ class OperationDialog(QDialog):
         # Knopf, statt drei Schritte später im Prüfbericht zu enden
         # (:meth:`block_apply`, gerufen aus ``MainWindow._preview_explained``).
         blocked = self._attachment_problem or self._blocked_reason
+        # **Beim heutigen Stand wartet der Knopf auf die erste Änderung** (RA-13,
+        # dieselbe Regel wie FD-31 und FD-99): Ein Umbenennen auf den Namen, der
+        # schon gilt, legte einen leeren Schritt an. Grau, und der Satz nennt das
+        # erste offene Feld (``first_change``). Wer den Stand vorgibt, setzt
+        # ``_opened_with`` (``MainWindow.run_operation``).
+        unchanged = self._opened_with is not None and self._opened_with == (
+            self.spec.name,
+            self.values(),
+        )
+        first = first_change_sentence(self._editors.values(), self) if unchanged else ""
+        self._waits_for_change = bool(first)
         # **Ansehen ja, Übernehmen nein** (FD-5): Ohne Freischaltung geht ein
         # Schritt aus Verlauf oder Baum zum Lesen auf; der Knopf trägt den Grund.
         refusal = change_refusal()
@@ -2713,8 +2729,11 @@ class OperationDialog(QDialog):
             or (placement_hint() if no_place else "")
             or (blocked or "")
         )
+        if first and not (refusal or pending):
+            reason = first
         incomplete = (
-            incomplete
+            self._waits_for_change
+            or incomplete
             or no_edge
             or no_contour
             or no_layout
@@ -2809,7 +2828,7 @@ class OperationDialog(QDialog):
 
     def can_accept(self) -> bool:
         """Alle Eingaben und die Freigabe derselben Vorschau erneut prüfen."""
-        if self._attachment_problem is not None or change_refusal():
+        if self._attachment_problem is not None or change_refusal() or self._waits_for_change:
             return False
         for editor in (*self.findChildren(QSpinBox), *self.findChildren(QDoubleSpinBox)):
             editor.interpretText()
@@ -2859,6 +2878,7 @@ class OperationDialog(QDialog):
             # könnte (RM-773).
             if (
                 self.preview_defer is not None
+                and not self._waits_for_change
                 and not self.place_missing()
                 and not self.source_missing()
             ):
