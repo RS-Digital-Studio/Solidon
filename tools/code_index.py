@@ -57,6 +57,7 @@ import functools
 import gc
 import hashlib
 import sys
+import textwrap
 import time
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path, PurePosixPath
@@ -174,6 +175,7 @@ _NEEDS_ARGUMENTS = _SEQUENCE_CALLS | {
     "pathlib.PurePosixPath",
     "importlib.util.spec_from_file_location",
     "importlib.util.module_from_spec",
+    "textwrap.dedent",
 }
 
 #: Methoden eines Pfads, die wieder einen Pfad liefern.
@@ -185,6 +187,7 @@ _REF_KINDS = {"attr": "attribute", "store": "store", "del": "delete"}
 # --------------------------------------------------------------------------- öffentliche Werte
 
 
+from tools import code_scripts  # noqa: E402
 from tools.code_report import inventory, reach_text  # noqa: E402
 from tools.code_values import (  # noqa: E402
     Finding,
@@ -259,6 +262,15 @@ def _join(values: tuple[Val, ...]) -> Val:
     if all(value.kind == "const" for value in values):
         return _const("".join(str(value.data) for value in values))
     return Val("unknown", "f-String mit offenem Teil")
+
+
+def _joined(separator: Val, values: tuple[Val, ...]) -> Val:
+    """``"; ".join(folge)`` einer bekannten Folge von Texten."""
+    items = _elements(values[0]) if len(values) == 1 and values[0].ref == "" else None
+    texts = [_text(item) for item in items or ()]
+    if items is None or any(text is None for text in texts):
+        return Val("unknown", "join mit offenem Teil")
+    return _const(str(separator.data).join(text or "" for text in texts))
 
 
 def _add(values: tuple[Val, ...]) -> Val:
@@ -513,6 +525,9 @@ class Index:
                 return [((), _const(getattr(path, name)))]
             if name in _PATH_METHODS:
                 return [((), Val("method", name, base))]
+        if kind == "const" and isinstance(base.data, str) and name == "join":
+            # ``"; ".join((…))`` setzt ein Skript für ``python -c`` zusammen (CS-18).
+            return [((), Val("method", name, base))]
         return [((), Val("obj", f"{base.ref}.{name}" if base.ref else name))]
 
     # ---- Faltung
@@ -1007,6 +1022,10 @@ class Index:
                 return [((), Val("seq", "pytest.param", values))]
             if ref == "builtins.str" and len(values) == 1 and values[0].kind == "const":
                 return [((), _const(str(values[0].data)))]
+            if ref == "textwrap.dedent" and len(values) == 1:
+                text = _text(values[0])
+                dedented = _const(textwrap.dedent(text)) if text is not None else None
+                return [((), dedented or Val("unknown", "dedent mit offenem Text"))]
             if ref.startswith("pathlib.") and len(values) == 1 and values[0].kind == "path":
                 return [((), values[0])]
             if ref == "importlib.util.spec_from_file_location" and len(values) >= 2:
@@ -1017,6 +1036,8 @@ class Index:
                 return [((), Val("module", values[0].ref, "loaded"))]
             return [((), Val("obj", f"{ref}()"))]
         if kind == "method" and isinstance(function.data, Val):
+            if function.data.kind == "const":
+                return [((), _joined(function.data, values))]
             return [((), _path_method(ref, function.data, values))]
         if kind == "def" and ref.startswith("tests"):
             return self._returns(ref)
@@ -1304,6 +1325,11 @@ class Index:
                 site = self._patch_site(facts, patch)
                 if site is not None:
                     self._patch_sites.append(site)
+        found, missing, counted = code_scripts.scan(self)
+        for key, references in found.items():
+            self._references.setdefault(key, []).extend(references)
+        self._unresolved.extend(missing)
+        self.counts.update(counted)
         self._patch_sites.sort()
         self._unresolved = sorted(set(self._unresolved))
         self._heads.sort()
@@ -1708,6 +1734,25 @@ class Index:
                 facts, to_ir(node, scope, comps=facts.comprehensions, checking=checking)
             )
         )
+
+    def fold(self, facts: Facts, ir: IR) -> frozenset[Val]:
+        """Was die Form ``ir`` aus dem Auszug ``facts`` bedeuten kann."""
+        return frozenset(value for _env, value in self._fold(facts, ir))
+
+    def scan_apart(
+        self, facts: Facts
+    ) -> tuple[dict[tuple[str, str], list[Reference]], list[Unresolved]]:
+        """Bezüge und W5-Funde eines Auszugs, der nicht zum Baum gehört (ein Skript aus einer
+        Zeichenkette, :mod:`tools.code_scripts`), getrennt von den eigenen Ergebnissen; Leser
+        liefert er nur, wenn sein Bereich ``app`` oder ``tools`` ist."""
+        saved = self._references, self._unresolved, self.counts
+        self._references, self._unresolved, self.counts = {}, [], {}
+        try:
+            self._scan_imports(facts)
+            self._scan_refs(facts)
+            return self._references, self._unresolved
+        finally:
+            self._references, self._unresolved, self.counts = saved
 
     def patch_sites(self) -> tuple[PatchSite, ...]:
         """Alle Patch-Stellen in ``tests/``, nach Pfad und Zeile sortiert."""

@@ -69,6 +69,13 @@ def inventory(index: Index) -> str:
             "Abfragen auf fehlende Namen, kein W5-Fund: "
             + ", ".join(f"{key[7:]} {count}" for key, count in sorted(absent.items()))
         )
+    scripts = {key[8:]: count for key, count in index.counts.items() if key.startswith("scripts.")}
+    lines.append(
+        f"Skripte für python -c: {scripts.get('sites', 0)} Stellen, "
+        f"{scripts.get('read', 0)} Texte gelesen ({scripts.get('template', 0)} Stellen mit "
+        f"Platzhalter), {scripts.get('open', 0)} nicht faltbar, "
+        f"{scripts.get('unparsed', 0)} kein Python"
+    )
     lines.append("")
     for rule in "abcde":
         items = findings[rule]

@@ -151,7 +151,9 @@ def elements(value: Val) -> tuple[Val, ...] | None:
         return value.data
     if value.kind == "map" and isinstance(value.data, tuple):
         return tuple(key for key, _item in value.data)
-    if value.kind == "const" and isinstance(value.data, str):
+    if value.kind == "const" and isinstance(value.data, str) and len(value.data) <= 512:
+        # Ein langer Text (ein Skript) bleibt eine offene Folge: Über seine Zeichen gefaltet,
+        # wüchse jede Schleife um Tausende Zeilen, die nichts auflösen.
         return tuple(constant(char) for char in value.data)
     return None
 

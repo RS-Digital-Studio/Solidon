@@ -40,6 +40,10 @@ INDEXED = ("app", "tools")
 #: Bereiche, deren Dateien gelesen werden; ``tests`` liefert Patch-Stellen und Importe.
 AREAS = ("app", "tools", "tests")
 
+#: Längster Text, den der Auszug als Konstante hält: Ein Skript für ``python -c`` ist oft
+#: ein ganzer Absatz (CS-18); im Baum stehen 262 Texte über 512 Zeichen, zusammen 0,3 MB.
+LONGEST_TEXT = 1 << 16
+
 COND = 1  # unter if/try/Schleife/match: kann fehlen
 CHECKING = 2  # unter TYPE_CHECKING: bindet zur Laufzeit nicht
 ANNOTATED = 4  # nur annotiert, ohne Wert
@@ -336,6 +340,21 @@ class Site(NamedTuple):
     keywords: tuple[tuple[str, IR], ...]
 
 
+class Script(NamedTuple):
+    """Ein Skript in einer Zeichenkette, das ein Befehl ``[kopf, …, "-c", skript, …]`` an einen
+    Prozess gibt (CS-18). ``head`` ist ``None``, wenn ``-c`` vorn steht (Argumente, die vor
+    einen Interpreter kommen), ``head_text`` der Kopf als Quelltext; Lage ist die des
+    Skriptausdrucks."""
+
+    scope: int
+    line: int
+    col: int
+    head: IR | None
+    head_text: str
+    script: IR
+    runtime: bool
+
+
 @dataclass(slots=True)
 class Facts:
     path: str
@@ -362,6 +381,8 @@ class Facts:
     comprehensions: dict[tuple[int, int], int] = field(default_factory=dict)
     #: Abweichender Typ-/Headerkontext für öffentliche Abfragen an eigenen AST-Knoten.
     contexts: dict[tuple[int, int], tuple[int, bool]] = field(default_factory=dict)
+    #: Skripte in Zeichenketten, die an ``python -c`` gehen; der Index liest sie wie Module.
+    scripts: list[Script] = field(default_factory=list)
 
 
 def to_ir(
@@ -383,7 +404,7 @@ def to_ir(
         return Use(node.id, scope, node.lineno, node.col_offset, checking=checking)
     if isinstance(node, ast.Constant):
         value = node.value
-        if isinstance(value, str) and len(value) > 512:
+        if isinstance(value, str) and len(value) > LONGEST_TEXT:
             return Unknown("lange Zeichenkette")
         if value is None or isinstance(value, (str, int, float, bytes)):
             return const(value)
@@ -442,7 +463,9 @@ def to_ir(
             ):
                 parts.append(to_ir(part.value, scope, d, comps, checking))
             else:
-                return Unknown("formatierter Text")
+                # Ein Teil mit Umwandlung (``!r``) oder Format bleibt offen, der Rest des Texts
+                # bleibt lesbar (ein Skript mit eingesetztem Pfad, CS-18).
+                parts.append(Unknown("formatierter Teil"))
         return Fstr(tuple(parts))
     if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Div)):
         left, right = (
@@ -745,7 +768,15 @@ class _Extractor:
             self.expr(node.value)
             if isinstance(node.target, ast.Name):
                 self.load(node.target.id, node.lineno)
-                self.bind(node.target.id, Unknown("erweiterte Zuweisung"), _end(node))
+                grown: IR = Unknown("erweiterte Zuweisung")
+                if isinstance(node.op, ast.Add):
+                    # ``text += …`` ist der Wert davor plus der Zusatz; gelesen an der Stelle davor.
+                    before = node.target.lineno, node.target.col_offset
+                    grown = Add(
+                        Use(node.target.id, self.scope, *before, checking=self.checking),
+                        self.ir(node.value),
+                    )
+                self.bind(node.target.id, grown, _end(node))
             else:
                 self.target(node.target, Unknown("erweiterte Zuweisung"), _end(node))
         elif isinstance(node, ast.While):
@@ -994,6 +1025,8 @@ class _Extractor:
     def expr(self, node: ast.expr) -> None:
         if self.checking or self.f.scopes[self.scope].kind == "typeparams":
             self.f.contexts[(node.lineno, node.col_offset)] = self.scope, self.checking
+        if isinstance(node, (ast.List, ast.Tuple)):
+            self.command(node)
         if isinstance(node, ast.Name):
             if isinstance(node.ctx, ast.Load):
                 self.load(node.id, node.lineno)
@@ -1029,6 +1062,37 @@ class _Extractor:
                     self.expr(child)
                 elif isinstance(child, ast.keyword):
                     self.expr(child.value)
+
+    def command(self, node: ast.List | ast.Tuple) -> None:
+        """``[kopf, …, "-c", skript, …]``: Das Element hinter ``-c`` ist ein Skript, wenn
+        davor nur Schalter eines Interpreters stehen (``-I``, ``-u``, ``-X faulthandler``) — nach
+        ``-m modul`` oder einem Dateinamen gehört ``-c`` dem Programm (``pytest -c``). Ob der Kopf
+        ein Python ist, entscheidet der Index (:class:`Script`); ``-c`` vorn heißt: kein Kopf."""
+        elements = node.elts
+        position = 0 if _text_is(elements[0] if elements else None, "-c") else 1
+        while position < len(elements) - 1:
+            element = elements[position]
+            if not (isinstance(element, ast.Constant) and isinstance(element.value, str)):
+                return
+            if element.value == "-c":
+                break
+            if element.value in ("-X", "-W"):
+                position += 2
+            elif element.value.startswith("-") and element.value not in ("-", "-m"):
+                position += 1
+            else:
+                return
+        else:
+            return
+        script, head = elements[position + 1], elements[0] if position else None
+        if isinstance(script, ast.Starred) or isinstance(head, ast.Starred):
+            return
+        head_ir = None if head is None else self.ir(head)
+        head_text = "" if head is None else ast.unparse(head)
+        at = (script.lineno, script.col_offset)
+        self.f.scripts.append(
+            Script(self.scope, *at, head_ir, head_text, self.ir(script), self.runtime)
+        )
 
     def chain(self, node: ast.Attribute) -> None:
         attrs: list[str] = []
@@ -1286,6 +1350,10 @@ class _Extractor:
 _FILLS = frozenset({"append", "add", "insert", "extend", "appendleft", "setdefault", "update"})
 
 
+def _text_is(node: ast.expr | None, text: str) -> bool:
+    return isinstance(node, ast.Constant) and node.value == text
+
+
 def _query_alias(value: IR) -> bool:
     """Ob eine Bindung ``getattr``/``hasattr`` unter anderem Namen sein kann."""
     queries = ("getattr", "hasattr")
@@ -1431,6 +1499,20 @@ def extract(path: str, source: bytes) -> Facts:
     module, package = module_name(path)
     area = path.partition("/")[0]
     facts = Facts(path, module, area, package, path.endswith(".pyi"), source.count(b"\n"))
+    _Extractor(facts).run(tree)
+    return facts
+
+
+def extract_script(path: str, text: str) -> Facts | None:
+    """Der Auszug eines Skripts aus einer Zeichenkette (CS-18), oder ``None``, wenn der Text
+    kein Python ist. ``path`` ist ein eigener Schlüssel; als ``-c`` gestartet heißt das Modul
+    ``__main__``, und es liegt in keinem Bereich: Es liest keinen Namen zur Aufrufzeit eines
+    Moduls aus ``app/`` oder ``tools/`` und hat keine Patch-Stellen."""
+    try:
+        tree = ast.parse(text, filename=path)
+    except SyntaxError, ValueError:
+        return None
+    facts = Facts(path, "__main__", "script", False, False, text.count("\n"))
     _Extractor(facts).run(tree)
     return facts
 
