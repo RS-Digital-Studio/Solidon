@@ -42,3 +42,8 @@ route = [{ target = "finding.action:place_on_bed" }]
 start_scene = "zu_gross.netz"
 example_goal = "Die Platte, die nicht auf das Bett passt, in druckbare Teile teilen."
 fault_case = { start_scene = "quader.exakt", expected = "meldung" }
+
+# Den Dichtweg zeichnet ein eigener Editor, den der Knopf im Feld *Dichtweg* des
+# Operationsdialogs öffnet (FD-101).
+[row."dialog:seal_path_dialog"]
+route = [{ target = "operation:create_seal" }, { target = "field:path_sketch" }]

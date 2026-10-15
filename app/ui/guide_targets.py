@@ -32,7 +32,6 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QAbstractButton,
     QAbstractItemView,
-    QAbstractScrollArea,
     QApplication,
     QDialog,
     QDialogButtonBox,
@@ -52,6 +51,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import guides
+from app.ui.guide_finders import bind_button, first_parameter_label
+from app.ui.guide_wheel import takes_wheel
 from app.ui.labels import RowCheckBox
 from app.ui.overlay import MARGIN, free_span
 
@@ -407,6 +408,12 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "dialog.more": _more_flap,
     "transform.values": _transform_values,
     "parameters.first": _first_parameter,
+    "parameters.first.label": first_parameter_label,
+    "parameters.bind": bind_button,
+    "parts.save": _marked("parts.save"),
+    "filament.add": _marked("filament.add"),
+    "filament.profile": _marked("filament.profile"),
+    "filament.colour": _marked("filament.colour"),
     "toolbar.draw": _draw_button,
     "sketch.done": _sketch_done,
     "feature.apply": _marked("feature.apply"),
@@ -1685,7 +1692,7 @@ def _scroll_needed(widget: QWidget, name: str) -> Click | None:
         # Ein innerer Bereich am Anschlag reicht das Rad weiter wie Qt; nimmt er es
         # selbst, dreht es über der Leiste des Bereichs, der das Ziel trägt (FD-159).
         hit = widget_under(seen.center())
-        while hit is not None and hit is not area and not _takes_wheel(hit, direction):
+        while hit is not None and hit is not area and not takes_wheel(hit, direction):
             hit = hit.parentWidget()
         use_bar = bar.isVisible() and (angle != 120 or area is not areas[0] or hit is not area)
         surface = _unclipped(bar.parentWidget() or bar) if use_bar else seen
@@ -1796,20 +1803,10 @@ def _can_roll(surface: QWidget, direction: int) -> bool:
     """
     holder = surface.parentWidget()
     while holder is not None and not holder.isWindow():
-        if _takes_wheel(holder, direction):
+        if takes_wheel(holder, direction):
             return True
         holder = holder.parentWidget()
     return False
-
-
-def _takes_wheel(widget: QWidget, direction: int) -> bool:
-    """Ob ein Rollbereich ein Rad in diese Richtung selbst nimmt, statt es weiterzureichen."""
-    if not isinstance(widget, QAbstractScrollArea):
-        return False
-    bar = widget.verticalScrollBar()
-    return bar is not None and (
-        bar.value() < bar.maximum() if direction > 0 else bar.value() > bar.minimum()
-    )
 
 
 def _expander_click(view: QAbstractItemView, item: QTreeWidgetItem, name: str) -> Click:

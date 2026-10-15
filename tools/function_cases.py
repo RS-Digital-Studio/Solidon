@@ -25,6 +25,10 @@ SEPARATOR: Final = "@"
 #: weil die vorige den Ausgangszustand verändert hat (FD-132). ``EX_TEMPFAIL``.
 RESTART_EXIT: Final = 75
 
+#: Vorbedingungen der Spezifikation, die keine Einrichtung des Prozesses sind:
+#: Lizenz und Druckart haben eigene Läufe (``function_setup.spec_variants``).
+ROW_PRECONDITIONS: Final[frozenset[str]] = frozenset({"licence", "printer"})
+
 
 @dataclass(frozen=True, slots=True)
 class Setup:
@@ -41,12 +45,20 @@ def setup_of(row: Mapping[str, Any]) -> Setup:
     """Die Einrichtung einer Zeile: Vorbedingungen und eigene Bausteine ihrer Startszenen.
 
     Wie beim Funktionsfall (``file_acceptance.function_cases``): Die Szene der
-    Zeile geht der des Fehlfalls vor.
+    Zeile geht der des Fehlfalls vor, die Szenen gehen der Spezifikation vor. Aus
+    der Spezifikation zählen die Vorbedingungen ohne Lizenz und Druckart — die
+    prüfen eigene Läufe, und ohne den Slicer etwa fand der Sprachfall dessen
+    Profile nie (FD-101).
     """
     from tools.function_scenes import row_scenes
     from tools.function_setup import scene_setup
 
-    needed: dict[str, str] = {}
+    spec = row.get("spec") or {}
+    needed: dict[str, str] = {
+        str(name): str(state)
+        for name, state in (spec.get("preconditions") or {}).items()
+        if name not in ROW_PRECONDITIONS
+    }
     parts: list[str] = []
     for key in reversed(row_scenes(row)):
         setup = scene_setup(key)

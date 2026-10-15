@@ -611,6 +611,15 @@ promises = { stops = true, findings = ["op.create_brep_box.BRepUnavailable"], ac
 op = "create_brep_box"
 params = { width = 40.0, depth = 30.0, height = 20.0 }
 
+# Die Profile des Slicers gibt es nur mit Slicer; ohne ihn nennt das Fenster der
+# neuen Spule den Grund, und die Auswahl bleibt zu (FD-101).
+[scene."quader_mit_slicer.exakt"]
+summary = "Der exakte Quader auf einer Maschine mit eingerichtetem Slicer."
+kernel = "exakt"
+base = "quader.exakt"
+preconditions = { slicer = "vorhanden" }
+promises = { objects = 1, body = "closed" }
+
 [scene."erzeugte_haut.netz"]
 summary = "Ein erzeugtes Modell, das nur eine Haut von 0,3 mm ist (Weg 3, Generator läuft)."
 kernel = "netz"

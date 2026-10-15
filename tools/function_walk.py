@@ -934,9 +934,18 @@ class QtPorts:
         Ein Zahlenfeld des Operationsdialogs (``ValueField``) ist breiter als
         sein Kästchen; die Mitte des Behälters lag am echten Schirm im leeren Teil
         daneben, und der Fokus blieb im Rollbereich des Dialogs (Probelauf F-34).
+        Ist ein Knopf die einzige Eingabe des Felds, gilt der Klick ihm: Im Feld
+        *Dichtweg* traf die Mitte den Satz daneben, und der Dialog öffnete nie
+        (FD-101).
         """
         from PySide6.QtCore import QPoint, QRect
-        from PySide6.QtWidgets import QAbstractSpinBox, QComboBox, QLineEdit
+        from PySide6.QtWidgets import (
+            QAbstractButton,
+            QAbstractItemView,
+            QAbstractSpinBox,
+            QComboBox,
+            QLineEdit,
+        )
 
         from app.ui import guide_targets
 
@@ -950,9 +959,16 @@ class QtPorts:
         except LookupError:
             return point
         kinds = (QAbstractSpinBox, QComboBox, QLineEdit)
-        if isinstance(holder, kinds):
+        if isinstance(holder, (*kinds, QAbstractButton)):
             return point
         boxes = [box for kind in kinds for box in holder.findChildren(kind) if box.isVisible()]
+        if not boxes and not any(
+            view.isVisible() for view in holder.findChildren(QAbstractItemView)
+        ):
+            buttons = [
+                button for button in holder.findChildren(QAbstractButton) if button.isVisible()
+            ]
+            boxes = buttons if len(buttons) == 1 else []
         hit = self.widget_under(point)
         if not boxes or any(hit is box or box.isAncestorOf(hit) for box in boxes):
             return point

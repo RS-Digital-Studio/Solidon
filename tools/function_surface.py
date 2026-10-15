@@ -453,13 +453,21 @@ def pending(window: Any) -> bool:
     Das Merkmalfenster zeigt :data:`PENDING_NOTE`, solange es seine Zeilen im
     Arbeiter rechnet (RM-232); die Sitzung rechnet, und ein Dialog nach der
     Rechnung kommt danach. Solange gilt ein fehlendes Ziel nicht als „nicht
-    auffindbar“.
+    auffindbar“. Ebenso ein Balken ohne Ende im Fenster, in dem der Kunde gerade
+    arbeitet: *Wählen …* im Fenster einer neuen Spule liest die Profile des
+    Slicers im Arbeiter, und die Auswahl kam nach der Frist (FD-101).
     """
-    from PySide6.QtWidgets import QLabel
+    from PySide6.QtWidgets import QApplication, QLabel, QProgressBar
 
     from app.i18n import tr
 
     if bool(getattr(window.session, "busy", False)):
+        return True
+    front = QApplication.activeModalWidget()
+    if front is not None and any(
+        bar.isVisible() and bar.minimum() == bar.maximum() == 0
+        for bar in front.findChildren(QProgressBar)
+    ):
         return True
     note = tr(PENDING_NOTE)
     return any(

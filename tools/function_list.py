@@ -191,7 +191,9 @@ DIALOG_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "UsageDialog": ("D9", "koerper:1"),
     "SlicerFilamentDialog": ("D10", "koerper:1"),
     "ParameterDialog": ("D10", "leer"),
-    "BindingDialog": ("D10", "merkmal:hole"),
+    # Gebunden werden feste Zahlen an Projektmaße: Der Knopf steht in der
+    # Parameterleiste, sobald eine passt — ein Merkmal braucht es nicht (FD-101).
+    "BindingDialog": ("D10", "parameter"),
     "CalibrationDialog": ("D10", "leer"),
     "CounterpartDialog": ("D10", "koerper:2"),
     "RecipeDialog": ("D10", "koerper:1"),
@@ -212,6 +214,17 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "statusbar": ("D12", "leer"),
     "parameters": ("D10", "leer"),
     "parameters.first": ("D10", "parameter"),
+    # Die Beschriftung derselben Zeile öffnet ihr Menü, der Bindeknopf darunter den
+    # Bindedialog, *Auswahl als Baustein speichern …* im Katalog das Rezept — alles
+    # Parameter (FD-101).
+    "parameters.first.label": ("D10", "parameter"),
+    "parameters.bind": ("D10", "parameter"),
+    "parts.save": ("D10", "parameter"),
+    # *Spule von Hand anlegen* gehört zum Filamentlager (D9); *Wählen …* und die
+    # Farbe der neuen Spule öffnen Slicerprofile und Farbwähler (D10).
+    "filament.add": ("D9", "leer"),
+    "filament.profile": ("D10", "leer"),
+    "filament.colour": ("D10", "leer"),
     # Der Prüfbericht ist eine Ansicht der Szene, keine Handlung an einer Auswahl:
     # Er braucht einen Körper, aber keinen gewählten (Probelauf F-33, Z3).
     "report": ("D8", "ansicht"),

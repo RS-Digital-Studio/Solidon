@@ -91,6 +91,17 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # Das Wertfeld der ersten Zeile unter „Parameter" — über die Reihenfolge,
         # weil ein benanntes Maß in jeder Sprache anders heißt
         "parameters.first",
+        # Die Beschriftung derselben Zeile — ein Rechtsklick dort öffnet ihr Menü
+        # (``menu:parameters.edit``) — und *Zahlen an Maße binden …* darunter
+        "parameters.first.label",
+        "parameters.bind",
+        # *Auswahl als Baustein speichern …* im offenen Bausteinkatalog
+        "parts.save",
+        # *Spule von Hand anlegen* im Filamentlager, im Fenster der neuen Spule
+        # *Wählen …* am Profil des Slicers und der erste Farbknopf
+        "filament.add",
+        "filament.profile",
+        "filament.colour",
         # „Zeichnen" in der Werkzeugleiste und „Fertig" im Zeichenmodus
         "toolbar.draw",
         "sketch.done",

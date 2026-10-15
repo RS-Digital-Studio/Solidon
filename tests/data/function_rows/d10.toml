@@ -40,3 +40,51 @@ route = [
   { target = "tree.row:obj_2.face_1", modifier = "ctrl" },
   { target = "menu:menubar.gegenstuecke_setzen" },
 ]
+
+# Das Kontextmenü der Parameterleiste öffnet der Rechtsklick auf die Beschriftung
+# einer Maßzeile; das Wertfeld trägt das Bearbeitungsmenü des Zahlenfelds (FD-101).
+[row."menu:parameters.edit"]
+route = [{ target = "parameters.first.label", button = "right" }]
+
+# Den Bindedialog öffnet der Knopf der Parameterleiste, sobald eine feste Zahl zu
+# einem Maß passt: In parameter.exakt ist die Höhe 20 = 0,5 · breite (FD-101).
+[row."dialog:binding_dialog"]
+route = [{ target = "parameters.bind" }]
+
+# Einen eigenen Baustein speichert der Katalog erst mit einem Projektparameter;
+# am starren Quader nennt er nur den Grund (FD-101).
+[row."dialog:recipe_dialog"]
+start_scene = "parameter.exakt"
+route = [
+  { target = "menu:menubar.bausteinkatalog" },
+  { target = "parts.save" },
+]
+
+# Die Profile des Slicers wählt *Wählen …* im Fenster einer neuen Spule; die
+# Auswahl öffnet erst, wenn der Arbeiter sie gelesen hat (FD-101).
+[row."dialog:slicer_filament_dialog"]
+start_scene = "quader_mit_slicer.exakt"
+route = [
+  { target = "menu:menubar.filamentlager" },
+  { target = "filament.add" },
+  { target = "filament.profile" },
+]
+
+# Der Farbwähler steht am Farbknopf im Fenster einer neuen Spule (FD-101).
+[row."meldung:_pick_colour"]
+route = [
+  { target = "menu:menubar.filamentlager" },
+  { target = "filament.add" },
+  { target = "filament.colour" },
+]
+
+# Die Knöpfe auf diesen Wegen sind eigene Zeilen: Der Katalog und das Fenster der
+# neuen Spule öffnen erst ihr Menüeintrag und *Spule von Hand anlegen* (FD-101).
+[row."parts.save"]
+route = [{ target = "menu:menubar.bausteinkatalog" }]
+
+[row."filament.profile"]
+route = [{ target = "menu:menubar.filamentlager" }, { target = "filament.add" }]
+
+[row."filament.colour"]
+route = [{ target = "menu:menubar.filamentlager" }, { target = "filament.add" }]

@@ -67,6 +67,32 @@ def test_the_language_case_of_a_setup_carries_its_preconditions(
     assert all(case.kind == "language" for case in cases)
 
 
+def test_the_preconditions_of_the_spec_join_the_setup_of_the_language_case(
+    rows: list[dict[str, Any]],
+) -> None:
+    """Eine Vorbedingung der Spezifikation gilt im Sprachfall wie im Funktionsfall;
+    vorher lief eine Zeile, die ohne KI gemessen werden soll, im Sprachfall mit ihr.
+    Lizenz und Druckart bilden keine Einrichtung — die prüfen eigene Läufe — und
+    die Szene geht der Spezifikation vor (FD-101)."""
+    from tools import function_cases
+
+    by_id = {row["id"]: row for row in rows}
+    row = {**by_id["parameters.bind"]}
+    assert function_cases.setup_of(row).key == ""
+    row["spec"] = {
+        **(row.get("spec") or {}),
+        "preconditions": {"ki": "fehlt", "licence": "licensed", "printer": "resin"},
+    }
+    setup = function_cases.setup_of(row)
+    assert (setup.key, dict(setup.preconditions)) == ("ki=fehlt", {"ki": "fehlt"})
+    # Die Profile des Slicers gibt es nur mit Slicer: Das sagt die Startszene, und
+    # eine Spezifikation, die es anders sagt, ändert daran nichts.
+    slicer = {**by_id["dialog:slicer_filament_dialog"]}
+    assert function_cases.setup_of(slicer).key == "slicer=vorhanden"
+    slicer["spec"] = {**slicer["spec"], "preconditions": {"slicer": "fehlt"}}
+    assert dict(function_cases.setup_of(slicer).preconditions) == {"slicer": "vorhanden"}
+
+
 @pytest.mark.windowed
 def test_the_language_case_of_own_parts_finds_their_finding(
     rows: list[dict[str, Any]], tmp_path: Path

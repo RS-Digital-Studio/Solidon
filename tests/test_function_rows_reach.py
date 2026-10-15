@@ -51,7 +51,38 @@ REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
     ),
     "finding.action:keep_saved_parts": ("baustein_geaendert.netz", ("finding:parts.own_changed",)),
     "command:edit.auto_split": ("zu_gross.netz", ("tree.row:obj_1",)),
+    "dialog:seal_path_dialog": (
+        "merkmal.face.exakt",
+        ("tree.row:obj_1.face_6", "operation:create_seal", "field:path_sketch"),
+    ),
+    # D9
+    "filament.add": ("leer", ("menu:menubar.filamentlager",)),
     # D10
+    "menu:parameters.edit": ("parameter.exakt", ("parameters.first.label",)),
+    "dialog:binding_dialog": ("parameter.exakt", ("parameters.bind",)),
+    "dialog:recipe_dialog": (
+        "parameter.exakt",
+        ("tree.row:obj_1", "menu:menubar.bausteinkatalog", "parts.save"),
+    ),
+    "dialog:slicer_filament_dialog": (
+        "quader_mit_slicer.exakt",
+        (
+            "tree.row:obj_1",
+            "menu:menubar.filamentlager",
+            "filament.add",
+            "filament.profile",
+        ),
+    ),
+    "meldung:_pick_colour": (
+        "quader.exakt",
+        ("tree.row:obj_1", "menu:menubar.filamentlager", "filament.add", "filament.colour"),
+    ),
+    # Die Knöpfe auf diesen Wegen sind selbst Zeilen des Wortschatzes.
+    "parameters.first.label": ("parameter.exakt", ()),
+    "parameters.bind": ("parameter.exakt", ()),
+    "parts.save": ("parameter.exakt", ("menu:menubar.bausteinkatalog",)),
+    "filament.profile": ("leer", ("menu:menubar.filamentlager", "filament.add")),
+    "filament.colour": ("leer", ("menu:menubar.filamentlager", "filament.add")),
     "dialog:parameter_dialog": ("leer", ("menu:menubar.parameter_anlegen",)),
     "dialog:calibration_dialog": ("leer", ("menu:menubar.material_kalibrieren",)),
     "dialog:counterpart_dialog": (

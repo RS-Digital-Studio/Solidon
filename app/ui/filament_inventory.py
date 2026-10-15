@@ -50,6 +50,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import guides
 from app.core.errors import AppError, InternalError, OperationCancelled, ValidationError
 from app.core.knowledge import filaments
 from app.core.log import get_logger
@@ -465,6 +466,7 @@ class InventoryView(QWidget):
         set_level(self.summary, "caption")
         header.addWidget(self.summary, 1, 1)
         self.add_button = QPushButton(tr("Spule von Hand anlegen"), self)
+        self.add_button.setProperty(guides.TARGET_PROPERTY, "filament.add")
         self.add_button.setIcon(icon("add", self.add_button))
         self.add_button.clicked.connect(self._add)
         make_primary(self.add_button)
@@ -574,6 +576,7 @@ class InventoryView(QWidget):
         empty_buttons.setSpacing(NORMAL)
         empty_buttons.addStretch(1)
         self.empty_add_button = QPushButton(tr("Spule von Hand anlegen"), self.empty_actions)
+        self.empty_add_button.setProperty(guides.TARGET_PROPERTY, "filament.add")
         self.empty_add_button.setIcon(icon("add", self.empty_add_button))
         self.empty_add_button.clicked.connect(self._add)
         make_primary(self.empty_add_button)

@@ -1,0 +1,7 @@
+# Zeilenspezifikationen für D9 — Druck, Slicer und Filamentlager.
+# Format: Bauplan D0 §2.4. Eine Zeile ohne Eintrag hier ist „ungeprüft“.
+
+# *Spule von Hand anlegen* steht im Filamentlager, das sein Menüeintrag öffnet
+# (FD-101).
+[row."filament.add"]
+route = [{ target = "menu:menubar.filamentlager" }]

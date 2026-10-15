@@ -794,6 +794,13 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "feature.every",
         "measure.reference",
         "measure.apply",
+        # Ohne Parameter keine Zeile; Katalog, Filamentlager und das Fenster einer
+        # neuen Spule sind am frischen Fenster nicht offen (FD-101)
+        "parameters.first.label",
+        "parts.save",
+        "filament.add",
+        "filament.profile",
+        "filament.colour",
         *printing,
     }
     window = MainWindow(Session(), UiSettings())
@@ -807,6 +814,11 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
             "dialog.naming",
             "dialog.more",
             "parameters.first",
+            "parameters.first.label",
+            "parts.save",
+            "filament.add",
+            "filament.profile",
+            "filament.colour",
             *printing,
         ):
             with pytest.raises(guide_targets.MissingTargetError):
