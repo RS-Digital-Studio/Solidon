@@ -15493,9 +15493,10 @@ def test_the_object_tree_fits_its_measures_in_the_card(qt_app: QApplication) -> 
     header = tree.tree.header()
     needed = header.sectionSize(0) + header.sectionSize(1)
     assert needed <= LEFT_WIDTH, f"{needed} Pixel bei {LEFT_WIDTH} verfügbaren"
-    assert header.sectionSize(0) > header.sectionSize(1), (
-        "der Name ist die Auskunft, das Maß die Beigabe"
-    )
+    # Der Name steht ganz da; das Maß nimmt, was er übrig lässt (FD-20,
+    # ``test_object_tree_columns``). Den Vorrang des Namens bei langen Namen
+    # prüft ``test_analysis_ui``.
+    assert header.sectionSize(0) >= tree.tree.sizeHintForColumn(0), "der Name ist die Auskunft"
     tree.close()
     tree.deleteLater()
 

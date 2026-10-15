@@ -222,6 +222,7 @@ from app.ui.layout_lifetime import detach_from_layout
 from app.ui.leash import Worker, WorkerLeash, weak_slot
 from app.ui.loading import DELAY_MS
 from app.ui.overlay import (
+    LEFT_MAX,
     LEFT_WIDTH,
     ContentScroller,
     FittedScroller,
@@ -2904,8 +2905,27 @@ class ObjectTree(QWidget):
         # misst nur die Zeilen, und der Anteil allein schnitt in mancher
         # Sprache den Kopf ab. Ihr Platz geht dem Namen ab, nicht ihr Wort.
         heading = self.tree.header().sectionSizeHint(1)
-        shared = max(heading, min(needed, int(free * MEASURE_SHARE)))
+        # **Der Anteil deckelt nur, wo beide nicht passen** (FD-20): Neben
+        # „Quader“ stand „253,44 x 190,08 x 12,67 mm“ in 117 von 152 Punkten,
+        # obwohl der Name den Rest nicht brauchte. Was die Namen übrig lassen,
+        # bekommt das Maß; erst wenn beide zusammen zu breit sind, gilt der
+        # Anteil, und der Name behält die Mehrheit.
+        names = self.tree.sizeHintForColumn(0)
+        shared = max(heading, min(needed, max(int(free * MEASURE_SHARE), free - names)))
         self.tree.header().resizeSection(1, max(0, min(shared, free)))
+        # **Und reicht die Karte für beide nicht, wird sie breiter, bis LEFT_MAX**
+        # (FD-20): Name und Maß brauchten neben „Quader“ zehn Punkte mehr, als
+        # die 300 der Karte hergaben. Den Ausschlag gibt das Maß; ein langer
+        # Name zählt nur mit seinem gewohnten Anteil an der Grundbreite, sonst
+        # machte jeder lange Dateiname die Karte breit. Gerechnet an der
+        # Grundbreite, nicht an der jetzigen — sonst wüchse die Karte an sich
+        # selbst weiter.
+        name_room = min(names, int((LEFT_WIDTH - FILAMENT_WIDTH) * (1 - MEASURE_SHARE)))
+        chrome = max(0, self.tree.width() - width)
+        least = min(chrome + FILAMENT_WIDTH + name_room + max(needed, heading), LEFT_MAX)
+        if least != self.tree.minimumWidth():
+            self.tree.setMinimumWidth(least)
+            tell_the_zone(self)
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         """Beim Breiterwerden neu teilen."""

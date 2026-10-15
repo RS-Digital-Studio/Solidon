@@ -1623,7 +1623,15 @@ class OverlayHost(QWidget):
     def _card_width(self, key: str, width: int) -> int:
         """Wie breit eine Seitenkarte ist — gleich, wo sie steht."""
         if key == "left":
-            return card_width(LEFT_WIDTH, LEFT_MAX, width)
+            card = card_width(LEFT_WIDTH, LEFT_MAX, width)
+            if self.left is None:
+                return card
+            # **Was der Inhalt mindestens braucht, bekommt er, bis LEFT_MAX**
+            # (FD-20): Der Objektbaum nennt die Breite, in der Name und Maß
+            # ganz stehen. Über der schmalen Grenze wächst nichts; dort teilt
+            # der Baum die Breite wie bisher.
+            least = self.left.minimumSizeHint().width()
+            return max(card, min(least, LEFT_MAX, int(width * NARROW_CARD_SHARE)))
         return self._right_width(width)
 
     def _card_sizes(
