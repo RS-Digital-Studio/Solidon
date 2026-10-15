@@ -72,6 +72,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El inglés y el portugués distinguen ahora el saliente de un gancho, o de un cuerpo bajo la placa, del voladizo al imprimir.
 - En español y portugués, el menú, la búsqueda y el diálogo vuelven a mostrar solo la primera frase de *Pasador para taladro* y *Orientar para imprimir*.
 - Varias traducciones se leen con más claridad, entre ellas la introducción de *Crear parámetro …*. La espiga empieza con mayúscula en todos los idiomas.
+- En la ventana *Desbloquear Solidon …*, *Comprar Solidon* sigue disponible también en un ordenador activado, por ejemplo para un segundo equipo. Los demás botones en gris indican su motivo.
 
 ### Imprimir y entregar al slicer
 

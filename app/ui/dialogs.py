@@ -75,6 +75,7 @@ from app.core.errors import (
     REPORT_ERROR,
     SHOW_DETAILS,
     Action,
+    ActiveLicenceCannotBeReplaced,
     AppError,
     InstallationDamaged,
     InternalError,
@@ -2541,7 +2542,11 @@ class ActivationDialog(QDialog):
         Hauses.
 
         *Schlüssel entfernen* bleibt bedienbar — es tut, was es sagt, und
-        hängt nicht an der Freischaltung.
+        hängt nicht an der Freischaltung. *Solidon kaufen* ebenso, außer bei
+        gebrochenem Manifest: Er öffnet nur die Website, und auf einem
+        freigeschalteten Rechner kauft der Kunde vielleicht für ein zweites
+        Gerät (FD-180). Was dort gesperrt bleibt — prüfen, aktivieren —, nennt
+        seinen Grund wie jeder gesperrte Knopf.
 
         Der Grund ist derselbe Satz wie in der Zeile darüber
         (:func:`damaged_line`, Quelle ist ``InstallationDamaged``), und er
@@ -2564,7 +2569,7 @@ class ActivationDialog(QDialog):
         self.check_button.setEnabled(filled and not damaged and not locked_locally and not busy)
         self.online_button.setEnabled(pending_activation and named and not busy)
         self.offline_button.setEnabled(pending_activation and named and not busy)
-        self.buy_button.setEnabled(not damaged and not locked_locally and not busy)
+        self.buy_button.setEnabled(not damaged)
         if self.online_button.isEnabled() and not self.online_button.isDefault():
             # Nach einer Quittung führte *Schließen* (``acknowledge``); steht wieder
             # eine Aktivierung an, führt wieder ihr kurzer Weg.
@@ -2582,19 +2587,32 @@ class ActivationDialog(QDialog):
             else tr("Schlüssel entfernen")
         )
         locked = damaged_line() if damaged else ""
-        self.check_button.setToolTip(
+        # Was gerade läuft, sagt die Zeile darüber (``state_label``, gesetzt vor
+        # dem Start des Arbeiters); dieselbe Auskunft gilt an den Knöpfen.
+        running = self.state_label.text() if busy else ""
+        check_hint = (
             locked
+            or running
+            or (deactivation_pending_line() if pending_deactivation else "")
+            or (str(ActiveLicenceCannotBeReplaced()) if active else "")
             or ("" if filled else str(tr("Fügen Sie den Schlüssel aus der Bestellmail ein.")))
         )
+        self.check_button.setToolTip(check_hint if not self.check_button.isEnabled() else "")
         self.buy_button.setToolTip(locked)
         for button in (self.check_button, self.buy_button):
             button.setAccessibleDescription(button.toolTip())
         activation_hint = ""
         if pending_deactivation:
             activation_hint = deactivation_pending_line()
-        elif not pending_activation and not active:
+        elif running:
+            activation_hint = running
+        elif active:
+            activation_hint = tr(
+                "Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."
+            )
+        elif not pending_activation:
             activation_hint = tr("Zuerst den Lizenzschlüssel einfügen und prüfen.")
-        elif pending_activation and not named:
+        elif not named:
             activation_hint = tr("Geben Sie einen Namen für diesen Rechner ein.")
         for button in (self.online_button, self.offline_button):
             button.setToolTip(activation_hint)

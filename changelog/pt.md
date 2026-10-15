@@ -71,6 +71,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O inglês e o português distinguem agora o ressalto de um gancho, ou de um corpo abaixo da placa, da saliência na impressão.
 - Em espanhol e português, o menu, a pesquisa e o diálogo voltam a mostrar só a primeira frase de *Pino para furo* e *Orientar para impressão*.
 - Várias traduções leem-se com mais clareza, entre elas a introdução de *Criar parâmetro …*. O pino começa com maiúscula em todas as línguas.
+- Na janela *Desbloquear o Solidon …*, *Comprar o Solidon* continua disponível também num computador ativado, por exemplo para um segundo dispositivo. Os outros botões a cinzento indicam o motivo.
 
 ### Imprimir e entregar ao slicer
 

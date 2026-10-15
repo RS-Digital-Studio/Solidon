@@ -71,6 +71,7 @@ it into `website/version.json`.
 - English and Portuguese now tell the protrusion of a hook, or of a body below the plate, apart from an overhang in printing.
 - In Spanish and Portuguese, menu, search and dialog show only the first sentence again for *Pin for hole* and *Orient for printing*.
 - Several translations read more clearly, among them the introduction of *Create parameter …*. The peg starts with a capital in every language.
+- In the *Unlock Solidon …* window, *Buy Solidon* stays available on an activated computer too, for example for a second device. The other greyed-out buttons there state their reason.
 
 ### Printing and slicer handover
 
