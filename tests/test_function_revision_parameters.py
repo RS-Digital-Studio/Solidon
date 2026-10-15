@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 
+from app.core import guides
 from app.core.types import Parameter
 from tools import function_bench, function_capture, function_surface
 from tools.function_machine import Step
@@ -104,6 +105,11 @@ def _flow(monkeypatch: pytest.MonkeyPatch, *, opens: bool) -> tuple[Any, list[st
         lambda root: {"name": "breite", "value": 20.0, "unit": "mm", "expression": ""},
     )
     monkeypatch.setattr("tools.file_acceptance.changed_value", lambda value: 22.0)
+    # Die festen Namen der zwei Wege kennt der Wortschatz, sobald guide_targets
+    # sie auflöst (``parameters.first.label`` aus Paket F7, ``history.last``).
+    known = {PARAMETER_ROW, HISTORY_ENTRY}
+    real = guides.is_target
+    monkeypatch.setattr(guides, "is_target", lambda name: name in known or real(name))
     return flow, targets
 
 
@@ -121,10 +127,10 @@ def test_a_parameter_row_is_revised_through_its_own_two_ways(
     flow.phase_revise()
     assert "revise" not in flow.data["unmeasured"]
     assert targets == [
-        f"{PARAMETER_ROW.format(1)} right",
+        f"{PARAMETER_ROW} right",
         "menu:parameters.edit left",
         "dialog.accept left",
-        f"{HISTORY_ENTRY.format(3)} double",
+        f"{HISTORY_ENTRY} double",
         "dialog.accept left",
     ], targets
     entries = flow.data["revise"]
@@ -144,3 +150,16 @@ def test_a_way_that_opens_nothing_is_a_finding(monkeypatch: pytest.MonkeyPatch) 
     outcome = _judged_revise(flow.data["revise"])
     assert outcome.verdict == "fund"
     assert any("öffnet nicht" in issue.text for issue in outcome.issues)
+
+
+def test_a_way_without_its_target_in_the_vocabulary_is_not_measured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fehlt ein Ziel im Wortschatz, liegt die Lücke am Prüfstand — nie ein Fund am Produkt."""
+    flow, targets = _flow(monkeypatch, opens=True)
+    monkeypatch.setattr(guides, "is_target", lambda name: name != HISTORY_ENTRY)
+    flow.phase_revise()
+    assert HISTORY_ENTRY not in " ".join(targets)
+    assert "fehlt im Wortschatz" in flow.data["unmeasured"]["revise"]
+    assert [entry["way"] for entry in flow.data["revise"]] == ["menue"]
+    assert _judged_revise(flow.data["revise"]).verdict == "nicht_gelaufen"

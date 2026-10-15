@@ -16,12 +16,18 @@ if TYPE_CHECKING:
 #: Die zwei Wege, einen Projektparameter nachträglich zu ändern (FD-127), mit
 #: denselben Namen wie die Wege eines Schritts (``function_checks.REVISE_WAYS``).
 REVISE_PARAMETER_WAYS: Final = REVISE_WAYS
-#: Die Zeile eines Parameters in der Parameterleiste, 1-basiert; ihr Rechtsklick
-#: öffnet das Menü der Leiste mit *Ändern …* (``menu:parameters.edit``).
-PARAMETER_ROW: Final = "parameters.row:{}"
-#: Ein Eintrag der Verlaufsliste, 1-basiert, auch ohne Schritt (``history.row``
+#: Die Beschriftung der ersten Zeile der Parameterleiste; ihr Rechtsklick öffnet
+#: das Menü der Leiste mit *Ändern …* (``menu:parameters.edit``). Der neue
+#: Parameter einer Startszene ohne Parameter steht dort.
+PARAMETER_ROW: Final = "parameters.first.label"
+#: Der letzte Eintrag der Verlaufsliste, auch ohne Schritt (``history.row``
 #: nennt nur Einträge mit Schrittnummer).
-HISTORY_ENTRY: Final = "history.entry:{}"
+HISTORY_ENTRY: Final = "history.last"
+#: Die Klicks je Weg (FD-127).
+PARAMETER_ROUTES: Final[dict[str, tuple[tuple[str, str], ...]]] = {
+    REVISE_PARAMETER_WAYS[0]: ((PARAMETER_ROW, "right"), ("menu:parameters.edit", "left")),
+    REVISE_PARAMETER_WAYS[1]: ((HISTORY_ENTRY, "double"),),
+}
 
 
 class RevisionPhase:
@@ -195,13 +201,22 @@ class RevisionPhase:
         öffnen den Dialog des Parameters mit seinen Werten; eine neue Zahl
         ändert ihn. Die Verlaufslänge ist hier die Zahl der Projektparameter —
         eine Änderung legt keinen zweiten an. Öffnet ein Weg nichts, misst
-        Prüfpunkt 12 das als Fund.
+        Prüfpunkt 12 das als Fund. Ein Weg, dessen Ziel der Wortschatz nicht
+        kennt, oder ein neuer Parameter, der nicht in der ersten Zeile steht,
+        ist nicht gemessen — die Lücke liegt am Prüfstand, nicht am Produkt.
         """
+        from app.core import guides
         from tools import function_capture as capture
         from tools.file_acceptance import changed_value
 
         entries: list[dict[str, Any]] = []
+        gaps: list[str] = []
         for way in REVISE_PARAMETER_WAYS:
+            route = PARAMETER_ROUTES[way]
+            unknown = [target for target, _button in route if not guides.is_target(target)]
+            if unknown:
+                gaps.append(f"{way}: Ziel {', '.join(unknown)} fehlt im Wortschatz")
+                continue
             if not self.reset():
                 self.data["errors"].append(f"nachträglich {way}: Startszene nicht herstellbar")
                 continue
@@ -224,6 +239,9 @@ class RevisionPhase:
                 self.data["errors"].append(f"nachträglich {way}: kein Parameter angelegt")
                 continue
             name = new[0]
+            if way == REVISE_PARAMETER_WAYS[0] and list(document.parameters).index(name):
+                gaps.append(f"{way}: der neue Parameter steht nicht in der ersten Zeile")
+                continue
             record: dict[str, Any] = {
                 "way": way,
                 "opened": False,
@@ -234,14 +252,6 @@ class RevisionPhase:
                 "typed_values": {},
                 "params_after": None,
             }
-            route = (
-                [
-                    (PARAMETER_ROW.format(list(document.parameters).index(name) + 1), "right"),
-                    ("menu:parameters.edit", "left"),
-                ]
-                if way == REVISE_PARAMETER_WAYS[0]
-                else [(HISTORY_ENTRY.format(self.window.history_panel.list.count()), "double")]
-            )
 
             def read(
                 machine: StepMachine, record: dict[str, Any] = record, name: str = name
@@ -296,6 +306,8 @@ class RevisionPhase:
             )
             record["history_after"] = len(self.session.project.document.parameters)
             entries.append(record)
+        if gaps:
+            unmeasured(self.data, "revise", "; ".join(gaps))
         self.data["revise"] = entries
 
 
