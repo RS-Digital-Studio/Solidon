@@ -11340,11 +11340,13 @@ class FeaturePanel(QWidget):
         # Zeichen, das er ist.
         dot = QToolButton(box)
         dot.setObjectName("infoDot")
-        # **Auch ein Zeichen ist ein Oberflächentext** (Regel 20). „i" steht in
-        # allen sechs Sprachen für dasselbe, und genau deshalb ist der
-        # Katalogeintrag billig — aber die Entscheidung gehört dorthin und
-        # nicht in eine Zeile Code, die keine Sprache je sieht.
-        dot.setText(tr("i"))
+        # **Ein Symbol aus dem eigenen Satz, kein Buchstabe** (FD-96): Ein
+        # halbfettes „i“ las sich neben den Strichsymbolen der Karte als
+        # Schriftzeichen. Der Kreis mit Punkt und Strich ist dasselbe Zeichen
+        # wie unter *Hilfe → Über*, im selben Strich; den Namen trägt der Knopf
+        # für den Bildschirmleser (:meth:`_extend_explanation`).
+        dot.setIcon(icon("about", dot))
+        dot.setIconSize(QSize(NORMAL * 2, NORMAL * 2))
         dot.setAutoRaise(True)
         dot.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         dot.setCursor(Qt.CursorShape.WhatsThisCursor)

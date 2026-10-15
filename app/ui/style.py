@@ -1523,15 +1523,14 @@ QPushButton[targetSize="large"] {{
     min-height: {TARGET_SIZE - 2 * TIGHT - 2}px;
 }}
 QPushButton:hover {{ background: {hover}; }}
-/* Das Info-Zeichen neben einer Überschrift: ein Kreis mit „i" darin, dessen
-   Tooltip den Absatz trägt, der vorher unter der Zeile stand. Die Erklärung
-   verschwindet damit nicht, sie belegt nur keine drei Zeilen mehr, solange
-   niemand sie liest (Robert, 10.09.2026: „die beschreibungen die über den
-   buttons zum übernehmen dastehen auch in einen tooltipp"). Der Buchstabe ist
-   die zweite Kodierung neben der Form — Regel 18 gilt auch für ein Zeichen,
-   das nur eine Erklärung ankündigt. */
+/* Das Info-Zeichen neben einer Überschrift: das Symbol eines Kreises mit „i"
+   darin (FD-96), dessen Tooltip den Absatz trägt, der vorher unter der Zeile
+   stand. Die Erklärung verschwindet damit nicht, sie belegt nur keine drei
+   Zeilen mehr, solange niemand sie liest (Robert, 10.09.2026). Den Kreis
+   zeichnet das Symbol selbst; der Rahmen bleibt durchsichtig, damit Hover
+   und Fokus die Breite nicht ändern. */
 QToolButton#infoDot {{
-    border: 1px solid {line};
+    border: 1px solid transparent;
     border-radius: 9px;
     min-width: 18px;
     max-width: 18px;
