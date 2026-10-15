@@ -393,6 +393,12 @@ def _module_cut(top: _Table, cut_id: str, file: Path, aliases: tuple[Alias, ...]
         table.done()
     if len({(n.path, n.value) for n in name_lists}) != len(name_lists):
         raise CutError("name_lists: je Datei und Wert höchstens ein Eintrag")
+    for entry in name_lists:
+        if entry.path == source and len(entry.to) != 1:
+            raise CutError(
+                f"name_lists {entry.value!r} in der Quelle: genau ein neuer Wert — in einer "
+                "verschobenen Definition wird eine Zeichenkette ersetzt, keine Liste verlängert"
+            )
     readers: list[SourceReader] = []
     for table in top.tables("source_readers"):
         module = _module(table.text("module"), table.context)

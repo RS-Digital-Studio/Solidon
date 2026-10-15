@@ -38,6 +38,7 @@ from tools.move_source import (
     docstring_node,
     is_type_checking,
     module_of,
+    names_source,
     path_of,
     spans,
 )
@@ -425,26 +426,23 @@ class ModuleProof:
         moved = {f"{self.src}.{name}" for name in self.mapping.moves}
         file_name = self.src_path.rpartition("/")[2]
         needles = (self.src_path.encode(), file_name.encode(), self.src.encode())
+        targets = {path_of(t) for t in self.targets}
         for path, data in self.trees.new_files.items():
             if not path.endswith(".py") or not any(n in data for n in needles):
                 continue
             source = self.trees.new(path)
             sites = {(s.line, s.col) for (p, *_), s in self.trees.sites("new").items() if p == path}
-            kept = {e.value for e in self.cut.name_lists if e.path == path and e.to == (e.value,)}
+            # Eine Erklärung mit der Quelle als Pfad gilt in jedem Ziel: Dort stehen danach die
+            # verschobenen Definitionen.
+            places = {path, self.src_path} if path in targets else {path}
+            kept = {e.value for e in self.cut.name_lists if e.path in places and e.to == (e.value,)}
             for node in string_constants(source):
                 value = node.value
                 assert isinstance(value, str)
-                slashed = value.replace("\\", "/")
-                stale = (
-                    self.src_path in slashed
-                    or slashed == file_name
-                    or slashed.endswith("/" + file_name)
-                    or value == self.src
-                    or any(value == m or value.startswith(m + ".") for m in moved)
-                )
+                stale = names_source(value, self.src_path, self.src, moved)
                 if value in kept:
                     for number, entry in enumerate(self.cut.name_lists):
-                        if (entry.path, entry.value) == (path, value):
+                        if entry.path in places and entry.value == value:
                             self.used_lists.add(number)
                     continue
                 if stale and (node.lineno, node.col_offset) not in sites:
@@ -514,6 +512,14 @@ class MovedComparison(Comparison):
             and _is_annotation(self.old.parent(old), old)
         ):
             return self.annotation(old, new)
+        if (
+            isinstance(old, ast.Constant)
+            and isinstance(new, ast.Constant)
+            and isinstance(old.value, str)
+            and isinstance(new.value, str)
+            and old.value != new.value
+        ):
+            return self.declared_text(old, new)
         if not isinstance(old, (ast.Name, ast.Attribute)) or not isinstance(
             new, (ast.Name, ast.Attribute)
         ):
@@ -549,6 +555,18 @@ class MovedComparison(Comparison):
             self.accept(f"{before} heißt {after} (erklärte Umbenennung)")
             return True
         return False
+
+    def declared_text(self, old: ast.Constant, new: ast.Constant) -> bool:
+        """Eine Zeichenkette in der verschobenen Definition, die ``[[name_lists]]`` mit der
+        Quelle als Pfad ersetzt (genau ein neuer Wert)."""
+        cut = self.owner.cut
+        for number, entry in enumerate(cut.name_lists):
+            if entry.path == cut.source and entry.value == old.value and entry.to == (new.value,):
+                self.owner.used_lists.add(number)
+                self.accept(f"{old.value!r} → {new.value!r} (name_lists)")
+                return True
+        self.fail(old, new, f"Zeichenkette {old.value!r} → {new.value!r} ohne Erklärung")
+        return True
 
     def annotation(self, old: ast.Constant, new: ast.Constant) -> bool:
         """Eine Annotation als Zeichenkette (``"Shape"``): Jeder Name darin meint vorher

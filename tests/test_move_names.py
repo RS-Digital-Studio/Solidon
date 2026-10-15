@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from tests import move_fixtures as fx
-from tools import move_cut, move_names
+from tools import move_cut, move_names, move_proof
 
 EXPECTED = fx.changed_tree(fx.MODULE_OLD, fx.MODULE_NEW)
 #: Eine Änderung, die ein anderer zwischen Planung und Schreiben macht.
@@ -356,6 +356,62 @@ def test_the_source_read_as_a_value_is_rejected(
     )
     message = _rejected(tmp_path, fx.MODULE_OLD | {"tests/test_value.py": text})
     assert "tests/test_value.py:" in message and "als Wert" in message, (label, message)
+
+
+#: Der Logger heißt nach seiner Quelle — als Zeichenkette in einer verschobenen Definition.
+SELF_NAMED = fx.edit(
+    fx.MODULE_OLD,
+    "app/core/legacy.py",
+    "logger = logging.getLogger(__name__)\n",
+    'logger = logging.getLogger("app.core.legacy")\n',
+)
+SELF_CUT = fx.MODULE_CUT.replace(
+    '[[identity]]\nname = "logger"\nreason = "Der Logger heißt danach app.core.legacy.state; die '
+    'Hierarchie trägt seine Meldungen."\n',
+    "",
+)
+SELF_DECLARED = (
+    '\n[[name_lists]]\npath = "app/core/legacy.py"\nvalue = "app.core.legacy"\nto = ["{to}"]\n'
+)
+
+
+def test_a_string_in_the_source_naming_the_source_needs_a_declaration(tmp_path: Path) -> None:
+    """RM-M11: Bisher plante der Planer, und der Beweis war rot. Jetzt hält der Schnitt vorher
+    an, mit Stelle und Ausweg."""
+    message = _rejected(tmp_path, SELF_NAMED, SELF_CUT)
+    assert "app/core/legacy.py:14: Zeichenkette 'app.core.legacy' nennt die alte Quelle" in message
+
+
+@pytest.mark.parametrize("to", ["app.core.legacy", "app.core.legacy.state"])
+def test_a_declared_string_in_the_source_stays_or_follows(tmp_path: Path, to: str) -> None:
+    """RM-M11: ``[[name_lists]]`` mit der Quelle als Pfad gilt für die Zeichenketten in den
+    verschobenen Definitionen — bleibend (``to = [value]``) oder ersetzt; der Beweis nimmt
+    genau das an."""
+    root, result = _run(tmp_path, SELF_NAMED, SELF_CUT + SELF_DECLARED.replace("{to}", to))
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    state = (root / "app/core/legacy/state.py").read_text(encoding="utf-8")
+    assert f'logger = logging.getLogger("{to}")\n' in state
+
+
+def test_a_string_in_the_source_changed_without_declaration_is_red(tmp_path: Path) -> None:
+    """Der Beweis von außen: eine Zeichenkette einer verschobenen Definition, anders als
+    erklärt, ist rot."""
+    expected = fx.changed_tree(fx.MODULE_OLD, fx.MODULE_NEW)
+    new = fx.edit(
+        expected,
+        "app/core/legacy/state.py",
+        "logger = logging.getLogger(__name__)\n",
+        'logger = logging.getLogger("app.core.legacy.rules")\n',
+    )
+    old = fx.write_tree(tmp_path / "old", SELF_NAMED)
+    tree = fx.write_tree(tmp_path / "new", new)
+    cut_file = tmp_path / "cut.toml"
+    cut_file.write_text(
+        SELF_CUT + SELF_DECLARED.replace("{to}", "app.core.legacy.state"), encoding="utf-8"
+    )
+    proof = move_proof.prove(move_cut.load(cut_file), old, tree)
+    assert not proof.ok, proof.text()
+    assert any("app.core.legacy.rules" in error for error in proof.errors), proof.errors
 
 
 def _limit_old() -> dict[str, str]:

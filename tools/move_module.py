@@ -44,6 +44,7 @@ from tools.move_source import (
     bound_name,
     docstring_node,
     is_type_checking,
+    names_source,
     path_of,
     spans,
     statement_names,
@@ -133,6 +134,7 @@ class ModulePlanner:
         self._dependencies()
         self.ctx.raise_problems()
         self._unit_rewrites()
+        self._source_texts()
         files = {path_of(t.module): self._target_text(t) for t in self.cut.targets}
         if self.cut.package:
             files[path_of(self.src, package=True)] = _docstring_text(self.cut.package_docstring)
@@ -733,8 +735,31 @@ class ModulePlanner:
                     "erklärten Bereiche — in [[source_readers]] erklären"
                 )
 
+    def _source_texts(self) -> None:
+        """``[[name_lists]]`` mit der Quelle als Pfad gilt für die Zeichenketten in den
+        verschobenen Definitionen: Sie bleiben (``to = [value]``) oder werden der eine neue Wert
+        — in der Tabelle der Einheiten, also vor dem Schreiben der Ziele."""
+        for number, entry in enumerate(self.cut.name_lists):
+            if entry.path != self.path:
+                continue
+            for node in string_constants(self.source):
+                if node.value != entry.value:
+                    continue
+                self.used_lists.add(number)
+                if entry.to != (entry.value,):
+                    text = quoted(self.source, node, entry.to[0])
+                    self.unit_edits.append(
+                        Edit.at(self.path, "expr", node, text, "name_lists", entry.value)
+                    )
+            if number not in self.used_lists:
+                self.ctx.problem(
+                    f"name_lists: {entry.value!r} steht nicht in {entry.path} — Erklärung streichen"
+                )
+
     def _name_lists(self) -> None:
         for number, entry in enumerate(self.cut.name_lists):
+            if entry.path == self.path:
+                continue  # in den verschobenen Definitionen: _source_texts
             if not (self.ctx.root / entry.path).is_file():
                 self.ctx.problem(f"name_lists: {entry.path} fehlt")
                 continue
@@ -1030,20 +1055,22 @@ class ModulePlanner:
         darunter nennt, ist umgeschrieben oder erklärt — sonst ein Fund."""
         moved = {f"{self.src}.{name}" for name in self.unit_of}
         file_name = self.path.rpartition("/")[2]
+        declared = {e.value for e in self.cut.name_lists if e.path == self.path}
+        for node in string_constants(self.source):
+            value = str(node.value)
+            if names_source(value, self.path, self.src, moved) and value not in declared:
+                self.ctx.problem(
+                    f"{self.path}:{node.lineno}: Zeichenkette {value!r} nennt die alte Quelle "
+                    "und wandert mit ihrer Definition — in [[name_lists]] mit der Quelle als "
+                    "Pfad erklären (to = [derselbe Wert], wenn sie bleibt) oder vorher umschreiben"
+                )
         for relative in self._files((self.path, file_name, self.src)):
             rewrite = self.ctx.rewrites().get(relative)
             source = rewrite.source if rewrite else self.ctx.source(relative)
             gone = rewrite.removed_assignments() if rewrite else []
             for node in string_constants(source):
                 value = str(node.value)
-                slashed = value.replace("\\", "/")
-                stale = (
-                    self.path in slashed
-                    or slashed == file_name
-                    or slashed.endswith("/" + file_name)
-                    or value == self.src
-                    or any(value == m or value.startswith(m + ".") for m in moved)
-                )
+                stale = names_source(value, self.path, self.src, moved)
                 if not stale or (rewrite and rewrite.covered(node)):
                     continue
                 if any(_inside_statement(stmt, node) for stmt in gone):

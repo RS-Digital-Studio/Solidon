@@ -20,7 +20,7 @@ import builtins
 import io
 import symtable
 import tokenize
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
@@ -240,6 +240,17 @@ def absolute_module(path: str, stmt: ast.ImportFrom) -> str:
 def bound_name(alias: ast.alias) -> str:
     """Der Name, den ein Eintrag einer Importanweisung bindet."""
     return alias.asname or alias.name.partition(".")[0]
+
+
+def names_source(value: str, path: str, module: str, moved: Iterable[str]) -> bool:
+    """Ob die Zeichenkette ``value`` die Quelldatei ``path`` (auch mit Backslash oder nur ihr
+    Dateiname), das Modul ``module`` oder einen verschobenen Namen darunter (``moved``,
+    Punktnamen ``modul.name``) nennt — Text, der nach dem Schnitt ins Leere zeigte."""
+    slashed = value.replace("\\", "/")
+    file_name = path.rpartition("/")[2]
+    if path in slashed or slashed == file_name or slashed.endswith("/" + file_name):
+        return True
+    return value == module or any(value == m or value.startswith(m + ".") for m in moved)
 
 
 # ------------------------------------------------------------------ Spannen von Anweisungen
