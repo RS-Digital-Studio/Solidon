@@ -130,8 +130,7 @@ zurück, wie er es fand.
   niemand. Die Fensterverträge der Linux-CI laufen offscreen mit DejaVu Sans;
   lokal nachgestellt mit `QT_QPA_FONTDIR` auf einen eigenen Ordner nur mit den
   `DejaVu*.ttf` aus `app/core/geom/data/fonts` (auf den ganzen Ordner nimmt
-  Qt Comfortaa), in der Fixture mit `QFontDatabase.addApplicationFont`
-  (`test_preview_banner_layout.py`).
+  Qt Comfortaa), in der Fixture über `tests/bundled_fonts.py`.
 - **Was am Anzeigen hängt, prüft nur ein gezeigter Dialog** (`show()`,
   `activateWindow()`): Ungezeigt gibt es keinen Erstfokus, und ein Test bleibt
   grün, während der erste Bildklick am Fenster ins falsche Feld geht (RM-416,

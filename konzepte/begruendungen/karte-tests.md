@@ -349,6 +349,11 @@ festem Bildschirmbezug), `begin_card_drag`/`end_card_drag`,
 `settle_measure_layout` (Layoutaufträge zustellen) und
 `measure_more_heading`.
 
+`bundled_fonts.py` ist die eine Stelle für die gebündelte Prüfschrift: `bundled_font`
+lädt DejaVu Sans (auf Wunsch weitere Dateien), setzt sie als Anwendungsschrift,
+prüft Familie und echte Metrik und entfernt die Dateien danach wieder; Schrift
+und Thema gibt `conftest.py` zurück.
+
 `guide_window.py` gehört allein `test_guide_targets.py`: die Fixture
 `prepared_window` für den Wortschatz des Funktionsdurchgangs (Quader mit
 Bohrung unter dem Bett, im Kundenthema) und `settle`, das nach festen Runden
