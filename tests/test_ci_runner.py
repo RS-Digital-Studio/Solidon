@@ -439,6 +439,43 @@ def test_renderer_group_keeps_pure_cases_from_mixed_files(tmp_path: Path) -> Non
     }
 
 
+def test_a_collection_in_the_process_leaves_import_hooks_and_environment_as_they_were(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Sammlung führt jede ``conftest.py`` aus — im Prozess der Suite auch deren
+    ``tests/conftest.py`` ein zweites Mal, die einen Import-Haken vorn in ``sys.meta_path``
+    einsetzt und die Profilvariablen auf einen neuen Temp-Ordner biegt. Danach stehen
+    Haken und Umgebung wieder, wie sie standen: geändert, gelöscht und neu."""
+    monkeypatch.setenv("SOLIDON_COLLECT_PROBE_CHANGED", "before")
+    monkeypatch.setenv("SOLIDON_COLLECT_PROBE_DELETED", "before")
+    monkeypatch.delenv("SOLIDON_COLLECT_PROBE_ADDED", raising=False)
+    (tmp_path / "conftest.py").write_text(
+        "import os\nimport sys\nfrom pathlib import Path\n"
+        "class Hook:\n"
+        "    def find_spec(self, name, path=None, target=None):\n"
+        "        return None\n"
+        "sys.meta_path.insert(0, Hook())\n"
+        "os.environ['SOLIDON_COLLECT_PROBE_CHANGED'] = 'after'\n"
+        "del os.environ['SOLIDON_COLLECT_PROBE_DELETED']\n"
+        "os.environ['SOLIDON_COLLECT_PROBE_ADDED'] = 'after'\n"
+        "Path(__file__).with_name('ran').write_text('', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    windowed = tmp_path / "test_collect_probe.py"
+    windowed.write_text(
+        "import pytest\n@pytest.mark.windowed\ndef test_window(): pass\n", encoding="utf-8"
+    )
+    hooks = list(sys.meta_path)
+    environment = dict(os.environ)
+
+    found = list_windowed_tests.collect_windowed((tmp_path,), confcutdir=tmp_path)
+
+    assert (tmp_path / "ran").is_file(), "die conftest lief in der Sammlung nicht"
+    assert found == (windowed.resolve(),)
+    assert sys.meta_path == hooks
+    assert dict(os.environ) == environment
+
+
 def test_an_empty_user_filter_keeps_pytests_nonzero_exit(tmp_path: Path) -> None:
     """Die Gruppenlogik darf eine ausdrücklich leere ``-k``-Wahl nicht grün färben."""
     config = tmp_path / "pytest.ini"
