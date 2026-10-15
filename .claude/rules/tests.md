@@ -117,7 +117,8 @@ Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
 Wer eine Rücksetzung baut, prüft ihren Zielzustand: Sie stellt her, was der
 **Kunde** hat. Quellsprache und Millimeter sind der Auslieferungszustand;
 Thema, Stylesheet und geladenes Register gehören zur Betriebslage und werden
-nicht weggeräumt.
+nicht weggeräumt; `conftest.py` gibt das Aussehen nach jedem Qt-Fall nur so
+zurück, wie er es fand.
 
 - **Wer eine Breite, ein Layout oder eine Metrik misst, stellt die
   Betriebslage her** (`apply_theme` im Test), statt sie wegzuräumen — und
@@ -129,7 +130,8 @@ nicht weggeräumt.
   niemand. Die Fensterverträge der Linux-CI laufen offscreen mit DejaVu Sans;
   lokal nachgestellt mit `QT_QPA_FONTDIR` auf einen eigenen Ordner nur mit den
   `DejaVu*.ttf` aus `app/core/geom/data/fonts` (auf den ganzen Ordner nimmt
-  Qt Comfortaa).
+  Qt Comfortaa), in der Fixture mit `QFontDatabase.addApplicationFont`
+  (`test_preview_banner_layout.py`).
 - **Was am Anzeigen hängt, prüft nur ein gezeigter Dialog** (`show()`,
   `activateWindow()`): Ungezeigt gibt es keinen Erstfokus, und ein Test bleibt
   grün, während der erste Bildklick am Fenster ins falsche Feld geht (RM-416,
@@ -154,11 +156,9 @@ richtigem Verhältnis halten einen Test jahrelang grün. Der Griff (für Farben;
 bei Schriftmetrik hilft er nicht):
 
 ```text
-before = QApplication.instance().styleSheet()
 apply_theme(QApplication.instance(), "dark")
 apply_style(QApplication.instance(), "dark")
 ...                                    # messen
-QApplication.instance().setStyleSheet(before)   # ins finally
 ```
 
 ## Marker

@@ -119,7 +119,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 
 | Datei | Rolle |
 |---|---|
-| `conftest.py` | Einstellungen, Profile und eigene Bausteine je Test zurückstellen; Abbaufehler sind rot. Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38) — je Prozess ein `solidon-tests-*`, beim Ende abgeräumt, Reste über einen Tag beim nächsten Start, Marker `windowed` für jeden `qt_app`- und `native_window_platform`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`). Unter `CI` endet der Lauf in `pytest_sessionstart`, wenn der exakte Kern fehlt — lokal bleibt das ein Skip |
+| `conftest.py` | Einstellungen, Profile, eigene Bausteine und Aussehen der Anwendung je Test zurückstellen (`test_suite_isolation.py`); Abbaufehler sind rot. Befunddaten über `record_trace`. Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38) — je Prozess ein `solidon-tests-*`, beim Ende abgeräumt, Reste über einen Tag beim nächsten Start, Marker `windowed` für jeden `qt_app`- und `native_window_platform`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`) |
 | `helpers.py` | Öffentliche Helfer ohne Fenster und Fixture `project`; Namen/Zwecke in `karte-tests.md`, „Helfer“. Keine privaten Querimporte aus `test_*.py` oder `conftest` |
 | `ui_helpers.py` | Fenster und Sitzung je Test frisch; Fixtures über `from tests.ui_helpers import window as window`. Weitere Helfer in `karte-tests.md`, „Helfer“ |
 | `cura_fakes.py` | Nachgebaute Cura 5.13 (`cura_installation`), ihr AppDir, Flatpak-Starter und AppImage als Abbild des AppDir mit nachgestelltem Einhängen für den Lauf — für `test_cura_machine.py` und die Cura-Fälle des Druckdialogs |
@@ -145,7 +145,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
   ihr nativer Abbau darf nicht dem späteren zyklischen Sammler überlassen bleiben.
 - **`tests.helpers.exact_kernel()` steht vor jedem `OCP`-Import**, auch am
   Modulanfang: Lokal wird ein fehlender Kern so ein Skip, unter `CI` hält
-  `conftest.py` an, statt dass sich die Dateien des exakten Kerns still
+  `conftest.py` in `pytest_sessionstart` an, statt dass sich die Dateien des exakten Kerns still
   überspringen. Es importiert das eigene Kernelmodul regulär, damit dessen
   Importfehler nicht als fehlendes Extra verschwinden;
   `test_toolchain.py` prüft beides und, dass jeder `OCP`-Import in einer

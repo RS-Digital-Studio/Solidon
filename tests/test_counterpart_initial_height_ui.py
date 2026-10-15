@@ -1,8 +1,10 @@
 """Die Gegenstückhöhe gehört zum fertigen Umbruch, nicht zu vorläufigen Rollleisten."""
 
+from pathlib import Path
+
 import pytest
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QRect, QSize, Qt
-from PySide6.QtGui import QFont, QFontInfo, QScreen
+from PySide6.QtGui import QFont, QFontDatabase, QFontInfo, QScreen
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QLabel, QToolButton
 
@@ -49,9 +51,23 @@ def _font(application, points):
 
 @pytest.fixture
 def counterpart_environment(qt_app, monkeypatch):
-    """Echte Betriebslage mit übersetzten Qt-Knöpfen und zurückgegebenem Schriftstand."""
+    """Echte Betriebslage mit übersetzten Qt-Knöpfen und zurückgegebenem Schriftstand.
+
+    Offscreen gibt es unter Windows keine Schrift (``QFontInfo.pointSize()``
+    ist −1, jede Familie misst gleich); die Höhe des Umbruchs hängt aber an
+    ihr. Die gebündelte DejaVu Sans ist die Schrift der Linux-CI und gibt jeder
+    Plattform dieselbe echte Metrik.
+    """
     before_font = QFont(qt_app.font())
     before_theme = current_theme()
+    fonts = Path(__file__).parents[1] / "app/core/geom/data/fonts"
+    font_ids = [
+        QFontDatabase.addApplicationFont(str(fonts / name))
+        for name in ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf")
+    ]
+    assert min(font_ids) >= 0, "Die gebündelte Prüfschrift wurde nicht geladen"
+    qt_app.setFont(QFont(QFontDatabase.applicationFontFamilies(font_ids[0])[0], 9))
+    assert QFontInfo(qt_app.font()).family() == "DejaVu Sans"
     monkeypatch.setattr(QScreen, "availableGeometry", lambda self: QRect(0, 0, 1920, 1080))
     apply_theme(qt_app, "light")
     load_operations()
@@ -63,6 +79,8 @@ def counterpart_environment(qt_app, monkeypatch):
     apply_style(qt_app, before_theme)
     install_qt_translations(qt_app, "de")
     set_language("de")
+    for font_id in font_ids:
+        QFontDatabase.removeApplicationFont(font_id)
 
 
 def _dialog(application, language, points, pair_key="dowel"):
@@ -113,7 +131,7 @@ def _state(dialog):
 @pytest.mark.parametrize("points", [9, 16])
 @pytest.mark.parametrize("pair_key", [pair.key for pair in PAIRS])
 def test_initial_and_reclosed_counterpart_need_the_same_height(
-    counterpart_environment, language, points, pair_key, record_property
+    counterpart_environment, language, points, pair_key, record_trace
 ):
     """Originalherkunft, echter Textumbruch und Klappen brauchen keine Leerreserve (FD66)."""
     application = counterpart_environment
@@ -126,7 +144,7 @@ def test_initial_and_reclosed_counterpart_need_the_same_height(
         assert dialog._height.user is None
         _assert_front(dialog, points)
         initial_state = _state(dialog)
-        record_property("initial", repr(initial_state))
+        record_trace("initial", repr(initial_state))
         flap = dialog.findChild(QToolButton, "sectionHeading")
         if flap is not None and flap.isVisibleTo(dialog):
             assert not flap.isChecked()
@@ -137,12 +155,12 @@ def test_initial_and_reclosed_counterpart_need_the_same_height(
             assert dialog.width() == initial.width()
             assert dialog.frameGeometry().topLeft() == anchor
             _assert_front(dialog, points)
-            record_property("opened", repr(_state(dialog)))
+            record_trace("opened", repr(_state(dialog)))
             QTest.mouseClick(flap, Qt.MouseButton.LeftButton)
             _settle(application)
             assert not flap.isChecked()
             closed_state = _state(dialog)
-            record_property("reclosed", repr(closed_state))
+            record_trace("reclosed", repr(closed_state))
             assert dialog.size() == initial, {"initial": initial_state, "reclosed": closed_state}
             assert dialog.frameGeometry().topLeft() == anchor
             _assert_front(dialog, points)

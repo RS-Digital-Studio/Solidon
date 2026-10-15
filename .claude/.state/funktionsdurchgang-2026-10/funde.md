@@ -113,7 +113,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `app/core/geom/prepare_ops.py` (doc und Feldtitel), `field_ops.py`; das Wort steht im eingefrorenen Bestand von `tests/data/customer_vocabulary.json`.
 - Vorschlag: Slicer-Wort, etwa „Spiel des Materials einrechnen“, in allen Sprachen neu übersetzt; Bestand schrumpft.
 - Wirkung beim Kunden: Wer aus dem Slicer kommt, versteht nicht, warum die Bohrung größer wird als getippt.
-- Stand: offen RM-741; der beobachtete Begriff ist im gemeinsamen Paket FD7/16/63/64 durch eine Wirkungserklärung zur Druckkorrektur ersetzt, mit vier neuen Textschlüsseln in allen fünf Katalogen. Geliefert als f333e5ba7d0248646ef7e4c16f0434573366e604, integriert als b863815593f2e8ec43e73db7957e6828b77ea60c. 44 enge Fälle, 30 bestehende Anschlüsse und 2.861 Kernfälle grün; gemeinsamer 71-Fall-Anschluss und anschließende 126-Fall-Integration mit FD66 grün. Die echte Sechssprachenfolge auf bc2d5e20c376e5d9003c1c1d8058033a93ca427f (native-runner-v3/runs/run-20261013T210714907Z) ist abgeschlossen: jeweils regulär Exit 0 und 62/62 Bedingungen, insgesamt 372. Alle 192 Originalbilder wurden einzeln gelesen; sämtliche 51 eigenen Prozessidentitäten beendet. Die ab Bild021 abgeschnittene Statuszeile bleibt im Original dokumentiert und wurde getrennt unter FD75 kausal behoben. Keine nachträgliche Umwertung der alten Bilder. Gemeinsamer endgültiger D0-Lauf und Tor bleiben offen.
+- Stand: offen RM-741; der Fix (`f333e5ba7`, welle4 `b86381559`) ersetzt das Wort nur an der Maßgruppe — der finale Lauf zeigt „Materialtoleranz“ weiter im doc von *Bohrung setzen* (037, V1 Fund), in der Zusammenfassung von *Bohrung verschließen* (037) und in der Detailmeldung (043); Stufe B V1 offen (D4, D8).
 
 ### FD-8 Der Kalibrierstand heißt „Startwert“
 
@@ -221,7 +221,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `app/ui/selection_operations.py` (`make_primary` am Katalogknopf) neben `panels.py` (*Übernehmen*).
 - Vorschlag: Katalogknopf gewöhnlich, solange das Merkmalfenster *Übernehmen* zeigt.
 - Wirkung beim Kunden: Er muss lesen, welcher Knopf seine Änderung übernimmt.
-- Stand: offen RM-741; FeatureEditPriority gibt dem angebotenen Merkmalauftrag Vorrang, auch bei vorübergehender Sperre, und stellt die Katalogpriorität nach Ende wieder her. Gemeinsam mit FD7/63/64 als f333e5ba7d0248646ef7e4c16f0434573366e604 geliefert und als b863815593f2e8ec43e73db7957e6828b77ea60c integriert. 44 enge Fälle sowie gemeinsame Anschlüsse mit 71 und 126 Fällen grün. Abbrechen, Einzel-/Sammelübernahme und Undo am echten Fenster in allen sechs Sprachen belegt. Die echte Sechssprachenfolge auf bc2d5e20c376e5d9003c1c1d8058033a93ca427f (native-runner-v3/runs/run-20261013T210714907Z) ist abgeschlossen: jeweils regulär Exit 0 und 62/62 Bedingungen, insgesamt 372. Alle 192 Originalbilder wurden einzeln gelesen; sämtliche 51 eigenen Prozessidentitäten beendet. Die ab Bild021 abgeschnittene Statuszeile bleibt im Original dokumentiert und wurde getrennt unter FD75 kausal behoben. Keine nachträgliche Umwertung der alten Bilder. Gemeinsamer endgültiger D0-Lauf und Tor bleiben offen.
+- Stand: behoben `f333e5ba7`; der 43er-Satz war am Original 38 rot, darunter die gleichzeitigen Hauptaktionen. Finaler Lauf 037–042: rechte Karte an `move_feature`, `duplicate_feature`, `rotate_feature` und `resize_feature` mit genau einem Akzentknopf, G1 erfüllt, Stufe B G1 `gut_nach_fix` (D4); die Zeile `feature.apply` selbst erreichte der Prüfstand nicht. In welle4 `b86381559`.
 
 ### FD-17 Die Suche findet Auf das Bett setzen und Parameter anlegen mit Kundenwörtern nicht vorn
 
@@ -441,7 +441,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 
 ## D0: Entwurf neuer Belege FD-35 bis FD-59
 
-Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurteile und Originalfunde bleiben erhalten. Nummern vom Koordinator vergeben. 25 Ergänzungen; FD36 ist integriert, ein gemeinsamer neuer D0-Nachweis steht aus.
+Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erhalten. Nachweis für den Stand ist der finale 48-Fall-Lauf auf `2ec37b23b` (Fortsetzung 03) mit den Stufe-B-Urteilen beider Prüfer.
 
 ### FD-35 Bettaktion beschreibt Anheben als Senken
 
@@ -453,7 +453,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: app/core/action_effects.py:133, SIDE_EFFECTS[place_on_bed], setzt mit Senkt und den fünf entsprechenden Katalogwerten eine Bewegung nach unten voraus; tatsächlich hängt die Richtung von der Ausgangslage ab.
 - Vorschlag: Richtungsneutraler Satz „Setzt den Körper auf das Bett; seitlich bleibt er, wo er ist.“ und fünf Katalogwerte gemäß textfix-fd35-fd43-entwurf.md; oberhalb/unterhalb/auf dem Bett prüfen. Kein Geometriefix.
 - Wirkung beim Kunden: Der Kunde liest eine falsche Bewegungsrichtung; das belegte geometrische Ergebnis selbst stimmt.
-- Stand: offen RM-745; Texteinheit 2ad0206ed5c9c2064f1fabe5504f9a116e4a8030 geliefert und als ac28ecbb22da16e210eb1f0c653c9b8d8129407b auf welle4/origin integriert. Alle 16 Paketpfade bytegleich; Paketwahl 27388 bestanden/172 übersprungen/4646 abgewählt, gemeinsamer Anschluss 348 bestanden/1 übersprungen/8 abgewählt und Statik grün. AT-01 korrigiert. Gemeinsamer frischer V4-/Sprachbeleg und volles Endtor stehen aus; ursprüngliches rotes Urteil bleibt erhalten.
+- Stand: behoben `2ad0206ed`; `tests/test_action_texts.py` war am Original 16 rot. Finaler Lauf 002, 005 und 043–048 zeigen „Setzt den Körper auf das Bett. Seitlich bleibt er, wo er ist.“, Stufe B V4 `gut_nach_fix` (D8). In welle4 `ac28ecbb2`.
 
 ### FD-36 Entfernen-Hinweis überspringt das notwendige Abbrechen
 
@@ -465,7 +465,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: FeaturePanel._removal_way nennt die Entfernen-Zeile auch während eines begonnenen Maßentwurfs, obwohl _settle_lock sie dann sperrt. Ohne begonnenen Entwurf ist der direkte Weg richtig.
 - Vorschlag: Begonnenen Entwurf unterscheiden; zuerst Abbrechen und danach den tatsächlichen Entfernen-Titel nennen. Fixbericht fix-probe-feedback-codex.md: vier Produktzeilen, sechs Kataloge, 6 vorher rot/18 Gegenfälle grün, danach 24 grün; echte DE-Aufnahme bestätigt den Text.
 - Wirkung beim Kunden: Wer dem bisherigen Hinweis folgt, erreicht einen gesperrten Knopf; der erforderliche erste Schritt fehlt.
-- Stand: offen RM-737 für den gemeinsamen neuen D0-Nachweis; Paket c75ece14b351c2694bc264d552385c794a3b0723 wurde als f807415569f636113c9e006b6ada3dee8f7c38ee auf welle4 integriert, konfliktfrei und mit identischem Baum 53c371a2740f86b44152b46e918806c46a32a4ba. 24 Regressionen, 72 Gegenfälle und echter Fensterfall belegt; 18604 bestandene Auswahlfälle mit zwei danach behobenen Changelog-Längen, 318 Textnachprüfungen grün. Endtor und gemeinsamer neuer Bildnachweis bleiben offen; keine rückwirkende Änderung der Originalurteile.
+- Stand: offen RM-737; der Hinweis nennt im finalen Lauf zuerst „Abbrechen“ (001 Fehlfall; Fix `c75ece14b`, welle4 `f807415569`, Rottest 6 rot), doch der angebotene Weg Abbrechen → *Merkmal entfernen* ist im Lauf nicht durchgeklickt; P7 und V5 beider Prüfer offen (D4).
 
 ### FD-37 Flächenaufnahme einer Sofortaktion entsteht erst nach ihrer Wirkung
 
@@ -477,7 +477,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Prüfstand: phase_surface führte sämtliche path_steps einschließlich des finalen wirksamen Zielklicks vor der Flächenmessung aus.
 - Vorschlag: Walk nur für diesen Flächenzweck nach allen Wegklicks und geprüfter Trefferidentität vor dem Zielklick halten. Normale Aktionswege bleiben wirksam. Kopflose Rot/Grün- und Zieltreffer-Gegenproben im Prüfstandfixbericht; nativer Vollnachweis offen.
 - Wirkung beim Kunden: Die beabsichtigte Kundenfläche wird nicht beurteilt; der Bericht könnte eine ungemessene Variante freigeben. Kein belegter Produktfehler der Bettkorrektur.
-- Stand: offen RM-737; Die zweite und letzte Durchsicht schließt RPF-M1: Soforthandlungen werden davor gemessen, Dialogöffner danach tatsächlich geklickt und als eigene Fläche aufgenommen. Paket 6d5734da599c73c0d4f7de43812a596499946b9e als 433da64bc31eb57943ad92b776c05a9174d36b91 auf welle4/origin integriert; alle 24 Pins bytegleich, keine Merge-Auflösung. Der FD56-Breitlauf bleibt mit 1 fehlgeschlagen/11178 bestanden/47 übersprungen/1635 abgewählt, Exit 1 historisch rot. Enger endgültiger Wächter-/Qt-Anschluss 96 grün; gemeinsamer Anschluss 755 bestanden/61 abgewählt plus 20 Radfälle, Statik und Prozessausgänge Exit 0. Die Commitmeldung unterzählt die tatsächlichen 20 Radfälle als 15. Gemeinsamer frischer D0-Nachweis und Endtor stehen aus; keine dritte C-Durchsicht und kein Gesamtgrün für D8/P18.
+- Stand: behoben `6d5734da5`; `tests/test_function_surface_timing.py` war am Original 4 rot. Finaler Lauf 005, 010, 017, 020 und 043–048: Aufnahme vor dem Zielklick, Körper noch unter dem Bett, Befund und Knopf im Bild, Verlauf ein Schritt; Stufe B Zweitprüfer P9 `gut_nach_fix` (D8). Dieselbe Aufnahmelage an `report.action` führt FD-115. In welle4 `433da64bc`.
 
 ### FD-38 E7 verwirft einen ausdrücklich gemessenen Rechenausweg
 
@@ -489,7 +489,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Prüfstand: E7 verlangt pauschal actions; der bei V5 erlaubte und als way_out gemessene Rechenausweg wurde dort nicht berücksichtigt.
 - Vorschlag: Nur explizit belegte Auswege an Sperrgrund/Grenzablehnung akzeptieren. Echte Meldungen ohne Handlungen bleiben auch bei beliebigem way_out=true rot; entsprechende Gegenproben erhalten.
 - Wirkung beim Kunden: Falscher schwerer Sackgassenbefund in der Abnahme; die gezeigte Berechnungssperre erklärt bereits ihren Rückweg.
-- Stand: offen RM-737; Ausdrücklich gemessene Rechenauswege werden als E7-Ausweg anerkannt; handlungslose Fehlermeldungen erhalten dadurch keine Freigabe. Paket 6d5734da599c73c0d4f7de43812a596499946b9e als 433da64bc31eb57943ad92b776c05a9174d36b91 auf welle4/origin integriert; alle 24 Pins bytegleich, keine Merge-Auflösung. Der FD56-Breitlauf bleibt mit 1 fehlgeschlagen/11178 bestanden/47 übersprungen/1635 abgewählt, Exit 1 historisch rot. Enger endgültiger Wächter-/Qt-Anschluss 96 grün; gemeinsamer Anschluss 755 bestanden/61 abgewählt plus 20 Radfälle, Statik und Prozessausgänge Exit 0. Die Commitmeldung unterzählt die tatsächlichen 20 Radfälle als 15. Gemeinsamer frischer D0-Nachweis und Endtor stehen aus; keine dritte C-Durchsicht und kein Gesamtgrün für D8/P18.
+- Stand: behoben `6d5734da5`; `tests/test_function_surface_timing.py` (darin `test_dead_ends_respect_a_measured_way_out`) war am Original rot. Finaler Lauf 002: E7 erfüllt, der gemessene Rechenausweg zählt, Stufe B E7 `gut_nach_fix` beider Prüfer (D8). In welle4 `433da64bc`.
 
 ### FD-39 Fehlfallbild wird erst nach Escape aufgenommen
 
@@ -501,7 +501,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Prüfstand: run_steps las die Meldung, schloss anschließend den modalen Parameterdialog mit Escape und erstellte erst danach die Fehlfallaufnahme.
 - Vorschlag: Bild im selben Leseschritt wie den Meldungstext vor Escape erfassen; den tatsächlichen Meldungs-/Korrekturweg anschließend unabhängig bewerten. Aufnahmefix allein schließt den automatischen E7/V5-Produktverdacht nicht.
 - Wirkung beim Kunden: Der sichtbare Fehlerzustand und sein Ausweg bleiben im Bericht unbewiesen.
-- Stand: offen RM-737; Der Fehlerdialog wird vor Escape gesichert; sein früherer echter E7/V5-Meldungsbefund und die alten Urteile bleiben erhalten. Paket 6d5734da599c73c0d4f7de43812a596499946b9e als 433da64bc31eb57943ad92b776c05a9174d36b91 auf welle4/origin integriert; alle 24 Pins bytegleich, keine Merge-Auflösung. Der FD56-Breitlauf bleibt mit 1 fehlgeschlagen/11178 bestanden/47 übersprungen/1635 abgewählt, Exit 1 historisch rot. Enger endgültiger Wächter-/Qt-Anschluss 96 grün; gemeinsamer Anschluss 755 bestanden/61 abgewählt plus 20 Radfälle, Statik und Prozessausgänge Exit 0. Die Commitmeldung unterzählt die tatsächlichen 20 Radfälle als 15. Gemeinsamer frischer D0-Nachweis und Endtor stehen aus; keine dritte C-Durchsicht und kein Gesamtgrün für D8/P18.
+- Stand: behoben `6d5734da5`; `tests/test_function_surface_timing.py` war am Original rot. Finaler Lauf 003: `04-fehlfall-dialog.png` zeigt den offenen Parameterdialog mit der Ablehnung vor Escape, beide Prüfer bestätigen (D10). Dass die Meldung selbst keine Handlung trägt (P7, E7, V5 offen), ist ein Produktbefund, den FD-39 nicht umfasst. In welle4 `433da64bc`.
 
 ### FD-40 Fremder Generierungsdialog verunreinigt spätere Sprachflächen
 
@@ -513,7 +513,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Prüfstand: LanguageFlow wechselte nach phase_surface die Startszene; StepMachine räumte nur laufende modale Aufrufe ab. Der nichtmodale Generierungsdialog blieb geöffnet. windows_to_picture fotografierte die tatsächlich sichtbaren Fenster korrekt.
 - Vorschlag: Nach jeder Sprachfläche echten Escape-Rückweg an sichtbaren Nebenfenstern durchführen; bei verbleibendem Fenster Teilfläche mit bench.surface_cleanup_failed rot beenden, bevor das nächste Projekt öffnet. Keine Fremdbilder filtern und keine direkten reject-Abkürzungen.
 - Wirkung beim Kunden: Spätere Dialogbilder gehören nicht zur benannten Handlung; ihre Texte und Maße dürfen deren Beurteilung nicht tragen. Kein nachgewiesener falscher Produktaufruf.
-- Stand: offen RM-737; Der nichtmodale Generator wird tatsächlich geöffnet, aufgenommen und über Escape geschlossen; Generator-/Folgeflächenbeleg liegt vor. Die später aufgedeckte Auto-Split-Radstörung ist über FD56 separat belegt und korrigiert. Paket 6d5734da599c73c0d4f7de43812a596499946b9e als 433da64bc31eb57943ad92b776c05a9174d36b91 auf welle4/origin integriert; alle 24 Pins bytegleich, keine Merge-Auflösung. Der FD56-Breitlauf bleibt mit 1 fehlgeschlagen/11178 bestanden/47 übersprungen/1635 abgewählt, Exit 1 historisch rot. Enger endgültiger Wächter-/Qt-Anschluss 96 grün; gemeinsamer Anschluss 755 bestanden/61 abgewählt plus 20 Radfälle, Statik und Prozessausgänge Exit 0. Die Commitmeldung unterzählt die tatsächlichen 20 Radfälle als 15. Gemeinsamer frischer D0-Nachweis und Endtor stehen aus; keine dritte C-Durchsicht und kein Gesamtgrün für D8/P18.
+- Stand: behoben `6d5734da5`; `cleanup-baseline-red` war am Original 2 rot. Finaler Lauf 043–048: an `place_on_bed` kein fremdes Nebenfenster, Dialogbilder nur an Zeilen, die einen Dialog öffnen; Stufe B Zweitprüfer P9 `gut_nach_fix` (D8). In welle4 `433da64bc`.
 
 ### FD-41 Native Sprachmessung bricht bei der Kontrastaufnahme ab
 
@@ -525,7 +525,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Prüfstandverdacht inzwischen an Kontrastcapture eingegrenzt: top.grab() berührt das gesamte Fenster mit nativer 3D-Fläche. Weglassen verhindert bisher den Abbruch; Ersatz durch screen.grabWindow liefert laut Fixagent inzwischen drei Originalsequenzen plus einen zweiten vollständigen Lauf mit Exit0. Ursprüngliche Stackorte beweisen keine frühere Beschädigungsursache; keine Hardwarebehauptung.
 - Vorschlag: Echte Schirmaufnahme für unveränderte Farbproben verwenden; reproduzierende Gegenprobe, wiederholte native Sprachfolgen, auswertbare Kontrastwerte, Abschlussauswahl und Commit dokumentieren. Ursachenbehebung erst nach dem kompletten Nachweissatz freigeben.
 - Wirkung beim Kunden: Sprachprüfung endet vorzeitig; ihre Vollständigkeit und Kontrastabnahme fehlen. Schwere bezieht sich hier auf den blockierenden Prüfstand, nicht auf einen nachgewiesenen Kundenabsturz.
-- Stand: offen RM-737; Native Bildschirmaufnahme ersetzt das gefährliche QWidget-Neuzeichnen; RPF-S1 geschlossen. Fehlende Pixel bleiben ungemessen, schlechte gemessene Kontraste rot. Frühere AccessViolations werden nicht umgedeutet. Paket 6d5734da599c73c0d4f7de43812a596499946b9e als 433da64bc31eb57943ad92b776c05a9174d36b91 auf welle4/origin integriert; alle 24 Pins bytegleich, keine Merge-Auflösung. Der FD56-Breitlauf bleibt mit 1 fehlgeschlagen/11178 bestanden/47 übersprungen/1635 abgewählt, Exit 1 historisch rot. Enger endgültiger Wächter-/Qt-Anschluss 96 grün; gemeinsamer Anschluss 755 bestanden/61 abgewählt plus 20 Radfälle, Statik und Prozessausgänge Exit 0. Die Commitmeldung unterzählt die tatsächlichen 20 Radfälle als 15. Gemeinsamer frischer D0-Nachweis und Endtor stehen aus; keine dritte C-Durchsicht und kein Gesamtgrün für D8/P18.
+- Stand: behoben `6d5734da5`; am Original nativ reproduziert (D10/en Exit 3221225477, im Ursprungslauf 032, 034 und 041), ein kopfloser Rottest ist für den nativen Abbruch nicht möglich. Finaler Lauf: alle Sprachfälle 031–048 Exit 0 samt Kontrastaufnahme, darunter die alten Abbruchfälle 032, 034 und 041; Stufe B G6 `gut` (D10). In welle4 `433da64bc`.
 
 ### FD-42 Gegenstücke setzen zeigt sechs unabhängige Vorderseitenfelder
 
@@ -537,7 +537,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: counterpart_dialog baut sämtliche Pair.shared-Felder in das vordere Formular und ignoriert vorhandenes ParamSpec.placement. Form, Spiel und Fase sind im Schema bereits advanced.
 - Vorschlag: Vorn Paar und gewöhnliche Maße; vorhandene advanced-Felder unter Weitere Einstellungen mit aktueller Zusammenfassung. ContentHeight/expanded_width und natürlich bemessene Breite verwenden, alle Werte/Paare/Tastaturwege in sechs Sprachen erhalten.
 - Wirkung beim Kunden: Für die einfache Gegenstückaufgabe muss der Kunde sechs fachliche Werte gleichzeitig überblicken; E5 erlaubt höchstens vier.
-- Stand: offen RM-747; Gegenstücke-Paket d06fb300be9c0042fb840aa10f03c74c541f1991 geliefert und als 9b3e44120881b78d54eb72cd1eb05ebe55e82ede auf welle4/origin integriert. KF-M1 und KF-L1 korrigiert; sechs native Sprachwege sowie Größe, Klappen, Abbruch, Übernahme und Undo im Autorenbericht belegt. Root prüfte alle fünf vereinigten Kataloge schlüsselweise und den Semikolonbestand 326; gemeinsamer Anschluss 507 bestanden/2 übersprungen/83 abgewählt plus Statik Exit 0. Alter breiter Lauf mit zwei später eng reparierten Regelverstößen bleibt rot dokumentiert. Gemeinsamer neuer D0-Lauf und Endtor noch offen, kein nachträgliches Angleichen der Originalurteile.
+- Stand: behoben `d06fb300b`; `tests/test_counterpart_front.py` war am Original 31 rot. Finaler Lauf 031–036: drei Felder vorn, E5 erfüllt, Stufe B E5 `gut_nach_fix` (D10). In welle4 `9b3e44120`.
 
 ### FD-43 Übersetzte Handlungsaufzählungen enthalten deutsches und
 
@@ -549,7 +549,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: app/ui/panels.py:_and_then (8144) verknüpft die von _folded bereits übersetzten Titel mit vier fest eingebauten deutschen Trennern in8157–8160. Vorhandenes Muster main_window.py:2903 und Schlüssel tr(und mit Leerzeichen) sind bereits in allen Katalogen vorhanden.
 - Vorschlag: Einmal connector=tr(" und ") innerhalb _and_then bestimmen, Suche/rpartition und beide Ergebniswege damit bilden. Bestehende Präfixkürzung erhalten. Zwei und drei Titel in allen sechs Sprachen samt Laufzeitwechsel prüfen. Kein neuer FD43-Katalogschlüssel, enger Entwurf textfix-fd35-fd43-entwurf.md.
 - Wirkung beim Kunden: Die sichtbare Auswahlkarte mischt Sprachen; kein benannter Projektinhalt.
-- Stand: offen RM-745; Übersetzungsanschluss gemeinsam mit FD35 als 2ad0206ed5c9c2064f1fabe5504f9a116e4a8030 geliefert und als ac28ecbb22da16e210eb1f0c653c9b8d8129407b auf welle4/origin integriert. 27388 Paketfälle und 348 gemeinsame enge Prüfungen bestanden, Statik grün; alle 16 Paketpfade bytegleich. Bestehender übersetzter und-Verbinder bleibt gemeinsame Quelle, keine neue FD43-Katalogdefinition. Frische gemeinsame D4-/D10-Aufnahme und Endtor fehlen; alte Urteile bleiben unverändert.
+- Stand: behoben `2ad0206ed`; `tests/test_action_texts.py` war am Original rot (gefaltete Handlungen in fünf Übersetzungen). Finaler Lauf 031–036: die Aufzählung endet auf „and/y/et/e/e“, Stufe B Zweitprüfer V1 `gut_nach_fix`, der Erstprüfer bestätigt (D10). In welle4 `ac28ecbb2`.
 
 ### FD-44 Skizzenfehler zeigt Ursachencode und verdeckt den Korrekturweg
 
@@ -561,7 +561,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Die absichtlich kollinearen Ebenenpunkte sind korrekt ungültig. spoken_values/value_line gibt den internen reason roh aus; nachgereichter ErrorNotice wird in show_refusal sichtbar, aber die Dialoghöhe nicht passend nachgeführt. Verständlicher Satz für denselben Grund existiert im Skizzeneditor.
 - Vorschlag: Vorhandene verständliche Erklärung zentral wiederverwenden/eng zuordnen; Fehlerbereich und vorhandene Korrekturtexte mit bestehendem ContentHeight-/Refitweg vollständig sichtbar machen, manuelle Größe und erreichbaren Scrollweg erhalten.
 - Wirkung beim Kunden: Die Ursache wird technisch statt handlungsnah erklärt, und der angebotene vorhandene Korrekturweg ist im aufgenommenen Fensterzustand unsichtbar. Kein Geometriefehler und keine Behauptung, die Anwendung hätte grundsätzlich keine Korrekturhandlung.
-- Stand: offen RM-745; Endgültiges Größenpaket 2e475252186598db3c9967737b4594b716cabde0 als 27a18b48c14b8d84b006c2dffa0d671f20eb66b4 auf welle4/origin integriert; alle neun Pins bytegleich, keine Merge-Auflösung. Paket 16847 bestanden/74 übersprungen/4686 abgewählt, Exit 0; dazu 141 gezielte Fälle und sechs native Komponentenfolgen/27 vom Autor gelesene Bilder. Gemeinsamer Größenanschluss 193 Fälle, Textanschluss 266 Fälle/8 abgewählt, Statik Exit 0. Tatsächliche 11/18-pt-Inhaltsschrift, vollständige Einleitung/Aktionen, manuelle Breite und notwendiges Footerminimum belegt. Gemeinsamer frischer D0-Nachweis und Endtor fehlen; ursprüngliche rote Urteile bleiben erhalten.
+- Stand: behoben `2e4752521`; die Regression war am Original 18 rot. Finaler Lauf 043–048: verständlicher Grund statt `points_are_on_one_line`, die Korrekturzeilen stehen ganz im Dialog (043 gelesen), Stufe B „FD-44 sichtbar verbessert“ (D8); Wege nur als Satz führt FD-95. In welle4 `27a18b48c`.
 
 ### FD-45 Merkmalslisten reservieren Höhe für nicht vorhandene Einträge
 
@@ -573,7 +573,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Gemeinsames FeatureSetField-QListWidget orientiert seine Höhe nicht an der tatsächlichen Zeilenzahl; Mindest-/Maximalhöhe und Qt-Größenhinweis reservieren zu viel Listenraum.
 - Vorschlag: Listenhöhe aus vorhandenen Zeilen, Zeilenhöhen, Rahmen und Innenabständen; bei vielen Einträgen begrenzen und rollen. Nach Einfügen/Schrift-/DPI-Wechsel nachziehen, keine feste deutsche Pixelhöhe. Ziel im DE-Einzelfall etwa40–48px statt224px.
 - Wirkung beim Kunden: Unnötige Leere macht den Dialog länger und verschiebt weitere Felder/Knöpfe nach unten; keine exakt verdeckte Modellfläche aus getrenntem Dialogbild behauptet.
-- Stand: offen RM-741; Endgültiges Größenpaket 2e475252186598db3c9967737b4594b716cabde0 als 27a18b48c14b8d84b006c2dffa0d671f20eb66b4 auf welle4/origin integriert; alle neun Pins bytegleich, keine Merge-Auflösung. Paket 16847 bestanden/74 übersprungen/4686 abgewählt, Exit 0; dazu 141 gezielte Fälle und sechs native Komponentenfolgen/27 vom Autor gelesene Bilder. Gemeinsamer Größenanschluss 193 Fälle, Textanschluss 266 Fälle/8 abgewählt, Statik Exit 0. Tatsächliche 11/18-pt-Inhaltsschrift, vollständige Einleitung/Aktionen, manuelle Breite und notwendiges Footerminimum belegt. Gemeinsamer frischer D0-Nachweis und Endtor fehlen; ursprüngliche rote Urteile bleiben erhalten.
+- Stand: offen RM-741; die Listenreserve ist im finalen Lauf weg (037–042 Liste eine Zeile, `group_pattern` und `hollow_object` ohne Reserve; Fix `2e4752521`, welle4 `27a18b48c`, Rottest rot), doch an `pattern_feature` bleibt in DE, EN, FR und IT ein Leerstreifen von etwa 40 px über den Knöpfen, den Stufe B unter FD-45 führt (D4).
 
 ### FD-46 Rechte Kartenbreite wächst allein mit dem Fensteranteil
 
@@ -585,7 +585,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Anfangsbreite wird aus Fensterquote bis540px abgeleitet, statt aus Inhalt/Schrift. Laut Koordinator ist keine gespeicherte Benutzerbreite vorhanden, nur CardPlace-Lage. Die Reserve einzelner Texte allein bestimmt noch nicht das Minimum aller Felder.
 - Vorschlag: Natürlichen Vorderseiten-/Feld-/Schriftbedarf und vorhandene Mindestbedarfe verwenden; Bildschirmgrenzen und bewusst gewählte Nutzergröße bewahren. Rund400px Standardschrift nur als Vergleichskandidat, nicht universelle harte Breite; sechs Sprachen,Zoll/große Werte/Großschrift prüfen.
 - Wirkung beim Kunden: Kurze Inhalte können unnötig 3D-Fläche überlagern; im kleinen D4-Beispiel könnte ein nachgewiesen passender400px-Kandidat≈59.400px² freigeben. Keine Behauptung einer vollständig verlorenen rechten Spalte in D8.
-- Stand: offen RM-737; Beobachtete Auswahlfläche D4/RM-741; ursprünglicher PB-01- und FD46-Befund unverändert. FD57 jetzt auf dem vereinbarten MSI MAG271CQR in allen sechs Sprachen nativ belegt: sechs Exit 0 und 54 vom Autor gelesene Bilder; die frühere LG-Folge bleibt nur Zusatzbeleg. FD58 korrigiert den vollen Spaltenumfang beim Umbruch sowie den ungültigen Zwischenzustand indexOf=-1 und dessen Messcache. Echte Folge schmal/9 pt→groß/14 pt→schmal/9 pt vorher rot, endgültige 66 Fälle und Statik grün. Manifest 4a03df4877f1d4ae8197950c7e61a113bad8fe659d6f0952267b6481a13b3d18 bindet fünf eigene Quellen und 2300 Pins; finaler MSI-Anschluss sechs Sprachen/24 vom Autor gelesene Bilder, alle Exit 0, Root liest DE/ES zusätzlich. Finale breite Auswahl abgeschlossen: 14603 bestanden/57 übersprungen/4633 abgewählt, Exit 0, 2300 Pins unverändert. Paket 11f44ba88f6b1af704f15df45597aa7ea92ee23a auf origin/codex/d0-panel-breite geliefert, Worktree sauber; 66 gezielte Fälle und 24 finale MSI-Bilder gehören zum gebundenen Lieferstand. Integriert auf welle4/origin als e68ca22cbf84417e3b2dea2bff473627e647927f, Baum 746d0a056e6d692c8d231ad4c03939141fea5fc6; Hooks/Push Exit 0. Vier Paketpins bytegleich, panels.py bewahrt ausschließlich die disjunkten Altänderungen _and_then-Übersetzung und FD36. Root-Anschluss 17 bestanden/201 abgewählt und Statik Exit 0. Erster Fensteranschluss 212 bestanden/6 Schriftumgebungsfehler, Exit 1; nach tatsächlichem Laden von zwölf DejaVu-TTFs dieselbe unveränderte Kartendatei vollständig 66/66 grün, Exit 0. Der erste rote Lauf bleibt erhalten. Gemeinsame native Gesamtabnahme und Endtor stehen weiterhin aus. Keine Gesamtfreigabe, ursprüngliche Urteile und rote Zwischenstände bleiben erhalten.
+- Stand: behoben `11f44ba88`; `tests/test_card_content_width.py` war am Original rot. Finaler Lauf 001 (2560) und 007 (1920): rechte Karte je etwa 358 px statt 540 und 479 px, Stufe B Zweitprüfer P9 `gut` mit gleicher Breite (D4). In welle4 `e68ca22cb`.
 
 ### FD-47 Messfläche trifft Nachbarkarte statt aktive Maßgruppe
 
@@ -597,7 +597,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Vom Fixagenten bestätigt: tools/function_surface.py:surface_for ignorierte feature:-Zielart und fiel auf die Auswahlseite zurück. Dadurch stammen Einleitung/Feld-/Layoutzahlen nicht ausschließlich von der bedienten Fläche.
 - Vorschlag: Nur bei passender öffentlicher feature_panel.measure_op und sichtbarem measure.apply deren eigene Elternkarte wählen; sonst tatsächlichen Zielkopf und eigene Elternzeile. Eine fremde Maßgruppe ausdrücklich ausschließen.
 - Wirkung beim Kunden: Falsche Wörter-/Feldzählung und falsche Zielflächen können Funktionen unberechtigt rot oder grün erklären; Produktbeurteilung der Maßgruppe bleibt ohne neue Aufnahme offen.
-- Stand: offen RM-737; RPF-M2 geschlossen: eigene offene Featurezeile und sichtbarer eigener Footer werden erfasst; sechs italienische Flächen samt Footer nativ belegt. Fremde Maßgruppen bleiben ausdrücklich ungemessen. Paket 6d5734da599c73c0d4f7de43812a596499946b9e als 433da64bc31eb57943ad92b776c05a9174d36b91 auf welle4/origin integriert; alle 24 Pins bytegleich, keine Merge-Auflösung. Der FD56-Breitlauf bleibt mit 1 fehlgeschlagen/11178 bestanden/47 übersprungen/1635 abgewählt, Exit 1 historisch rot. Enger endgültiger Wächter-/Qt-Anschluss 96 grün; gemeinsamer Anschluss 755 bestanden/61 abgewählt plus 20 Radfälle, Statik und Prozessausgänge Exit 0. Die Commitmeldung unterzählt die tatsächlichen 20 Radfälle als 15. Gemeinsamer frischer D0-Nachweis und Endtor stehen aus; keine dritte C-Durchsicht und kein Gesamtgrün für D8/P18.
+- Stand: behoben `6d5734da5`; `feature-red` war am Original 5 rot. Finaler Lauf 001, 004, 007, 016, 019 und 037–042 messen die eigene `_MeasureCard` (8 von 8 Feldern, vorn 3), Stufe B E5 und V3 `gut_nach_fix` beider Prüfer, der Zweitprüfer sieht keine Fremdflächenmessung mehr (D4). In welle4 `433da64bc`.
 
 ### FD-48 Änderungsprobe liest noch das alte Importergebnis
 
@@ -609,7 +609,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Vom Fixagenten bestätigt: phase_revise wartete nur auf idle, obwohl last_result noch zum vorherigen Import gehörte. Die Werte- und Verlaufsbasis wurden vor dem fertigen neuen Ergebnis gelesen.
 - Vorschlag: Nach Vorschau und erfolgreichem run_steps ein wirklich neues last_result sowie die erwartete Verlaufslänge abwarten, erst danach Werte vergleichen. Verweigerte Übernahme als roten Gegenfall erhalten.
 - Wirkung beim Kunden: Falscher schwerer Änderungsfund im Prüfbericht; aus diesen alten Parametern folgt kein belegter Kundenfehler des nachträglichen Änderns.
-- Stand: offen RM-737; Tatsächlich getippte 8,8 mm über Menü und Doppelklick sowie Verlauf 2→2 sind belegt; P12 lokal erfüllt. Die passende fertige Vorschau ersetzt das veraltete Importergebnis als Zeitbasis, alte Ø8-Teilbelege bleiben getrennt. Paket 6d5734da599c73c0d4f7de43812a596499946b9e als 433da64bc31eb57943ad92b776c05a9174d36b91 auf welle4/origin integriert; alle 24 Pins bytegleich, keine Merge-Auflösung. Der FD56-Breitlauf bleibt mit 1 fehlgeschlagen/11178 bestanden/47 übersprungen/1635 abgewählt, Exit 1 historisch rot. Enger endgültiger Wächter-/Qt-Anschluss 96 grün; gemeinsamer Anschluss 755 bestanden/61 abgewählt plus 20 Radfälle, Statik und Prozessausgänge Exit 0. Die Commitmeldung unterzählt die tatsächlichen 20 Radfälle als 15. Gemeinsamer frischer D0-Nachweis und Endtor stehen aus; keine dritte C-Durchsicht und kein Gesamtgrün für D8/P18.
+- Stand: behoben `6d5734da5`; `feature-red` war am Original rot. Finaler Lauf 001: P12 erfüllt, beide Wege tippen 8,8 mm, Verlauf 2 → 2, Stufe B P12 `gut_nach_fix` beider Prüfer (D4). In welle4 `433da64bc`.
 
 ### FD-49 G7 zählt beschriftete Aufklapppfeile als namenlose Symbolknöpfe
 
@@ -621,7 +621,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Prüfstand: Ein checkable QToolButton mit Pfeil wurde trotz unmittelbar benachbartem sichtbarem gleichnamigem Label als Bedienelement ohne Text klassifiziert.
 - Vorschlag: Nur diese unmittelbar und gleichnamig beschrifteten Aufklappköpfe als Textbedienelement behandeln. Verborgene, leere und anders benannte Labels entlasten nicht. headings-red: 1 failed/12 passed, danach grün laut Fixbericht; echte namenlose Symbolknöpfe bleiben Negativfälle.
 - Wirkung beim Kunden: Die Abnahme erzeugt einen falschen Symbolbefund und könnte zu überflüssigen Symbolen oder Textdoppelung führen; kein belegtes namenloses Bedienelement an dieser Bildstelle.
-- Stand: offen RM-737; G7 erkennt ausschließlich passend beschriftete Aufklapppfeile; leere, verdeckte oder anderslautende Beschriftungen bleiben Gegenfälle. Paket 6d5734da599c73c0d4f7de43812a596499946b9e als 433da64bc31eb57943ad92b776c05a9174d36b91 auf welle4/origin integriert; alle 24 Pins bytegleich, keine Merge-Auflösung. Der FD56-Breitlauf bleibt mit 1 fehlgeschlagen/11178 bestanden/47 übersprungen/1635 abgewählt, Exit 1 historisch rot. Enger endgültiger Wächter-/Qt-Anschluss 96 grün; gemeinsamer Anschluss 755 bestanden/61 abgewählt plus 20 Radfälle, Statik und Prozessausgänge Exit 0. Die Commitmeldung unterzählt die tatsächlichen 20 Radfälle als 15. Gemeinsamer frischer D0-Nachweis und Endtor stehen aus; keine dritte C-Durchsicht und kein Gesamtgrün für D8/P18.
+- Stand: behoben `6d5734da5`; `headings-red` war am Original 1 rot. Finaler Lauf: G7 in allen 693 gemessenen Protokollen erfüllt, an 001 „0 Symbole“, Stufe B G7 `gut` (D4). In welle4 `433da64bc`.
 
 ### FD-50 Paar im Gegenstücke-Dialog hat keine eigene zugängliche Feldhilfe
 
@@ -633,7 +633,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Der bereits übersetzte erklärende Satz pair.doc erscheint im Dialog, ist aber nicht dem Paarfeld als Kurzhilfe und AccessibleDescription zugeordnet.
 - Vorschlag: Gemeinsamen Pair.doc beim Paarwechsel an Tooltip und AccessibleDescription von Feld und Beschriftung binden. KF-L1 verlangt dabei die inhaltstreue Kürzung der beiden zentralen Quellen für Schraube/Mutter und Buchse/Loch von 30/29 auf höchstens25 deutsche Wörter samt je fünf Katalogwerten. Die frühere Aussage keine neuen Katalogtexte ist damit überholt. Eine Quelle für sichtbaren Hinweis und Hilfe erhalten; drei Paare/sechs Sprachen und tatsächliche Wort-/Satzgrenze prüfen. Von FD42 getrennt nachweisen.
 - Wirkung beim Kunden: Direkt am obersten Auswahlfeld fehlt der erklärende Satz für Kurzhilfe und Hilfstechnik.
-- Stand: offen RM-747; beide zentralen Pair.doc samt ihren Katalogwerten auf 19–23 Wörter gekürzt, anschließend Schraubenhilfe ohne Semikolon nachgeführt. Paket d06fb300be9c0042fb840aa10f03c74c541f1991 geliefert und als 9b3e44120881b78d54eb72cd1eb05ebe55e82ede auf welle4/origin integriert. Root-Katalogaudit bestätigt die vereinigten Schlüsseländerungen ohne Verlust; kombinierter Semikolonbestand 326. Gemeinsamer Anschluss 507 bestanden/2 übersprungen/83 abgewählt und ganze Statik Exit 0. Alter breiter Lauf bleibt mit zwei anschließend gezielt behobenen Regelverstößen erhalten. Gemeinsamer frischer D0-/Feldhilfennachweis und Endtor stehen aus.
+- Stand: behoben `d06fb300b`; `tests/test_counterpart_front.py` war am Original rot. Finaler Lauf 031–036: V3 6 von 6 Feldern samt Paar, Stufe B V3 `gut_nach_fix` (D10). In welle4 `9b3e44120`.
 
 ### FD-51 Kurzer Dialoginhalt behält eine unnötige Mindesthöhe von 88 Pixeln
 
@@ -645,7 +645,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Die gemeinsame DialogScrollArea hält auch bei kurzem Inhalt eine pauschale Mindesthöhe von88 Pixeln vor und vergrößert dadurch den leeren Rumpf.
 - Vorschlag: Im bestehenden style.py-Rumpf die natürliche Inhaltshöhe als Untergrenze berücksichtigen. Ziel für die gezeigte DE-Fläche etwa32 Pixel weniger Höhe, kein fester122-Pixel-Dialog. Lange Inhalte, sechs Sprachen, größere Schrift, manuelle Nutzergröße und Rollweg erhalten.
 - Wirkung beim Kunden: Ein Dialog mit nur einem kurzen Namensfeld verdeckt mehr3D-Fläche als sein tatsächlicher Inhalt benötigt.
-- Stand: offen RM-737; Endgültiges Größenpaket 2e475252186598db3c9967737b4594b716cabde0 als 27a18b48c14b8d84b006c2dffa0d671f20eb66b4 auf welle4/origin integriert; alle neun Pins bytegleich, keine Merge-Auflösung. Paket 16847 bestanden/74 übersprungen/4686 abgewählt, Exit 0; dazu 141 gezielte Fälle und sechs native Komponentenfolgen/27 vom Autor gelesene Bilder. Gemeinsamer Größenanschluss 193 Fälle, Textanschluss 266 Fälle/8 abgewählt, Statik Exit 0. Tatsächliche 11/18-pt-Inhaltsschrift, vollständige Einleitung/Aktionen, manuelle Breite und notwendiges Footerminimum belegt. Gemeinsamer frischer D0-Nachweis und Endtor fehlen; ursprüngliche rote Urteile bleiben erhalten.
+- Stand: behoben `2e4752521`; die Regression war am Original 13 rot. Finaler Lauf 043–048: *Umbenennen* 380 × 118 statt 380 × 154, Stufe B P19 „FD-51 im Bild behoben“ (D8). In welle4 `27a18b48c`.
 
 ### FD-52 Vorschauband bleibt nach ausgeblendeter Legende zu schmal
 
@@ -657,7 +657,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Vorherige Vorschauabsage mit changes=False versteckt die Legende. _refresh_preview_banner ruft show_preview/place/adjustSize vor dem Wiedereinblenden auf; endgültige Legendensichtbarkeit fehlt bei der Messung. PT:557−163−12=382px. Fertige Vorschau und weitere Ereignisse heben den Zustand nicht auf; kein Beleg für eine bloß zu frühe Aufnahme oder FD46-Kartenbreite.
 - Vorschlag: Endgültige Legendensichtbarkeit vor den vorhandenen show_preview/place-Aufruf setzen. Keine zweite Größenrechnung oder neue Mindestbreite. Originalvorgeschichte, kurze/lange Hinweise, echte sechs Kataloge und Inhaltsschriften prüfen; native PT-/IT-Gegenprobe erst mit freigegebenem korrigiertem C-Prüfstand.
 - Wirkung beim Kunden: Die Legende zur Vorschau endet mitten im Wort; der umgebrochene Notiztext wird ebenfalls abgeschnitten. Der Kunde kann die angezeigte Vorschaufolge nicht vollständig lesen.
-- Stand: offen RM-737; beobachtetes D10/RM-747, gemeinsame Vorschau D11/RM-748; Vorschauband-Paket ac6c686f14ea30a5e485012f1b14a66c537c0e3c geliefert und konfliktfrei als 64ec1b690a154ffc09374c0eac6bd481d8c03ba2 auf welle4/origin integriert. Korrigierter vollständig isolierter Lauf: 14573 bestanden/57 übersprungen/4613 abgewählt, Exit 0, alle 35 Pins unverändert. Unabhängige enge Durchsicht 24 grün, kein sperrender Produktfund. Gegen Paket nur STAND.md unterschiedlich. 28 fehlende Bash-Fälle bleiben übersprungen und sind im Endtor nachzuholen; erster unvollständig isolierter Lauf bleibt ungültig. Gemeinsame native Originalfolge und volles Endtor fehlen, kein pauschales neues D0-Urteil.
+- Stand: behoben `ac6c686f1`; der Widgettest war am Original rot. Finaler Lauf 036 (PT, gleiche Vorgeschichte): Vorschauband mit Legende und Notiz ganz, Stufe B P9 „nicht mehr zu sehen“ (D10). In welle4 `64ec1b690`.
 
 ### FD-53 Gemischte Exportprobe übernimmt die Auswahl der vorherigen Szene
 
@@ -669,7 +669,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Prüfstandfehler: Die Szenenvorbereitung übernimmt die zuvor ausgewählte ID obj_1. In export_gemischt bezeichnet dieselbe ID den exakten Quader; der Netzkörper obj_2 gehört nicht zur Auswahl. Die Produktfunktion exportiert folgerichtig nur diesen einen geeigneten Körper. Der Prüfstand wartet dagegen bis180s auf die Rückfrage für einen nicht zum Exportumfang gehörenden Netzkörper.
 - Vorschlag: Fix C stellt vor dieser Exportvorbereitung über die bestehende Kundeneingabe eine leere Auswahl her und prüft den öffentlichen Zustand beziehungsweise vollständigen Exportumfang. Danach ursprüngliche decimate_mesh→export_gemischt-Folge sowie isolierten Gegenfall neu belegen. Keine Änderung am Produkt-Export, keine bloße Unterdrückung der Wartefrist oder nachträgliche Umwertung.
 - Wirkung beim Kunden: Die Abnahme meldet fälschlich eine fehlende Export-Rückfrage und erreicht den beauftragten gemischten Exportfall nicht. Das beobachtete Produktverhalten ist korrekt; daraus folgt kein Kundenfehler des STEP-Exports.
-- Stand: offen RM-737; Die echte Teilfolge decimate_mesh→export_gemischt leert geerbtes obj_1 per Escape und prüft den öffentlichen vollständigen Exportumfang. export.needs_solid erscheint für beide Körperarten; Produkt-Export war korrekt. FD55-Nachlauf misst den danach geöffneten Dateidialog vollständig. Paket 6d5734da599c73c0d4f7de43812a596499946b9e als 433da64bc31eb57943ad92b776c05a9174d36b91 auf welle4/origin integriert; alle 24 Pins bytegleich, keine Merge-Auflösung. Der FD56-Breitlauf bleibt mit 1 fehlgeschlagen/11178 bestanden/47 übersprungen/1635 abgewählt, Exit 1 historisch rot. Enger endgültiger Wächter-/Qt-Anschluss 96 grün; gemeinsamer Anschluss 755 bestanden/61 abgewählt plus 20 Radfälle, Statik und Prozessausgänge Exit 0. Die Commitmeldung unterzählt die tatsächlichen 20 Radfälle als 15. Gemeinsamer frischer D0-Nachweis und Endtor stehen aus; keine dritte C-Durchsicht und kein Gesamtgrün für D8/P18.
+- Stand: behoben `6d5734da5`; `tests/test_function_export_preparation.py` war am Original 8 rot. Finaler Lauf 043–048: Escape leert die geerbte Auswahl, `export.needs_solid` erscheint, der Dateidialog öffnet und wird gemessen; Stufe B urteilt an dieser gemischten Exportfläche (D8). In welle4 `433da64bc`.
 
 ### FD-54 Große Inhaltsschrift schneidet Einleitung und Hauptknopf im Operationsdialog ab
 
@@ -681,7 +681,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Bei tatsächlicher großer Inhaltsschrift decken vorhandene automatische Dialogbreite, Umbruchhöhe der Einleitung und einzeilige Knopfleiste den Platzbedarf nicht. Der erste Satz endet vollständig mit „oder ändern lässt.“; der zweite Satz gehört gemäß lead_sentence bewusst in die Kurzhilfe. Der Befund ist eine Abschneidung vorhandener Texte, kein Auftrag zur Kürzung. Die Größenursache ist im Autorenbericht dokumentiert; Basis und eigener Zwischenstand betroffen.
 - Vorschlag: Einleitung über den vorhandenen Umbruchträger korrekt bemessen und automatische Breite anhand des tatsächlichen Inhalts bis zur Bildschirmgrenze nachführen. Bei gewählter Nutzergröße vollständige Knöpfe und Rollweg erhalten, bei Bedarf Knöpfe untereinander beziehungsweise mit Textumbruch; Originaltexte, Rollen, Tastatur und zugängliche Namen bewahren. Sechs Sprachen sowie automatische/manuelle Größe und echte Inhaltsschrift am endgültigen Stand belegen.
 - Wirkung beim Kunden: Der Kunde kann bei großer Schrift den vollständigen Hinweis und den Namen der Hauptaktion nicht lesen, obwohl beide Texte vorhanden sind. Der kürzere englische Cancel-Knopf in der alten Sonde ist eine getrennte fehlende Qt-Übersetzerinitialisierung der Sonde und kein Produktsprachfund.
-- Stand: offen RM-741; Endgültiges Größenpaket 2e475252186598db3c9967737b4594b716cabde0 als 27a18b48c14b8d84b006c2dffa0d671f20eb66b4 auf welle4/origin integriert; alle neun Pins bytegleich, keine Merge-Auflösung. Paket 16847 bestanden/74 übersprungen/4686 abgewählt, Exit 0; dazu 141 gezielte Fälle und sechs native Komponentenfolgen/27 vom Autor gelesene Bilder. Gemeinsamer Größenanschluss 193 Fälle, Textanschluss 266 Fälle/8 abgewählt, Statik Exit 0. Tatsächliche 11/18-pt-Inhaltsschrift, vollständige Einleitung/Aktionen, manuelle Breite und notwendiges Footerminimum belegt. Gemeinsamer frischer D0-Nachweis und Endtor fehlen; ursprüngliche rote Urteile bleiben erhalten.
+- Stand: offen RM-741; Fix `2e4752521` (welle4 `27a18b48c`), aber der finale Lauf fährt keine große Inhaltsschrift — die Lage ist ungemessen (Stufe B `group_pattern` P9).
 
 ### FD-55 Wechselnde Python-Wrapperidentität verwirft einen ruhigen C++-Dateidialog
 
@@ -693,7 +693,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Prüfstandfehler: surface_signature bindet die Flächenidentität an id(root). Für denselben von QFileDialog.getSaveFileName in C++ erzeugten Dialog liefert PySide nach Freigabe der vorigen Hülle neue kurzlebige Python-Hüllen. Die Identität ändert sich bei konstantem C++-Dialog und unveränderter sichtbarer Geometrie; der Stillstandsmerker beginnt deshalb immer wieder neu. Die unabhängige Offscreen-Sonde belegt diesen Mechanismus. Der native export-native-context-fixed-Lauf enthält keine Zeiger-/Signaturmessungen und beweist nicht nachträglich dieselbe Ursache für jeden Takt.
 - Vorschlag: Die Identität lebender Qt-Flächen während der Messphase stabil halten, etwa durch Referenzen auf die aktuellen Wurzelwidgets. Echte Geometrieänderung und Flächenwechsel müssen weiter neu beginnen. C++-erzeugten Dialog ohne vom Test dauerhaft gehaltene Python-Hülle sowie echte Bewegung und Flächenwechsel gezielt gegenprüfen; Stillstandsfrist und Pflicht zur vollständigen Messung nicht lockern.
 - Wirkung beim Kunden: Die Abnahme kann die wirklich geöffnete Dateidialogfläche trotz ruhiger Rechtecke als ungemessen verlieren. Dadurch bleibt der Exportfall unbegründet unvollständig. Kein Produktfehler und kein falsches Grün; vorhandene fehlende Messungen werden nicht nachträglich gutgesetzt.
-- Stand: offen RM-737; Gezielte Korrektur mit 116 grünen Fällen und realem C++-Dialog, Bewegungs-/Flächenwechselgegenfällen. export-native-fd55-final Exit 0/28,01 s; 6 Layout-/5 Schrift-/9 Kontrast-/3 Feldmessungen ohne Fehler oder fehlende Messungen. Der frühere breite 11286/47/1962-Exit-0-Beleg gilt ausdrücklich für den Stand vor FD56. Paket 6d5734da599c73c0d4f7de43812a596499946b9e als 433da64bc31eb57943ad92b776c05a9174d36b91 auf welle4/origin integriert; alle 24 Pins bytegleich, keine Merge-Auflösung. Der FD56-Breitlauf bleibt mit 1 fehlgeschlagen/11178 bestanden/47 übersprungen/1635 abgewählt, Exit 1 historisch rot. Enger endgültiger Wächter-/Qt-Anschluss 96 grün; gemeinsamer Anschluss 755 bestanden/61 abgewählt plus 20 Radfälle, Statik und Prozessausgänge Exit 0. Die Commitmeldung unterzählt die tatsächlichen 20 Radfälle als 15. Gemeinsamer frischer D0-Nachweis und Endtor stehen aus; keine dritte C-Durchsicht und kein Gesamtgrün für D8/P18.
+- Stand: behoben `6d5734da5`; `fd55-red-2` war am Original 1 rot. Finaler Lauf 043–048: der Speicherdialog ist vollständig gemessen (`unmeasured` leer), Stufe B P9 und P19 urteilen an ihm (D8). In welle4 `433da64bc`.
 
 ### FD-56 Synthetisches Radereignis erreicht nach Ablehnung den äußeren Rollbereich nicht
 
@@ -705,7 +705,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Prüfstandfehler in tools/function_walk.py, QtPorts.press, ursprünglicher Radzweig: QApplication.sendEvent stellt QWheelEvent unmittelbar dem getroffenen Kindwidget zu und verlässt den Zweig. Dessen ausdrückliche Ablehnung löst dabei nicht die normale Fenster-Weiterleitung zum äußeren Rollbereich aus. sendEvent-Rückgabe true ist keine Annahme. Ein vorhandener Hinweis verlagert das Ziel um 45 Pixel und macht den funktionierenden Kunden-Rollweg erforderlich. Das Produkt bewältigt diesen Zustand über die Betriebssystem-Eingabe korrekt.
 - Vorschlag: Vorhandenen Qt-Fensterdispatcher QTest.wheelEvent mit korrekt aus dem globalen Punkt abgeleiteten QWindow-Koordinaten und unveränderten Zusatztasten benutzen. Keine eigene Elternschleife, kein direktes Setzen von Scrollwerten. Die Werkzeugvoraussetzung Qt ab 6.8 ausdrücklich prüfen; bei fehlender API Handlungshinweis auf die gepinnte Prüfumgebung 6.12, keine Änderung am allgemeinen App-Minimum. Annahme/Ablehnung, verschachtelte rollbare Bereiche, Bewegung beider Richtungen, Modifier und echten ursprünglichen Zielweg sichern.
 - Wirkung beim Kunden: Die Abnahme meldet Auto Split fälschlich als nicht auffindbar, obwohl der normale Kundenweg mit einem Radschritt funktioniert. Kein Produktfehler und keine Aussage über die Teilungsrechnung; der verwendete passende Quader prüft Zugang und Schon-passend-Rückmeldung.
-- Stand: offen RM-737; Original 4 rot/10 grün→14 grün, C-Anschluss samt Vorbedingung 15 grün. Nativer Originalweg erreicht mit einem Radereignis das Ziel, Exit 0/17,47 s. QTest.wheelEvent ist eng im bestehenden Wächter freigegeben; direkte Widget-Handler und dynamische Zustellwege bleiben rote Gegenfälle. Keine Teilungsrechnung behauptet. Paket 6d5734da599c73c0d4f7de43812a596499946b9e als 433da64bc31eb57943ad92b776c05a9174d36b91 auf welle4/origin integriert; alle 24 Pins bytegleich, keine Merge-Auflösung. Der FD56-Breitlauf bleibt mit 1 fehlgeschlagen/11178 bestanden/47 übersprungen/1635 abgewählt, Exit 1 historisch rot. Enger endgültiger Wächter-/Qt-Anschluss 96 grün; gemeinsamer Anschluss 755 bestanden/61 abgewählt plus 20 Radfälle, Statik und Prozessausgänge Exit 0. Die Commitmeldung unterzählt die tatsächlichen 20 Radfälle als 15. Gemeinsamer frischer D0-Nachweis und Endtor stehen aus; keine dritte C-Durchsicht und kein Gesamtgrün für D8/P18.
+- Stand: offen RM-737; Fix `6d5734da5` (welle4 `433da64bc`, Rottest 4 rot), aber im finalen Lauf erreichen 043–048 das Ziel ohne Radschritt — der korrigierte Radweg ist ungemessen.
 
 ### FD-57 Auswahlkarte und XYZ-Zeile geraten nach spanischem Schriftwechsel in eine Größenschleife
 
@@ -717,7 +717,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Echte Produkt-Geometrieänderung im Auswahlkartenlayout, während die Sitzung nicht rechnet; keine bloß wechselnde Python-Wrapperidentität wie FD55. Der Autorenbericht lokalisiert die Rückkopplung an der von augenblicklicher Sichtbarkeit abhängigen Rollbalkenreserve in der natürlichen Breitenmessung. Ein kleiner roter Höhenwechsel-Fall nimmt XYZ allein durch einen erscheinenden Balken zwölf Punkte zugesagte Breite. Die neue enge Korrektur verwendet das vorhandene Stilmaß möglicher Rollbalken unabhängig von ihrer aktuellen Sichtbarkeit; ein abschließender nativer Nachherbeleg fehlt noch.
 - Vorschlag: Im bestehenden Kartenmessweg die Rollbalkenreserve und den natürlichen Querbedarf so bestimmen, dass der sichtbare aktuelle Zustand keine endlose gegenseitige Größenänderung erzeugt. Roten konkreten Schriftwechsel-Gegenfall sichern, anschließend tatsächlichen ES14-Nachlauf mit stabiler Geometrie sowie Sprach-/Rückkehrgegenfälle belegen. Nicht nur die Wartefrist verlängern, eine breite Fixbreite erzwingen oder den roten Nachlauf durch frühere grüne Fälle ersetzen.
 - Wirkung beim Kunden: Die Auswahlkarte verändert nach dem Schriftwechsel fortlaufend ihre Breite, und XYZ springt zwischen Querzeile und gestapelten Feldern. Die Bedienelemente bleiben dadurch nicht ruhig; eine verlässliche Größeneinstellung und Zielwahl ist in diesem Zustand nicht belegt.
-- Stand: offen RM-747; Ursprünglicher ES14-Rotbefund (Karte 470–483, XYZ 41↔131, busy=false) bleibt unverändert. FD57 jetzt auf dem vereinbarten MSI MAG271CQR in allen sechs Sprachen nativ belegt: sechs Exit 0 und 54 vom Autor gelesene Bilder; die frühere LG-Folge bleibt nur Zusatzbeleg. FD58 korrigiert den vollen Spaltenumfang beim Umbruch sowie den ungültigen Zwischenzustand indexOf=-1 und dessen Messcache. Echte Folge schmal/9 pt→groß/14 pt→schmal/9 pt vorher rot, endgültige 66 Fälle und Statik grün. Manifest 4a03df4877f1d4ae8197950c7e61a113bad8fe659d6f0952267b6481a13b3d18 bindet fünf eigene Quellen und 2300 Pins; finaler MSI-Anschluss sechs Sprachen/24 vom Autor gelesene Bilder, alle Exit 0, Root liest DE/ES zusätzlich. Finale breite Auswahl abgeschlossen: 14603 bestanden/57 übersprungen/4633 abgewählt, Exit 0, 2300 Pins unverändert. Paket 11f44ba88f6b1af704f15df45597aa7ea92ee23a auf origin/codex/d0-panel-breite geliefert, Worktree sauber; 66 gezielte Fälle und 24 finale MSI-Bilder gehören zum gebundenen Lieferstand. Integriert auf welle4/origin als e68ca22cbf84417e3b2dea2bff473627e647927f, Baum 746d0a056e6d692c8d231ad4c03939141fea5fc6; Hooks/Push Exit 0. Vier Paketpins bytegleich, panels.py bewahrt ausschließlich die disjunkten Altänderungen _and_then-Übersetzung und FD36. Root-Anschluss 17 bestanden/201 abgewählt und Statik Exit 0. Erster Fensteranschluss 212 bestanden/6 Schriftumgebungsfehler, Exit 1; nach tatsächlichem Laden von zwölf DejaVu-TTFs dieselbe unveränderte Kartendatei vollständig 66/66 grün, Exit 0. Der erste rote Lauf bleibt erhalten. Gemeinsame native Gesamtabnahme und Endtor stehen weiterhin aus. Keine Gesamtfreigabe, ursprüngliche Urteile und rote Zwischenstände bleiben erhalten.
+- Stand: offen RM-747; Fix `11f44ba88` (welle4 `e68ca22cb`), aber der finale Lauf fährt keinen Schriftwechsel 9 → 14 pt; 039 zeigt nur die ruhige Ausgangsschrift.
 
 ### FD-58 Vollzeilenknopf erhält halbe Umbruchbreite und behält einen ungültigen Rasterzustand
 
@@ -729,7 +729,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Produktfehler in app/ui/selection_operations.py, vorhandener _wrap_labels-Weg: Der dritte Hauptknopf überspannt die ganze Rasterzeile, die Textmessung teilte die Breite trotzdem wie bei den beiden Nachbarknöpfen. Während Qt die Knöpfe umhängt, wird derselbe Weg vor dem erneuten Eintragen aufgerufen; indexOf(button) ist dann -1, getItemPosition liefert keinen gültigen Spaltenumfang. Die Gegenprobe sah den ungültigen Wert 32761. Der Messcache behielt diesen Zwischenstand, weil sein Schlüssel den gültigen tatsächlichen Span nicht hinreichend unterschied.
 - Vorschlag: Im vorhandenen Umbruchweg den tatsächlichen gültigen Raster-/Spaltenumfang verwenden, einen noch nicht eingetragenen Knopf abwarten und den gültigen Span im bestehenden Messschlüssel berücksichtigen. Keine zusätzliche feste Kartenbreite, zweite Layoutdefinition oder neue Timerkette. Den echten Start- und Rückweg mit tatsächlicher Schrift 9/14 und sechs Sprachen prüfen, einschließlich XYZ-Querzeile, Höhe 1200→700→1200 und unterster sichtbarer Handlung.
 - Wirkung beim Kunden: Eine eigentlich ausreichend breite Hauptaktion wird unnötig zweizeilig und hoch. Beim echten Wechsel von schmaler Ansicht mit kleiner Schrift zur großen Ansicht mit großer Schrift kann dieser überhöhte Zustand trotz genügend Platz erhalten bleiben; die Karte und ihr Rollbedarf zeigen dadurch vermeidbare zusätzliche Höhe.
-- Stand: offen RM-747; FD58 und mittlere Schwere vom Koordinator vergeben. FD57 jetzt auf dem vereinbarten MSI MAG271CQR in allen sechs Sprachen nativ belegt: sechs Exit 0 und 54 vom Autor gelesene Bilder; die frühere LG-Folge bleibt nur Zusatzbeleg. FD58 korrigiert den vollen Spaltenumfang beim Umbruch sowie den ungültigen Zwischenzustand indexOf=-1 und dessen Messcache. Echte Folge schmal/9 pt→groß/14 pt→schmal/9 pt vorher rot, endgültige 66 Fälle und Statik grün. Manifest 4a03df4877f1d4ae8197950c7e61a113bad8fe659d6f0952267b6481a13b3d18 bindet fünf eigene Quellen und 2300 Pins; finaler MSI-Anschluss sechs Sprachen/24 vom Autor gelesene Bilder, alle Exit 0, Root liest DE/ES zusätzlich. Finale breite Auswahl abgeschlossen: 14603 bestanden/57 übersprungen/4633 abgewählt, Exit 0, 2300 Pins unverändert. Paket 11f44ba88f6b1af704f15df45597aa7ea92ee23a auf origin/codex/d0-panel-breite geliefert, Worktree sauber; 66 gezielte Fälle und 24 finale MSI-Bilder gehören zum gebundenen Lieferstand. Integriert auf welle4/origin als e68ca22cbf84417e3b2dea2bff473627e647927f, Baum 746d0a056e6d692c8d231ad4c03939141fea5fc6; Hooks/Push Exit 0. Vier Paketpins bytegleich, panels.py bewahrt ausschließlich die disjunkten Altänderungen _and_then-Übersetzung und FD36. Root-Anschluss 17 bestanden/201 abgewählt und Statik Exit 0. Erster Fensteranschluss 212 bestanden/6 Schriftumgebungsfehler, Exit 1; nach tatsächlichem Laden von zwölf DejaVu-TTFs dieselbe unveränderte Kartendatei vollständig 66/66 grün, Exit 0. Der erste rote Lauf bleibt erhalten. Gemeinsame native Gesamtabnahme und Endtor stehen weiterhin aus. Keine Gesamtfreigabe, ursprüngliche Urteile und rote Zwischenstände bleiben erhalten.
+- Stand: offen RM-747; Fix `11f44ba88` (welle4 `e68ca22cb`), aber die Folge schmal/9 pt → groß/14 pt → schmal/9 pt ist im finalen Lauf nicht gefahren.
 
 ### FD-59 Innere Fallfrist des Dateiprüfstands lässt untergeordnete Prozesse zurück
 
@@ -741,7 +741,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Prüfstandfehler in tools/file_acceptance.py, run(): Die innere Fallfrist beendete nur den direkt gestarteten Launcher. Auf Windows blieb dessen untergeordnete Interpreter-/Helferkette bei Timeout und Ausnahme im Warten bestehen. Die öffentliche Prozessgruppe war an dieser inneren Grenze noch nicht angeschlossen. Der neue Import von app.core.process benötigt zudem den eigenen ROOT unbedingt zuerst in sys.path, auch wenn dort vorher ein fremder Eintrag stand.
 - Vorschlag: Vorhandene process_group_options(no_window=True), no_error_dialogs und terminate_process_tree im bestehenden run-Rumpf verwenden. Den zugehörigen Baum bei Timeout oder Ausnahme beenden, solange seine Kante besteht; keine zweite Prozessverwaltung. ROOT vor dem neuen Kernimport unbedingt vorn eintragen. Tatsächliche Exitwerte, Ausnahme, Timeoutstatus, Falldateien, Wiederaufnahme und sechs weitergegebene Profile unverändert erhalten. Normale Rückkehr und Exit 7 als Gegenfälle belassen.
 - Wirkung beim Kunden: Ein abgebrochener Prüffall endet nur scheinbar vollständig. Zurückgebliebene Interpreter oder Helfer können nachfolgende Fälle und Prozessnachweise verunreinigen. Das ist ein Prüfstandfehler; hieraus wird kein Fehler des Produkt-Exportwegs oder der eigentlichen Anwendung abgeleitet.
-- Stand: offen RM-737; FD59 und mittlere Schwere vom Koordinator vergeben. Eng korrigiert und geliefert als bc376abc0868141a10c1f5edad26798993f38f6d, integriert auf welle4/origin als c9505aac22bc4cb213a7ebe64980c1f41de0d59d. Beide Pins bytegleich zum Manifest bc6dbce3961d165b1a6fb4b420e210887d01d2f47a504432fbab532d02f53d47; keine Merge-Auflösung. Paket und Root jeweils 142 bestanden/5 Fensterfälle abgewählt, Statik und Ausgänge Exit 0. Vier echte Ketten/0 sichtbare Fenster/0 Konsole belegt, eigene Restprozesse leer. Die automatische 97-Dateien-Auswahl ist nur protokolliert; übrige unveränderte C-Nachweise werden ausdrücklich wiederverwendet. Kein neuer breiter Lauf und keine dritte C-Durchsicht. Gemeinsamer frischer D0-Nachweis und vollständiges Endtor bleiben offen; D10 inzwischen als 11f44ba88f6b1af704f15df45597aa7ea92ee23a geliefert, inzwischen als e68ca22cbf84417e3b2dea2bff473627e647927f auf welle4/origin integriert; gemeinsame native Gesamtabnahme und Endtor offen; keine vorgezogene Gesamtfreigabe.
+- Stand: offen RM-737; Fix `bc376abc0` (welle4 `c9505aac2`, Rottest 4 rot), aber der finale Lauf hatte weder Zeitüberschreitung noch Ausnahme und nutzt den Einzelfallweg statt `file_acceptance.run` — die innere Frist ist ungemessen.
 
 ### FD-60 Native Zugriffsverletzungen brechen den frischen Fensterlauf ab
 
@@ -753,7 +753,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Die begrenzten CDB-Sonden zeigen den NULL-Zugriff in PySide::SignalManager::retrieveMetaObject und einen falschen Nicht-QObject-Wrapper vom Typ QWidgetItem. Der native Widgetabbau in weiterlebenden FeaturePanel-Layouts ließ dessen gehaltene Python-Hülle gültig. Die beiden betroffenen Abbauwege clear und keep_measure_group lösen das Widget jetzt vorher öffentlich aus dem tatsächlichen Layout, auch bei verschachteltem Layout oder externem Host. removeWidget entwertet die Itemhülle; Elternschaft und wiederverwendete Widgets bleiben erhalten. Kein Hardwareurteil.
 - Vorschlag: Den belegten Einzelabbau über layout_lifetime.detach_from_layout vor hide/deleteLater führen; keine globale Invalidierung, zusätzliche Lebenszeitreferenz oder unterdrückte Ausnahme. Die ursprünglichen sieben Absturzfälle auf der gemeinsamen Fassung erneut prüfen.
 - Wirkung beim Kunden: Der echte Anwendungsprozess endet ohne nutzbaren Rückweg. Die fehlenden Folgeaufnahmen und Urteile sind kein bestandenes Ergebnis; der Gesamtlauf kann nicht abgenommen werden.
-- Stand: offen RM-737; geliefert als f507043f9bab355ba781c88278811decd7977d6c und integriert als fda4f687cc367c16371961ab128ee0a59e542438. Neun reproduzierende Lebensdauerfälle und fünf Folgeaufbauten grün; 14.717 betroffene Kernfälle bestanden, 48 übersprungen, 4.658 abgewählt, Exit 0. Root hat die neun Fälle erneut bestanden; spätere gemeinsame 27-, 71- und 126-Fall-Anschlüsse grün. Unabhängige Durchsicht ohne offenen Fund. Original001 am echten Fenster grün; die anderen sechs alten Absturzfälle, vollständiger gemeinsamer Fensterlauf und Endtor bleiben offen. Alte Abstürze und abgebrochene Diagnosen bleiben unverändert erhalten.
+- Stand: behoben `f507043f9`; `tests/test_feature_layout_lifetime.py` war am Original 9 rot. Finaler Lauf: alle 48 Fälle Exit 0 mit regulärem Abbau, darunter die alten Absturzfälle 001, 002, 032, 038, 039, 042 und 047. In welle4 `fda4f687c`.
 
 ### FD-61 Lagebefund zeigt Millimeter trotz gewählter Zollanzeige
 
@@ -765,7 +765,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Kanonische geometrische Werte excess/gap/needed wurden bereits im Kern als vollständiger mm-Text geliefert und später nicht als Anzeigegröße formatiert. Bei synthetischen Gruppen wechselte die Identität mit den formatierten Mitgliedstexten. Der echte Einstellungsweg setzte außerdem den gelesenen Reiter und offene Körperknoten zurück; frühere künstliche Tabproben bildeten diesen Kundenweg nicht ab.
 - Vorschlag: Ausschließlich vollständige kanonische geometrische mm-Werte über den bestehenden Längenformatter anzeigen; beim Einheitenwechsel den Bericht über seinen öffentlichen Pfad erneuern. Auswahl, Details und Voriger-Stand-Zuordnung an rohe vollständige Mitgliedsidentitäten einschließlich Duplikaten binden. Freitext, Versionszahlen und Slicerwerte unverändert behandeln.
 - Wirkung beim Kunden: Der Bericht widerspricht der gewählten Maßeinheit. Ein unvollständiger Fix würde zusätzlich die ausgewählte Sammelzeile und ihren Bearbeitungszustand verlieren.
-- Stand: offen RM-745; geliefert als 5d11646c6fac45e31d212eef78e206e4747d4b30, integriert als c6789f91c05fe3a46e6a62439e5a5e0e229e8ea5. 222 enge Fälle, sieben bestehende Qt-Anschlüsse und 23 neue Quellenleser grün; zuvor 1.627 gebundene kopflose Teilfälle. Der Reiter-/Baumfix hat 24 echte Rotfälle und sechs positive Kontrollen; nach einer formalen Test-Callbackkorrektur die betroffenen 18 erneut grün. Gemeinsame Anschlüsse mit 27, 71 und zuletzt 126 Fällen grün, Statik und enge Durchsicht ohne offenen Fund. Auf dem gemeinsamen Stand ece8988f2bdc60436a7bc327ee1b77e8e794a4b7 ist der echte sechssprachige mm/in/mm-Weg vollständig grün: sechs Prozesse Exit 0, zwölf Settingswechsel, alle 18 echten MSI-Aufnahmen gelesen. Bericht, Details, Auswahl und Körperklappzustand bleiben erhalten; Quellen und acht Nutzerprofildateien unverändert, alle eigenen Prozesse beendet. Gemeinsamer finaler D0-Nachweis bleibt offen.
+- Stand: behoben `5d11646c6`; die Einheitenregression war am Original 48 rot, der Reiter- und Baumweg 24 rot. Finaler Lauf 005: „Überstand: 0,3937 in“, Stufe B Zweitprüfer P9 `gut_nach_fix`, der Erstprüfer bestätigt (D8). In welle4 `c6789f91c`.
 
 ### FD-62 Kontrastmessung liest am Hauptknopf die falsche Textfarbe
 
@@ -777,7 +777,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Die generische Farbrolle des Widgets entspricht bei einem über den Qt-Stil gezeichneten Hauptknopf nicht zwingend der tatsächlich verwendeten Beschriftungsfarbe und ihrem aktuellen Zustand.
 - Vorschlag: Die tatsächliche zustandsabhängige Qt-Beschriftung messen; nur eindeutig deckende Textpixel übernehmen. Fehlende oder mehrdeutige Messung offen lassen. Den Hintergrund weiterhin am echten Bildschirm lesen, keine gute Themenfarbe als Ersatz für eine schlechte Eigenfarbe einsetzen.
 - Wirkung beim Kunden: Die Abnahme kann ausreichenden Kontrast falsch beanstanden oder einen tatsächlichen Kontrastfehler verdecken. Der Produktstil und die Kontrastschwelle dürfen durch die Messkorrektur nicht verändert werden.
-- Stand: offen RM-737; geliefert als 599526b10e930381a17e734a00708c0c130f27db und konfliktfrei auf welle4/origin als f08927d636f88bca0d31517ec3722e28ef3869f6 integriert. Vollständiger Baum und fünf Quellpins stimmen mit der geprüften Lieferung überein. 1.831 Anschlussfälle bestanden, 2 übersprungen, 41 abgewählt; Ruff, Format, Projekt-Mypy und unabhängige Durchsicht grün. Zusätzlicher direkter Werkzeug-Mypy behält acht basisgleiche Altfehler. Gemeinsamer nativer Messnachweis und Endtor offen.
+- Stand: behoben `599526b10`; die Kontrastgegenfälle waren am Original 9 rot. Finaler Lauf: G6 in 669 Protokollen erfüllt, kein Fund, Hauptknopf #1c2026 auf #f0a54a gemessen, Stufe B G6 `gut` (D10). In welle4 `f08927d63`.
 
 ### FD-63 Maßgruppe zeigt fünf eigenständige Vorderseitenfelder
 
@@ -789,7 +789,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Der Adapter der Merkmalsfelder verliert die Vorder-/Rückseitenzuordnung des Operationsschemas. Die Maßgruppe stellt außer Koordinaten alle Felder nach vorn und zählt den zusätzlichen Sammelhaken nicht gegen das Feldbudget.
 - Vorschlag: Schemametadaten durch die gemeinsame Feldauskunft transportieren und rechts wie im Bild verwenden. Gewöhnliche Bohrung mit Durchmesser, Tiefe und gegebenenfalls Sammelhaken; Druckkorrektur und gewöhnlicher Änderungsumfang hinten. Fachlich vorbelegtes Mitnehmen des Einlaufs bleibt als bewusste vierte Eingabe sichtbar. Werte, Bedingungen, Wiederverwendung und Undo erhalten.
 - Wirkung beim Kunden: Fünf gleichrangige Eingaben überladen die Maßgruppe und verletzen die Vorderseitengrenze. Ein pauschales Verstecken könnte dagegen eine wirksame Vorbelegung oder die Reichweite der Sammeländerung verschleiern.
-- Stand: offen RM-741; gemeinsames Paket FD7/16/63/64 als f333e5ba7d0248646ef7e4c16f0434573366e604 geliefert und als b863815593f2e8ec43e73db7957e6828b77ea60c integriert. Die ursprünglichen 43 Fälle waren 38 rot / 5 grün; nach Fix und reproduziertem Theme-Fixture-Gegenfall MG-M1 alle 44 grün. Dazu 30 bestehende Anschlüsse und 2.861 Kernfälle grün, 97 abgewählt. Gemeinsame Integrationen mit 71 und 126 Fällen grün; Statik und Nachprüfung ohne offenen Fund. Keine neue Definition in den vier großen Altdateien. Die echte Sechssprachenfolge auf bc2d5e20c376e5d9003c1c1d8058033a93ca427f (native-runner-v3/runs/run-20261013T210714907Z) ist abgeschlossen: jeweils regulär Exit 0 und 62/62 Bedingungen, insgesamt 372. Alle 192 Originalbilder wurden einzeln gelesen; sämtliche 51 eigenen Prozessidentitäten beendet. Die ab Bild021 abgeschnittene Statuszeile bleibt im Original dokumentiert und wurde getrennt unter FD75 kausal behoben. Keine nachträgliche Umwertung der alten Bilder. Gemeinsamer endgültiger D0-Lauf und Tor bleiben offen.
+- Stand: behoben `f333e5ba7`; der 43er-Satz war am Original 38 rot. Finaler Lauf 001, 004, 007, 016, 019 und 037–042: vorn drei Felder, E5 erfüllt, Stufe B E5 `gut_nach_fix` beider Prüfer (D4). In welle4 `b86381559`.
 
 ### FD-64 Maßgruppenfelder verlieren die Wirkungshilfe ihres Schemas
 
@@ -801,7 +801,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: ActionField transportiert die Schemahilfe nicht. Der gemeinsame Feldkonfigurator ersetzt die Feldhilfe durch Herkunft; Beschriftungen übernehmen diesen unvollständigen Stand. Erklärung einzelner Auswahlwerte ersetzt keinen Wirkungssatz des Feldes.
 - Vorschlag: Die gemeinsame Schemahilfe durchreichen und bei Wiederverwendung an Beschriftung, Editor und fokussierte Innenfelder binden; Herkunft ergänzend erhalten. Beide Sammelhaken bekommen dieselbe übersetzte Wirkungshilfe. Die unklare Materialbezeichnung bleibt dem bereits bestehenden FD7 zugeordnet.
 - Wirkung beim Kunden: Direkt am Eingabefeld fehlen die Erklärung der Änderung und entsprechende Auskünfte für Hilfstechnik. Der Nutzer sieht teilweise nur, woher das Maß stammt, nicht was seine Änderung bewirkt.
-- Stand: offen RM-741; mit FD7/16/63 als f333e5ba7d0248646ef7e4c16f0434573366e604 geliefert und als b863815593f2e8ec43e73db7957e6828b77ea60c integriert. Vier neue Textschlüssel in allen fünf Katalogen; Wirkungshilfe auch an Beschriftung, fokussierten Innenfeldern, Ausdrücken und Radiusdarstellung. Dieselben 44 engen, 30 bestehenden, 2.861 Kern- und gemeinsamen 71-/126-Fall-Anschlüsse wie FD63 grün. Alle 18 echten Feldhilfen in sechs Sprachen nach gehaltenen Kartenzügen mit Inhalt und tatsächlichen Ereignisspuren belegt. Die echte Sechssprachenfolge auf bc2d5e20c376e5d9003c1c1d8058033a93ca427f (native-runner-v3/runs/run-20261013T210714907Z) ist abgeschlossen: jeweils regulär Exit 0 und 62/62 Bedingungen, insgesamt 372. Alle 192 Originalbilder wurden einzeln gelesen; sämtliche 51 eigenen Prozessidentitäten beendet. Die ab Bild021 abgeschnittene Statuszeile bleibt im Original dokumentiert und wurde getrennt unter FD75 kausal behoben. Keine nachträgliche Umwertung der alten Bilder. Gemeinsamer endgültiger D0-Lauf und Tor bleiben offen. Kein zusätzlicher Fund für den bereits unter FD7 erfassten Begriff.
+- Stand: behoben `f333e5ba7`; der 43er-Satz war am Original rot. Finaler Lauf: V3 8 von 8 Feldern mit Wirkungssatz in sechs Sprachen, Stufe B V3 `gut_nach_fix` beider Prüfer (D4). In welle4 `b86381559`.
 
 ### FD-65 Schriftprüfung lehnt die vertragliche Primärschrift ab
 
@@ -813,7 +813,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Die Prüfung unterschied die ausdrücklich erlaubte halbfette Grundschrift des tatsächlichen Hauptknopfs nicht hinreichend von beliebigen Schriftabweichungen. Die Primärrolle und reale Anwendungsfamilie fehlten als typgeprüfte Messwerte.
 - Vorschlag: Optionale boolesche Primärrolle und reale Schriftfamilien kompatibel erfassen. Nur nachgewiesene Primärbeschriftung in der tatsächlichen Grundfamilie und vereinbarten Größe/Gewichtung entlasten; gewöhnliche Knöpfe, fremde Familien und falsche Größen bleiben Gegenfälle. Alte Protokolle weiter lesen.
 - Wirkung beim Kunden: Die Abnahme fordert eine Änderung an einer bereits vertraglichen Hervorhebung oder verdeckt echte Schriftabweichungen durch eine zu breite Ausnahme.
-- Stand: offen RM-737; gemeinsam mit FD62 als 599526b10e930381a17e734a00708c0c130f27db geliefert und als f08927d636f88bca0d31517ec3722e28ef3869f6 integriert. Derselbe gebundene Anschluss, Statik und unabhängige Durchsicht. Gemeinsame native Messung und Endtor bleiben offen; keine nachträgliche Umwertung der versiegelten Alturteile.
+- Stand: behoben `599526b10`; die Schriftfälle waren am Original 26 rot. Finaler Lauf: Hauptknöpfe als halbfette Primärrolle erfasst, kein G4-Fund an einem Hauptknopf, Stufe B G4 `gut` an sieben D4-Zeilen. In welle4 `f08927d63`.
 
 ### FD-66 Gegenstückdialog behält unnötige Anfangshöhe
 
@@ -825,7 +825,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Die Anfangsmessung las eine durch vorübergehende AsNeeded-Rollleisten noch auf 297 statt 309 Pixel reduzierte Viewportbreite und erzeugte zusätzliche Textzeilen. Beim passiven Nachmessen wurde außerdem der Platz einer Querleiste ohne echten Rollweg als verdeckter Inhalt gezählt. sizeHint und _hidden_height berücksichtigen jetzt den tatsächlich verfügbaren maximalen Ausschnitt; nötige oder dauerhaft gesetzte Leisten bleiben erhalten. Keine irrtümliche Erkennung einer Nutzergröße.
 - Vorschlag: Im bestehenden natürlichen Größenwunsch die nach Abbau vorübergehender Rollleisten tatsächlich verfügbare Breite zugrunde legen; keine feste 31-Pixel-Korrektur. Gleichen geschlossenen Inhalt vor und nach Klappzyklus vergleichen, manuelle Größe, echte große Schrift und tatsächlich nötige Rollleisten erhalten.
 - Wirkung beim Kunden: Der Dialog verdeckt mehr Modellfläche als sein vorhandener Inhalt benötigt. Die zusätzliche echte Herkunftszeile in FR ist notwendiger Inhalt und bleibt erhalten.
-- Stand: offen RM-747; als e7ca1cc953ee0ccd2c543db07f7f4186297c9c1d geliefert, mit b863 als 34ec9526d5fafdda4acc8ddd40f8dedbadcb5cd2 zusammengeführt und auf welle4 als a100dd99f9d960b5164c12231459c788221207c3 integriert. Endgültiger gleicher Vertrag am Ursprung 15 rot / 39 grün, am Fix 54 grün; 142 bestehende Größenfälle sowie 126 gemeinsame Integrationsfälle grün. Breiter Lauf historisch Exit 1: 14.777 bestanden, 57 übersprungen, 4.703 abgewählt und genau ein fehlender API-Zugang im alten Scroll-Testdouble. Nach dessen minimaler Ergänzung derselbe Test mit allen acht unveränderten Zusicherungen grün; übrige Fälle unverändert übernommen. Statik und enge Durchsicht grün. Native FR-/IT-Folgen regulär grün, 14 tatsächliche Bilder gelesen: Anfang und Wiederzuklappen jeweils FR 341 × 322, IT 306 × 322; Nutzermaße, echter Rollweg und Fußaktionen erhalten, ursprüngliche Textflächen pixelgleich. Frühere rote Test-/Sondenläufe bleiben erhalten. Gemeinsamer finaler D0-Lauf und Endtor offen.
+- Stand: behoben `e7ca1cc95`; der Größenvertrag war am Original 15 rot. Finaler Lauf 034 und 035: Gegenstückdialog FR 341 × 322, IT 306 × 322 (vorher FR 341 × 353), Stufe B P19 ohne Anfangshöhe (D10). In welle4 `a100dd99f`.
 
 ### FD-67 Aufgeklappte Maßgruppenfelder verschwinden unter der Knopfzeile
 
@@ -837,7 +837,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Der vorhandene PlacementFlow-Gruppenfilter verarbeitet den geänderten Größenbedarf nach LayoutRequest nicht. Die feste Höhe und ScrollBarAlwaysOff bleiben vom geschlossenen Zustand erhalten, auch nach weiteren Qt-Ereignisrunden.
 - Vorschlag: Größenbedarfsänderungen über den bestehenden Gruppenfilter nach dem Qt-Layoutschritt an die vorhandene Größenrechnung anschließen; selbst ausgelöste Layoutschleifen, Gruppentausch und Abbau berücksichtigen. Aufklappen und Zuklappen gegenprüfen, bei echtem Platzmangel erreichbar rollen und Fußaktionen sichtbar halten.
 - Wirkung beim Kunden: Die Rückseite lässt sich öffnen, ihre Werte sind aber verdeckt und mit dem Zeiger nicht erreichbar. Eine Vergrößerung auf pauschale Maße würde unnötig Modellfläche verdecken.
-- Stand: offen RM-741; Größenfix als f6b0f53f2e61b18d7436940e830604aa80ce0ca1 geliefert und als 4521cf8ff0d4f623c070feda6b67cb937b0cb7a7 auf welle4 integriert, vollständiger Baum identisch. Neun gehärtete Fälle in sechs vor Fensterbau eingestellten Sprachen einschließlich echter Klappen-/Fußtexte und Lebensdauer grün; Statik und enge Durchsicht ohne offenen Produktfund. Der bestehende hohe-Karten-Reihenfolgefall besteht auf Original und Fix allein und scheitert auf beiden nach demselben Dark-Vorgänger; keine neue Regression behauptet. Auf-/Zuklappen, Feldeingabe und erreichbare Fußaktionen in allen sechs Sprachen nativ belegt. Die echte Sechssprachenfolge auf bc2d5e20c376e5d9003c1c1d8058033a93ca427f (native-runner-v3/runs/run-20261013T210714907Z) ist abgeschlossen: jeweils regulär Exit 0 und 62/62 Bedingungen, insgesamt 372. Alle 192 Originalbilder wurden einzeln gelesen; sämtliche 51 eigenen Prozessidentitäten beendet. Die ab Bild021 abgeschnittene Statuszeile bleibt im Original dokumentiert und wurde getrennt unter FD75 kausal behoben. Keine nachträgliche Umwertung der alten Bilder. Gemeinsamer endgültiger D0-Lauf und Tor bleiben offen. Beide ursprünglichen roten Maßgruppenläufe bleiben erhalten; kein Umgehen der verdeckten Felder im Prüfablauf.
+- Stand: offen RM-741; Fix `f6b0f53f2` (welle4 `4521cf8ff`), aber der finale Lauf klappt „Weitere Werte“ der Maßgruppe nie auf (001, Schritte 0–104) — ungemessen.
 
 ### FD-68 Druckbett-Raster verschwindet im hellen Thema
 
@@ -849,7 +849,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Raster und Bettkante nutzten dieselbe sehr helle Farbrolle; 0,35 Deckkraft nähert die Linienfarbe zusätzlich an die beleuchtete Bettfläche an. Themenweitergabe und Tiefenabstand sind vorhanden; kein belegter Tiefenfehler. Die Linien hatten keine getrennte Gewichtung zur Orientierung.
 - Vorschlag: Bestehende Rasterlinien mit eigener bed_grid-Farbrolle und disjunkten Haupt-/Nebenlinien alle fünf Abstände zeichnen. Positionen, Zeichenraster, Bauraum und Treffverhalten erhalten; Hell/Dunkel/Hell am echten Fenster vergleichen.
 - Wirkung beim Kunden: Auf dem hellen Druckbett fehlt eine verlässlich erkennbare räumliche Orientierung. Die Korrektur lässt das Raster erkennen und hält den Körper visuell im Vordergrund.
-- Stand: offen RM-737; fünf Pfade als bc4fe912a828cbe072f51011910d36dfd2ea5dec normal geliefert und als 438efade21e7e3ad42ca7da993a631118607cb66 auf welle4 integriert, vollständiger Baum identisch. Sieben gezielte Fälle, Ruff/Format/mypy und enge Durchsicht grün. Native V3-Vorher- und Nachherfolge jeweils regulär Exit 0, alle sechs Aufnahmen vom Autor, beide Hell-/Dunkelpaare zusätzlich vom Root gelesen; eigene Prozesse beendet. Sechs Profile vor Appimport umgebogen, kein separater Hashvergleich aller echten Nutzerprofile. Die zwei früheren roten Scratchfolgen bleiben erhalten. Automatische breite Auswahl von 261 Dateien nicht ausgeführt und bis zum gemeinsamen Entwicklungstor ausstehend; endgültiger D0-Nachweis offen.
+- Stand: behoben `bc4fe912a`; `tests/test_bed_grid_visibility.py` war am Original 6 rot. Finaler Lauf 001, 005 und alle hellen Fälle: Haupt- und Nebenlinien des Bettrasters sichtbar (eigene Bildlesung); das Bett ist keine Zeile der Funktionsliste und hat keine eigene Stufe-B-Zelle. In welle4 `438efade2`.
 
 ### FD-69 Bettmaßzahlen bleiben im hellen Thema äußerst blass
 
@@ -861,7 +861,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Viewport._draw_one_bed verwendet für LabelStyle.text_colour weiterhin _bed_colour, also die Farbe der Bettkante (#bfcad8 im hellen Thema). Der bestehende Labelrenderer passt den Kontrast nicht automatisch an. Im dunklen Thema läuft derselbe Pfad mit #5a6472.
 - Vorschlag: Ausschließlich die Maßzahlen über eine geeignete vorhandene Textrolle zeichnen und im Themenwechsel erneuern; Bauraumfarbe, Texte, Geometrie und Positionen erhalten. Hell und Dunkel am selben nativen Zustand nachlesen.
 - Wirkung beim Kunden: Die Orientierungslinien sind sichtbar, die zugehörigen Maßzahlen bleiben aber schwer lesbar.
-- Stand: offen RM-737; Bild- und Quellbefund bestätigt. Die vorhandene Textrolle _sketch_label_colour ersetzt ausschließlich die Bettzahlenfarbe. Original zwei falsche Textrollen rot/sechs Rasterkontrollen grün, nach Korrektur acht Fälle grün; Hell/Dunkel/Rückweg sowie unveränderte Positionen, Größe und Bauraumfarbe. Enge Erstlesung ohne Fund. Statik grün, normal geliefert als 1e37ebc101cd18e42ed628d4d1310e17d786724d und auf welle4 als d4e7305f3f9cb75e0b2ea019530c4c66f48f94a7 integriert. Native Endfolge grips-after-front-final regulär Exit 0, alle 17 Originalbilder einzeln gelesen, Bettzahlen in Hell und Dunkel lesbar. Gemeinsamer endgültiger D0-Nachweis und Tor bleiben offen. Keine behauptete numerische Normverletzung.
+- Stand: behoben `1e37ebc10`; `labels-original-red` war am Original 2 rot. Finaler Lauf 001 (hell) und 016 (dunkel): Bettzahlen 0 und 100 lesbar (eigene Bildlesung), Stufe B liest sie an `resize_hole` P9 (die fehlende Einheit führt FD-92). In welle4 `d4e7305f3`.
 
 ### FD-70 Griff- und Vorschauflächen verdecken die gewählte Bohrung
 
@@ -873,7 +873,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Zwei gefüllte pickbare SlotHandle-Zylinder mit Deckkraft 1,0, zusätzliche nicht pickbare face-handle-Scheibe mit 0,6 und Merkmalsfüllung mit 0,45 liegen in der gewählten Öffnung übereinander. outlined bezeichnet die Schnittkontur und entfernt die Griffkörper nicht. Die vorhandene Größenbegrenzung der Zylinder verhindert diese perspektivische Überdeckung nicht.
 - Vorschlag: Ruhende Füllungen gezielt zurücknehmen, überfahrene/gehaltene Griffe und wirkliche laufende oder wartende Entwürfe klar erhalten. Bestehende Netze, Bezugspunkte und positive Deckkraft im Pickpfad bewahren. Direkten take_press ohne Hover, wiederverwendeten Vorschauaktor, Abbruch und Wiederaufbau prüfen; keine kleineren Trefferflächen als Gestaltungstrick.
 - Wirkung beim Kunden: Gerade die zu bearbeitende Öffnung lässt sich schlechter erkennen als die ungewählten. Die Gestaltung soll Lochrand und Änderung zugleich sichtbar halten, bei unverändert gut treffbaren Griffen.
-- Stand: offen RM-741; als 48adcd982f5f0f72b37da4d4f9fbdada76ad03d8 normal geliefert, drei eigene Pfade. Original zehn Fälle rot/eine Positivkontrolle grün; enge Erstlesung fand GL-01: Außenrelease hielt den Griff kräftig, der alte Test verdeckte es durch ein zweites Leave. Neue Außenfälle vorher zweimal rot, nach Korrektur der Zustandsübernahme am tatsächlichen Loslasspunkt fünfzehn Fälle grün, einschließlich Innenrelease, direktem Lochdruck, echten Gizmoschritten und Abbau. Ruff/Format/mypy grün; keine neue Definition im Viewport. Nach nativer Gegenprobe wurde zusätzlich die zweite OIT-Mischung des Vordergrundknopfs gezielt geschlossen; Vordergrundflächen verwenden reguläres blend; Raumtransparenz bleibt weighted_blend, die Deckkraft bleibt erhalten. Normaler Abschluss 1e37ebc101cd18e42ed628d4d1310e17d786724d auf welle4 als d4e7305f3f9cb75e0b2ea019530c4c66f48f94a7 integriert. Native Endfolge grips-after-front-final mit 17 einzeln gelesenen Originalbildern regulär Exit 0: aktive Griffe, Umrisse, Auswahl und Escape-Rückweg in Hell/Dunkel sichtbar. Die dabei aufgefallenen blassen Maße wurden separat unter FD73 behoben. Keine pauschale Abnahme aller Griffzustände; endgültiger gemeinsamer D0-Nachweis und Tor bleiben offen. Die Schwere folgt der ausdrücklichen G9-Grenze leicht; der erste rote Fundleser wegen mittel bleibt erhalten.
+- Stand: offen RM-741; trotz Fix (`48adcd982`, `1e37ebc10`, welle4 `d4e7305f3`) decken im finalen Lauf Griffkörper und Achspfeile die gewählte Bohrung (001, 016, 019), Stufe B G9 offen beider Prüfer (D4).
 
 ### FD-71 Maßkartenzüge halten den impliziten Qt-Mausempfänger fest
 
@@ -885,7 +885,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Der globale Ereignisfilter konsumierte auch den QWindow-Release. Dadurch erreichte die Freigabe den Qt-Transport nicht, der den impliziten button_down-Empfänger löscht. Ein ausdrückliches grabMouse verwendet der Helfer nicht.
 - Vorschlag: Den aktiven Zug erst bei QWidget-Empfängern verarbeiten. QWindow-Transport unverändert passieren lassen; nach dem Loslassen muss die echte folgende Mausbewegung den neuen Empfänger erreichen. Eingabefelder, Außenrelease, Abbau und aktueller Vorfahrenvertrag bleiben erhalten.
 - Wirkung beim Kunden: Nach dem Verschieben reagieren Feldhilfen und Hoverzustände nicht mehr am tatsächlich überfahrenen Eingabefeld. Die schwebende Karte lässt sich bewegen, stört danach aber die normale Mauszustellung.
-- Stand: offen RM-741; als c902aed139c900ffcb5f577a6a01d26b302013d4 normal geliefert und als 8831b33e94c786667d229756ebfff7ca52d18e4d auf welle4 integriert. Vollständiger Integrationsbaum identisch zum Autorenbaum, keine manuelle Auflösung. 36 Fälle, Ruff/Format/mypy und enge unabhängige Durchsicht grün; normale Hooks/Autopush bestätigt. Vollständige echte Sechssprachenfolge run-20261013T210714907Z auf bc2d5e20c376e5d9003c1c1d8058033a93ca427f jeweils regulär Exit 0 und 62/62 Bedingungen, zusammen 372. Alle zwölf gehaltenen Titel-/Flächenzüge erreichen den freien Ort, je vier Movepunkte auf QWindow und QWidget mit gedrückter linker Taste und Release ohne gedrückte Taste; alle 18 Feldhilfen erreichen nach dem Zug das richtige Feld und zeigen den passenden echten Tooltip. Abbrechen, Einzel-/Sammelübernahme und Undo bestanden. 32 Produktpins unverändert, alle 51 eigenen Prozessidentitäten beendet. Getrennter Aufnahmefehler FD75 betrifft ab Bild021 den unteren Statusrand, nicht die dokumentierten Züge und Hilfen. Gemeinsamer frischer D0-Nachlauf und Endtor bleiben offen; frühere rote Läufe erhalten.
+- Stand: offen RM-741; Fix `c902aed13` (welle4 `8831b33e9`), aber der finale Lauf verschiebt keine Maßkarte — ungemessen.
 
 ### FD-72 Vordergrundkanten übernehmen den Zeichenvertrag ihrer Fläche nicht
 
@@ -897,7 +897,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Das eigene show_edges-Material übernimmt weder den abgeschalteten Tiefentest noch die festgelegte Vordergrundqueue der zugehörigen Fläche. Die Lücke bestand bereits vor der Alphakorrektur von FD70.
 - Vorschlag: Ausschließlich die zwei vorhandenen Materialargumente aus keep_in_front ableiten; Raumkanten behalten Tiefentest und automatische Queue. Deckkraftwechsel, force_opaque, Rückseitenanteile sowie erhaltene Geometrie und Pickflags gegenprüfen.
 - Wirkung beim Kunden: Der öffentliche Renderer-Vertrag erlaubt, dass Kanten einer ausdrücklich im Vordergrund gezeichneten Fläche verdeckt werden. Eine solche konkrete Kundenansicht ist hier nicht belegt; kein Abbruch und keine Modelländerung behauptet.
-- Stand: offen RM-737; minimaler Zweizeilenanschluss am vorhandenen Kantenmaterial mit 16 bestandenen CPU-Materialfällen, Ruff/Format/mypy und enger unabhängiger Rückprüfung. Rendererpin90dcf946605d3bb856eab4d85f69fedb96cd1e932dc75756b2777437970a4b23 und Testpin756007bb490aa5185a671df1148443d1747e96a82cb675943f8b467617e69bde. Keine neue Definition im großen Renderer. Regulär als 1e37ebc101cd18e42ed628d4d1310e17d786724d geliefert, auf welle4 d4e7305f3f9cb75e0b2ea019530c4c66f48f94a7 mit identischem Autorenbaum integriert; normale Hooks/Push bestätigt. Gemeinsame breite Abnahme steht aus. Der erste Testentwurf mit einer falschen starren Raumqueueannahme bleibt separat erhalten und ist kein Produktgegenbeleg.
+- Stand: behoben `1e37ebc10`; in welle4 `d4e7305f3`, Renderertest am Original 8 rot. Keine Kundenansicht nutzt beide Schalter, Stufe A hat dafür keine Zeile; der Renderertest ist deshalb der Nachweis (Entscheidung Koordinator, 15.10.).
 
 ### FD-73 Freistehende Griffmaße verschwinden auf hellen Modellflächen
 
@@ -909,7 +909,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Viewport._label_gizmo hängt _slot_length_text an den gemeinsamen gizmo_labels-Aktor für X/Y/Z/L und wählt _object_colour als Textfarbe, im dunklen Thema #b9c4d0, im hellen #78828e. 13 Pixel, fett, immer sichtbar, ohne Hintergrund oder Umriss. Der vorhandene Textmaterialweg nutzt volle Deckkraft, keinen Tiefentest und seine Vordergrundqueue; keine belegte erneute OIT- oder Griffdeckkraftursache.
 - Vorschlag: Vorhandenes kontrastierendes Text-/Fensterfarbpaar mit deckendem LabelStyle-Hintergrund verwenden. Die gemeinsame Wirkung auf Achsen-/L-Buchstaben ausdrücklich mitprüfen, bei Themenwechsel erneuern und am echten gehaltenen Zustand in beiden Themen nachlesen. Keine neue Farbrolle, API, Geometrie oder Definition im großen Viewport.
 - Wirkung beim Kunden: Die aktuelle Länge steht zwar im Eingabefeld, lässt sich direkt am Griff aber nur schwer ablesen. Die Lesbarkeit darf nicht von der zufälligen Farbe der Fläche darunter abhängen.
-- Stand: offen RM-741; vier ursprüngliche Stilgegenfälle rot, danach alle 20 Griffprüfungen grün. Der leichte Leerfeldfund ist im bestehenden GfxLabels.build mit tatsächlicher Textsichtbarkeit behoben; ein CPU-Gegenfall rot plus eine Positivkontrolle, danach alle 18 Material-/Labelprüfungen grün, einschließlich Nachbarn, Anker, Sichtbarkeit und adopt/build. Erste Lieferung 471291463eb6833f6e6dc92a6640716f47315b92 integriert als 425dfc1db347a8ff8c63d36894e06d0701154f91. Die anschließenden echten Bilder belegten noch L-Felder über kleinen Knöpfen. Gezielter Nachfix verwendet öffentliche Knopfhüllen und vorhandene Projektion/Layoutrechnung, hält endliche Ausgangsanker bei nicht platzierbaren Feldern und schützt den laufenden Gizmo-Zug vor dem Kameratimer. Acht Originalgegenfälle und ein gesonderter Bewegungsanschluss rot, endgültige bestehende Datei 29/29 grün, Statik und enger unabhängiger Abschluss ohne Fund. Normal geliefert als a408a0620524eb58946d947a8a98a4d2e7090f10 und auf welle4/origin als 26b66508e19aafa4ec5b9f9519e8f0a7f65aeacd integriert; vollständiger Baum autorengleich, keine Auflösung, normale Hooks/Push Exit 0. Native Folge grips-after-fd73-anchors-final auf diesem sauberen Autorenkopf regulär Exit 0/39,26 s; alle 19 Originalbilder einzeln gelesen, Root zusätzlich Hell04 und Dunkel05. L neben freien gelben Knöpfen, gehaltene/wartende Maßzahl, XYZ/S und Leerfeld-Rückweg in Hell/Dunkel lesbar. Zehn App-Pins unverändert, alle sechs eigenen Prozessidentitäten beendet. Keine echte zusätzliche Zoom-/DPR2-Folge oder allgemeine Überlappungsfreiheit behauptet. D0-Nachlauf und Tor bleiben offen.
+- Stand: offen RM-741; Fix `a408a0620` (welle4 `26b66508e`), aber der finale Lauf zieht keinen Langlochgriff, die freistehende Maßzahl erscheint nicht — ungemessen.
 
 ### FD-74 Prüfstand prüft den Knopftreffer vor der nötigen Mausbewegung
 
@@ -921,7 +921,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Die bisherige Bereitschaft prüft den zukünftigen Treffpunkt, ohne zuvor den tatsächlichen Mausort dorthin zu bewegen und Qt den natürlichen Zustellungs-/Tooltipabbau zu erlauben. Ein verschachteltes processEvents in click_button würde den bereits vorgemerkten StepMachine-Folgeschritt vor dem aktuellen Klick ausführen können.
 - Vorschlag: Im bestehenden Walk.stable zuerst öffentlich zum aktuellen Ziel bewegen und im nächsten regulären Takt Ziel, Sichtbarkeit, Aktivierung, Geometrie und Treffer frisch prüfen. Bei geändertem Ziel erneut bewegen. Benannte und per Getter aufgelöste Knöpfe benutzen denselben Weg; click_button bleibt abschließender synchroner Zustands-/Trefferwächter. Vorhandene Fristen unverändert, keine gezielte Tooltipunterdrückung.
 - Wirkung beim Kunden: Die Abnahme kann einen normal bedienbaren Kundenweg vor dessen Klick abbrechen. Ein kaputter Abbrechen-Knopf der Anwendung ist damit nicht belegt.
-- Stand: offen RM-737; drei Pfade als f749bdc61f386e2c4f7825432d17b00cc51e3b77 normal geliefert und mit identischem Autorenbaum als bc2d5e20c376e5d9003c1c1d8058033a93ca427f auf welle4 integriert, keine manuelle Auflösung. Ein echter ursprünglicher benannter Tooltipfall rot, danach elf neue Qt-Fälle und 25 bestehende Walk/FakePorts-Anschlüsse grün. Ruff/Format und reguläres mypy über 388 Quellen grün. Ein zusätzlicher Werkzeug-mypy-Aufruf meldet exakt dieselben fünf belegten Altfehler an Original und Fix, kein pauschales Werkzeug-mypy-Grün. Unabhängiger enger Review ohne neue Funde, finale drei Pins bestätigt. Ganze echte Sechssprachenfolge run-20261013T210714907Z regulär jeweils Exit 0, insgesamt 372/372 Bedingungen: nach drei Feldhilfen tatsächlicher Abbrechen-Press und Release, danach Einzel-/Sammelübernahme und Undo. 32 Produktpins unverändert, alle 51 eigenen Prozessidentitäten beendet. Aufnahmegrenze am späteren Statusrand separat FD75; keine Umwertung alter Bilder. Gemeinsamer D0-Nachlauf und Tor stehen aus. Direkte synchrone Prüfstandsaufrufer bleiben ausdrücklich einphasig.
+- Stand: offen RM-737; Fix `f749bdc61` (welle4 `bc2d5e20c`, Rottest 1 rot), aber die Lage — eine Kurzhilfe über dem Klickziel nach Feldhilfen — kommt im finalen Lauf nicht vor.
 
 ### FD-75 Erneute Fensterplatzierung trennt gemessene Clientfläche und Aufnahme
 
@@ -933,7 +933,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: place_window ruft bei jeder Vorbereitung erneut setGeometry(availableGeometry) und showMaximized auf, auch wenn das Fenster bereits auf demselben Schirm maximiert ist. Der zweite Aufbau überschreibt damit den gespeicherten QWidget-Clientumfang. Die native Gegenprobe bestätigt einen unveränderten Win32-Rahmen und tatsächlichen Client von 2560 × 1369; ausschließlich QWidget und contentsRect springen beim zweiten Originalaufbau auf 2560 × 1392. Kein physischer Monitorbeschnitt.
 - Vorschlag: Wiederholte Maximierung am bereits gewählten Schirm idempotent behandeln; beim ersten Aufbau, Monitorwechsel oder Wechsel zur ausdrücklichen Größe den nötigen Normalzustand herstellen und den bisherigen Platzierungsvertrag erhalten. Aufnahme und tatsächliche Clientfläche gegenprüfen, einschließlich vollständiger Statuszeile. Kein Zuschneiden, keine erfundenen Sollpixel und keine Änderung der Bildschirm-/DPI-Untergrenzen.
 - Wirkung beim Kunden: Prüfstandsmessung und sichtbarer Bildbeleg beschreiben unterschiedliche Flächen. Die bereits innerhalb des Bilds belegten Kartenaktionen bleiben gültig, eine vollständige Fensterabnahme kann daraus nicht entstehen. Kein Fehler am eigentlichen Kunden-Statusinhalt belegt.
-- Stand: offen RM-737; enger Vorwärtsfix in function_setup.py und zwei vorhandenen Testdateien. Fünf kausale Originalgegenfälle rot, danach dieselben fünf grün; vollständiger bestehender Setup-Anschluss mit 28 Fällen grün. Die echte Offscreen-Qt-Grenze zeigt am Original QWidget 800 × 800 statt zuvor 796 × 796 sowie eine ausdrückliche Sollgröße ohne passenden QWindow-Client; am Fix stimmen QWidget, contentsRect und QWindow überein. Ruff, Format und reguläres mypy (388 Dateien) grün, unabhängige Durchsicht ohne Fund; automatische Auswahl 103 nur ermittelt. Normal geliefert als a0d5ae491f8e348a2a4c37fc2e57c348fe0922a9. Echte MSI-Gegenprobe auf Root bc2d: run-20261013T213709788Z regulär Exit 1 wegen genau der zweiten Clientabweichung, keine Aufbau-/Fristfehler. Fix auf a0d5: run-20261013T213806356Z regulär Exit 0; beide Aufbauten QWidget/contentsRect/QWindow/Win32-Client/PNG durchgehend 2560 × 1369, Statuszeile vollständig. Alle vier Originalbilder einzeln gelesen, Root beide zweiten Bilder; Rahmen gleich und sämtliche 32 Quellenpins pro Lauf unverändert. Alle 15 beziehungsweise 13 eigenen Prozessidentitäten beendet, Lease zurück. Native Vergleichsverdichtung SHA5406E4E6D98EE92A67CF0E4394D688587473A6711D174995ADBC667BE34E0B7D. Nach normalem Autorenmerge 37dcea59f023a3112769c7ed5fc22d35b98276fb auf welle4/origin als 9dc38e79f253a92efde6df55e1dec3c79d64a9f6 integriert; vollständiger Baum autorengleich, keine Auflösung, normale Hooks/Push Exit 0. Endgültiger D0-Lauf und Tor bleiben offen.
+- Stand: offen RM-737; Fix `a0d5ae491` (welle4 `9dc38e79f`, Rottest 5 rot), aber im finalen Lauf platziert jeder Prozess das Fenster nur einmal — der wiederholte Aufbau ist ungemessen.
 
 ### FD-76 Textmessung beschädigt HTML-Entities und literale Ampersands
 
@@ -969,7 +969,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Die Rohaufnahme zeigt an sieben unterschiedlichen Feldern eine leere zugängliche Beschreibung; Analyseauswahl, Generatorbeschreibung und Werte-Haken haben zusätzlich keine Kurzhilfe. An den vier übrigen Feldern ist ein erklärender Tooltip vorhanden. Im Slicerhinweis ist der erklärende Satz sichtbar; seine technische Zuordnung an die Hilfekanäle fehlt. Der konkrete Quellenanschluss ist noch nicht diagnostiziert; keine globale Ursache behauptet.
 - Vorschlag: Vorhandene übersetzte Wirkungssätze an die zugängliche Beschreibung der tatsächlichen Eingabefelder binden. Für die drei Felder ohne Tooltip den passenden vorhandenen Wirkungssatz ermitteln und beide Hilfekanäle anbinden. Gleiche Träger, sechs Sprachen, Titelwortüberschneidung und tatsächliche Feldhilfe prüfen. Sichtbare Erklärung erhalten; nachgelagerte Drucker-/Einstellungsdialoge sind durch diese Aufnahmen nicht nachgewiesen.
 - Wirkung beim Kunden: Die Erklärung der Feldwirkung fehlt in einem erforderlichen Hilfekanal, bei drei Feldern auch beim Überfahren. Eine Bildschirmleser-Ausführung wurde hier nicht durchgeführt; kein fehlender Erklärungstext im gesamten Slicerhinweis behauptet.
-- Stand: offen RM-745; von FD10/11/12/50/64 und Systemdialogen, reinen Ausgaben sowie verdeckten Nachbarfeldern abgegrenzt. Eigenständiger leichter Fund für das bereits beauftragte Kundenpaket D8. Kein Quellfix und kein Nachherbeleg; der ursprüngliche Bild- und Rohbefund bleibt erhalten.
+- Stand: offen RM-745; kein Fix, der finale Lauf zeigt den Fund weiter (043–048 V3 Fund an allen sechs Zeilen, Stufe B offen, D8).
 
 ### FD-79 Maßkartenzug umgeht den gemeinsamen Ereignisverteiler
 
@@ -1017,7 +1017,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: `0036e21ea` führte `_measure_drag.update_room` in `PlacementFlow.redraw` ein; die zwei Doubles der Datei wurden nicht nachgezogen.
 - Vorschlag: Beide Doubles tragen einen stummen Zug wie ihre übrigen Maßhelfer.
 - Wirkung beim Kunden: Kein Produktfehler; 88 Prüfungen der Werkzeugausrichtung an der Fläche erreichten ihre Zusicherung nicht, das Entwicklungstor wäre rot.
-- Stand: behoben `0df73f13d`
+- Stand: behoben `0df73f13d`; `tests/test_surface_placement.py` vorher 88 von 381 rot (`AttributeError _measure_drag`), nachher 381/381 grün, gepinnt.
 
 ### FD-83 Tooltipfall des Prüfstands hängt von der Reihenfolge ab
 
@@ -1026,10 +1026,10 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Funktion: Prüfanschlüsse des Prüfstands
 - Prüfpunkt: 19
 - Beleg: `tests/test_function_bench_window.py::test_button_probe_moves_away_from_a_real_tooltip_before_testing_coverage[wortschatz|knopf]` ist allein grün und nach `test_a_double_click_reaches_a_list_as_a_double_click` im selben Prozess rot (`verdeckt: feature:resize_hole … qtooltip_label`), am unveränderten `2ec37b23b` genauso (`F:\tmp-suche\fpf-liefern-claude\order-b.txt`, `order-c.txt`).
-- Ursache: offen; der Doppelklick hinterlässt Zustand, nach dem der Tooltip die Mausbewegung überdauert.
+- Ursache: `QtPorts.press(…, "double")` schickte nach `mouseClick` und `mouseDClick` kein Loslassen; bis zum nächsten Klick galt die linke Taste als gedrückt, jede Bewegung bis dahin war ein Zug ohne Enter und Leave, und der Tooltip des vorigen Ziels blieb über dem nächsten stehen.
 - Vorschlag: Ursache am Ablauf belegen und an der Wurzel beheben, Gegenprobe in derselben Datei in beiden Reihenfolgen.
-- Wirkung beim Kunden: Kein Produktfehler belegt; ein Fenstertest wird im Release-Tor reihenfolgeabhängig rot.
-- Stand: behoben `001effdcd`; Tooltipfall nach dem Doppelklickfall am alten Stand rot, am Fix in beiden Reihenfolgen grün, neue Zusicherung ohne gedrückte Taste; in welle4 `fe8f5bcd7`.
+- Wirkung beim Kunden: Kein Produktfehler; ein Fenstertest wird im Release-Tor reihenfolgeabhängig rot. Die Urteile des 48-Fall-Laufs verfälscht es nicht: In `phase_revise` folgt dem Doppelklick der Klick ins erste Dialogfeld, jede weitere Phase beginnt mit Klicks.
+- Stand: behoben `001effdcd`; Tooltipfall nach dem Doppelklickfall am alten Stand rot, am Fix in beiden Reihenfolgen grün, neue Zusicherung ohne gedrückte Taste; in welle4 `fe8f5bcd7`. Rückfallzweig (Widget im Doppelklick abgebaut) mit Fall `5c138af29`, Kommentar und Docstring `0f93ad296` (Review RD-2/RD-3).
 
 ### FD-85 Abhakliste lässt einen offenen Fund hinter einem älteren behobenen verschwinden
 
@@ -1126,14 +1126,14 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 ### FD-92 Die Bettmaßzahlen folgen der Anzeigeeinheit nicht
 
 - Art: Verständlichkeit
-- Schwere: leicht
+- Schwere: mittel
 - Funktion: Druckbett in der 3D-Ansicht
 - Prüfpunkt: 9
 - Beleg: Lauf 004/flaeche-zoll.png (`F:\tmp-suche\urteile-d04-claude\crops\004-bett.png`): „0“, „100“ ohne Einheit bei Zollanzeige; 006/flaeche-zoll.png: „50“ (`F:\tmp-suche\urteile-d10-claude\crops\006-bett50.png`); Kopf und Baum zeigen Zoll (d04 Nr. 5, d10 Nr. 1).
 - Ursache: belegt: `bed_scale` schreibt `f"{value:.0f}"` in Millimetern, ohne Anzeigeeinheit und ohne Einheitenzeichen (`viewport.py:2808–2812`). Zwilling zu FD-69 (Farbe derselben Zahlen), andere Ursache.
 - Vorschlag: Die Zahlen über den Längenformatter der Anzeige setzen, Schrittweite passend zur Einheit, das Einheitenzeichen einmal an der Skala; beim Einheitenwechsel neu zeichnen.
 - Wirkung beim Kunden: In Zoll liest er Millimeterzahlen ohne Hinweis und schätzt Größe und Lage falsch ein.
-- Stand: offen RM-737
+- Stand: offen RM-737; Schwere von leicht auf mittel wie die Zwillinge FD-61 und FD-125, weil die Anzeigeeinheit zugesagt ist (Prüfpunkt 9; Review RD-6).
 
 ### FD-93 Die Auswahlkarte hält am Katalogknopf Leerraum
 
@@ -1730,7 +1730,160 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Funktion: Prüfanschlüsse und Videowerkzeug
 - Prüfpunkt: 19
 - Beleg: Neben dem in FD-83 behobenen `QtPorts.press` rufen `tests/test_start_screen.py:461`, `:957`, `:966` und `tools/make_workshop_videos.py:2462` `QTest.mouseDClick` ohne anschließendes Loslassen auf; in `make_workshop_videos.py` fehlt zusätzlich der Klick davor (`F:\3D Druck\output\konsolidierung-2026-10-12\fd83-claude.md`).
-- Ursache: `mouseDClick` schickt nur das Doppelklickereignis; Qt hält die linke Taste danach im ganzen Prozess für gedrückt.
+- Ursache: `mouseDClick` schickt nur das Doppelklickereignis; Qt hält die linke Taste danach bis zum nächsten Klick im selben Prozess für gedrückt.
 - Vorschlag: Dieselbe Folge wie der Kunde (Klick, Doppelklick, Loslassen) an allen Stellen; als Wächter eine Fixture, die nach jedem `qt_app`-Fall `QGuiApplication.mouseButtons() == NoButton` zusichert.
-- Wirkung beim Kunden: Kein Produktfehler; spätere Fälle im selben Prozess und Werkstattvideos sehen Bewegungen als Zug.
+- Wirkung beim Kunden: Kein Produktfehler; im selben Prozess sehen Bewegungen bis zum nächsten Klick wie ein Zug aus, in Tests wie in den Werkstattvideos.
+- Stand: offen RM-737
+
+## Einordnung der Prüferabweichungen (FD-143 bis FD-153)
+
+Einordnung aller 37 Abweichungen zwischen Primär- und Zweitprüfer am finalen
+Lauf: `output/konsolidierung-2026-10-12/abweichungen-claude.md` (Klassen,
+Diffs, Nachurteilsliste `F:\tmp-suche\abweichungen-claude\nachurteil.toml`).
+Entscheidung Koordinator zu FD-145: Die Übereinstimmung ≥ 90 % gilt je
+Prüfpunkt gepoolt über alle Pakete einer Urteilsrunde; die Werte je Paket sind
+Auskunft.
+
+### FD-143 Funde mit mehreren Zeilen erreichen keine Zelle der Abhakliste
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: `F:\tmp-suche\abweichungen-claude\mehrzeilig.txt`: 43 Funde nennen mehrere Zeilen in „Funktion“ (FD-94, FD-100, FD-101, FD-109, FD-128, FD-129, FD-132 …) und erreichen keine Zelle; neuer Fall `test_a_finding_of_several_rows_holds_each_of_them_open` am alten Code dreimal rot (`_finding_for` liefert `None`).
+- Ursache: `_finding_for` und die Fundspalte der Abhakliste verglichen das ganze Feld „Funktion“ mit der Zeilenkennung.
+- Vorschlag: Die Zeilen aus „Funktion“ trennen wie die Prüfpunkte (Komma, Semikolon, „und“); ein Fund gehört jeder genannten Zeile.
+- Wirkung beim Kunden: Kein Produktfehler; Zellen der Abhakliste galten als erledigt, obwohl ein offener Fund sie offen halten muss.
+- Stand: behoben `3ea60bd0e`; Abhaklisten danach neu erzeugt.
+
+### FD-144 Die Übereinstimmung lässt Zellen ohne Gegenurteil still weg
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: Gegenprobe an einer Kopie (`F:\tmp-suche\abweichungen-claude\gegenprobe.txt`): an den 13 Zeilen des Zweitprüfers 77 Zellen nur primär, 5 nur zweit; G1–G8, Z1, Z2, Z5 und Z6 haben keinen einzigen Übereinstimmungswert.
+- Ursache: `function_report.agreement` zählt nur Paare und meldet ungepaarte Zellen nicht.
+- Vorschlag: `agreement` gibt die ungepaarten Zellen aus, die Abhakliste führt sie als „ohne Gegenurteil“; jeder Prüfpunkt braucht Paare, sonst ist er nicht gemessen.
+- Wirkung beim Kunden: Kein Produktfehler; die Abnahme „≥ 90 % je Prüfpunkt“ war für zwölf Kriterien nicht prüfbar.
+- Stand: offen RM-737
+
+### FD-145 Ob die Übereinstimmung gepoolt oder je Paket gilt, war nicht festgelegt
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: Konzept §4 (Urteil und Schwere) gegen §10 (Abnahme); die Abhaklisten markieren je Paket 7, 14 und 7 Punkte, gepoolt sind es 11 (`F:\tmp-suche\koord-claude-1014\ue.txt`); bei zwei bis drei Zeilen je Paket heißt 90 % „keine Abweichung“.
+- Ursache: Konzept und Prüfstand nennen die Grundmenge der Quote nicht.
+- Vorschlag: Entschieden (Koordinator, 15.10.): gepoolt je Prüfpunkt über alle Pakete einer Urteilsrunde ist bindend, je Paket Auskunft; Konzept §4 und `report` erhalten den Rundenwert.
+- Wirkung beim Kunden: Kein Produktfehler; die Abnahme maß bei kleinen Paketen nichts.
+- Stand: offen RM-737
+
+### FD-146 E1 bis E3 gelten als erfüllt an Wegen, die vor dem Beispielziel enden
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: E1, E2, E3
+- Beleg: Alle Sprachflächenzeilen haben keine Zeilenspezifikation (`F:\tmp-suche\abweichungen-claude\zeilen.txt`); Stufe A meldet trotzdem „0 Eingaben, erfüllt“ (`stufe-a-paare.txt`, Abweichungen 01, 07–09, 11–15); neun Abweichungen gehen darauf zurück.
+- Ursache: `_e1`, `_e2`, `_e3` (`tools/function_judges.py`) prüfen weder Spezifikation noch Übernahmeschritt; der E2-Paketanteil zählt diese Zeilen mit.
+- Vorschlag: E1–E3 nur an einem Weg, der das Beispielziel erreicht hat; sonst nicht gemessen, *offen* mit Paket-RM; Gegenprobe Sprachflächenprotokoll ohne Spezifikation.
+- Wirkung beim Kunden: Kein Produktfehler; Schrittzahlen galten als gemessen, die es nicht waren.
+- Stand: offen RM-737
+
+### FD-147 Englisch übersetzt „Überstand“ und „Überhang“ beide mit „Overhang“
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `finding.action:place_on_bed`
+- Prüfpunkt: V1
+- Beleg: `app/i18n/locales/en.json` Befund „An object sits below the build plate … Overhang: 10.00 mm“ (Fall 044, Ausschnitt `F:\tmp-suche\abweichungen-claude\crops2\pob-6spr.png`); dazu „overhang“ für Überstand an Haken, Rastnase und Widerhaken.
+- Ursache: Zwei deutsche Begriffe teilen im englischen Katalog ein Slicer-Wort mit anderer Bedeutung.
+- Vorschlag: Den Überstand unter dem Bett neu übersetzen (etwa „Below plate“), die Bausteintexte auf „protrusion“; alle Kataloge auf dieselbe Verwechslung prüfen.
+- Wirkung beim Kunden: Ein englischsprachiger Kunde liest einen Überhang, wo ein Teil unter dem Bett steckt.
+- Stand: offen RM-745
+
+### FD-148 V4 nimmt jede geschriebene Vorhersage an, auch eine nachträgliche
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: V4
+- Beleg: `tools/function_report.py` prüft an V4 nur, dass `prediction` nicht leer ist; die Fälle 29, 36 und 37 wurden so als *gut* angenommen.
+- Ursache: Die Vorhersage ist nicht an den Zeitpunkt vor dem Klick gebunden.
+- Vorschlag: Feld `prediction_bound` (Pfad und SHA256 der vor dem Klick freigegebenen Vorhersage); ohne Bindung ist V4 *offen*; Vorhersagetor im Fallprozess auch im Sprachdurchgang.
+- Wirkung beim Kunden: Kein Produktfehler; V4 konnte ohne echte Vorhersage gelten.
+- Stand: offen RM-737
+
+### FD-149 Der Sperrgrund des grauen Knopfs im Fehlfall steht nicht im Bild
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `finding.action:place_on_bed`
+- Prüfpunkt: 7
+- Beleg: `cases/002/04-fehlfall.png` (Ausschnitt `F:\tmp-suche\abweichungen-claude\crops2\002-04-karte.png`): unter „Auf das Bett setzen“ nur der Wirkungssatz; der Sperrgrund steht nur in `function.json#messages`, beide Prüfer stützen Punkt 7 darauf.
+- Ursache: Der Prüfstand nimmt Tooltip und Sperrgrund eines grauen Elements nicht als Bild auf.
+- Vorschlag: Sperrgrund bzw. Tooltip des grauen Elements als eigenes Bild aufnehmen; eine JSON-Eigenschaft ersetzt kein angezeigtes Bild.
+- Wirkung beim Kunden: Kein Produktfehler; Punkt 7 wurde an einer nicht gezeigten Zeile geurteilt.
+- Stand: offen RM-737
+
+### FD-150 Prüfpunkt 11 findet außerhalb des Registers und an Bildtexten keine Fundstelle
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 11
+- Beleg: `tools/function_report.py` sucht Fundstellen nur über Registernamen und entfernt `alt` aus dem Websitetext; `resize_hole` hat `website: []` trotz `website/funktionen.html` (Abschnitt Bohrungen).
+- Ursache: Website- und Handbuchstellen hängen am Registernamen; Zeilen ohne Op und Bildtexte fallen heraus.
+- Vorschlag: Zeilenspezifikation um `manual` und `website` je Zeile; `_point_11` misst damit auch Nicht-Operationen; `alt` und `title` zählen zum Websitetext.
+- Wirkung beim Kunden: Kein Produktfehler; Versprechen ohne Fundstelle blieben ungeprüft.
+- Stand: offen RM-737
+
+### FD-151 auto_split hat kein Beispielziel, und die Szene erlaubt kein Teilen
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `auto_split`
+- Prüfpunkt: G9
+- Beleg: Fall 043 (Ausschnitt `F:\tmp-suche\abweichungen-claude\crops2\043-autosplit.png`): „Dieses Objekt passt bereits auf das Bett“; die Spezifikation fehlt. Zwilling zu FD-101.
+- Ursache: Szenenkatalog und Zeilenspezifikation decken nur den Fall „passt bereits“.
+- Vorschlag: Spezifikation mit Beispielziel („passt bereits“ als Rückmeldung) und ein zweiter Fall mit zu großem Körper für Vorschlag und G9.
+- Wirkung beim Kunden: Kein Produktfehler; G9 und E1–E3 an auto_split waren nicht messbar.
+- Stand: offen RM-737
+
+### FD-152 I1 „jede Art“ ist aus dem Protokoll nicht prüfbar
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: I1
+- Beleg: `cases/002/function.json`: `hover_labels` hat einen Eintrag, ein Feld der erkannten Arten fehlt.
+- Ursache: Das Protokoll hält nicht fest, welche Merkmalsarten die Erkennung an der Szene liefert.
+- Vorschlag: Protokollfeld `recognized_kinds` neben `hover_labels`; `_i1` vergleicht beide.
+- Wirkung beim Kunden: Kein Produktfehler; die Bauplanzusage zu I1 war nicht prüfbar.
+- Stand: offen RM-737
+
+### FD-153 Funde mit integriertem Fix stehen in der Funddatei weiter offen
+
+- Art: Aufräumen
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: FD-35, FD-37, FD-38, FD-43, FD-61 und FD-64 stehen auf „offen RM-…; … integriert“, ihre Fixe sind Vorfahren von `2ec37b23b`; die Abweichungen 16, 18 und 24 hängen daran.
+- Ursache: Der Stand wurde nach dem gemeinsamen Lauf nicht nachgezogen.
+- Vorschlag: Vor jeder Urteilsrunde den Stand der Funde nachziehen, deren Fix im Laufkopf liegt, mit Nachweis an ihrer Zeile.
+- Wirkung beim Kunden: Kein Produktfehler; *gut nach Fix* war eine Lesart statt einer Folge der Funddatei.
+- Stand: offen RM-737
+
+### FD-155 Parameter anlegen lehnt einen Namen ohne Handlung und abseits des Felds ab
+
+- Art: Verständlichkeit
+- Schwere: mittel
+- Funktion: `Bearbeiten/Parameter anlegen …`
+- Prüfpunkt: 7, E7, V5
+- Beleg: Fall 003 `04-fehlfall-dialog.png` und `function.json#messages` im finalen Lauf: „Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.“ steht unter „Weitere Einstellungen“, das Feld ist nicht markiert, eine Handlung fehlt (`output/konsolidierung-2026-10-12/funde-stand-claude.md`, neuer Punkt). Die D10-Urteile führten das bisher unter FD-39, das nur die Aufnahme betraf.
+- Ursache: offen; die Ablehnung des Namens wird als allgemeiner Hinweis des Dialogs gesetzt, nicht am Feld.
+- Vorschlag: Die Ablehnung steht am Namensfeld, das Feld wird markiert und bekommt den Fokus; der Satz nennt den Weg (etwa einen gültigen Vorschlag aus dem eingegebenen Text).
+- Wirkung beim Kunden: Der Kunde sucht, welches Feld falsch ist, und findet den Satz an anderer Stelle.
 - Stand: offen RM-737

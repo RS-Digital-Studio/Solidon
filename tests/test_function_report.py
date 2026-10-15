@@ -1535,6 +1535,41 @@ def test_a_fixed_older_finding_does_not_hide_an_open_younger_one() -> None:
     assert "| offen RM-800 |" in line
 
 
+@pytest.mark.parametrize(
+    "rows",
+    [
+        "`pin_for_bore`, `drill_hole`",
+        "`drill_hole`; `plug_hole`",
+        "drill_hole und die Sprachflächen",
+    ],
+)
+def test_a_finding_of_several_rows_holds_each_of_them_open(rows: str) -> None:
+    """Ein Fund nennt mehrere Zeilen: Er hält die Zelle jeder davon offen (FD-143)."""
+    text = _finding(subject="1").replace("**Funktion:** drill_hole", f"**Funktion:** {rows}")
+    findings, problems = parse_findings(text)
+    assert problems == []
+    known = {f.key: f for f in findings}
+    assert function_report._finding_for("drill_hole", 1, known) == known["FD-1"]
+    case = _judged()
+    cases = {case.row_id: case}
+    checked = check_verdicts(_b_verdicts(), outcomes=cases)
+    values = package_values(cases, checked.accepted, common_goals={}, solutions=SOLUTIONS)
+    checklist = render_checklist(
+        "D4",
+        rows=ROWS[:1],
+        cases=cases,
+        verdicts=checked,
+        findings=known,
+        values=values,
+        commit="a280ee8f5",
+        date="2026-10-12",
+        out="F:/tmp-suche/lauf",
+    )
+    line = next(line for line in checklist.splitlines() if line.startswith("| drill_hole"))
+    assert "| offen RM-800 |" in line
+    assert line.rstrip(" |").endswith("FD-1")
+
+
 def test_evidence_names_the_file_of_the_case() -> None:
     """Belege zeigen auf die Datei des Falls, auch bei Sprachfällen (L19)."""
     case = judge_case(sample_protocol(), sample_context(), source="2/surfaces/drill_hole.json")

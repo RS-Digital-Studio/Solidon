@@ -67,23 +67,38 @@ def test_contrast_reads_the_ground_the_customer_sees(qt_app: Any) -> None:
 
 
 def test_fonts_carry_the_effective_font_of_their_carrier(qt_app: Any) -> None:
-    """F-4: Ohne ``level`` steht die wirksame Schrift im Protokoll — die Grundschrift."""
+    """F-4: Ohne ``level`` steht die wirksame Schrift im Protokoll — die Grundschrift.
+
+    Die Stufe verlangt eine gemessene Familie. Offscreen hat Qt unter Windows
+    keine Schrift; die gebündelte DejaVu Sans gibt jeder Plattform eine.
+    """
+    from pathlib import Path
+
+    from PySide6.QtGui import QFont, QFontDatabase, QFontInfo
     from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
     from tools.function_judges import _effective_level
 
+    path = Path(__file__).parents[1] / "app/core/geom/data/fonts/DejaVuSans.ttf"
+    font_id = QFontDatabase.addApplicationFont(str(path))
+    assert font_id >= 0, "Die gebündelte Prüfschrift wurde nicht geladen"
+    before = QFont(qt_app.font())
+    qt_app.setFont(QFont("DejaVu Sans", 9))
     holder = QWidget()
     label = QLabel("Durchmesser", holder)
     QVBoxLayout(holder).addWidget(label)
     holder.show()
     _settle(qt_app)
     try:
+        assert QFontInfo(label.font()).family() == "DejaVu Sans"
         (entry,) = capture.font_entries(holder)
         points = round(label.font().pointSizeF(), 2)
     finally:
         holder.close()
         holder.deleteLater()
         _settle(qt_app)
+        qt_app.setFont(before)
+        QFontDatabase.removeApplicationFont(font_id)
     assert entry["level"] == ""
     assert entry["base_points"] == QApplication.font().pointSize()
     assert entry["points"] == points

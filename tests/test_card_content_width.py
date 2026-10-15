@@ -1,9 +1,10 @@
 """FD46: Die Auswahlkarte misst Inhalt statt freier Bildschirmfläche."""
 
 from collections.abc import Callable, Iterator
+from pathlib import Path
 
 import pytest
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QFontDatabase, QFontInfo
 from PySide6.QtWidgets import (
     QAbstractButton,
     QAbstractSpinBox,
@@ -69,16 +70,29 @@ def test_a_spanning_quick_action_wraps_to_its_whole_row(
 
 @pytest.fixture(autouse=True)
 def _readable_font(qt_app: QApplication) -> Iterator[None]:
-    """Die Betriebsschrift steht vor dem Stil; synthetische Metriken reichen nicht."""
+    """Die Betriebsschrift steht vor dem Stil; synthetische Metriken reichen nicht.
+
+    Offscreen hat Qt unter Windows keine Schrift, auch nicht DejaVu Sans; die
+    gebündelte Datei gibt jeder Plattform dieselbe Metrik wie der Linux-CI.
+    """
     from app.ui.style import apply_style
 
+    fonts = Path(__file__).parents[1] / "app/core/geom/data/fonts"
+    font_ids = [
+        QFontDatabase.addApplicationFont(str(fonts / name))
+        for name in ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf")
+    ]
+    assert min(font_ids) >= 0, "Die gebündelte Prüfschrift wurde nicht geladen"
     before = qt_app.font()
     qt_app.setFont(QFont("DejaVu Sans", 9))
+    assert QFontInfo(qt_app.font()).family() == "DejaVu Sans"
     apply_theme(qt_app, "light")
     apply_style(qt_app, "light")
     yield
     qt_app.setFont(before)
     apply_style(qt_app, "light")
+    for font_id in font_ids:
+        QFontDatabase.removeApplicationFont(font_id)
 
 
 def test_a_short_selection_does_not_expand_with_the_screen(
