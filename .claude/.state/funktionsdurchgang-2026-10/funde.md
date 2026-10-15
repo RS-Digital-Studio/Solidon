@@ -885,7 +885,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Der globale Ereignisfilter konsumierte auch den QWindow-Release. Dadurch erreichte die Freigabe den Qt-Transport nicht, der den impliziten button_down-Empfänger löscht. Ein ausdrückliches grabMouse verwendet der Helfer nicht.
 - Vorschlag: Den aktiven Zug erst bei QWidget-Empfängern verarbeiten. QWindow-Transport unverändert passieren lassen; nach dem Loslassen muss die echte folgende Mausbewegung den neuen Empfänger erreichen. Eingabefelder, Außenrelease, Abbau und aktueller Vorfahrenvertrag bleiben erhalten.
 - Wirkung beim Kunden: Nach dem Verschieben reagieren Feldhilfen und Hoverzustände nicht mehr am tatsächlich überfahrenen Eingabefeld. Die schwebende Karte lässt sich bewegen, stört danach aber die normale Mauszustellung.
-- Stand: offen RM-741; Fix `c902aed13` (welle4 `8831b33e9`), aber der finale Lauf verschiebt keine Maßkarte — ungemessen.
+- Stand: behoben `c902aed13`; in welle4 `8831b33e9`; native DE-Maßkartenfolge am echten Fenster auf welle4 `7d978c4ee` 62/62 Bedingungen (Titel- und Freiflächenzug mit vollständiger QWindow-/QWidget-Folge, echte Feldhilfen nach dem Zug; `output/konsolidierung-2026-10-12/native-d0-claude.md`, Nachweis 2).
 
 ### FD-72 Vordergrundkanten übernehmen den Zeichenvertrag ihrer Fläche nicht
 
@@ -957,7 +957,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: guide_targets._scroll_needed prüft ausschließlich die Mitte gegen alle Scrollsichtflächen. Walk bestätigt den stabilen Mittelpunkt und Treffer; der nachfolgende Stillstand prüft keine Vollsicht. So wird die teilweise abgeschnittene Fläche regulär aufgenommen.
 - Vorschlag: Passend große Felder im vorhandenen gemeinsamen Navigationsweg bis zu ihren vertikalen Kanten freilegen, innere und äußere Scrollbereiche berücksichtigen. Vollsichtkontrolle mit halb abgeschnittenem Original, oberem Rand, verschachtelten Bereichen, vollständig sichtbarem Feld, übergroßem Container und Scrollanschlag. Keine privaten Scrollbaränderungen im Kundenweg oder verlängerten Fristen.
 - Wirkung beim Kunden: Eine technisch erreichbare Feldmitte wird als brauchbare Endansicht behandelt. Eine unbedienbare Produktliste ist damit nicht belegt; kein erneuter FD75-Statusbeschnitt.
-- Stand: behoben `46c628ef9`; gegen die alten Module 20 rot (16 fachlich, 4 Vertrag), gezielt 92/92 grün; betroffene Auswahl 14 783 grün, Exit 0; in welle4 `64e389936`. Native EN-Nachheraufnahme von Fall 032 offen RM-737.
+- Stand: behoben `46c628ef9`; gegen die alten Module 20 rot (16 fachlich, 4 Vertrag), gezielt 92/92 grün; betroffene Auswahl 14 783 grün, Exit 0; in welle4 `64e389936`. Native EN-Nachheraufnahme von Fall 032 auf `7d978c4ee`: Lauf regulär, der Wähler aber „nicht auffindbar“ — die Anleitungsnavigation verwirft den Rollschritt unter einer verschachtelten Liste (FD-159); der Nachweis folgt mit dessen Fix.
 
 ### FD-78 Fachfelder in Druckvorbereitungswegen haben unvollständige Hilfen
 
@@ -981,7 +981,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Die Geste installiert einen eigenen Anwendungsfilter, obwohl app.ui.app_events einen gemeinsamen, nach Ereignisarten gefilterten Verteiler bereitstellt.
 - Vorschlag: Nur während der Geste die benötigten Ereignisarten über listen anmelden und über forget abmelden. Lokale Kartenfilter, QWidget-Schranke aus FD71, einmalige Verarbeitung und vollständigen Abbau erhalten.
 - Wirkung beim Kunden: Zusätzliche globale Zustellung umgeht den bestehenden Architekturvertrag. Eine konkrete Verlangsamung wurde in diesem Lauf nicht gemessen; keine neue Leistungszahl behauptet.
-- Stand: behoben `8f4e89fd0`; Wächter am alten Stand rot, am Fix grün; 16 neue Verhaltensfälle gegen die Originalklasse rot, am Fix grün; in welle4 `7eebc67dd`.
+- Stand: behoben `8f4e89fd0`; Wächter am alten Stand rot, am Fix grün; 16 neue Verhaltensfälle gegen die Originalklasse rot, am Fix grün; in welle4 `7eebc67dd`; native DE-Maßkartenfolge am echten Fenster auf welle4 `7d978c4ee` 62/62 Bedingungen.
 
 ### FD-80 Maßkartenzug sichert seinen globalen Mauszeiger nicht gegen jeden Ausgang
 
@@ -993,7 +993,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Ein asynchroner Zug verändert den globalen Cursorstapel und nimmt ihn nur über den gewöhnlichen _finish-Weg zurück. Der Ausnahmeweg nach dem Setzen ist nicht abgesichert; eine fremde spätere Stapelposition hat keine eigene Zuordnung.
 - Vorschlag: Das vorhandene Pattern für widgetgebundene asynchrone Cursor verwenden, falls der echte gehaltene Zug außerhalb der Karte dadurch vollständig erhalten bleibt. Vorherigen eigenen oder geerbten Zustand wiederherstellen; fremde globale Overrides, Release, Escape, Fokusverlust, Reset und Lebensdauerenden gegenprüfen. Fehlerwege müssen tatsächlich aufräumen.
 - Wirkung beim Kunden: Der Cursorzustand ist nicht für jeden Ausgang abgesichert. Ein konkret beim Kunden stehengebliebener Cursor wurde hier nicht beobachtet; der statische Regelverstoß ist bestätigt.
-- Stand: behoben `8f4e89fd0`; Zeiger am Druckempfänger statt Override, Rückgabe auf jedem Ausgang (Escape, Hide, Fokus-/Fensterverlust, Reset, Empfängertod, Ausnahme) gegen die Originalklasse rot, am Fix grün; in welle4 `7eebc67dd`.
+- Stand: behoben `8f4e89fd0`; Zeiger am Druckempfänger statt Override, Rückgabe auf jedem Ausgang (Escape, Hide, Fokus-/Fensterverlust, Reset, Empfängertod, Ausnahme) gegen die Originalklasse rot, am Fix grün; in welle4 `7eebc67dd`; am echten Fenster auf `7d978c4ee` trägt der Druckempfänger während des Haltens den Verschiebezeiger ohne globalen Override, nach dem Loslassen ist der alte Zeiger zurück (`native-d0-claude.md`, 2b).
 
 ### FD-81 Maßkartenprüfungen importieren private Helfer aus anderen Testmodulen
 
@@ -1946,4 +1946,76 @@ Auskunft.
 - Ursache: offen; der Rückruf hält das Fenster stark und prüft nicht, ob seine Widgets noch leben.
 - Vorschlag: Rückrufe halten das Fenster nur schwach oder prüfen es mit `shiboken6.isValid`, an der einen Stelle, die Vorschaurückrufe anmeldet; Test, der das Fenster vor dem Rückruf abbaut.
 - Wirkung beim Kunden: keine belegte; beim Schließen während einer laufenden Vorschau könnte ein Rückruf ins Leere greifen.
+- Stand: offen RM-737
+
+### FD-159 Die Anleitungsnavigation verwirft erreichbare Ziele unter einer verschachtelten Liste
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Gemeinsame Anleitungsnavigation und Funktionsaufnahme
+- Prüfpunkt: 1
+- Beleg: Nativer Lauf am echten Fenster auf welle4 `7d978c4ee`, Fall 032 EN: `filament.picker` und `filament.section` enden „nicht auffindbar: Rollanschlag oder kein geeigneter Radschritt“, obwohl der Rollbalken 170 px Restweg hat und 132 px fehlen; zwei lesende Diagnoseläufe (`output/konsolidierung-2026-10-12/native-d0-claude.md`, Nachweis 1).
+- Ursache: Die Trefferprobe in `guide_targets._scroll_needed` trifft in der Mitte der Sichtfläche eine verschachtelte Liste (`_ListScroller`) statt des äußeren Rollbereichs und verwirft jeden Rollschritt; Regression aus FD-77.
+- Vorschlag: Den Rollschritt an den Rollbereich geben, der das Ziel enthält und weiter rollen kann, nicht an das Widget unter der Mitte; Gegenprobe mit verschachtelter Liste.
+- Wirkung beim Kunden: Die Anleitung kommt am Filamentwähler nicht ans Ziel, obwohl der Kunde ihn selbst ins Bild rollen kann.
+- Stand: offen RM-737
+
+### FD-160 Nach „Abbrechen“ der Maßgruppe steht der Fokus auf dem Kartengriff „Objekte“
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: 10
+- Beleg: Native DE-Maßkartenfolge auf `7d978c4ee` (`native-d0-claude.md`, neuer Punkt 2): nach *Abbrechen* Fokus auf dem Kartengriff „Objekte“, nach *Übernehmen* und Undo dagegen in der 3D-Ansicht.
+- Ursache: offen; Abbrechen gibt den Fokus nicht an die Ansicht zurück, aus der die Maßgruppe kam.
+- Vorschlag: Alle drei Ausgänge der Maßgruppe geben den Fokus an dieselbe Stelle zurück (die Ansicht).
+- Wirkung beim Kunden: Wer nach Abbrechen eine Taste drückt, bedient die Objektkarte statt der Ansicht.
+- Stand: offen RM-737
+
+### FD-161 Eine geänderte Bohrung springt im Objektbaum ans Listenende
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: 3
+- Beleg: Native DE-Maßkartenfolge auf `7d978c4ee` (`native-d0-claude.md`, neuer Punkt 3); am Stand vor D0 genauso.
+- Ursache: offen; der Baum ordnet ein geändertes Merkmal neu ein statt an seiner Stelle.
+- Vorschlag: Ein geändertes Merkmal behält seinen Platz im Baum.
+- Wirkung beim Kunden: Nach jeder Änderung sucht der Kunde die Bohrung neu.
+- Stand: offen RM-737
+
+### FD-162 Die Undo-Blase verdeckt die Sammelzeile, und die Statuszeile meldet danach weiter „zurückgenommen“
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: 9
+- Beleg: Native DE-Maßkartenfolge auf `7d978c4ee` (`native-d0-claude.md`, neuer Punkt 4): Die Blase steht 6,7 s über Wiederwahl, Aufklappen und Tippen und verdeckt die Zeile des Sammelhakens; nach der nächsten Übernahme meldet die Statuszeile weiter „zurückgenommen“. Zwilling zu FD-108 (Quittung am Zeiger über dem Bericht).
+- Ursache: offen; die Quittung kennt weder die Lage der Karten noch den nächsten Schritt.
+- Vorschlag: Mit FD-108 eine Regel für Quittungen: nie über einer Karte, weg mit dem nächsten Schritt; die Statuszeile folgt dem letzten Schritt.
+- Wirkung beim Kunden: Die Blase deckt die nächste Bedienung zu, und die Statuszeile widerspricht dem Stand.
+- Stand: offen RM-737
+
+### FD-163 Prozesse des Prüfstands schreiben kein Dateiprotokoll
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: Native Läufe auf `7d978c4ee` (`native-d0-claude.md`, Nachweis 3 und neuer Punkt 5): Die Zeile, mit der FD-154 auf einen Arbeiter wartet, steht in keinem Protokoll des Falls, weil nur `main()` das Dateiprotokoll einrichtet; die Zusage in `fd154-claude.md` trifft so nicht zu.
+- Ursache: Der Fallprozess richtet das Protokoll der Anwendung nicht ein.
+- Vorschlag: Der Fallprozess richtet dasselbe Dateiprotokoll ein wie `main()`, im isolierten Profil des Falls.
+- Wirkung beim Kunden: Kein Produktfehler; Ursachen in Fallprozessen bleiben ohne Protokoll.
+- Stand: offen RM-737
+
+### FD-164 Die nativen Läufer liegen außerhalb des Repositorys und starten ohne Siegelprüfung
+
+- Art: Stabilität
+- Schwere: mittel
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: Die DE-Maßkartenfolge läuft über `F:\tmp-suche\fix-massgruppe-front-codex\native-runner-v3\Run-Language.ps1`, der Fall 032 über `F:\tmp-suche\fix-projektwechsel-crash-codex\final_d0_cli.py`, beide außerhalb des Baums; im Läuferordner lag eine spätere, ungesiegelte Ergänzung, die `Run-Language.ps1` ohne Prüfung gefahren hätte, und ihre Cursorlesung zielt auf das Hauptfenster statt auf das eigene Fenster der Maßkarte (`native-d0-claude.md`, Nachweis 2b und neuer Punkt 6).
+- Ursache: Die nativen Anschlüsse entstanden als Sitzungswerkzeuge und wurden nie ins Repository übernommen.
+- Vorschlag: Die nativen Läufer (Fallbrücke, Maßkartenfolge, Bindung und Siegel) nach `tools/` übernehmen, mit Siegelprüfung vor dem Start, als Schritt in `/erzeugen` (Konzept §8, §10); die Cursorlesung am Fenster des Druckempfängers.
+- Wirkung beim Kunden: Kein Produktfehler; der Wiederholungslauf beim Release wäre auf keinem frischen Stand reproduzierbar.
 - Stand: offen RM-737
