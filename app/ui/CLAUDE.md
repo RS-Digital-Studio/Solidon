@@ -296,9 +296,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 - `FeaturePanel.footer` gehört zum Träger: `isHidden`, nicht `isVisibleTo(panel)`.
   Neue Layoutzeilen ausdrücklich über `_set_shown` verbergen;
   `_q_showIfNotHidden` beachtet `WA_WState_ExplicitShowHide`.
-- Kontextmenü je Klick als Panel-Kind erzeugen, nach `exec` mit `deleteLater`
-  räumen. `customContextMenuRequested` des Objektbaums liefert bereits
-  Viewport-Koordinaten; keine zweite Umrechnung über die Kopfzeile.
+- Kontextmenü je Klick, nach `exec` `deleteLater`; Baumkoordinaten in `karte-app-ui.md`.
 - Wahldialoge (Filament, Slicerprofil, Körper) und Katalog nach Antwort im
   `finally` löschen; Katalog zuerst `release`, damit Timer-Rückrufe die
   Hülle nicht über die native Löschung hinaus halten. `weak_slot` braucht
