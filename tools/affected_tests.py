@@ -32,8 +32,9 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
 4. eine geänderte Nicht-Python-Datei oder ein Skript außerhalb der Pakete
    in einer Zeichenkette genannt wird — ``ROADMAP.md``, ``constraints.txt``,
    ein Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/`` —, auch
-   über einen Helfer, den die Testdatei direkt importiert, oder ihr Ordner.
-   Ein Kommentar oder Docstring nennt nichts.
+   über einen Helfer, den die Testdatei direkt importiert, oder ihr Ordner
+   über seinen Pfad (``Path(__file__).parent / "data"``). Ein Kommentar oder
+   Docstring nennt nichts.
 
 Gewählt werden nur Testdateien: Aus einem Helfer sammelt pytest nichts, er
 steht für die Testdateien, die ihn importieren.
@@ -83,6 +84,9 @@ from tools import tree_reads  # noqa: E402
 #: Die Pakete, deren Importgraph gelesen wird. ``app`` und ``tools`` reisen
 #: als Module, ``tests`` sind die Blätter.
 PACKAGES = ("app", "tools", "tests")
+
+#: Aufrufe, deren Argument ein Pfadteil ist: ``Path("app", "ui")``, ``os.path.join``.
+_PATH_CALLS = frozenset({"Path", "PurePath", "PurePosixPath", "join"})
 
 #: Änderungen hieran betreffen jeden Test.
 _EVERYTHING = frozenset({"tests/conftest.py", "pyproject.toml", "constraints.txt"})
@@ -402,20 +406,100 @@ def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
     # Datendatei ändert, will die Tests der Module sehen, die sie lesen; wer
     # das ganze Fenster prüfen will, fährt das Tor. Deshalb zählt auch ein
     # Helfer, der einen Leser nur importiert, nicht: Er wäre das zweite Glied.
-    folder = file.parent.name
-    if folder and folder not in {"", ".", "website"}:
-        pattern = _folder_pattern(folder)
-        readers = [name for name in graph.modules if re.search(pattern, graph.text(name))]
-        # Der Namensweg oben ist der genauere und behält den Vorrang, danach
-        # die Testdatei, die den Ordner selbst nennt, vor dem Importeur.
-        for name in readers:
-            if _is_test_file(graph, name):
-                found.setdefault(name, f"nennt den Ordner {folder}/")
-        for name in readers:
-            if not _is_test_file(graph, name):
-                for importer in _direct_tests(graph, name):
-                    found.setdefault(importer, f"hängt an einem Modul, das {folder}/ liest")
+    relative = PurePosixPath(file.relative_to(graph.root).as_posix())
+    folder = relative.parent
+    if folder.as_posix() in {".", "website"}:
+        return found
+    words = [folder.name]
+    if folder.parent.name not in ("", "app", "tests", "tools"):
+        words.append(folder.parent.name)
+    patterns = [re.compile(_folder_pattern(word)) for word in words]
+    readers = [
+        name
+        for name in graph.modules
+        if any(one.search(graph.text(name)) for one in patterns)
+        and _reads_folder(graph, name, folder, relative)
+    ]
+    # Der Namensweg oben ist der genauere und behält den Vorrang, danach
+    # die Testdatei, die den Ordner selbst nennt, vor dem Importeur.
+    for name in readers:
+        if _is_test_file(graph, name):
+            found.setdefault(name, f"nennt den Ordner {folder}/")
+    for name in readers:
+        if not _is_test_file(graph, name):
+            for importer in _direct_tests(graph, name):
+                found.setdefault(importer, f"hängt an einem Modul, das {folder}/ liest")
     return found
+
+
+def _reads_folder(
+    graph: ImportGraph, name: str, folder: PurePosixPath, file: PurePosixPath
+) -> bool:
+    """Ob das Modul ``name`` den Ordner ``folder`` nennt — über seinen Pfad, nicht über seinen
+    letzten Namen (RQ-5).
+
+    Zuerst die Pfadausdrücke: Löst sich einer auf den Ordner oder die Datei auf
+    (``Path(__file__).parent / EXAMPLES_DIRNAME``), liest das Modul sie; ``tests/data`` ist
+    nicht ``app/core/knowledge/data``. Bleibt ein Ausdruck offen, nachdem er bis höchstens eine
+    Ebene über dem Ordner aufgelöst war (``ROOT / "website" / sprache``), zählt er auch — er
+    kann in den Ordner zeigen. Dann die Texte: ``"knowledge/data"`` zählt, wenn die Teile vor
+    dem Namen zum Pfad passen, ein bloßer Name nur für einen Ordner direkt unter der Wurzel
+    (``"changelog"``); ein bloßes ``"data"`` als Schlüssel eines Wörterbuchs liest nichts.
+    """
+    relative = graph.modules[name].relative_to(graph.root).as_posix()
+    tree, _parents = graph.resolver.parsed(relative)
+    for node in ast.walk(tree):
+        if not _is_path_expression(node):
+            continue
+        assert isinstance(node, ast.expr)
+        value = graph.resolver.value_at(relative, node)
+        places = [one for one in tree_reads.options(value) if isinstance(one, tree_reads.Place)]
+        if any(
+            one.parts[: len(folder.parts)] == folder.parts or one.parts == file.parts
+            for one in places
+        ):
+            return True
+        if value is None and isinstance(node, ast.BinOp):
+            left = graph.resolver.value_at(relative, node.left)
+            if (
+                isinstance(left, tree_reads.Place)
+                and len(folder.parts) - 1 <= len(left.parts) < len(folder.parts)
+                and folder.parts[: len(left.parts)] == left.parts
+            ):
+                return True
+    alone = {
+        id(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
+    }
+    for node in ast.walk(tree):
+        if (
+            not isinstance(node, ast.Constant)
+            or not isinstance(node.value, str)
+            or id(node) in alone
+        ):
+            continue
+        parts = [part for part in re.split(r"[\\/]", node.value) if part not in ("", ".")]
+        if folder.name not in parts:
+            continue
+        before = tuple(parts[: parts.index(folder.name)])
+        if before and folder.parts[:-1][-len(before) :] == before:
+            return True
+        if not before and len(folder.parts) == 1:
+            return True
+    return False
+
+
+def _is_path_expression(node: ast.AST) -> bool:
+    """``a / b``, ``Path(…)``, ``os.path.join(…)``, ``x.joinpath(…)``."""
+    if isinstance(node, ast.BinOp):
+        return isinstance(node.op, ast.Div)
+    if not isinstance(node, ast.Call):
+        return False
+    function = node.func
+    if isinstance(function, ast.Attribute):
+        return function.attr in ("joinpath", "join") or function.attr in _PATH_CALLS
+    return isinstance(function, ast.Name) and function.id in _PATH_CALLS
 
 
 def _note_readers(graph: ImportGraph, reasons: dict[Path, str], found: dict[str, str]) -> None:

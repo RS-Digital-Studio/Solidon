@@ -413,6 +413,52 @@ def test_a_helper_names_a_file_in_strings_and_for_its_direct_importers_only(tree
     )
 
 
+def test_a_data_folder_counts_by_its_path_not_by_its_last_name(tree: Path) -> None:
+    """RQ-5: Eine Datei unter ``app/core/knowledge/data`` wählte jedes Modul, das irgendeinen
+    Ordner ``data`` nennt — ``tests/data``, ``geom/data/fonts``, Temp-Ordner. Jetzt zählt, wohin
+    ein Pfadausdruck zeigt, auch über eine Konstante (``EXAMPLES_DIRNAME``) und auch, wenn er
+    eine Ebene über dem Ordner offen bleibt (``ROOT / "website" / sprache``); ein Text zählt,
+    wenn seine Teile zum Pfad passen. Ein bloßes ``"data"`` liest nichts."""
+    rules = _write(tree, "app/core/knowledge/data/rules.toml", "version = 1\n")
+    _write(tree, "app/core/__init__.py", "")
+    _write(tree, "app/core/knowledge/__init__.py", "")
+    for module, text in (
+        ("rules", "from pathlib import Path\nDATA = Path(__file__).parent / 'data'\n"),
+        (
+            "tables",
+            "from pathlib import Path\nDIRNAME = 'data'\nDIR = Path(__file__).parent / DIRNAME\n",
+        ),
+        (
+            "pick",
+            "from pathlib import Path\nHERE = Path(__file__).parent.parent / 'knowledge'\n"
+            "def table(kind):\n    return HERE / kind\n",
+        ),
+    ):
+        _write(tree, f"app/core/knowledge/{module}.py", text)
+        _write(tree, f"tests/test_{module}.py", f"from app.core.knowledge import {module}\n")
+    _write(
+        tree,
+        "tests/corpus.py",
+        "from pathlib import Path\nDATA = Path(__file__).parent / 'data'\n",
+    )
+    _write(tree, "tests/test_corpus.py", "from tests.corpus import DATA\n")
+    _write(tree, "tests/test_text_path.py", "WHERE = 'knowledge/data/'\n")
+    _write(tree, "tests/test_other_text.py", "WHERE = 'tests/data/'\n")
+    _write(tree, "tests/test_bare.py", "ROW = {'data': 1}\n")
+
+    files, reasons = affected([rules], ImportGraph(tree))
+
+    assert _names(files, tree) == {
+        "tests/test_rules.py",
+        "tests/test_tables.py",
+        "tests/test_pick.py",
+        "tests/test_text_path.py",
+    }
+    assert reasons[tree / "tests" / "test_rules.py"] == (
+        "hängt an einem Modul, das app/core/knowledge/data/ liest"
+    )
+
+
 def test_an_application_module_reading_its_own_tree_lends_that_reading(tree: Path) -> None:
     """CS-32: ``app/i18n/extract.py`` liest die Quellen unter ``app/`` nach ``tr()``-Schlüsseln;
     ``tools/registry_dump.py`` ruft es, und ``test_registry_dump`` fehlte bei einem neuen Text
@@ -759,9 +805,9 @@ def test_a_folder_named_by_a_test_or_a_test_helper_selects_its_readers(tree: Pat
 
     assert _names(files, tree) == {"tests/test_packaging_platform.py", "tests/test_ci_files.py"}
     assert reasons[tree / "tests" / "test_packaging_platform.py"] == (
-        "hängt an einem Modul, das workflows/ liest"
+        "hängt an einem Modul, das .github/workflows/ liest"
     )
-    assert reasons[tree / "tests" / "test_ci_files.py"] == "nennt den Ordner workflows/"
+    assert reasons[tree / "tests" / "test_ci_files.py"] == "nennt den Ordner .github/workflows/"
 
 
 def test_a_script_outside_the_packages_selects_the_test_that_loads_it(tree: Path) -> None:
