@@ -228,23 +228,68 @@ def test_every_tool_that_uses_the_bench_is_guarded() -> None:
 
     Sonst wüchse ein neues Modul neben der Liste, das klickt, ohne dass jemand
     hinsieht. ``file_acceptance`` legt Fälle an und reicht sie weiter; sein
-    Fensterweg ``WindowFlow`` hat einen eigenen Test.
+    Fensterweg ``WindowFlow`` hat einen eigenen Test. Die nativen Läufer stehen
+    unter dem Lesemodus des Wächters (``READING_MODULES``, Test darunter).
     """
+    reading = set(function_guard.READING_MODULES)
 
     def unguarded(listed: set[str]) -> set[str]:
         return {
             path.stem
             for path in TOOLS.glob("*.py")
             if path.stem != "file_acceptance"
-            and path.stem not in listed
+            and path.stem not in listed | reading
             and _imports(path) & listed
         }
 
     bench = set(function_guard.BENCH_MODULES)
-    assert all((TOOLS / f"{module}.py").is_file() for module in bench)
+    assert all((TOOLS / f"{module}.py").is_file() for module in bench | reading)
+    assert not bench & reading, "ein Modul steht unter genau einer Regel"
     assert unguarded(bench) == set()
     # Gegenprobe: ``function_language`` benutzt ``function_bench`` und fiele auf.
     assert unguarded(bench - {"function_language"}) == {"function_language"}
+
+
+@pytest.mark.parametrize("module", function_guard.READING_MODULES)
+def test_the_native_runners_handle_through_input_and_only_read_what_is_private(
+    module: str,
+) -> None:
+    """Die Ausnahme der nativen Läufer ist eng (RF10-1): bedienen wie der Prüfstand, Privates lesen.
+
+    Sie messen Lage und Zugraum der Maßkarte oder ob die Anordnung ruht — Zustand
+    ohne Schnittstelle. Erlaubt ist, ein privates Attribut zu lesen und am
+    Gelesenen eine lesende Methode zu rufen; nicht erlaubt bleibt jeder Umweg
+    des Prüfstands, ein privater Aufruf, ein Setzen und jede andere Methode an
+    etwas privat Erreichtem.
+    """
+    assert function_guard.forbidden_calls(_source(module), private_reads=True) == []
+
+
+def test_the_reading_exception_still_finds_every_detour() -> None:
+    """Gegenprobe: Der Lesemodus lässt Lesen durch, sonst nichts."""
+    allowed = (
+        "def read(window, row):\n"
+        "    room = window._placement._drag._room\n"
+        "    box = window._placement._box.geometry()\n"
+        "    shown = window._preview.isActive()\n"
+        "    return room, box, shown, row._asdict(), row._replace(id=1)\n"
+        "from tools.function_setup import apply_licence\n"
+        "apply_licence('licensed')\n"
+    )
+    assert function_guard.forbidden_calls(allowed, private_reads=True) == []
+    assert function_guard.forbidden_calls(allowed) != [], "ohne Ausnahme sind es Umwege"
+    detours = {
+        "window._placement._drag = None\n": "window._placement._drag",
+        "window._placement._helper()\n": "window._placement._helper",
+        "window._placement._drag.press(1)\n": "window._placement._drag.press",
+        "window._placement._box.setGeometry(1)\n": "window._placement._box.setGeometry",
+        "button.click()\n": "button.click",
+        "window.measure.setValue(3)\n": "window.measure.setValue",
+        "from tools.function_setup import apply_scene\n": "import apply_scene",
+    }
+    for source, detour in detours.items():
+        found = [call for _line, call in function_guard.forbidden_calls(source, private_reads=True)]
+        assert detour in found, (source, found)
 
 
 def test_no_bench_module_has_an_entry_of_its_own() -> None:

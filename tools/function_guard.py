@@ -15,7 +15,9 @@ Attribute und nie ein Kernaufruf.
 :func:`forbidden_calls` findet sie im Quelltext; ``tests/test_function_guard.py``
 fährt ihn über jedes Modul aus :data:`BENCH_MODULES` und über ``WindowFlow``
 in ``tools/file_acceptance.py`` und hält, dass jedes Werkzeugmodul, das den
-Prüfstand benutzt, in dieser Liste steht.
+Prüfstand benutzt, in dieser Liste steht. Die nativen Läufer
+(:data:`READING_MODULES`) stehen unter einer engen Ausnahme: Privates dürfen sie
+lesen, nicht bedienen.
 
 **Grenze:** Ein Wächter über den Quelltext sieht Namen, keine Typen. Ein Name an
 ``self``, ``cls`` oder ``super()`` gilt als eigene Methode des Prüfstands; ein
@@ -118,6 +120,71 @@ ALLOWED_CALLS: Final[frozenset[str]] = frozenset(
 ALLOWED_PRIVATE: Final[frozenset[str]] = frozenset(
     {"activation._cached", "discover._remembered_program", "sys._getframe"}
 )
+
+#: Die nativen Läufer (F10, RF10-1). Sie fahren den Prüfstand am echten Fenster
+#: und messen dabei Zustand, den keine Schnittstelle anbietet: Lage und Zugraum der
+#: Maßkarte, ob die Anordnung ruht, ob eine Vorschau läuft. Eine öffentliche
+#: Schnittstelle dafür hieße neue Methoden in ``main_window.py`` und den Karten,
+#: die über der Größengrenze stehen (Regel 6), nur für einen Messläufer. Die
+#: Ausnahme ist deshalb eng: Sie bedienen wie jedes Modul des Prüfstands nur über
+#: Eingabeereignisse, und Privates dürfen sie **nur lesen**
+#: (``forbidden_calls(…, private_reads=True)``, ``tests/test_function_guard.py``).
+READING_MODULES: Final[tuple[str, ...]] = ("native_runs", "native_measure_card", "native_binding")
+
+#: Was ein Läufer an einem privat erreichten Objekt aufrufen darf: Qts lesende
+#: Methoden, die die Läufer brauchen. ``is*`` meint ``isVisible``, ``isChecked`` …
+READERS: Final[tuple[str, ...]] = (
+    "is*",
+    "geometry",
+    "layout",
+    "itemAt",
+    "widget",
+    "findChild",
+    "values",
+)
+
+#: Die öffentliche Schnittstelle eines ``NamedTuple``: Sie heißt mit ``_``, damit
+#: sie keinem Feld im Weg steht, und liefert nur neue Daten.
+NAMEDTUPLE_API: Final[frozenset[str]] = frozenset({"_asdict", "_replace", "_fields", "_make"})
+
+#: Die Vorbereitung eines Falls vor dem Fenster, die ein Läufer wie
+#: ``file_acceptance`` selbst setzt: der Lizenzzustand über die Nahtstelle der
+#: Suite. Sie bedient nichts; der Name trägt nur ``apply_``.
+PREPARATION: Final[frozenset[str]] = frozenset({"apply_licence", "apply_preconditions"})
+
+
+def _reader(name: str) -> bool:
+    """Eine lesende Methode: ein Name aus :data:`READERS` oder ``isX…``."""
+    for pattern in READERS:
+        prefix = pattern.rstrip("*")
+        if name == pattern or (
+            pattern.endswith("*")
+            and name.startswith(prefix)
+            and name[len(prefix) : len(prefix) + 1].isupper()
+        ):
+            return True
+    return False
+
+
+def _through_private(expression: ast.expr) -> bool:
+    """Ob ein Ausdruck über ein privates Attribut eines fremden Objekts läuft."""
+    while isinstance(expression, (ast.Attribute, ast.Call, ast.Subscript)):
+        if isinstance(expression, ast.Attribute):
+            receiver = ast.unparse(expression.value)
+            whole = f"{receiver}.{expression.attr}"
+            if (
+                _private(expression.attr)
+                and receiver not in ("self", "cls")
+                and whole not in ALLOWED_PRIVATE
+            ):
+                return True
+            expression = expression.value
+        elif isinstance(expression, ast.Call):
+            expression = expression.func
+        else:
+            expression = expression.value
+    return False
+
 
 #: Empfänger, deren Namen dem Prüfstand selbst gehören.
 OWN: Final[frozenset[str]] = frozenset({"self", "cls", "super()"})
@@ -288,7 +355,9 @@ def _imported_forbidden(tree: ast.AST) -> dict[str, str]:
     }
 
 
-def _attribute_detour(node: ast.Attribute, called: set[int], sessions: set[str]) -> bool:
+def _attribute_detour(
+    node: ast.Attribute, called: set[int], sessions: set[str], *, private_reads: bool = False
+) -> bool:
     name, receiver = node.attr, ast.unparse(node.value)
     whole = f"{receiver}.{name}"
     if whole in ALLOWED_CALLS:
@@ -299,6 +368,11 @@ def _attribute_detour(node: ast.Attribute, called: set[int], sessions: set[str])
     shortcut = not own and _forbidden_name(name) and (name not in CALL_ONLY or is_called)
     event = not own and _event_method(name)
     foreign = _private(name) and receiver not in ("self", "cls") and whole not in ALLOWED_PRIVATE
+    if foreign and private_reads:
+        # Ein Läufer liest: kein Aufruf, kein Setzen — außer der Schnittstelle
+        # eines ``NamedTuple``, die nur neue Daten liefert.
+        reading = isinstance(node.ctx, ast.Load) and not is_called
+        foreign = not (reading or (is_called and name in NAMEDTUPLE_API))
     return core or shortcut or event or foreign
 
 
@@ -352,7 +426,9 @@ def _dictionary_detour(node: ast.Subscript, values: dict[str, set[str] | None]) 
     return None
 
 
-def forbidden_calls(source: str, *, within_class: str | None = None) -> list[tuple[int, str]]:
+def forbidden_calls(
+    source: str, *, within_class: str | None = None, private_reads: bool = False
+) -> list[tuple[int, str]]:
     """Wo ein Quelltext eine Bedienung umgeht: Zeile und Umweg (Review M8, C-M3).
 
     Gefunden werden ein verbotener Name als Aufruf und als Zugriff (``press =
@@ -370,7 +446,10 @@ def forbidden_calls(source: str, *, within_class: str | None = None) -> list[tup
     Rumpf dieser Klasse (``WindowFlow`` in ``file_acceptance``). Der Wächter in
     ``tests/test_function_guard.py`` fährt diese Funktion über jedes Modul aus
     :data:`BENCH_MODULES`, über ``WindowFlow`` und über Quelltexte mit allen
-    bekannten Umwegen.
+    bekannten Umwegen. ``private_reads`` ist die Ausnahme der nativen Läufer
+    (:data:`READING_MODULES`): Ein privates Attribut darf gelesen werden, und
+    an dem, was es liefert, nur eine lesende Methode (:data:`READERS`); setzen,
+    privat aufrufen oder darüber etwas anderes aufrufen bleibt ein Umweg.
     """
     tree = ast.parse(source)
     roots: list[ast.AST] = [tree]
@@ -401,9 +480,13 @@ def forbidden_calls(source: str, *, within_class: str | None = None) -> list[tup
     for scope in scopes:
         values = _string_values(scope)
         imported = _imported_forbidden(scope)
+        if private_reads:
+            imported = {local: name for local, name in imported.items() if name not in PREPARATION}
         for node in _scope_nodes(scope):
             if isinstance(node, ast.Attribute):
-                if _attribute_detour(node, called, bindings.sessions(node.value)):
+                if _attribute_detour(
+                    node, called, bindings.sessions(node.value), private_reads=private_reads
+                ):
                     found.add((node.lineno, f"{ast.unparse(node.value)}.{node.attr}"))
             elif isinstance(node, ast.ImportFrom):
                 for alias in node.names:
@@ -415,6 +498,15 @@ def forbidden_calls(source: str, *, within_class: str | None = None) -> list[tup
                     found.add((node.lineno, dictionary))
             elif isinstance(node, ast.Call):
                 label = ast.unparse(node.func)
+                if (
+                    private_reads
+                    and isinstance(node.func, ast.Attribute)
+                    and not _private(node.func.attr)
+                    and not _reader(node.func.attr)
+                    and _through_private(node.func.value)
+                ):
+                    # Was über Privates erreicht ist, wird nur gelesen.
+                    found.add((node.lineno, label))
                 if isinstance(node.func, ast.Name) and node.func.id in imported:
                     found.add((node.lineno, f"{node.func.id}(…)"))
                 elif (
