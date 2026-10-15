@@ -1102,6 +1102,7 @@
   "Das Maß bleibt dort, wo das Teil in Entformungsrichtung endet — bei „nach oben“ oben.": "La quota resta dove il pezzo finisce nella direzione di sformo — in alto con «verso l'alto».",
   "Das Maß des Körpers setzt Schritt {number}. Dieser Wert wirkt nur auf die Schritte dazwischen.": "La dimensione del corpo la fissa il passaggio {number}. Questo valore agisce solo sui passaggi intermedi.",
   "Das Maß einer Bedingung ist ein Ausdruck als Text.": "La quota di un vincolo è un'espressione in forma di testo.",
+  "Das Maß „{name}“ steht nicht mehr im Projekt. „Parameter anlegen …“ legt es neu an.": "La quota «{name}» non è più nel progetto. «Crea parametro …» la crea di nuovo.",
   "Das Merkmal hat dieses Maß schon.": "La caratteristica ha già questa misura.",
   "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es verweisen, finden es nicht mehr.": "La caratteristica è stata rimossa. I passaggi e gli accoppiamenti successivi che vi fanno riferimento non la troveranno più.",
   "Das Merkmal ist gesetzt, aber am Ergebnis nicht wiederzufinden, spätere Schritte verlieren den Bezug. Strg+Z nimmt den Schritt zurück.": "La caratteristica è posizionata, ma non si ritrova sul risultato, e i passaggi successivi perdono il riferimento. Ctrl+Z annulla il passaggio.",

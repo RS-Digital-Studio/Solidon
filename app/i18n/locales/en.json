@@ -1102,6 +1102,7 @@
   "Das Maß bleibt dort, wo das Teil in Entformungsrichtung endet — bei „nach oben“ oben.": "The size stays where the part ends in the pull direction — at the top for “upwards”.",
   "Das Maß des Körpers setzt Schritt {number}. Dieser Wert wirkt nur auf die Schritte dazwischen.": "Step {number} sets the size of the body. This value only affects the steps in between.",
   "Das Maß einer Bedingung ist ein Ausdruck als Text.": "The value of a constraint is an expression as text.",
+  "Das Maß „{name}“ steht nicht mehr im Projekt. „Parameter anlegen …“ legt es neu an.": "The dimension “{name}” is no longer in the project. “Create parameter …” creates it again.",
   "Das Merkmal hat dieses Maß schon.": "The feature already has this dimension.",
   "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es verweisen, finden es nicht mehr.": "The feature is removed. Later steps and fits that refer to it will no longer find it.",
   "Das Merkmal ist gesetzt, aber am Ergebnis nicht wiederzufinden, spätere Schritte verlieren den Bezug. Strg+Z nimmt den Schritt zurück.": "The feature is placed but cannot be found on the result, so later steps lose their reference. Ctrl+Z takes the step back.",

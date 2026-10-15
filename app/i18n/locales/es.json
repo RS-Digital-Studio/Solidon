@@ -1102,6 +1102,7 @@
   "Das Maß bleibt dort, wo das Teil in Entformungsrichtung endet — bei „nach oben“ oben.": "La medida se mantiene donde termina la pieza en la dirección de desmoldeo; con «hacia arriba», arriba.",
   "Das Maß des Körpers setzt Schritt {number}. Dieser Wert wirkt nur auf die Schritte dazwischen.": "El tamaño del cuerpo lo fija el paso {number}. Este valor solo afecta a los pasos intermedios.",
   "Das Maß einer Bedingung ist ein Ausdruck als Text.": "La cota de una restricción es una expresión en forma de texto.",
+  "Das Maß „{name}“ steht nicht mehr im Projekt. „Parameter anlegen …“ legt es neu an.": "La medida «{name}» ya no está en el proyecto. «Crear parámetro …» la vuelve a crear.",
   "Das Merkmal hat dieses Maß schon.": "La característica ya tiene esta medida.",
   "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es verweisen, finden es nicht mehr.": "La característica se ha quitado. Los pasos y ajustes posteriores que se refieran a ella ya no la encontrarán.",
   "Das Merkmal ist gesetzt, aber am Ergebnis nicht wiederzufinden, spätere Schritte verlieren den Bezug. Strg+Z nimmt den Schritt zurück.": "La característica está colocada, pero no se encuentra en el resultado, y los pasos posteriores pierden la referencia. Ctrl+Z deshace el paso.",

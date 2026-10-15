@@ -4601,6 +4601,9 @@ MARKER_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 #: Die Zeile steht unter dem *Objekt entfernen*, das ihr Ergebnis wegnimmt, und
 #: damit nicht an ihrer Stelle im Stapel: Eine Ablage dort hätte kein Ziel.
 NESTED_ROLE = int(Qt.ItemDataRole.UserRole) + 4
+#: Das Projektmaß, das eine Zeile ohne Schritt geändert hat — Name und
+#: Beschriftung (FD-166). Ein Doppelklick öffnet es wie *Ändern …*.
+PARAMETER_ROLE = int(Qt.ItemDataRole.UserRole) + 9
 
 
 def history_step_titles(document: Document) -> dict[int, str]:
@@ -4943,6 +4946,12 @@ class HistoryPanel(QWidget):
 
     operationActivated = Signal(int)
     """Eine Operation wurde doppelt angeklickt — trägt ihre ID, zum Ändern (§15.4)."""
+    parameterActivated = Signal(str)
+    """Eine Maßänderung wurde doppelt angeklickt — trägt den Namen des Maßes.
+
+    Derselbe Weg wie *Ändern …* an der Zeile der Parameterleiste
+    (``ParameterPanel.limitsRequested``): Eine Transaktion aus *Parameter
+    anlegen …* hat keinen Schritt, und der Doppelklick blieb stumm (FD-166)."""
     previewRequested = Signal(int)
     previewClosed = Signal()
     previewInsertRequested = Signal(object)
@@ -5059,6 +5068,8 @@ class HistoryPanel(QWidget):
         noch aus ihren Zügen gerechnet werden."""
         self._switchable: dict[int, str] = {}
         """Grundkörperschritte, die in den anderen Rechenkern können, mit dem Satz dafür."""
+        self._parameter_names: frozenset[str] = frozenset()
+        """Die Maße des gezeigten Dokuments — siehe :meth:`_on_activated`."""
         self._drawn: frozenset[int] = frozenset()
         """Schritte mit einer gezeichneten Skizze — dort steht „Zeichnung weiterverwenden"."""
         self._discarded = Discarded()
@@ -5303,6 +5314,9 @@ class HistoryPanel(QWidget):
         self._drawn = frozenset(
             entry.id for entry in document.ops if str(entry.params.get("sketch", "") or "").strip()
         )
+        # Welche Maße es gibt — ein Doppelklick auf eine Maßänderung öffnet nur
+        # ein Maß, das noch im Projekt steht (FD-166).
+        self._parameter_names = frozenset(document.parameters)
         for transaction in document.transactions:
             if transaction.ops and all(op_id in replanned for op_id in transaction.ops):
                 # Neu gefasst, nicht gelöscht (P7): Derselbe Schritt steht unter
@@ -5383,6 +5397,15 @@ class HistoryPanel(QWidget):
                 else _changed_parameters(transaction)
             )
             tip = f"{transaction.id} · {steps}" if steps else str(transaction.id)
+            changed = transaction.changes.after.parameters if transaction.changes else None
+            if not transaction.ops and changed:
+                # **Eine Maßänderung öffnet ihr Maß** (FD-166): Sie hat keinen
+                # Schritt, aber ein Ziel — dasselbe wie *Ändern …* an der Leiste.
+                name, now = next(iter(changed.items()))
+                before = transaction.changes.before.parameters if transaction.changes else None
+                shown = now or (before or {}).get(name)
+                label = str(shown.title or name) if shown is not None else name
+                item.setData(PARAMETER_ROLE, (name, label))
             if halted:
                 tip += "\n" + tr("Hier hält die Kette an — der Grund steht im Prüfbericht.")
             item.setToolTip(tip)
@@ -5987,6 +6010,20 @@ class HistoryPanel(QWidget):
                     "Öffnen lässt sich jede einzeln — die eingerückten Zeilen darunter."
                 )
             )
+            return
+        parameter = item.data(PARAMETER_ROLE)
+        if parameter:
+            name, label = parameter
+            if name in self._parameter_names:
+                self.parameterActivated.emit(str(name))
+            else:
+                self.noteRequested.emit(
+                    tr(
+                        "Das Maß „{name}“ steht nicht mehr im Projekt. "
+                        "„Parameter anlegen …“ legt es neu an.",
+                        name=label,
+                    )
+                )
 
     def _request_selected_removal(self) -> None:
         """Die sichtbare Auswahl zum bestätigten Löschen weiterreichen."""
