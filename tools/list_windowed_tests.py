@@ -249,11 +249,33 @@ def _collect(
         for name, module in modules.items():
             if sys.modules.get(name) is not module:
                 sys.modules[name] = module
+        # Neu geladene Testmodule der gesammelten Ordner gehen wieder: Eine Testdatei ohne
+        # Paket steht unter ihrem bloßen Namen dort, und die nächste Sammlung einer
+        # gleichnamigen Datei aus einem anderen Ordner scheiterte an „import file mismatch“.
+        # Was die Sammlung sonst geladen hat (die Anwendung), bleibt — ein zweites Laden
+        # registrierte jede Op noch einmal.
+        roots = [Path(path).resolve() for path in paths]
+        for name in sys.modules.keys() - modules.keys():
+            if _is_collected_test(sys.modules[name], roots):
+                del sys.modules[name]
     only_filtered = outcome == pytest.ExitCode.NO_TESTS_COLLECTED and collector.collected_count > 0
     if outcome != pytest.ExitCode.OK and not only_filtered:
         details = (captured_out.getvalue() + captured_err.getvalue()).strip()
         raise RuntimeError(f"Die Tests ließen sich nicht sammeln (Exit {int(outcome)}).\n{details}")
     return collector
+
+
+def _is_collected_test(module: object, roots: Sequence[Path]) -> bool:
+    """Ob ``module`` eine Testdatei oder ``conftest.py`` aus einem der gesammelten Orte ist."""
+    file = getattr(module, "__file__", None)
+    if not isinstance(file, str):
+        return False
+    path = Path(file).resolve()
+    if not (
+        path.name == "conftest.py" or path.name.startswith("test_") or path.stem.endswith("_test")
+    ):
+        return False
+    return any(path == root or path.is_relative_to(root) for root in roots)
 
 
 def main() -> int:
