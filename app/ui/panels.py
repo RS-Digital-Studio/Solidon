@@ -2929,8 +2929,9 @@ class ObjectTree(QWidget):
         # „Quader“ stand „253,44 x 190,08 x 12,67 mm“ in 117 von 152 Punkten,
         # obwohl der Name den Rest nicht brauchte. Was die Namen übrig lassen,
         # bekommt das Maß; erst wenn beide zusammen zu breit sind, gilt der
-        # Anteil, und der Name behält die Mehrheit.
-        names = self.tree.sizeHintForColumn(0)
+        # Anteil, und der Name behält die Mehrheit. Zu den Namen zählt ihre
+        # Überschrift: Neben „Box“ blieb „Object“ sonst nur halb stehen.
+        names = max(self.tree.sizeHintForColumn(0), self.tree.header().sectionSizeHint(0))
         shared = max(heading, min(needed, max(int(free * MEASURE_SHARE), free - names)))
         self.tree.header().resizeSection(1, max(0, min(shared, free)))
         # **Und reicht die Karte für beide nicht, wird sie breiter, bis LEFT_MAX**
