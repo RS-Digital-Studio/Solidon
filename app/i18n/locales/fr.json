@@ -1518,6 +1518,8 @@
   "Der Körper folgt jetzt der eingestellten Stellung.": "Le corps suit maintenant la pose définie.",
   "Der Körper hat bereits echte Flächen und Kanten.": "Le corps a déjà de vraies faces et arêtes.",
   "Der Körper hat bereits echte Flächen und Kanten. Die Umwandlung lässt ihn, wie er ist.": "Le corps a déjà de vraies faces et arêtes. La conversion le laisse tel quel.",
+  "Der Körper hat nur ein druckbares Teil und einen Splitter, den der Drucker nicht abbildet.": "Le corps n'a qu'une seule pièce imprimable et un éclat que l'imprimante ne reproduit pas.",
+  "Der Körper hat nur ein druckbares Teil und {count} Splitter, die der Drucker nicht abbildet.": "Le corps n'a qu'une seule pièce imprimable et {count} éclats que l'imprimante ne reproduit pas.",
   "Der Körper hat schon weniger Dreiecke als das Ziel, es gibt nichts zu verringern.": "Le corps a déjà moins de triangles que la cible, il n'y a donc rien à réduire.",
   "Der Körper hat sich beim Formen umgestülpt — für diese Stärke ist seine Wand zu dünn.": "Le corps s'est retourné pendant la sculpture — sa paroi est trop mince pour cette intensité.",
   "Der Körper hat sich beim Glätten umgestülpt — für so viele Durchgänge ist seine Wand zu dünn.": "Le lissage a retourné le corps comme un gant — sa paroi est trop mince pour autant de passes.",

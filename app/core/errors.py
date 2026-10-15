@@ -215,6 +215,12 @@ SPLIT_AND_RETRY = Action(
 RECOUNT_AND_RETRY = Action(
     "recount_and_retry", _("Stückzahl anpassen und erneut versuchen"), primary=True
 )
+#: Für eine Zerlegung, der neben einem druckbaren Teil nur Splitter bleiben:
+#: den Schritt mit dem Cursor auf *Splitter behalten* öffnen
+#: (``values["field"] = "keep_tiny"``), eingelöst wie *Größe ändern*
+#: (``change_step``). Die Absage sagte „aus einem Stück“, während der
+#: Prüfbericht zwei Teile meldete, und verschwieg den Schalter (FD-113).
+KEEP_SPLINTERS = Action("change_step", _("Splitter behalten"), primary=True)
 #: Für ein Netz, das zum Teilen schon zu dicht ist: *Dreiecke verringern* vor
 #: den angehaltenen Schritt, dann derselbe Schritt noch einmal — das vierte
 #: Geschwister von ``REPAIR_AND_RETRY`` (``History.decimate_and_retry``). Die

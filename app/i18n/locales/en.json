@@ -1518,6 +1518,8 @@
   "Der Körper folgt jetzt der eingestellten Stellung.": "The body now follows the pose that was set.",
   "Der Körper hat bereits echte Flächen und Kanten.": "The body already has true faces and edges.",
   "Der Körper hat bereits echte Flächen und Kanten. Die Umwandlung lässt ihn, wie er ist.": "The body already has true faces and edges. The conversion leaves it as it is.",
+  "Der Körper hat nur ein druckbares Teil und einen Splitter, den der Drucker nicht abbildet.": "The body has only one printable part and one sliver the printer cannot reproduce.",
+  "Der Körper hat nur ein druckbares Teil und {count} Splitter, die der Drucker nicht abbildet.": "The body has only one printable part and {count} slivers the printer cannot reproduce.",
   "Der Körper hat schon weniger Dreiecke als das Ziel, es gibt nichts zu verringern.": "The body already has fewer triangles than the target, so there is nothing to reduce.",
   "Der Körper hat sich beim Formen umgestülpt — für diese Stärke ist seine Wand zu dünn.": "The body turned inside out while sculpting — its wall is too thin for this strength.",
   "Der Körper hat sich beim Glätten umgestülpt — für so viele Durchgänge ist seine Wand zu dünn.": "Smoothing turned the body inside out — its wall is too thin for that many passes.",

@@ -1518,6 +1518,8 @@
   "Der Körper folgt jetzt der eingestellten Stellung.": "O corpo segue agora a pose definida.",
   "Der Körper hat bereits echte Flächen und Kanten.": "O corpo já tem faces e arestas verdadeiras.",
   "Der Körper hat bereits echte Flächen und Kanten. Die Umwandlung lässt ihn, wie er ist.": "O corpo já tem faces e arestas verdadeiras. A conversão deixa-o como está.",
+  "Der Körper hat nur ein druckbares Teil und einen Splitter, den der Drucker nicht abbildet.": "O corpo tem apenas uma peça imprimível e uma lasca que a impressora não reproduz.",
+  "Der Körper hat nur ein druckbares Teil und {count} Splitter, die der Drucker nicht abbildet.": "O corpo tem apenas uma peça imprimível e {count} lascas que a impressora não reproduz.",
   "Der Körper hat schon weniger Dreiecke als das Ziel, es gibt nichts zu verringern.": "O corpo já tem menos triângulos do que o alvo, por isso não há nada a reduzir.",
   "Der Körper hat sich beim Formen umgestülpt — für diese Stärke ist seine Wand zu dünn.": "O corpo virou-se do avesso durante a modelação — a sua parede é fina demais para esta intensidade.",
   "Der Körper hat sich beim Glätten umgestülpt — für so viele Durchgänge ist seine Wand zu dünn.": "O corpo virou-se do avesso ao ser suavizado — a sua parede é fina demais para tantas passagens.",

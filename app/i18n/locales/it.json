@@ -1518,6 +1518,8 @@
   "Der Körper folgt jetzt der eingestellten Stellung.": "Il corpo ora segue la posa impostata.",
   "Der Körper hat bereits echte Flächen und Kanten.": "Il corpo ha già facce e spigoli veri.",
   "Der Körper hat bereits echte Flächen und Kanten. Die Umwandlung lässt ihn, wie er ist.": "Il corpo ha già facce e spigoli veri. La conversione lo lascia com'è.",
+  "Der Körper hat nur ein druckbares Teil und einen Splitter, den der Drucker nicht abbildet.": "Il corpo ha un solo pezzo stampabile e una scheggia che la stampante non riproduce.",
+  "Der Körper hat nur ein druckbares Teil und {count} Splitter, die der Drucker nicht abbildet.": "Il corpo ha un solo pezzo stampabile e {count} schegge che la stampante non riproduce.",
   "Der Körper hat schon weniger Dreiecke als das Ziel, es gibt nichts zu verringern.": "Il corpo ha già meno triangoli dell'obiettivo, quindi non c'è nulla da ridurre.",
   "Der Körper hat sich beim Formen umgestülpt — für diese Stärke ist seine Wand zu dünn.": "Il corpo si è rovesciato durante la modellazione: la sua parete è troppo sottile per questa intensità.",
   "Der Körper hat sich beim Glätten umgestülpt — für so viele Durchgänge ist seine Wand zu dünn.": "Il corpo si è rovesciato durante la levigatura — per così tanti passaggi la sua parete è troppo sottile.",
