@@ -109,7 +109,8 @@ gleich:
 - **V4:** nur mit einer vor dem Klick gebundenen Vorhersage
   (`prediction_bound`: Datei und SHA256 der Vorhersage, die vor dem Klick
   freigegeben wurde). Eine nach dem Lauf, aber vor dem Ansehen geschriebene ist
-  Teilbeleg, das Urteil *offen*.
+  Teilbeleg, das Urteil *offen*. Gebunden wird am Vorhersagetor des Falls
+  (Variantensatz `vorhersage`, Ablauf in Plan D0 §2.9).
 
 *Gut nach Fix* und die Zuordnung eines Funds zu seiner Zelle regelt Konzept §4
 („Urteil und Schwere“).

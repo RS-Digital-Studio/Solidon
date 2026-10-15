@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from app.ui.motion import ACCENT_MS, MEDIUM_MS, SHORT_MS
+from tools import function_prediction as prediction
 from tools import function_surface as surfaces
 from tools import function_tooltips as tooltips
 from tools.function_capture import run_reference_factor
@@ -216,16 +217,18 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
         self.application.processEvents()
         time.sleep(0.005)
 
-    def run_steps(
-        self, label: str, steps: Sequence[Step], timeout_s: float = PHASE_TIMEOUT_S
-    ) -> bool:
+    def run_steps(self, label: str, steps: Sequence[Step], timeout_s: float | None = None) -> bool:
         """Fährt Schritte; ein Fund oder Fehler steht danach im Protokoll.
 
         ``label`` ist die Phase jedes Eintrags in ``steps``, den diese Schritte
         schreiben (``Walk.phase``). Tiefer als hier geschachtelte Ereignisschleifen
         gehören einem Fenster, das während ``pump`` aufging; der Automat schließt
-        es wie eines aus seinen Schritten (``StepMachine.nested``).
+        es wie eines aus seinen Schritten (``StepMachine.nested``). Ohne
+        ``timeout_s`` gilt :data:`PHASE_TIMEOUT_S`, mit Vorhersagetor dazu seine
+        Frist (``function_prediction.extra_s``).
         """
+        if timeout_s is None:
+            timeout_s = PHASE_TIMEOUT_S + prediction.extra_s(self.variant)
         self.walker.phase = label
         machine = StepMachine(
             qt_schedule,
@@ -1101,6 +1104,12 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
                 unmeasured(self.data, "preview", "die Zeile zeigt keine Vorschau")
 
         applying, finish = self.apply_steps(acting)
+        # V4: vor dem Klick, der übernimmt, eine Vorhersage binden (FD-168).
+        gate = (
+            prediction.gate_for(self, self.apply_target or target, folder=self.folder / "v4")
+            if acting is not None and self.variant.predict
+            else None
+        )
         self.walker.before_target = remember_focus
         try:
             self.run_steps(
@@ -1112,7 +1121,9 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
                     self.still_step("fläche steht still", self.surface),
                     Step("fläche aufnehmen", take_surface),
                     Step("vor dem übernehmen", before_apply),
+                    *(gate.before_steps() if gate is not None else ()),
                     *applying,
+                    *(gate.after_steps() if gate is not None else ()),
                 ],
             )
             finish()
@@ -1157,7 +1168,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
             click = self.ports.next_click(name)
         except LookupError as error:
             # Die gewählte Stelle ist die Stelle — kein Ersatz durch den Körper.
-            unmeasured(self.data, "spot", f"{name}: {error}")
+            unmeasured(self.data, "spot", str(error))
             return None
         point = self.ports.centre(click.rect)
         hit = self.ports.widget_under(point)
@@ -1870,11 +1881,25 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
             )
             if decided["at_once"]:
                 before.update(deepcopy(self.data))
+                # V4 auch im Sprachfall: vor dem Klick der Soforthandlung (FD-168).
+                row_id = str(self.row.get("id") or "")
+                gate = (
+                    prediction.gate_for(
+                        self,
+                        target,
+                        folder=self.folder / "v4" / safe_name(row_id),
+                        label=lambda name: surfaces.picture_label(self.variant, row_id, name),
+                    )
+                    if self.variant.predict
+                    else None
+                )
                 machine.insert(
                     [
+                        *(gate.before_steps() if gate is not None else ()),
                         self.walker.step(target),
                         self.still_step("geöffnete fläche steht still", self.surface),
                         Step("geöffnete fläche aufnehmen", opened),
+                        *(gate.after_steps() if gate is not None else ()),
                     ]
                 )
 

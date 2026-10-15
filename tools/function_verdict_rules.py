@@ -11,7 +11,8 @@ eines Belegs machen (Konzept §4, „Urteil und Schwere“):
 * **V4 nur mit gebundener Vorhersage** (FD-148): ``prediction_bound`` nennt
   die Datei, die vor dem Klick freigegeben wurde, mit ihrem SHA256. Eine
   Vorhersage, die erst nach dem Lauf entstand, ist ein Teilbeleg und kein
-  „gut“.
+  „gut“. Nennt die Bindung diesen Lauf, muss sein Vorhersagetor genau sie
+  freigegeben haben (FD-168, ``tools/function_prediction.py``).
 
 Aufgerufen aus ``function_report._verdict_problems``.
 """
@@ -19,7 +20,7 @@ Aufgerufen aus ``function_report._verdict_problems``.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any, Final
 
 from tools.function_checks import CHECKPOINTS, DESIGN_PARTS
@@ -46,9 +47,14 @@ GOOD_OVER_OPEN: Final = "gut trotz offenem Fund an der Zelle"
 GOOD_OVER_FIXED: Final = "„gut“, obwohl hier ein Fund behoben ist: gut_nach_fix"
 FIX_WITHOUT_CELL: Final = "gut_nach_fix ohne behobenen Fund dieser Zelle"
 UNBOUND_PREDICTION: Final = "V4 ohne vor dem Klick gebundene Vorhersage (prediction_bound)"
+UNRELEASED_PREDICTION: Final = (
+    "prediction_bound nennt keine Vorhersage, die das Vorhersagetor dieses Laufs freigab"
+)
 
 _SHA256: Final = re.compile(r"\b[0-9a-f]{64}\b")
 _MACHINE_PATH: Final = re.compile(r"(?<!\w)[A-Za-z]:[\\/]")
+#: Eine Rundenkennung vor dem Pfad (``v4:cases/…``, Plan D0 §2.9) — kein Laufwerk.
+_ROUND_KEY: Final = re.compile(r"^[A-Za-z]\w+:")
 
 
 def covered(subject: int | str | None) -> frozenset[int | str]:
@@ -107,6 +113,43 @@ def prediction_problems(entry: Mapping[str, Any], subject: int | str | None) -> 
     bound = str(entry.get("prediction_bound") or "")
     if not _SHA256.search(bound) or _MACHINE_PATH.search(bound):
         return [UNBOUND_PREDICTION]
+    return []
+
+
+def releases_of(protocols: Iterable[Mapping[str, Any]]) -> dict[str, frozenset[str]]:
+    """Je Zeile die Bindungen, die das Vorhersagetor dieses Laufs freigab (FD-168).
+
+    Aus ``prediction.bound`` der Protokolle, Funktions- wie Sprachfall:
+    Pfad relativ zum Lauf und SHA256 der Vorhersage vor dem Klick.
+    """
+    found: dict[str, set[str]] = {}
+    for protocol in protocols:
+        gate = protocol.get("prediction")
+        row = protocol.get("row")
+        row_id = str(row.get("id") if isinstance(row, Mapping) else row or "")
+        if isinstance(gate, Mapping) and gate.get("bound"):
+            found.setdefault(row_id, set()).add(" ".join(str(gate["bound"]).split()))
+    return {row: frozenset(bounds) for row, bounds in found.items()}
+
+
+def release_problems(
+    entry: Mapping[str, Any],
+    subject: int | str | None,
+    releases: Mapping[str, frozenset[str]] | None,
+) -> list[str]:
+    """Eine Bindung an diesen Lauf muss eine sein, die sein Vorhersagetor freigab (FD-168).
+
+    Eine Bindung mit Rundenkennung davor (``v4:cases/…``) gehört einem anderen
+    Lauf; sie prüft hier nur ihre Form (:func:`prediction_problems`). Ohne die
+    Protokolle des Laufs (``releases`` ``None``) wird nichts geprüft.
+    """
+    bound = " ".join(str(entry.get("prediction_bound") or "").split())
+    if subject != "V4" or releases is None or not bound:
+        return []
+    if _ROUND_KEY.match(bound):
+        return []
+    if bound not in releases.get(str(entry.get("row") or ""), frozenset()):
+        return [UNRELEASED_PREDICTION]
     return []
 
 

@@ -101,6 +101,8 @@ PHASES: Final[dict[str, tuple[str, ...]]] = {
         "drag",
     ),
     "lizenz": ("licence",),
+    # Der Hauptweg mit dem Vorhersagetor vor dem Übernehmen (V4, FD-168).
+    "vorhersage": ("main",),
     "zoll": ("surface",),
     "skalierung": ("surface",),
     "dunkel": ("surface",),
@@ -121,6 +123,9 @@ class Variant:
     :data:`PHASES`). ``phases`` beschränkt auf einzelne davon — die Nachprüfung
     einer Zeile nach einem Fix fährt nur, was der Fix berührt (Konzept §7).
     ``motion`` falsch heißt: Lauf mit ``SOLIDON3D_MOTION=aus`` (G8).
+    ``predict`` hält vor jedem Handlungsklick an, bis eine Vorhersage gebunden
+    ist (``function_prediction``, V4): der Satz ``vorhersage`` und die
+    Sprachfälle daneben.
     """
 
     set: str = "basis"
@@ -134,6 +139,7 @@ class Variant:
     window_size: str = ""
     motion: bool = True
     phases: tuple[str, ...] = ()
+    predict: bool = False
 
     @classmethod
     def of(cls, data: Mapping[str, Any] | None) -> Variant:
@@ -213,6 +219,7 @@ FIXED_VARIANT_SETS: Final[dict[str, tuple[dict[str, Any], ...]]] = {
     ),
     "dunkel": ({"set": "dunkel", "theme": "dark"},),
     "bewegung": ({"set": "bewegung", "motion": False},),
+    "vorhersage": ({"set": "vorhersage", "predict": True},),
     "sprachen": (),
 }
 

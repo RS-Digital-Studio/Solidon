@@ -577,8 +577,23 @@ def _v3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
 
 
 def _v4(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
-    # Nur Stufe B: Die Vorhersage steht im Urteil (``prediction``).
-    return Outcome("V4", "B", "stufe_b", "Vorhersage im Urteil")
+    # Nur Stufe B: Die Vorhersage steht im Urteil (``prediction``). Lief der Fall
+    # mit dem Vorhersagetor, nennt die Messung die Bindung, die das Urteil als
+    # ``prediction_bound`` trägt, oder warum es keine gibt (FD-168).
+    gate = _map(protocol, "prediction")
+    if gate is None:
+        return Outcome("V4", "B", "stufe_b", "Vorhersage im Urteil")
+    bound = gate.get("bound")
+    if bound:
+        return Outcome(
+            "V4",
+            "B",
+            "stufe_b",
+            "Vorhersage vor dem Klick gebunden",
+            {"bound": bound, "after": list(gate.get("after") or ())},
+        )
+    reason = str(gate.get("reason") or "keine Vorhersage freigegeben")
+    return Outcome("V4", "B", "stufe_b", f"ohne gebundene Vorhersage: {reason}", {"bound": None})
 
 
 def _v5(protocol: Mapping[str, Any], context: Context) -> Outcome | None:

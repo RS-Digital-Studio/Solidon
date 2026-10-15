@@ -76,7 +76,13 @@ from tools.function_judges import compare_themes, judge_sizes
 from tools.function_list import NOT_APPLICABLE_REASONS, ROW_KINDS
 from tools.function_points import judge_case, judge_design, judge_licence
 from tools.function_samples import BrokenSample, sample_context, sample_protocol
-from tools.function_verdict_rules import bound_problems, fix_problems, prediction_problems
+from tools.function_verdict_rules import (
+    bound_problems,
+    fix_problems,
+    prediction_problems,
+    release_problems,
+    releases_of,
+)
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 
@@ -648,6 +654,7 @@ def check_verdicts(
     rows: Iterable[str] | None = None,
     findings: Mapping[str, Finding] | None = None,
     round_rules: bool = True,
+    releases: Mapping[str, frozenset[str]] | None = None,
 ) -> Checked:
     """Prüft Urteile gegen das Format, die Messung der Stufe A und die Funddatei.
 
@@ -659,7 +666,8 @@ def check_verdicts(
     Funde nicht mehr trägt, steht als abgewiesen in der Abhakliste und wird
     nachgeurteilt. Der Wächter über die versionierten Urteile prüft ihre Form
     ohne sie: Die Funddatei wächst und wird behoben, die Urteile einer Runde
-    bleiben, was sie zu ihrer Zeit waren.
+    bleiben, was sie zu ihrer Zeit waren. ``releases`` sind die Bindungen, die
+    das Vorhersagetor des Laufs freigab (``releases_of``, FD-168).
     """
     known = frozenset(rows) if rows is not None else None
     accepted: list[dict[str, Any]] = []
@@ -670,6 +678,7 @@ def check_verdicts(
         if round_rules:
             subject = subject_of(entry)
             problems += prediction_problems(entry, subject)
+            problems += release_problems(entry, subject, releases)
             problems += fix_problems(entry, subject, findings)
         key = (str(entry.get("row")), str(subject_of(entry)), str(entry.get("reviewer")))
         if key in seen:
@@ -1496,6 +1505,7 @@ def write(
             print(f"ungültig: {problem}")
         return 1
     protocols = [protocol for _where, protocol in readings]
+    released = releases_of(protocols)
     all_rows = [dict(row) for row in rows] if rows is not None else _rows_of(out, protocols)
     used = context if context is not None else repository_context()
     judged: list[tuple[str, Mapping[str, Any], CaseOutcome]] = []
@@ -1557,7 +1567,7 @@ def write(
         given = verdicts if verdicts is not None and packages == [name] else None
         read[name] = read_verdict_file(given or state / f"urteile-{package_slug(name)}.toml")
         checked_of[name] = check_verdicts(
-            read[name][0], outcomes=cases_of[name], rows=ids, findings=found
+            read[name][0], outcomes=cases_of[name], rows=ids, findings=found, releases=released
         )
         run = run_folder(read[name][1]) or str(out)
         rounds.setdefault(run, {})[name] = checked_of[name].accepted

@@ -4,7 +4,7 @@
     .venv\\Scripts\\python.exe tools/file_acceptance.py inventory --source <bestand> --out <ordner>
     .venv\\Scripts\\python.exe tools/file_acceptance.py inventory --functions --out <ordner>
         [--package D4] [--rows <kennung>,…] [--phases main,escape]
-        [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel]
+        [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel,bewegung,vorhersage]
     .venv\\Scripts\\python.exe tools/file_acceptance.py run --out <ordner> [--first 1] [--last 9]
         [--again] [--timeout <s>] [--screen <name oder nummer>]
     .venv\\Scripts\\python.exe tools/file_acceptance.py report --out <ordner>
@@ -477,7 +477,7 @@ def function_cases(
 
         spoken = tuple(languages) if languages is not None else available_languages()
         packages = {str(row.get("package")) for row in chosen}
-        cases += language_cases(rows, packages, spoken, number)
+        cases += language_cases(rows, packages, spoken, number, "vorhersage" in variant_sets)
     return cases
 
 
@@ -1004,7 +1004,7 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
     """
     sys.path.insert(0, str(ROOT))
     from app.core.process import no_error_dialogs, process_group_options, terminate_process_tree
-    from tools.function_cases import RESTART_EXIT, most_restarts
+    from tools.function_cases import RESTART_EXIT, most_restarts, prediction_wait_s
 
     cases = read_cases(out)
     if any(case.kind in ("function", "language") for case in cases):
@@ -1038,6 +1038,7 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
         restarts = (
             most_restarts(read_rows(out).values(), case.row) if case.kind == "language" else 0
         )
+        waiting = prediction_wait_s(case, read_rows(out).values())  # Vorhersagetor (V4)
         mode = "w"
         while True:
             with (
@@ -1054,7 +1055,7 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
                     **process_group_options(no_window=True),
                 )
                 try:
-                    code = process.wait(timeout=case_timeout(case, timeout))
+                    code = process.wait(timeout=case_timeout(case, timeout) + waiting)
                     timed_out = False
                 except subprocess.TimeoutExpired:
                     terminate_process_tree(process)

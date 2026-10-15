@@ -182,6 +182,19 @@ def sample_protocol() -> dict[str, Any]:
             },
         ],
         "spot": {"point": [640, 410], "covered_by": None},
+        # Das Vorhersagetor vor dem Übernehmen (V4, FD-168): gebunden.
+        "prediction": {
+            "ready": "cases/001/v4/ready.json",
+            "target": "feature.apply",
+            "bound": f"cases/001/v4/prediction-before-click.json {'c' * 64}",
+            "path": "cases/001/v4/prediction-before-click.json",
+            "sha256": "c" * 64,
+            "step_index": 6,
+            "image_index": 3,
+            "reason": None,
+            "rejected": [],
+            "after": ["cases/001/v4-nachher.png"],
+        },
         "states": {
             "before": before,
             "preview": before,

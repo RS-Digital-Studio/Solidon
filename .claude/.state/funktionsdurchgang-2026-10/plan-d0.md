@@ -277,6 +277,7 @@ In `app/core/guides.py`: `TARGET_PROPERTY = "guideTarget"`, `menubar_name(msgid,
 | `search{}` | je Probe Rang und Treffer |
 | `place` | Ort (karte, menue, werkzeugleiste, kuerzel, kontext), Pfad |
 | `spot` | E4: an Merkmal oder Kante `point` und `covered_by` vor dem Übernehmen; an einer Handlung am ganzen Körper `frame` der geänderten `bodies` im Ergebnisbild, `view`, `inside`, `covered_by` (`tools/function_spot.py`) |
+| `prediction` | V4 mit Vorhersagetor: `ready`, `target`, `bound` (Pfad und SHA256), `step_index`, `image_index`, `reason` ohne Bindung, `rejected`, `after` (§2.9) |
 | `layout[]`, `fonts[]`, `state_images[]`, `contrast[]`, `icons[]`, `animations[]`, `scrollbars[]` | G1–G8, Z6 |
 | `hover_labels[]`, `empty_states[]` | I1, Z4 |
 | `licence_runs{}`, `halt`, `insertion`, `switch` | Prüfpunkte 18, 15, 16 |
@@ -313,6 +314,37 @@ Ein Eintrag `[[verdict]]` je Urteil. Die Schlüssel sind englisch (Schemata), di
 | `design_judgement` | bei G9, Z3, Z4, I1–I6 und Vergleich | `true`: Gestaltungsurteil, kein bewiesener Fehler |
 | `prediction` | bei V4 | vor dem Übernehmen geschriebene Vorhersage |
 | `prediction_bound` | bei V4 *gut* | Pfad (relativ zum Lauf) und SHA256 der vor dem Klick freigegebenen Vorhersagedatei; ohne Bindung ist V4 *offen* (`tools/function_verdict_rules.py`) |
+
+**Wie ein Prüfer die Vorhersage schreibt (V4, FD-168).** Gebunden wird im
+Fallprozess, nicht danach (`tools/function_prediction.py`):
+
+1. Inventar mit dem Variantensatz `vorhersage` (je Zeile ein Hauptweg mit Tor
+   vor dem Übernehmen); steht `sprachen` daneben, halten auch die Sprachfälle
+   vor jeder Soforthandlung an. Gefahren wird wie jeder Lauf (`run`); ein Fall
+   wartet je Klick höchstens `PREDICTION_WAIT_S` (600 s), der Elternprozess
+   rechnet die Frist dazu.
+2. Vor dem Klick legt der Fall `cases/<nr>/v4/ready.json` an (im Sprachfall
+   `cases/<nr>/v4/<zeile>/ready.json`; `stdout.log` nennt den Pfad mit
+   „V4 wartet“): Bilder vor dem Klick mit SHA256, die sichtbaren Texte,
+   `nonce`, `commit`, `row`, `target`, `before_sha256`.
+3. Der Prüfer sieht nur diese Bilder an — kein Ergebnisbild, keinen anderen
+   Fall — und schreibt mit dem Schreibwerkzeug `prediction.json` daneben
+   (UTF-8): `nonce`, `commit`, `row`, `before_sha256` unverändert aus
+   `ready.json`; `title`, `first_sentence`, `preview`, wie er sie liest;
+   `prediction`, was der Klick seiner Erwartung nach tut.
+4. Das Tor prüft die Bindung; gehört die Datei nicht zum Bild oder ist ein
+   Feld leer, steht der Grund in `prediction.rejected` des Protokolls, und es
+   wartet weiter auf eine gültige. Eine gültige kopiert es unverändert nach
+   `prediction-before-click.json`, schreibt `release.json` (SHA256, Zeit,
+   Schritt- und Bildindex) und gibt den Klick frei; danach `after.json` mit dem
+   Bild nach dem Klick.
+5. Das Protokoll trägt `prediction.bound` (`cases/<nr>/v4/prediction-before-click.json <sha256>`).
+   Das Urteil übernimmt ihn wörtlich als `prediction_bound`, die Vorhersage
+   als `prediction`, und vergleicht mit dem Bild danach. `report` nimmt eine
+   Bindung an diesen Lauf nur, wenn sein Tor genau sie freigab
+   (`release_problems`); aus einer anderen Runde mit deren Kennung davor
+   (`v4:cases/…`). Ohne gültige Vorhersage fällt der Klick nach der Frist
+   trotzdem, `prediction.reason` sagt warum, und V4 bleibt *offen*.
 
 Jede Runde (Kopfkommentar eines Prüfers) nennt vor ihren Urteilen den Lauf, an
 dem sie urteilt, als `[[run]]`, eine Runde wiederholt ihn gleich lautend.
@@ -370,7 +402,7 @@ Jedes Skill erhält eine Tabelle mit den Spalten `Kennung | Zählgröße | Schwe
 
 | Befehl | Wirkung |
 |---|---|
-| `inventory --functions --out <ordner> [--package D4] [--rows …] [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel]` | Fälle aus Funktionsliste und Spezifikationen, Szenen nach `<out>/scenes/`, Menüleiste nach `<out>/menubar.json` |
+| `inventory --functions --out <ordner> [--package D4] [--rows …] [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel,bewegung,vorhersage]` | Fälle aus Funktionsliste und Spezifikationen, Szenen nach `<out>/scenes/`, Menüleiste nach `<out>/menubar.json`; `vorhersage` hält vor dem Handlungsklick am Vorhersagetor an, auch die Sprachfälle daneben (§2.9) |
 | `run --out … [--first --last --again --timeout] [--screen <name oder index>]` | je Fall ein Prozess mit eigenem Profil; wieder aufnehmbar |
 | `report --out … [--package] [--verdicts <pfad>] [--checklist <pfad>]` | Zusammenfassung, Ergebnisse je Prüfpunkt, Abhakliste; Ausgang 1 nur bei ungültigen Eingaben |
 

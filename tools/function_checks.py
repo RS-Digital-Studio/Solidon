@@ -344,7 +344,7 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         "tabelle",
         _keys(
             "language", "theme", "unit", "licence", "preconditions", "platform", "screen",
-            "scale", "window_size", "motion", "set", "phases", "placed",
+            "scale", "window_size", "motion", "set", "phases", "placed", "predict",
         ),
         {"theme": ("light", "dark"), "unit": DISPLAY_UNITS, "licence": VARIANT_LICENCES},
         required=True,
@@ -489,6 +489,16 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     # Szene), nicht die Ladezeit der Startszene — *Abbrechen* erscheint nach
     # der Uhr dieses Rechners.
     "abort": ProtocolField("tabelle", _keys("eval_s", "cancel_shown_s", "clicked")),
+    # V4: das Vorhersagetor vor dem Handlungsklick (``function_prediction``,
+    # FD-168). ``bound`` ist Pfad relativ zum Lauf und SHA256 der freigegebenen
+    # Vorhersage; ohne Bindung sagt ``reason`` warum.
+    "prediction": ProtocolField(
+        "tabelle",
+        _keys(
+            "ready", "target", "bound", "path", "sha256", "step_index", "image_index",
+            "reason", "rejected", "after",
+        ),
+    ),
     "findings": ProtocolField(
         "liste", _keys("phase", "kind", "target", "detail"), {"kind": BENCH_FINDINGS}
     ),
@@ -787,13 +797,15 @@ CRITERIA: Final[dict[str, Criterion]] = {
             "A",
             ("fields",),
         ),
+        # ``prediction``: das Vorhersagetor im Protokoll (FD-168); die
+        # Vorhersage selbst steht im Urteil.
         _criterion(
             "V4",
             "Vorhersage vor dem Übernehmen",
             "Abweichung vom Ergebnis ist ein Fund",
             (),
             "B",
-            (),
+            ("prediction",),
         ),
         _criterion("V5", "Meldungen", "jede Handlung löst das Problem", (), "AB", ("messages",)),
         _criterion(

@@ -122,13 +122,19 @@ def language_groups(rows: Iterable[Mapping[str, Any]]) -> dict[str, list[Setup]]
 
 
 def language_cases(
-    rows: Iterable[Mapping[str, Any]], packages: Iterable[str], spoken: Iterable[str], number: int
+    rows: Iterable[Mapping[str, Any]],
+    packages: Iterable[str],
+    spoken: Iterable[str],
+    number: int,
+    predict: bool = False,
 ) -> list[Any]:
     """Die Sprachfälle der Pakete: je Paket, Einrichtung und Sprache einer, ab ``number``.
 
     Die Vorbedingungen der Einrichtung stehen in der Variante des Falls;
     ``file_acceptance.function_child`` wendet sie vor dem Start der Anwendung an
-    und legt die eigenen Bausteine in den Nutzerordner.
+    und legt die eigenen Bausteine in den Nutzerordner. ``predict`` hält vor dem
+    Klick jeder Soforthandlung am Vorhersagetor an (``function_prediction``,
+    V4) — mit dem Satz ``vorhersage`` daneben.
     """
     from tools.file_acceptance import Case
     from tools.function_setup import Variant
@@ -143,6 +149,8 @@ def language_cases(
                 entry: dict[str, Any] = {"set": "sprachen", "language": language}
                 if setup.preconditions:
                     entry["preconditions"] = dict(setup.preconditions)
+                if predict:
+                    entry["predict"] = True
                 name = case_row(package, setup)
                 variant = Variant.of(entry).as_dict()
                 cases.append(
@@ -167,6 +175,20 @@ def most_restarts(rows: Iterable[Mapping[str, Any]], case: str) -> int:
     mehr Neustarts als Zeilen hieße, er käme nicht voran.
     """
     return len(rows_of(rows, case))
+
+
+def prediction_wait_s(case: Any, rows: Iterable[Mapping[str, Any]]) -> float:
+    """Wie viel länger der Prozess eines Falls mit Vorhersagetor laufen darf (V4, FD-168).
+
+    Je Klick einmal die Frist des Tors: ein Klick im Funktionsfall, im Sprachfall
+    höchstens einer je Zeile. Ohne ``predict`` nichts.
+    """
+    from tools.function_prediction import PREDICTION_WAIT_S
+
+    if not (case.variant or {}).get("predict"):
+        return 0.0
+    clicks = len(rows_of(rows, case.row)) if case.kind == "language" else 1
+    return PREDICTION_WAIT_S * clicks
 
 
 def case_row(package: str, setup: Setup) -> str:
