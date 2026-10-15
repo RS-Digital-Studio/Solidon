@@ -32,9 +32,11 @@ from typing import Any, Final
 
 from app.ui.motion import ACCENT_MS, MEDIUM_MS, SHORT_MS
 from tools import function_surface as surfaces
+from tools import function_tooltips as tooltips
 from tools.function_capture import run_reference_factor
 from tools.function_checks import (
     FAULT_PHASE,
+    NO_DRAFT,
     NO_RESPONSE,
     WITHOUT_DIALOG,
 )
@@ -1014,7 +1016,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
         inputs = self.spec.get("inputs") or {}
         before = self.scene_now()
         if not inputs:
-            unmeasured(self.data, "states.escape", "keine Eingaben, kein Entwurf zum Verwerfen")
+            unmeasured(self.data, "states.escape", NO_DRAFT)
             return
         self.run_steps(
             "escape",
@@ -1444,6 +1446,11 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
             # Noch innerhalb der modalen Schleife: Nach run_steps hat der
             # Automat den Dialog bereits mit Escape geschlossen.
             self.picture("04-fehlfall")
+            # Der Sperrgrund eines grauen Ziels steht nur in seiner Kurzhilfe:
+            # als eigenes Bild, wie der Kunde ihn beim Überfahren sieht (FD-149).
+            self.data["images"].extend(
+                tooltips.reason_pictures(self.widget, targets, self.folder, self.out)
+            )
 
         computed = {"seen": False}
 

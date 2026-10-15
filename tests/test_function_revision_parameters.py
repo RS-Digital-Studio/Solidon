@@ -105,12 +105,21 @@ def _flow(monkeypatch: pytest.MonkeyPatch, *, opens: bool) -> tuple[Any, list[st
         lambda root: {"name": "breite", "value": 20.0, "unit": "mm", "expression": ""},
     )
     monkeypatch.setattr("tools.file_acceptance.changed_value", lambda value: 22.0)
-    # Die festen Namen der zwei Wege kennt der Wortschatz, sobald guide_targets
-    # sie auflöst (``parameters.first.label`` aus Paket F7, ``history.last``).
-    known = {PARAMETER_ROW, HISTORY_ENTRY}
-    real = guides.is_target
-    monkeypatch.setattr(guides, "is_target", lambda name: name in known or real(name))
     return flow, targets
+
+
+def test_the_vocabulary_knows_both_ways_of_a_parameter() -> None:
+    """Die zwei Wege gehen über feste Namen des Wortschatzes — keine Brücke im Test.
+
+    Bis F7 und F8 zusammenkamen, nahm dieser Test die Namen per Patch als bekannt
+    an; jetzt löst sie der echte Wortschatz auf (``guide_targets``,
+    ``parameters.first.label`` und ``history.last``).
+    """
+    from app.ui import guide_targets
+
+    for name in (PARAMETER_ROW, HISTORY_ENTRY):
+        assert guides.is_target(name), name
+        assert name in guide_targets.RESOLVED, name
 
 
 def _judged_revise(entries: list[dict[str, Any]]) -> Any:

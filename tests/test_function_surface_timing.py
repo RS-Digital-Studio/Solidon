@@ -1,5 +1,6 @@
 """Aufnahme vor Wirkung und vor dem Aufräumen des zweiten nativen Probelaufs."""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -100,7 +101,10 @@ def test_fault_picture_is_taken_while_its_message_is_still_visible(monkeypatch) 
     flow.apply_target = None
     flow.session = SimpleNamespace(last_result=None)
     flow.window = object()
-    flow.data = {"messages": None}
+    flow.data = {"messages": None, "images": []}
+    # Ohne graues Ziel nimmt der Fehlfall kein Bild des Sperrgrunds auf (FD-149).
+    flow.widget = lambda name: None
+    flow.folder = flow.out = Path("cases")
     flow.fault_scene = lambda key: True
     flow.path_steps = list
     flow.input_steps = lambda inputs: []
@@ -129,3 +133,55 @@ def test_fault_picture_is_taken_while_its_message_is_still_visible(monkeypatch) 
     flow.phase_fault()
     assert pictures == [("04-fehlfall", True)]
     assert flow.data["messages"][0]["text"] == "Ungültiger Name"
+
+
+def test_the_reason_of_a_grey_target_is_pictured_in_the_fault_phase(monkeypatch, tmp_path) -> None:
+    """FD-149: Neben ``04-fehlfall`` steht der Sperrgrund jedes grauen Ziels als eigenes Bild.
+
+    Vorher gab es ``function_tooltips.reason_pictures``, aber der Fehlfall rief es
+    nicht: Lauf 002 zeigte unter dem grauen *Auf das Bett setzen* nur den Knopf.
+    """
+    from tools import function_tooltips
+
+    folder = tmp_path / "cases" / "002"
+    flow = object.__new__(function_bench.FunctionFlow)
+    flow.spec = {"fault_case": {"expected": "sperrgrund"}}
+    flow.row = {"target": "finding.action:place_on_bed"}
+    flow.apply_target = None
+    flow.session = SimpleNamespace(last_result=None)
+    flow.window = object()
+    flow.folder, flow.out = folder, tmp_path
+    flow.data = {"messages": None, "images": []}
+    flow.fault_scene = lambda key: True
+    flow.path_steps = list
+    flow.input_steps = lambda inputs: []
+    flow.until_step = lambda name, condition: Step(name, lambda machine: None)
+    flow.widget = lambda name: f"Widget {name}"
+    monkeypatch.setattr(function_surface, "open_dialog", lambda window: None)
+    monkeypatch.setattr(
+        function_surface,
+        "fault_messages",
+        lambda window, targets: [{"kind": "sperrgrund", "text": "Grund", "actions": []}],
+    )
+    monkeypatch.setattr(function_capture, "visible_texts", lambda root: [])
+    asked = []
+
+    def reason_pictures(find, targets, where, out):
+        asked.append(([find(name) for name in targets], where, out))
+        return ["cases/002/04-fehlfall-grund-1.png"]
+
+    monkeypatch.setattr(function_tooltips, "reason_pictures", reason_pictures)
+    flow.picture = lambda name: flow.data["images"].append(f"cases/002/{name}.png")
+
+    def run(label, steps):
+        for step in steps:
+            step.act(None)
+        return True
+
+    flow.run_steps = run
+    flow.phase_fault()
+    assert asked == [(["Widget finding.action:place_on_bed"], folder, tmp_path)]
+    assert flow.data["images"] == [
+        "cases/002/04-fehlfall.png",
+        "cases/002/04-fehlfall-grund-1.png",
+    ]

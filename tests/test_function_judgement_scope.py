@@ -182,15 +182,17 @@ def test_a_late_event_after_a_switch_stays_a_finding() -> None:
 
 
 def test_the_bench_writes_the_reasons_the_judges_read() -> None:
-    """Gehaltener Zwilling: Prüfstand und Urteil lesen dieselben Sätze (FD-128).
+    """Prüfstand und Urteil lesen dieselben Sätze (FD-128): die Konstanten selbst.
 
-    ``function_bench.phase_escape`` schreibt den Satz ohne Entwurf als Text;
-    der Wächter hält ihn gleich :data:`NO_DRAFT`, bis die Zeile die Konstante nimmt.
+    ``function_bench.phase_escape`` schrieb den Satz ohne Entwurf als Text, bis F7
+    und F8 zusammenkamen; jetzt nimmt es :data:`NO_DRAFT`, und der Text steht an
+    einer Stelle.
     """
     root = Path(__file__).resolve().parents[1] / "tools"
     bench = (root / "function_bench.py").read_text(encoding="utf-8")
     switch = (root / "function_switch.py").read_text(encoding="utf-8")
-    assert f'"states.escape", "{NO_DRAFT}"' in bench or "NO_DRAFT" in bench
+    assert '"states.escape", NO_DRAFT)' in bench
+    assert NO_DRAFT not in bench
     for name in ("SWITCH_WITHOUT_INPUTS", "SWITCH_WITHOUT_PREVIEW", "SWITCH_RUN_OVER"):
         assert name in switch, name
 
@@ -335,6 +337,28 @@ def test_a_row_outside_the_register_finds_its_places_through_the_spec() -> None:
     hits = outcome.measurement["website"]
     assert "website/funktionen.html#parametrisch" in hits
     assert len(hits) == 6, hits
+
+
+def test_every_place_a_row_spec_names_exists() -> None:
+    """Die Fundstellen der echten Zeilenspezifikationen treffen Handbuch und Website (FD-150).
+
+    Die Werte kamen mit dem Weg der Zeilen (F7) in ``tests/data/function_rows``;
+    eine Stelle, die es nicht gibt, machte Prüfpunkt 11 erst am Lauf nicht prüfbar.
+    """
+    from tools import function_list, function_promises
+
+    named = {
+        row: entry.values
+        for row, entry in function_list.load_specs().items()
+        if {"manual", "website"} & set(entry.values)
+    }
+    assert {
+        "finding.action:place_on_bed",
+        "Bearbeiten/Parameter anlegen …",
+        "Erzeugen/Bausteine/Gegenstücke setzen …",
+    } <= set(named), sorted(named)
+    problems = {row: function_promises.reference_problems(values) for row, values in named.items()}
+    assert not any(problems.values()), problems
 
 
 @pytest.mark.parametrize(
