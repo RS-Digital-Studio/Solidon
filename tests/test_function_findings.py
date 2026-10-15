@@ -11,12 +11,15 @@ from __future__ import annotations
 from typing import Any
 
 from tools import function_report
+from tools.function_list import rows as function_rows
 from tools.function_points import judge_case
 from tools.function_report import (
     STATE,
+    check_finding_rows,
     check_verdicts,
     package_values,
     parse_findings,
+    read_checklists,
     render_checklist,
 )
 from tools.function_samples import sample_context, sample_protocol
@@ -109,3 +112,70 @@ def test_an_open_cell_names_no_fixed_finding_as_its_reason() -> None:
     assert table.split(" | ")[11] == "FD-6" and criterion.endswith("| FD-6 |"), (table, criterion)
     own = _render([_open(point=9, finding="FD-5"), _open(criterion="V1", finding="FD-5")], fixed)
     assert own[0].split(" | ")[11] == "FD-5" and own[1].endswith("| FD-5 |"), own
+
+
+KNOWN = ("resize_hole", "finding.action:install", "command:edit.auto_split", "drill_hole")
+
+
+def test_a_row_with_an_addition_or_only_its_tail_names_no_row() -> None:
+    """„resize_hole im Bild“ und „install“ trafen keine Zelle, und der Fund fehlte still
+    in der Abhakliste (Schlussreview D0, RF-3: FD-67, FD-70, FD-101)."""
+    findings = _findings(
+        (1, "resize_hole im Bild, Weitere Werte", "19", "offen RM-741"),
+        (2, "`drill_hole`, install und auto_split", "1", "offen RM-737"),
+        (3, "`resize_hole`", "19", "offen RM-741"),
+        (4, "`drill_hole` und die Sprachflächen", "9", "offen RM-737"),
+    )
+    problems = check_finding_rows(findings.values(), KNOWN, complete=False)
+    assert problems == [
+        "FD-1: „resize_hole im Bild“ ist keine Zeile, gemeint: resize_hole",
+        "FD-2: „auto_split“ ist keine Zeile, gemeint: command:edit.auto_split",
+        "FD-2: „install“ ist keine Zeile, gemeint: finding.action:install",
+    ]
+
+
+NAVIGATION = "Ansicht/Navigation/Wie in Bambu Studio, Orca und PrusaSlicer — links dreht"
+
+
+def test_a_row_with_a_comma_stays_one_row_in_backticks() -> None:
+    """Fensterbefehle heißen nach Menütiteln mit Komma und „und“ — die Kennung oben steht
+    so in der Menüleiste. In Backticks bleibt sie eine Zeile; ohne zerfällt sie an den
+    Trennzeichen, und die Prüfung sagt es (Schlussreview D0, RF-3)."""
+    quoted, bare = _findings(
+        (1, f"`{NAVIGATION}`, `drill_hole`", "19", "offen RM-737"),
+        (2, f"{NAVIGATION}, drill_hole", "19", "offen RM-737"),
+    ).values()
+    assert quoted.rows == {NAVIGATION, "drill_hole"}
+    assert NAVIGATION not in bare.rows and "drill_hole" in bare.rows
+    assert check_finding_rows([quoted, bare], (*KNOWN, NAVIGATION)) == [
+        f"FD-2: „{NAVIGATION}“ zerfällt ohne Backticks"
+    ]
+
+
+def test_an_open_finding_names_a_row_or_says_it_has_none() -> None:
+    """Mit der ganzen Funktionsliste hält jeder offene Fund eine Zeile oder sagt
+    ausdrücklich, dass er keine betrifft; ein behobener darf eine Zeile tragen, die sein
+    Fix entfernt hat (FD-24). Der Bericht über einen Lauf kennt nicht alle Zeilen und
+    prüft das nicht."""
+    findings = _findings(
+        (1, "Prüfanschlüsse des Prüfstands", "19", "offen RM-737"),
+        (2, "keine Zeile: Prüfanschlüsse des Prüfstands", "19", "offen RM-737"),
+        (3, "`meldung:_online_completed`", "19", "behoben `544640f2a`"),
+        (4, "`drill_hole`, Statusleiste", "9", "offen RM-737"),
+    )
+    assert findings["FD-2"].rows == frozenset()
+    assert check_finding_rows(findings.values(), KNOWN) == [
+        "FD-1: offen, trifft aber keine Zeile — Kennung ausschreiben oder „keine Zeile: …“"
+    ]
+    assert check_finding_rows(findings.values(), KNOWN, complete=False) == []
+
+
+def test_every_finding_names_the_rows_it_means() -> None:
+    """Der Wächter über die eingecheckte Funddatei, gegen die ganze Funktionsliste samt
+    den Fensterbefehlen der Abhaklisten (die Menüleiste entsteht erst am Fenster)."""
+    found, problems = function_report.read_findings(STATE / "funde.md")
+    assert problems == [] and len(found) > 150
+    listed = {row for checklist in read_checklists().values() for row in checklist.rows}
+    known = {row.id for row in function_rows(with_specs=False)} | listed
+    assert len(known) > 300 and any("/" in row for row in listed)
+    assert check_finding_rows(found.values(), known) == []

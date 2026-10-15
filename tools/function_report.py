@@ -166,6 +166,11 @@ _STAND: Final = (
     re.compile(r"^gut nach Fix\b.*`[0-9a-f]{7,40}`"),
 )
 _RM: Final = re.compile(r"\bRM-\d+\b")
+#: So beginnt ``Funktion`` eines Funds, der keine Zeile der Funktionsliste betrifft
+#: (Prüfstand, Werkzeug, Statusleiste); er hält keine Zelle offen.
+NO_ROW: Final = "keine Zeile:"
+#: Wie ``Funktion`` mehrere Zeilen außerhalb von Backticks trennt (:attr:`Finding.rows`).
+_ROW_SEPARATOR: Final = re.compile(r"\s*(?:,|;|\bund\b)\s*")
 
 #: Ein Bild steht relativ zum Laufordner (``--out``), mit ``/`` und als PNG;
 #: eines aus einer anderen Runde trägt die Kennung ihres ``[[run]]`` davor
@@ -505,14 +510,18 @@ class Finding:
     def rows(self) -> frozenset[str]:
         """Die Zeilen aus ``Funktion``, getrennt wie die Prüfpunkte (FD-143).
 
-        Zeilenkennungen tragen weder Komma, Semikolon noch „und“; ein Fund, der
-        mehrere Zeilen nennt, gehört so jeder von ihnen.
+        Eine Kennung in Backticks ist eine Zeile, auch mit Komma oder „und“ —
+        Fensterbefehle heißen nach Menütiteln wie „Wie in Bambu Studio, Orca und
+        PrusaSlicer — links dreht“. Der übrige Text wird an Komma, Semikolon und
+        „und“ getrennt; ein Fund, der mehrere Zeilen nennt, gehört so jeder von
+        ihnen. Ein Fund mit :data:`NO_ROW` gehört keiner.
         """
         raw = self.fields.get("Funktion", "")
-        parts = (
-            part.strip().strip("`").strip() for part in re.split(r"\s*(?:,|;|\bund\b)\s*", raw)
-        )
-        return frozenset(part for part in parts if part)
+        if raw.startswith(NO_ROW):
+            return frozenset()
+        quoted = re.findall(r"`([^`]+)`", raw)
+        rest = _ROW_SEPARATOR.split(re.sub(r"`[^`]+`", ",", raw))
+        return frozenset(part.strip() for part in (*quoted, *rest) if part.strip())
 
     @property
     def severity(self) -> str:
@@ -752,6 +761,49 @@ def read_findings(path: Path) -> tuple[dict[str, Finding], list[str]]:
     findings, problems = parse_findings(path.read_text(encoding="utf-8"))
     problems += check_findings(findings)
     return {finding.key: finding for finding in findings}, problems
+
+
+def check_finding_rows(
+    findings: Iterable[Finding], known: Iterable[str], *, complete: bool = True
+) -> list[str]:
+    """Ob ``Funktion`` jedes Funds die Zeilen trifft, die er meint (Zwilling von FD-143).
+
+    Ein Teil, der eine bekannte Kennung mit Zusatz trägt („resize_hole im Bild“)
+    oder nur ihr Ende nennt („install“ für ``finding.action:install``), trifft
+    keine Zelle, und der Fund fehlt still in der Abhakliste; ebenso eine Kennung
+    mit Komma oder „und“ ohne Backticks, die beim Trennen zerfällt. Mit der ganzen
+    Funktionsliste (``complete``) muss zudem jeder **offene** Fund wenigstens eine
+    Zeile treffen oder mit :data:`NO_ROW` ausdrücklich keine nennen; ein
+    behobener darf eine Zeile tragen, die sein Fix entfernt hat (FD-24). Der
+    Bericht über einen Lauf kennt nur die Zeilen seiner Pakete und prüft nur
+    die Teile.
+    """
+    ids = set(known)
+    problems: list[str] = []
+    for finding in findings:
+        for part in sorted(finding.rows - ids):
+            meant = sorted(
+                row
+                for row in ids
+                if re.search(rf"(?<![\w.:]){re.escape(row)}(?![\w.:])", part)
+                or row.endswith((f":{part}", f".{part}"))
+            )
+            if meant:
+                problems.append(
+                    f"{finding.key}: „{part}“ ist keine Zeile, gemeint: {', '.join(meant)}"
+                )
+        raw = finding.fields.get("Funktion", "")
+        explicit = raw.startswith(NO_ROW)
+        for row in sorted(ids):
+            if not explicit and _ROW_SEPARATOR.search(row) and row in raw.replace(f"`{row}`", ""):
+                problems.append(f"{finding.key}: „{row}“ zerfällt ohne Backticks")
+        reaches = explicit or bool(finding.rows & ids)
+        if complete and finding.stand.startswith("offen") and not reaches:
+            problems.append(
+                f"{finding.key}: offen, trifft aber keine Zeile — Kennung ausschreiben "
+                f"oder „{NO_ROW} …“"
+            )
+    return problems
 
 
 # --- Zwei Prüfer und Paketanteile ------------------------------------------------
@@ -1561,6 +1613,9 @@ def write(
         invalid.append("--checklist und --verdicts verlangen genau ein Paket")
         packages = []
     found, finding_problems = read_findings(findings or state / "funde.md")
+    finding_problems += check_finding_rows(
+        found.values(), (str(row.get("id")) for row in all_rows), complete=False
+    )
     invalid += [f"funde.md: {problem}" for problem in finding_problems]
     commits = sorted(
         {str((p.get("version") or {}).get("commit")) for p in protocols if p.get("version")}
