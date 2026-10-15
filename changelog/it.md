@@ -76,6 +76,7 @@ scrive in `website/version.json`.
 - Un lettore di schermo nomina ogni campo di ogni finestra di funzione, anche elenchi a discesa, caselle di spunta ed elenchi di caratteristiche.
 - Un testo che la finestra propone, come un nome, è selezionato all'apertura. Digitando lo si sostituisce.
 - I numeri grandi compaiono anche nei campi a gruppi di tre cifre, per esempio 1 051 736 triangoli. Si scrivono con o senza separatori.
+- I nomi lunghi dei campi in *Altre impostazioni* mostrano ogni riga, anche con caratteri grandi. Nella versione 0.6.0 *Pratica un foro* ne perdeva l'ultima parola.
 - Le finestre di funzione si aprono alte quanto il loro contenuto. Nella versione 0.6.0, per esempio *Ripeti caratteristica* lasciava una striscia vuota sopra i pulsanti.
 - Se un campo obbligatorio come il testo di *Scritta come corpo* è vuoto, il campo dice cosa va inserito e il pulsante attende. La versione 0.6.0 mostrava lì un errore all'apertura.
 - Chi modifica un passo conferma con *Applica*. Il pulsante resta grigio finché qualcosa non cambia e indica il campo da cambiare.

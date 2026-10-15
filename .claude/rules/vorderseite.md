@@ -155,7 +155,14 @@ Rückseite; eine ausdrückliche Feldübergabe öffnet sie vor dem Fokuswechsel.
 - **Ein vorgegebener Text ist beim ersten Fokus markiert** (`first_focus`,
   FD-114); `focus_field` markiert ein Textfeld wie ein Zahlenfeld.
 - **Ganzzahlen ab vier Stellen stehen in Dreiergruppen** wie jeder Satz
-  (`grouped_spin`, `count_text`, FD-124); Felder mit Nachkomma nie.
+  (`count_text`, FD-124); Felder mit Nachkomma nie. Jedes Ganzzahlfeld der
+  Oberfläche entsteht über `grouped_spin` (`GroupedSpin`, `GroupedNumberSpin`,
+  `GroupedIntSpin`), nie als nacktes `QSpinBox` oder über `setDecimals(0)`;
+  Kennungen (Startwert, Port) sind die Ausnahme, Wächter
+  `tests/test_grouped_count_fields.py` (FD-184).
+- **Eine umgebrochene Beschriftung zeigt jede Zeile** (FD-183):
+  `align_to_the_front` hält ihre Breite fest, `wrapped_caption.keep_whole_lines`
+  die Höhe des Textes in dieser Breite, auch nach einem Schriftwechsel.
 - **Gemessen wird in der endgültigen Breite** (FD-45): Vor Anfangs- und
   Klappenmessung zieht der Dialog auf seine Breite, und jede Merkmalsliste setzt
   ihre Höhe (`FeatureList.fit_now`) — sonst bliebe über den Knöpfen ein

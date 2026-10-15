@@ -229,7 +229,10 @@ verlangt je Eingabefeld einen Namen, keinen doppelt;
 `test_operation_dialog_change.py` den Änderungsweg (*Übernehmen*, grau bis zur
 ersten Änderung). Ohne Fenster: `test_hole_compensation_words.py` (der Name des
 Ausgleichs an jeder Bohrung, in jeder Sprache). `test_calibration_units.py`
-prüft *Material kalibrieren* in Zoll.
+prüft *Material kalibrieren* in Zoll. `test_wrapped_captions.py` verlangt jede
+Zeile jeder umgebrochenen Beschriftung bei Grund- und großer Schrift,
+`test_grouped_count_fields.py` liest den Quelltext auf Ganzzahlfelder ohne
+Dreiergruppen.
 
 Statische Quellprüfungen teilen die Vorbereitung innerhalb eines Testfalls:
 `test_language_rules.py` prüft je Datei denselben AST auf alle Sprachregeln;

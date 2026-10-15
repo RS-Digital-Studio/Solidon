@@ -101,6 +101,7 @@ Nutzen da und sonst nichts.
 - Ein Bildschirmleser nennt in jedem Funktionsdialog jedes Feld beim Namen, auch Auswahllisten, Haken und Merkmalslisten.
 - Ein vorgegebener Text in einem Dialog, etwa ein Name, ist beim Öffnen markiert. Tippen ersetzt ihn.
 - Große Anzahlen stehen auch in Eingabefeldern in Dreiergruppen, etwa 1 051 736 Dreiecke. Getippt werden sie mit oder ohne Trennzeichen.
+- Lange Feldnamen unter *Weitere Einstellungen* zeigen jede Zeile, auch bei großer Schrift. In Version 0.6.0 fehlte etwa bei *Bohrung setzen* das letzte Wort von „Durchmesser der Aufweitung“.
 - Funktionsdialoge öffnen so hoch wie ihr Inhalt. In Version 0.6.0 blieb etwa bei *Merkmal vervielfachen* ein leerer Streifen über den Knöpfen.
 - Ist ein Pflichtfeld wie der Text von *Schriftzug als Körper* leer, sagt das Feld, was hineingehört, und der Knopf wartet. Version 0.6.0 zeigte dort beim Öffnen einen Fehler.
 - Wer einen Schritt ändert, bestätigt mit *Übernehmen*. Der Knopf bleibt grau, bis sich etwas geändert hat, und nennt das Feld dafür.
