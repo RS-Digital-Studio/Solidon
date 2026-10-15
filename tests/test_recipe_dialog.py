@@ -1454,7 +1454,8 @@ def test_the_unit_list_follows_a_language_change(qt_app: QApplication) -> None:
         install_language("en")
         set_language("en")
 
-        englisch = [tr(source_text(label)) for _code, label in UNITS]
+        # Die Länge nennt die Anzeigeeinheit (FD-125); im Test steht sie auf mm.
+        englisch = [tr(source_text(label)).format(unit="mm") for _code, label in UNITS]
         deutsch = [source_text(label) for _code, label in UNITS]
         # Zusicherung gegen die leere Menge: Ohne angekommenen Katalog wäre
         # jede „Übersetzung" ihre eigene Message-ID, und alles unten grün.

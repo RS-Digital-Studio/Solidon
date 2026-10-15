@@ -92,6 +92,12 @@ Nutzen da und sonst nichts.
 - Die Auswahlkarte folgt Inhalt und Schrift; Text und Handlungsspalten bleiben erhalten. Freie Reiterfenster behalten ihre Größe. Bei angebotener Merkmaländerung ist „Übernehmen“ die Hauptaktion.
 - Gegenstücke fragen zuerst nach Paar und Größe; die Auswahl erklärt beide Hälften. Form und Passung stehen unter „Weitere Einstellungen“. Die Anfangshöhe passt zum Inhalt.
 - Nach einer Vorschauabsage bleiben die Texte der nächsten Vorschau vollständig lesbar.
+- Der Dialog *Parameter anlegen …* erklärt jedes Feld, auch Unter- und Obergrenze, und ein Bildschirmleser nennt jedes Feld beim Namen.
+- Passt ein Parametername nicht, steht der Grund direkt unter dem Namensfeld, mit einem Knopf für einen Namen, der geht.
+- Wer in Zoll arbeitet, gibt Längenparameter in *Parameter anlegen …* und beim Speichern eines Bausteins in Zoll ein. Version 0.6.0 zeigte dort nur Millimeter.
+- Der Dialog *Material kalibrieren* nennt ein ungemessenes Material „noch nicht kalibriert“, auch in der Kommandozeile. Bisher stand dort „Startwert“.
+- Eine Absage im Dialog wiederholt ihren Titel nicht mehr darunter. *Eingabe korrigieren* setzt dort den Cursor in das Feld, um das es geht.
+- Die *Einzelheiten* nennen Körper und Schritt beim Namen und die Stelle in der gewählten Einheit. *Werte ansehen* zeigt die Namen der Felder und ist nur so hoch wie nötig.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -106,6 +112,8 @@ Nutzen da und sonst nichts.
 - Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
 - Bei Bohrungen zeigen Bild und *Auswahl* dieselbe Änderung. Zielmaß, Tiefe und mitgehender Einlauf stehen vorn; Druckkorrektur und Feinwerte unter „Weitere Werte“.
 - Bohrungsfelder und der Haken zum gemeinsamen Ändern gleichartiger Merkmale erklären ihre Wirkung. „Druckabweichung ausgleichen“ beschreibt die Korrektur aus dem Materialprofil verständlicher.
+- Wer einen Würfel zum Ausprobieren einer Passung ausschneidet, wählt dessen Lage jetzt unter *Lage des Würfels*. Die Zeile *Stelle* darüber zeigt sie an.
+- Der Dialog hinter *Dicke geben* sagt in seiner ersten Zeile, dass er der Fläche eine Dicke gibt.
 
 ## 0.6.0
 

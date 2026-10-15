@@ -67,6 +67,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O painel de seleção segue conteúdo e letra, mantendo texto e colunas. Os separadores destacados conservam o tamanho. Se houver uma alteração proposta, «Aplicar» é a ação principal.
 - Os elementos correspondentes pedem par e tamanho e explicam ambas as metades. Forma e ajuste ficam em «Mais definições». A altura inicial do diálogo adapta-se ao conteúdo.
 - Após a recusa de uma pré-visualização, os textos da seguinte continuam totalmente legíveis.
+- O diálogo *Criar parâmetro …* explica cada campo, incluindo os limites inferior e superior, e um leitor de ecrã nomeia cada campo.
+- Se um nome de parâmetro não serve, o motivo aparece logo abaixo do campo do nome, com um botão para um nome que serve.
+- Quem trabalha em polegadas introduz os parâmetros de comprimento em polegadas em *Criar parâmetro …* e ao guardar um bloco. A versão 0.6.0 mostrava aí só milímetros.
+- O diálogo *Calibrar material* chama a um material por medir «ainda não calibrado», também na linha de comandos. Antes dizia «valores iniciais».
+- Uma recusa num diálogo já não repete o título por baixo. *Corrigir a entrada* põe o cursor no campo em causa.
+- A janela *Pormenores* nomeia o corpo e o passo e dá o ponto na unidade escolhida. *Mostrar os valores* mostra os nomes dos campos e só é tão alto quanto necessário.
 
 ### Imprimir e entregar ao slicer
 
@@ -81,6 +87,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
 - Nos furos, vista e *Seleção* mostram a mesma alteração. Dimensão, profundidade e entrada associada ficam à frente; compensação de impressão e ajustes finos, em «Mais valores».
 - Os campos do furo e a caixa para alterar elementos iguais em conjunto explicam o seu efeito. «Compensar desvios de impressão» esclarece a correção do perfil do material.
+- Ao recortar um cubo para experimentar um ajuste, a posição escolhe-se agora em *Posição do cubo*. A linha *Ponto* acima mostra-a.
+- O diálogo por trás de *Dar espessura* diz na primeira linha que dá espessura à superfície.
 
 ## 0.6.0
 

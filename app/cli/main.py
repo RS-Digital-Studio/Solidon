@@ -308,11 +308,10 @@ def command_profiles(args: argparse.Namespace) -> int:
         title = str(profiles.shown_printer_title(printer))
         print(f"  {identifier:<24} {title:<28} {width:.0f} x {depth:.0f} x {height:.0f} mm")
     print(tr("Material"))
+    from app.core.knowledge.calibration import state_text
+
     for identifier, material in sorted(profiles.material_profiles().items()):
-        state = (
-            tr("kalibriert") if material.calibrated else tr("Startwert", context="Kalibrierstand")
-        )
-        print(f"  {identifier:<24} {material.title:<28} {state}")
+        print(f"  {identifier:<24} {material.title:<28} {state_text(material)}")
     return 0
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from PySide6.QtWidgets import QApplication, QDialogButtonBox
+from PySide6.QtWidgets import QApplication, QDialogButtonBox, QLabel
 
 from app.core.types import Parameter
 from app.ui.dialogs import ParameterDialog
@@ -78,3 +78,119 @@ def test_only_name_value_and_unit_stand_in_front(qt_app: QApplication) -> None:
     finally:
         fresh.deleteLater()
         bounded.deleteLater()
+
+
+def _caption_of(dialog: ParameterDialog, field: object) -> QLabel:
+    """Die Beschriftung, die das Feld als Ziel trägt (``QLabel.buddy``)."""
+    found = [label for label in dialog.findChildren(QLabel) if label.buddy() is field]
+    assert len(found) == 1, f"genau eine Beschriftung führt zu {field!r}"
+    return found[0]
+
+
+@pytest.mark.parametrize("editing", [False, True])
+def test_every_field_says_what_it_does_on_both_halves(qt_app: QApplication, editing: bool) -> None:
+    """FD-11: Name, Wert, Ausdruck, Einheit und die Grenzen ohne Satz — wofür eine
+    Grenze gut ist, musste man raten. Jedes Feld trägt jetzt einen, an Feld und
+    Beschriftung und am Vorleser, und der Satz wiederholt nicht den Titel."""
+    existing = Parameter(name="spiel", value=0.4, unit="mm") if editing else None
+    dialog = ParameterDialog({"spiel": existing} if existing else {}, existing=existing)
+    try:
+        for field in (
+            dialog.name_field,
+            dialog.value_field,
+            dialog.expression_field,
+            dialog.unit_field,
+            dialog.minimum_field,
+            dialog.maximum_field,
+        ):
+            caption = _caption_of(dialog, field)
+            sentence = field.accessibleDescription()
+            assert sentence, f"{caption.text()}: ohne Satz"
+            assert field.toolTip() == sentence, f"{caption.text()}: Kurzhilfe fehlt"
+            assert caption.toolTip() == sentence, f"{caption.text()}: Beschriftung ohne Satz"
+            assert len(sentence.split()) >= 4, f"{caption.text()}: wiederholt nur den Titel"
+            assert field.accessibleName() == caption.text(), "FD-94: Name wie die Zeile"
+    finally:
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize(
+    ("typed", "taken", "expected"),
+    [
+        ("Breite Platte", set(), "Breite_Platte"),
+        ("Höhe", set(), "Hoehe"),
+        ("3fach", set(), "_3fach"),
+        ("breite", {"breite"}, "breite_2"),
+        ("breite", {"breite", "breite_2"}, "breite_3"),
+        ("Länge-außen", set(), "Laenge_aussen"),
+        ("—", set(), None),
+    ],
+)
+def test_a_refused_name_gets_a_free_name_made_from_what_was_typed(
+    typed: str, taken: set[str], expected: str | None
+) -> None:
+    """FD-155: Der Weg aus der Ablehnung ist ein Name, der geht — aus dem Getippten."""
+    from app.ui.parameter_dialog import suggested_name, usable_name
+
+    made = suggested_name(typed, taken)
+    assert made == expected
+    if made is not None:
+        assert usable_name(made), "der Vorschlag lässt sich als @name schreiben"
+
+
+def test_a_refused_name_stands_at_the_name_field_with_its_way(qt_app: QApplication) -> None:
+    """FD-155: Die Ablehnung des Namens stand unter „Weitere Einstellungen“, das Feld
+    war nicht markiert, eine Handlung fehlte. Jetzt steht sie direkt unter dem
+    Namensfeld, das Feld hat den Fokus und ist markiert, und ein Knopf nimmt
+    einen freien Namen."""
+    dialog = ParameterDialog({"breite": Parameter(name="breite", value=40.0)})
+    try:
+        dialog.show()
+        QApplication.processEvents()
+        buttons = dialog.findChild(QDialogButtonBox)
+        assert buttons is not None
+        ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        assert ok is not None
+        assert not dialog.name_refusal.isVisibleTo(dialog), "vor dem ersten Versuch still"
+
+        dialog.name_field.setText("Breite Platte")
+        ok.click()
+        QApplication.processEvents()
+
+        sentence = dialog.name_problem()
+        assert sentence is not None and "@name" in sentence
+        assert dialog.name_refusal.isVisibleTo(dialog), "die Ablehnung steht da"
+        assert not dialog.problem.isVisibleTo(dialog), "und nicht am Ende des Dialogs"
+        assert sentence in dialog.name_note.accessibleDescription()
+        assert dialog.name_field.accessibleDescription() == sentence, "das Feld sagt es vor"
+        assert dialog.focusWidget() is dialog.name_field, "der Cursor steht im Feld"
+        assert dialog.name_field.selectedText() == "Breite Platte", "das Feld ist markiert"
+        field_bottom = dialog.name_field.mapTo(dialog, dialog.name_field.rect().bottomLeft()).y()
+        refusal_top = dialog.name_refusal.mapTo(dialog, dialog.name_refusal.rect().topLeft()).y()
+        value_top = dialog.value_field.mapTo(dialog, dialog.value_field.rect().topLeft()).y()
+        assert field_bottom < refusal_top < value_top, "direkt unter dem Namensfeld"
+        assert dialog.name_suggestion.isVisibleTo(dialog)
+        assert dialog.name_suggestion.text() == "„Breite_Platte“ verwenden"
+        # Satz und Knopf nebeneinander machten die Spalte breiter als den Dialog:
+        # Der Rollbereich wich zur Seite und schnitt die Beschriftungen ab.
+        assert dialog._scroll.horizontalScrollBar().maximum() == 0, "nichts rollt zur Seite"
+
+        dialog.name_suggestion.click()
+        QApplication.processEvents()
+        assert dialog.name_field.text() == "Breite_Platte"
+        assert not dialog.name_refusal.isVisibleTo(dialog), "erledigt, also still"
+        assert dialog.validation_problem() is None
+
+        dialog.name_field.setText("breite")
+        ok.click()
+        QApplication.processEvents()
+        assert dialog.name_suggestion.text() == "„breite_2“ verwenden", "vergeben → frei"
+
+        dialog.name_field.setText("")
+        ok.click()
+        QApplication.processEvents()
+        assert dialog.name_refusal.isVisibleTo(dialog)
+        assert not dialog.name_suggestion.isVisibleTo(dialog), "aus nichts kein Vorschlag"
+    finally:
+        dialog.close()
+        dialog.deleteLater()
