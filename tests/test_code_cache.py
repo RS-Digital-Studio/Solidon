@@ -11,6 +11,7 @@ from typing import cast
 
 import pytest
 
+from tests.code_index_helpers import stored_index
 from tools import code_cache, code_facts
 from tools.code_index import CACHE, Index
 
@@ -392,3 +393,41 @@ def test_scope_bounds_do_not_restrict_other_integer_fields(tmp_path: Path) -> No
     cache = tmp_path / "cache.data"
     cache.write_bytes(code_cache.encode(code_facts.stamp(), files))
     assert code_cache.decode(cache, code_facts.stamp()) == files
+
+
+def test_a_refused_replace_keeps_the_file_and_leaves_no_temporary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hält ein anderer Prozess die Datei offen, gibt ``replace_atomically`` auf: Die Datei
+    bleibt, wie sie ist, und keine Zwischendatei bleibt liegen. Gegenprobe: ohne Sperre ersetzt
+    derselbe Weg."""
+    target = tmp_path / "speicher.data"
+    target.write_bytes(b"alt")
+    code_cache.replace_atomically(target, b"neu")
+    assert target.read_bytes() == b"neu"
+
+    def refuse(self: Path, other: Path) -> Path:
+        raise PermissionError(other)
+
+    monkeypatch.setattr(Path, "replace", refuse)
+    monkeypatch.setattr(code_cache.time, "sleep", lambda seconds: None)
+    code_cache.replace_atomically(target, b"dritte")
+    assert target.read_bytes() == b"neu"
+    assert [path.name for path in tmp_path.iterdir()] == ["speicher.data"]
+
+
+def test_both_stores_replace_their_file_through_one_helper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RR2-10: Zwischenspeicher der Auszüge und Ergebnisspeicher ersetzen ihre Datei über
+    denselben Helfer; eine Korrektur an der Sperrlogik erreicht so beide."""
+    written: list[str] = []
+    original = code_cache.replace_atomically
+
+    def recorded(path: Path, data: bytes) -> None:
+        written.append(path.name)
+        original(path, data)
+
+    monkeypatch.setattr(code_cache, "replace_atomically", recorded)
+    stored_index(tmp_path, {})
+    assert sorted(written) == ["code_index.data", "code_index.result"]

@@ -29,8 +29,6 @@ from __future__ import annotations
 
 import ast
 import hashlib
-import os
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
@@ -1571,19 +1569,9 @@ def load_cache(
 
 
 def save_cache(path: Path, current: str, files: dict[str, tuple[str, Facts]]) -> None:
-    """Schreibt über eine eigene Zwischendatei und ersetzt dann; ein zweiter Prozess liest so nie
-    eine halbe Datei. Hält ein anderer die Datei gerade offen, bleibt dessen Stand — seine
-    Einträge sind nach Inhaltshash ebenso gültig, fehlende zieht der nächste Bau nach."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    from tools.code_cache import encode
+    """Über :func:`tools.code_cache.replace_atomically`; ein zweiter Prozess liest so nie eine
+    halbe Datei. Hält ein anderer die Datei gerade offen, bleibt dessen Stand — seine Einträge
+    sind nach Inhaltshash ebenso gültig, fehlende zieht der nächste Bau nach."""
+    from tools.code_cache import encode, replace_atomically
 
-    data = encode(current, files)
-    temporary.write_bytes(data)
-    for _attempt in range(20):
-        try:
-            temporary.replace(path)
-            return
-        except PermissionError:
-            time.sleep(0.05)
-    temporary.unlink()
+    replace_atomically(path, encode(current, files))

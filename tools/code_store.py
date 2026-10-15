@@ -24,7 +24,6 @@ from __future__ import annotations
 import contextlib
 import functools
 import hashlib
-import os
 import sys
 import time
 from collections.abc import Iterator, Mapping
@@ -127,18 +126,9 @@ def read(path: Path, tree: str) -> Stored | None:
 
 
 def write(path: Path, stored: Stored) -> None:
-    """Über eine eigene Zwischendatei, dann ersetzt: Ein Leser sieht nie eine halbe Datei. Hält
-    ein anderer Prozess die Datei gerade offen, bleibt sie, wie sie ist; der nächste baut neu."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    temporary.write_bytes(_header(stored.tree) + code_cache.dumps(stored))
-    for _attempt in range(20):
-        try:
-            temporary.replace(path)
-            return
-        except PermissionError:
-            time.sleep(0.05)
-    temporary.unlink()
+    """Über :func:`tools.code_cache.replace_atomically`: Ein Leser sieht nie eine halbe Datei;
+    hält ein anderer Prozess sie gerade offen, bleibt sie, wie sie ist, und der nächste baut neu."""
+    code_cache.replace_atomically(path, _header(stored.tree) + code_cache.dumps(stored))
 
 
 def snapshot(index: Index) -> Stored:

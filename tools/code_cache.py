@@ -6,6 +6,8 @@ import ast
 import dataclasses
 import hashlib
 import marshal
+import os
+import time
 from collections.abc import Callable, Iterable, Mapping
 from itertools import chain
 from pathlib import Path
@@ -284,6 +286,24 @@ def frame(current: str, entries: Iterable[tuple[str, str, bytes]]) -> bytes:
     directory = marshal.dumps(tuple(table), allow_code=False)
     size = len(directory).to_bytes(_SIZE, "little")
     return _header(current) + size + directory + b"".join(records)
+
+
+def replace_atomically(path: Path, data: bytes) -> None:
+    """Schreibt ``data`` über eine eigene Zwischendatei und ersetzt dann ``path``: Ein Leser
+    sieht nie eine halbe Datei. Hält ein anderer Prozess sie gerade offen (Windows), bleibt
+    sie, wie sie ist — sie ist eine Ableitung, der nächste Bau schreibt sie neu. Der eine Weg
+    für den Zwischenspeicher der Auszüge und den Ergebnisspeicher (``tools/code_store.py``).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    temporary.write_bytes(data)
+    for _attempt in range(20):
+        try:
+            temporary.replace(path)
+            return
+        except PermissionError:
+            time.sleep(0.05)
+    temporary.unlink()
 
 
 def encode(current: str, files: dict[str, tuple[str, Facts]]) -> bytes:
