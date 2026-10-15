@@ -11,13 +11,32 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from tools.function_bench import FunctionFlow
 from tools.function_machine import MOST_UNSTICKS, SETTLE_MS, Step
 from tools.function_protocol import empty_protocol, safe_name, unmeasured
 from tools.function_setup import Variant, place_window
 from tools.function_surface import without_way
+
+#: Wie viele Ereignisrunden ein Fenster höchstens braucht, um nach vorn zu kommen.
+FORWARD_ROUNDS: Final = 50
+
+
+def bring_forward(widget: Any) -> None:
+    """Holt ein Fenster nach vorn, wie der Kunde, der es anklickt, bevor er eine Taste drückt."""
+    import time
+
+    from PySide6.QtWidgets import QApplication
+
+    if QApplication.activeWindow() is widget:
+        return
+    widget.activateWindow()
+    for _round in range(FORWARD_ROUNDS):
+        QApplication.processEvents()
+        if QApplication.activeWindow() is widget:
+            return
+        time.sleep(0.01)
 
 
 class LanguageFlow:
@@ -120,7 +139,10 @@ class LanguageFlow:
         Der Schrittautomat löst nur noch laufende modale Aufrufe mit Escape.
         Ein nichtmodaler Generator kehrt sofort zurück und blieb deshalb über
         Projektwechsel sichtbar. Er wird über dieselbe Kundentaste geschlossen;
-        bleibt ein Fenster stehen, beginnt keine weitere Messung darin.
+        bleibt ein Fenster stehen, beginnt keine weitere Messung darin. Escape
+        drückt der Kunde in dem Fenster, das vorn steht: Steht das Hauptfenster
+        vorn, nimmt seine Taste *Auswahl leeren* den Druck, und der Dialog
+        bleibt offen — es wird erst nach vorn geholt.
         """
         from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
@@ -137,6 +159,7 @@ class LanguageFlow:
                 flow.walker.record(
                     {"target": type(widget).__name__, "key": "Escape", "button": None}
                 )
+                bring_forward(widget)
                 QTest.keyClick(widget, Qt.Key.Key_Escape)
 
             if not flow.run_steps(

@@ -45,6 +45,9 @@ def test_language_surfaces_close_their_windows_before_the_next_project(
     monkeypatch.setattr(function_language, "without_way", lambda row: "")
     monkeypatch.setattr(function_surface, "windows_to_picture", lambda window: list(opened))
     monkeypatch.setattr(QTest, "keyClick", lambda *args: None if stubborn else opened.clear())
+    # Nach vorn holt die Attrappe nichts; das echte Fenster prüft
+    # ``test_function_language_escape.py``.
+    monkeypatch.setattr(function_language, "bring_forward", lambda widget: None)
     rows = [
         {"id": name, "target": "operation:test", "kind": "operation", "package": "D4"}
         for name in ("first", "second")
