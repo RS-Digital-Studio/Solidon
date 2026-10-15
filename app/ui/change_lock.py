@@ -91,31 +91,6 @@ READING_ACTIONS: Final[frozenset[str]] = frozenset(
     }
 )
 
-#: Handlungen, die auch hinter einem Halt gehen (§15.3, FD-104): Sie ändern
-#: einen vorhandenen Schritt oder setzen ihren Zug vor den angehaltenen — die
-#: Wege des Halts selbst (``Session.halt_in_the_way`` nimmt sie an). Jede andere
-#: ändernde Handlung legt einen Schritt hinten an, und der würde nicht
-#: gerechnet; sie steht dann grau mit dem Halt als Grund.
-CHAIN_WAYS: Final[frozenset[str]] = frozenset(
-    {
-        "change_creating_step",
-        "change_selection",
-        "change_step",
-        "correct_input",
-        "decimate_and_retry",
-        "leave_open",
-        "mesh_and_retry",
-        "recognize_fully",
-        "recount_and_retry",
-        "remesh_and_retry",
-        "repair_and_retry",
-        "repair_before_and_retry",
-        "sketch.pick_plane",
-        "split_and_retry",
-        "use_reachable",
-    }
-)
-
 #: Menüs der Leiste, deren Zeilen nur zeigen: Darstellung, Kamera, Thema und
 #: Navigation, Handbuch und Freischaltung. Gelesen am ``objectName`` des
 #: Menüs (:func:`app.core.guides.menubar_name`), gleich in jeder Sprache.
@@ -181,17 +156,23 @@ def change_refusal() -> str:
     return "" if state.unlocked else licence_lock_line(state)
 
 
-def action_refusal(action_id: str, *, halt: str = "") -> str:
+def action_refusal(action_id: str, *, halt: str = "", at_halt: bool = False) -> str:
     """Warum diese Handlung eines Befunds oder Fehlers gerade nicht geht — oder leer.
 
     ``halt`` ist der Satz des Halts (:func:`halt_line`), wenn die Kette anhält:
-    Eine Handlung, die einen Schritt hinten anlegt, geht dann nicht, und der
-    Satz nennt den Schritt und den Weg weiter (FD-104). Vor dem Klick, nicht
-    erst als Absage danach.
+    Eine ändernde Handlung geht dann nicht, und der Satz nennt den Schritt und
+    den Weg weiter (FD-104). Vor dem Klick, nicht erst als Absage danach.
+
+    **Ausgenommen sind die Wege des Halts selbst** (RA-3): ``at_halt`` sagt,
+    dass die Handlung am haltenden Befund steht (``revision.halt_finding``) —
+    demselben Befund, dessen Wege ``Session.halt_in_the_way`` als die des Halts
+    anbietet. Eine Liste von Kennungen entschied das vorher, graute am Halt
+    „braucht einen ausgeschalteten Schritt“ beide Wege und gab hinter einem
+    fremden Halt Wege frei, die die Sitzung danach ablehnte.
     """
     if action_id in READING_ACTIONS:
         return ""
-    return change_refusal() or ("" if action_id in CHAIN_WAYS else halt)
+    return change_refusal() or ("" if at_halt else halt)
 
 
 def halt_line(document: Document | None, stopped_at: OpId | None) -> str:

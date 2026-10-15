@@ -232,6 +232,7 @@ from app.core.scene.placement import NORMAL as NORMAL_FIELDS
 from app.core.scene.placement import POSITION as POSITION_FIELDS
 from app.core.scene.placement import bound_surface_values, seats_on, surface_at_feature
 from app.core.scene.project import clear_autosave, discard_recovery, find_recovery
+from app.core.scene.revision import halt_finding
 from app.core.sketch.planes import (
     feature_plane,
     feature_plane_parts,
@@ -25702,14 +25703,7 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         if chosen == "correct_step":
             if result is not None and result.stopped_at is not None:
-                refusal = next(
-                    (
-                        finding
-                        for finding in result.scene.report.findings
-                        if finding.severity == "error" and finding.op_id == result.stopped_at
-                    ),
-                    None,
-                )
+                refusal = halt_finding(result.scene.report.findings, result.stopped_at)
                 if refusal is not None:
                     self._correct_after_error(as_error(refusal, self.session.project.document))
                 else:

@@ -157,6 +157,7 @@ from app.core.scene.history import (
 )
 from app.core.scene.parameter_binding import BindingSpot
 from app.core.scene.parameter_usage import field_bounds
+from app.core.scene.revision import halt_finding
 from app.core.types import (
     CancelToken,
     Document,
@@ -6938,6 +6939,9 @@ class ReportPanel(QWidget):
         # Hält die Kette an, legt eine ändernde Handlung ihren Schritt dahinter,
         # wo nichts gerechnet wird: grau mit dem Halt als Grund (FD-104).
         halt = halt_line(self._document, self._stopped_at)
+        # Die Wege am haltenden Befund gehen (RA-3): derselbe Befund, dessen Wege
+        # die Sitzung als die des Halts anbietet (``revision.halt_finding``).
+        at_halt = finding is not None and halt_finding([finding], self._stopped_at) is not None
         previous: QWidget = self.finding_place
         for action in offered:
             button = QPushButton(str(action.label), self._offers)
@@ -6967,7 +6971,7 @@ class ReportPanel(QWidget):
                 # Sperre fällt (FD-30).
                 button.setEnabled(False)
                 say_refusal(button, computing_refusal())
-            refusal = action_refusal(action.id, halt=halt)
+            refusal = action_refusal(action.id, halt=halt, at_halt=at_halt)
             if refusal:
                 # **Gesperrt heißt grau mit Grund, vor dem Klick** (FD-5): In
                 # der Demo und ohne Geräteaktivierung endete *Auf das Bett
@@ -8059,12 +8063,15 @@ class ReportPanel(QWidget):
         menu.setToolTipsVisible(True)
         chosen: dict[Any, Any] = {}
         halt = halt_line(self._document, self._stopped_at)
+        # Die Wege am haltenden Befund gehen (RA-3): derselbe Befund, dessen Wege
+        # die Sitzung als die des Halts anbietet (``revision.halt_finding``).
+        at_halt = finding is not None and halt_finding([finding], self._stopped_at) is not None
         for action in offered:
             entry = menu.addAction(str(action.label))
             entry.setObjectName(f"report.{action.id}")
             # Dieselben Sperren wie an den Knöpfen darunter (RM-534, FD-5),
             # jede mit ihrem Grund (FD-27).
-            refusal = action_refusal(action.id, halt=halt) or (
+            refusal = action_refusal(action.id, halt=halt, at_halt=at_halt) or (
                 computing_refusal() if self._previous(item) else ""
             )
             entry.setEnabled(not refusal)

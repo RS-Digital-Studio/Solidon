@@ -125,7 +125,13 @@ from app.core.scene.project import (
     save,
     write_autosave,
 )
-from app.core.scene.revision import Revision, revise, searched_at_the_end, step_needs
+from app.core.scene.revision import (
+    Revision,
+    halt_finding,
+    revise,
+    searched_at_the_end,
+    step_needs,
+)
 from app.core.scene.revision import commit as commit_revision
 from app.core.scene.revision import dependencies as revision_dependencies
 from app.core.split import (
@@ -2757,14 +2763,8 @@ class Session(QObject):
         op_id, title = halted
         result = self.last_result
         assert result is not None
-        halt = next(
-            (
-                finding
-                for finding in result.scene.report.findings
-                if finding.severity == "error" and finding.op_id == op_id
-            ),
-            None,
-        )
+        # Derselbe Befund, nach dem die graue Anzeige fragt (RA-3).
+        halt = halt_finding(result.scene.report.findings, op_id)
         step = next((entry for entry in self.project.document.ops if entry.id == op_id), None)
         object_id = halt.object_id if halt is not None else None
         if object_id is None and step is not None and len(step.inputs) == 1:

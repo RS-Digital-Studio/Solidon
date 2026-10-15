@@ -60,6 +60,8 @@ def test_the_report_and_the_menu_say_the_same_halt(halted: MainWindow) -> None:
     assert line and line == halted._halt_reason(), "eine Quelle für beide Zugänge"
     assert action_refusal("split_bodies", halt=line) == line, "hängt einen Schritt an"
     assert action_refusal("orient_for_print", halt=line) == line
-    assert action_refusal("recount_and_retry", halt=line) == "", "ein Weg des Halts"
+    # Ein Weg des Halts ist eine Handlung am haltenden Befund, nicht eine Kennung (RA-3).
+    assert action_refusal("recount_and_retry", halt=line, at_halt=True) == "", "am Halt"
+    assert action_refusal("recount_and_retry", halt=line) == line, "an einem fremden Befund"
     assert action_refusal("show_details", halt=line) == "", "lesend"
     assert action_refusal("split_bodies") == "", "ohne Halt frei"
