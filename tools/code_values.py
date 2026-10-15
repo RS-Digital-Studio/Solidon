@@ -1,10 +1,12 @@
-"""Werte des statischen Auflösers und exakte Faltung eingebauter Folgenaufrufe."""
+"""Werte des statischen Auflösers und ihre exakte Faltung: Konstanten, Pfade, Summen, Vergleiche und
+eingebaute Folgenaufrufe."""
 
 from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from pathlib import PurePosixPath
 from typing import NamedTuple
 
 
@@ -156,6 +158,80 @@ def elements(value: Val) -> tuple[Val, ...] | None:
         # wüchse jede Schleife um Tausende Zeilen, die nichts auflösen.
         return tuple(constant(char) for char in value.data)
     return None
+
+
+def text(value: Val) -> str | None:
+    """Der Text einer Konstante, sonst ``None``."""
+    return value.data if value.kind == "const" and isinstance(value.data, str) else None
+
+
+def divide(values: tuple[Val, ...]) -> Val:
+    left, right = values
+    if left.kind == "path" and (part := text(right)) is not None:
+        return Val("path", (PurePosixPath(left.ref) / part).as_posix())
+    return Val("obj", "Quotient")
+
+
+def path_method(name: str, base: Val, values: tuple[Val, ...]) -> Val:
+    """``resolve()``, ``joinpath(…)``, ``with_suffix(…)`` und Co. eines gefalteten Pfads."""
+    path = PurePosixPath(base.ref)
+    texts = [text(value) for value in values]
+    if any(part is None for part in texts):
+        return Val("obj", f"{name}()")
+    if name == "joinpath":
+        return Val("path", path.joinpath(*(t or "" for t in texts)).as_posix())
+    if name == "with_suffix" and len(texts) == 1:
+        return Val("path", path.with_suffix(texts[0] or "").as_posix())
+    return base
+
+
+def join(values: tuple[Val, ...]) -> Val:
+    if all(value.kind == "const" for value in values):
+        return constant("".join(str(value.data) for value in values))
+    return Val("unknown", "f-String mit offenem Teil")
+
+
+def joined(separator: Val, values: tuple[Val, ...]) -> Val:
+    """``"; ".join(folge)`` einer bekannten Folge von Texten."""
+    items = elements(values[0]) if len(values) == 1 and values[0].ref == "" else None
+    texts = [text(item) for item in items or ()]
+    if items is None or any(part is None for part in texts):
+        return Val("unknown", "join mit offenem Teil")
+    return constant(str(separator.data).join(part or "" for part in texts))
+
+
+def add(values: tuple[Val, ...]) -> Val:
+    left, right = values
+    if left.kind == "const" and right.kind == "const":
+        if isinstance(left.data, str) and isinstance(right.data, str):
+            return constant(left.data + right.data)
+        if isinstance(left.data, (int, float)) and isinstance(right.data, (int, float)):
+            return constant(left.data + right.data)
+    if left.kind == "seq" and right.kind == "seq":
+        first = left.data if isinstance(left.data, tuple) else ()
+        second = right.data if isinstance(right.data, tuple) else ()
+        return Val("seq", "", first + second)
+    return Val("unknown", "Summe mit offenem Teil")
+
+
+COMPARE: dict[str, Callable[[object, object], bool]] = {
+    "Eq": lambda a, b: a == b,
+    "NotEq": lambda a, b: a != b,
+    "Is": lambda a, b: a is b,
+    "IsNot": lambda a, b: a is not b,
+}
+
+
+def compare(op: str, values: tuple[Val, ...]) -> Val:
+    left, right = values
+    if left.kind == "const" and right.kind == "const" and op in COMPARE:
+        return constant(COMPARE[op](left.data, right.data))
+    if op in ("In", "NotIn") and left.kind == "const":
+        items = elements(right)
+        if items is not None and all(item.kind == "const" for item in items):
+            inside = any(item.data == left.data for item in items)
+            return constant(inside if op == "In" else not inside)
+    return Val("unknown", "Vergleich mit offenem Teil")
 
 
 def _numeric(value: Val) -> int | float:

@@ -203,8 +203,15 @@ from tools.code_values import (  # noqa: E402
     sequence,
     unordered_items,
 )
+from tools.code_values import add as _add  # noqa: E402
+from tools.code_values import compare as _compare  # noqa: E402
 from tools.code_values import constant as _const  # noqa: E402
+from tools.code_values import divide as _divide  # noqa: E402
 from tools.code_values import elements as _elements  # noqa: E402
+from tools.code_values import join as _join  # noqa: E402
+from tools.code_values import joined as _joined  # noqa: E402
+from tools.code_values import path_method as _path_method  # noqa: E402
+from tools.code_values import text as _text  # noqa: E402
 
 #: Eine Zeile der Faltung: je Quelle (Schleife, ``parametrize``, Aufrufstelle) der Zeilenindex.
 Env = tuple[tuple[str, int], ...]
@@ -229,82 +236,9 @@ def _merge(first: Env, second: Env) -> Env | None:
     return tuple(sorted(merged.items()))
 
 
-def _text(value: Val) -> str | None:
-    return value.data if value.kind == "const" and isinstance(value.data, str) else None
-
-
 def _chain_text(base: IR, attrs: tuple[str, ...]) -> str:
     head = base.name if isinstance(base, Use) else "…"
     return ".".join((head, *attrs))
-
-
-def _divide(values: tuple[Val, ...]) -> Val:
-    left, right = values
-    if left.kind == "path" and (part := _text(right)) is not None:
-        return Val("path", (PurePosixPath(left.ref) / part).as_posix())
-    return Val("obj", "Quotient")
-
-
-def _path_method(name: str, base: Val, values: tuple[Val, ...]) -> Val:
-    """``resolve()``, ``joinpath(…)``, ``with_suffix(…)`` und Co. eines gefalteten Pfads."""
-    path = PurePosixPath(base.ref)
-    texts = [_text(value) for value in values]
-    if any(text is None for text in texts):
-        return Val("obj", f"{name}()")
-    if name == "joinpath":
-        return Val("path", path.joinpath(*(t or "" for t in texts)).as_posix())
-    if name == "with_suffix" and len(texts) == 1:
-        return Val("path", path.with_suffix(texts[0] or "").as_posix())
-    return base
-
-
-def _join(values: tuple[Val, ...]) -> Val:
-    if all(value.kind == "const" for value in values):
-        return _const("".join(str(value.data) for value in values))
-    return Val("unknown", "f-String mit offenem Teil")
-
-
-def _joined(separator: Val, values: tuple[Val, ...]) -> Val:
-    """``"; ".join(folge)`` einer bekannten Folge von Texten."""
-    items = _elements(values[0]) if len(values) == 1 and values[0].ref == "" else None
-    texts = [_text(item) for item in items or ()]
-    if items is None or any(text is None for text in texts):
-        return Val("unknown", "join mit offenem Teil")
-    return _const(str(separator.data).join(text or "" for text in texts))
-
-
-def _add(values: tuple[Val, ...]) -> Val:
-    left, right = values
-    if left.kind == "const" and right.kind == "const":
-        if isinstance(left.data, str) and isinstance(right.data, str):
-            return _const(left.data + right.data)
-        if isinstance(left.data, (int, float)) and isinstance(right.data, (int, float)):
-            return _const(left.data + right.data)
-    if left.kind == "seq" and right.kind == "seq":
-        first = left.data if isinstance(left.data, tuple) else ()
-        second = right.data if isinstance(right.data, tuple) else ()
-        return Val("seq", "", first + second)
-    return Val("unknown", "Summe mit offenem Teil")
-
-
-_COMPARE: dict[str, Callable[[object, object], bool]] = {
-    "Eq": lambda a, b: a == b,
-    "NotEq": lambda a, b: a != b,
-    "Is": lambda a, b: a is b,
-    "IsNot": lambda a, b: a is not b,
-}
-
-
-def _compare(op: str, values: tuple[Val, ...]) -> Val:
-    left, right = values
-    if left.kind == "const" and right.kind == "const" and op in _COMPARE:
-        return _const(_COMPARE[op](left.data, right.data))
-    if op in ("In", "NotIn") and left.kind == "const":
-        items = _elements(right)
-        if items is not None and all(item.kind == "const" for item in items):
-            inside = any(item.data == left.data for item in items)
-            return _const(inside if op == "In" else not inside)
-    return Val("unknown", "Vergleich mit offenem Teil")
 
 
 def _name_table(modules: Mapping[str, Facts]) -> dict[str, Names]:
