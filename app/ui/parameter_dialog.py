@@ -34,9 +34,16 @@ from PySide6.QtWidgets import (
 
 from app.core import expressions, guides
 from app.core.errors import AppError
+from app.core.units import decimals_for, from_mm, to_mm
 from app.i18n import tr
 from app.ui.form_fields import explain_row, name_rows
-from app.ui.labels import NumberSpin, fill_parameter_units, localised_value, wheel_needs_focus
+from app.ui.labels import (
+    NumberSpin,
+    display_unit,
+    fill_parameter_units,
+    localised_value,
+    wheel_needs_focus,
+)
 from app.ui.leash import weak_slot
 from app.ui.style import (
     NORMAL,
@@ -58,6 +65,33 @@ PARAMETER_MARKER = expressions.REFERENCE_PREFIX
 #: Wie ein Umlaut in einem Namen aussieht, den ``@name`` lesen kann — dieselbe
 #: Umschrift wie bei Dateinamen (``export.writer.safe_name``).
 _SPELLED_OUT: Final = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"}
+
+
+#: Der Code einer Länge im Dokument (§13): gespeichert in Millimetern (Regel 6),
+#: gezeigt und getippt in der Anzeigeeinheit (§19.3, FD-125).
+LENGTH_CODE: Final = "mm"
+
+
+def shown_number(value_mm: float, code: str) -> float:
+    """Eine gespeicherte Zahl, wie das Feld sie zeigt — eine Länge in der Anzeigeeinheit."""
+    return from_mm(value_mm, display_unit()) if code == LENGTH_CODE else value_mm
+
+
+def stored_number(shown: float, code: str) -> float:
+    """Eine getippte Zahl, wie das Dokument sie speichert — eine Länge in Millimetern.
+
+    Ein Feld, das niemand berührt hat, fragt vorher den gespeicherten Wert
+    (``ParameterDialog._stored``, ``recipe_dialog._ParamRow._stored``) — sonst
+    käme aus 40 mm über 1,5748 in 39,99992 mm zurück.
+    """
+    return to_mm(shown, display_unit()) if code == LENGTH_CODE else shown
+
+
+def number_places(code: str, least: int) -> int:
+    """Wie viele Stellen ein Feld für diese Bedeutung braucht — Zoll braucht mehr."""
+    if code == LENGTH_CODE:
+        return max(least, decimals_for(display_unit()))
+    return least
 
 
 def usable_name(name: str) -> bool:
@@ -175,14 +209,16 @@ class ParameterDialog(QDialog):
 
         self.name_field = QLineEdit(content)
         self.name_field.setPlaceholderText(tr("zum Beispiel breite"))
+        # **Eine Länge in der Anzeigeeinheit** (FD-125): Wer in Zoll arbeitet,
+        # tippt Zoll; gespeichert wird in Millimetern (``stored_number``). Was im
+        # Feld steht, gilt in der Einheit, die die Auswahl daneben nennt.
+        code = str(existing.unit or "") if existing is not None else LENGTH_CODE
+        self._given_code = code
         self.value_field = _ParameterValueSpin(content)
-        self.value_field.setDecimals(3)
+        self.value_field.setDecimals(number_places(code, 3))
         self.value_field.setRange(-100_000.0, 100_000.0)
         self.unit_field = QComboBox(content)
-        fill_parameter_units(
-            self.unit_field,
-            str(existing.unit or "") if existing is not None else "mm",
-        )
+        fill_parameter_units(self.unit_field, code, display_unit())
         self.unit_field.setAccessibleName(tr("Einheit"))
         # Die Schreibseite der Grenzen (Gesamtreview B-15): Die Leiste liest
         # minimum/maximum seit je als Spinbox-Grenzen und fiel immer auf
@@ -370,12 +406,26 @@ class ParameterDialog(QDialog):
             # Komma wie den Punkt, der Rückweg bleibt also derselbe.
             self.name_field.setText(str(existing.name))
             self.name_field.setReadOnly(True)
-            self.value_field.setValue(float(existing.value))
-            if existing.minimum is not None:
-                self.minimum_field.setText(localised_value(f"{float(existing.minimum):g}"))
-            if existing.maximum is not None:
-                self.maximum_field.setText(localised_value(f"{float(existing.maximum):g}"))
+            self.value_field.setValue(shown_number(float(existing.value), code))
+            for field, bound in (
+                (self.minimum_field, existing.minimum),
+                (self.maximum_field, existing.maximum),
+            ):
+                if bound is not None:
+                    shown = shown_number(float(bound), code)
+                    field.setText(localised_value(f"{shown:g}"))
             self.expression_field.setText(str(existing.expression or ""))
+        # Was das Feld beim Öffnen zeigte, und der gespeicherte Wert dahinter —
+        # ein unberührtes Feld gibt den gespeicherten zurück, nicht seine Anzeige.
+        self._given: dict[str, tuple[str, float]] = {}
+        if existing is not None:
+            self._given["value"] = (self.value_field.text(), float(existing.value))
+            for key, field, bound in (
+                ("minimum", self.minimum_field, existing.minimum),
+                ("maximum", self.maximum_field, existing.maximum),
+            ):
+                if bound is not None:
+                    self._given[key] = (field.text(), float(bound))
 
         self.problem = QLabel("", content)
         self.problem.setWordWrap(True)
@@ -469,10 +519,30 @@ class ParameterDialog(QDialog):
         low, high = bounds
         if low is not None and high is not None and low > high:
             return tr("Die Untergrenze liegt über der Obergrenze.")
-        value = self._value if expression else self.value_field.value()
+        value = self._value if expression else self._typed_value()
         if (low is not None and value < low) or (high is not None and value > high):
             return tr("Der Wert liegt außerhalb der eigenen Grenzen.")
         return None
+
+    def _code(self) -> str:
+        """Die gewählte Bedeutung, wie das Dokument sie schreibt (``mm``, ``°``, leer)."""
+        code = self.unit_field.currentData()
+        return str(code) if code is not None else LENGTH_CODE
+
+    def _stored(self, key: str, shown: float, text: str) -> float:
+        """Eine Zahl aus dem Feld ``key`` im Maß des Dokuments (FD-125).
+
+        Unberührt — derselbe Text, dieselbe Bedeutung — gilt der gespeicherte
+        Wert, sonst die Umrechnung der Anzeige.
+        """
+        given = self._given.get(key)
+        if given is not None and given[0] == text and self._code() == self._given_code:
+            return given[1]
+        return stored_number(shown, self._code())
+
+    def _typed_value(self) -> float:
+        """Die Zahl im Wertfeld, gespeichert wie das Dokument sie führt."""
+        return self._stored("value", self.value_field.value(), self.value_field.text())
 
     @staticmethod
     def _limit_problems() -> tuple[str, ...]:
@@ -484,13 +554,15 @@ class ParameterDialog(QDialog):
         )
 
     def _bounds(self) -> tuple[float | None, float | None] | None:
-        """Die eingetragenen Grenzen — oder ``None``, wenn eine keine Zahl ist.
+        """Die eingetragenen Grenzen im Maß des Dokuments — oder ``None``, wenn
+        eine keine Zahl ist.
 
         Leer heißt: keine Grenze. Das Komma gilt wie der Punkt, denn die
-        Felder daneben nehmen beide an.
+        Felder daneben nehmen beide an. Getippt wird in der Einheit der
+        Auswahl, eine Länge also in der Anzeigeeinheit (FD-125).
         """
         found: list[float | None] = []
-        for field in (self.minimum_field, self.maximum_field):
+        for key, field in (("minimum", self.minimum_field), ("maximum", self.maximum_field)):
             raw = field.text().strip().replace(",", ".")
             if not raw:
                 found.append(None)
@@ -504,7 +576,7 @@ class ParameterDialog(QDialog):
             # Meldung (Gesamtreview 05.09.2026, UI-26).
             if not math.isfinite(number):
                 return None
-            found.append(number)
+            found.append(self._stored(key, number, field.text()))
         return found[0], found[1]
 
     def _expression_typed(self, text: str) -> None:
@@ -645,11 +717,10 @@ class ParameterDialog(QDialog):
             with suppress(AppError):
                 expression = expressions.canonical(expression, self._values)
         low, high = self._bounds() or (None, None)
-        unit = self.unit_field.currentData()
         return Parameter(
             name=self.name_field.text().strip(),
-            value=self._value if expression else self.value_field.value(),
-            unit=str(unit) if unit is not None else "mm",
+            value=self._value if expression else self._typed_value(),
+            unit=self._code(),
             title=self._title,
             minimum=low,
             maximum=high,

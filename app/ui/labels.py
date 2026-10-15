@@ -109,25 +109,30 @@ def localised(text: str) -> str:
 #: in der Kerneinheit; Winkel und einheitenlose Anzahlen sind die beiden anderen
 #: Bedeutungen. Dieselbe Liste bedient Parameterdialog, linke Leiste und
 #: Rezeptdialog, damit ein Projektparameter überall dieselbe Sprache spricht.
+#: Die Länge nennt die Einheit, in der ihr Feld schreibt (``{unit}``, FD-125):
+#: gespeichert bleibt ``mm``, gezeigt wird die Anzeigeeinheit.
 PARAMETER_UNITS: Final[tuple[tuple[str, TranslatableText], ...]] = (
-    ("mm", _("mm — Länge")),
+    ("mm", _("{unit} — Länge")),
     (DEGREE_UNIT, _("Grad — Winkel")),
     ("", _("ohne Einheit")),
 )
 
 
-def fill_parameter_units(box: QComboBox, selected: str = "mm") -> None:
+def fill_parameter_units(box: QComboBox, selected: str = "mm", shown: str = "mm") -> None:
     """Füllt *box* mit den festen Parametereinheiten und wählt *selected*.
 
     Eine alte Projektdatei kann einen freien Wert tragen. Er wird sichtbar als
     zusätzlicher Eintrag erhalten, nie still als Millimeter umgedeutet. Tippen
     lässt die Auswahl trotzdem nicht zu: Neue Werte kommen nur aus der
     freigegebenen Liste.
+
+    *shown* ist die Einheit, in der das Feld daneben eine Länge schreibt —
+    die Daten bleiben die Codes des Dokuments.
     """
     box.clear()
     box.setEditable(False)
     for code, label in PARAMETER_UNITS:
-        box.addItem(str(label), code)
+        box.addItem(str(label).format(unit=shown), code)
     index = box.findData(selected)
     if index < 0:
         unknown_label = str(tr("{unit} — wird nicht umgerechnet").format(unit=selected or "?"))
