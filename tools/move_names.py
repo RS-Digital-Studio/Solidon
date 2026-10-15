@@ -35,6 +35,10 @@ unverändert). Jeder Ausgang außer 0 nennt seinen Ausweg.
   ``[[source_readers]]`` (``path``, ``scope``, ``module``: Leser von ``Path(M.__file__)``).
 * ``copies``: ``[[bindings]]`` (``module``, ``name``) — die Originale, deren Kopfkopien
   Modulzugriffe werden (Vorschlag: ``--list-copies``).
+* ``copies`` und ``component``: ``[[open_names]]`` (``path``, ``scope`` als Qualname oder
+  ``<module>``) — ein Zugriff mit offenem Namen (``getattr(x, name)``, ``vars(x)``,
+  ``x.__dict__``), von dem erklärt ist, dass er keinen verschobenen Namen liest (keine Kopie
+  eines Halters, keinen Wirt); umschreiben lässt er sich nicht.
 * ``component``: ``source`` (Datei des Wirts), ``host`` (Klasse), ``component``
   (``modul:Klasse`` aus dem Gerüst-Commit), ``host_attribute`` (``self.<attr>`` im Wirt),
   ``host_protocol``, ``methods`` (wandern), ``own_attributes`` (Zustand der Komponente),
@@ -43,9 +47,7 @@ unverändert). Jeder Ausgang außer 0 nennt seinen Ausweg.
   Position oder Schlüsselwort, ``role`` = ``qt_parent``, ``owner``, ``event_filter`` oder
   ``flow_host``), ``[[accesses]]`` (``path``, ``scope`` als Qualname oder ``<module>``,
   ``member``, ``decision`` = ``component`` oder ``keep``): nur wo der Nachweis offen lässt, ob
-  der Empfänger der Wirt ist (``tools/move_receivers.py``); ``member = "*"`` mit ``keep`` für
-  einen Zugriff mit offenem Namen (``getattr(x, name)``, ``vars(x)``) auf einen solchen
-  Empfänger.
+  der Empfänger der Wirt ist (``tools/move_receivers.py``).
 
 Jedes Feld ist eine Erklärung, keine Ausnahme: Was sie nicht trifft, ist ein Fehler, und es gibt
 keinen Schalter, der einen Fund übergeht (Konzept Codestruktur 4.1).

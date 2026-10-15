@@ -25,8 +25,6 @@ MODES = ("module", "copies", "component")
 #: Rollen eines nackten ``self`` im verschobenen Rumpf (Konzept 3.3).
 ROLES = ("qt_parent", "owner", "event_filter", "flow_host")
 DECISIONS = ("component", "keep")
-#: ``member`` einer Erklärung für einen Zugriff mit offenem Namen (Review 2, RM-M20).
-OPEN_MEMBER = "*"
 
 
 class CutError(Exception):
@@ -101,6 +99,14 @@ class Access:
 
 
 @dataclass(frozen=True)
+class OpenName:
+    """Ein erklärter Zugriff mit offenem Namen: Datei und Bereich (Qualname oder ``<module>``)."""
+
+    path: str
+    scope: str
+
+
+@dataclass(frozen=True)
 class Cut:
     """Ein gelesener Schnitt; welche Felder gelten, sagt ``mode``."""
 
@@ -127,6 +133,7 @@ class Cut:
     parent_members: tuple[str, ...] = ()
     self_roles: tuple[SelfRole, ...] = ()
     accesses: tuple[Access, ...] = ()
+    open_names: tuple[OpenName, ...] = ()
 
     @property
     def source_module(self) -> str:
@@ -447,7 +454,31 @@ def _copies_cut(top: _Table, cut_id: str, file: Path, aliases: tuple[Alias, ...]
         )
     if len(set(bindings)) != len(bindings):
         raise CutError("bindings: ein Original ist doppelt genannt")
-    return Cut(id=cut_id, mode="copies", file=file, bindings=tuple(bindings), aliases=aliases)
+    return Cut(
+        id=cut_id,
+        mode="copies",
+        file=file,
+        bindings=tuple(bindings),
+        aliases=aliases,
+        open_names=_open_names(top),
+    )
+
+
+def _open_names(top: _Table) -> tuple[OpenName, ...]:
+    """``[[open_names]]``: Zugriffe mit offenem Namen (``getattr(x, name)``, ``vars(x)``), von
+    denen erklärt ist, dass sie keinen verschobenen Namen lesen — je Datei und Bereich."""
+    found: list[OpenName] = []
+    for table in top.tables("open_names"):
+        found.append(
+            OpenName(
+                _path(table.text("path"), table.context),
+                _qualname(table.text("scope"), table.context),
+            )
+        )
+        table.done()
+    if len(set(found)) != len(found):
+        raise CutError("open_names: je Datei und Bereich höchstens eine Erklärung")
+    return tuple(found)
 
 
 def _component_cut(top: _Table, cut_id: str, file: Path, aliases: tuple[Alias, ...]) -> Cut:
@@ -508,19 +539,9 @@ def _component_cut(top: _Table, cut_id: str, file: Path, aliases: tuple[Alias, .
         decision = table.text("decision")
         if decision not in DECISIONS:
             raise CutError(f"{table.context}.decision: {' oder '.join(DECISIONS)}")
-        member = table.text("member")
-        if member == OPEN_MEMBER:
-            # Ein Zugriff mit offenem Namen (``getattr(x, name)``, ``vars(x)``) lässt sich nicht
-            # umschreiben: Erklärbar ist nur, dass sein Empfänger nicht der Wirt ist.
-            if decision != "keep":
-                raise CutError(
-                    f'{table.context}: member = "{OPEN_MEMBER}" (offener Name) nur mit '
-                    'decision = "keep" — umschreiben lässt sich ein offener Name nicht'
-                )
-        else:
-            member = _identifier(member, table.context)
-            if member not in methods and member not in own:
-                raise CutError(f"{table.context}.member {member!r} wandert nicht")
+        member = _identifier(table.text("member"), table.context)
+        if member not in methods and member not in own:
+            raise CutError(f"{table.context}.member {member!r} wandert nicht")
         accesses.append(
             Access(
                 _path(table.text("path"), table.context),
@@ -548,4 +569,5 @@ def _component_cut(top: _Table, cut_id: str, file: Path, aliases: tuple[Alias, .
         self_roles=tuple(roles),
         accesses=tuple(accesses),
         aliases=aliases,
+        open_names=_open_names(top),
     )

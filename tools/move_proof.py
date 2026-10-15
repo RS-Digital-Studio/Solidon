@@ -39,7 +39,7 @@ from pathlib import Path
 from tools.code_index import Index, PatchSite
 from tools.move_compare import module_of_expression
 from tools.move_cut import Cut
-from tools.move_forms import Calls
+from tools.move_forms import Calls, folded_names
 from tools.move_proof_component import ComponentProof
 from tools.move_proof_copies import CopiesProof
 from tools.move_proof_module import ModuleProof
@@ -176,12 +176,8 @@ def _queries(trees: Trees, side: str) -> dict[tuple[str, str], list[str]]:
             module = module_of_expression(index, path, named.target)
             if module is None:
                 continue
-            names = index.resolve(path, named.name)
-            if not names or not all(v.kind == "const" and isinstance(v.data, str) for v in names):
-                continue
-            for value in names:
-                site = f"{path}:{named.call.lineno}"
-                found.setdefault((module, str(value.data)), []).append(site)
+            for name in sorted(folded_names(index, path, named.name) or ()):
+                found.setdefault((module, name), []).append(f"{path}:{named.call.lineno}")
     return found
 
 

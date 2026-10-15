@@ -44,7 +44,7 @@ mit ``classmethod``/``staticmethod``, ein Lesen einer Definition des Wirtsmoduls
 importiert den Wirt nicht), ein gepatchter Name des Wirtsmoduls, den eine verschobene Methode
 liest, ``hasattr`` oder ``getattr`` mit Vorgabe auf ein verschobenes Member (auch über einen
 Alias), ein Zugriff mit offenem Namen (``getattr(x, name)``, ``vars(x)``, ``x.__dict__``) auf einen
-Empfänger, der der Wirt ist oder sein kann (ohne Erklärung ``member = "*"``), eine Zeichenkette
+Empfänger, der der Wirt ist oder sein kann (ohne Erklärung in ``[[open_names]]``), eine Zeichenkette
 mit seinem Namen ohne Erklärung, eine Erklärung, die nichts trifft — und was Qt danach anders sähe
 (``tools/move_qt.py``): ``self.sender()`` in einem verschobenen Rumpf oder über eine Methode des
 Wirts, die ein verschobener Rumpf erreicht, eine verschobene
@@ -74,12 +74,13 @@ from tools.move_compare import (
     qualname_of,
     string_constants,
 )
-from tools.move_cut import OPEN_MEMBER, Cut
+from tools.move_cut import Cut, OpenName
 from tools.move_edits import Edit, EditError, apply_text
 from tools.move_forms import (
     Calls,
     annotation_names,
     attribute_kind,
+    folded_names,
     is_annotation,
     is_query,
     patch_call,
@@ -165,6 +166,8 @@ class Shape:
         self.receivers = Receivers(index, self.module, cut.host, source_of)
         #: Die Erklärungen aus ``[[accesses]]``, die eine Stelle getroffen haben.
         self.used_accesses: set[tuple[str, str, str]] = set()
+        #: Die Erklärungen aus ``[[open_names]]``, die eine Stelle getroffen haben.
+        self.used_open: set[OpenName] = set()
         self.component_module = cut.component_module
         self.moved_names = set(cut.methods) | set(cut.own_attributes)
         self.problems: list[str] = []
@@ -527,9 +530,9 @@ class Shape:
         Lesung des ganzen Namensraums (``vars(x)``, ``dir(x)``, ``x.__dict__``) —, auf einen
         Empfänger, der der Wirt ist oder sein kann: Er lässt sich nicht umschreiben und fände
         ein verschobenes Member danach still nicht (Review 2, RM-M20). Nachweislich der Wirt →
-        abgewiesen, Ausweg fester Name; offen → abgewiesen, außer ``[[accesses]]`` erklärt an
-        Datei und Bereich mit ``member = "*"``, dass er es nicht ist. Ein gefalteter Name, der
-        ein verschobenes Member trifft, verlangt die feste Zeichenkette."""
+        abgewiesen, Ausweg fester Name; offen → abgewiesen, außer ``[[open_names]]`` erklärt an
+        Datei und Bereich, dass er es nicht ist. Ein gefalteter Name, der ein verschobenes
+        Member trifft, verlangt die feste Zeichenkette."""
         for path, source in files:
             for node in ast.walk(source.tree):
                 named = calls.named(path, node) if isinstance(node, ast.Call) else None
@@ -537,14 +540,9 @@ class Shape:
                 if named is not None:
                     if named.fixed is not None:
                         continue
-                    values = self.index.resolve(path, named.name)
-                    folded = {v.data for v in values if v.kind == "const"}
-                    if (
-                        values
-                        and len(folded) == len(values)
-                        and all(isinstance(f, str) for f in folded)
-                    ):
-                        hits = {str(f) for f in folded} & self.moved_names
+                    folded = folded_names(self.index, path, named.name)
+                    if folded is not None:
+                        hits = set(folded & self.moved_names)
                         if not hits:
                             continue
                     target = named.target
@@ -575,10 +573,9 @@ class Shape:
         parts = scope.split(".")
         if path == self.cut.source and parts[0] == self.cut.host and len(parts) > 2:
             scope = ".".join(parts[:2])
-        key = (path, scope, OPEN_MEMBER)
-        declared = any((a.path, a.scope, a.member) == key for a in self.cut.accesses)
+        declared = OpenName(path, scope) in self.cut.open_names
         if declared:
-            self.used_accesses.add(key)
+            self.used_open.add(OpenName(path, scope))
             if judged.verdict == OPEN:
                 return
         if judged.verdict == HOST:
@@ -586,14 +583,18 @@ class Shape:
                 f"{path}:{line}: {text} liest den Wirt über einen offenen Namen ({judged.why}) — "
                 "fände ein verschobenes Member danach nicht; vor dem Schnitt mit festem Namen "
                 "schreiben"
-                + ('; die Erklärung mit member = "*" widerspricht dem Nachweis' if declared else "")
+                + (
+                    "; die Erklärung in [[open_names]] widerspricht dem Nachweis"
+                    if declared
+                    else ""
+                )
             )
             return
         self.problems.append(
             f"{path}:{line}: {text} liest über einen offenen Namen einen Empfänger, der der Wirt "
             f"sein kann ({judged.why}) — mit festem Namen schreiben, den Empfänger als Nicht-Wirt "
-            'nachweisbar schreiben (Annotation) oder in [[accesses]] mit member = "*" und '
-            f'decision = "keep" erklären (path = "{path}", scope = "{scope}")'
+            "nachweisbar schreiben (Annotation) oder in [[open_names]] erklären, dass er es nicht "
+            f'ist (path = "{path}", scope = "{scope}")'
         )
 
     def _host_filter(self, path: str, source: Source, call: ast.Call) -> None:
@@ -1339,6 +1340,12 @@ class ComponentPlanner:
                 self.ctx.problem(
                     f"accesses ({access.path}, {access.scope}, {access.member}) trifft keine "
                     "Stelle — streichen oder prüfen"
+                )
+        for entry in self.cut.open_names:
+            if entry not in self.shape.used_open:
+                self.ctx.problem(
+                    f"open_names ({entry.path}, {entry.scope}) trifft keinen Zugriff mit offenem "
+                    "Namen auf einen möglichen Wirt — streichen oder prüfen"
                 )
 
     # ------------------------------------------------------------------ Abhängigkeiten

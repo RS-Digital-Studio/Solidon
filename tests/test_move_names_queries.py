@@ -211,3 +211,21 @@ def test_the_tree_binds_no_alias_it_does_not_have(tmp_path: Path) -> None:
     calls = Calls(Index.build(root, cache=False), tree_files(root))
     assert {"has", "ask"} <= calls.names
     assert "lg" not in calls.names
+
+
+def test_an_open_holder_read_declared_in_open_names_passes(tmp_path: Path) -> None:
+    """``[[open_names]]`` erklärt an Datei und Bereich, dass der offene Name keine Kopie liest
+    (die Lage zweier Stellen der K-Trockenprobe); Planer und Beweis nehmen es an. Eine
+    Erklärung, die nichts trifft, ist ein Fund."""
+    text = COPIES_FORMS[2][1]
+    declared = fx.COPIES_CUT + f'\n[[open_names]]\npath = "{QUERY}"\nscope = "pick"\n'
+    _root, result = _run(tmp_path / "plan", fx.COPIES_OLD | {QUERY: text}, declared)
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    found = _prove(
+        tmp_path / "proof", fx.COPIES_OLD | {QUERY: text}, COPIES_EXPECTED | {QUERY: text}, declared
+    )
+    assert found.ok, found.text()
+    assert "erklärt in open_names" in found.text()
+    _root, result = _run(tmp_path / "leer", fx.COPIES_OLD, declared)
+    assert result.status == "rejected", result.problems
+    assert any(f"open_names ({QUERY}, pick) trifft keinen" in p for p in result.problems)

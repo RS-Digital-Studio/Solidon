@@ -36,11 +36,12 @@ from tools.move_compare import (
     _text,
     fixed_parts,
     module_of_expression,
+    qualname_of,
     string_constants,
 )
 from tools.move_copies import Copy, families, names_copy, namespace_reads
-from tools.move_cut import Cut
-from tools.move_forms import Calls, annotation_expression, is_annotation
+from tools.move_cut import Cut, OpenName
+from tools.move_forms import Calls, annotation_expression, folded_names, is_annotation
 from tools.move_source import Source, path_of
 from tools.move_trees import Mapping, Proof, Trees
 
@@ -188,10 +189,16 @@ class CopiesProof:
             source = self.trees.old(path)
             for node in ast.walk(source.tree):
                 named = calls.named(path, node) if isinstance(node, ast.Call) else None
-                if named is not None and named.fixed is not None:
-                    continue
+                if named is not None and folded_names(index, path, named.name) is not None:
+                    continue  # ein fester oder gefalteter Name: check_queries prüft ihn
                 target = named.target if named is not None else calls.namespace(path, node)
                 if target is None or module_of_expression(index, path, target) not in holders:
+                    continue
+                if OpenName(path, qualname_of(source, node)) in self.cut.open_names:
+                    self.proof.note(
+                        f"{path}:{getattr(node, 'lineno', '?')}: {_text(source, node)} liest den "
+                        "Namensraum eines Halters (erklärt in open_names)"
+                    )
                     continue
                 self.proof.error(
                     f"{path}:{getattr(node, 'lineno', '?')}: {_text(source, node)} liest den "

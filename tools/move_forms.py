@@ -77,6 +77,16 @@ def is_annotation(parent: ast.AST | None, node: ast.AST) -> bool:
 # ------------------------------------------------------------------ Aufrufe
 
 
+def folded_names(index: Index, path: str, node: ast.expr) -> frozenset[str] | None:
+    """Die Zeichenketten, zu denen der Auflöser einen Attributnamen faltet (``name`` aus einer
+    Schleife über ein Literal, eine Konstante, ein ``if``-Ausdruck); ``None``, wenn er ihn nicht
+    ganz falten kann — dann ist der Name offen."""
+    values = index.resolve(path, node)
+    if not values or not all(v.kind == "const" and isinstance(v.data, str) for v in values):
+        return None
+    return frozenset(str(v.data) for v in values)
+
+
 @dataclass(frozen=True)
 class NamedCall:
     """Ein Aufruf mit einem Attributnamen an zweiter Stelle.

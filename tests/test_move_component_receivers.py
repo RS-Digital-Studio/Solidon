@@ -327,7 +327,7 @@ def test_an_open_name_on_a_possible_host_is_rejected(
     tmp_path: Path, label: str, tool: str, where: str
 ) -> None:
     """Ein offener Name lässt sich nicht umschreiben: auf den Wirt abgewiesen, auf einen
-    Empfänger, der es sein kann, abgewiesen mit dem Ausweg ``member = "*"``."""
+    Empfänger, der es sein kann, abgewiesen mit dem Ausweg ``[[open_names]]``."""
     message = _rejected(tmp_path, fx.COMPONENT_OLD | {NAMES: NAMES_HEAD + tool}, fx.COMPONENT_CUT)
     assert where in message, (label, message)
 
@@ -344,18 +344,16 @@ def test_an_open_name_left_standing_is_red(
     assert any(where in e for e in proof.errors), (label, proof.errors)
 
 
-def test_an_open_name_declared_keep_moves_and_a_foreign_receiver_needs_nothing(
+def test_an_open_name_declared_moves_and_a_foreign_receiver_needs_nothing(
     tmp_path: Path,
 ) -> None:
-    """``member = "*"`` mit ``keep`` erklärt, dass der Empfänger nicht der Wirt ist; ein
-    nachweislich fremder Empfänger (``toast: Toast``) braucht keine Erklärung; ``component``
-    lässt sich für einen offenen Namen nicht erklären."""
+    """``[[open_names]]`` erklärt, dass der Empfänger nicht der Wirt ist; ein nachweislich
+    fremder Empfänger (``toast: Toast``) braucht keine Erklärung; eine Erklärung am
+    nachgewiesenen Wirt widerspricht und eine, die nichts trifft, ist ein Fund."""
     tool = NAMES_HEAD + OPEN_NAMES[1][1]
-    declared = (
-        f'\n[[accesses]]\npath = "{NAMES}"\nscope = "call"\nmember = "*"\ndecision = "keep"\n'
-    )
+    declared = f'\n[[open_names]]\npath = "{NAMES}"\nscope = "call"\n'
     _root, result = _run(
-        tmp_path / "keep", fx.COMPONENT_OLD | {NAMES: tool}, fx.COMPONENT_CUT + declared
+        tmp_path / "erklärt", fx.COMPONENT_OLD | {NAMES: tool}, fx.COMPONENT_CUT + declared
     )
     assert result.status == "written", result.problems
     foreign = NAMES_HEAD + (
@@ -364,9 +362,12 @@ def test_an_open_name_declared_keep_moves_and_a_foreign_receiver_needs_nothing(
     )
     _root, result = _run(tmp_path / "fremd", fx.COMPONENT_OLD | {NAMES: foreign}, fx.COMPONENT_CUT)
     assert result.status == "written", result.problems
-    cut_file = tmp_path / "cut.toml"
-    cut_file.write_text(
-        fx.COMPONENT_CUT + declared.replace('"keep"', '"component"'), encoding="utf-8"
+    host = NAMES_HEAD + OPEN_NAMES[3][1]
+    message = _rejected(
+        tmp_path / "wirt",
+        fx.COMPONENT_OLD | {NAMES: host},
+        fx.COMPONENT_CUT + declared.replace('"call"', '"pick"'),
     )
-    with pytest.raises(move_cut.CutError, match="nur mit"):
-        move_cut.load(cut_file)
+    assert "die Erklärung in [[open_names]] widerspricht dem Nachweis" in message, message
+    message = _rejected(tmp_path / "leer", fx.COMPONENT_OLD, fx.COMPONENT_CUT + declared)
+    assert f"open_names ({NAMES}, call) trifft keinen Zugriff" in message, message

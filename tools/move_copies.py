@@ -36,10 +36,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from tools.code_index import HeadCopy, Index
-from tools.move_compare import FileScopes, TopLevel, fixed_parts, string_constants
-from tools.move_cut import Cut
+from tools.move_compare import FileScopes, TopLevel, fixed_parts, qualname_of, string_constants
+from tools.move_cut import Cut, OpenName
 from tools.move_edits import Edit
-from tools.move_forms import annotation_expression, annotation_names, is_annotation
+from tools.move_forms import annotation_expression, annotation_names, folded_names, is_annotation
 from tools.move_refs import (
     AlreadyAppliedError,
     Context,
@@ -199,7 +199,14 @@ class CopiesPlanner:
         self._outside()
         self._patches()
         self._lazy_exports()
+        self.used_open: set[OpenName] = set()
         self._stale_strings()
+        for entry in self.cut.open_names:
+            if entry not in self.used_open:
+                self.ctx.problem(
+                    f"open_names ({entry.path}, {entry.scope}) trifft keinen Zugriff mit offenem "
+                    "Namen auf einen Halter — streichen oder prüfen"
+                )
         self.ctx.raise_problems()
         edits: dict[str, list[Edit]] = {}
         for path, rewrite in sorted(self.ctx.rewrites().items()):
@@ -591,17 +598,23 @@ class CopiesPlanner:
                 continue
             text = _short(source, node)
             line = target.lineno
-            if named is not None and named.fixed is not None:
-                if (holder, named.fixed) in self.copies:
+            names = folded_names(self.ctx.index, path, named.name) if named else None
+            if names is not None:
+                if any((holder, name) in self.copies for name in names):
                     self.ctx.problem(
                         f"{path}:{line}: {text} fragt nach der Kopie — vor dem Schnitt "
                         "als Zugriff auf das Original schreiben"
                     )
                 continue
+            declared = OpenName(path, qualname_of(source, node))
+            if declared in self.cut.open_names:
+                self.used_open.add(declared)
+                continue
             self.ctx.problem(
                 f"{path}:{line}: {text} liest den Namensraum des Halters {holder} als "
                 "Ganzes, und danach fehlen dort seine Kopien — vor dem Schnitt mit festem Namen "
-                "schreiben oder das Original lesen"
+                "schreiben oder das Original lesen; liest es keine Kopie, in [[open_names]] "
+                f'erklären (path = "{path}", scope = "{declared.scope}")'
             )
 
 
