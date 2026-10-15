@@ -1030,6 +1030,27 @@ params = { diameter = 6.0, height = 10.0, z = 20.0 }
 op = "union_objects"
 inputs = ["obj_1", "obj_2"]
 
+# Drei gleiche Zapfen sind weniger, als die Erkennung ohne Erzeugerwissen als
+# Muster liest (``patterns.MIN_CELLS``); *Als Muster zusammenfassen* fasst die
+# markierten zusammen (RM-504; FD-101).
+[scene."drei_zapfen.netz"]
+summary = "Der Netzquader mit drei gleichen Zapfen Ø 6 × 5 mm in einer Reihe."
+kernel = "netz"
+base = "quader.netz"
+promises = { objects = 1, kinds = ["pin"] }
+[[scene."drei_zapfen.netz".ops]]
+op = "create_cylinder"
+params = { diameter = 6.0, height = 5.0, x = -12.0, z = 20.0 }
+[[scene."drei_zapfen.netz".ops]]
+op = "create_cylinder"
+params = { diameter = 6.0, height = 5.0, z = 20.0 }
+[[scene."drei_zapfen.netz".ops]]
+op = "create_cylinder"
+params = { diameter = 6.0, height = 5.0, x = 12.0, z = 20.0 }
+[[scene."drei_zapfen.netz".ops]]
+op = "union_objects"
+inputs = ["obj_1", "obj_2", "obj_3", "obj_4"]
+
 # Am exakten Kern über *Verrunden mit Verlauf*: Die Rundung mit wachsendem Radius
 # ist keine Verrundung fester Breite, sondern eine gerundete Seite. *Text
 # aufbringen* trägt am exakten Körper heute keine Merkmale (Bericht D0-L, Fund 1).

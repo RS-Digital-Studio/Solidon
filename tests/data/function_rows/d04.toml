@@ -39,6 +39,18 @@ route = [{ target = "feature:move_feature" }]
 [row."feature.every"]
 route = [{ target = "feature:move_feature" }]
 
+# *Als Muster zusammenfassen* übernimmt die markierten Zeilen eines Körpers
+# (``MainWindow._values_for_selection``); am Quader ohne gleiche Einzelmerkmale
+# gab es nichts zusammenzufassen, und der Schritt sagte ab (FD-101).
+[row."group_pattern"]
+start_scene = "drei_zapfen.netz"
+example_goal = "Die drei Zapfen als ein Muster führen."
+route = [
+  { target = "tree.row:obj_1.pin_1" },
+  { target = "tree.row:obj_1.pin_2", modifier = "ctrl" },
+  { target = "tree.row:obj_1.pin_3", modifier = "ctrl" },
+]
+
 # Die örtliche Erkennung ist erst scharf; ihr Dialog öffnet mit dem Klick auf die
 # Stelle im Bild (``local_recognition_flow``, FD-101).
 [row."dialog:local_recognition_dialog"]

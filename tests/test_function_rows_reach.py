@@ -23,6 +23,10 @@ from tools import function_list, function_surface
 REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
     # D4
     "slot_hole": ("erkannte_bohrung.netz", ("tree.row:obj_1.hole_1",)),
+    "group_pattern": (
+        "drei_zapfen.netz",
+        ("tree.row:obj_1", "tree.row:obj_1.pin_1", "tree.row:obj_1.pin_2", "tree.row:obj_1.pin_3"),
+    ),
     "feature.apply": ("merkmal.hole.exakt", ("tree.row:obj_1.hole_1", "feature:move_feature")),
     "feature.in_view": ("merkmal.hole.exakt", ("tree.row:obj_1.hole_1", "feature:move_feature")),
     "feature.every": (
@@ -177,3 +181,37 @@ def test_the_thread_of_its_scene_asks_for_its_size() -> None:
         counterpart.thread_values_for(thread, families=standards.shown_thread_families())
     assert asked.value.constraint == counterpart.AMBIGUOUS_THREAD
     assert set(asked.value.values["choices"]) == {"M4", "#8-36 UNF"}
+
+
+def test_the_three_pins_of_its_scene_are_one_pattern_after_grouping() -> None:
+    """``drei_zapfen.netz`` trägt drei Einzelzapfen — weniger, als die Erkennung als
+    Muster liest —, und *Als Muster zusammenfassen* macht aus den markierten eines:
+    das Beispielziel der Zeile ``group_pattern``. Am Quader ohne gleiche Merkmale
+    sagte der Schritt ab."""
+    from dataclasses import replace
+
+    from app.core.types import Operation
+    from tools import function_scenes
+
+    project = function_scenes.build_scene("drei_zapfen.netz")
+    before = function_scenes.evaluate_scene(project).scene.objects["obj_1"].features
+    pins = sorted(name for name, feature in before.items() if feature.kind == "pin")
+    assert pins == ["pin_1", "pin_2", "pin_3"]
+    assert not any(feature.kind == "pattern" for feature in before.values())
+    document = project.document
+    step = Operation(
+        id=max(op.id for op in document.ops) + 1,
+        op="group_pattern",
+        inputs=("obj_1",),
+        outputs=("obj_1",),
+        params={"at_features": pins},
+    )
+    grouped = replace(project, document=replace(document, ops=[*document.ops, step]))
+    result = function_scenes.evaluate_scene(grouped)
+    assert result.stopped_at is None
+    patterns = [
+        feature
+        for feature in result.scene.objects["obj_1"].features.values()
+        if feature.kind == "pattern"
+    ]
+    assert len(patterns) == 1 and patterns[0].params.get("grouped") is True
