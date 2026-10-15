@@ -384,7 +384,7 @@ Alle Gegenproben laufen ohne Fenster in `tests/test_function_report.py`. Sie spe
 | 2 Weg | A zählt, B urteilt | `steps`: Klicks inklusive Wegklicks, Tasten, getippte Felder, Entscheidungen, Zonenfolge | 4 Klicks an einer Körperhandlung (E1 über der Schwelle); fehlende `steps` ergeben „nicht gemessen“, nie „gut“ |
 | 3 Vorschau | A | `preview`: Abdruck gegen Übernommenes; über `COARSE_PREVIEW_ABOVE` der Satz im Band | ungleiche Abdrücke; grobe Szene ohne Bandsatz |
 | 4 Ergebnis | A | `result` gegen `expectation`; `cli` druckgleich | Volumen außerhalb der Toleranz; Kommandozeilennetz mit verschobener Ecke; Erwartung ohne Herkunft |
-| 5 Rückweg | A | `states`: Rückgängig = vorher, Wiederholen = übernommen, Escape und Abbrechen = vorher bei gleich langem Verlauf; Tasten aus `shortcut_schemes` | Rückgängig ≠ vorher; Escape mit gewachsenem Verlauf. Nur die Auswahl verschieden: Vermerk, nicht rot |
+| 5 Rückweg | A | `states`: Rückgängig = vorher, Wiederholen = übernommen, Escape und Abbrechen = vorher bei gleich langem Verlauf, nur an Zeilen mit Entwurf oder Dialog (`unmeasured`: `NO_DRAFT` und `WITHOUT_DIALOG`); Tasten aus `shortcut_schemes` | Rückgängig ≠ vorher; Escape mit gewachsenem Verlauf. Nur die Auswahl verschieden: Vermerk, nicht rot |
 | 6 Rückmeldung und Zeit | A | `timing`: Lücke ≤ 100 ms; ab 0,2 s Zeiger, ab 2 s Balken und *Abbrechen*; Budget überschritten = Verdacht | Lücke 150 ms; Lauf von 3 s ohne sichtbares *Abbrechen* |
 | 7 Fehlerweg | A misst, B (V5-Wortlaut) | `fault_case`, `messages[].actions` geklickt und wirksam | Meldung ohne Handlung; Handlung ohne Wirkung |
 | 8 Verständlich | A (V1–V3, V6 Handbuch), B (V4–V6, Gesamturteil) | `texts`, `fields`, Handbuchfenster geöffnet | Negativwort; Feld ohne eigenen Satz; B „gut“ trotz V1-Treffer |
@@ -395,7 +395,7 @@ Alle Gegenproben laufen ohne Fenster in `tests/test_function_report.py`. Sie spe
 | 13 Auswahlstufen | A misst, B (gegen `grenzen.md`) | `matrix` über sechs Stufen | grau mit leerem Grund; angeboten ohne Wirkung |
 | 14 Abbruch | A | `langsam_2s`: *Abbrechen* sichtbar, Klick auf `progress.cancel`, Stand = vorher, wartendes Übernehmen verfällt | Abdruck nach Abbruch ≠ vorher; Szene unter 2 s ergibt „nicht prüfbar“, nie grün |
 | 15 Halt und Einfügemarke | A | `halt`: Grund mit Schrittnummer; Einfügen über `menu:history.insert`: Ergebnis davor oder Absage mit *Einfügen beenden* | Grund ohne Nummer; Absage ohne Handlung |
-| 16 Projektwechsel | A | Wechsel über *Datei → Zuletzt geöffnet* während Vorschau, Entwurf und Rechnung; `switch.late_events` | ein später Befund oder Dialog nach dem Wechsel |
+| 16 Projektwechsel | A | Wechsel über *Datei → Zuletzt geöffnet* während Vorschau, Entwurf und Rechnung, soweit die Zeile die Lage hat (`function_checks.SWITCH_ABSENT` je Lage unter `unmeasured.switch`; keine Lage: *entfällt* ohne Rechnung); `switch.late_events` | ein später Befund oder Dialog nach dem Wechsel |
 | 17 Agentenweg | A ohne Fenster | `menu_path` aus `tool_schemas()` gegen `place`; Rücknahme des Vorschlags über die Agenten-Suite (Skriptmodell), nur verwiesen | Menüpfad „Datei → …“ bei Ort Karte |
 | 18 Lizenzzustand | A | `licence_runs`: Demo abgelaufen, Testlauf abgelaufen, gekauft | schreibendes Ziel freigegeben trotz Ablauf; grau ohne Grund |
 | 19 Gestaltung | A, B und C nach §3.3 | | je Kriterium nach §3.3 |

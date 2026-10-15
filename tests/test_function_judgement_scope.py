@@ -12,11 +12,19 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from tools.function_checks import CaseOutcome
+from tools.function_checks import (
+    NO_DRAFT,
+    SWITCH_RUN_OVER,
+    SWITCH_WITHOUT_INPUTS,
+    SWITCH_WITHOUT_PREVIEW,
+    WITHOUT_DIALOG,
+    CaseOutcome,
+)
 from tools.function_points import judge_case
 from tools.function_samples import sample_context, sample_protocol
 
@@ -86,3 +94,101 @@ def test_a_way_without_its_goal_does_not_enter_the_input_share() -> None:
     """Der E2-Paketanteil liest nur Zeilen, deren Eingaben gezählt sind (N4)."""
     case = _judged(_language_surface)
     assert "inputs" not in case.criteria["E2"].measurement
+
+
+# --- FD-128: Rückweg und Projektwechsel nur in den Lagen der Zeile -------------------
+
+
+def _without_draft_or_dialog(protocol: dict[str, Any]) -> None:
+    """Eine Befundhandlung wie *Auf das Bett setzen*: kein Entwurf, kein Dialog (Lauf 002)."""
+    protocol["states"].pop("escape")
+    protocol["states"].pop("cancelled")
+    protocol["unmeasured"] = {
+        "states.escape": NO_DRAFT,
+        "focus_return": WITHOUT_DIALOG,
+    }
+
+
+def test_the_way_back_without_a_draft_needs_no_escape() -> None:
+    """Lauf 002: Rückgängig und Wiederholen stimmen, P5 meldete trotzdem alles fehlend."""
+    outcome = _judged(_without_draft_or_dialog).points[5]
+    assert outcome.verdict == "erfuellt", outcome
+    assert outcome.measurement["compared"] == ["undo", "redo"]
+
+
+def test_a_dialog_without_a_measured_escape_stays_unmeasured() -> None:
+    """Gegenfall: Wer einen Dialog öffnet, hat einen Entwurf — ohne Escape kein Rückweg."""
+
+    def change(protocol: dict[str, Any]) -> None:
+        _without_draft_or_dialog(protocol)
+        protocol["unmeasured"].pop("focus_return")
+
+    assert _judged(change).points[5].verdict == "nicht_gelaufen"
+
+
+ALL_ABSENT = (
+    f"vorschau: {SWITCH_WITHOUT_INPUTS}, kein vorschau; "
+    f"entwurf: {SWITCH_WITHOUT_INPUTS}, kein entwurf; rechnung: {SWITCH_RUN_OVER}"
+)
+
+
+def _switch(phases: list[str] | None, notes: str) -> Callable[[dict[str, Any]], None]:
+    def change(protocol: dict[str, Any]) -> None:
+        protocol["switch"] = None if phases is None else {"phases": phases, "late_events": []}
+        protocol["unmeasured"] = {"switch": notes} if notes else {}
+
+    return change
+
+
+def test_a_row_without_any_switch_situation_is_not_applicable() -> None:
+    """Lauf 002: ohne Eingaben, ohne Vorschau und mit sofort fertiger Rechnung (FD-128)."""
+    outcome = _judged(_switch(None, ALL_ABSENT)).points[16]
+    assert outcome.verdict == "entfaellt" and outcome.reason == "ohne_rechnung", outcome
+
+
+def test_only_the_situations_of_the_row_are_demanded() -> None:
+    """Lauf 003 *Parameter anlegen*: nur der Entwurf — Vorschau und Rechnung gibt es nicht."""
+    notes = f"vorschau: {SWITCH_WITHOUT_PREVIEW}; rechnung: {SWITCH_RUN_OVER}"
+    outcome = _judged(_switch(["entwurf"], notes)).points[16]
+    assert outcome.verdict == "erfuellt", outcome
+    assert any("vorschau" in note for note in outcome.notes)
+
+
+@pytest.mark.parametrize(
+    ("phases", "notes"),
+    [
+        (None, "Szene zweites_projekt fehlt"),
+        (["vorschau", "entwurf"], "rechnung: der Wechsel kam nicht an"),
+        (["entwurf"], f"vorschau: Startszene nicht herstellbar; rechnung: {SWITCH_RUN_OVER}"),
+    ],
+    ids=["ohne_szene", "wechsel_kam_nicht_an", "startszene_fehlt"],
+)
+def test_a_situation_the_bench_could_not_reach_stays_unmeasured(
+    phases: list[str] | None, notes: str
+) -> None:
+    """Gegenfälle: Was die Zeile hat, aber nicht gemessen ist, bleibt „nicht gelaufen“."""
+    assert _judged(_switch(phases, notes)).points[16].verdict == "nicht_gelaufen"
+
+
+def test_a_late_event_after_a_switch_stays_a_finding() -> None:
+    def change(protocol: dict[str, Any]) -> None:
+        _switch(["entwurf"], f"vorschau: {SWITCH_WITHOUT_PREVIEW}; rechnung: {SWITCH_RUN_OVER}")(
+            protocol
+        )
+        protocol["switch"]["late_events"] = [{"kind": "meldung", "text": "spät"}]
+
+    assert _judged(change).points[16].verdict == "fund"
+
+
+def test_the_bench_writes_the_reasons_the_judges_read() -> None:
+    """Gehaltener Zwilling: Prüfstand und Urteil lesen dieselben Sätze (FD-128).
+
+    ``function_bench.phase_escape`` schreibt den Satz ohne Entwurf als Text;
+    der Wächter hält ihn gleich :data:`NO_DRAFT`, bis die Zeile die Konstante nimmt.
+    """
+    root = Path(__file__).resolve().parents[1] / "tools"
+    bench = (root / "function_bench.py").read_text(encoding="utf-8")
+    switch = (root / "function_switch.py").read_text(encoding="utf-8")
+    assert f'"states.escape", "{NO_DRAFT}"' in bench or "NO_DRAFT" in bench
+    for name in ("SWITCH_WITHOUT_INPUTS", "SWITCH_WITHOUT_PREVIEW", "SWITCH_RUN_OVER"):
+        assert name in switch, name

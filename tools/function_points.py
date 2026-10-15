@@ -32,11 +32,13 @@ from tools.function_checks import (
     MAIN_GAP_MS,
     MAIN_PHASES,
     MATRIX_UNREACHABLE,
+    NO_DRAFT,
     NO_RESPONSE,
     NOT_FOUND,
     REVISE_WAYS,
     SELECTION_STAGES,
     STEP_WITHOUT_VALUES,
+    SWITCH_ABSENT,
     SWITCH_PHASES,
     WITHOUT_DIALOG,
     CaseOutcome,
@@ -338,10 +340,17 @@ def _point_5(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
     states = _map(protocol, "states")
-    required = ("before", "applied", "undo", "redo", "escape")
+    # Escape verwirft den Entwurf (Konzept §4, Prüfpunkt 5); ohne ihn ist der
+    # Rückweg nur zur Hälfte gemessen. Hat die Zeile weder Entwurf noch Dialog —
+    # eine Befundhandlung wie *Auf das Bett setzen* —, gibt es nichts zu
+    # verwerfen, und der Rückweg ist Rückgängig und Wiederholen (FD-128).
+    unmeasured = _map(protocol, "unmeasured") or {}
+    nothing_to_discard = (
+        unmeasured.get("states.escape") == NO_DRAFT
+        and unmeasured.get("focus_return") == WITHOUT_DIALOG
+    )
+    required = ("before", "applied", "undo", "redo") + (() if nothing_to_discard else ("escape",))
     if states is None or not all(isinstance(states.get(key), Mapping) for key in required):
-        # Escape verwirft den Entwurf an jeder Zeile (Konzept §4, Prüfpunkt 5);
-        # ohne ihn ist der Rückweg nur zur Hälfte gemessen.
         return _missing(5, *(f"states.{key}" for key in required))
     before, applied = states["before"], states["applied"]
     if _print_without_view(before) == _print_without_view(applied):
@@ -357,15 +366,15 @@ def _point_5(
         )
     issues = []
     notes = []
-    checks = [
-        ("undo", before, "Rückgängig"),
-        ("redo", applied, "Wiederholen"),
-        ("escape", before, "Escape"),
-    ]
-    if isinstance(states.get("cancelled"), Mapping):
-        checks.append(("cancelled", before, "Abbrechen"))
+    checks = [("undo", before, "Rückgängig"), ("redo", applied, "Wiederholen")]
+    if nothing_to_discard:
+        notes.append(f"Escape und Abbrechen entfallen: {NO_DRAFT}, {WITHOUT_DIALOG}")
     else:
-        notes.append("Abbrechen im Dialog nicht gemessen (Zeile ohne Dialog?)")
+        checks.append(("escape", before, "Escape"))
+        if isinstance(states.get("cancelled"), Mapping):
+            checks.append(("cancelled", before, "Abbrechen"))
+        else:
+            notes.append("Abbrechen im Dialog nicht gemessen (Zeile ohne Dialog?)")
     for key, expected, title in checks:
         got = states[key]
         if _print_without_view(got) != _print_without_view(expected):
@@ -831,21 +840,61 @@ def _point_15(
 def _point_16(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
+    # Gewechselt wird während Vorschau, Entwurf und Rechnung (Konzept §4,
+    # Prüfpunkt 16) — in den Lagen, die die Zeile hat (FD-128). Ohne Eingaben
+    # gibt es weder Entwurf noch Vorschau, und eine Rechnung, die vorbei ist,
+    # bevor der Kunde wechseln kann, ist keine Lage, in die er wechselt.
+    without = {
+        phase: reason
+        for phase, reason in _switch_notes(protocol).items()
+        if reason.startswith(SWITCH_ABSENT)
+    }
+    wanted = [phase for phase in SWITCH_PHASES if phase not in without]
+    notes = [f"{phase} entfällt: {reason}" for phase, reason in sorted(without.items())]
     switch = _map(protocol, "switch")
     if switch is None:
-        return _missing(16, "switch")
+        if not wanted:
+            return Outcome(
+                16,
+                "A",
+                "entfaellt",
+                NOT_APPLICABLE_REASONS["ohne_rechnung"],
+                reason="ohne_rechnung",
+                notes=tuple(notes),
+            )
+        return _missing(16, *(f"switch ({phase})" for phase in wanted))
     late = [event for event in switch.get("late_events") or () if isinstance(event, Mapping)]
     issues = [
         Issue(f"nach dem Wechsel: {event.get('kind')} „{event.get('text', '')}“", "schwer")
         for event in late
     ]
     phases = sorted(set(switch.get("phases") or ()))
-    # Gewechselt wird während Vorschau, Entwurf und Rechnung (Konzept §4,
-    # Prüfpunkt 16); fehlt eine Phase, ist der Punkt nicht ganz gemessen.
-    absent = [f"switch ({phase})" for phase in SWITCH_PHASES if phase not in phases]
+    absent = [f"switch ({phase})" for phase in wanted if phase not in phases]
     return _settled(
-        16, issues, absent, f"{len(phases)} Wechsel", {"phases": phases, "late": len(late)}
+        16,
+        issues,
+        absent,
+        f"{len(phases)} Wechsel",
+        {"phases": phases, "late": len(late)},
+        notes=notes,
     )
+
+
+def _switch_notes(protocol: Mapping[str, Any]) -> dict[str, str]:
+    """Warum eine Lage des Projektwechsels nicht lief, je Lage (``unmeasured.switch``).
+
+    ``function_switch`` schreibt ``<lage>: <grund>`` und trennt mit „; “; ein
+    Grund ohne Lage (eine fehlende Szene) gilt allen Lagen.
+    """
+    text = str((_map(protocol, "unmeasured") or {}).get("switch") or "")
+    found: dict[str, str] = {}
+    for part in (piece.strip() for piece in text.split("; ") if piece.strip()):
+        phase, separator, reason = part.partition(": ")
+        if separator and phase in SWITCH_PHASES:
+            found[phase] = reason
+        else:
+            found.update({phase: part for phase in SWITCH_PHASES if phase not in found})
+    return found
 
 
 def _point_17(

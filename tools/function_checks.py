@@ -160,6 +160,19 @@ BENCH_FINDINGS: Final = (COVERED, NOT_FOUND, NO_RESPONSE)
 #: Wert, den man nachträglich ändern könnte (Prüfpunkt 12, *entfällt* ohne Dialog).
 WITHOUT_DIALOG: Final = "die Zeile öffnet keinen Dialog"
 STEP_WITHOUT_VALUES: Final = "der Schritt hat keinen Wert, der sich ändern ließe"
+#: Die Zeile hat keinen Entwurf, den Escape verwerfen könnte (Prüfpunkt 5,
+#: ``function_bench.phase_escape``). Ohne Entwurf und ohne Dialog verlangt der
+#: Rückweg nur Rückgängig und Wiederholen (FD-128).
+NO_DRAFT: Final = "keine Eingaben, kein Entwurf zum Verwerfen"
+#: Lagen des Projektwechsels, die die Zeile nicht hat (Prüfpunkt 16, FD-128):
+#: ohne Eingaben kein Entwurf und keine Vorschau, eine Zeile ohne Vorschau, und
+#: eine Rechnung, die vorbei war, bevor der Kunde wechseln konnte — in sie
+#: kann niemand wechseln. ``function_switch`` schreibt sie je Lage als
+#: ``<lage>: <grund>`` unter ``unmeasured.switch``.
+SWITCH_WITHOUT_INPUTS: Final = "keine Eingaben"
+SWITCH_WITHOUT_PREVIEW: Final = "die Zeile zeigt keine Vorschau"
+SWITCH_RUN_OVER: Final = "die Rechnung war vor dem ersten Wechselklick fertig"
+SWITCH_ABSENT: Final = (SWITCH_WITHOUT_INPUTS, SWITCH_WITHOUT_PREVIEW, SWITCH_RUN_OVER)
 
 #: Rohe Qt-Fenster, die im Kundenweg nicht erscheinen (Z5).
 RAW_CLASSES: Final = ("QMessageBox", "QInputDialog", "QColorDialog")
