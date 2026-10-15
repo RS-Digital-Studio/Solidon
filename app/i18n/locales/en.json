@@ -7918,7 +7918,7 @@
   "Zahlen stammen aus Solidons Auftrag und Dateiausgabe. Eine G-Code-Prüfung ist ein eigener Schritt.": "Figures come from Solidon's request and file output. G-code checking is a separate step.",
   "Zahlen werden hier mit Punkt geschrieben: 10.5 statt 10,5.": "Numbers are written with a dot here: 10.5, not 10,5.",
   "Zahlungslink kopieren": "Copy payment link",
-  "Zapfen": "peg",
+  "Zapfen": "Peg",
   "Zapfen und Bohrungen mit gestaffeltem Spiel. Einmal drucken, ausprobieren, und der Wert steht — er gehört danach ins Materialprofil, nicht ins Modell.": "Pins and bores with staggered clearance. Print once, try, and the value is settled — it belongs in the material profile afterwards, not in the model.",
   "Zapfen, Federnabe und Rastzunge lassen in dieser Scheibe kein Fenster frei. Einen größeren Durchmesser, einen dünneren Zapfen oder schwächere Federarme wählen.": "Post, spring hub and detent tongue leave no room for a window in this dial. Choose a larger diameter, a thinner post or thinner spring arms.",
   "Zapfendurchmesser": "Peg diameter",
