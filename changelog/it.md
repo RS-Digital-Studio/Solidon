@@ -66,6 +66,12 @@ scrive in `website/version.json`.
 - La scheda di selezione segue contenuto e carattere, mantenendo testo e colonne. Le schede separate mantengono le dimensioni. Se è proposta una modifica, «Applica» è l’azione principale.
 - Le controparti chiedono coppia e dimensioni e spiegano entrambe le metà. Forma e accoppiamento sono in «Altre impostazioni». L’altezza iniziale del dialogo segue il contenuto.
 - Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
+- La finestra *Crea parametro …* spiega ogni campo, anche i limiti inferiore e superiore, e un lettore di schermo nomina ogni campo.
+- Se un nome di parametro non va, il motivo compare subito sotto il campo del nome, con un pulsante per un nome che va.
+- Chi lavora in pollici inserisce i parametri di lunghezza in pollici in *Crea parametro …* e nel salvare un blocco. La versione 0.6.0 lì mostrava solo millimetri.
+- La finestra *Calibra il materiale* chiama un materiale non misurato «non ancora calibrato», anche dalla riga di comando. Prima diceva «valori iniziali».
+- Un rifiuto in una finestra non ripete più il suo titolo sotto. *Correggi l'inserimento* porta il cursore nel campo interessato.
+- La finestra *Dettagli* nomina corpo e passaggio e dà il punto nell'unità scelta. *Mostra i valori* mostra i nomi dei campi ed è alto solo quanto serve.
 
 ### Stampare e passare allo slicer
 
@@ -80,6 +86,8 @@ scrive in `website/version.json`.
 - Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
 - Per i fori, vista e *Selezione* mostrano la stessa modifica. Misura, profondità e imbocco collegato sono davanti; compensazione di stampa e regolazioni fini, in «Altri valori».
 - I campi del foro e la casella per modificare insieme elementi uguali spiegano il loro effetto. «Compensare gli scostamenti di stampa» chiarisce la correzione del profilo del materiale.
+- Per ritagliare un cubo e provare un accoppiamento, ora la posizione si sceglie in *Posizione del cubo*. La riga *Punto* sopra la mostra.
+- La finestra dietro *Dai spessore* dice nella prima riga che dà spessore alla superficie.
 
 ## 0.6.0
 

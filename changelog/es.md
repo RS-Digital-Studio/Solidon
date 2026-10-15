@@ -67,6 +67,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La tarjeta de selección sigue contenido y letra, conservando texto y columnas. Las pestañas separadas mantienen su tamaño. Si se ofrece editar una característica, «Aplicar» es la acción principal.
 - Los elementos correspondientes piden par y tamaño y explican ambas mitades. Forma y ajuste están en «Más ajustes». La altura inicial del diálogo se adapta al contenido.
 - Tras rechazarse una vista previa, los textos de la siguiente siguen siendo totalmente legibles.
+- El diálogo *Crear parámetro …* explica cada campo, también los límites inferior y superior, y un lector de pantalla nombra cada campo.
+- Si un nombre de parámetro no sirve, el motivo aparece justo debajo del campo del nombre, con un botón para un nombre que sí sirve.
+- Quien trabaja en pulgadas introduce los parámetros de longitud en pulgadas en *Crear parámetro …* y al guardar un bloque. La versión 0.6.0 mostraba allí solo milímetros.
+- El diálogo *Calibrar material* llama a un material sin medir «aún sin calibrar», también en la línea de comandos. Antes ponía «valores de partida».
+- Un rechazo en un diálogo ya no repite su título debajo. *Corregir la entrada* pone el cursor en el campo afectado.
+- La ventana *Detalles* nombra el cuerpo y el paso y da el punto en la unidad elegida. *Mostrar los valores* muestra los nombres de los campos y solo es tan alto como hace falta.
 
 ### Imprimir y entregar al slicer
 
@@ -81,6 +87,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro o un recipiente solo sale adelante moviendo las esquinas una cantidad mínima, la abertura queda libre. En la versión 0.6.0 podía quedar encima una piel finísima.
 - En agujeros, vista y *Selección* muestran el mismo cambio. Medida, profundidad y entrada vinculada están delante; compensación de impresión y ajustes finos, en «Más valores».
 - Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
+- Al recortar un cubo para probar un ajuste, su posición se elige ahora en *Posición del cubo*. La línea *Punto* de arriba la muestra.
+- El diálogo tras *Dar grosor* dice en su primera línea que da grosor a la superficie.
 
 ## 0.6.0
 

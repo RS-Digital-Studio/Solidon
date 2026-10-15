@@ -66,6 +66,12 @@ it into `website/version.json`.
 - The selection card follows content and font, preserving text and action columns. Detached tabs keep their size. When a feature edit is offered, “Apply” is the primary action.
 - Counterparts ask for pair and size first and explain both halves. Shape and fit are under “More settings”. The initial dialog height fits its content.
 - After a preview is refused, the next preview's text remains fully readable.
+- The *Create parameter …* dialog explains every field, including the lower and upper bound, and a screen reader names every field.
+- If a parameter name does not work, the reason appears right under the name field, with a button for a name that does.
+- If you work in inches, you enter length parameters in inches in *Create parameter …* and when saving a part. Version 0.6.0 showed only millimetres there.
+- The *Calibrate material* dialog calls an unmeasured material “not calibrated yet”, also on the command line. It used to say “starting values”.
+- A refusal in a dialog no longer repeats its title underneath. *Correct the input* puts the cursor into the field concerned.
+- The *Details* window names the body and the step and give the location in the chosen unit. *Show the values* shows the field names and is only as tall as needed.
 
 ### Printing and slicer handover
 
@@ -80,6 +86,8 @@ it into `website/version.json`.
 - If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
 - For holes, the view and *Selection* show the same edit. Size, depth and a linked entrance stay in front; print compensation and fine settings are under “More values”.
 - Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
+- When you cut out a cube to try a fit, you now choose its position under *Cube position*. The *Place* line above shows it.
+- The dialog behind *Add thickness* says in its first line that it gives the surface a thickness.
 
 ## 0.6.0
 
