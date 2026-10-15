@@ -335,9 +335,10 @@ def read_cases(out: Path) -> list[Case]:
     return [Case(**entry) for entry in json.loads((out / "cases.json").read_text(encoding="utf-8"))]
 
 
-#: Die Nutzerordner, die ein Fall auf sein Profil legt. Nie ``HOME`` oder
-#: ``USERPROFILE``: Grafiktreiber und ihre Zwischenspeicher hängen daran, und die
-#: Adapterfrage der Ansicht hing dann (Erinnerung „sonden-bauen“).
+#: Die Nutzerordner, die ein Fall auf sein Profil legt. ``HOME`` oder
+#: ``USERPROFILE`` nur unter macOS (:func:`isolate`): Unter Windows hängen
+#: Grafiktreiber und ihre Zwischenspeicher daran, und die Adapterfrage der
+#: Ansicht hing dann (Erinnerung „sonden-bauen“).
 PROFILE_VARIABLES: tuple[str, ...] = (
     "APPDATA",
     "LOCALAPPDATA",
@@ -352,6 +353,10 @@ def isolate(profile: Path) -> None:
     profile.mkdir(parents=True, exist_ok=True)
     for key in PROFILE_VARIABLES:
         os.environ[key] = str(profile)
+    if sys.platform == "darwin":
+        # macOS liest jeden Nutzerordner über ``Path.home()`` (``app.core.paths``);
+        # ohne ``HOME`` schrieb ein Fall in das echte Profil des Rechners.
+        os.environ["HOME"] = str(profile)
 
 
 # --- Funktionsfälle (RM-737) -----------------------------------------------------
