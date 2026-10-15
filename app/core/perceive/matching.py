@@ -186,16 +186,17 @@ def _cost_matrix(
     radius: float,
     check: Callable[[], None] | None,
 ) -> np.ndarray:
-    """Die volle Matrix des globalen Solvers — der einzige quadratische Schritt der Zuordnung.
+    """Die volle Matrix des globalen Solvers — der Eintritt in den quadratischen Weg.
 
-    Jedes angenommene Paar trägt seine Kosten aus :func:`_candidate_costs`,
+    Sie legt die volle Matrix an; Solver, Hülle und Komponenten danach lesen nur
+    sie. Jedes angenommene Paar trägt seine Kosten aus :func:`_candidate_costs`,
     jedes andere die Strafe. Abgelehnte Paare kosten überall dieselbe Strafe:
     Sonst könnte der Summenoptimierer ein annehmbares Paar zugunsten zweier
     billigerer, aber beide abgelehnter Paare opfern. Der vollständige globale
     Kontext bleibt auch bei räumlich getrennten Konkurrenzgruppen erhalten.
 
     :func:`_assignment` liest die Funktion über das Modul: Ein Test, der sie
-    verbietet, verbietet damit die Matrix selbst (CS-9b).
+    verbietet, verbietet damit den ganzen quadratischen Weg (CS-9b).
     """
     matrix = np.full((len(first), len(second)), KIND_PENALTY, dtype=float)
     for row, columns, values in _candidate_costs(first, second, one, two, tree, radius, check):
