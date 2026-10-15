@@ -24,9 +24,10 @@ import pytest
 
 # Eine Datei, ein Modul: pytest lädt diese Datei als ``conftest``; wer
 # ``tests.conftest`` importiert (``test_toolchain.py``, ``test_packaging.py``,
-# ``test_affected_tests.py``), bekommt dasselbe Modul. Sonst liefe sie ein zweites Mal — mit zweitem
-# Import-Haken samt eigener Pinliste, die kein Abbau leert, und den
-# Profilvariablen auf einem neuen Ordner mitten im Lauf (``test_suite_pin.py``).
+# ``test_affected_tests.py``), bekommt dasselbe Modul. Sonst liefe sie ein
+# zweites Mal — mit einem zweiten Import-Haken vorn in ``sys.meta_path``, einem
+# zweiten Temp-Ordner samt ``atexit`` und den Profilvariablen auf diesem Ordner
+# mitten im Lauf (``test_suite_pin.py``).
 sys.modules.setdefault("tests.conftest", sys.modules[__name__])
 
 # Oberflächentests brauchen eine Qt-Plattform, die ohne Bildschirm funktioniert.

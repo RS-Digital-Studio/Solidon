@@ -17,7 +17,8 @@ Geprüft wird hier:
   seine Klasse bricht den Import ab (die Mutation, die vorher still grün war);
 - ein noch nicht geladenes Modul hat nichts zu pinnen und bleibt ungeladen;
 - ``tests.conftest`` ist dasselbe Modul wie die von pytest geladene ``conftest``
-  — sonst brächte jeder solche Import einen zweiten Haken mit eigener Pinliste.
+  — sonst brächte jeder solche Import einen zweiten Import-Haken und die
+  Profilvariablen mitten im Lauf auf einem neuen Ordner.
 """
 
 from __future__ import annotations
@@ -154,10 +155,9 @@ def test_a_module_not_loaded_yet_has_nothing_to_pin(
 
 def test_tests_conftest_is_the_conftest_pytest_loaded(suite: ModuleType) -> None:
     """``from tests.conftest import …`` (``test_packaging.py``, ``test_toolchain.py``)
-    führte die Datei ein zweites Mal aus: zweiter Import-Haken vorn in
-    ``sys.meta_path``, dessen Pinliste kein Abbau leert, und die Profilvariablen auf
-    einem neuen Ordner. Die erste Zusicherung steht vorn, damit ein Rückfall hier
-    keine zweite Ausführung auslöst."""
+    führte die Datei ein zweites Mal aus: ein zweiter Import-Haken vorn in
+    ``sys.meta_path`` und die Profilvariablen auf einem neuen Ordner. Die erste
+    Zusicherung steht vorn, damit ein Rückfall hier keine zweite Ausführung auslöst."""
     from app.core.paths import PROFILE_VARIABLES
 
     assert sys.modules.get("tests.conftest") is suite
