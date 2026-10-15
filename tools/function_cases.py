@@ -29,6 +29,12 @@ RESTART_EXIT: Final = 75
 #: Lizenz und Druckart haben eigene Läufe (``function_setup.spec_variants``).
 ROW_PRECONDITIONS: Final[frozenset[str]] = frozenset({"licence", "printer"})
 
+#: Zustände, die jeder Fall ohnehin hat: „vorhanden“ ist die Maschine selbst,
+#: „gesehen“ das Profil jedes Falls (``function_setup.profile_settings``). Sie
+#: ändern den Prozess nicht und bilden keine Einrichtung — ein eigener Prozess
+#: dafür kostete nur Zeit.
+EVERY_CASE_STATES: Final[frozenset[str]] = frozenset({"vorhanden", "gesehen"})
+
 
 @dataclass(frozen=True, slots=True)
 class Setup:
@@ -47,8 +53,9 @@ def setup_of(row: Mapping[str, Any]) -> Setup:
     Wie beim Funktionsfall (``file_acceptance.function_cases``): Die Szene der
     Zeile geht der des Fehlfalls vor, die Szenen gehen der Spezifikation vor. Aus
     der Spezifikation zählen die Vorbedingungen ohne Lizenz und Druckart — die
-    prüfen eigene Läufe, und ohne den Slicer etwa fand der Sprachfall dessen
-    Profile nie (FD-101).
+    prüfen eigene Läufe; ohne sie lief der Druckhinweis im Sprachfall nie offen
+    (FD-101, FD-121). Was jeder Fall ohnehin hat (:data:`EVERY_CASE_STATES`),
+    bleibt im Sprachfall des Pakets.
     """
     from tools.function_scenes import row_scenes
     from tools.function_setup import scene_setup
@@ -65,6 +72,7 @@ def setup_of(row: Mapping[str, Any]) -> Setup:
         needed.update(setup.preconditions)
         if setup.own_parts:
             parts.append(key)
+    needed = {name: state for name, state in needed.items() if state not in EVERY_CASE_STATES}
     words = [f"{name}={state}" for name, state in sorted(needed.items())]
     words += [f"bausteine:{key}" for key in sorted(parts)]
     return Setup(",".join(words), needed, tuple(sorted(parts)))

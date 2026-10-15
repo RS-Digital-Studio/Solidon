@@ -1,0 +1,9 @@
+# Zeilenspezifikationen für D12 — Fenster, Einstellungen, Hilfe und Hinweise.
+# Format: Bauplan D0 §2.4. Eine Zeile ohne Eintrag hier ist „ungeprüft“.
+
+# Der Druckhinweis steht einmal vor dem Druckdialog, den *An den Slicer übergeben …*
+# öffnet; im Profil der übrigen Fälle gilt er als gesehen (FD-101, FD-121).
+[row."dialog:print_disclosure_dialog"]
+start_scene = "quader.exakt"
+preconditions = { druckhinweis = "offen" }
+route = [{ target = "menu:menubar.an_den_slicer_uebergeben" }]

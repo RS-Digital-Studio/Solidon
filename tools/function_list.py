@@ -1549,6 +1549,10 @@ PRECONDITIONS: Final[dict[str, tuple[str, ...]]] = {
     # Alle Zustände; welche ein Lauf erreicht, hängt am Paket (:func:`licence_states`).
     "licence": (*LICENCE_STATES, STARTUP_LICENCE),
     "printer": ("filament", "resin"),
+    # Der einmalige Druckhinweis (§29): Im Profil jedes Falls gilt er als gesehen,
+    # damit er keine Zielfläche verdeckt; offen braucht ihn nur seine eigene Zeile
+    # (FD-121, ``function_setup.PRINT_HINT``).
+    "druckhinweis": ("gesehen", "offen"),
 }
 
 

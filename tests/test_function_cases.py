@@ -70,13 +70,19 @@ def test_the_language_case_of_a_setup_carries_its_preconditions(
 def test_the_preconditions_of_the_spec_join_the_setup_of_the_language_case(
     rows: list[dict[str, Any]],
 ) -> None:
-    """Eine Vorbedingung der Spezifikation gilt im Sprachfall wie im Funktionsfall;
-    vorher lief eine Zeile, die ohne KI gemessen werden soll, im Sprachfall mit ihr.
-    Lizenz und Druckart bilden keine Einrichtung — die prüfen eigene Läufe — und
-    die Szene geht der Spezifikation vor (FD-101)."""
+    """Eine Vorbedingung der Spezifikation gilt im Sprachfall wie im Funktionsfall:
+    Der Druckhinweis lief im Sprachfall nie offen, eine Zeile ohne KI mit ihr.
+    Lizenz und Druckart bilden keine Einrichtung — die prüfen eigene Läufe —,
+    ebenso was jeder Fall ohnehin hat, und die Szene geht der Spezifikation vor
+    (FD-101, FD-121)."""
     from tools import function_cases
 
     by_id = {row["id"]: row for row in rows}
+    hint = function_cases.setup_of(by_id["dialog:print_disclosure_dialog"])
+    assert (hint.key, dict(hint.preconditions)) == (
+        "druckhinweis=offen",
+        {"druckhinweis": "offen"},
+    )
     row = {**by_id["parameters.bind"]}
     assert function_cases.setup_of(row).key == ""
     row["spec"] = {
@@ -85,12 +91,14 @@ def test_the_preconditions_of_the_spec_join_the_setup_of_the_language_case(
     }
     setup = function_cases.setup_of(row)
     assert (setup.key, dict(setup.preconditions)) == ("ki=fehlt", {"ki": "fehlt"})
-    # Die Profile des Slicers gibt es nur mit Slicer: Das sagt die Startszene, und
-    # eine Spezifikation, die es anders sagt, ändert daran nichts.
-    slicer = {**by_id["dialog:slicer_filament_dialog"]}
-    assert function_cases.setup_of(slicer).key == "slicer=vorhanden"
-    slicer["spec"] = {**slicer["spec"], "preconditions": {"slicer": "fehlt"}}
-    assert dict(function_cases.setup_of(slicer).preconditions) == {"slicer": "vorhanden"}
+    # Gegenprobe: Den Slicer der Maschine hat jeder Fall — kein eigener Prozess.
+    row["spec"] = {**row["spec"], "preconditions": {"slicer": "vorhanden"}}
+    assert function_cases.setup_of(row).key == ""
+    assert function_cases.setup_of(by_id["dialog:slicer_filament_dialog"]).key == ""
+    # Ohne OpenCASCADE sagt die Startszene; die Spezifikation ändert daran nichts.
+    install = {**by_id[INSTALL]}
+    install["spec"] = {**(install.get("spec") or {}), "preconditions": {"opencascade": "vorhanden"}}
+    assert dict(function_cases.setup_of(install).preconditions) == {"opencascade": "fehlt"}
 
 
 @pytest.mark.windowed

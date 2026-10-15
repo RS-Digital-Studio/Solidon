@@ -95,6 +95,8 @@ REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
             "menu:menubar.gegenstuecke_setzen",
         ),
     ),
+    # D12: Der Druckhinweis vor dem Druckdialog, im eigenen Sprachfall mit offenem Hinweis.
+    "dialog:print_disclosure_dialog": ("quader.exakt", ("menu:menubar.an_den_slicer_uebergeben",)),
 }
 
 
