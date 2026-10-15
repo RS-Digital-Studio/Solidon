@@ -2773,8 +2773,8 @@ def test_the_support_cache_lets_go_of_a_dead_body() -> None:
     memory = module._MEMORIES[key]
     tokens = {memory.token, memory.lineage.token}
     remembered = {
-        name: sum(1 for entry in answers if entry[0] in tokens)
-        for name, answers in module._SUPPORT_CACHE.items()
+        name: sum(1 for entry in tuple(answers) if entry[0] in tokens)
+        for name, answers in tuple(module._SUPPORT_CACHE.items())
     }
     assert sum(remembered.values()) > 0, "die Vorbedingung: der Körper hat Antworten hinterlassen"
     assert memory.answers or memory.lineage.answers
@@ -2786,8 +2786,8 @@ def test_the_support_cache_lets_go_of_a_dead_body() -> None:
     assert key not in module._MEMORIES, "der Merker des toten Körpers ist weg"
     assert not [
         entry
-        for answers in module._SUPPORT_CACHE.values()
-        for entry in answers
+        for answers in tuple(module._SUPPORT_CACHE.values())
+        for entry in tuple(answers)
         if entry[0] in tokens
     ], "und keine seiner Antworten steht mehr im Stützcache"
     assert not module._DIGESTS, "auch die Abdrücke seiner Listen sind fort"
@@ -2920,8 +2920,8 @@ def test_the_shared_answers_live_as_long_as_one_of_the_family() -> None:
     gc.collect()
     assert not [
         entry
-        for answers in module._SUPPORT_CACHE.values()
-        for entry in answers
+        for answers in tuple(module._SUPPORT_CACHE.values())
+        for entry in tuple(answers)
         if entry[0] in tokens
     ], "mit dem letzten Körper gehen die geteilten Antworten"
     assert not module._DERIVED_LINEAGES, "und die Abstammung der verschweißten Lesungen"

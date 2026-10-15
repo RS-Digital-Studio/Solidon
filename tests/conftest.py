@@ -16,10 +16,19 @@ import shutil
 import sys
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
+from types import ModuleType
 
 import pytest
+
+# Eine Datei, ein Modul: pytest lädt diese Datei als ``conftest``; wer
+# ``tests.conftest`` importiert (``test_toolchain.py``, ``test_packaging.py``,
+# ``test_affected_tests.py``), bekommt dasselbe Modul. Sonst liefe sie ein
+# zweites Mal — mit einem zweiten Import-Haken vorn in ``sys.meta_path``, einem
+# zweiten Temp-Ordner samt ``atexit`` und den Profilvariablen auf diesem Ordner
+# mitten im Lauf (``test_suite_pin.py``).
+sys.modules.setdefault("tests.conftest", sys.modules[__name__])
 
 # Oberflächentests brauchen eine Qt-Plattform, die ohne Bildschirm funktioniert.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -87,6 +96,7 @@ for _variable in PROFILE_VARIABLES:
 
 from app.core import discover
 from app.core.activation import store as activation_store
+from app.core.backends import llm
 from app.core.export import slicer_profiles
 from app.core.knowledge import profiles
 from app.core.perceive import features, local, matching
@@ -95,6 +105,17 @@ from tests.helpers import FakeMesh
 
 #: Der Stichtag der Demo, gesichert bevor die Fixture unten ihn wegnimmt.
 _SHIPPED_DEMO_UNTIL = activation_store.DEMO_UNTIL
+
+#: Die echten Funktionen, bevor ``_machine_stays_out_of_it`` und
+#: ``_the_network_stays_out_of_it`` sie je Test gegen Attrappen tauschen —
+#: erhoben beim Laden dieser Datei, also vor jedem Patch, und die einzige Quelle
+#: der gleichnamigen Fixtures. An den Produktmodulen hängen sie nicht: Ein Name,
+#: den es dort nur zur Laufzeit gibt, legt ``monkeypatch`` nur mit
+#: ``raising=False`` an, und ihn kann weder ein Wächter auflösen noch ein Schnitt
+#: umschreiben (Konzept Codestruktur 4.1, W2 a und b, W5).
+_UNPATCHED_FIND_PROGRAM = discover.find_program
+_UNPATCHED_FIND_PROGRAMS = discover.find_programs
+_UNPATCHED_BACKENDS = llm.backends
 
 #: Der Satz, mit dem der Lauf endet, wenn der exakte Kern in der CI fehlt.
 #: ``test_toolchain.py`` prüft, dass er an ``pytest_sessionstart`` hängt.
@@ -233,37 +254,39 @@ def _pin_ui_object(value: object) -> None:
         _PINNED_UI.append(value)
 
 
-def _pin_ui_widgets(module: object) -> None:
-    """Hängt den Pin an Fenster, Viewport und Leinenbesitzer — je Typ einmal.
+def _pin_instances(widget_type: type) -> None:
+    """Hält jedes Exemplar nach seinem vollständigen Aufbau bis zum Testabbau — je Typ einmal.
 
     Ein Hauptfenster hält seinen Viewport ohnehin. Einige Ansichtsprüfungen
     bauen den Viewport aber absichtlich allein; dessen Renderer-Zustand braucht
-    denselben Lebenszeitvertrag wie das ganze Fenster. Elternlose Dialoge mit
-    Arbeitern brauchen ihn ebenfalls: Ohne den früheren Rückverweis ihrer
-    ``WorkerLeash`` kann ihre letzte Testreferenz vor der zentralen
-    ``release``-Fixture fallen. Die Leine hält den Besitzer im Produkt bewusst
-    nicht; die Suite hält nur das Qt-Widget bis zu genau diesem Teardown.
+    denselben Lebenszeitvertrag wie das ganze Fenster.
     """
-    for type_name in ("MainWindow", "Viewport"):
-        widget_type = getattr(module, type_name, None)
-        if widget_type is None or getattr(widget_type, "_suite_pinned", False):
-            continue
-        original = widget_type.__init__
+    if getattr(widget_type, "_suite_pinned", False):
+        return
+    original = widget_type.__init__
 
-        def pinning(
-            self: object,
-            *args: object,
-            _original: object = original,
-            **kwargs: object,
-        ) -> None:
-            _original(self, *args, **kwargs)  # type: ignore[operator]
-            _pin_ui_object(self)
+    def pinning(
+        self: object,
+        *args: object,
+        _original: object = original,
+        **kwargs: object,
+    ) -> None:
+        _original(self, *args, **kwargs)  # type: ignore[operator]
+        _pin_ui_object(self)
 
-        widget_type.__init__ = pinning
-        widget_type._suite_pinned = True
+    widget_type.__init__ = pinning
+    widget_type._suite_pinned = True
 
-    leash_type = getattr(module, "WorkerLeash", None)
-    if leash_type is None or getattr(leash_type, "_suite_owner_pinned", False):
+
+def _pin_leash_owners(leash_type: type) -> None:
+    """Hält elternlose Widgets mit Arbeitern über ihre Leine bis zum Testabbau — einmal.
+
+    Ohne den früheren Rückverweis ihrer ``WorkerLeash`` kann ihre letzte
+    Testreferenz vor der zentralen ``release``-Fixture fallen. Die Leine hält
+    den Besitzer im Produkt bewusst nicht; die Suite hält nur das Qt-Widget bis
+    zu genau diesem Teardown.
+    """
+    if getattr(leash_type, "_suite_owner_pinned", False):
         return
     original_leash_init = leash_type.__init__
 
@@ -287,6 +310,49 @@ def _pin_ui_widgets(module: object) -> None:
     leash_type._suite_owner_pinned = True
 
 
+#: Je Lebensdauermodul die Klasse, die der Pin hält, und wie: Fenster und
+#: Viewport je Exemplar, die Leine über ihren Besitzer. Eine Zuordnung statt der
+#: Frage nach jeder Klasse an jedem Modul — in ``app.ui.leash`` fehlen Fenster und
+#: Viewport planmäßig. Zieht eine Klasse in ein anderes Modul, zieht ihr Eintrag
+#: mit; ein Modul ohne seine Klasse ist ein Fehler, kein stilles Überspringen
+#: (CS-10, Konzept Codestruktur 4.1, W6; ``test_suite_pin.py``).
+UI_PINS: dict[str, tuple[str, Callable[[type], None]]] = {
+    "app.ui.leash": ("WorkerLeash", _pin_leash_owners),
+    "app.ui.main_window": ("MainWindow", _pin_instances),
+    "app.ui.viewport": ("Viewport", _pin_instances),
+}
+
+
+def pin_ui_widgets(module: ModuleType) -> None:
+    """Hängt den Pin an die Klasse, die ``UI_PINS`` diesem Modul zuordnet.
+
+    Fehlt sie, bricht der Import ab: Ohne Pin stirbt das erste Fenster mit
+    seiner letzten Referenz mitten im Lauf und reißt ihn mit (0xc0000374,
+    ``_PinOnImport``) — das stumme Überspringen verdeckte genau das.
+    """
+    class_name, pin = UI_PINS[module.__name__]
+    pinned = getattr(module, class_name, None)
+    if not isinstance(pinned, type):
+        raise LookupError(
+            f"{module.__name__} definiert die Klasse {class_name} nicht mehr. Den Eintrag "
+            f"in UI_PINS (tests/conftest.py) auf das Modul setzen, das sie jetzt definiert."
+        )
+    pin(pinned)
+
+
+def pin_loaded_ui_modules() -> None:
+    """Pinnt jedes Modul aus ``UI_PINS``, das schon geladen ist.
+
+    Der Regelfall läuft über den Import-Haken ``_PinOnImport``; dieser Griff
+    bleibt für ein Modul, das schon vor dem Haken geladen war. Ein noch nicht
+    geladenes Modul hat nichts zu pinnen — seinen Import fängt der Haken.
+    """
+    for name in UI_PINS:
+        module = sys.modules.get(name)
+        if module is not None:
+            pin_ui_widgets(module)
+
+
 class _PinningLoader:
     """Führt den echten Lader aus und pinnt danach — sonst nichts."""
 
@@ -296,9 +362,9 @@ class _PinningLoader:
     def create_module(self, spec: object) -> object:
         return self._wrapped.create_module(spec)  # type: ignore[attr-defined]
 
-    def exec_module(self, module: object) -> None:
+    def exec_module(self, module: ModuleType) -> None:
         self._wrapped.exec_module(module)  # type: ignore[attr-defined]
-        _pin_ui_widgets(module)
+        pin_ui_widgets(module)
 
 
 class _PinOnImport:
@@ -312,11 +378,12 @@ class _PinOnImport:
     sonst nichts — insbesondere keinen eifrigen Import von Qt und pygfx in
     Läufe, die beides nie anfassen. ``app.ui.leash`` kommt hinzu, damit ein
     elternloser Dialog bis zu seiner zentralen ``release``-Phase lebt, ohne
-    dass der Produktcode dafür seinen Besitzer zyklisch halten muss.
+    dass der Produktcode dafür seinen Besitzer zyklisch halten muss. Welche
+    Module, sagt ``UI_PINS``.
     """
 
     def find_spec(self, fullname: str, path: object = None, target: object = None) -> object:
-        if fullname not in {"app.ui.leash", "app.ui.main_window", "app.ui.viewport"}:
+        if fullname not in UI_PINS:
             return None
         import importlib.util
 
@@ -427,12 +494,7 @@ def _windows_live_until_their_test_ends() -> Iterator[None]:
     # gelöschter Fensterbaum erst hier zyklisch frei werden. Er wird im
     # Hauptthread eingesammelt, bevor ein neuer Arbeiter starten kann.
     _collect_released_ui()
-    # Der Regelfall läuft über den Import-Haken oben; dieser Griff bleibt als
-    # zweiter für ein Modul, das schon vor dem Haken geladen war.
-    for module_name in ("app.ui.viewport", "app.ui.main_window"):
-        module = sys.modules.get(module_name)
-        if module is not None:
-            _pin_ui_widgets(module)
+    pin_loaded_ui_modules()
     first = len(_PINNED_UI)
     try:
         yield
@@ -607,15 +669,11 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
         # las erst nur den alten Schlüssel und nahm dann nur eine Datei an.
         return discover._remembered_program(tool_id)
 
-    # Das Original bleibt unter eigenem Namen erreichbar, für die wenigen
-    # Tests, die **genau es** prüfen wollen (`test_discover.py`). Ohne diese
-    # Zeile fragt ein solcher Test die Attrappe darüber und ist grün, ohne
-    # etwas geprüft zu haben — die Attrappe protokolliert zum Beispiel nie.
     def only_what_was_set_plural(tool_id: str, names: object) -> object:
         single = only_what_was_set(tool_id, names)
         return () if single is None else (single,)
 
-    monkeypatch.setattr(discover, "unpatched_find_program", discover.find_program, raising=False)
+    # Das Original reicht die Fixture ``unpatched_find_program`` weiter.
     monkeypatch.setattr(discover, "find_program", only_what_was_set)
     # **Die Mehrzahl braucht denselben Riegel**, und ohne ihn war er weg: Seit
     # der Slicer-Auswahl fragt der Dialog :func:`discover.find_programs`, und
@@ -623,8 +681,8 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     # Entwicklerrechner mit drei Slicern sah damit etwas anderes als der
     # Bauserver mit keinem — genau die Abhängigkeit, die diese Fixture
     # ausschließt (§38). Aufgefallen an zwei Tests, die ohne Fund rechneten
-    # und plötzlich ElegooSlicer vorfanden (30.08.2026).
-    monkeypatch.setattr(discover, "unpatched_find_programs", discover.find_programs, raising=False)
+    # und plötzlich ElegooSlicer vorfanden (30.08.2026). Das Original reicht
+    # die Fixture ``unpatched_find_programs`` weiter.
     monkeypatch.setattr(discover, "find_programs", only_what_was_set_plural)
     discover.forget_cache()
     # **Und nicht Prozessor und Speicher** (RM-564): Auf einem Mac mit 16 GB
@@ -644,6 +702,37 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     machine.forget_card()
 
 
+@pytest.fixture
+def unpatched_find_program() -> Callable[..., Path | None]:
+    """Die echte :func:`discover.find_program` — für die wenigen Tests, die **genau
+    sie** prüfen (``test_discover.py``).
+
+    ``discover.find_program`` ist in der Suite die Attrappe aus
+    ``_machine_stays_out_of_it``. Ein Test, der sie fragte, wäre grün, ohne die
+    Suchkette je betreten zu haben — die Attrappe protokolliert zum Beispiel nie.
+    Wer damit nach einem Slicer sucht, isoliert die Ablagen (``isolated_search``)
+    oder geht über ``installed_slicer`` (``test_slicer_selection.py`` hält das).
+    """
+    return _UNPATCHED_FIND_PROGRAM
+
+
+@pytest.fixture
+def unpatched_find_programs() -> Callable[[str, Iterable[str]], tuple[Path, ...]]:
+    """Die echte :func:`discover.find_programs`; wie ``unpatched_find_program``."""
+    return _UNPATCHED_FIND_PROGRAMS
+
+
+@pytest.fixture
+def unpatched_backends() -> Callable[[], tuple[llm.LLMBackend, ...]]:
+    """Die echte :func:`llm.backends` — für einen Test, der genau die Liste braucht.
+
+    ``_the_network_stays_out_of_it`` leert sie, damit die Suite nicht nach einem
+    Modell auf dieser Maschine fragt. Wer sie zurückholt, stellt die Erreichbarkeit
+    der Backends selbst (``test_backends.py``) — sonst fragte der Test das Netz.
+    """
+    return _UNPATCHED_BACKENDS
+
+
 #: Unter dieser Variable ist ein fehlender Slicer ein Fehler statt ein Skip —
 #: gesetzt von ``.github/workflows/slicer-auswahl.yml``, wo jeder gewählte
 #: Slicertest sein Programm installiert vorfinden muss.
@@ -651,13 +740,16 @@ REQUIRE_SLICERS = "SOLIDON_REQUIRE_SLICERS"
 
 
 @pytest.fixture
-def installed_slicer(request: pytest.FixtureRequest) -> Path:
+def installed_slicer(
+    request: pytest.FixtureRequest,
+    unpatched_find_programs: Callable[[str, Iterable[str]], tuple[Path, ...]],
+) -> Path:
     """Der echte, auf dieser Maschine installierte Slicer, den der Marker nennt.
 
     Die einzige Stelle, an der ein Test die Maschine nach einem Slicer fragen
     darf (``test_slicer_selection.py`` hält das): ``@pytest.mark.slicer("cura")``
     nennt das Programm in der Schreibweise von :func:`discover.program_mark`,
-    die Fixture sucht es wie die Anwendung (``discover.find_programs`` ohne die
+    die Fixture sucht es wie die Anwendung (``unpatched_find_programs``, ohne die
     Attrappe aus ``_machine_stays_out_of_it``). Über den Marker wählt
     ``tools/ci_selection.py`` den Test für die Slicerauswahl auf Linux und
     macOS, und der Workflow installiert genau die genannten Programme.
@@ -685,7 +777,7 @@ def installed_slicer(request: pytest.FixtureRequest) -> Path:
     try:
         found = [
             program
-            for program in discover.unpatched_find_programs("slicer", tools.SLICERS)
+            for program in unpatched_find_programs("slicer", tools.SLICERS)
             if discover.program_mark(program.name) == wanted
         ]
     finally:
@@ -775,12 +867,11 @@ def _the_network_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     (``localhost:1``), und das soll es weiter tun. Wer die Prüfung selbst
     ersetzte, machte aus diesem Test eine Attrappe, die nichts mehr misst.
 
-    Das Original bleibt unter eigenem Namen erreichbar — für den Fall, dass ein
-    Test genau die Liste braucht.
+    Das Original reicht die Fixture ``unpatched_backends`` weiter — für den
+    Fall, dass ein Test genau die Liste braucht.
     """
-    from app.core.backends import llm, resources
+    from app.core.backends import resources
 
-    monkeypatch.setattr(llm, "unpatched_backends", llm.backends, raising=False)
     monkeypatch.setattr(llm, "backends", tuple)
     # **Und kein warm gehaltenes Modell reist in den nächsten Test** (seit dem
     # 25.09.2026 bleibt ein Modell nach dem Zug geladen, ``resources.keep_warm``).
@@ -837,27 +928,75 @@ def _the_language_starts_at_the_source() -> Iterator[None]:
     set_key_platform("")
 
 
-#: **Was hier absichtlich NICHT zurückgesetzt wird: das Stylesheet.**
+#: **Das Aussehen der Anwendung wird zurückgegeben, nicht auf ein Ziel gesetzt.**
 #:
-#: ``apply_theme`` legt es über die *Anwendung*, und ``app.py`` tut das beim
-#: Start — der Kunde sieht die Oberfläche also nie ohne. Eine Fixture, die es
-#: nach jedem Test abräumt, stellte einen Zustand her, den es im Betrieb nicht
-#: gibt: Ein Test, der Abstände oder Innenmaße misst, bekäme Zahlen, die
-#: niemand je sieht.
-#:
-#: **Womit dieser Hinweis am 30.08.2026 begründet war, trug allerdings nicht.**
-#: Hier stand, die Parameterkarte messe ohne Stylesheet 258 und mit 270 gegen
-#: eine Zone von 260, ein Rücksetzen hätte also einen Kundenfehler zugedeckt.
-#: Beide Zahlen stammten aus einem Offscreen-Lauf, und dort hat Qt gar keine
-#: Schrift — am echten Bildschirm sind es 166 mit Stylesheet wie ohne. Der
-#: Hinweis bleibt, weil das Stylesheet Abstände wirklich verändert; die
-#: Kartenbreite ist nur kein Beleg dafür.
-#:
-#: Wer eine Rücksetzung baut, prüft deshalb zuerst: Setzt sie auf das zurück,
-#: was der Kunde hat, oder auf ein nacktes Nichts? Ein Thema, ein Stylesheet,
-#: ein geladenes Register gehören zur Betriebslage. Wer eine Breite oder ein
-#: Layout misst, stellt sie **her** (``apply_theme`` im Test), statt sie
-#: wegzuräumen.
+#: ``apply_theme`` legt Stil, Palette und Stylesheet über die *Anwendung*, und
+#: ``app.py`` tut das beim Start — der Kunde sieht die Oberfläche nie ohne. Eine
+#: Fixture, die es nach jedem Test auf „kein Thema“ abräumte, stellte einen
+#: Zustand her, den es im Betrieb nicht gibt. Die Fixture darunter tut das
+#: nicht: Sie gibt nur zurück, was der Test vorfand. Die Suite startet ohne
+#: Thema, und jeder Qt-Fall findet dieselbe Lage wie als erster seines
+#: Prozesses — die er in der Auswahl ohnehin haben kann. Wer eine Breite, eine
+#: Farbe oder ein Layout misst, stellt die Betriebslage weiter selbst **her**
+#: (``apply_theme`` im Test); nur hängt sein Ergebnis nicht mehr am Vorgänger.
+
+
+@pytest.fixture(autouse=True)
+def _the_application_look_stays_with_its_test() -> Iterator[None]:
+    """Stil, Palette, Stylesheet, Schrift und Thema gehen zurück, wie der Test sie fand.
+
+    Eine Fixture mit ``autouse``, die das dunkle Thema setzte und stehen ließ,
+    nahm jeden folgenden Fall im selben Prozess mit: Der Wortschatzfall von
+    ``test_guide_targets.py`` war allein grün und nach
+    ``test_measure_card_placement.py`` zeitweise rot. Dieselbe Sorte Zustand
+    wie Sprache und Einheit darüber, nur an der ``QApplication``. Geprüft in
+    ``test_suite_isolation.py``. Ohne Qt-Anwendung gibt es nichts zu halten.
+    """
+    widgets = sys.modules.get("PySide6.QtWidgets")
+    application = widgets.QApplication.instance() if widgets is not None else None
+    # ``instance()`` liefert auch eine reine ``QCoreApplication``; die hat kein
+    # Aussehen.
+    if widgets is None or not isinstance(application, widgets.QApplication):
+        yield
+        return
+    before = _application_look(application)
+    yield
+    if _application_look(application) == before:
+        return
+    from app.ui import theme
+
+    style, palette, sheet, font, marker, active = before
+    # Das Stylesheet zuerst: Solange eines gilt, meldet ``style()`` den
+    # Stylesheet-Stil ohne Namen, und der Vergleich darunter griffe ins Leere.
+    if application.styleSheet() != sheet:
+        application.setStyleSheet(sheet)
+    if application.style().name() != style:
+        assert application.setStyle(style) is not None, f"Stil {style!r} nicht herstellbar"
+    if application.palette() != palette:
+        application.setPalette(palette)
+    if application.font() != font:
+        application.setFont(font)
+    application.setProperty(theme._THEME_PROPERTY, marker)
+    theme._ACTIVE = active
+    assert _application_look(application) == before, "Aussehen nicht zurückgegeben"
+
+
+def _application_look(application: object) -> tuple[object, ...]:
+    """Was ``apply_theme``, ``apply_style`` und ``setFont`` an der Anwendung ändern."""
+    from PySide6.QtGui import QFont, QPalette
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui import theme
+
+    assert isinstance(application, QApplication)
+    return (
+        application.style().name(),
+        QPalette(application.palette()),
+        application.styleSheet(),
+        QFont(application.font()),
+        application.property(theme._THEME_PROPERTY),
+        theme.current_theme(),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -1313,6 +1452,27 @@ def qt_app() -> object:
     # Hauptfaden ab (RM-021), sonst verklemmt sich ein Arbeiter mit ihm.
     collect_in_main_thread(application)
     return application
+
+
+@pytest.fixture
+def record_trace(request: pytest.FixtureRequest) -> Callable[[str, object], None]:
+    """Befunddaten eines Falls an seinen Bericht — ``record_property`` ohne JUnit.
+
+    ``record_property`` schreibt nur in den JUnit-Bericht, und der ist in jedem
+    Lauf ``xunit2``: ``tools/run_suite_isolated.py`` und ``build.yml`` setzen
+    ``--junitxml`` ohne Familie, und pytest lehnt die Fixture dort mit einer
+    Warnung ab — unter ``filterwarnings = error`` ein Setup-Fehler. Die
+    Fensterauswahl ohne JUnit blieb grün, der Release-Job ``windows`` wäre an
+    jedem solchen Fall rot gewesen (RD-9). Hier wird jeder Wert ein eigener
+    Abschnitt des Berichts: Ein roter Fall zeigt ihn als „Captured trace
+    <name> call“, ein grüner mit ``-rP``. ``test_suite_isolation.py`` hält,
+    dass kein Test ``record_property`` anfordert.
+    """
+
+    def record(name: str, value: object) -> None:
+        request.node.add_report_section("call", f"trace {name}", str(value))
+
+    return record
 
 
 @pytest.fixture

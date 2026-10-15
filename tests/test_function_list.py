@@ -1485,6 +1485,12 @@ def test_every_menubar_line_becomes_a_row_with_a_package(qt_app: Any, tmp_path: 
     used = {row.id.rsplit("/", 1)[-1] for row in commands}
     assert set(fl.COMMAND_PACKAGES) <= used, "Ausnahme ohne Menüzeile"
     assert {row.id.split("/")[0] for row in commands} == set(fl.MENU_PACKAGES)
+    # Menütitel tragen Komma und „und“ („Wie in Bambu Studio, Orca und PrusaSlicer …“):
+    # In Backticks bleibt jede Kennung in der Funddatei eine Zeile (Schlussreview D0, RF-3).
+    from tools.function_report import Finding
+
+    for row in found:
+        assert Finding(0, "", {"Funktion": f"`{row.id}`"}).rows == {row.id}, row.id
 
 
 def test_a_window_command_lands_in_the_package_of_its_area() -> None:

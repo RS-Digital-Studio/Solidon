@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QRect, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QToolButton, QWidget
+from PySide6.QtWidgets import QWidget
 
 from app.i18n import set_language, tr
 from app.i18n.catalog import available_languages, install_language
@@ -13,8 +13,13 @@ from app.ui.panels import FIELD_PROPERTY
 from app.ui.style import apply_style
 from app.ui.theme import apply_theme
 from tests.render_fakes import RecordingRenderer
+from tests.ui_helpers import (
+    measure_more_heading,
+    settle_measure_layout,
+    wait_for_print_findings,
+    wait_until,
+)
 from tests.ui_helpers import session as session
-from tests.ui_helpers import wait_for_print_findings, wait_until
 from tests.ui_helpers import window as window
 
 
@@ -59,23 +64,7 @@ def selected_hole(window, qt_app):
     finally:
         window.end_quiet_placement()
         assert window.session.wait_for_idle(30_000)
-        _rounds(qt_app)
-
-
-def _rounds(qt_app):
-    """Layoutaufträge zustellen, ohne die Produktanordnung von Hand anzustoßen."""
-    for _ in range(20):
-        qt_app.processEvents()
-
-
-def _heading(flow):
-    group = flow._measure_group
-    assert group is not None
-    flap = group.findChild(QWidget, "feature-measure-more")
-    assert flap is not None
-    heading = flap.findChild(QToolButton, "sectionHeading")
-    assert heading is not None
-    return heading
+        settle_measure_layout(qt_app)
 
 
 def _assert_contents_reachable(flow):
@@ -118,8 +107,8 @@ def test_fold_changes_card_height_and_settles(selected_hole, qt_app, language):
     assert window.session.wait_for_idle(30_000)
     flow = window._quiet_placement
     assert flow is not None and flow.active
-    _rounds(qt_app)
-    heading = _heading(flow)
+    settle_measure_layout(qt_app)
+    heading = measure_more_heading(flow)
     for widget, source in (
         (heading, "Weitere Werte"),
         (flow._measure_accept, "Übernehmen"),
@@ -132,17 +121,17 @@ def test_fold_changes_card_height_and_settles(selected_hole, qt_app, language):
     before = flow._measure_box.height()
     for _ in range(2):
         QTest.mouseClick(heading, Qt.MouseButton.LeftButton)
-        _rounds(qt_app)
+        settle_measure_layout(qt_app)
         assert heading.isChecked()
         _assert_contents_reachable(flow)
         assert flow._measure_box.height() > before
         settled = window.viewport.renderer.renders
-        _rounds(qt_app)
+        settle_measure_layout(qt_app)
         assert window.viewport.renderer.renders == settled, (
             "die Größenanpassung löst keine eigene Dauerschleife aus"
         )
         QTest.mouseClick(heading, Qt.MouseButton.LeftButton)
-        _rounds(qt_app)
+        settle_measure_layout(qt_app)
         assert not heading.isChecked()
         assert flow._measure_box.height() == before
 
@@ -154,7 +143,7 @@ def test_queued_fold_layout_survives_replacement_and_end(selected_hole, qt_app, 
     flow = window._quiet_placement
     assert flow is not None and flow.active
     group = flow._measure_group
-    QTest.mouseClick(_heading(flow), Qt.MouseButton.LeftButton)
+    QTest.mouseClick(measure_more_heading(flow), Qt.MouseButton.LeftButton)
     # Den Layoutauftrag vor dem Rückweg ausliefern, den verzögerten Rückruf noch nicht.
     QCoreApplication.sendPostedEvents(group, QEvent.Type.LayoutRequest)
     if ending == "replace":
@@ -162,18 +151,18 @@ def test_queued_fold_layout_survives_replacement_and_end(selected_hole, qt_app, 
         assert window.session.wait_for_idle(30_000)
         current = window._quiet_placement
         assert current is not None and current.active
-        _rounds(qt_app)
-        assert not _heading(current).isChecked()
-        QTest.mouseClick(_heading(current), Qt.MouseButton.LeftButton)
-        _rounds(qt_app)
+        settle_measure_layout(qt_app)
+        assert not measure_more_heading(current).isChecked()
+        QTest.mouseClick(measure_more_heading(current), Qt.MouseButton.LeftButton)
+        settle_measure_layout(qt_app)
         _assert_contents_reachable(current)
     elif ending == "cancel":
         QTest.mouseClick(flow._measure_cancel, Qt.MouseButton.LeftButton)
-        _rounds(qt_app)
+        settle_measure_layout(qt_app)
         assert not flow.active
         assert not flow._watched and not flow._measure_targets
     else:
         flow.dispose()
         flow.deleteLater()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-        _rounds(qt_app)
+        settle_measure_layout(qt_app)

@@ -156,11 +156,29 @@ tut das beim Start; die Oberfläche existiert im Betrieb also nie ohne. Eine
 Fixture, die es nach jedem Test abräumt, macht Tests verlässlich grün gegen
 einen Zustand, den niemand je sieht.
 
+**Zurückgeben ist etwas anderes als Wegräumen.** Die Suite startet ohne Thema,
+und `_the_application_look_stays_with_its_test` in `conftest.py` gibt Stil,
+Palette, Stylesheet, Schrift und Thema nach jedem Qt-Fall so zurück, wie er sie
+fand. Sie setzt kein Ziel; sie sorgt nur dafür, dass jeder Fall dieselbe Lage
+findet wie als erster seines Prozesses — die er in einer Auswahl ohnehin haben
+kann. Vorher setzte `customer_theme` (`test_feature_front_contract.py`, mit
+`autouse` auch in `test_measure_card_placement.py`) das dunkle Thema und ließ
+es stehen; der Wortschatzfall von `test_guide_targets.py` war allein grün und
+danach in fünf von sechs Läufen rot (D0-Review, Themenleck). Wer misst, stellt
+die Betriebslage weiter selbst her.
+
 **Offscreen hat gar keine Schrift.** Die Punktgröße ist negativ, und jede
 angeforderte Familie — `Segoe UI`, `DejaVu Sans`, `Sans Serif` — liefert
 dieselbe synthetische Metrik. Der Wächter, der hier als Beleg stand, war selbst
 der Fehler: Er maß eine Kartenbreite in einer Schrift, die es nicht gibt, und
 hat eine Änderung erzwungen, die niemand brauchte (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
+In `conftest.py` stand dazu, die Parameterkarte messe ohne Stylesheet 258 und
+mit 270 gegen eine Zone von 260; beide Zahlen stammten aus einem
+Offscreen-Lauf, am echten Bildschirm sind es 166 mit Stylesheet wie ohne. Eine
+Schrift, die eine Fixture selbst lädt (`QFontDatabase.addApplicationFont` mit
+der gebündelten DejaVu Sans), gilt auch offscreen: So messen
+`test_preview_banner_layout.py` und `test_counterpart_initial_height_ui.py`
+unter Windows dieselbe Metrik wie die Linux-CI.
 
 Daraus **drei** Sätze, und der dritte ist der teuerste:
 
@@ -214,14 +232,12 @@ Dialogknopfs ist vor `show()` überall `False`. Ein solcher Test kann dabei
 richtigen nicht zu unterscheiden — und ein Test, der so grün wird, wird es
 jahrelang (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
-Praktisch, und es sind drei Zeilen:
+Praktisch, und es sind zwei Zeilen; das Zurückgeben übernimmt `conftest.py`:
 
 ```
-before = QApplication.instance().styleSheet()
 apply_theme(QApplication.instance(), "dark")
 apply_style(QApplication.instance(), "dark")
 ...                                    # messen
-QApplication.instance().setStyleSheet(before)   # ins finally
 ```
 
 **Und wo die Messgröße von der Schriftmetrik abhängt, hilft auch das nicht** —
@@ -374,10 +390,10 @@ hat.
 
 `tests/.performance.json` hält die Bestwerte, gegen die die 25-%-Schwelle
 misst. Die Datei ist **absichtlich** ignoriert (`.gitignore`), und der Grund
-steht bisher nur dort: Die Werte sind maschinenabhängig (Bauplan §31). An
-diesem Projekt arbeiten drei Maschinen; die Bestwerte des schnellsten Rechners
-würden den Laptop dauerhaft rot färben, ohne dass eine Zeile langsamer
-geworden wäre (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
+steht bisher nur dort: Die Werte sind maschinenabhängig (Bauplan §31). Die
+Bestwerte eines schnelleren Rechners würden einen langsameren dauerhaft rot
+färben, ohne dass eine Zeile langsamer geworden wäre (Vorfall aus der Zeit
+mit drei Arbeitsplätzen: ROADMAP-ARCHIV.md, 04.09.2026).
 
 **Daraus folgt für jeden roten Leistungstest:**
 

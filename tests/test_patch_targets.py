@@ -62,12 +62,6 @@ def test_the_ground_set_holds_every_patch_site() -> None:
     assert _index().head_copies(), "keine Kopfkopie gefunden: der Auflöser liest nichts"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="scharf, wenn P1 die Originale discover.unpatched_* und llm.unpatched_backends "
-    "als Fixture führt (Plan 1.6, #1 bis #3)",
-)
 def test_rule_a_every_target_on_an_own_module_exists() -> None:
     """Ein Patch auf einen Namen, den es nicht gibt, legt ihn an — mit ``raising=False``
     still, sonst laut. Beides prüft dann nichts."""
@@ -78,8 +72,8 @@ def test_rule_a_every_target_on_an_own_module_exists() -> None:
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="scharf, wenn P1 (9 Stellen) und Q (3 Stellen) raising=False auf app.* "
-    "gestrichen haben (Plan 1.6, Entscheidung E2)",
+    reason="scharf, wenn Q (3 Stellen) raising=False auf app.* gestrichen hat "
+    "(Plan 1.6, Entscheidung E2)",
 )
 def test_rule_b_no_raising_false_on_an_own_module() -> None:
     """``raising=False`` verdeckt, dass ein Name fehlt — nach einem Schnitt der häufigste
@@ -92,7 +86,7 @@ def test_rule_b_no_raising_false_on_an_own_module() -> None:
     strict=True,
     raises=AssertionError,
     reason="scharf mit K: move_names copies stellt die Kopfkopien gepatchter Namen auf "
-    "Modulzugriff um (CS-11, Entscheidung E1); CS-9a behebt P1",
+    "Modulzugriff um (CS-11, Entscheidung E1)",
 )
 def test_rule_c_no_head_copy_of_a_name_patched_at_its_original() -> None:
     """Eine Kopfkopie hält den alten Wert; der Patch am Original erreicht sie nie."""
@@ -100,12 +94,6 @@ def test_rule_c_no_head_copy_of_a_name_patched_at_its_original() -> None:
     assert not findings, _report(findings)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="scharf, wenn P2 _cost_matrix (CS-9b), P1 configured_spools (CS-9a) und der "
-    "Verbotspatch auf sign_release.run (test_sign_release.py:789, neuer Punkt) behoben sind",
-)
 def test_rule_d_every_patched_name_is_read_by_somebody() -> None:
     """Wer einen Namen patcht, den niemand zur Aufrufzeit liest, prüft nichts — auch ein
     Verbotspatch („darf nicht gerufen werden“) wäre dann grün, ohne dass der Aufruf je

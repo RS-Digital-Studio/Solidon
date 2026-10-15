@@ -67,25 +67,36 @@ def test_contrast_reads_the_ground_the_customer_sees(qt_app: Any) -> None:
 
 
 def test_fonts_carry_the_effective_font_of_their_carrier(qt_app: Any) -> None:
-    """F-4: Ohne ``level`` steht die wirksame Schrift im Protokoll — die Grundschrift."""
+    """F-4: Ohne ``level`` steht die wirksame Schrift im Protokoll — die Grundschrift.
+
+    Die Stufe verlangt eine gemessene Familie. Offscreen hat Qt unter Windows
+    keine Schrift; die gebündelte DejaVu Sans gibt jeder Plattform eine.
+    """
+    from PySide6.QtGui import QFontInfo
     from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
+    from tests.bundled_fonts import bundled_font
     from tools.function_judges import _effective_level
 
-    holder = QWidget()
-    label = QLabel("Durchmesser", holder)
-    QVBoxLayout(holder).addWidget(label)
-    holder.show()
-    _settle(qt_app)
-    try:
-        (entry,) = capture.font_entries(holder)
-        points = round(label.font().pointSizeF(), 2)
-    finally:
-        holder.close()
-        holder.deleteLater()
+    with bundled_font(qt_app, 9):
+        holder = QWidget()
+        label = QLabel("Durchmesser", holder)
+        QVBoxLayout(holder).addWidget(label)
+        holder.show()
         _settle(qt_app)
+        try:
+            assert QFontInfo(label.font()).family() == "DejaVu Sans"
+            (entry,) = capture.font_entries(holder)
+            points = round(label.font().pointSizeF(), 2)
+            # Die Grundschrift, solange sie gilt — nach der Rückgabe stünde dort
+            # die des Vorgängers, und gleich wären beide nur zufällig.
+            base = QApplication.font().pointSize()
+        finally:
+            holder.close()
+            holder.deleteLater()
+            _settle(qt_app)
     assert entry["level"] == ""
-    assert entry["base_points"] == QApplication.font().pointSize()
+    assert entry["base_points"] == base == 9
     assert entry["points"] == points
     assert _effective_level(entry) == "body", entry
 

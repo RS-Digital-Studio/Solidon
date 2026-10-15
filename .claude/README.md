@@ -29,11 +29,10 @@ rot.
 
 ## Was ins Repository gehört
 
-**Fast alles — und das ist eine Entscheidung, keine Nachlässigkeit.** An
-diesem Projekt wird auf drei Maschinen gearbeitet, und eine Durchsicht, deren
-Messskripte und Rohfunde nur auf einer davon liegen, ist auf den anderen
-zweien nicht fortsetzbar. Die Begründung steht ausführlich in `.gitignore`
-über dem Abschnitt „Claude Code".
+**Fast alles — und das ist eine Entscheidung, keine Nachlässigkeit.** Eine
+Durchsicht, deren Messskripte und Rohfunde nur auf der Platte liegen, ist nach
+einem Neuaufbau oder in einer frischen Sitzung nicht fortsetzbar. Die
+Begründung steht in `.gitignore` über dem Abschnitt „Claude Code".
 
 Ausgenommen ist, was wirklich **dieser** Maschine gehört:
 

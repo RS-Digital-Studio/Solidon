@@ -13,6 +13,7 @@ from __future__ import annotations
 import gc
 import weakref
 from collections.abc import Callable
+from pathlib import Path
 from threading import Event, Thread
 
 import pytest
@@ -21,6 +22,8 @@ from PySide6.QtWidgets import QApplication
 
 from app.ui.leash import Worker, WorkerLeash
 from tests import source_tree
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize("initially_enabled", [True, False])
@@ -551,6 +554,107 @@ def test_waiting_for_all_reports_who_did_not_stop(qt_app: QApplication) -> None:
     if arbeiter.isRunning():
         assert arbeiter in steht_noch, "wer nach der Frist läuft, steht im Ergebnis"
     arbeiter.wait(2000)
+
+
+#: Ein Prozess, der mit laufendem Arbeiter endet — wie ein Fallprozess des
+#: Prüfstands nach ``shutdown_window`` (FD-154). Argumente: Schlafdauer des
+#: Arbeiters in Sekunden und die Wartefrist am Prozessende in Millisekunden
+#: (leer: Vorgabe der Leine).
+_ENDE_MIT_ARBEITER = """
+import sys
+import time
+
+sys.path.insert(0, sys.argv[1])
+from PySide6.QtCore import QCoreApplication, qInstallMessageHandler
+
+import app.ui.leash as leash
+
+
+def notiere(art, kontext, meldung):
+    sys.stderr.write(f"QT {getattr(art, 'name', art)} {meldung}\\n")
+    sys.stderr.flush()
+
+
+qInstallMessageHandler(notiere)
+if sys.argv[3]:
+    leash.EXIT_WAIT_MS = int(sys.argv[3])
+anwendung = QCoreApplication([])
+
+
+class Schlaefer(leash.Worker):
+    def work(self):
+        time.sleep(float(sys.argv[2]))
+        print("ARBEITER FERTIG", flush=True)
+
+
+leine = leash.WorkerLeash(anwendung)
+leine.start(Schlaefer())
+time.sleep(0.2)
+print("PROZESS ENDET", flush=True)
+"""
+
+
+def _ende_mit_arbeiter(
+    tmp_path: Path, schlaf_s: float, frist_ms: str
+) -> tuple[int, str, str, float]:
+    """Startet :data:`_ENDE_MIT_ARBEITER` und gibt Exit, Ausgaben und Dauer zurück."""
+    import os
+    import subprocess
+    import sys
+    import time
+
+    skript = tmp_path / "ende_mit_arbeiter.py"
+    skript.write_text(_ENDE_MIT_ARBEITER, encoding="utf-8")
+    beginn = time.monotonic()
+    lauf = subprocess.run(
+        [sys.executable, str(skript), str(ROOT), str(schlaf_s), frist_ms],
+        cwd=ROOT,
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONUTF8": "1"},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+        check=False,
+    )
+    return lauf.returncode, lauf.stdout, lauf.stderr, time.monotonic() - beginn
+
+
+def test_a_process_that_ends_while_a_worker_runs_waits_for_it(tmp_path: Path) -> None:
+    """Kein Arbeiter läuft über das Prozessende (FD-154).
+
+    PySide zerstört am Prozessende über seinen ``atexit``-Haken jedes
+    Python-eigene QObject, gleich wer es hält — läuft ein Arbeiter da noch,
+    endet der Prozess mit ``QThread: Destroyed while thread '' is still
+    running`` (0xC0000409). So starben Fallprozesse des Prüfstands, deren
+    Abbau nach den 2 s aus ``MainWindow.release`` weiterging. Die Leine wartet
+    deshalb am Prozessende auf jeden gehaltenen Arbeiter.
+    """
+    code, ausgabe, fehler, _dauer = _ende_mit_arbeiter(tmp_path, 1.5, "")
+
+    assert "Destroyed while thread" not in fehler, fehler
+    assert code == 0, (code, ausgabe, fehler)
+    assert ausgabe.splitlines()[-1] == "ARBEITER FERTIG", ausgabe
+
+
+def test_a_worker_past_the_exit_wait_ends_the_process_without_qt_teardown(
+    tmp_path: Path,
+) -> None:
+    """Wer die Frist am Prozessende reißt, beendet den Prozess benannt statt im qFatal.
+
+    Ein Arbeiter, der auch nach :data:`app.ui.leash.EXIT_WAIT_MS` nicht
+    zurückkommt, darf weder den Prozess unbegrenzt aufhalten noch ihn in Qts
+    Abbau umbringen. Der Prozess endet ohne diesen Abbau mit
+    :data:`app.ui.leash.STRAGGLER_EXIT_CODE` und nennt den Arbeiter.
+    """
+    from app.ui.leash import STRAGGLER_EXIT_CODE
+
+    code, ausgabe, fehler, dauer = _ende_mit_arbeiter(tmp_path, 30.0, "200")
+
+    assert "Destroyed while thread" not in fehler, fehler
+    assert code == STRAGGLER_EXIT_CODE, (code, ausgabe, fehler)
+    assert "Schlaefer" in fehler, fehler
+    assert "ARBEITER FERTIG" not in ausgabe
+    assert dauer < 20.0, dauer
 
 
 def test_a_worker_survives_the_death_of_its_leash(qt_app: QApplication) -> None:

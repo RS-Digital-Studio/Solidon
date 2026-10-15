@@ -18,6 +18,7 @@ from app.ui import overlay
 from app.ui.overlay import CurrentPageTabs, OverlayHost
 from app.ui.theme import apply_theme
 from tests import qt_roots
+from tests.bundled_fonts import bundled_font
 
 roots = qt_roots.roots
 
@@ -69,16 +70,18 @@ def test_a_spanning_quick_action_wraps_to_its_whole_row(
 
 @pytest.fixture(autouse=True)
 def _readable_font(qt_app: QApplication) -> Iterator[None]:
-    """Die Betriebsschrift steht vor dem Stil; synthetische Metriken reichen nicht."""
+    """Die Betriebsschrift steht vor dem Stil; synthetische Metriken reichen nicht.
+
+    Offscreen hat Qt unter Windows keine Schrift, auch nicht DejaVu Sans; die
+    gebündelte Datei gibt jeder Plattform dieselbe Metrik wie der Linux-CI.
+    Schrift und Thema gibt ``conftest.py`` zurück.
+    """
     from app.ui.style import apply_style
 
-    before = qt_app.font()
-    qt_app.setFont(QFont("DejaVu Sans", 9))
-    apply_theme(qt_app, "light")
-    apply_style(qt_app, "light")
-    yield
-    qt_app.setFont(before)
-    apply_style(qt_app, "light")
+    with bundled_font(qt_app, 9):
+        apply_theme(qt_app, "light")
+        apply_style(qt_app, "light")
+        yield
 
 
 def test_a_short_selection_does_not_expand_with_the_screen(

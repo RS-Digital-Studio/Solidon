@@ -35,8 +35,8 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Zweitkodierung, Menü-/Feldgrenzen, ruhende Werkzeugleisten? | `test_theme_and_palette.py` · `test_interface_limits.py` · `test_toolbar_rest_style.py` |
 | Findet die Suche, was der Kunde tippt? | `test_search.py`; das Suchfeld der Karte in `test_selection_operations.py` |
 | Bleiben Änderungswege gesperrt, Gründe aktuell und Fokus nach Befundhandlung im Bericht? | `test_change_lock.py`, `test_licence_lock_offers.py`, `test_finding_action_focus.py` |
-| Systemdialoge, Maßkarten und Feldhilfe? | `test_process.py`, `test_in_view_arming.py`, `test_sketch_editor_measure_field.py`, `test_feature_front_contract.py`, `test_measure_group_layout.py`, `test_measure_card_drag_ui.py`, `test_measure_card_placement.py` |
-| Funktionsdurchgang: Zeilen, Pakete, Szenen · Urteile und Gegenproben · der Prüfstand am Fenster · der Wortschatz der Ziele, aufgelöst am Fenster | `test_function_*.py` (Attrappen in `bench_fakes.py`) · `test_guide_targets.py`, `test_bench_findings.py`; Bildanleitungen und Wortschatz im Kern in `test_guides.py` |
+| Systemdialoge, Maßkarten und Feldhilfe? | `test_process.py`, `test_in_view_arming.py`, `test_sketch_editor_measure_field.py`, `test_feature_front_contract.py`, `test_measure_group_layout.py`, `test_measure_card_*.py`, `test_measure_field_places.py` |
+| Funktionsdurchgang: Zeilen, Pakete, Szenen · Urteile und Gegenproben · der Prüfstand am Fenster · der Wortschatz der Ziele, aufgelöst am Fenster | `test_function_*.py` (Attrappen in `bench_fakes.py`) · `test_guide_targets.py` (Fenster: `guide_window.py`), `test_bench_findings.py`; Bildanleitungen und Wortschatz im Kern in `test_guides.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
 | Erkennt der druckgleich-Vergleich (§11.2) jede Verletzung? | `test_print_equal.py` |
 | Verhindert eine abweisende Nachprüfung das Schreiben einer Vergleichsmarke und bleibt sie außerhalb der API-Zeit? | `test_performance_marks.py` — nachgestellte Prüfablehnungen, gestellte Uhr, eigene temporäre Marken; keine Leistungsmessung |
@@ -99,7 +99,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Nachbau im Prüfbericht: Kandidaten, Vergleich, Verluste, Abbruch/Projektwechsel, Undo/Redo und Dateirundreise | `test_rebuild_ui.py`; Geometrievertrag in `test_rebuild.py` |
 | Karten unten andocken, Reiter umordnen und verlustfrei in eigene Fenster ziehen? | `test_tab_windows.py`: reine Platz- und Bildschirmrechnung im Tor; Inhalte, Reiterkennungen und OS-Fenster in der Fenster-CI |
 | Kundenwege im Fenster | `test_ui.py`; Teilbereiche in `test_ui_dialogs.py`, `test_ui_export.py`, `test_ui_licensing.py`, `test_ui_remote.py`; `test_operation_ui.py` mit leerem Fenster, wo keine Geometrie nötig ist |
-| Größenwechsel: Inhalt und Abschluss erreichbar, Nutzergröße erhalten? | `test_dialog_layout.py`, `test_dialog_layout_regressions.py`, `test_ui_settings.py`, `test_counterpart_initial_height_ui.py`; Zusatzfälle in `karte-tests.md` |
+| Größenwechsel: Inhalt und Abschluss erreichbar, Nutzergröße erhalten? | `test_dialog_layout.py`, `test_dialog_layout_regressions.py`, `test_ui_settings.py`, `test_counterpart_initial_height_ui.py`, ohne Fenster `test_style_dialog_size.py`; Zusatzfälle in `karte-tests.md` |
 | Steht im Register jeder Umschalter vor den Feldern, die er schaltet, und nie hinter der Klappe eines Vorderfelds? | `test_dependency_order.py`; die Folge des Druckdialogs in `test_print_settings_ui.py` |
 | Bleiben Käuferzuordnung und Betreiberzugang aus dem Server? Halten die PHP-Endpunkte ihre Missbrauchsgrenzen? | `test_licence_admin.py`, `test_activation_server.py` · `test_public_php_security.py`; ohne PHP ein Skip, in der Linux-CI ein Fehler (`php_probe.py`) |
 | Website: tote Verweise, Stempel, Paketgrößen, „nichts von außen“, Sprachfassungen | `test_website.py` — Außenlinks getrennt von eingebundenen Ressourcen |
@@ -119,7 +119,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 
 | Datei | Rolle |
 |---|---|
-| `conftest.py` | Einstellungen, Profile und eigene Bausteine je Test zurückstellen; Abbaufehler sind rot. Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38) — je Prozess ein `solidon-tests-*`, beim Ende abgeräumt, Reste über einen Tag beim nächsten Start, Marker `windowed` für jeden `qt_app`- und `native_window_platform`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`). Unter `CI` endet der Lauf in `pytest_sessionstart`, wenn der exakte Kern fehlt — lokal bleibt das ein Skip |
+| `conftest.py` | Einstellungen, Profile, eigene Bausteine und Aussehen der Anwendung je Test zurückstellen (`test_suite_isolation.py`); Abbaufehler sind rot. Befunddaten über `record_trace`. Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38) — je Prozess ein `solidon-tests-*`, beim Ende abgeräumt, Reste über einen Tag beim nächsten Start, Marker `windowed` für jeden `qt_app`- und `native_window_platform`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`) |
 | `helpers.py` | Öffentliche Helfer ohne Fenster und Fixture `project`; Namen/Zwecke in `karte-tests.md`, „Helfer“. Keine privaten Querimporte aus `test_*.py` oder `conftest` |
 | `ui_helpers.py` | Fenster und Sitzung je Test frisch; Fixtures über `from tests.ui_helpers import window as window`. Weitere Helfer in `karte-tests.md`, „Helfer“ |
 | `cura_fakes.py` | Nachgebaute Cura 5.13 (`cura_installation`), ihr AppDir, Flatpak-Starter und AppImage als Abbild des AppDir mit nachgestelltem Einhängen für den Lauf — für `test_cura_machine.py` und die Cura-Fälle des Druckdialogs |
@@ -127,7 +127,8 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | `print_equal.py` | Druckgleich (§11.2): `shot`, `save`/`load`, `compare`; zwei Codestände: `tools/check_print_equal.py` |
 | `gcode_contact.py` | Stützkontakt im G-Code (`support_contact`): Abstand und Trennschichten je Rasterzelle; `support_in_box`: Stütze im Quader — nur für `test_real_slicers.py` |
 | `render_fakes.py` | Renderer-Doppel der Ansichtstests: schreibt Aktoren, Stile, Beschriftungen und Kamera mit, statt zu zeichnen — wer das Bild misst, nimmt den echten Renderer ohne Fenster |
-| `release_signing.py` | Eigenes Schlüsselpaar der Suite für unterschriebene Versionsdateien (`signed`, auch mit fremdem Schlüssel); die echten Schlüssel (`REAL_PUBLIC_KEYS`) samt Abdruck des ersten und Besitzproben (`KEY_PROOFS`) prüfen `test_the_published_version_file_is_signed` und `test_the_shipped_release_keys_are_proven` |
+| `release_signing.py` | Eigenes Schlüsselpaar der Suite für unterschriebene Versionsdateien; die echten Schlüssel in `karte-tests.md`, „Helfer“ |
+| `bundled_fonts.py` | Gebündelte DejaVu-Prüfschrift laden, setzen, prüfen, entfernen (`bundled_font`) |
 | `qt_roots.py` | Qt-Wurzeln am Testende geordnet abbauen; im Modul `roots = qt_roots.roots` |
 | `evaluation_helpers.py` | `window_evaluation`, `short_chain_finds_nothing`: volle Rückfallkette und erzwungene Absage der kurzen Kette |
 | `workflow_helpers.py` | Grenzt Jobs und Schritte der Workflows ab, ohne allgemeiner YAML-Parser zu sein |
@@ -145,7 +146,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
   ihr nativer Abbau darf nicht dem späteren zyklischen Sammler überlassen bleiben.
 - **`tests.helpers.exact_kernel()` steht vor jedem `OCP`-Import**, auch am
   Modulanfang: Lokal wird ein fehlender Kern so ein Skip, unter `CI` hält
-  `conftest.py` an, statt dass sich die Dateien des exakten Kerns still
+  `conftest.py` in `pytest_sessionstart` an, statt dass sich die Dateien des exakten Kerns still
   überspringen. Es importiert das eigene Kernelmodul regulär, damit dessen
   Importfehler nicht als fehlendes Extra verschwinden;
   `test_toolchain.py` prüft beides und, dass jeder `OCP`-Import in einer

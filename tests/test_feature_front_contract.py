@@ -34,10 +34,11 @@ from tests.ui_helpers import window as window
 
 @pytest.fixture(autouse=True)
 def customer_theme(qt_app):
-    """Die wirkliche Gestaltung bleibt als konsistente Betriebslage bestehen.
+    """Die wirkliche Gestaltung gilt als konsistente Betriebslage für den ganzen Fall.
 
-    Nur das Stylesheet zurückzusetzen ließe Palette und Themenmerker in
-    einem anderen Zustand. conftest setzt das Thema absichtlich nicht zurück.
+    Nur das Stylesheet zu setzen ließe Palette und Themenmerker in einem
+    anderen Zustand. Nach dem Fall gibt ``conftest.py`` das ganze Aussehen
+    zurück, wie es der Fall vorfand; der Nachfolger erbt kein dunkles Thema.
     """
     from app.ui.style import apply_style
     from app.ui.theme import apply_theme

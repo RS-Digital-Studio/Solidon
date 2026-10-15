@@ -528,7 +528,7 @@ def _kernel_not_loaded(monkeypatch: pytest.MonkeyPatch) -> list[int]:
 
     monkeypatch.delitem(sys.modules, "OCP.BRepPrimAPI", raising=False)
     monkeypatch.setattr(registry_module, "_KERNEL_PROBED", None)
-    monkeypatch.setattr(registry_module, "_KERNEL_INSTALLED", None, raising=False)
+    monkeypatch.setattr(registry_module, "_KERNEL_INSTALLED", None)
     looked: list[int] = []
     real = registry_module._kernel_is_installed
 

@@ -151,7 +151,10 @@ Felder genügen nicht. Gemessen und beruhigt wird dieselbe Teilmenge.
 Ein Klapppfeil erhält seinen Namen nur durch die tatsächlich sichtbare
 zugehörige Beschriftung, nicht durch irgendeinen Text daneben.
 
-`function_capture` liest für nativen Kontrast die wirklichen Fensterpixel.
+`function_capture` liest Texte nach dem Textformat ihres Trägers: Rich Text
+über `QTextDocument`, Kürzelmarken (`&`) nur an Trägern, die sie haben, und
+`&&` bleibt ein Zeichen (FD-76). Für nativen Kontrast liest es die wirklichen
+Fensterpixel.
 Ein leeres Bild oder fehlende Bildpunkte bleiben ungemessen; eine gute Palette
 ersetzt sie nicht. Fehlerbild und Fehlerangebot gehören zum selben offenen
 Zustand, vor Escape. Sperr- und Grenzfälle erhalten nur aus ausdrücklich

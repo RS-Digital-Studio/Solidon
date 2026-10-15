@@ -1,11 +1,11 @@
 """Der Kontrastprüfer liest die gezeichnete Schrift eines Hauptknopfs samt Zustand."""
 
 from collections import Counter
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from tests.bundled_fonts import bundled_font
 from tools import function_capture
 from tools.function_judges import CRITERION_JUDGES
 from tools.function_samples import sample_context
@@ -13,29 +13,9 @@ from tools.function_samples import sample_context
 
 @pytest.fixture
 def styled_app(qt_app):
-    """Schrift und Thema kehren nach dem Versuch zur vorherigen Betriebslage zurück."""
-    from PySide6.QtGui import QFont, QFontDatabase, QFontInfo, QFontMetrics
-
-    from app.ui.style import apply_style
-    from app.ui.theme import apply_theme, current_theme
-
-    font, theme = QFont(qt_app.font()), current_theme()
-    font_ids = []
-    for filename in ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf"):
-        font_path = Path(__file__).parents[1] / "app/core/geom/data/fonts" / filename
-        font_id = QFontDatabase.addApplicationFont(str(font_path))
-        assert font_id >= 0, "Die gebündelte Prüfschrift wurde nicht geladen"
-        font_ids.append(font_id)
-    qt_app.setFont(QFont("DejaVu Sans", 12))
-    assert QFontInfo(qt_app.font()).family() == "DejaVu Sans"
-    metrics = QFontMetrics(qt_app.font())
-    assert metrics.horizontalAdvance("WWW") > metrics.horizontalAdvance("iii")
-    yield qt_app
-    qt_app.setFont(font)
-    apply_theme(qt_app, theme)
-    apply_style(qt_app, theme)
-    for font_id in font_ids:
-        QFontDatabase.removeApplicationFont(font_id)
+    """Gebündelte Sans in 12 pt; Schrift und Thema gibt ``conftest.py`` zurück."""
+    with bundled_font(qt_app, 12):
+        yield qt_app
 
 
 def _button(qt_app, theme):

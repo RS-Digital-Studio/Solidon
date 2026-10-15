@@ -255,7 +255,8 @@ Aktion).
 **Stufe B — Bild und Text lesen.** Ein Agent liest Bilder und Textauszug jeder
 Zeile und urteilt nach E1–E7, V1–V6, G9, Z3, Z4, I1–I6 und den Prüfpunkten 2, 8,
 9, 11 und 19. Die Urteile stehen je Paket in `urteile-<paket>.toml`, jedes mit
-Bild und Stelle.
+Bild und Stelle; das Bild relativ zum Lauf, den die Datei mit Name, Kopf und
+Siegel nennt, oder mit dem Grund, warum der Lauf keines hat.
 
 **Stufe C — von Hand am laufenden Fenster**, mit Maus und Tastatur
 (Computer-Steuerung), nur für das, was kein Skript kann: Dateidialoge des
@@ -327,8 +328,8 @@ nach Fix*. Kleine Funde in eigenen Commits im Paket, größere als Registerpunkt
 mit Verweis auf den Fund.
 
 **Abhakliste:** je Paket `.claude/.state/funktionsdurchgang-2026-10/
-abhakliste-<paket>.md`, versioniert, damit sie auf allen drei Maschinen gleich
-ist — nur Text; Bilder und Rohdaten liegen außerhalb des Baums (`--out`). Der
+abhakliste-<paket>.md`, versioniert, damit jede Sitzung und die Durchsicht
+denselben Stand lesen — nur Text; Bilder und Rohdaten liegen außerhalb des Baums (`--out`). Der
 Prüfstand erzeugt sie aus seinen Messungen und `urteile-<paket>.toml`; von Hand
 wird sie nicht bearbeitet. Eine Datei je Paket, damit zwei parallele Pakete
 keine erzeugte Datei mergen müssen. „Offen“ gibt es nur mit RM-Nummer — das

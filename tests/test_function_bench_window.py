@@ -458,8 +458,13 @@ def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:
     Liste meldet ``itemDoubleClicked`` aber nur an der Zeile, die vorher
     gedrückt war. Kein Doppelklick des Prüfstands öffnete so je einen Schritt
     im Verlauf — der Fehlfall von *Auf das Bett setzen* fand sein Feld nie.
+
+    Danach ist die Taste wieder los (FD-83): ``mouseDClick`` lässt sie nicht
+    los, und Qt hielt sie bis zum nächsten Klick für gedrückt — jede Bewegung
+    bis dahin war ein Zug ohne Leave, ein Tooltip blieb über dem nächsten Ziel.
     """
-    from PySide6.QtWidgets import QListWidget
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QListWidget
 
     listing = QListWidget()
     listing.addItems(["1  Quader anlegen", "2  Bohrung setzen"])
@@ -474,9 +479,63 @@ def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:
         ports.press(ports.widget_under(point), point, "double")
         qt_app.processEvents()
         assert opened == ["2  Bohrung setzen"]
+        assert QApplication.mouseButtons() == Qt.MouseButton.NoButton
     finally:
         listing.close()
         listing.deleteLater()
+        qt_app.processEvents()
+
+
+def test_a_double_click_that_removes_its_widget_releases_at_the_pointer(
+    qt_app: Any, monkeypatch: Any
+) -> None:
+    """FD-83, Rückfallzweig: Baut der Doppelklick das gedrückte Widget ab, lässt das los,
+    was jetzt unter dem Zeiger liegt — wie Qt beim Kunden.
+
+    Offscreen lässt sich das gedrückte Widget im Doppelklick nicht abbauen, ohne
+    den Prozess zu verlieren. Der Fall öffnet deshalb an derselben Stelle eine
+    neue Fläche und meldet die Liste über ``shiboken6.isValid`` als abgebaut;
+    ``press`` holt ``isValid`` erst im Aufruf.
+    """
+    import shiboken6
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication, QListWidget, QStackedWidget, QWidget
+
+    stack = QStackedWidget()
+    listing = QListWidget()
+    listing.addItems(["1  Quader anlegen", "2  Bohrung setzen"])
+    opened = QWidget()
+    stack.addWidget(listing)
+    stack.addWidget(opened)
+    listing.itemDoubleClicked.connect(lambda _item: stack.setCurrentWidget(opened))
+    stack.resize(300, 200)
+    stack.show()
+    qt_app.processEvents()
+    pressed = listing.viewport()
+    valid = shiboken6.isValid
+    monkeypatch.setattr(shiboken6, "isValid", lambda thing: thing is not pressed and valid(thing))
+    released: list[Any] = []
+    release = QTest.mouseRelease
+
+    def record(widget: Any, *args: Any) -> None:
+        released.append(widget)
+        release(widget, *args)
+
+    monkeypatch.setattr(QTest, "mouseRelease", record)
+    try:
+        point = pressed.mapToGlobal(listing.visualItemRect(listing.item(1)).center())
+        ports = function_walk.QtPorts(None, 0.0)
+        assert ports.widget_under(point) is pressed
+        ports.press(pressed, point, "double")
+        qt_app.processEvents()
+        assert stack.currentWidget() is opened
+        assert ports.widget_under(point) is opened
+        assert released == [opened]
+        assert QApplication.mouseButtons() == Qt.MouseButton.NoButton
+    finally:
+        stack.close()
+        stack.deleteLater()
         qt_app.processEvents()
 
 
@@ -1155,6 +1214,107 @@ def test_a_scroll_click_covers_its_scroll_area_and_not_a_list_over_it(qt_app: An
         root.close()
         root.deleteLater()
         settle()
+
+
+@pytest.mark.parametrize(
+    "kind, text, expected",
+    [
+        ("plain", "A & B <b>wörtlich</b> &nbsp;", "A & B <b>wörtlich</b> &nbsp;"),
+        ("auto", "A & B", "A & B"),
+        ("auto", "<b>A&nbsp;&amp;&nbsp;B</b>", "A & B"),
+        ("rich", "&nbsp;A&amp;B&nbsp;", " A&B "),
+        ("rich", "&lt;b&gt;X&lt;/b&gt; &#43; &#x2212;", "<b>X</b> + −"),
+        ("button", "&Datei && Ablage", "Datei & Ablage"),
+        ("button", "<b>&Datei</b>", "<b>Datei</b>"),
+        ("button", "A&", "A"),
+        ("button", "A&&&", "A&"),
+        ("buddy", "A&\nB", "A\nB"),
+        ("group", "&Datei && Ablage", "Datei & Ablage"),
+        ("buddy", "&Datei && Ablage", "Datei & Ablage"),
+        ("rich_buddy", "<b>&amp;Datei &amp;&amp; Ablage</b>", "Datei & Ablage"),
+        ("tab", "&Datei && Ablage", "Datei & Ablage"),
+    ],
+)
+def test_text_capture_respects_entities_formats_and_mnemonic_carriers(
+    qt_app: Any, kind: str, text: str, expected: str
+) -> None:
+    """FD76: Sichtbarer Text statt HTML-Reste oder pauschal entfernter Ampersands."""
+    from PySide6.QtCore import QCoreApplication, QEvent, Qt
+    from PySide6.QtWidgets import QGroupBox, QLabel, QLineEdit, QPushButton, QTabBar, QWidget
+
+    root = QWidget()
+    root.resize(900, 200)
+    if kind == "button":
+        carrier = QPushButton(text, root)
+    elif kind == "group":
+        carrier = QGroupBox(text, root)
+    elif kind == "tab":
+        carrier = QTabBar(root)
+        carrier.addTab(text)
+    else:
+        carrier = QLabel(text, root)
+        if kind == "plain":
+            carrier.setTextFormat(Qt.TextFormat.PlainText)
+        elif kind in ("rich", "rich_buddy"):
+            carrier.setTextFormat(Qt.TextFormat.RichText)
+        if kind in ("buddy", "rich_buddy"):
+            carrier.setBuddy(QLineEdit(root))
+    carrier.setGeometry(20, 60, 850, 60)
+    try:
+        root.show()
+        qt_app.processEvents()
+        entries = capture.text_entries(root)
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry["text"] == expected
+        assert not entry["cut"], entry
+        # Ein HTML-ähnlicher Plaintext darf auch am gemeinsamen Namensweg nicht verschwinden.
+        if kind != "tab":
+            assert capture.name_of(carrier) == expected
+    finally:
+        root.close()
+        root.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+@pytest.mark.parametrize("narrow", [False, True], ids=["passt", "wirklich_zu_schmal"])
+def test_real_preview_legend_keeps_its_visible_text_and_the_public_p9_guard(
+    qt_app: Any, narrow: bool
+) -> None:
+    """FD76: Echte Vorschaulegende ohne falschen P9-Fund; echter Platzmangel bleibt rot."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QWidget
+
+    from app.i18n import tr
+    from app.ui.viewport import PreviewBanner
+    from tools.function_points import judge_case
+    from tools.function_samples import sample_context, sample_protocol
+
+    root = QWidget()
+    root.resize(1920, 1080)
+    banner = PreviewBanner(root)
+    try:
+        root.show()
+        banner.show_preview("Vorschau", "blue_orange", "Vorher")
+        qt_app.processEvents()
+        expected = f" + {tr('Hinzugefügt')}    - {tr('Entfernt')} "
+        assert "&nbsp;" in banner.legend.text(), "Der echte Träger muss Entities enthalten"
+        if narrow:
+            banner.legend.setFixedWidth(1)
+            qt_app.processEvents()
+        entries = capture.text_entries(banner)
+        legend = next(entry for entry in entries if tr("Hinzugefügt") in entry["text"])
+        assert legend["text"] == expected
+        assert legend["cut"] is narrow, legend
+        protocol = sample_protocol()
+        protocol["texts"] = [legend]
+        outcome = judge_case(protocol, sample_context()).points[9]
+        assert (outcome.verdict == "fund") is narrow, outcome
+        assert bool(outcome.issues) is narrow
+    finally:
+        root.close()
+        root.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def test_text_needs_count_box_symbol_padding_rich_text_and_list_cells(qt_app: Any) -> None:

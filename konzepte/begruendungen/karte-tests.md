@@ -42,7 +42,7 @@ und von zwei Fassungen desselben Satzes veraltet immer eine (RM-098).
 | Echte Lage-/Abstandsbefunde und warme Daten bei mm/in/mm, sechs Sprachen, Auswahl/Einzelheiten/Nachschub, rohe Gruppenidentität samt vorigem Stand, gelesener Reiter und offene/geschlossene Körperknoten; Slicerwerte und Freitext als Gegenfälle | `test_finding_display_units.py` |
 | Nach Absage wieder sichtbare Vorschaulegende, kurze und lange Texte in sechs Sprachen und zwei tatsächlichen Anwendungsschriften | `test_preview_banner_layout.py` |
 | Maßgruppe nach Auf-/Zuklappen neu bemessen, ohne Layoutschleife; vorgemerkte Antwort bei Gruppentausch und Abschluss | `test_measure_group_layout.py` |
-| Maßkarte an Titel/freiem Grund ziehen; Felder, Knöpfe und Klappen bedienbar; Nutzerort bei Größenwechsel, Grenzen, Abbruch und Rückrufabbau; Globalfilter erst an QWidget, QWindow-Maustransport durchlassen, damit Qt beim Release seinen impliziten Druckempfänger löst | `test_measure_card_drag_ui.py` |
+| Maßkarte an Titel/freiem Grund ziehen; Felder, Knöpfe und Klappen bedienbar; Nutzerort bei Größenwechsel, Grenzen, Abbruch und Rückrufabbau; am gemeinsamen Verteiler (`app_events`) nur während des Zugs angemeldet, QWindow-Maustransport durchgelassen, damit Qt beim Release seinen impliziten Druckempfänger löst; Bewegungszeiger am Druckempfänger, dessen eigener oder geerbter Zeiger auf jedem Ausgang zurück (Escape, Verbergen, Reset, Abbau, Fokus- und Fensterverlust, erster Bewegungsfehler); ein fremder Override bleibt unberührt, auch im Fehlerweg; Verlust des Druckempfängers (gelöscht, umgehängt) und Abbau des Helfers beenden die Anmeldung | `test_measure_card_drag_ui.py` |
 | Echter Maßfluss: Nutzerort bei Klappen, Werten und fehlender Fläche; Gruppenwechsel/Abbruch, Seiten-/Bodenkarten und freie Maßfelder auch im Rückfall | `test_measure_card_placement.py` |
 | Bettrasterfarbe und Hauptlinien getrennt von Bauraum/Zeichnung; unveränderte Linienpositionen/Tiefe, Themenwechsel und Sichtbarkeit; Bettmaßzahlen aus der Textrolle, Bauraumfarbe unverändert | `test_bed_grid_visibility.py` |
 | Nur direkte gewöhnliche Werkzeugknöpfe in Ruhe ohne Rahmenfarbe; Geometrie und Hover/Fokus/Wahl sowie fremde Eingaben und Hauptaktion erhalten | `test_toolbar_rest_style.py` |
@@ -278,6 +278,7 @@ von weiterhin zwei unabhängigen Bauten für den Determinismusvergleich.
 | Kommt ein Backslash in einem Pfad als Backslash an statt als Steuerzeichen? | `test_source_escapes.py` — jedes Oktal-Escape außer `\0` und jedes rohe Steuerzeichen in einer nicht rohen Zeichenkette unter `app/`, `tests/`, `tools/`, `website/`, `packaging/`; Hex-Escapes sind die gewollte Form |
 | Bleiben Musteränderung und -entfernung auf STL-gerundeten Zylinderfacetten dicht und frei von Selbstschnitten? | `test_pattern_features.py` — binärer STL-Rundlauf in beiden Güten, getrennte Importfelder und deren unabhängige Bearbeitung, Schnittprüfung, Wiedererkennung, Winkelnaht, Abbruch und Attributerhalt; `test_platform_identity.py` prüft die Ausrichtung aufrecht und gekippt gegen Plattformrauschen. *Aus der Karte verschoben, als die Suche (RM-735) ihre Zeile bekam.* |
 | Findet die Suche, was der Kunde tippt? | `test_search.py` — drei Runden, Güte, Vorauswahl und Kundenwörter in jeder Sprache, ohne Fenster; das Suchfeld der Karte mit Trefferliste, Tasten und Hinweiszeile in `test_selection_operations.py` |
+| Verträgt jeder Fall den JUnit-Bericht der CI, und hinterlässt er die Anwendung, wie er sie fand? | `test_suite_isolation.py` — kein Fall fordert `record_property` oder `record_xml_attribute` an (im `xunit2`-Bericht von `run_suite_isolated.py` ein Setup-Fehler), mit Gegenprobe; Befunddaten legt `record_trace` aus `conftest.py` als Berichtsabschnitt ab. Ein Fallpaar stellt Thema, Stil und Schrift um und prüft im Nachfolger Stil, Palette, Stylesheet, Schrift, Themenmerker und Thema gegen den Stand davor (Rückgabe: `_the_application_look_stays_with_its_test`) |
 
 ## Helfer
 
@@ -342,7 +343,36 @@ ohne Startbildschirm, `with_a_body` für die ausgewählte Korpusfigur,
 `on_the_bore_wall` für einen Klick auf eine Bohrungswand, `wait_until` für
 zugestellte Qt-Ereignisse, `wait_for_export` und `wait_for_print_findings` für
 Arbeiter, die `wait_for_idle` nicht sieht, sowie `PlacementItem`,
-`PlacementViewport` und `scene_with_a_hole_and_a_fillet` für Platzierungsfälle.
+`PlacementViewport`, `placement_layout` und `scene_with_a_hole_and_a_fillet`
+für Platzierungsfälle. Für Maßkarten: `send_mouse_event` (Mausereignis mit
+festem Bildschirmbezug), `begin_card_drag`/`end_card_drag`,
+`settle_measure_layout` (Layoutaufträge zustellen) und
+`measure_more_heading`.
+
+`release_signing.py` hält ein eigenes Schlüsselpaar der Suite für unterschriebene
+Versionsdateien (`signed`, auch mit fremdem Schlüssel); die echten Schlüssel
+(`REAL_PUBLIC_KEYS`) samt Abdruck des ersten und Besitzproben (`KEY_PROOFS`)
+prüfen `test_the_published_version_file_is_signed` und
+`test_the_shipped_release_keys_are_proven`.
+
+`bundled_fonts.py` ist die eine Stelle für die gebündelte Prüfschrift: `bundled_font`
+lädt DejaVu Sans (auf Wunsch weitere Dateien), setzt sie als Anwendungsschrift,
+prüft Familie und echte Metrik und entfernt die Dateien danach wieder; Schrift
+und Thema gibt `conftest.py` zurück.
+
+`shell_helpers.py` ist die eine Stelle, die bash und sh der Suite sucht:
+`bash_executable` (der Starter aus Git, mit `keep_path` die bash selbst, nie der
+Starter von WSL) und `posix_shell` für das Linux-Installationsskript, beide mit
+Rückfall neben Git, unter `ProgramFiles` und in der Installation je Nutzer. Es
+lädt nur die Standardbibliothek. Dass keine Testdatei selbst per `which` sucht,
+hält `test_packaging_platform.py::test_only_the_shell_helpers_look_for_bash_or_sh`.
+
+`guide_window.py` gehört allein `test_guide_targets.py`: die Fixture
+`prepared_window` für den Wortschatz des Funktionsdurchgangs (Quader mit
+Bohrung unter dem Bett, im Kundenthema) und `settle`, das nach festen Runden
+wartet, bis keine Seitenkarte mehr gleitet (`at_rest`) — gelesen wird die Lage,
+die der Kunde nach dem Gleiten sieht, nicht eine Zwischenlage, die an der
+Rechnerlast hängt (FD-157).
 
 ## Stolperfallen
 

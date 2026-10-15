@@ -22,6 +22,8 @@ from PySide6.QtWidgets import QMenu, QScrollArea, QToolButton
 from app.core import guides
 from app.core.bootstrap import load_operations
 from app.i18n import SOURCE_LANGUAGE
+from tests.guide_window import prepared_window as prepared_window
+from tests.guide_window import settle as _settle
 from tools.function_scan import MESSAGE_BUILDERS, message_builders
 
 load_operations()
@@ -162,54 +164,6 @@ def test_a_private_read_in_a_resolver_turns_the_guard_red() -> None:
     """Gegenprobe: ``window.feature_panel._apply`` wäre ein Zugriff am Kennzeichen vorbei."""
     source = "def next_click(window, name):\n    return window.feature_panel._apply\n"
     assert private_reads(source, ("next_click",)) == ["next_click: window.feature_panel._apply"]
-
-
-@pytest.fixture
-def prepared_window(qt_app: Any) -> Iterator[Any]:
-    """Ein Fenster mit einem Quader samt Bohrung, unter das Bett geschoben.
-
-    Die Attrappe des Renderers gibt der Ansicht eine Projektion; offscreen gibt
-    es sonst keine, und die Maßgruppe im Bild bliebe aus.
-    """
-    from app.core.scene.history import OperationDraft
-    from app.ui.main_window import MainWindow
-    from app.ui.session import Session
-    from app.ui.settings import UiSettings
-    from tests.render_fakes import RecordingRenderer
-    from tools.function_checks import SMALLEST_WINDOW
-
-    window = MainWindow(Session(), UiSettings())
-    window.viewport.renderer = RecordingRenderer(size=(900, 600))
-    window.resize(*SMALLEST_WINDOW)
-    window.show()
-    window._show_start_screen(False)
-    assert window.session.apply(
-        "Quader mit Bohrung",
-        [
-            OperationDraft(op="create_box"),
-            OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 12.0}),
-            OperationDraft(
-                op="translate_object", inputs=("obj_1",), params={"dx": 0.0, "dy": 0.0, "dz": -15.0}
-            ),
-        ],
-    )
-    assert window.session.wait_for_idle(60_000)
-    window.report.show_result(window.session.last_result, window.session.project.document)
-    _settle(qt_app)
-    try:
-        yield window
-    finally:
-        for menu in [*window.findChildren(QMenu), *qt_app.topLevelWidgets()]:
-            if isinstance(menu, QMenu) and menu.isVisible():
-                menu.hide()
-        window.hide()
-        window.release()
-        window.viewport.renderer = None
-
-
-def _settle(qt_app: Any, rounds: int = 20) -> None:
-    for _ in range(rounds):
-        qt_app.processEvents()
 
 
 def _follow(qt_app: Any, window: Any, name: str) -> str:
@@ -369,6 +323,7 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
     from app.ui.settings_dialog import SettingsDialog
 
     window = prepared_window
+    assert qt_app.styleSheet(), "Voraussetzung: die Lage des Kunden, mit seinem Thema"
     seen: set[str] = set()
 
     def widget(name: str) -> Any:
@@ -386,17 +341,29 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
     assert click("tree.row:obj_1").why == "ziel"
     assert click("tree.row:obj_1.hole_1").why in {"aufklappen", "ziel"}
     # Drei Schritte in einer Transaktion: Schritt 1 steht in der zugeklappten
-    # Gruppe, der Klick auf ihre Zeile klappt sie auf.
+    # Gruppe, der Klick auf ihre Zeile klappt sie auf. Steht die Karte danach
+    # still, ist die Zeile im Kundenthema ganz da, ohne Rollen (FD-157).
     from PySide6.QtTest import QTest
 
     step = click("history.row:1")
     assert step.why == "aufklappen"
-    surface = window.history_panel.list.viewport()
+    listing = window.history_panel.list
+    surface = listing.viewport()
     QTest.mouseClick(
         surface, Qt.MouseButton.LeftButton, pos=surface.mapFromGlobal(step.rect.center())
     )
     _settle(qt_app)
+    first = window.session.project.document.ops[0].id
+    row = next(
+        listing.item(number)
+        for number in range(listing.count())
+        if listing.item(number).data(Qt.ItemDataRole.UserRole) == first
+    )
+
     assert click("history.row:1").why == "ziel"
+    # Ganz zu sehen in der Höhe; breiter als die Liste darf die Zeile sein.
+    shown, place = surface.visibleRegion().boundingRect(), listing.visualItemRect(row)
+    assert shown.top() <= place.top() and place.bottom() <= shown.bottom(), (shown, place)
     with pytest.raises(guide_targets.MissingTargetError):
         guide_targets.next_click(window, "history.row:99")
     assert _follow(qt_app, window, "finding:arrange.below_bed") == "ziel"
@@ -1234,22 +1201,31 @@ def nested_scroll(qt_app: Any) -> Iterator[tuple[Any, Any, Any]]:
 def test_a_widget_cut_off_by_an_outer_scroll_area_is_reached_by_rolling_it(
     nested_scroll: tuple[Any, Any, Any], qt_app: Any
 ) -> None:
-    """D0 F-19: Ein Feld, das sein innerer Rollbereich ganz zeigt, der äußere aber abschneidet.
-
-    Die Auswahlkarte steckt im Rollbereich der Karte und im äußeren
-    ``FittedScroller``. Gefragt war nur der nächste Rollbereich: Dort stand das
-    Ziel „sichtbar“, und der Klick fiel unter die Karte. Jetzt zählt jeder
-    Bereich, gerollt wird der erste, der rollen kann — hier der äußere.
-    """
+    """D0 F-19: Innen sichtbar genügt nicht beim äußeren ``FittedScroller`` der Karte.
+    Jeder Bereich zählt; der hilfreiche äußere Radweg muss das ganze Feld freilegen."""
     from app.ui import guide_targets
+    from tools.function_walk import QtPorts
 
-    window, outer, _inner = nested_scroll
+    window, outer, inner = nested_scroll
     bar = outer.verticalScrollBar()
     step = guide_targets.next_click(window, "setting:probe")
     assert (step.why, step.direction, step.button) == ("rollen", 1, Qt.MouseButton.NoButton)
     assert bar.value() == 0, "next_click hat selbst gerollt"
     bar.setValue(bar.maximum())
     _settle(qt_app)
+    # Der äußere Anschlag legt die Mitte frei, schneidet oben aber eine Zeile ab.
+    step = guide_targets.next_click(window, "setting:probe")
+    assert (step.why, step.direction) == ("rollen", -1)
+    ports = QtPorts(window, 0.0)
+    hit = ports.widget_under(step.rect.center())
+    assert hit is not None and ports.covers(step, hit)
+    ports.press(hit, step.rect.center(), "wheel_up", wheel_angle=step.wheel_angle)
+    _settle(qt_app)
+    target = guide_targets.widget_for(window, "setting:probe")
+    for area in (inner, outer):
+        shown = area.viewport().rect()
+        actual = QRect(target.mapTo(area.viewport(), QPoint()), target.size())
+        assert shown.contains(actual), (shown, actual)
     assert guide_targets.next_click(window, "setting:probe").why == "ziel"
 
 

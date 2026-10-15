@@ -1302,7 +1302,10 @@ def forget_cache() -> None:
         _DIGESTS.clear()
         _BY_GEOMETRY.clear()
         _GEOMETRY_HOLDERS.clear()
-        for memory in _MEMORIES.values():
+        # Über einen Schnappschuss: Der Abschied eines Körpers läuft an jedem
+        # Prüfpunkt dieser Schleife aus der Speicherbereinigung heraus und
+        # nimmt seinen Merker aus ``_MEMORIES`` (FD-167, :data:`_MEMORY_LOCK`).
+        for memory in tuple(_MEMORIES.values()):
             memory.answers.clear()
             memory.digests.clear()
             memory.lineage.answers.clear()
@@ -3088,8 +3091,12 @@ def answered_ahead(
                     )
     answers: dict[str, dict[Any, Any]] = {}
     with _MEMORY_LOCK:
-        for name, held_answers in _BY_GEOMETRY.items():
-            fresh = {key: value for key, value in held_answers.items() if (name, key) not in sent}
+        # Schnappschüsse: Ein Abschied mitten in der Schleife nimmt, was nur der
+        # gestorbene Körper hielt (``_release_geometric``, FD-167).
+        for name, held_answers in tuple(_BY_GEOMETRY.items()):
+            fresh = {
+                key: value for key, value in tuple(held_answers.items()) if (name, key) not in sent
+            }
             sent.update((name, key) for key in fresh)
             answers[name] = fresh
     answers[_SPLIT_TARGETS] = splits
@@ -8346,7 +8353,10 @@ _MEMORIES: dict[int, _BodyMemory] = {}
 #: dazwischen verdrängt wird, bekam einen ``KeyError``. Wiedereintrittsfähig,
 #: weil der Abschied eines Körpers (:func:`_forget_body`) aus der
 #: Speicherbereinigung heraus in jedem Faden und an jeder Zuweisung laufen
-#: kann — auch innerhalb des gehaltenen Schlosses.
+#: kann — auch innerhalb des gehaltenen Schlosses. **Deshalb schützt das
+#: Schloss keine Schleife:** Wer über einen Merker läuft, aus dem ein Abschied
+#: nimmt, läuft über einen Schnappschuss (``tuple(...)``, FD-167;
+#: ``tests/test_memory_farewell.py`` hält es fest).
 _MEMORY_LOCK = threading.RLock()
 
 

@@ -82,6 +82,22 @@ ein neues Bild wird nach einer Korrektur erneut tatsächlich gelesen.
 
 ## Verlauf
 
+- 15.10.2026, D0 vor der Landung: Robert verlangt Phase 2 vollständig, nichts
+  offen — auch die leichten Funde werden vor 0.6.1 behoben; gearbeitet wird
+  nur noch auf einem Rechner. Auf `welle4` neu: Statusnachzug von 28 Funden am
+  finalen Lauf, FD-84 (Maßfelder im Bild), FD-143 (mehrzeilige Funde in der
+  Abhakliste), FD-154 (kein Prozessende unter laufendem Arbeiter), FD-156/157
+  (Fenstertests nach drei Fixen, grauer Werkzeuggrund), Urteile relativ zum
+  gesiegelten Lauf, Fixe beider Reviews, neu erzeugte Abhaklisten; native
+  DE-Maßkartenfolge 62/62 und FD-154 am echten Fenster grün, 032 EN wartet auf
+  FD-159. Funddatei bis FD-167. Die Übereinstimmung ≥ 90 % gilt je Prüfpunkt
+  gepoolt über eine Urteilsrunde (Entscheidung Koordinator, FD-145). Parallel
+  laufen die Fixpakete F2b, F5, F7, F8, F10 und FD-167 sowie CS0 (R, W13, P1,
+  P2, Plattform integrierbar; M und Q in der Fixrunde). **Als Nächstes:**
+  Schlussreview-Fixe, Nachprüfung, gepinntes Tor, D0 nach main und CI; dann
+  `welle5` mit CS0 und allen Fixpaketen, Schlusslauf am echten Fenster,
+  Nachurteilsrunde, Tor, main; danach Release 0.6.1.
+
 - 13.10.2026, Maßkarten und sichtbare Schlussfixe: `welle4`/origin steht auf
   `9dc38e79f253a92efde6df55e1dec3c79d64a9f6`. FD69–75 sind normal integriert,
   jeweils ohne manuelle Merge-Auflösung und mit grünen normalen Hooks.
