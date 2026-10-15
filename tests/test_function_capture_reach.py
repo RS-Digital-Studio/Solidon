@@ -100,3 +100,74 @@ def test_the_feature_window_names_every_field_it_counts(qt_app: Any) -> None:
             qt_app.processEvents()
     finally:
         host.close()
+
+
+# --- FD-110: eine umbrochene Zeile, die nicht in ihre Zelle passt ----------------------
+
+
+LONG = "Ein Objekt steckt unter dem Druckbett. · cube_clean · Überstand: 10,00 mm"
+
+
+def _list(qt_app: Any, text: str, *, wrap: bool, lines: int, width: int = 220) -> Any:
+    """Eine Liste mit einer Zeile so hoch wie ``lines`` Textzeilen — wie die Befundliste."""
+    from PySide6.QtCore import QSize
+    from PySide6.QtWidgets import QListWidget, QListWidgetItem, QVBoxLayout, QWidget
+
+    host = QWidget()
+    listing = QListWidget(host)
+    QVBoxLayout(host).addWidget(listing)
+    listing.setWordWrap(wrap)
+    item = QListWidgetItem(text)
+    item.setSizeHint(QSize(width, listing.fontMetrics().lineSpacing() * lines + 2))
+    listing.addItem(item)
+    listing.setFixedSize(width + 2 * listing.frameWidth(), 200)
+    host.show()
+    qt_app.processEvents()
+    return host
+
+
+def _cell(listing: Any) -> dict[str, Any]:
+    (entry,) = [e for e in capture.text_entries(listing) if e["carrier"].endswith(".Zeile")]
+    return entry
+
+
+def test_a_wrapped_row_too_low_for_its_lines_is_cut(qt_app: Any) -> None:
+    """Die Befundzeile „… Überstand: 10,00 …“ (FD-109) hieß an Stufe A ``cut=false``.
+
+    Eine umbrechende Liste brauchte nur ihr längstes Wort (F-15); dass die
+    Zeile dafür zu niedrig ist und die letzte Zeile gekürzt wird, sah die
+    Messung nicht (FD-110, Lauf 002/04-fehlfall).
+    """
+    listing = _list(qt_app, LONG, wrap=True, lines=1)
+    try:
+        entry = _cell(listing)
+        assert entry["cut"] is True, entry
+        assert entry["axis"] == "hoehe" and entry["need_px"] > entry["width_px"], entry
+    finally:
+        listing.close()
+
+
+def test_a_wrapped_row_tall_enough_and_a_short_row_are_not_cut(qt_app: Any) -> None:
+    """Gegenfälle: genug Zeilen für den Umbruch, und eine kurze Zeile."""
+    for text, lines in ((LONG, 8), ("Kurz", 1)):
+        listing = _list(qt_app, text, wrap=True, lines=lines)
+        try:
+            entry = _cell(listing)
+            assert entry["cut"] is False, entry
+        finally:
+            listing.close()
+
+
+def test_a_row_without_wrapping_is_measured_across(qt_app: Any) -> None:
+    """Ohne Umbruch zählt die Breite wie bisher — und eine kurze Zeile passt."""
+    listing = _list(qt_app, LONG, wrap=False, lines=1)
+    try:
+        entry = _cell(listing)
+        assert entry["cut"] is True and entry["axis"] == "breite", entry
+    finally:
+        listing.close()
+    listing = _list(qt_app, "Kurz", wrap=False, lines=1)
+    try:
+        assert _cell(listing)["cut"] is False
+    finally:
+        listing.close()

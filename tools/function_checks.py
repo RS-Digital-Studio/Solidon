@@ -378,7 +378,14 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         _keys("text", "actions", "kind", "way_out", "phase"),
         {"kind": FAULT_KINDS},
     ),
-    "texts": ProtocolField("liste", _keys("text", "carrier", "need_px", "width_px", "cut", "lead")),
+    # ``axis``: Woran ein Text gemessen ist — ``breite`` (Bedarf gegen Breite)
+    # oder ``hoehe`` (umbrochene Zeile einer Liste gegen die Höhe ihrer Zelle,
+    # FD-110). Fehlt es, ist es die Breite.
+    "texts": ProtocolField(
+        "liste",
+        _keys("text", "carrier", "need_px", "width_px", "cut", "lead", "axis"),
+        {"axis": ("breite", "hoehe")},
+    ),
     "fields": ProtocolField(
         "liste", _keys("label", "accessible_name", "description", "tooltip", "front")
     ),

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import sys
 import time
@@ -682,13 +683,49 @@ def _columns(model: Any, parent: Any) -> int:
         return 1
 
 
-def _item_texts(root: Any) -> list[dict[str, Any]]:
-    """Die sichtbaren Zellen der Listen und Bäume unter ``root``: Text gegen Zellbreite (M12).
+def _wrapped_height(text: str, font: Any, width: int) -> tuple[int, int]:
+    """Höhe und breiteste Zeile eines umbrochenen Texts, gelegt wie Qt eine Zelle legt.
 
-    Eine Ansicht kürzt mit „…“, statt umzubrechen — der Kunde sieht dann nur
-    einen Teil. Bedarf ist Text, Symbol und der Innenrand der Zelle.
+    Dieselbe Folge wie ``QCommonStylePrivate::viewItemTextLayout``: Wortumbruch
+    auf die Textbreite der Zelle, Zeile um Zeile. Ein Wort, das allein breiter
+    ist als die Zelle, zeichnet Qt gekürzt — dafür die breiteste Zeile.
+    """
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QTextLayout, QTextOption
+
+    layout = QTextLayout(text, font)
+    option = QTextOption()
+    option.setWrapMode(QTextOption.WrapMode.WordWrap)
+    layout.setTextOption(option)
+    height = 0.0
+    widest = 0.0
+    layout.beginLayout()
+    while True:
+        line = layout.createLine()
+        if not line.isValid():
+            break
+        line.setLineWidth(max(width, 1))
+        line.setPosition(QPointF(0.0, height))
+        height += line.height()
+        widest = max(widest, line.naturalTextWidth())
+    layout.endLayout()
+    return math.ceil(height), math.ceil(widest)
+
+
+def _item_texts(root: Any) -> list[dict[str, Any]]:
+    """Die sichtbaren Zellen der Listen und Bäume unter ``root``: Text gegen Zelle (M12, FD-110).
+
+    Eine Ansicht kürzt mit „…“ — der Kunde sieht dann nur einen Teil. Ohne
+    Umbruch zählt die Breite: Text, Symbol und der Innenrand der Zelle gegen
+    die Breite, die in der Sichtfläche liegt (``axis`` ``breite``). Mit Umbruch
+    (die Befundliste des Prüfberichts, F-15) braucht die Zeile so viel Höhe,
+    wie ihre umbrochenen Zeilen tragen; ist die Zelle niedriger, kürzt Qt die
+    letzte sichtbare Zeile („Überstand: 10,00 …“, FD-110) — ``axis`` ``hoehe``.
+    Ein Wort, das allein nicht in die Breite passt, ist auch umbrochen ein
+    Breitenfund.
     """
     from PySide6.QtCore import QModelIndex, Qt
+    from PySide6.QtGui import QFont
     from PySide6.QtWidgets import QAbstractItemView, QStyle
 
     found: list[dict[str, Any]] = []
@@ -699,8 +736,6 @@ def _item_texts(root: Any) -> list[dict[str, Any]]:
         area = view.viewport().rect()
         metrics = view.fontMetrics()
         margin = 2 * (view.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1)
-        # Eine Liste, die umbricht, braucht für ihre Zeile nur das längste Wort
-        # (F-15: die Befundliste des Prüfberichts, ``setWordWrap(True)``).
         wraps = bool(getattr(view, "wordWrap", lambda: False)())
         pending = [QModelIndex()]
         while pending and len(found) < MOST_ITEM_TEXTS:
@@ -713,26 +748,35 @@ def _item_texts(root: Any) -> list[dict[str, Any]]:
                     if not text or cell.isEmpty() or not area.intersects(cell):
                         continue
                     icon = index.data(Qt.ItemDataRole.DecorationRole)
-                    pieces = text.split() if wraps else text.splitlines()[:1]
-                    need = (
-                        max((metrics.horizontalAdvance(piece) for piece in pieces), default=0)
-                        + margin
+                    symbol = (
+                        view.iconSize().width() + 4
+                        if icon is not None and not (hasattr(icon, "isNull") and icon.isNull())
+                        else 0
                     )
-                    if icon is not None and not (hasattr(icon, "isNull") and icon.isNull()):
-                        need += view.iconSize().width() + 4
                     # Zu sehen ist die Zelle nur, soweit sie in der Sichtfläche liegt;
                     # eine Liste ohne Umbruch macht die Zelle so breit wie ihren Text.
                     shown = cell.intersected(area).width()
-                    found.append(
-                        {
-                            "text": text,
-                            "carrier": f"{type(view).__name__}.Zeile",
-                            "need_px": need,
-                            "width_px": shown,
-                            "cut": need > shown,
-                            "lead": False,
-                        }
-                    )
+                    entry: dict[str, Any] = {
+                        "text": text,
+                        "carrier": f"{type(view).__name__}.Zeile",
+                        "lead": False,
+                    }
+                    if wraps:
+                        given = index.data(Qt.ItemDataRole.FontRole)
+                        font = given if isinstance(given, QFont) else view.font()
+                        height, widest = _wrapped_height(text, font, shown - margin - symbol)
+                        if widest + margin + symbol > shown:
+                            entry.update(axis="breite", need_px=widest + margin + symbol)
+                            entry["width_px"] = shown
+                        else:
+                            entry.update(axis="hoehe", need_px=height, width_px=cell.height())
+                    else:
+                        first = text.splitlines()[:1]
+                        need = max((metrics.horizontalAdvance(p) for p in first), default=0)
+                        entry.update(axis="breite", need_px=need + margin + symbol)
+                        entry["width_px"] = shown
+                    entry["cut"] = entry["need_px"] > entry["width_px"]
+                    found.append(entry)
                 # Nur ein Baum hat Kinder, und nur aufgeklappte sind zu sehen.
                 expanded = getattr(view, "isExpanded", None)
                 child = model.index(row, 0, parent)

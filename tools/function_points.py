@@ -548,8 +548,10 @@ def _point_9(
         if entry.get("cut") or (
             need is not None and width is not None and float(need) > float(width)
         ):
+            # Eine umbrochene Listenzeile misst ihre Höhe (FD-110).
+            axis = " Höhe" if entry.get("axis") == "hoehe" else ""
             issues.append(
-                Issue(f"„{entry.get('text')}“ braucht {need} px, hat {width} px", "leicht")
+                Issue(f"„{entry.get('text')}“ braucht {need} px{axis}, hat {width} px", "leicht")
             )
         if variant.get("unit") not in {None, "mm"} and _MM_VALUE.search(
             str(entry.get("text") or "")

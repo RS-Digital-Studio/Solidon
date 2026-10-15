@@ -1117,6 +1117,23 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         )
         for key in ("E1", "E2", "E3")
     ),
+    # --- Eine umbrochene Listenzeile, niedriger als ihr Text (FD-110).
+    BrokenSample(
+        9,
+        "Befundzeile höher als ihre Zelle",
+        change=_set(
+            "texts.1",
+            {
+                "text": "Ein Objekt steckt unter dem Druckbett. · Überstand: 10,00 mm",
+                "carrier": "_ReportList.Zeile",
+                "need_px": 72,
+                "width_px": 16,
+                "cut": True,
+                "lead": False,
+                "axis": "hoehe",
+            },
+        ),
+    ),
 )
 
 
