@@ -304,7 +304,7 @@ def test_c_a_step_way_module_without_own_function_stops(monkeypatch: pytest.Monk
     )
     with pytest.raises(InternalError) as caught:
         evaluate._step_ways()
-    assert caught.value.values["module"] == borrowed.__name__
+    assert caught.value.values["name"] == borrowed.__name__
     assert caught.value.suggestions, "jede Ausnahme trägt einen Handlungsvorschlag"
 
 

@@ -4527,7 +4527,7 @@ def _step_ways() -> tuple[Any, ...]:
         if not any(getattr(value, "__module__", None) == name for value in found):
             raise InternalError(
                 detail="a module of the remembered step ways defines no function",
-                values={"module": name},
+                values={"name": name},
             )
         ways.extend(found)
     return tuple(ways)
