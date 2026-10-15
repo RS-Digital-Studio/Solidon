@@ -3571,6 +3571,8 @@ class MainWindow(QMainWindow):
         """Ob die Markierung im Verlauf jünger ist als die Körperwahl im Baum (Review G7)."""
         self.history_panel.list.itemSelectionChanged.connect(self._history_selection_changed)
         self.history_panel.operationActivated.connect(self.edit_operation)
+        # Eine Maßänderung öffnet ihr Maß wie *Ändern …* an der Leiste (FD-166).
+        self.history_panel.parameterActivated.connect(self.action_edit_parameter)
         self.history_panel.noteRequested.connect(self.announce)
         self.history_panel.removalRequested.connect(self.remove_history_operations)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
