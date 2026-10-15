@@ -51,6 +51,7 @@ from tools.function_machine import (
     Step,
     StepMachine,
     drive,
+    nested_since_now,
     qt_schedule,
     until_step,
 )
@@ -224,16 +225,13 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
         gehören einem Fenster, das während ``pump`` aufging; der Automat schließt
         es wie eines aus seinen Schritten (``StepMachine.nested``).
         """
-        from PySide6.QtCore import QThread
-
         self.walker.phase = label
-        level = QThread.currentThread().loopLevel()
         machine = StepMachine(
             qt_schedule,
             time.perf_counter,
             unstick=self.escape_modal,
             on_stuck=lambda: self.stuck_modal(label),
-            nested=lambda: QThread.currentThread().loopLevel() > level,
+            nested=nested_since_now(),
         )
         drive(machine, steps, self.pump, time.perf_counter, timeout_s)
         ok = True

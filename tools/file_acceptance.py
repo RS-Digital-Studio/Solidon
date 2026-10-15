@@ -1431,15 +1431,18 @@ class WindowFlow:
         raise TimeoutError(label)
 
     def drive(self, label: str, steps: Sequence[Any], timeout: float = STEP_TIMEOUT) -> None:
-        """Fährt Schritte über den Automaten; ein Fund oder Fehler bricht den Fall ab."""
+        """Fährt Schritte über den Automaten; ein Fund oder Fehler bricht den Fall ab.
+
+        Ein Fenster aus ``pump`` schließt er wie eins seiner Schritte (FD-173)."""
         self.walker.phase = label
-        from tools.function_machine import StepMachine, drive, qt_schedule
+        from tools.function_machine import StepMachine, drive, nested_since_now, qt_schedule
 
         machine = StepMachine(
             qt_schedule,
             time.perf_counter,
             unstick=self._escape,
             on_stuck=lambda: self._stuck(label),
+            nested=nested_since_now(),
         )
         drive(machine, steps, lambda: self.pump(0.005), time.perf_counter, timeout)
         if machine.finding is not None:

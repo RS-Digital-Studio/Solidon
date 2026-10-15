@@ -241,6 +241,21 @@ def qt_schedule(milliseconds: int, callback: Callable[[], None]) -> None:
     QTimer.singleShot(milliseconds, callback)
 
 
+def nested_since_now() -> Callable[[], bool]:
+    """Die Frage ``StepMachine.nested`` am Fenster: läuft eine tiefere Schleife als jetzt?
+
+    Gemessen an ``QThread.loopLevel`` beim Anlegen des Automaten. Tiefer
+    geschachtelt ist ein Fenster, das während ``pump`` aufging — ein Arbeiter
+    fragte, eine Absage kam als Meldung; ohne diese Frage stand ``drive`` in
+    dessen Schleife bis zur Frist des Elternprozesses. Funktionsfall
+    (FD-172) und Dateifall (FD-173) fragen dasselbe.
+    """
+    from PySide6.QtCore import QThread
+
+    level = QThread.currentThread().loopLevel()
+    return lambda: QThread.currentThread().loopLevel() > level
+
+
 def until_step(
     name: str, condition: Callable[[], bool], at_most_s: float, clock: Callable[[], float]
 ) -> Step:
