@@ -1031,6 +1031,18 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Wirkung beim Kunden: Kein Produktfehler; ein Fenstertest wird im Release-Tor reihenfolgeabhängig rot. Die Urteile des 48-Fall-Laufs verfälscht es nicht: In `phase_revise` folgt dem Doppelklick der Klick ins erste Dialogfeld, jede weitere Phase beginnt mit Klicks.
 - Stand: behoben `001effdcd`; Tooltipfall nach dem Doppelklickfall am alten Stand rot, am Fix in beiden Reihenfolgen grün, neue Zusicherung ohne gedrückte Taste; in welle4 `fe8f5bcd7`. Rückfallzweig (Widget im Doppelklick abgebaut) mit Fall `5c138af29`, Kommentar und Docstring `0f93ad296` (Review RD-2/RD-3).
 
+### FD-84 Maßfelder fallen bei Platzmangel unter den Bildrand und über den Bewegungsgriff
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `resize_hole`
+- Prüfpunkt: 7
+- Beleg: Elf Fenstertests offscreen rot an welle4 `7eebc67dd` und schon an `0036e21ea` (`tests/test_measure_card_placement.py`, `test_placement_dimensions.py::test_the_dimension_fields_leave_the_movement_handle_alone` nach dunklem Thema); neuer Fall `test_a_tall_card_leaves_as_many_rows_as_the_fields_need` am Original 4 failed, fünftes Feld bei `QRect(12, 1072, 471, 12)` in einer 1920 × 1080 großen Ansicht, deren Raum bei 1067 endet; am 900 × 600-Fall Mittenbeschriftung bei (12, 78) über dem Griff (234, 84, 433, 433). Belege in `output/konsolidierung-2026-10-12/fd84-claude.md`.
+- Ursache: Die Maßkarte hielt fest eine Feldzeile frei, gleich wie viele Felder hineinmussten; die Notreihen brachen ohne Prüfung der Unterkante um und wichen nur dem Setzpunkt aus, nicht dem Bewegungsgriff. Offscreen ausgelöst durch breitere Schrift mit Stylesheet, dazu zwei Testbauannahmen über Schriftbreiten und ein stehen gebliebenes dunkles Thema aus `customer_theme`.
+- Vorschlag: Freihaltung nach den Zeilen, die die Felder brauchen (`measure_field_places.rows_height`), Notanordnung je Feld am ersten freien Platz im Bild mit Stufen vom Abstand bis zum Überdecken (`emergency_places`); Testziele aus dem freien Raum statt fester Punkte; Aussehen nach jedem Fall zurückgeben.
+- Wirkung beim Kunden: Bei schmalem Bildraum, kleinem Bildschirm oder langer Sprache stand ein Maßfeld außerhalb der Ansicht oder über dem Bewegungsgriff, dessen Pfeile und Ringe dann nicht mehr auf den Zeiger reagierten.
+- Stand: behoben `377f1b552`, Testbau `cbc883304`, Nachzug `c5b25728f`, Themenleck zentral über `bf3c6d5e8`; in welle4 `b4e515c7b`, gezielt 580 grün am gemergten Stand.
+
 ### FD-85 Abhakliste lässt einen offenen Fund hinter einem älteren behobenen verschwinden
 
 - Art: Fehler
