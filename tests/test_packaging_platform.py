@@ -5,7 +5,8 @@ Fensterstarts auf dem Intel-Mac samt ihrer Ergebniszeile; keine Pipe in einen
 Leser, der vor dem Ende aufhört und unter ``pipefail`` den Schritt abbricht;
 das Flatpak ohne installierte Pakete; das 3D-Maus-Modul der Spec; ein
 macOS-Paket, das nicht umzieht, keine Bibliothek des Läufers mitnimmt und seine
-Bundle-Version trägt.
+Bundle-Version trägt. Die CI-Blöcke laufen dabei in der bash von Git, nie im
+Starter von WSL.
 
 Die Prüfungen stehen neben ``tests/test_packaging.py`` in eigener Datei: Jene
 hat über 2 000 Zeilen und bekommt in der Sperrklinke keine neue Definition mehr
@@ -19,6 +20,7 @@ from __future__ import annotations
 import ast
 import os
 import re
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -28,6 +30,7 @@ from typing import Final
 import pytest
 
 from tests.packaging_helpers import ROOT, SPEC, WORKFLOW, start_report, workflow_shell
+from tests.shell_helpers import bash_executable
 from tests.workflow_helpers import job_block, step_block
 
 
@@ -184,6 +187,34 @@ def test_the_window_trial_always_writes_its_outcome_and_ends_with_the_start(
     )
     assert done.returncode == started, done.stderr
     assert summary.read_text(encoding="utf-8").startswith("Ergebnis: Plattform cocoa")
+
+
+def test_a_wsl_starter_ahead_of_git_in_the_search_path_never_runs_the_ci_blocks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Steht WSL vor Git im Suchpfad, fahren die Workflowtests ihre Blöcke in der Git-bash.
+
+    ``which("bash")`` liefert dann ``System32\\bash.exe``, den Starter von WSL:
+    Ein CI-Block liefe in einem Linux mit eigenem Dateisystem statt in der
+    bash, für die er gemessen wird. ``workflow_shell`` fragt dieselbe Quelle wie
+    ``bash_executable`` (``tests/shell_helpers.py``) und nimmt die bash neben
+    dem installierten Git — die bash selbst, nicht den Starter aus Git, der die
+    Attrappen der Tests im ``PATH`` überdeckte (Review 1 CS0 Plattform, RPL-4).
+    """
+    wsl = tmp_path / "Windows" / "System32" / "bash.exe"
+    git = tmp_path / "Git"
+    starter, bash = git / "bin" / "bash.exe", git / "usr" / "bin" / "bash.exe"
+    for path in (wsl, starter, bash):
+        path.parent.mkdir(parents=True)
+        path.touch()
+    found = {"bash": wsl, "git": git / "cmd" / "git.exe"}
+
+    def which(name: str, *_args: object, **_kwargs: object) -> str | None:
+        return str(found[name]) if name in found else None
+
+    monkeypatch.setattr(shutil, "which", which)
+    assert bash_executable() == starter
+    assert workflow_shell() == str(bash)
 
 
 def test_the_start_check_says_in_one_line_how_far_the_start_came() -> None:

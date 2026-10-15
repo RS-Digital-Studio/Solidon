@@ -21,10 +21,10 @@ Pakettest liest sie von hier.
 
 from __future__ import annotations
 
-import os
-import shutil
 from pathlib import Path
 from typing import Any, Final
+
+from tests.shell_helpers import bash_executable
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 SPEC: Final = ROOT / "packaging" / "solidon3d.spec"
@@ -54,16 +54,14 @@ def workflow_shell() -> str | None:
 
     Für das Linux-Installationsskript gilt das Gegenteil: Es ist bewusst
     POSIX-``sh`` und wird mit ``_posix_shell`` aus ``tests/test_packaging.py`` gefahren.
-    """
-    found = shutil.which("bash")
-    if found is not None:
-        return found
 
-    program_files = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
-    git_bash = program_files / "Git" / "usr" / "bin" / "bash.exe"
-    if git_bash.is_file():
-        return str(git_bash)
-    return None
+    Wo die bash liegt, sagt allein ``bash_executable`` (``tests/shell_helpers.py``),
+    das den Starter von WSL verwirft. Gefragt wird nach der bash, die den
+    ``PATH`` lässt: Die Tests tragen Attrappen für ``git`` und ``python`` vorn
+    ein, und der Starter aus Git für Windows überdeckte sie mit den echten.
+    """
+    found = bash_executable(keep_path=True)
+    return None if found is None else str(found)
 
 
 # Der Bericht eines gelungenen Starts, wie ihn ``app.ui.start_check`` schreibt;
