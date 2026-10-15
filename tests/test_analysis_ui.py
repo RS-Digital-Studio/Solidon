@@ -22,7 +22,7 @@ from app.core.perceive import maps
 from app.core.types import Action, Finding
 from app.i18n import TranslatableText, format_decimal, tr
 from app.ui.analysis_bar import MAP_ORDER, AnalysisBar, LayerBar, MapLegend
-from app.ui.labels import feature_label, length
+from app.ui.labels import count_text, feature_label, length
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -844,7 +844,8 @@ def test_a_map_request_discards_old_colours_and_late_replies(
     assert host.viewport.analysis_map is None, "the previous map belongs to another kind"
     previous.tooLarge.emit(120000)
     assert host.viewport.analysis_map is None
-    assert "120000" in host.analysis_bar.legend.note.text()
+    # In Dreiergruppen, wie jede Anzahl der Oberfläche (FD-124).
+    assert count_text(120000) in host.analysis_bar.legend.note.text()
 
     newest = maps.AnalysisMap(
         kind="overhang", title="Überhang", values=(0.0,) * 12, unit="°", low=0.0, high=90.0

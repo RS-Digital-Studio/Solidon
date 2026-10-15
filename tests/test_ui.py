@@ -22304,7 +22304,7 @@ def test_two_named_boxes_get_distinct_rows_with_names(window: MainWindow) -> Non
     ändern“. Jetzt trägt der zweite Satz die Nummer seines Namens, und jedes
     Feld, jede Einheit und jeder Knopf heißt nach seinem Maß.
     """
-    from app.ui.labels import BoundedSpin
+    from app.ui.labels import BoundedLengthSpin, BoundedSpin
 
     spec = REGISTRY.get("create_box")
     for _round in range(2):
@@ -22334,7 +22334,10 @@ def test_two_named_boxes_get_distinct_rows_with_names(window: MainWindow) -> Non
     ]
     assert all(named), "kein Feld ohne Namen"
     assert len(named) == len(set(named)), f"doppelte Namen: {named}"
-    assert all(isinstance(editor, BoundedSpin) for editor in panel._editors.values())
+    # Längen in der Anzeigeeinheit (FD-125) lehnen ebenso ab, statt zu kürzen.
+    assert all(
+        isinstance(editor, BoundedSpin | BoundedLengthSpin) for editor in panel._editors.values()
+    )
     assert all(panel._titles[name].buddy() is editor for name, editor in panel._editors.items()), (
         "die Beschriftung zeigt auf ihr Feld"
     )
