@@ -5,10 +5,10 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | | |
 |---|---|
 | Paket | D10 |
-| Prüfsumme | d9422796e5127a507089ea98970967fad407adc7f454d3928c6295ddb2ef4f11 |
+| Prüfsumme | 60dd32fc7c07f9c60afac513234ab1dbe675ab021110590093d8e242ff061ced |
 | Commit | 2ec37b23bbc18bd76fc604c794ecd0c7231adaec |
-| Datum | 2026-10-14 |
-| Laufordner | `F:\tmp-suche\koord-claude-1014\lauf` |
+| Datum | 2026-10-15 |
+| Laufordner | `probelauf-d0-final-2ec37b23b-fortsetzung-03` |
 | Zeilen | 24 |
 | gut | 0 |
 | gut nach Fix | 0 |
@@ -22,29 +22,29 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | Kennung | Art | Szene | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | Urteil | Funde |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | assign_slot | operation | quader.exakt | offen | FD-131 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-19 | offen RM-737, RM-747 | FD-19, FD-131 |
-| clear_filament | operation | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-747 |  |
-| create_label | operation | leer | offen | offen | offen | offen | offen | offen | offen | FD-9 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-9, FD-134 |
-| inlay_text | operation | merkmal.face.exakt | offen | offen | offen | FD-2 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-2 |
+| clear_filament | operation | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-136 | offen RM-747 | FD-136, FD-138 |
+| create_label | operation | leer | offen | offen | offen | offen | offen | offen | FD-95 | FD-9 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-9, FD-95, FD-134 |
+| inlay_text | operation | merkmal.face.exakt | offen | offen | offen | FD-2 | offen | offen | offen | FD-137 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-2, FD-137 |
 | label_text | operation | merkmal.face.exakt | offen | offen | offen | FD-1 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-1 |
-| paint_slot | operation | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-43 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-43 |
+| paint_slot | operation | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-43 | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-136 | offen RM-747 | FD-43, FD-132, FD-136, FD-138 |
 | slots_from_texture | operation | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-135 | offen | offen | offen | offen | offen | offen | offen RM-747 | FD-135 |
 | Bearbeiten/Material kalibrieren … | fensterbefehl | leer | offen | offen | offen | offen | offen | offen | offen | FD-8 | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-747 | FD-8, FD-10, FD-13, FD-14 |
-| Bearbeiten/Parameter anlegen … | fensterbefehl | quader.exakt | FD-17 | offen | — | offen | offen | ja | FD-39 | FD-11 | FD-41 | offen | ja | FD-127 | offen | — | offen | offen | — | FD-26 | offen | offen RM-737, RM-747 | FD-11, FD-17, FD-26, FD-39, FD-41, FD-125, FD-127 |
-| Erzeugen/Bausteine/Gegenstücke setzen … | fensterbefehl | zwei_koerper.exakt | offen | offen | offen | offen | offen | offen | offen | FD-50 | FD-52 | offen | offen | offen | offen | offen | offen | offen | — | offen | FD-52 | offen RM-747 | FD-42, FD-50, FD-52, FD-66, FD-133 |
+| Bearbeiten/Parameter anlegen … | fensterbefehl | quader.exakt | FD-17 | offen | — | offen | FD-128 | ja | FD-155 | FD-11 | FD-125 | FD-94 | ja | FD-127 | offen | — | offen | FD-128 | — | FD-26 | FD-126 | offen RM-737, RM-747 | FD-11, FD-17, FD-26, FD-39, FD-41, FD-94, FD-125, FD-126, FD-127, FD-128, FD-129, FD-137, FD-139, FD-155 |
+| Erzeugen/Bausteine/Gegenstücke setzen … | fensterbefehl | zwei_koerper.exakt | offen | offen | offen | offen | offen | offen | offen | FD-50 | FD-133 | offen | offen | offen | offen | offen | offen | offen | — | offen | FD-52 | offen RM-747 | FD-42, FD-50, FD-52, FD-66, FD-133 |
 | dialog:binding_dialog | bedienflaeche | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
 | dialog:calibration_dialog | bedienflaeche | leer | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
 | dialog:counterpart_dialog | bedienflaeche | zwei_koerper.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
-| dialog:parameter_dialog | bedienflaeche | leer | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
+| dialog:parameter_dialog | bedienflaeche | leer | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-129 |
 | dialog:recipe_dialog | bedienflaeche | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
 | dialog:slicer_filament_dialog | bedienflaeche | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
 | filament.picker | bedienflaeche | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-77 | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-747 | FD-19, FD-77 |
-| filament.section | bedienflaeche | quader.exakt | offen | offen | — | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | — | offen | offen | — | offen | offen | offen RM-747 |  |
+| filament.section | bedienflaeche | quader.exakt | offen | offen | — | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | — | offen | offen | — | offen | offen | offen RM-747 | FD-132 |
 | meldung:_pick_colour | bedienflaeche | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-22 |
 | meldung:_replacement_slot | bedienflaeche | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
 | meldung:action_counterpart | bedienflaeche | zwei_koerper.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
-| menu:parameters.edit | bedienflaeche | parameter.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
-| parameters | bedienflaeche | leer | offen | offen | — | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | — | offen | offen | — | offen | offen | offen RM-737, RM-747 |  |
-| parameters.first | bedienflaeche | parameter.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-747 |  |
+| menu:parameters.edit | bedienflaeche | parameter.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101 |
+| parameters | bedienflaeche | leer | offen | offen | — | offen | offen | offen | offen | FD-130 | offen | offen | offen | — | offen | — | offen | offen | — | offen | FD-126 | offen RM-737, RM-747 | FD-126, FD-130 |
+| parameters.first | bedienflaeche | parameter.exakt | offen | offen | offen | offen | offen | offen | offen | FD-130 | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-747 | FD-130 |
 
 ## Kriterien, die nicht erfüllt sind
 
@@ -69,7 +69,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | clear_filament | E4 | nicht gemessen | ≤ 2; kein Dialog verdeckt die bearbeitete Stelle | — |
 | clear_filament | E6 | nicht gemessen | 0 | — |
 | clear_filament | E7 | nicht gemessen | 0 | — |
-| clear_filament | V1 | 0 Treffer | 0 | — |
+| clear_filament | V1 | 0 Treffer | 0 | FD-138 |
 | clear_filament | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | — |
 | clear_filament | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
 | clear_filament | V5 | nicht gemessen | jede Handlung löst das Problem | — |
@@ -79,10 +79,10 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | create_label | E2 | 0 Eingaben | ≤ 1 bei 90% der Funktionen | — |
 | create_label | E6 | nicht gemessen | 0 | — |
 | create_label | E7 | nicht gemessen | 0 | — |
-| create_label | V1 | 0 Treffer | 0 | — |
+| create_label | V1 | 0 Treffer | 0 | FD-95 |
 | create_label | V2 | zu lang (eingefrorener Bestand): „Legt einen Schriftzug als eigenes Objekt an — für den Zweifarbendruck mit zwei Dateien und für Buchstaben, die aufgeklebt werden.“ | die Grenzen aus `test_text_length` | FD-9 |
 | create_label | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
-| create_label | V5 | nicht gemessen | jede Handlung löst das Problem | FD-134 |
+| create_label | V5 | nicht gemessen | jede Handlung löst das Problem | FD-95 |
 | create_label | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
 | create_label | G9 | Gestaltungsurteil | Gestaltungsurteil, höchstens leicht | — |
 | inlay_text | E1 | 1 Klicks | ≤ 3; am Merkmal ≤ 2 nach der Auswahl | — |
@@ -90,7 +90,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | inlay_text | E4 | nicht gemessen | ≤ 2; kein Dialog verdeckt die bearbeitete Stelle | — |
 | inlay_text | E6 | nicht gemessen | 0 | — |
 | inlay_text | E7 | nicht gemessen | 0 | — |
-| inlay_text | V1 | 0 Treffer | 0 | — |
+| inlay_text | V1 | 0 Treffer | 0 | FD-137 |
 | inlay_text | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
 | inlay_text | V5 | nicht gemessen | jede Handlung löst das Problem | — |
 | inlay_text | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
@@ -108,7 +108,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | paint_slot | E4 | nicht gemessen | ≤ 2; kein Dialog verdeckt die bearbeitete Stelle | — |
 | paint_slot | E6 | nicht gemessen | 0 | — |
 | paint_slot | E7 | nicht gemessen | 0 | — |
-| paint_slot | V1 | 0 Treffer | 0 | FD-43 |
+| paint_slot | V1 | 0 Treffer | 0 | FD-138 |
 | paint_slot | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | — |
 | paint_slot | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
 | paint_slot | V5 | nicht gemessen | jede Handlung löst das Problem | — |
@@ -132,10 +132,10 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | Bearbeiten/Material kalibrieren … | V5 | nicht gemessen | jede Handlung löst das Problem | — |
 | Bearbeiten/Material kalibrieren … | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
 | Bearbeiten/Parameter anlegen … | E2 | 2 Eingaben | ≤ 1 bei 90% der Funktionen | — |
-| Bearbeiten/Parameter anlegen … | E7 | Meldung ohne Handlung: „Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.“ | 0 | FD-39 |
-| Bearbeiten/Parameter anlegen … | V1 | 0 Treffer | 0 | — |
+| Bearbeiten/Parameter anlegen … | E7 | Meldung ohne Handlung: „Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.“ | 0 | FD-155 |
+| Bearbeiten/Parameter anlegen … | V1 | 0 Treffer | 0 | FD-137 |
 | Bearbeiten/Parameter anlegen … | V3 | Feld „Wert“ ohne Kurzhilfe; Feld „Wert“ ohne Beschreibung; Feld „Name“ ohne Kurzhilfe; Feld „Name“ ohne Beschreibung; Feld „Ausdruck“ ohne Kurzhilfe; Feld „Ausdruck“ ohne Beschreibung; Feld „Untergrenze“ ohne Kurzhilfe; Feld „Untergrenze“ ohne Beschreibung; Feld „Obergrenze“ ohne Kurzhilfe; Feld „Obergrenze“ ohne Beschreibung; Feld „Einheit“ ohne Kurzhilfe; Feld „Einheit“ ohne Beschreibung; Feld „Value“ ohne Kurzhilfe; Feld „Value“ ohne Beschreibung; Feld „Expression“ ohne Kurzhilfe; Feld „Expression“ ohne Beschreibung; Feld „Lower bound“ ohne Kurzhilfe; Feld „Lower bound“ ohne Beschreibung; Feld „Upper bound“ ohne Kurzhilfe; Feld „Upper bound“ ohne Beschreibung; Feld „Unit“ ohne Kurzhilfe; Feld „Unit“ ohne Beschreibung; Feld „Valor“ ohne Kurzhilfe; Feld „Valor“ ohne Beschreibung; Feld „Nombre“ ohne Kurzhilfe; Feld „Nombre“ ohne Beschreibung; Feld „Expresión“ ohne Kurzhilfe; Feld „Expresión“ ohne Beschreibung; Feld „Límite inferior“ ohne Kurzhilfe; Feld „Límite inferior“ ohne Beschreibung; Feld „Límite superior“ ohne Kurzhilfe; Feld „Límite superior“ ohne Beschreibung; Feld „Unidad“ ohne Kurzhilfe; Feld „Unidad“ ohne Beschreibung; Feld „Valeur“ ohne Kurzhilfe; Feld „Valeur“ ohne Beschreibung; Feld „Nom“ ohne Kurzhilfe; Feld „Nom“ ohne Beschreibung; Feld „Borne inférieure“ ohne Kurzhilfe; Feld „Borne inférieure“ ohne Beschreibung; Feld „Borne supérieure“ ohne Kurzhilfe; Feld „Borne supérieure“ ohne Beschreibung; Feld „Unité“ ohne Kurzhilfe; Feld „Unité“ ohne Beschreibung; Feld „Valore“ ohne Kurzhilfe; Feld „Valore“ ohne Beschreibung; Feld „Nome“ ohne Kurzhilfe; Feld „Nome“ ohne Beschreibung; Feld „Espressione“ ohne Kurzhilfe; Feld „Espressione“ ohne Beschreibung; Feld „Limite inferiore“ ohne Kurzhilfe; Feld „Limite inferiore“ ohne Beschreibung; Feld „Limite superiore“ ohne Kurzhilfe; Feld „Limite superiore“ ohne Beschreibung; Feld „Unità“ ohne Kurzhilfe; Feld „Unità“ ohne Beschreibung; Feld „Expressão“ ohne Kurzhilfe; Feld „Expressão“ ohne Beschreibung; Feld „Limite inferior“ ohne Kurzhilfe; Feld „Limite inferior“ ohne Beschreibung; Feld „Limite superior“ ohne Kurzhilfe; Feld „Limite superior“ ohne Beschreibung; Feld „Unidade“ ohne Kurzhilfe; Feld „Unidade“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | FD-11 |
-| Bearbeiten/Parameter anlegen … | V5 | Meldung ohne Handlung: „Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.“ | jede Handlung löst das Problem | FD-39 |
+| Bearbeiten/Parameter anlegen … | V5 | Meldung ohne Handlung: „Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.“ | jede Handlung löst das Problem | FD-155 |
 | Bearbeiten/Parameter anlegen … | G5 | Anlegen: hover und rest sehen gleich aus | jeder unterscheidbar, zweite Kodierung, Fokus sichtbar | — |
 | Bearbeiten/Parameter anlegen … | Z6 | 11 Flächen | 1920 x 1080 logisch (maximiert, Task- und Titelleiste ab) ohne Rollleiste vorn; Symbole scharf bei 100%, 150%, 200%, solange ≥ 1920 x 1080 logisch | — |
 | Bearbeiten/Parameter anlegen … | I1 | Art face ohne Name und Maß beim Überfahren | ja an jeder erkannten Art | — |
@@ -325,13 +325,13 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | menu:parameters.edit | Z4 | nicht gemessen | Knopf zur nächsten Handlung | — |
 | parameters | E6 | nicht gemessen | 0 | — |
 | parameters | E7 | nicht gemessen | 0 | — |
-| parameters | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | — |
+| parameters | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | FD-130 |
 | parameters | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
 | parameters | V5 | nicht gemessen | jede Handlung löst das Problem | — |
 | parameters | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
 | parameters.first | E6 | nicht gemessen | 0 | — |
 | parameters.first | E7 | nicht gemessen | 0 | — |
-| parameters.first | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | — |
+| parameters.first | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | FD-130 |
 | parameters.first | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
 | parameters.first | V5 | nicht gemessen | jede Handlung löst das Problem | — |
 | parameters.first | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
