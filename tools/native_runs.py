@@ -30,9 +30,12 @@ D0-Nachweise am MSI-Schirm fuhren:
   zeigen in den neuen Ordner, schon beim Aufseher. Das echte Profil wird nur
   per ``stat`` verglichen (Größe, Änderungszeit), nie gelesen.
 - **Eigener Prozessbaum, begrenzt.** Je Kind eine eigene Prozessgruppe, eine
-  Frist (``--deadline``), eine lesende Aufnahme aller Nachkommen mit PID und
-  Startzeit; nach der Frist ``terminate_process_tree``, danach wird jeder
-  verbliebene eigene Nachkomme beendet und gemeldet — ein Lauf mit Rest ist rot.
+  Frist (``--deadline``, dazu die Wartezeit des Vorhersagetors), eine lesende
+  Aufnahme aller Nachkommen mit PID und Startzeit; nach der Frist
+  ``terminate_process_tree``, danach wird jeder verbliebene eigene Nachkomme
+  beendet und gemeldet — ein Lauf mit Rest ist rot. Ein Sprachfall, der vor
+  einer Fläche einen frischen Prozess braucht (Ausgang 75, FD-132), beginnt neu
+  wie unter ``file_acceptance.py run``.
 - **Belege außerhalb des Repositorys** in einem neuen Ordner; nichts wird
   überschrieben oder wieder aufgenommen.
 
@@ -293,6 +296,7 @@ def supervise(
     deadline_s: float,
     folder: Path,
     poll_s: float = POLL_S,
+    append: bool = False,
 ) -> dict[str, Any]:
     """Startet ``command`` in eigener Prozessgruppe, begrenzt es und baut seinen Baum ab.
 
@@ -300,6 +304,7 @@ def supervise(
     nach dem Ende noch lief und beendet wurde, und was danach noch lief.
     ``clean_end`` ist wahr nur ohne Fristablauf, ohne beendeten Rest und ohne
     verbliebenen Prozess; der rohe Ausgang des Kindes bleibt daneben stehen.
+    ``append`` hängt die Ausgaben an die eines vorigen Laufs (Neustart).
     """
     from app.core.process import no_error_dialogs, process_group_options, terminate_process_tree
 
@@ -311,9 +316,10 @@ def supervise(
         "started_utc": now(),
     }
     began = time.monotonic()
+    mode = "a" if append else "w"
     with (
-        (folder / "stdout.log").open("w", encoding="utf-8") as stdout,
-        (folder / "stderr.log").open("w", encoding="utf-8") as stderr,
+        (folder / "stdout.log").open(mode, encoding="utf-8") as stdout,
+        (folder / "stderr.log").open(mode, encoding="utf-8") as stderr,
         no_error_dialogs(),
     ):
         child = subprocess.Popen(
@@ -372,6 +378,33 @@ def supervise(
     record["clean_end"] = not record["timeout"] and not stopped and not remaining_rows
     write_json(folder / "child-tree.json", record)
     return record
+
+
+def supervise_restarting(
+    command: Sequence[str],
+    *,
+    restarts: int,
+    restart_exit: int,
+    **supervised: Any,
+) -> dict[str, Any]:
+    """:func:`supervise`, und ein Sprachfall, der einen frischen Prozess braucht, läuft weiter.
+
+    Wie ``file_acceptance.run`` (FD-132): Endet das Kind sauber mit ``restart_exit``,
+    beginnt es neu, höchstens ``restarts`` mal; jeder Lauf hat die volle Frist,
+    und seine Ausgaben hängen an die des vorigen. Ein Fristablauf oder ein
+    unsauberes Ende bricht ab. ``restarts`` im Ergebnis zählt die Neustarts.
+    """
+    attempts = 0
+    while True:
+        record = supervise(command, append=attempts > 0, **supervised)
+        if (
+            record["exit_code"] != restart_exit
+            or record["timeout"]
+            or not record["clean_end"]
+            or attempts >= restarts
+        ):
+            return {**record, "restarts": attempts}
+        attempts += 1
 
 
 # --- Eingaben, Profil, Umgebung -------------------------------------------------
@@ -654,6 +687,23 @@ def read_case(inventory: Path, number: int) -> dict[str, Any]:
     return dict(case)
 
 
+def case_limit(
+    case: Mapping[str, Any], rows: Iterable[Mapping[str, Any]], deadline: float | None
+) -> float:
+    """Die Frist eines Fallprozesses: ``--deadline`` oder :data:`CASE_DEADLINE_S`, dazu das Tor.
+
+    ``--deadline`` setzt die Frist, auch über die Vorgabe hinaus. Mit dem
+    Vorhersagetor (V4) wartet ein Fall je Klick bis ``PREDICTION_WAIT_S`` auf den
+    Prüfer; diese Zeit kommt dazu, wie in ``file_acceptance.run``
+    (``function_cases.prediction_wait_s``, RF10-2).
+    """
+    from tools.file_acceptance import Case
+    from tools.function_cases import prediction_wait_s
+
+    base = deadline if deadline is not None else CASE_DEADLINE_S
+    return base + prediction_wait_s(Case(**case), rows)
+
+
 def run_case(arguments: argparse.Namespace) -> int:
     """``case``: einen Fall eines Inventars neu, gebunden, begrenzt, mit Abbau und Urteil."""
     binding = checked_binding(arguments.binding)
@@ -664,7 +714,11 @@ def run_case(arguments: argparse.Namespace) -> int:
     plan = {"case": case, "inventory": str(inventory), "out": str(out), "deadline_s": deadline}
     if not started(arguments, plan):
         return 0
-    from tools.file_acceptance import Case, case_timeout, crash_note
+    from tools.file_acceptance import crash_note
+    from tools.function_cases import RESTART_EXIT, most_restarts
+
+    rows = list(read_json(inventory / "rows.json"))
+    limit = case_limit(case, rows, arguments.deadline)
 
     original = dict(os.environ)
     out.mkdir(parents=True)
@@ -672,8 +726,14 @@ def run_case(arguments: argparse.Namespace) -> int:
     real = real_profile(original)
     real_before = stat_only(real)
     copied = copy_inputs(inventory, out, (*REQUIRED_INPUTS, *OPTIONAL_INPUTS))
-    limit = min(case_timeout(Case(**case), 600.0), deadline)
-    identity = identity_of(arguments, binding, plan) | {"limit_s": limit, "inputs": copied}
+    # Ein Sprachfall, der vor einer Fläche einen frischen Prozess braucht, läuft
+    # weiter — höchstens einmal je Zeile, wie in ``file_acceptance.run`` (FD-132).
+    restarts = most_restarts(rows, case["row"]) if case["kind"] == "language" else 0
+    identity = identity_of(arguments, binding, plan) | {
+        "limit_s": limit,
+        "restarts_allowed": restarts,
+        "inputs": copied,
+    }
     write_json(out / "identity.json", identity)
     folder = out / "cases" / f"{arguments.case:03d}"
     command = child_command(
@@ -691,8 +751,10 @@ def run_case(arguments: argparse.Namespace) -> int:
     failure = None
     verdict: dict[str, Any] = {}
     try:
-        record = supervise(
+        record = supervise_restarting(
             command,
+            restarts=restarts,
+            restart_exit=RESTART_EXIT,
             cwd=ROOT,
             env=profile_environment(os.environ, out / "profile"),
             deadline_s=limit,

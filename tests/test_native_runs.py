@@ -597,3 +597,74 @@ def test_only_the_documented_reasons_go_without_images() -> None:
     broken = {**measured, "licence_runs": {"trial": {"writes": "nein", "state": "grau"}}}
     assert not licence_protocol_only(licence, broken, **contract)
     assert not licence_protocol_only(licence, {**measured, "errors": ["x"]}, **contract)
+
+
+# --- Neustart und Frist eines Einzelfalls (RF10-2) ------------------------------------
+
+RESTARTING = """import sys
+from pathlib import Path
+counter = Path(sys.argv[1])
+runs = int(counter.read_text()) + 1 if counter.exists() else 1
+counter.write_text(str(runs))
+print(f"lauf {runs}", flush=True)
+sys.exit(75 if runs < int(sys.argv[2]) else 0)
+"""
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Prozessaufnahme und Abbau nur unter Windows")
+@pytest.mark.parametrize(("needed", "allowed", "code", "restarts"), [(3, 2, 0, 2), (3, 1, 75, 1)])
+def test_a_language_case_that_needs_a_fresh_process_starts_again(
+    tmp_path: Path, needed: int, allowed: int, code: int, restarts: int
+) -> None:
+    """Ausgang 75 heißt Neustart, nicht Abbruch — höchstens so oft, wie erlaubt (FD-132).
+
+    ``file_acceptance.run`` startet einen Sprachfall neu, der vor einer Fläche einen
+    frischen Prozess braucht; ``case`` wertete 75 als Abbruch.
+    """
+    from tools.function_cases import RESTART_EXIT
+
+    script = tmp_path / "neustart.py"
+    script.write_text(RESTARTING, encoding="utf-8")
+    folder = tmp_path / "fall"
+    record = native_runs.supervise_restarting(
+        [sys.executable, str(script), str(tmp_path / "zaehler.txt"), str(needed)],
+        restarts=allowed,
+        restart_exit=RESTART_EXIT,
+        cwd=tmp_path,
+        env=dict(os.environ),
+        deadline_s=30.0,
+        folder=folder,
+        poll_s=0.2,
+    )
+    assert (record["exit_code"], record["restarts"]) == (code, restarts)
+    log = (folder / "stdout.log").read_text(encoding="utf-8").split()
+    assert log == [word for run in range(1, restarts + 2) for word in ("lauf", str(run))]
+
+
+def test_the_deadline_of_a_case_knows_the_prediction_gate_and_can_be_raised() -> None:
+    """Die Frist trägt die Wartezeit des Vorhersagetors, und ``--deadline`` hebt sie wirklich.
+
+    Vorher galt ``min(case_timeout, --deadline)``: Ein Fall mit Tor brach nach 420 s
+    ab, während das Tor je Klick bis zu 600 s wartet, und ``--deadline 1500`` blieb
+    an ``case_timeout`` hängen.
+    """
+    from tools.function_prediction import PREDICTION_WAIT_S
+
+    rows = [{"id": f"zeile_{n}", "package": "D9", "start_scene": "leer"} for n in range(3)]
+    plain = {
+        "number": 1,
+        "relative": "",
+        "path": "",
+        "suffix": "",
+        "kind": "function",
+        "row": "zeile_0",
+        "variant": {},
+    }
+    gated = {**plain, "variant": {"predict": True}}
+    language = {**gated, "kind": "language", "row": "D9"}
+    assert native_runs.case_limit(plain, rows, None) == native_runs.CASE_DEADLINE_S
+    assert native_runs.case_limit(plain, rows, 1500.0) == 1500.0
+    assert native_runs.case_limit(gated, rows, None) == (
+        native_runs.CASE_DEADLINE_S + PREDICTION_WAIT_S
+    )
+    assert native_runs.case_limit(language, rows, 1500.0) == 1500.0 + 3 * PREDICTION_WAIT_S
