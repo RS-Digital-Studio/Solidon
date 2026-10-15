@@ -315,7 +315,8 @@ Die Fokuskette folgt der Reihenfolge, in der Widgets **entstanden** sind, nicht
 dem Layout. Wer ein Element später umhängt, zieht sie mit
 `QWidget.setTabOrder` von hinten nach (`FeaturePanel._settle_tab_order`;
 unsichtbare und gesperrte übergeht Qt). Geprüft wird gegen das Layout, nicht
-gegen Bildpunkte. **Nie in Python über `nextInFocusChain` laufen:** PySide
+gegen Bildpunkte. Ein Rollbereich ist nie namenloser Halt (`scroll_areas`).
+**Nie in Python über `nextInFocusChain` laufen:** PySide
 hängt das Ergebnis an das befragte Widget, der Bereiniger löscht dann echte
 mit (`CardGrip`).
 

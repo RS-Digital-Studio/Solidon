@@ -112,6 +112,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `panels.py` | die Panels links und der Prüfbericht rechts (§2.5): `ObjectTree`, `ParameterPanel`, `HistoryPanel`, `ReportPanel` mit `BodyChoiceDialog`, dazu das Merkmalfenster `FeaturePanel` (Handlungen, Kanten, Bausteine, Schutz vor Trennnähten, Passung anlegen) |
+| `feature_footer.py`, `parameter_length.py`, `report_rows.py` | Fußzeile unter scharfer Handlung; Parameterlängen; Befundzeilen mit Reserve |
 | `feature_editing.py` | `advanced_fields` für Maßgruppe und rechte Zeile; `configure_scope`, `explain_value_help`; panelgebundene Hauptaktionspriorität `FeatureEditPriority` |
 | `card_width.py` | Natürliche Breite des eingebetteten Auswahlreiters (§2.5), Paar- und Koordinatenraster; Schnittstellen in `karte-app-ui.md` |
 | `selection_operations.py` | Auswahlhandlungen aus dem Register und Suchfeld mit Trefferliste; Auswahlregeln und Schnittstellen in `karte-app-ui.md` |
@@ -210,6 +211,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `theme.py` | hell und dunkel (§19.3); eigene Bett-Rasterrolle `bed_grid`, getrennt von Bauraum und Zeichenraster |
 | `window_chrome.py` | Windows malt die Titelleiste mit Anwendungsfarben; idempotenter Ereigniswächter |
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |
+| `scroll_areas.py` | Rollbereich ohne Tab-Halt oder als Lesebereich |
 | `icons.py` | Symbole als themenabhängige SVGs (§19.3, Regel 18); `svg_pixmap` rastert scharf auf HiDPI |
 | `motion.py` | Bewegung an einer Stelle, nicht an zwanzig |
 | `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht; Zuordnungen folgen `tabMoved` |
@@ -312,18 +314,13 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   je `SceneObject`, als vollständiger Ast. Eine einzelne Bausteinzeile trägt
   selbst den Namen statt eines zusätzlichen Dachs; eine funktionale Gruppe
   hängt unter der Zeile ihres Ankers.
-- Warnungsmarken sind Zustand; Ring/Text nur Darstellung. Neuaufbau nutzt
-  Punkt/Text/Körper, verlängert keine Frist. Andere Platte/verborgener Körper
-  versteckt beide; ein neues Ergebnis verwirft beide.
 - `ensure_ai_disclosure` vor `propose_async` und Ollama-Werkzeugprobe;
   Generierung verwendet `generation_disclosure_*`. Nur fertiger Dialog gibt
   frei; Abbruch/Fehler senden nichts. KI-/Drucknachweise gehören in `UiSettings`.
 - Fremde Handbuchressourcen erhalten leere Daten, niemals `None` (Qt-Dateileser);
   ausschließlich `figure:` verwendet den Abbildungskatalog.
 - Sprachabhängige Formate lesen `QLocale(get_language())`.
-- Kartenbewegung endet mit `DeleteWhenStopped`, auch beim Ersetzen.
-- `overlay.is_room_taker` prüft vier Methoden; kein `runtime_checkable Protocol`
-  beim Shiboken-Resize mit unvollständigen Typdaten.
+- Kartenbewegung (`DeleteWhenStopped`), `is_room_taker`: `karte-app-ui.md`.
 
 ## Druckbewertung und Übergabe
 

@@ -1427,6 +1427,23 @@ ungebrochene Titel steht als `operationTitle` am Knopf, weil `text()` sich
   lokale Zahlenanzeige wie im Maßfeld. Unsichere Zuordnung wird erklärt, nicht
   als unbeantwortbare Frage formuliert.
 
+*F4 „Karten“ (FD-19, 93, 125, 136, 139):* `scroll_areas.py` trägt die zwei
+Rollbereiche — `PassingScrollArea` für Behälter (NoFocus, Tab geht in den
+Inhalt, Qt rollt das fokussierte Kind ins Bild) und `ReadingScrollArea` für
+Lesetext (Halt mit Name und Beschreibung, Pfeil- und Bildtasten).
+`DialogScrollArea`, `FittedScroller`, `ContentScroller` und `ColumnScroller`
+leiten von der ersten ab. `feature_footer.py` hängt die Knopfzeile des
+Merkmalfensters unter die scharfe Handlung, solange sie dem Panel gehört, und
+holt sie über `keep_in_sight` ins Sichtfeld des Rollbereichs; ihr eigener
+Titel entfällt dort. `report_rows.WrappedRowDelegate` misst Befundzeilen eine
+Zeichenbreite schmaler, als sie gezeichnet werden — bei gebrochener
+Skalierung brauchte eine knapp passende Zeile sonst beim Zeichnen eine zweite
+und wurde gekürzt. `parameter_length.py` gibt der Parameterleiste Längenfelder
+in der Anzeigeeinheit (Einheit in der Auswahl daneben, kein Suffix) und die
+Helfer, über die jede Stelle der Leiste in Millimetern liest und setzt. Das
+Panel der Handlungen hat keine feste Mindesthöhe mehr; die Liste wächst nicht
+über ihren Wunsch, und „Filament und Druck“ steht unter den Hauptaktionen.
+
 ### Dialoge
 
 `FeatureSetField` verwendet `feature_list.FeatureList`. Die Liste nimmt für

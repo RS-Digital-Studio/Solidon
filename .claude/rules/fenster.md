@@ -252,7 +252,7 @@ Stellen halten das, beide sind nötig:
 ## Das Merkmalfenster
 
 - **Offen ist genau eine Handlung, die scharfe** (RM-510): `_arm` klappt auf
-  (`_open_only`), ein Kopf macht scharf, Zugeklapptes nennt seine Werte. Ohne
+  (`_open_only`), die Knopfzeile steht darunter (`feature_footer`), ein Kopf macht scharf, Zugeklapptes nennt seine Werte. Ohne
   Auswahl schweigt es; die Anleitung entfällt nach dem ersten Merkmalklick.
   Am Anker einer Gruppe („Kammer 1“ im Baum) führt ihre Handlung
   (`actions.group_action_first`), sonst stünde *Fläche versetzen* mit 0 mm offen.
@@ -271,8 +271,8 @@ Stellen halten das, beide sind nötig:
   lässt keine aus. *Merkmal verschieben* führt an Zapfen, Senkung, Kugel und Ring
   ins Bild wie *Bohrung ändern* (`MEASURED_WHILE_MOVED`).
 - **Ein zusammengelegter Grund spricht für alle, unter denen er steht:**
-  `_folded` macht aus gleich begründeten Absagen eine Zeile („Verschieben,
-  Ändern, Drehen, Verdoppeln und Entfernen — <Satz>“); der Satz verneint die
+  `_folded` macht aus gleich begründeten Absagen eine Zeile („Hier nicht möglich:
+  Verschieben, …, Entfernen. <Satz>“); der Satz verneint die
   **Voraussetzung**, nicht eine Handlung („trägt kein Maß, an dem sich Lage
   oder Größe ändern ließen“), und nennt den Weg, der bleibt.
 - **Die Spalte rollt nur senkrecht** (RM-488): `panels.ColumnScroller` nimmt
