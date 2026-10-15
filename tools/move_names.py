@@ -12,8 +12,10 @@ Ablauf: Zuschnitt lesen (``tools/move_cut.py``), Index des Baums bauen (Paket R,
 formatieren (``ruff``), den Beweis führen (``tools/move_proof.py``) — und erst wenn er grün ist,
 den Baum selbst ändern. Ein roter Beweis schreibt nichts; ein Fehler beim Schreiben stellt jede
 schon geschriebene Datei auf ihre alten Bytes zurück (es sind nur die eigenen Änderungen dieses
-Laufs). Exit 0: geschrieben (oder schon angewandt), 1: Beweis rot, 2: Zuschnitt oder Plan
-abgewiesen.
+Laufs). Exit 0: geschrieben (oder schon angewandt, oder mit ``--check`` bewiesen), 1: Beweis rot,
+2: Zuschnitt oder Plan abgewiesen, 3: der Baum änderte sich während Planung und Beweis (jede Datei
+der Bereiche, auch eine unberührte; nichts geschrieben — neu erzeugen), 4: Schreiben gescheitert
+(zurückgestellt), 5: Werkzeugfehler (Traceback). Jeder Ausgang außer 0 nennt seinen Ausweg.
 
 **Zuschnittliste** (TOML, ``schema_version = 1``):
 
@@ -51,6 +53,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import traceback
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -61,23 +64,46 @@ if str(ROOT) not in sys.path:
 
 from tools.code_index import CACHE, Index  # noqa: E402
 from tools.move_cut import Cut, CutError, load  # noqa: E402
-from tools.move_edits import apply_text  # noqa: E402
+from tools.move_edits import EditError, apply_text  # noqa: E402
 from tools.move_proof import Proof, prove  # noqa: E402
 from tools.move_refs import AlreadyAppliedError, Context, PlanError  # noqa: E402
 from tools.move_source import AREAS  # noqa: E402
+from tools.move_trees import tree_files  # noqa: E402
 
 #: Größte Zeilenzahl eines neuen Moduls (Konzept 3.1, Regel 1); darüber nur mit ``over_limit``.
 LINE_LIMIT = 2000
 
+#: Der Ausgang je Ergebnis; jeder Weg hinaus hat seinen eigenen (Modul-Docstring).
+EXIT = {
+    "written": 0,
+    "applied": 0,
+    "proven": 0,
+    "red": 1,
+    "rejected": 2,
+    "stale": 3,
+    "write_failed": 4,
+    "tool_error": 5,
+}
+
 
 @dataclass
 class Change:
-    """Was ein Schnitt am Baum ändert: neue oder geänderte Dateien (Inhalt) und entfallende."""
+    """Was ein Schnitt am Baum ändert: neue oder geänderte Dateien (Inhalt) und entfallende;
+    ``snapshot`` ist der Stand jeder Datei der Bereiche beim Planen (Pfad → SHA-256)."""
 
     files: dict[str, str] = field(default_factory=dict)
     removed: list[str] = field(default_factory=list)
     hashes: dict[str, str] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+    snapshot: dict[str, str] = field(default_factory=dict)
+
+
+class StaleError(RuntimeError):
+    """Der Baum hat sich seit dem Planen geändert; ``problems`` nennt jede Datei."""
+
+    def __init__(self, problems: list[str]) -> None:
+        super().__init__("\n".join(problems))
+        self.problems = problems
 
 
 @dataclass
@@ -110,7 +136,14 @@ def plan(cut: Cut, root: Path, index: Index) -> Change:
         edits = planned.edits
         change.notes.extend(planned.notes)
     for path, rows in edits.items():
-        change.files[path] = apply_text(ctx.source(path), rows)
+        try:
+            change.files[path] = apply_text(ctx.source(path), rows)
+        except EditError as error:
+            ctx.problem(
+                f"{error} — die Tabelle lässt sich so nicht anwenden (Werkzeugfehler); die Stelle "
+                "vor dem Schnitt einfacher schreiben und den Fall melden"
+            )
+            continue
         change.notes.extend(f"{path}:{row.line}: {row.rule}: {row.detail}" for row in rows)
     for path in [*change.files, *change.removed]:
         if (root / path).is_file():
@@ -221,19 +254,35 @@ def tidy(tree: Path, paths: Sequence[str], config: Path | None) -> list[str]:
 # ------------------------------------------------------------------------------ Schreiben
 
 
+def snapshot(root: Path) -> dict[str, str]:
+    """Der Stand jeder Datei der Bereiche (ohne ``__pycache__`` und Punktordner): Pfad →
+    SHA-256 — dieselbe Menge, die der Beweis als Baum vergleicht."""
+    return {path: hashlib.sha256(data).hexdigest() for path, data in tree_files(root).items()}
+
+
+def stale(root: Path, change: Change) -> list[str]:
+    """Jede Datei der Bereiche, die seit dem Planen entstand, verschwand oder sich änderte — auch
+    eine, die der Schnitt nicht berührt: Ein neuer Leser der Quelle bliebe sonst stehen."""
+    now = snapshot(root)
+    before = change.snapshot
+    found: list[str] = []
+    for path in sorted(set(now) | set(before)):
+        if path not in before:
+            found.append(f"{path} ist seit der Planung entstanden")
+        elif path not in now:
+            found.append(f"{path} ist seit der Planung verschwunden")
+        elif now[path] != before[path]:
+            found.append(f"{path} hat sich seit der Planung geändert")
+    return [f"{text} — den Schnitt neu erzeugen" for text in found]
+
+
 def write(root: Path, change: Change, tree: Path) -> None:
-    """Übernimmt den bewiesenen Kandidaten in den Baum. Vorher: Jede berührte Datei hat noch die
-    Bytes, gegen die geplant wurde. Scheitert ein Schritt, kommen die schon geschriebenen Dateien
-    auf ihre alten Bytes zurück."""
-    for path, digest in change.hashes.items():
-        current = (root / path).read_bytes() if (root / path).is_file() else b""
-        if hashlib.sha256(current).hexdigest() != digest:
-            raise RuntimeError(
-                f"{path} hat sich seit der Planung geändert — den Schnitt neu erzeugen"
-            )
-    for path in change.files:
-        if path not in change.hashes and (root / path).exists():
-            raise RuntimeError(f"{path} ist seit der Planung entstanden — den Schnitt neu erzeugen")
+    """Übernimmt den bewiesenen Kandidaten in den Baum. Vorher: Jede Datei der Bereiche hat noch
+    den Stand, gegen den geplant wurde (sonst :class:`StaleError`). Scheitert ein Schritt,
+    kommen die schon geschriebenen Dateien auf ihre alten Bytes zurück."""
+    problems = stale(root, change)
+    if problems:
+        raise StaleError(problems)
     done: list[tuple[Path, bytes | None]] = []
     try:
         for path in change.files:
@@ -272,7 +321,10 @@ def run(
     registry: bool = True,
     cache: bool = True,
 ) -> Result:
-    """Plant, beweist und schreibt (außer ``check``) einen Schnitt."""
+    """Plant, beweist und schreibt (außer ``check``) einen Schnitt. Status: ``written``,
+    ``applied``, ``proven`` (mit ``check``), ``red``, ``rejected`` oder ``stale`` (der Baum
+    änderte sich, während geplant und bewiesen wurde; nichts geschrieben)."""
+    state = snapshot(root)
     index = Index.build(root, cache=cache)
     try:
         change = plan(cut, root, index)
@@ -280,6 +332,7 @@ def run(
         return Result("applied", problems=[str(applied)])
     except PlanError as error:
         return Result("rejected", problems=error.problems)
+    change.snapshot = state
     with tempfile.TemporaryDirectory(prefix="move-names-", dir=work) as folder:
         tree = candidate(root, change, Path(folder))
         config = root / "pyproject.toml" if (root / "pyproject.toml").is_file() else None
@@ -291,7 +344,10 @@ def run(
         proof = prove(cut, root, tree, old_index=index, new_index=new_index, registry=registry)
         if not proof.ok or check:
             return Result("proven" if proof.ok else "red", proof=proof, change=change)
-        write(root, change, tree)
+        try:
+            write(root, change, tree)
+        except StaleError as error:
+            return Result("stale", proof=proof, change=change, problems=error.problems)
     return Result("written", proof=proof, change=change)
 
 
@@ -318,8 +374,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         cut = load(args.cut)
     except CutError as error:
         print(f"move_names: {error}", file=sys.stderr)
-        return 2
-    result = run(cut, root, check=args.check, work=args.work)
+        return EXIT["rejected"]
+    try:
+        result = run(cut, root, check=args.check, work=args.work)
+    except OSError as error:
+        print(
+            f"move_names: Schreiben gescheitert ({error}) — jede schon geschriebene Datei steht "
+            "wieder auf ihren alten Bytes; Ursache beheben (Rechte, Platz, Sperre) und den Schnitt "
+            "neu erzeugen",
+            file=sys.stderr,
+        )
+        return EXIT["write_failed"]
+    except Exception:
+        traceback.print_exc()
+        print(
+            "move_names: Werkzeugfehler (Traceback oben) — der Baum ist unverändert oder auf seine "
+            "alten Bytes zurückgestellt; den Fall mit Zuschnitt und Traceback melden",
+            file=sys.stderr,
+        )
+        return EXIT["tool_error"]
     for problem in result.problems:
         print(f"move_names: {problem}", file=sys.stderr)
     if result.proof is not None:
@@ -328,7 +401,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.proof.write_text(text, encoding="utf-8", newline="\n")
         print(text)
     print(f"move_names: {result.status}")
-    return {"written": 0, "applied": 0, "proven": 0, "red": 1}.get(result.status, 2)
+    return EXIT[result.status]
 
 
 if __name__ == "__main__":

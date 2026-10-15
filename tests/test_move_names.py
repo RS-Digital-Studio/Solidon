@@ -98,25 +98,111 @@ def test_a_failed_write_restores_every_written_file(
     assert fx.tree_bytes(root) == _expected_bytes(fx.MODULE_OLD)
 
 
-def test_a_source_changed_after_planning_is_refused(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+#: Ein Leser der Quelle, den eine andere Sitzung anlegt, während der Beweis läuft.
+LATE_READER = (
+    '"""Neu, während der Beweis lief."""\n\nfrom app.core.legacy import bump\n\n\n'
+    "def again() -> None:\n    bump()\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("label", "path", "change"),
+    [
+        ("berührte-datei", "app/core/consumer.py", "anhängen"),
+        ("neuer-leser", "app/core/late_reader.py", "anlegen"),
+        ("unberührte-datei", "app/core/other.py", "anhängen"),
+    ],
+)
+def test_a_tree_changed_after_planning_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, label: str, path: str, change: str
 ) -> None:
-    """M−9: Ändert jemand eine berührte Datei zwischen Planung und Schreiben, schreibt das
+    """M−9 und RM-M7: Ändert jemand während des Beweises eine Datei der Bereiche — eine
+    berührte, eine unberührte oder eine neue mit einem Leser der Quelle —, schreibt das
     Werkzeug nichts und sagt, dass der Schnitt neu zu erzeugen ist."""
     original = move_names.prove
+    target = tmp_path / "tree" / path
 
     def meddle(*args: object, **kwargs: object) -> move_names.Proof:
         proof = original(*args, **kwargs)  # type: ignore[arg-type]
-        consumer = tmp_path / "tree" / "app/core/consumer.py"
-        consumer.write_bytes(consumer.read_bytes() + FOREIGN)
+        if change == "anlegen":
+            target.write_bytes(LATE_READER.encode("utf-8"))
+        else:
+            target.write_bytes(target.read_bytes() + FOREIGN)
         return proof
 
     monkeypatch.setattr(move_names, "prove", meddle)
-    with pytest.raises(RuntimeError, match="neu erzeugen"):
-        _run(tmp_path)
+    root, result = _run(tmp_path)
+    assert result.status == "stale", (label, result.status, result.problems)
+    assert any(path in p and "neu erzeugen" in p for p in result.problems), result.problems
     expected = _expected_bytes(fx.MODULE_OLD)
-    expected["app/core/consumer.py"] += FOREIGN
-    assert fx.tree_bytes(tmp_path / "tree") == expected
+    if change == "anlegen":
+        expected[path] = LATE_READER.encode("utf-8")
+    else:
+        expected[path] += FOREIGN
+    assert fx.tree_bytes(root) == expected
+
+
+def _main(tmp_path: Path, *extra: str) -> int:
+    root = fx.write_tree(tmp_path / "tree", fx.MODULE_OLD)
+    cut_file = tmp_path / "cut.toml"
+    cut_file.write_text(fx.MODULE_CUT, encoding="utf-8")
+    work = tmp_path / "work"
+    work.mkdir(exist_ok=True)
+    return move_names.main([str(cut_file), "--root", str(root), "--work", str(work), *extra])
+
+
+def test_each_way_out_of_main_has_its_own_exit_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """RM-M12: Exit 1 heißt nur „Beweis rot“. Ein veralteter Baum (3), ein gescheiterter
+    Schreibvorgang (4) und ein Werkzeugfehler (5) enden mit eigenem Ausgang und Ausweg, nie mit
+    einem Traceback als Exit 1."""
+    assert _main(tmp_path / "a", "--check") == 0
+    capsys.readouterr()
+
+    original = move_names.prove
+
+    def stale(*args: object, **kwargs: object) -> move_names.Proof:
+        proof = original(*args, **kwargs)  # type: ignore[arg-type]
+        other = tmp_path / "b" / "tree" / "app/core/other.py"
+        other.write_bytes(other.read_bytes() + FOREIGN)
+        return proof
+
+    monkeypatch.setattr(move_names, "prove", stale)
+    assert _main(tmp_path / "b") == 3
+    assert "neu erzeugen" in capsys.readouterr().err
+    monkeypatch.setattr(move_names, "prove", original)
+
+    def failing(source: object, target: object) -> None:
+        raise OSError("Gegenprobe: Platte voll")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(move_names.os, "replace", failing)
+        assert _main(tmp_path / "c") == 4
+    err = capsys.readouterr().err
+    assert "Platte voll" in err and " — " in err
+
+    def broken(*args: object, **kwargs: object) -> object:
+        raise ValueError("Gegenprobe: Werkzeugfehler")
+
+    monkeypatch.setattr(move_names, "plan", broken)
+    assert _main(tmp_path / "d") == 5
+    err = capsys.readouterr().err
+    assert "Werkzeugfehler" in err and "ValueError" in err and " — " in err
+
+
+def test_a_table_that_cannot_be_applied_rejects_the_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-M12: Lässt sich die Tabelle einer Datei nicht anwenden (``EditError``), ist der Plan
+    abgewiesen — mit Stelle und Ausweg, ohne Traceback und ohne Schreiben."""
+
+    def overlapping(*args: object, **kwargs: object) -> str:
+        raise move_names.EditError("app/core/consumer.py:9: zwei Zeilen der Tabelle überlappen")
+
+    monkeypatch.setattr(move_names, "apply_text", overlapping)
+    message = _rejected(tmp_path, fx.MODULE_OLD)
+    assert "app/core/consumer.py:9: zwei Zeilen der Tabelle überlappen — " in message
 
 
 def test_the_cut_repeated_on_a_newer_state_carries_the_change(tmp_path: Path) -> None:
