@@ -119,19 +119,30 @@ KNOWN = ("resize_hole", "finding.action:install", "command:edit.auto_split", "dr
 
 def test_a_row_with_an_addition_or_only_its_tail_names_no_row() -> None:
     """„resize_hole im Bild“ und „install“ trafen keine Zelle, und der Fund fehlte still
-    in der Abhakliste (Schlussreview D0, RF-3: FD-67, FD-70, FD-101)."""
+    in der Abhakliste (Schlussreview D0, RF-3: FD-67, FD-70, FD-101).
+
+    Ein bloßes Ende prüft nur die ganze Liste: Der Bericht über einen Lauf kennt nur
+    dessen Pakete, und dort ist ``place_on_bed`` eine Operation aus D3, kein
+    abgeschnittenes ``finding.action:place_on_bed`` (FD-60, FD-61).
+    """
     findings = _findings(
         (1, "resize_hole im Bild, Weitere Werte", "19", "offen RM-741"),
         (2, "`drill_hole`, install und auto_split", "1", "offen RM-737"),
         (3, "`resize_hole`", "19", "offen RM-741"),
         (4, "`drill_hole` und die Sprachflächen", "9", "offen RM-737"),
     )
-    problems = check_finding_rows(findings.values(), KNOWN, complete=False)
-    assert problems == [
+    assert check_finding_rows(findings.values(), KNOWN, complete=False) == [
+        "FD-1: „resize_hole im Bild“ ist keine Zeile, gemeint: resize_hole"
+    ]
+    assert check_finding_rows(findings.values(), KNOWN) == [
         "FD-1: „resize_hole im Bild“ ist keine Zeile, gemeint: resize_hole",
+        "FD-1: offen, trifft aber keine Zeile — Kennung ausschreiben oder „keine Zeile: …“",
         "FD-2: „auto_split“ ist keine Zeile, gemeint: command:edit.auto_split",
         "FD-2: „install“ ist keine Zeile, gemeint: finding.action:install",
     ]
+    fixed = _findings((60, "`place_on_bed`, `resize_hole`", "9", "behoben `f50704312`"))
+    run_rows = ("resize_hole", "finding.action:place_on_bed")
+    assert check_finding_rows(fixed.values(), run_rows, complete=False) == []
 
 
 NAVIGATION = "Ansicht/Navigation/Wie in Bambu Studio, Orca und PrusaSlicer — links dreht"

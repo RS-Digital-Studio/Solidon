@@ -776,7 +776,8 @@ def check_finding_rows(
     Zeile treffen oder mit :data:`NO_ROW` ausdrücklich keine nennen; ein
     behobener darf eine Zeile tragen, die sein Fix entfernt hat (FD-24). Der
     Bericht über einen Lauf kennt nur die Zeilen seiner Pakete und prüft nur
-    die Teile.
+    Teile mit Zusatz und zerfallende Kennungen: Ein bloßes Ende wie
+    ``place_on_bed`` ist dort oft eine Zeile eines anderen Pakets.
     """
     ids = set(known)
     problems: list[str] = []
@@ -786,7 +787,7 @@ def check_finding_rows(
                 row
                 for row in ids
                 if re.search(rf"(?<![\w.:]){re.escape(row)}(?![\w.:])", part)
-                or row.endswith((f":{part}", f".{part}"))
+                or (complete and row.endswith((f":{part}", f".{part}")))
             )
             if meant:
                 problems.append(
