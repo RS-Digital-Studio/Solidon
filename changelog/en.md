@@ -92,6 +92,7 @@ it into `website/version.json`.
 - If only slivers remain beside one printable part, *Split into separate parts* names them and offers *Keep slivers*. Before, it said the body was all one piece.
 - If a fillet radius or chamfer width is too large for the edges, the message offers *Pick different edges*.
 - If a selected face does not suit *Apply draft angle* or *Offset face*, the message offers *Pick different faces*.
+- The same applies to *Hollow out*, *Seal groove with gasket* and *Apply texture*. If a fillet cannot be traced back to an edge, the message offers *Pick different edges*.
 
 ## 0.6.0
 

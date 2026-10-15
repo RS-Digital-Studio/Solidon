@@ -92,6 +92,7 @@ scrive in `website/version.json`.
 - Se accanto a un pezzo stampabile restano solo schegge, *Dividi in pezzi distinti* le nomina e offre *Tieni le schegge*. Prima diceva che il corpo era di un solo pezzo.
 - Se il raggio di un raccordo o la larghezza di uno smusso è troppo grande per gli spigoli, il messaggio offre *Scegli altri spigoli*.
 - Se una faccia selezionata non va bene per *Applica l'angolo di sformo* o *Scosta la faccia*, il messaggio offre *Scegli altre facce*.
+- Lo stesso vale per *Svuota*, *Scanalatura con guarnizione* e *Applica texture*. Se un raccordo non si può ricondurre a uno spigolo, il messaggio offre *Scegli altri spigoli*.
 
 ## 0.6.0
 

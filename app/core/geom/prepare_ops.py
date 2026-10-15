@@ -22,6 +22,8 @@ from app.core.deferred import trimesh
 from app.core.errors import (
     BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
     CANCEL,
+    CHANGE_EDGES,
+    CHANGE_FACES,
     CHANGE_SELECTION,
     CHANGE_SIZE,
     CHANGE_THIS_STEP,
@@ -20470,7 +20472,7 @@ def _mesh_hollow_open(
                 ),
                 value=feature.id,
                 constraint="not_planar",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FACES, CANCEL),
             )
         chosen.append(Opening(triangles=triangles, name=feature.id))
     if params.open_top:
@@ -24078,7 +24080,7 @@ def _refuse_a_corner(feature: Feature) -> None:
     if "axis" not in feature.params:
         from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
 
-        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_EDGES, CANCEL))
 
 
 def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float | None) -> OpResult:

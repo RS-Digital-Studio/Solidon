@@ -93,6 +93,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si junto a una pieza imprimible solo quedan astillas, *Dividir en piezas sueltas* las nombra y ofrece *Conservar las astillas*. Antes decía que el cuerpo era de una sola pieza.
 - Si el radio de un redondeo o el ancho de un chaflán es demasiado grande para las aristas, el mensaje ofrece *Elegir otras aristas*.
 - Si una cara seleccionada no sirve para *Aplicar ángulo de desmoldeo* o *Desplazar cara*, el mensaje ofrece *Elegir otras caras*.
+- Lo mismo vale para *Vaciar*, *Ranura de sellado con junta* y *Aplicar textura*. Si un redondeo no puede reducirse a una arista, el mensaje ofrece *Elegir otras aristas*.
 
 ## 0.6.0
 

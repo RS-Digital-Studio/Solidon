@@ -1655,7 +1655,8 @@ def test_a_fillet_beside_a_curved_wall_does_not_invent_a_plane(
         run(operation, source, profile, **params)
 
     assert "zwei ebene Flächen" in str(problem.value.detail)
-    assert {entry.id for entry in problem.value.suggestions} == {"change_selection", "cancel"}
+    # Die Rundung hängt an Kanten; dorthin führt der Weg (FD-178).
+    assert {entry.id for entry in problem.value.suggestions} == {"change_step", "cancel"}
     assert body.volume == pytest.approx(before)
 
 

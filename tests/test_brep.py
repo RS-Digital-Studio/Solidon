@@ -2130,7 +2130,7 @@ def test_rounding_failures_offer_editing_instead_of_mesh_repair(
         else:
             edit.unround(source, centre, 3.0)
 
-    offered = "change_selection" if failure == "missing_edge" else "correct_input"
+    offered = "change_step" if failure == "missing_edge" else "correct_input"
     assert {action.id for action in failed.value.suggestions} == {offered, "cancel"}
     assert source.volume == pytest.approx(before, abs=EPS_GEOM)
 

@@ -93,6 +93,7 @@ dans `website/version.json`.
 - S'il ne reste que des éclats à côté d'une pièce imprimable, *Diviser en pièces distinctes* les nomme et propose *Garder les éclats*. Avant, le corps était dit d'un seul tenant.
 - Si le rayon d'un congé ou la largeur d'un chanfrein est trop grand pour les arêtes, le message propose *Choisir d'autres arêtes*.
 - Si une face sélectionnée ne convient pas à *Appliquer une dépouille* ou *Décaler la face*, le message propose *Choisir d'autres faces*.
+- Il en va de même pour *Évidement*, *Rainure avec joint* et *Appliquer une texture*. Si un congé ne peut pas être ramené à une arête, le message propose *Choisir d'autres arêtes*.
 
 ## 0.6.0
 

@@ -118,3 +118,27 @@ def test_other_faces_opens_the_step_where_the_faces_are_chosen() -> None:
     assert CHANGE_FACES.id == "change_step"
     assert str(CHANGE_FACES.label) == "Andere Flächen wählen"
     assert CORRECT_INPUT in faces._across_the_pull().suggestions
+
+
+def test_an_opening_without_a_cavity_offers_other_faces() -> None:
+    """*Aushöhlen*: Unter der gewählten Öffnung liegt kein Hohlraum (FD-178)."""
+    from app.core.geom.hollow import Opening, _opening_misses
+
+    finding = _opening_misses(Opening(triangles=(0, 1), name="face_1"))
+    assert CHANGE_SELECTION not in finding.suggestions
+    assert CHANGE_FACES in finding.suggestions
+
+
+def test_the_other_face_refusals_offer_other_faces() -> None:
+    """Öffnung am Dreiecksmodell, Trägerfläche der Dichtnut, Muster bis zum Rand:
+    jede Absage verlangt eine ebene Fläche und führt zu den Flächen (FD-178)."""
+    from app.core.geom import prepare_ops, seal, texture_ops
+
+    for function in (
+        prepare_ops._mesh_hollow_open,
+        seal.support_geometry,
+        texture_ops._face_texture_tool,
+    ):
+        source = inspect.getsource(function)
+        assert "CHANGE_SELECTION" not in source, function.__name__
+        assert "CHANGE_FACES" in source, function.__name__
