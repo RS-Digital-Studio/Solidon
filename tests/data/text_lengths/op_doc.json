@@ -20,7 +20,6 @@
   "Legt eine runde Leiste auf die gewählten Kanten — außen als Wulst, in einem Innenwinkel als Kehlnaht. Die glatte Hohlkehle macht dagegen *Verrunden* an derselben Kante.",
   "Legt einen Kegel oder Kegelstumpf mit echter Kegelfläche auf dem Druckbett oder auf einer gewählten Fläche an.",
   "Legt einen Quader mit echten Kanten an — an sie lassen sich später Fasen und Verrundungen setzen.",
-  "Legt einen Schriftzug als eigenes Objekt an — für den Zweifarbendruck mit zwei Dateien und für Buchstaben, die aufgeklebt werden.",
   "Legt einen geschlossenen runden Ring mit echter Ringfläche auf dem Druckbett oder auf einer gewählten Fläche an.",
   "Macht aus einem Dreiecksnetz einen Körper mit echten Flächen und Kanten — Ebenen, Zylinder, Kegel, Kugeln und Ringe. Danach geht STEP, und Bohrungen, Kanten und Flächen lassen sich bearbeiten; einen Konstruktionsverlauf hat er nicht. Was auf keiner erkannten Fläche liegt, bleibt ebene Dreiecke; der Prüfbericht nennt Anteil und Abweichung.",
   "Nase zum Einrasten, mit Anlaufschräge nach oben und gerader Haltefläche nach unten — druckt ohne Stütze und hält gegen Zug.",

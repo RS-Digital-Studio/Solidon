@@ -5082,7 +5082,7 @@
   "Legt einen Parameter an": "Crea un parámetro",
   "Legt einen Quader auf dem Druckbett oder auf einer gewählten Fläche an.": "Crea una caja sobre la placa de impresión o una superficie seleccionada.",
   "Legt einen Quader mit echten Kanten an — an sie lassen sich später Fasen und Verrundungen setzen.": "Crea una caja con aristas reales: más tarde se les pueden aplicar chaflanes y redondeos.",
-  "Legt einen Schriftzug als eigenes Objekt an — für den Zweifarbendruck mit zwei Dateien und für Buchstaben, die aufgeklebt werden.": "Crea un rótulo como objeto propio — para la impresión a dos colores con dos archivos y para letras que se pegan.",
+  "Legt einen Schriftzug als eigenes Objekt an — zum Aufkleben oder für zwei Farben.": "Crea un rótulo como objeto propio — para pegarlo o para imprimir en dos colores.",
   "Legt einen Zylinder auf dem Druckbett oder auf einer gewählten Fläche an.": "Crea un cilindro sobre la placa de impresión o una superficie seleccionada.",
   "Legt einen Zylinder mit echten Kanten auf dem Druckbett oder auf einer gewählten Fläche an.": "Crea un cilindro con aristas reales sobre la placa de impresión o una superficie seleccionada.",
   "Legt einen geschlossenen runden Ring auf dem Druckbett oder auf einer gewählten Fläche an.": "Crea un anillo circular cerrado sobre la placa de impresión o una superficie seleccionada.",

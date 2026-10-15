@@ -5082,7 +5082,7 @@
   "Legt einen Parameter an": "Creates a parameter",
   "Legt einen Quader auf dem Druckbett oder auf einer gewählten Fläche an.": "Creates a box on the print bed or on a selected surface.",
   "Legt einen Quader mit echten Kanten an — an sie lassen sich später Fasen und Verrundungen setzen.": "Creates a cuboid with real edges — chamfers and fillets can be set on them later.",
-  "Legt einen Schriftzug als eigenes Objekt an — für den Zweifarbendruck mit zwei Dateien und für Buchstaben, die aufgeklebt werden.": "Creates lettering as an object of its own — for two-colour printing with two files, and for letters that get glued on.",
+  "Legt einen Schriftzug als eigenes Objekt an — zum Aufkleben oder für zwei Farben.": "Creates lettering as an object of its own — to glue on, or for printing in two colours.",
   "Legt einen Zylinder auf dem Druckbett oder auf einer gewählten Fläche an.": "Creates a cylinder on the print bed or on a selected surface.",
   "Legt einen Zylinder mit echten Kanten auf dem Druckbett oder auf einer gewählten Fläche an.": "Creates a cylinder with real edges on the print bed or on a selected surface.",
   "Legt einen geschlossenen runden Ring auf dem Druckbett oder auf einer gewählten Fläche an.": "Creates a closed round ring on the print bed or on a selected surface.",

@@ -65,7 +65,7 @@ LIMITS: dict[str, Limit] = {
 FROZEN_COUNTS: dict[str, int] = {
     "announcement": 1,
     "error_detail": 36,
-    "op_doc": 39,
+    "op_doc": 38,
     "param_doc": 53,
     "tooltip": 2,
 }

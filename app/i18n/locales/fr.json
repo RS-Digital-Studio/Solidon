@@ -5082,7 +5082,7 @@
   "Legt einen Parameter an": "Crée un paramètre",
   "Legt einen Quader auf dem Druckbett oder auf einer gewählten Fläche an.": "Crée un pavé sur le plateau ou sur une surface sélectionnée.",
   "Legt einen Quader mit echten Kanten an — an sie lassen sich später Fasen und Verrundungen setzen.": "Crée un pavé avec de vraies arêtes — on pourra y poser des chanfreins et des congés plus tard.",
-  "Legt einen Schriftzug als eigenes Objekt an — für den Zweifarbendruck mit zwei Dateien und für Buchstaben, die aufgeklebt werden.": "Crée une inscription comme objet à part — pour l'impression bicolore avec deux fichiers et pour des lettres à coller.",
+  "Legt einen Schriftzug als eigenes Objekt an — zum Aufkleben oder für zwei Farben.": "Crée une inscription comme objet à part — à coller, ou pour imprimer en deux couleurs.",
   "Legt einen Zylinder auf dem Druckbett oder auf einer gewählten Fläche an.": "Crée un cylindre sur le plateau ou sur une surface sélectionnée.",
   "Legt einen Zylinder mit echten Kanten auf dem Druckbett oder auf einer gewählten Fläche an.": "Crée un cylindre avec de vraies arêtes sur le plateau ou sur une surface sélectionnée.",
   "Legt einen geschlossenen runden Ring auf dem Druckbett oder auf einer gewählten Fläche an.": "Crée un anneau rond fermé sur le plateau ou sur une surface sélectionnée.",
