@@ -217,6 +217,23 @@ def test_a_wsl_starter_ahead_of_git_in_the_search_path_never_runs_the_ci_blocks(
     assert workflow_shell() == str(bash)
 
 
+def test_only_the_shell_helpers_look_for_bash() -> None:
+    """Jede Testdatei, die Skripte fährt, fragt ``bash_executable`` (CS-30).
+
+    ``test_suite_script.py`` suchte die bash ein drittes Mal mit
+    ``which("bash")``, ohne Rückfall neben Git und ohne den WSL-Starter zu
+    verwerfen: Unter dem ``PATH`` einer PowerShell übersprang es seine Fälle,
+    und mit WSL vorn liefe das Tor-Skript in einem Linux.
+    """
+    asking = sorted(
+        path.name
+        for path in (ROOT / "tests").glob("*.py")
+        if re.search(r"""which\(\s*["']bash["']""", path.read_text(encoding="utf-8"))
+        and path.name not in {"shell_helpers.py", Path(__file__).name}
+    )
+    assert asking == []
+
+
 def test_the_start_check_says_in_one_line_how_far_the_start_came() -> None:
     """Die Erprobung mit Fenster auf dem Intel-Mac darf rot werden; ihre Zeile sagt, warum."""
     from tools.check_frozen_start import outcome
