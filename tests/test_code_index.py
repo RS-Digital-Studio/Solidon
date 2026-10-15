@@ -696,14 +696,34 @@ def test_known_case_head_copy_of_detect_in_evaluate() -> None:
     assert any(f.name == "detect" for f in rules)
 
 
+#: Wo das Lager die Spulensuche zur Aufrufzeit liest.
+SPOOL_READER = ("app.ui.filament_inventory", "InventoryView._import")
+
+#: Die zwei Bindungen, über die es sie lesen kann: heute die Kopfkopie in
+#: ``filament_inventory``, nach Paket K (Entscheidung E1) das Original.
+SPOOL_BINDINGS = (
+    ("app.ui.filament_inventory", "configured_spools"),
+    ("app.ui.filament_picker", "configured_spools"),
+)
+
+
 def test_known_case_the_spool_ban_sits_on_the_binding_the_inventory_reads() -> None:
     """CS-9a, behoben und umgekehrt gehalten: ``test_first_run.py`` verbietet
-    ``configured_spools`` an der Bindung in ``filament_inventory.py``, die das Lager zur
-    Aufrufzeit liest — nicht am Original in ``filament_picker``, das dessen Kopfkopie nie
-    erreicht. Solange W2 c) und d) ``xfail`` tragen, hält dieser Fall das ohne Fenster;
-    sind beide scharf, wird er gestrichen."""
+    ``configured_spools`` an der Bindung, die das Lager zur Aufrufzeit liest — heute
+    die Kopfkopie in ``filament_inventory``, nach K das Original in ``filament_picker``.
+    Welche es ist, sagt der Index über den Leser ``InventoryView._import``: Der Fall
+    hält die Zusage, nicht die heutige Bindung, und bleibt beim Schnitt von K grün.
+    Solange W2 c) und d) ``xfail`` tragen, hält er das ohne Fenster; sind beide
+    scharf, wird er gestrichen."""
     index = _real()
-    binding = ("app.ui.filament_inventory", "configured_spools")
+    read = [
+        binding
+        for binding in SPOOL_BINDINGS
+        if any((r.module, r.qualname) == SPOOL_READER for r in index.readers(*binding))
+    ]
+    assert len(read) == 1, f"{'.'.join(SPOOL_READER)} liest {read}, erwartet genau eine Bindung"
+    binding = read[0]
+    (other,) = (candidate for candidate in SPOOL_BINDINGS if candidate != binding)
     bans = [
         site
         for site in index.patch_sites()
@@ -714,8 +734,9 @@ def test_known_case_the_spool_ban_sits_on_the_binding_the_inventory_reads() -> N
     for site in bans:
         targets = {(target.module, target.name) for target in site.targets}
         assert targets == {binding}, f"Zeile {site.line} verbietet an {targets}"
-    assert index.readers(*binding), "niemand liest filament_inventory.configured_spools"
-    assert ("app.ui.filament_picker", "configured_spools") not in index.patched_names()
+    assert other not in index.patched_names(), (
+        f"{'.'.join(other)} gepatcht, das Lager liest es nicht"
+    )
     found = index.patch_findings()
     named = [f for rule in "cd" for f in found[rule] if f.name == "configured_spools"]
     assert not named, named
