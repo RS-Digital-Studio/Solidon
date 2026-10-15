@@ -397,7 +397,7 @@ Alle Gegenproben laufen ohne Fenster in `tests/test_function_report.py`. Sie spe
 | 14 Abbruch | A | `langsam_2s`: *Abbrechen* sichtbar, Klick auf `progress.cancel`, Stand = vorher, wartendes Übernehmen verfällt | Abdruck nach Abbruch ≠ vorher; Szene unter 2 s ergibt „nicht prüfbar“, nie grün |
 | 15 Halt und Einfügemarke | A | `halt`: Grund mit Schrittnummer; Einfügen über `menu:history.insert`: Ergebnis davor oder Absage mit *Einfügen beenden* | Grund ohne Nummer; Absage ohne Handlung |
 | 16 Projektwechsel | A | Wechsel über *Datei → Zuletzt geöffnet* während Vorschau, Entwurf und Rechnung, soweit die Zeile die Lage hat (`function_checks.SWITCH_ABSENT` je Lage unter `unmeasured.switch`; keine Lage: *entfällt* ohne Rechnung); `switch.late_events` | ein später Befund oder Dialog nach dem Wechsel |
-| 17 Agentenweg | A ohne Fenster | `menu_path` aus `tool_schemas()` gegen `place`; Rücknahme des Vorschlags über die Agenten-Suite (Skriptmodell), nur verwiesen | Menüpfad „Datei → …“ bei Ort Karte |
+| 17 Agentenweg | A ohne Fenster | `menu_path` aus `tool_schemas()` gegen `place`, an Zeilen außerhalb des Registers Ort und Weg des Zusatzwerkzeugs, das sie nennt (`agent.tools.extra_tool_rows`, `extra_tool_place`; Ort `leiste` gegen Karte oder Kontextmenü); Rücknahme des Vorschlags über die Agenten-Suite (Skriptmodell), nur verwiesen | Menüpfad „Datei → …“ bei Ort Karte |
 | 18 Lizenzzustand | A | `licence_runs`: Demo abgelaufen, Testlauf abgelaufen, gekauft | schreibendes Ziel freigegeben trotz Ablauf; grau ohne Grund |
 | 19 Gestaltung | A, B und C nach §3.3 | | je Kriterium nach §3.3 |
 
