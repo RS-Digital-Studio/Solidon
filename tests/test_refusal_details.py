@@ -11,12 +11,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtWidgets import QApplication, QPushButton
+import pytest
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
 from app.core import bootstrap
 from app.core.errors import CANCEL, CORRECT_INPUT, AppError, ValidationError
 from app.core.registry import REGISTRY
+from app.core.scene import OperationDraft
+from app.core.types import Operation
 from app.ui.dialogs import problem_text, spoken_values
+from app.ui.session import Session
+from tests.ui_helpers import session as session
 
 #: Der Titel, den ``evaluate._finding_from`` einer Schrittabsage als ``kind`` mitgibt.
 STEP_TITLE = "Die Eingabe war so nicht verwendbar."
@@ -108,4 +113,100 @@ def test_correct_input_without_a_field_is_left_out_in_the_open_dialog(
         ]
         assert "Eingabe korrigieren" in problem_text(refusal, {}), "ohne Dialog bleibt der Rat"
     finally:
+        dialog.deleteLater()
+
+
+class _Host(QWidget):
+    """Ein Fenster mit Sitzung, wie ``show_details`` es als Elternteil bekommt."""
+
+    def __init__(self, session: Session) -> None:
+        super().__init__()
+        self.session = session
+
+
+def test_the_details_name_body_step_and_place_in_words(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FD-105: „Objekt: obj_1“, „Operation: 1“ und „Stelle: (1.33e-16, …)“."""
+    from app.ui.dialogs import show_details
+    from app.ui.message_dialog import MessageDialog
+
+    assert session.apply("Quader", [OperationDraft(op="create_box")])
+    assert session.wait_for_idle(30_000)
+    result = session.last_result
+    assert result is not None
+    body = next(iter(result.scene.objects))
+    step = session.project.document.ops[0]
+    caught: list[Any] = []
+    monkeypatch.setattr(MessageDialog, "exec", lambda dialog: caught.append(dialog) or 0)
+    host = _Host(session)
+    try:
+        show_details(
+            AppError(
+                title="Die Wand ist zu dünn.",
+                object_id=body,
+                op_id=step.id,
+                values={"location": (1.3325671035519837e-16, 0.0, 10.0)},
+            ),
+            host,
+        )
+        (box,) = caught
+        text = box.details.toPlainText()
+        name = str(result.scene.objects[body].name)
+        assert f"Objekt: {name}" in text
+        assert f"Schritt 1: {REGISTRY.get(step.op).title}" in text
+        assert "Stelle: 0,00 / 0,00 / 10,00 mm" in text
+        assert body not in text and "e-16" not in text and "Operation:" not in text
+        box.deleteLater()
+    finally:
+        host.deleteLater()
+
+
+LEGACY_PAINT = Operation(
+    id=2,
+    op="paint_slot",
+    inputs=("obj_1",),
+    params={"slot": 1, "radius": 12.0, "x": 0.0, "y": 0.0, "z": 8.0, "name": "Rot"},
+)
+
+
+def test_the_step_values_speak_the_window_words(qt_app: QApplication) -> None:
+    """FD-105: Titel und Feldnamen statt „paint_slot“ und „radius = 12.0“ —
+    auch für Werte, die das Schema nicht mehr kennt (der alte Punktpinsel)."""
+    from app.ui.dialogs import StepValuesDialog
+
+    bootstrap.load_operations()
+    dialog = StepValuesDialog(LEGACY_PAINT)
+    try:
+        text = dialog.text.toPlainText()
+        shown = " ".join(label.text() for label in dialog.findChildren(QLabel))
+        assert str(REGISTRY.get("paint_slot").title) in shown, "der Titel, nicht paint_slot"
+        assert "paint_slot" not in shown
+        assert "Filament: 1" in text
+        assert "Bezeichnung: Rot" in text
+        assert "Radius: 12,00 mm" in text
+        assert "Position X: 0,00 mm" in text and "Position Z: 8,00 mm" in text
+        assert "radius =" not in text and "12.0" not in text
+    finally:
+        dialog.deleteLater()
+
+
+def test_the_step_values_window_is_as_tall_as_its_lines(qt_app: QApplication) -> None:
+    """FD-118: sechs Zeilen in einem Fenster von 520 × 360, zwei Drittel leer."""
+    from app.ui.dialogs import StepValuesDialog
+
+    bootstrap.load_operations()
+    dialog = StepValuesDialog(LEGACY_PAINT)
+    try:
+        dialog.show()
+        for _ in range(3):
+            QApplication.processEvents()
+        assert dialog.text.verticalScrollBar().maximum() == 0, "alle Zeilen sichtbar"
+        lines = dialog.text.toPlainText().count("\n") + 1
+        spare = dialog.text.height() - lines * dialog.text.fontMetrics().lineSpacing()
+        assert spare < 3 * dialog.text.fontMetrics().lineSpacing(), f"{spare} px leer"
+        assert dialog.height() < 360
+        assert dialog.text.accessibleName(), "FD-94: das Textfeld hat einen Namen"
+    finally:
+        dialog.close()
         dialog.deleteLater()

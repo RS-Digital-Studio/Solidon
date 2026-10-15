@@ -669,8 +669,9 @@ def test_legacy_paint_finding_opens_its_real_values_and_history(window, monkeypa
     buttons = {button.text(): button for button in window.report._offers.findChildren(QPushButton)}
     buttons["Werte ansehen"].click()
     assert len(opened) == 1
-    assert "radius" in opened[0] and "12.0" in opened[0]
-    assert all(name in opened[0] for name in ("x", "y", "z", "slot"))
+    # Lesbar statt roh (FD-105): Feldnamen und Längen wie im Dialog.
+    assert "Radius: 12,00 mm" in opened[0]
+    assert all(name in opened[0] for name in ("Position X", "Position Y", "Position Z", "Filament"))
     buttons["Verlauf zeigen"].click()
     assert visited == ["history"]
     assert window.session.project.document.ops[1].params["radius"] == pytest.approx(12.0)

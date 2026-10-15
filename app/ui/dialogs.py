@@ -110,7 +110,10 @@ from app.ui.message_dialog import MessageDialog, acknowledge, inform, name_butto
 # Seit der Codestruktur ein eigenes Modul; Fenster, Werkzeuge und Tests holen
 # den Dialog weiter hier.
 from app.ui.parameter_dialog import ParameterDialog as ParameterDialog
-from app.ui.refusal_details import field_ways, input_dialog_of, silent_ways
+
+# Seit der Codestruktur ein eigenes Modul; das Fenster holt den Dialog weiter hier.
+from app.ui.refusal_details import StepValuesDialog as StepValuesDialog
+from app.ui.refusal_details import field_ways, input_dialog_of, silent_ways, where_lines
 from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
@@ -2628,88 +2631,6 @@ NEEDS_OP: Final = frozenset(
 )
 
 
-class StepValuesDialog(QDialog):
-    """Die rohen Werte eines Schritts, den diese Fassung nicht rechnen kann.
-
-    **Der einzige Weg zu einer Arbeit, die sonst in der Datei eingeschlossen
-    wäre.** Eine Projektdatei aus einer früheren Fassung kann einen Schritt
-    tragen, den es hier nicht mehr gibt (§16.2) — bei einer Datei aus 0.1.3
-    ist das der OpenSCAD-Quelltext, den jemand geschrieben hat. Der Schritt
-    bleibt stehen und seine Werte mit ihm; rechnen lässt er sich nicht, und
-    öffnen auch nicht, denn der Operationsdialog wird aus einem
-    Registereintrag gebaut, den es nicht gibt.
-
-    Ohne diesen Dialog wäre der Prüfbericht eine Sackgasse: ein Befund, der
-    sagt „Ihre Werte bleiben erhalten", und kein Weg, an sie heranzukommen.
-
-    **Die Werte stehen roh da, mit Punkt statt Komma, und das ist Absicht.**
-    Sonst gilt in der Oberfläche das Gegenteil (``labels.localised``) — hier
-    aber ist der Text zum **Kopieren** gedacht: Er geht in ein anderes
-    Programm oder dient als Vorlage zum Nachbauen. Eine lokalisierte Zahl wäre
-    dort falsch, dieselbe Begründung wie bei ``measured_expression``.
-    """
-
-    def __init__(self, operation: Any, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(tr("Werte dieses Schritts"))
-        self.setMinimumSize(520, 360)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
-        layout.setSpacing(NORMAL)
-        hint = QLabel(
-            tr(
-                "Diesen Schritt kann Solidon nicht rechnen — seine Werte stehen "
-                "aber unverändert in der Datei. Sie lassen sich hier "
-                "herauskopieren."
-            ),
-            self,
-        )
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
-        layout.addWidget(QLabel(str(operation.op), self))
-
-        self.text = QPlainTextEdit(self)
-        self.text.setReadOnly(True)
-        self.text.setPlainText(step_values_text(operation))
-        layout.addWidget(self.text, 1)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, parent=self)
-        copy = buttons.addButton(tr("Kopieren"), QDialogButtonBox.ButtonRole.ActionRole)
-        button_layout = buttons.layout()
-        assert button_layout is not None
-        button_layout.setSpacing(SPACE)
-        make_primary(copy)
-        copy.clicked.connect(self._copy)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-    def _copy(self) -> None:
-        from PySide6.QtGui import QGuiApplication
-
-        clipboard = QGuiApplication.clipboard()
-        if clipboard is not None:
-            clipboard.setText(self.text.toPlainText())
-
-
-def step_values_text(operation: Any) -> str:
-    """Die Parameter eines Schritts als lesbarer Block.
-
-    Ein mehrzeiliger Wert — ein Quelltext, eine Skizze — bekommt seine eigenen
-    Zeilen; alles andere steht in einer. Ohne diese Unterscheidung stünde ein
-    ganzes Programm hinter einem Gleichheitszeichen auf einer einzigen Zeile.
-    """
-    lines: list[str] = []
-    for name, value in sorted(dict(operation.params).items()):
-        text = str(value)
-        if newline in text:
-            lines.append(tr("{name}:", name=name))
-            lines.extend(f"    {line}" for line in text.splitlines())
-        else:
-            lines.append(f"{name} = {text}")
-    return newline.join(lines) if lines else tr("Dieser Schritt hat keine Werte.")
-
-
 def handlers_of(widget: QWidget | None) -> Mapping[str, Callable[[AppError], None]]:
     """Die Fehlerhandlungen des Fensters, in dem dieser Dialog steckt.
 
@@ -2857,9 +2778,22 @@ def spoken_values(error: AppError) -> list[str]:
 #: Befund mit ``field`` den Cursor seines Schritts setzt (RM-374). Dazu
 #: ``action`` der Freischaltungsfehler (``change``, ``export``, ``slicer``,
 #: ``chat``): eine Kennung fürs Protokoll, die als „Handlung: change“ unter der
-#: Lizenzabsage stand — der Titel sagt schon, was fehlt (RM-456).
+#: Lizenzabsage stand — der Titel sagt schon, was fehlt (RM-456). Und die
+#: Orte eines Befunds (``location``, ``outline``, ``import_group``): Adressen
+#: für *Stelle zeigen*, die als rohes Tupel unter *Einzelheiten* standen
+#: (FD-105); die Stelle schreibt ``refusal_details.where_lines`` lesbar.
 ADDRESS_VALUES: Final = frozenset(
-    {"field", "constraint", "feature_ids", "action", "part_index", "object_ids"}
+    {
+        "field",
+        "constraint",
+        "feature_ids",
+        "action",
+        "part_index",
+        "object_ids",
+        "location",
+        "outline",
+        "import_group",
+    }
 )
 
 
@@ -3046,10 +2980,9 @@ def show_details(error: AppError, parent: QWidget | None = None) -> None:
     # Dieselbe Quelle wie im Fehlerdialog (:func:`spoken_values`): Zwei
     # Antworten auf die Frage, welche Werte dem Kunden etwas sagen, driften.
     lines.extend(spoken_values(error))
-    if error.object_id:
-        lines.append(tr("Objekt: {object_id}", object_id=error.object_id))
-    if error.op_id is not None:
-        lines.append(tr("Operation: {op_id}", op_id=error.op_id))
+    # Stelle, Körper und Schritt in den Wörtern des Fensters (FD-105): Hier
+    # standen „Objekt: obj_1“, „Operation: 3“ und ein rohes Koordinatentupel.
+    lines.extend(where_lines(error, parent))
 
     box = MessageDialog(
         parent,
