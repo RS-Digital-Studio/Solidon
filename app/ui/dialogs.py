@@ -85,6 +85,7 @@ from app.ui.ai_disclosure import (
     ensure_ai_disclosure,
     target_for_backend,
 )
+from app.ui.form_fields import name_rows
 from app.ui.icons import icon
 from app.ui.labels import (
     UNEXPECTED_CRASH,
@@ -878,6 +879,7 @@ class KeyDialog(QDialog):
         form.addRow(note)
         form.addRow(self.key_status)
         form.addRow(self.explanation)
+        name_rows(form)
 
         forget_actions = QDialogButtonBox(section)
         self.forget_button = forget_actions.addButton(
@@ -950,6 +952,8 @@ class KeyDialog(QDialog):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self.model_field.setMinimumContentsLength(18)
+        # Die Zeile hat keine Beschriftung; der Abschnitt heißt so (FD-94).
+        self.model_field.setAccessibleName(tr("Lokales Modell"))
         self.model_note = WrappedNote(section)
         self.model_note.setWordWrap(True)
         self.model_field.currentIndexChanged.connect(self._show_model_note)

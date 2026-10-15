@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 from app.core import expressions, guides
 from app.core.errors import AppError
 from app.i18n import tr
+from app.ui.form_fields import name_rows
 from app.ui.labels import NumberSpin, fill_parameter_units, localised_value, wheel_needs_focus
 from app.ui.leash import weak_slot
 from app.ui.style import (
@@ -246,6 +247,9 @@ class ParameterDialog(QDialog):
         limits_form.addRow(tr("Obergrenze"), self.maximum_field)
         # Eine Beschriftungskante für Wert und Grenzen (RM-518).
         align_to_the_front(form, limits_form)
+        # Jedes Feld heißt wie seine Zeile (FD-94): Ohne Namen las ein
+        # Vorleser „breite“ und „40,00“ statt „Name“ und „Wert“.
+        name_rows(form, limits_form)
         bounded = existing is not None and (
             existing.minimum is not None or existing.maximum is not None
         )

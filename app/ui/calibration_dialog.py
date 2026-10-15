@@ -183,7 +183,9 @@ class CalibrationDialog(QDialog):
             editor.setDecimals(2)
             editor.setRange(0.01, maximum)
             editor.setSuffix(suffix)
-            editor.setAccessibleName(title)
+            # Der Haken heißt nach der Handlung, das Feld nach dem Wert — beide
+            # „… übernehmen“ waren für den Vorleser eine Frage ohne Antwort.
+            editor.setAccessibleName(short)
             value = getattr(current, name)
             applies = process is not None and process.has_process_calibration and value is not None
             default = (
