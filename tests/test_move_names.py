@@ -91,7 +91,7 @@ def test_a_failed_write_restores_every_written_file(
         original(source, target)
 
     monkeypatch.setattr(move_names.os, "replace", failing)
-    with pytest.raises(OSError, match="Gegenprobe"):
+    with pytest.raises(move_names.WriteError, match="Gegenprobe"):
         _run(tmp_path)
     root = tmp_path / "tree"
     assert calls["n"] == 4
@@ -173,8 +173,14 @@ def test_each_way_out_of_main_has_its_own_exit_code(
     assert "neu erzeugen" in capsys.readouterr().err
     monkeypatch.setattr(move_names, "prove", original)
 
-    def failing(source: object, target: object) -> None:
-        raise OSError("Gegenprobe: Platte voll")
+    replace = os.replace
+
+    def failing(source: str | os.PathLike[str], target: str | os.PathLike[str]) -> None:
+        # Nur das Schreiben des Baums scheitert (``write`` ersetzt über ``*.move-names``);
+        # ein anderes ``os.replace`` (Zwischenspeicher des Auflösers) ist kein Schreiben.
+        if str(source).endswith(".move-names"):
+            raise OSError("Gegenprobe: Platte voll")
+        replace(source, target)
 
     with monkeypatch.context() as patched:
         patched.setattr(move_names.os, "replace", failing)
@@ -189,6 +195,74 @@ def test_each_way_out_of_main_has_its_own_exit_code(
     assert _main(tmp_path / "d") == 5
     err = capsys.readouterr().err
     assert "Werkzeugfehler" in err and "ValueError" in err and " — " in err
+
+
+@pytest.mark.parametrize(
+    ("label", "extra", "where"),
+    [
+        ("arbeitsordner-fehlt", ("--check", "--work", "{fehlt}"), "--work"),
+        ("protokollordner-fehlt-check", ("--check", "--proof", "{fehlt}/beweis.txt"), "--proof"),
+        ("protokollordner-fehlt-schreiben", ("--proof", "{fehlt}/beweis.txt"), "--proof"),
+        ("protokoll-ist-ordner", ("--proof", "{ordner}"), "--proof"),
+    ],
+)
+def test_a_wrong_folder_stops_before_the_run(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    label: str,
+    extra: tuple[str, ...],
+    where: str,
+) -> None:
+    """Review 2, RM-M21: Ein fehlender Arbeitsordner hieß „Schreiben gescheitert“ (Exit 4, auch
+    unter ``--check``), ein fehlender Ordner für ``--proof`` endete mit Traceback und Exit 1 —
+    auch nach geschriebenem Baum. Beides hält jetzt vor dem Lauf an, als falscher Aufruf
+    (Exit 2) mit Ausweg, und der Baum bleibt unverändert."""
+    folder = tmp_path / "ordner"
+    folder.mkdir()
+    values = {"fehlt": str(tmp_path / "fehlt"), "ordner": str(folder)}
+    arguments = [part.format(**values) for part in extra]
+    with pytest.raises(SystemExit) as stopped:
+        _main(tmp_path, *arguments)
+    assert stopped.value.code == 2, label
+    err = capsys.readouterr().err
+    assert where in err and " — " in err, (label, err)
+    assert fx.tree_bytes(tmp_path / "tree") == _expected_bytes(fx.MODULE_OLD)
+
+
+def test_the_proof_file_is_written_before_the_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """RM-M21: Das Protokoll entsteht vor dem Baum. Lässt es sich erst im Lauf nicht schreiben
+    (die Datei ist schreibgeschützt), bleibt der Baum unverändert, und der Ausgang ist 5 mit
+    dieser Auskunft — nie „Beweis rot“ und nie ein geschriebener Baum ohne Protokoll. Ein
+    anderer ``OSError`` als der beim Schreiben des Baums (hier beim Bau des Kandidaten) ist kein
+    „Schreiben gescheitert“ mehr. Mit schreibbarer Datei stehen Protokoll und Baum da."""
+    locked = tmp_path / "gesperrt.txt"
+    locked.write_text("alt\n", encoding="utf-8")
+    locked.chmod(0o444)
+    try:
+        assert _main(tmp_path / "a", "--proof", str(locked)) == 5
+    finally:
+        locked.chmod(0o666)
+    err = capsys.readouterr().err
+    assert "Beweisprotokoll" in err and "Baum ist unverändert" in err and " — " in err
+    assert fx.tree_bytes(tmp_path / "a" / "tree") == _expected_bytes(fx.MODULE_OLD)
+    assert locked.read_text(encoding="utf-8") == "alt\n"
+
+    def unreadable(*args: object, **kwargs: object) -> Path:
+        raise OSError("Gegenprobe: Lesefehler")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(move_names, "candidate", unreadable)
+        assert _main(tmp_path / "b") == 5
+    err = capsys.readouterr().err
+    assert "Lesefehler" in err and "Schreiben gescheitert" not in err and " — " in err
+    assert fx.tree_bytes(tmp_path / "b" / "tree") == _expected_bytes(fx.MODULE_OLD)
+
+    written = tmp_path / "beweis.txt"
+    assert _main(tmp_path / "c", "--proof", str(written)) == 0
+    assert written.read_text(encoding="utf-8").startswith("Beweis legacy-split (module): grün")
+    assert fx.tree_bytes(tmp_path / "c" / "tree") == _expected_bytes(EXPECTED)
 
 
 def test_a_table_that_cannot_be_applied_rejects_the_plan(

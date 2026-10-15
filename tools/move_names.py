@@ -12,10 +12,13 @@ Ablauf: Zuschnitt lesen (``tools/move_cut.py``), Index des Baums bauen (Paket R,
 formatieren (``ruff``), den Beweis führen (``tools/move_proof.py``) — und erst wenn er grün ist,
 den Baum selbst ändern. Ein roter Beweis schreibt nichts; ein Fehler beim Schreiben stellt jede
 schon geschriebene Datei auf ihre alten Bytes zurück (es sind nur die eigenen Änderungen dieses
-Laufs). Exit 0: geschrieben (oder schon angewandt, oder mit ``--check`` bewiesen), 1: Beweis rot,
-2: Zuschnitt oder Plan abgewiesen, 3: der Baum änderte sich während Planung und Beweis (jede Datei
-der Bereiche, auch eine unberührte; nichts geschrieben — neu erzeugen), 4: Schreiben gescheitert
-(zurückgestellt), 5: Werkzeugfehler (Traceback). Jeder Ausgang außer 0 nennt seinen Ausweg.
+Laufs). Das Beweisprotokoll (``--proof``) entsteht vor dem Baum. Exit 0: geschrieben (oder schon
+angewandt, oder mit ``--check`` bewiesen), 1: Beweis rot, 2: Aufruf, Zuschnitt oder Plan
+abgewiesen (auch ein fehlender ``--work``- oder ``--proof``-Ordner, vor dem Lauf geprüft), 3: der
+Baum änderte sich während Planung und Beweis (jede Datei der Bereiche, auch eine unberührte;
+nichts geschrieben — neu erzeugen), 4: Schreiben des Baums gescheitert (zurückgestellt), 5:
+Werkzeug- oder Umgebungsfehler (Traceback, Lesen, Arbeitsordner, Beweisprotokoll — der Baum ist
+unverändert). Jeder Ausgang außer 0 nennt seinen Ausweg.
 
 **Zuschnittliste** (TOML, ``schema_version = 1``):
 
@@ -102,6 +105,16 @@ class StaleError(RuntimeError):
     def __init__(self, problems: list[str]) -> None:
         super().__init__("\n".join(problems))
         self.problems = problems
+
+
+class WriteError(RuntimeError):
+    """Das Schreiben des Baums scheiterte; jede schon geschriebene Datei steht wieder auf ihren
+    alten Bytes (Exit 4). Nur dieser Weg heißt „Schreiben gescheitert“."""
+
+
+class ProofFileError(RuntimeError):
+    """Das Beweisprotokoll (``--proof``) ließ sich nicht schreiben. Es wird vor dem Baum
+    geschrieben: Der Baum ist dann unverändert (Exit 5)."""
 
 
 @dataclass
@@ -327,10 +340,13 @@ def run(
     use_ruff: bool = True,
     registry: bool = True,
     cache: bool = True,
+    proof_file: Path | None = None,
 ) -> Result:
     """Plant, beweist und schreibt (außer ``check``) einen Schnitt. Status: ``written``,
     ``applied``, ``proven`` (mit ``check``), ``red``, ``rejected`` oder ``stale`` (der Baum
-    änderte sich, während geplant und bewiesen wurde; nichts geschrieben)."""
+    änderte sich, während geplant und bewiesen wurde; nichts geschrieben). Das Protokoll nach
+    ``proof_file`` entsteht vor dem Schreiben des Baums (sonst :class:`ProofFileError`, der Baum
+    bleibt unverändert); ein Fehler beim Schreiben des Baums ist :class:`WriteError`."""
     state = snapshot(root)
     index = Index.build(root, cache=cache)
     try:
@@ -349,13 +365,38 @@ def run(
                 return Result("rejected", change=change, problems=problems)
         new_index = Index.build(tree, cache=cache)
         proof = prove(cut, root, tree, old_index=index, new_index=new_index, registry=registry)
+        if proof_file is not None:
+            try:
+                proof_file.write_text(proof.text(), encoding="utf-8", newline="\n")
+            except OSError as error:
+                raise ProofFileError(str(error)) from error
         if not proof.ok or check:
             return Result("proven" if proof.ok else "red", proof=proof, change=change)
         try:
             write(root, change, tree)
         except StaleError as error:
             return Result("stale", proof=proof, change=change, problems=error.problems)
+        except OSError as error:
+            raise WriteError(str(error)) from error
     return Result("written", proof=proof, change=change)
+
+
+def _arguments(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Was sich vor dem Lauf prüfen lässt, hält vor dem Lauf an (Exit 2, wie jeder falsche
+    Aufruf): ein Baum, der kein Ordner ist, ein fehlender Arbeitsordner und ein Protokoll,
+    dessen Ordner fehlt oder das selbst ein Ordner ist."""
+    if not args.root.is_dir():
+        parser.error(f"--root {args.root}: kein Ordner — den Baum des Repositorys nennen")
+    if args.work is not None and not args.work.is_dir():
+        parser.error(f"--work {args.work}: kein Ordner — anlegen oder einen vorhandenen nennen")
+    if args.proof is not None:
+        if args.proof.is_dir():
+            parser.error(f"--proof {args.proof}: ein Ordner — einen Dateinamen darin nennen")
+        if not args.proof.parent.is_dir():
+            parser.error(
+                f"--proof {args.proof}: der Ordner {args.proof.parent} fehlt — anlegen oder "
+                "einen vorhandenen nennen"
+            )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -369,6 +410,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--list-copies", action="store_true", help="Originale mit Kopfkopien (W2 c)"
     )
     args = parser.parse_args(argv)
+    _arguments(parser, args)
     root = args.root.resolve()
     if args.list_copies:
         from tools.move_copies import bindings_toml, list_copies
@@ -383,8 +425,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"move_names: {error}", file=sys.stderr)
         return EXIT["rejected"]
     try:
-        result = run(cut, root, check=args.check, work=args.work)
-    except OSError as error:
+        result = run(cut, root, check=args.check, work=args.work, proof_file=args.proof)
+    except WriteError as error:
         print(
             f"move_names: Schreiben gescheitert ({error}) — jede schon geschriebene Datei steht "
             "wieder auf ihren alten Bytes; Ursache beheben (Rechte, Platz, Sperre) und den Schnitt "
@@ -392,6 +434,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return EXIT["write_failed"]
+    except ProofFileError as error:
+        print(
+            f"move_names: Beweisprotokoll {args.proof} nicht geschrieben ({error}) — der Baum ist "
+            "unverändert (das Protokoll entsteht vor ihm); einen schreibbaren Pfad nennen und neu "
+            "starten",
+            file=sys.stderr,
+        )
+        return EXIT["tool_error"]
+    except OSError as error:
+        print(
+            f"move_names: Lesen oder Arbeitsordner gescheitert ({error}) — der Baum ist "
+            "unverändert; Ursache beheben (Pfad, Rechte, Platz) und neu starten",
+            file=sys.stderr,
+        )
+        return EXIT["tool_error"]
     except Exception:
         traceback.print_exc()
         print(
@@ -403,10 +460,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for problem in result.problems:
         print(f"move_names: {problem}", file=sys.stderr)
     if result.proof is not None:
-        text = result.proof.text()
-        if args.proof is not None:
-            args.proof.write_text(text, encoding="utf-8", newline="\n")
-        print(text)
+        print(result.proof.text())
     print(f"move_names: {result.status}")
     return EXIT[result.status]
 
