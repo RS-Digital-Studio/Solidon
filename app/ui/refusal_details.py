@@ -17,6 +17,7 @@ Eine Absage spricht in den Wörtern des Fensters, nicht in denen des Kerns.
 
 from __future__ import annotations
 
+import json
 import math
 import weakref
 from collections.abc import Callable, Sequence
@@ -234,6 +235,28 @@ def step_values_text(operation: Any) -> str:
     return newline.join(lines) if lines else str(tr("Dieser Schritt hat keine Werte."))
 
 
+def stored_values_text(operation: Any) -> str:
+    """Die Werte eines Schritts, wie die Datei sie speichert — für *Kopieren* (RA-7).
+
+    Schlüssel und Zahl unverändert, in Millimetern und ohne Rundung: Der Dialog
+    sagt zu, dass sie sich herauskopieren lassen, und gezeigt wird gerundet in
+    der Anzeigeeinheit (:func:`step_values_text`). Ein mehrzeiliger Wert bleibt
+    wörtlich unter seinem Schlüssel.
+    """
+    lines: list[str] = []
+    for name, value in dict(operation.params).items():
+        if isinstance(value, str) and newline in value:
+            lines.append(f"{name} =")
+            lines.extend(f"    {line}" for line in value.splitlines())
+            continue
+        try:
+            written = json.dumps(value, ensure_ascii=False)
+        except TypeError, ValueError:
+            written = str(value)
+        lines.append(f"{name} = {written}")
+    return newline.join(lines)
+
+
 class StepValuesDialog(QDialog):
     """Die Werte eines Schritts, den diese Version nicht rechnen kann.
 
@@ -252,6 +275,7 @@ class StepValuesDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(tr("Werte dieses Schritts"))
         self._fitted = False
+        self._stored = stored_values_text(operation)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
@@ -341,4 +365,5 @@ class StepValuesDialog(QDialog):
     def _copy(self) -> None:
         clipboard = QApplication.clipboard()
         if clipboard is not None:
-            clipboard.setText(self.text.toPlainText())
+            # Die gespeicherten Werte, nicht die gerundete Anzeige (RA-7).
+            clipboard.setText(self._stored)
