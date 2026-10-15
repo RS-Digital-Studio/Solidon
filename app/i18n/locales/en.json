@@ -5649,6 +5649,7 @@
   "Nicht gebucht — ansehen …": "Not recorded — review …",
   "Nicht gefunden. Wer es an einer ungewöhnlichen Stelle hat, kann sie hier angeben.": "Not found. If it is somewhere unusual, you can set its location here.",
   "Nicht gefunden: {names}": "Not found: {names}",
+  "Nicht geteilt. {reason}": "Not split. {reason}",
   "Nicht getroffene Züge": "Strokes that missed",
   "Nicht jede Variante ließ sich rechnen — nichts wurde geschrieben.": "Not every variant could be computed — nothing was written.",
   "Nicht jede gewählte Fläche ist als eben erkannt. Wählen Sie zum Versetzen vollständige ebene Flächen.": "Not every selected face was recognised as planar. Select complete planar faces to offset.",

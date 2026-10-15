@@ -73,6 +73,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A linha com material e duração da impressão só indica «desde o último passo» o que um passo alterou. Enquanto os valores do perfil de slicer ainda estão a ser lidos, mostra «provisório».
 - O material e a duração da impressão aparecem sempre por inteiro na barra de estado. Se a barra estiver cheia, a mensagem ao lado encurta-se, e a frase completa fica na dica.
 - O cabeçalho só encurta o nome da impressora quando a linha está cheia. O nome do projeto e as medidas ficam juntos à esquerda, a impressora à direita ao lado de *Definições de impressão …*.
+- Se *Dividir automaticamente* não encontrar um corte, a linha de estado diz porquê. Até agora dizia então que a peça já cabia na mesa.
 
 ### Imprimir e entregar ao slicer
 

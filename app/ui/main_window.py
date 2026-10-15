@@ -9088,6 +9088,22 @@ class MainWindow(QMainWindow):
             if self._split_turn is not None:
                 self._split_turn_done += 1
         if applied.transaction is None:
+            # **Ohne Schnitt passt es nur, wenn die Suche nichts zu sagen hat**
+            # (FD-106): Fand sie keine Trennebene oder sperrte eine geschützte
+            # Fläche, stand hier „passt bereits“ neben der Warnung, dass es über
+            # den Bauraum ragt. Dann sagt die Zeile den Grund; seine Handlung
+            # steht am Befund im Bericht.
+            reason = next(
+                (finding for finding in applied.findings if finding.severity != "info"), None
+            )
+            if reason is not None:
+                self.announce(
+                    tr(
+                        "Nicht geteilt. {reason}",
+                        reason=first_sentence(str(reason.message)),
+                    )
+                )
+                return
             self.announce(tr("Dieses Objekt passt bereits auf das Bett."))
             return
         self._queue_split_reveal(applied.object_ids)

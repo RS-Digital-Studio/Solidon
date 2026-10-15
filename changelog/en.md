@@ -73,6 +73,7 @@ it into `website/version.json`.
 - The status line with material and print time now says “since the last step” only for what a step changed. While the slicer profile values are still being read, it says “provisional”.
 - Material and print time always show in full in the status bar. When the bar is full, the message beside them is shortened, and its full sentence is in the tooltip.
 - The header shortens the printer name only when the row is full. Project name and dimensions stand together on the left, the printer on the right next to *Print settings …*.
+- If *Split automatically* finds no cut, the status line says why. Until now it then reported that the part already fits on the bed.
 
 ### Printing and slicer handover
 
