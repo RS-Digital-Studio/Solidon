@@ -1238,12 +1238,17 @@ def _i1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         if recognized is None
         else [f"hover_labels ({kind})" for kind in sorted(set(map(str, recognized)) - hovered)]
     )
+    summary = (
+        f"{len(labels)} Arten überfahren, erkannte nicht festgehalten"
+        if recognized is None
+        else f"{len(labels)} von {len(recognized)} erkannten Arten"
+    )
     return _settled(
         "I1",
         issues,
         absent,
-        f"{len(labels)} von {len(recognized or ())} Arten",
-        {"kinds": len(labels), "recognized": len(recognized or ())},
+        summary,
+        {"kinds": len(labels), "recognized": None if recognized is None else len(recognized)},
         judged=True,
         notes=notes,
     )
