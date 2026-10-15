@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QToolBar,
+    QToolButton,
     QWidget,
 )
 
@@ -5243,7 +5244,17 @@ def test_the_measures_in_the_view_take_their_twins_out_of_the_panel(window: Main
     assert not any("Bohrung ändern" in name for name in shown()), (
         "rechts steht kein Zwilling davon: " + ", ".join(sorted(shown()))
     )
-    assert any("Merkmal verschieben" in name for name in shown()), "die übrigen Handlungen bleiben"
+    # Die Handlung im Bild ist auch rechts die scharfe (FD-34, ``6238bf7fd``):
+    # Bis dahin stand *Merkmal verschieben* rechts offen daneben. Die übrigen
+    # Handlungen bleiben als Köpfe stehen, zugeklappt (RM-510).
+    assert panel.preview_values()[0] == "resize_hole", "im Bild und rechts dieselbe Handlung"
+    assert not shown(), "rechts ist keine andere Handlung offen: " + ", ".join(sorted(shown()))
+    heads = {
+        row.op
+        for row in panel._shown_rows.values()
+        if row.toggle is not None and row.toggle.isVisibleTo(panel)
+    }
+    assert {"move_feature", "slot_hole", "rotate_feature"} <= heads, "die übrigen bleiben"
 
     window.end_quiet_placement()
     for _ in range(10):
@@ -5256,15 +5267,19 @@ def test_the_measures_in_the_view_take_their_twins_out_of_the_panel(window: Main
 def _the_resize_row_comes_back(panel: Any, shown: Any) -> None:
     """Mit dem Ende des Messens steht *Bohrung ändern* wieder rechts (RM-199).
 
-    Zugeklappt und mit ihren Werten: Offen ist genau die scharfe Handlung, und
-    die bleibt, was sie war (RM-510). Ein Klick auf den Kopf öffnet die Felder.
+    Offen ist genau die scharfe Handlung (RM-510), und das ist seit FD-34
+    (``6238bf7fd``) die, deren Maße eben im Bild standen — also diese. Vorn
+    stehen Durchmesser und Tiefe, die Stelle hinter „Weitere Werte“ wie in der
+    Maßgruppe (FD-63, ``b86381559``); ein Klick auf die Klappe zeigt sie.
     """
     row = next(row for row in panel._shown_rows.values() if row.op == "resize_hole")
     assert row.toggle is not None and row.toggle.isVisibleTo(panel), "der Kopf steht wieder"
-    assert row.summary is not None and row.summary.text(), "zugeklappt nennt sie ihre Werte"
-    assert not any("Bohrung ändern" in name for name in shown()), "zugeklappt, nicht offen"
-    row.toggle.click()
-    assert {"Bohrung ändern — Durchmesser", "Bohrung ändern — X"} <= shown(), sorted(shown())
+    assert row.toggle.isChecked() and panel.preview_values()[0] == "resize_hole", "offen, scharf"
+    assert {"Bohrung ändern — Durchmesser", "Bohrung ändern — Tiefe"} <= shown(), sorted(shown())
+    assert "Bohrung ändern — X" not in shown(), "die Stelle steht hinter „Weitere Werte“"
+    assert row.more is not None
+    row.more.findChild(QToolButton, "sectionHeading").click()
+    assert {"Bohrung ändern — X", "Bohrung ändern — Z"} <= shown(), sorted(shown())
 
 
 def test_the_next_hole_hides_its_twins_too_and_the_end_brings_them_back(
@@ -5305,7 +5320,11 @@ def test_the_next_hole_hides_its_twins_too_and_the_end_brings_them_back(
         assert panel.feature_id == hole
         assert window._quiet_placement is not None and panel._measuring
         assert not any("Bohrung ändern" in name for name in shown()), sorted(shown())
-        assert any("Merkmal verschieben" in name for name in shown())
+        # Auch an der nächsten Bohrung ist rechts die Handlung im Bild scharf
+        # und sonst nichts offen (FD-34); *Merkmal verschieben* steht als Kopf.
+        assert panel.preview_values()[0] == "resize_hole" and not shown(), sorted(shown())
+        mover = next(row for row in panel._shown_rows.values() if row.op == "move_feature")
+        assert mover.toggle is not None and mover.toggle.isVisibleTo(panel)
 
     window.end_quiet_placement()
     for _ in range(10):
@@ -5746,6 +5765,9 @@ def test_the_return_key_in_a_feature_field_writes_exactly_one_step(window: MainW
     Gemessen am gebauten Fenster (13.09.2026): Durchmesser gesetzt, ``Return``
     im Feld, Verlauf 1 → 1. Der Knopf daneben tat es, und er stand an dieser
     Fensterhöhe unter dem Rand.
+
+    Seit FD-34 (``6238bf7fd``) ist nach der Auswahl *Bohrung ändern* scharf;
+    *Merkmal verschieben* öffnet der Kunde mit einem Klick auf ihren Kopf.
     """
     from PySide6.QtTest import QTest
 
@@ -5754,6 +5776,10 @@ def test_the_return_key_in_a_feature_field_writes_exactly_one_step(window: MainW
     object_id, hole = _a_chosen_hole(window)
     panel = window.feature_panel
     before = len(window.session.project.document.ops)
+    mover = next(row for row in panel._shown_rows.values() if row.op == "move_feature")
+    assert mover.toggle is not None and not mover.toggle.isChecked(), "zugeklappt bis zum Klick"
+    mover.toggle.click()
+    QApplication.processEvents()
     feld = next(
         widget
         for widget in panel.findChildren(LengthSpin)
