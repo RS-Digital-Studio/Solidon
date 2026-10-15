@@ -49,7 +49,7 @@ def test_the_forms_cut_writes_the_hand_written_tree(tmp_path: Path) -> None:
     assert result.status == "written", (result.problems, result.proof and result.proof.text())
     assert fx.tree_bytes(root) == _bytes(fx.FORMS_NEW)
     assert result.proof is not None
-    assert result.proof.counts["definitions"] == 9  # sechs, dazu pick dreifach
+    assert result.proof.counts["definitions"] == 10  # sechs, pick dreifach, bounded
 
 
 def test_the_proof_names_each_form(tmp_path: Path) -> None:

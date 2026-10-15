@@ -569,6 +569,10 @@ OVERLOADS = '''
     def pick(value: int | str) -> int | str:
         """Gibt den Wert zurück — überladen."""
         return value
+
+
+    def bounded(*, low: int, high: int = 9) -> dict[str, int]:
+        return {**{"low": low}, "high": high}
 '''
 
 
@@ -592,7 +596,9 @@ def _forms() -> tuple[dict[str, str], str, dict[str, str]]:
         "def read_count() -> int:\n    return COUNT\n",
         "def read_count() -> int:\n    return COUNT\n" + textwrap.dedent(OVERLOADS),
     )
-    cut = MODULE_CUT.replace('"bump", "read_count"]', '"bump", "read_count", "pick"]') + (
+    cut = MODULE_CUT.replace(
+        '"bump", "read_count"]', '"bump", "read_count", "pick", "bounded"]'
+    ) + (
         '\n[[name_lists]]\npath = "tests/test_forms.py"\nvalue = "app.core.legacy"\n'
         'to = ["app.core.legacy"]\n'
     )
@@ -737,6 +743,10 @@ COPIES_OLD: dict[str, str] = BASE | {
             return value.factor
 
 
+        def merged(*, value: int, extra: int = 1) -> dict[str, object]:
+            return {**TABLE, "value": scale(value) + extra}
+
+
         def limit() -> int:
             return LIMIT
     ''',
@@ -847,6 +857,10 @@ COPIES_NEW: dict[str, str | None] = {
 
         def typed(value: "engine.Settings") -> int:
             return value.factor
+
+
+        def merged(*, value: int, extra: int = 1) -> dict[str, object]:
+            return {**TABLE, "value": engine.scale(value) + extra}
 
 
         def limit() -> int:

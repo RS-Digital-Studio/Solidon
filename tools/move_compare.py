@@ -425,6 +425,21 @@ class Comparison:
 
     # ---- Vergleich
 
+    def _gapped(
+        self, old: ast.AST, new: ast.AST, name: str, before: list[object], after: list[object]
+    ) -> None:
+        if len(before) != len(after):
+            self.fail(old, new, f"{name}: {len(after)} statt {len(before)} Einträge")
+            return
+        for first, second in zip(before, after, strict=True):
+            if first is None and second is None:
+                continue
+            if isinstance(first, ast.AST) and isinstance(second, ast.AST):
+                self.compare(first, second)
+            else:
+                self.fail(old, new, f"{name}: eine Lücke weniger oder mehr")
+                return
+
     def compare(self, old: ast.AST, new: ast.AST) -> None:
         self.compared += 1
         if self.special(old, new):
@@ -437,9 +452,14 @@ class Comparison:
                 continue
             after = getattr(new, name, None)
             if isinstance(before, list):
+                items = [*before, *after] if isinstance(after, list) else []
                 if not isinstance(after, list):
                     self.fail(old, new, f"Feld {name}")
-                elif not all(isinstance(item, ast.AST) for item in [*before, *after]):
+                elif any(isinstance(i, ast.AST) for i in items) and None in items:
+                    # Eine Liste mit Lücken: ``kw_defaults`` (kein Vorgabewert) und die
+                    # Schlüssel eines ``dict`` mit ``**`` — je Stelle verglichen.
+                    self._gapped(old, new, name, before, after)
+                elif not all(isinstance(item, ast.AST) for item in items):
                     if before != after and not self.scalar(old, new, name, before, after):
                         self.fail(old, new, f"{name} {before!r} → {after!r}")
                 elif (before and isinstance(before[0], ast.stmt)) or (

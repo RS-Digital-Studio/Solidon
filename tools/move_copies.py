@@ -223,6 +223,15 @@ class CopiesPlanner:
             for node in scopes.global_names(bound):
                 if isinstance(node.ctx, ast.Load):
                     loads.append(node)
+                    alias = _module_alias(source, node)
+                    if alias is not None:
+                        self.ctx.problem(
+                            f"{path}:{node.lineno}: {alias} = {bound} bindet die Kopie beim "
+                            f"Import unter neuem Namen — danach wäre {alias} eine Kopfkopie des "
+                            f"Originals {copy.origin[0]}.{copy.origin[1]}; vor dem Schnitt "
+                            f"entscheiden: {alias} liest das Original zur Aufrufzeit oder ist "
+                            "eine eigene Zahl"
+                        )
                 elif not _inside(stmt, node):
                     self.ctx.problem(
                         f"{path}:{node.lineno}: {bound} wird geschrieben (Zuweisung, global, del) "
@@ -545,6 +554,25 @@ class CopiesPlanner:
 
 def _inside(stmt: ast.stmt, node: ast.AST) -> bool:
     return any(child is node for child in ast.walk(stmt))
+
+
+def _module_alias(source: Source, node: ast.Name) -> str | None:
+    """``X = b`` oder ``X: T = b`` außerhalb jeder Funktion: der neue Name ``X``."""
+    parent = source.parent(node)
+    if isinstance(parent, ast.Assign) and parent.value is node and len(parent.targets) == 1:
+        target: ast.expr | None = parent.targets[0]
+    elif isinstance(parent, ast.AnnAssign) and parent.value is node:
+        target = parent.target
+    else:
+        return None
+    if not isinstance(target, ast.Name):
+        return None
+    if any(
+        isinstance(outer, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef))
+        for outer in source.ancestors(parent)
+    ):
+        return None
+    return target.id
 
 
 def _is_annotation(source: Source, node: ast.AST) -> bool:

@@ -280,6 +280,7 @@ def _mutants() -> list[tuple[str, dict[str, str], str]]:
                 CONSUMER,
                 "engine.scale(value)",
                 "scale(value)",
+                count=2,
             ),
             "Kopfkopie scale",
         ),
@@ -470,6 +471,16 @@ def _with_test(text: str) -> dict[str, str]:
                 'TABLE = {"op": operation}\n__all__ = ["scale"]\n',
             ),
             "steht in __all__",
+        ),
+        (
+            "kopie-unter-neuem-namen",
+            fx.edit(
+                fx.COPIES_OLD,
+                CONSUMER,
+                'TABLE = {"op": operation}\n',
+                'TABLE = {"op": operation}\nLIMIT_ALIAS: int = LIMIT\nSTEP = scale\n',
+            ),
+            "STEP = scale bindet die Kopie beim Import unter neuem Namen",
         ),
         (
             "zeichenkette-nennt-kopie",
