@@ -45,6 +45,7 @@ from tools.move_compare import (
     _difference,
     _text,
     comments,
+    loaded_names,
     qualname_of,
     string_constants,
 )
@@ -695,11 +696,24 @@ class _FileRules(_Rules, ReaderComparison):
         )
 
     def allowed_removal(self, binding: ImportBinding) -> bool:
-        return binding.bound not in _loaded_names(self.new.tree)
+        return binding.bound not in loaded_names(self.new.tree)
 
 
 class ComponentReaderComparison(_FileRules):
-    """Ein Leser außerhalb von Wirt und Komponente."""
+    """Ein Leser außerhalb von Wirt und Komponente: Es entfällt nur ein Import von Wirt oder
+    Komponente (Modul oder Klasse), den danach niemand mehr liest."""
+
+    def allowed_removal(self, binding: ImportBinding) -> bool:
+        shape = self.shape
+        modules = (shape.module, shape.component_module)
+        own = (
+            binding.module in modules
+            if binding.form == "import"
+            else f"{binding.module}.{binding.name}" in modules
+            or (binding.module, binding.name) == (shape.module, shape.cut.host)
+            or (binding.module, binding.name) == (shape.component_module, shape.cut.component_class)
+        )
+        return own and super().allowed_removal(binding)
 
 
 class HostComparison(_FileRules):
@@ -786,17 +800,3 @@ def _class(source: Source, name: str) -> ast.ClassDef | None:
     return next(
         (s for s in source.tree.body if isinstance(s, ast.ClassDef) and s.name == name), None
     )
-
-
-def _loaded_names(tree: ast.AST) -> set[str]:
-    found = {
-        n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
-    }
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            try:
-                inner = ast.parse(node.value, mode="eval")
-            except SyntaxError:
-                continue
-            found |= {n.id for n in ast.walk(inner) if isinstance(n, ast.Name)}
-    return found

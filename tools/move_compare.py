@@ -647,6 +647,7 @@ class ReaderComparison(Comparison):
             (s.line, s.col): s for (p, _l, _c), s in trees.sites("new").items() if p == path
         }
         self.old_identifiers = identifiers(self.old.tree)
+        self.read_before = loaded_names(self.old.tree)
 
     # ---- Ablauf
 
@@ -777,6 +778,13 @@ class ReaderComparison(Comparison):
         added_names = {b.bound for b in added}
         for binding in removed:
             if binding.bound in added_names:
+                continue
+            if binding.bound not in self.read_before:
+                self.errors.append(
+                    f"{self.path}:{old[0].lineno}: Import {binding.text()} entfernt, den vorher "
+                    "niemand las (ein Seiteneffekt?) — der Schnitt entfernt nur Importe, deren "
+                    "Leser er umschreibt; den Import stehen lassen"
+                )
                 continue
             if not self.allowed_removal(binding):
                 self.errors.append(
@@ -926,6 +934,21 @@ class ReaderComparison(Comparison):
         if ast.dump(old) != ast.dump(new):
             self.accept(f"Patch {site_old.text} → {site_new.text}")
         return True
+
+
+def loaded_names(tree: ast.AST) -> set[str]:
+    """Jeder Name, den eine Datei liest — auch in einer Annotation als Zeichenkette."""
+    found = {
+        n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                inner = ast.parse(node.value, mode="eval")
+            except SyntaxError:
+                continue
+            found |= {n.id for n in ast.walk(inner) if isinstance(n, ast.Name)}
+    return found
 
 
 def _file_comments(source: Source) -> Counter[str]:

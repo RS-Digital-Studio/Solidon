@@ -88,6 +88,7 @@ class ModuleProof:
         units = self._source_units(old)
         for target in self.cut.targets:
             self._target(old, units, target)
+        self._source_head(old, units)
         if self.cut.package:
             self._package_init()
         for path in self.trees.changed:
@@ -184,6 +185,32 @@ class ModuleProof:
                     )
         return units
 
+    def _source_head(self, old: Source, units: list[tuple[list[str], ast.stmt, Span]]) -> None:
+        """Was im Kopf der Quelle steht, hat ein Ziel: Kein Kommentar steht dort (die Köpfe der
+        Ziele entstehen neu), und jeder Import der Quelle steht in mindestens einem Ziel — einer,
+        den keine Definition liest, fiele sonst still weg (ein Seiteneffekt)."""
+        end = units[0][2].first - 1 if units else len(old.lines)
+        for comment in old.comments_between(1, end):
+            self.proof.error(
+                f"{self.src_path}:{comment.line}: Kommentar im Kopf der Quelle "
+                f"({comment.text.strip()!r}) steht in keinem Ziel — vor dem Schnitt an eine "
+                "Definition stellen oder entfernen"
+            )
+        landed: set[Identity] = set()
+        for target in self.targets:
+            path = path_of(target)
+            if path in self.trees.new_files:
+                top = TopLevel(self.trees.new(path))
+                landed |= {b.identity for found in top.imports.values() for b in found}
+        for stmt, checking in TopLevel(old).import_statements:
+            for binding in import_bindings(self.src_path, stmt, checking):
+                if binding.module != "__future__" and binding.identity not in landed:
+                    self.proof.error(
+                        f"{self.src_path}:{stmt.lineno}: Import {binding.text()} der Quelle steht "
+                        "in keinem Ziel — liest ihn keine Definition (ein Seiteneffekt?), vor dem "
+                        "Schnitt in die Definition ziehen, die ihn braucht, oder entfernen"
+                    )
+
     # ---- Ziele
 
     def _target(
@@ -226,6 +253,12 @@ class ModuleProof:
                 continue
             seen_unit = True
             new_units.append((stmt, span))
+        head_end = new_units[0][1].first - 1 if new_units else len(new.lines)
+        for comment in new.comments_between(1, head_end):
+            self.proof.error(
+                f"{path}:{comment.line}: Kommentar im Kopf des Ziels ({comment.text.strip()!r}) — "
+                "die Quelle hatte dort keinen"
+            )
         duplicates = [
             (stmt, span)
             for stmt, span in new_units
@@ -328,8 +361,10 @@ class ModuleProof:
         comparison.compare(old_stmt, new_stmt)
         for error in comparison.errors:
             self.proof.error(error)
-        before = comments(old, old_span.head, old_stmt.end_lineno or old_span.last)
-        after = comments(new, new_span.head, new_stmt.end_lineno or new_span.last)
+        # Die ganze Spanne: Kopfkommentar, freie Kommentare davor (durch Leerzeilen getrennt) und
+        # bei der letzten Anweisung, was hinter ihr steht — der Planer nimmt genau das mit.
+        before = comments(old, old_span.first, old_span.last)
+        after = comments(new, new_span.first, new_span.last)
         if before != after:
             self.proof.error(
                 f"{new.path}:{new_stmt.lineno} ({label}): Kommentar verloren oder neu — vorher "

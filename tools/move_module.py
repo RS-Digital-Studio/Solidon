@@ -127,6 +127,7 @@ class ModulePlanner:
         self.source = self.ctx.source(self.path)
         self._classify()
         self.ctx.raise_problems()
+        self._head()
         self._check_globals()
         self._check_identity()
         self._dependencies()
@@ -278,6 +279,44 @@ class ModulePlanner:
                 f"{self.path}: {name!r} wird importiert und neu gebunden — vor dem Schnitt einen "
                 "der beiden umbenennen"
             )
+
+    def _head(self) -> None:
+        """Der Kopf der Quelle (Docstring, Importe) entsteht in jedem Ziel neu: Ein Kommentar
+        dort hätte kein Ziel, und ein Import, den keine Definition liest (ein Seiteneffekt),
+        fiele still weg — beides hält den Schnitt an."""
+        end = self.units[0].span.first - 1 if self.units else len(self.source.lines)
+        for comment in self.source.comments_between(1, end):
+            self.ctx.problem(
+                f"{self.path}:{comment.line}: Kommentar im Kopf der Quelle "
+                f"({comment.text.strip()!r}) — die Köpfe der Ziele entstehen neu; vor dem Schnitt "
+                "an eine Definition stellen oder entfernen"
+            )
+        needed: set[str] = set()
+        for unit in self.units:
+            needed |= unit.facts.all_reads
+        checking_read = any(
+            bound_name(alias) in needed
+            for stmt, checking in self.imports
+            if checking
+            for alias in stmt.names
+        )
+        tests = {
+            node.id
+            for stmt in self.source.tree.body
+            if isinstance(stmt, ast.If) and is_type_checking(stmt.test)
+            for node in ast.walk(stmt.test)
+            if isinstance(node, ast.Name)
+        }
+        for stmt, _checking in self.imports:
+            for alias in stmt.names:
+                name = bound_name(alias)
+                if name in needed or (name in tests and checking_read):
+                    continue
+                self.ctx.problem(
+                    f"{self.path}:{stmt.lineno}: Import {_import_text(self.path, stmt, [alias])} "
+                    "liest keine Definition der Quelle (ein Seiteneffekt?) — er fiele beim Schnitt "
+                    "weg; vorher in die Definition ziehen, die ihn braucht, oder entfernen"
+                )
 
     def _check_globals(self) -> None:
         """Ein ``global``-Schreiber bleibt mit seiner Variable und deren Lesern in einem Modul
@@ -847,7 +886,9 @@ class ModulePlanner:
         for path in self._files((last,)):
             source = self.ctx.source(path)
             sites = {(site.line, site.col) for site in self.ctx.sites(path)}
-            for node in self._source_expressions(path, source):
+            found = self._source_expressions(path, source)
+            self._effect_imports(path, source, found)
+            for node in found:
                 why = self._value_use(path, source, node, sites)
                 if why is None:
                     continue
@@ -861,6 +902,34 @@ class ModulePlanner:
                     )
                     + "; vorher auf das Modul umschreiben, dessen Definitionen die Stelle meint, "
                     "oder je Zielmodul nach dem Schnitt"
+                )
+
+    def _effect_imports(self, path: str, source: Source, found: list[ast.expr]) -> None:
+        """Ein Import der Quelle, über den nichts gelesen wird, steht um ihrer Wirkung willen da
+        (``import app.x  # noqa: F401`` registriert Operationen): Nach dem Schnitt lüde er nur
+        das Paket, die Wirkung der Definitionen fiele still weg."""
+        roots: set[str] = set()
+        for node in found:
+            current: ast.expr = node
+            while isinstance(current, ast.Attribute):
+                current = current.value
+            if isinstance(current, ast.Name):
+                roots.add(current.id)
+        for stmt in ast.walk(source.tree):
+            if isinstance(stmt, ast.Import):
+                hits = [a for a in stmt.names if a.name == self.src]
+            elif isinstance(stmt, ast.ImportFrom):
+                module = absolute_module(path, stmt)
+                hits = [a for a in stmt.names if f"{module}.{a.name}" == self.src]
+            else:
+                continue
+            for alias in hits:
+                if bound_name(alias) in roots:
+                    continue
+                self.ctx.problem(
+                    f"{path}:{stmt.lineno}: importiert {self.src} nur um der Wirkung willen "
+                    "(niemand liest den Namen) — nach dem Schnitt lüde das nur das Paket; vorher "
+                    "die Ziele importieren, deren Wirkung gebraucht wird, oder den Import entfernen"
                 )
 
     def _source_expressions(self, path: str, source: Source) -> list[ast.expr]:
