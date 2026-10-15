@@ -114,6 +114,44 @@ def _first_free(size: QSize, bounds: QRect, taken: Sequence[QRect]) -> QRect | N
     return None
 
 
+def _least_covering(
+    size: QSize, bounds: QRect, fixed: Sequence[QRect], placed: Sequence[QRect]
+) -> QRect | None:
+    """Der Platz im Bild neben der Karte, der die gelegten Felder am wenigsten deckt.
+
+    Gefragt wird an den Stellen von :func:`_first_free`, dazu am rechten und
+    unteren Bildrand und an Anfang und Mitte jedes gelegten Feldes — so kann ein
+    Feld seitlich versetzt über einem anderen stehen. Ein Platz, der ein Feld
+    ganz deckt oder ganz in einem liegt, kommt nicht in Frage: Dann wäre eines
+    der beiden nicht mehr zu sehen. Unter den übrigen gewinnt die kleinste
+    Überdeckung eines einzelnen Feldes, dann die kleinste Summe, dann die
+    Lesereihenfolge.
+    """
+    width, height = size.width(), size.height()
+    xs = {bounds.left(), bounds.right() - width + 1}
+    ys = {bounds.top(), bounds.bottom() - height + 1}
+    for rect in (*fixed, *placed):
+        xs.add(rect.right() + SPACE + 1)
+        ys.add(rect.bottom() + SPACE + 1)
+    for rect in placed:
+        xs.update({rect.left(), rect.left() + rect.width() // 2})
+        ys.update({rect.top(), rect.top() + rect.height() // 2})
+    best: tuple[tuple[int, int, int, int], QRect] | None = None
+    for y in ys:
+        for x in xs:
+            rect = QRect(x, y, width, height)
+            if not bounds.contains(rect) or any(rect.intersects(card) for card in fixed):
+                continue
+            covers = [rect.intersected(field) for field in placed]
+            if any(part in (field, rect) for part, field in zip(covers, placed, strict=True)):
+                continue
+            areas = [part.width() * part.height() for part in covers if not part.isEmpty()]
+            key = (max(areas, default=0), sum(areas), y, x)
+            if best is None or key < best[0]:
+                best = (key, rect)
+    return best[1] if best is not None else None
+
+
 def emergency_places(
     sizes: Sequence[QSize],
     bounds: QRect,
@@ -123,15 +161,15 @@ def emergency_places(
     """Die Notanordnung: jedes Feld der Reihe nach an den ersten freien Platz im Bild.
 
     ``fixed`` bleibt frei, solange im Bild neben ihr Platz für das Feld ist —
-    die vom Kunden gelegte Karte, unter der ein Maß ganz verschwände.
+    die vom Kunden gelegte Karte; die Halter der Kantenmaße liegen unter ihr.
     ``tiers`` sind die übrigen Hindernisse von streng nach nachgiebig: erst mit
     Abstand, dann ohne, zuletzt keine. Ein Feld nimmt den ersten Platz der
     strengsten Stufe, in der es einen gibt; Überdecken ist das kleinere Übel,
     ein Feld außerhalb des Bildes ist keines. Ist neben Karte und gelegten
-    Feldern nichts mehr frei, überdeckt es eher ein Feld als die Karte — beide
-    Felder bleiben zu sehen —, und füllt die Karte das Bild, rückt es an den
-    ersten Platz neben den Feldern oder an die linke obere Ecke: im Bild, nie
-    darunter.
+    Feldern nichts mehr frei, steht es neben der Karte seitlich versetzt über
+    den Feldern, ohne eines ganz zu decken (:func:`_least_covering`). Geht auch
+    das nicht, rückt es an den ersten Platz neben den Feldern, auch über die
+    Karte, zuletzt an die linke obere Ecke: im Bild, nie darunter.
     """
     placed: list[QRect] = []
     for size in sizes:
@@ -145,7 +183,7 @@ def emergency_places(
         )
         if rect is None:
             rect = (
-                _first_free(size, bounds, fixed)
+                _least_covering(size, bounds, fixed, placed)
                 or _first_free(size, bounds, placed)
                 or QRect(bounds.topLeft(), size)
             )

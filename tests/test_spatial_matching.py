@@ -125,6 +125,36 @@ def test_separated_features_do_not_allocate_or_solve_the_full_assignment(monkeyp
     assert result.settled and not result.fresh
 
 
+def test_the_forbidden_quadratic_stages_are_reached_where_the_solver_is_needed(monkeypatch):
+    """Gegenprobe zum Verbot oben (CS-9b, Entscheidung E8).
+
+    Wo Gleichstände den globalen Solver brauchen, erreicht die Zuordnung ohne
+    Patch beide verbotenen Stufen: die volle Matrix über ``_cost_matrix``,
+    dann ``linear_sum_assignment``. Bis Schritt 0 rief niemand
+    ``_cost_matrix`` — das Verbot war grün, ohne etwas zu verbieten.
+    """
+    old = {f"old_{index}": hole(f"old_{index}", x) for index, x in enumerate([0, 1, 1, 1])}
+    new = {f"new_{index}": hole(f"new_{index}", x) for index, x in enumerate([0, 0, 1])}
+    reached = []
+    real_matrix, real_solver = matching._cost_matrix, matching.linear_sum_assignment
+
+    def matrix_spy(*args, **kwargs):
+        reached.append("_cost_matrix")
+        return real_matrix(*args, **kwargs)
+
+    def solver_spy(*args, **kwargs):
+        reached.append("linear_sum_assignment")
+        return real_solver(*args, **kwargs)
+
+    monkeypatch.setattr(matching, "_cost_matrix", matrix_spy)
+    monkeypatch.setattr(matching, "linear_sum_assignment", solver_spy)
+    matching.forget_matches()
+    match(old, new, (0.0, 0.0, 0.0), 1.0)
+    assert reached == ["_cost_matrix", "linear_sum_assignment"]
+    # Und die Antwort über den gesehenen Weg ist die der unabhängigen Referenz.
+    assert_original_assignment(old, new)
+
+
 def test_matching_can_cancel_during_actual_preparation():
     checks = []
     signal = CancelSignal()

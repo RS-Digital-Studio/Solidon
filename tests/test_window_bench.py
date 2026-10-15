@@ -370,3 +370,70 @@ def test_staying_with_a_generation_asks_nothing_else() -> None:
     MainWindow.closeEvent(_StayingWindow(), event)
 
     assert not event.isAccepted()
+
+
+def test_every_process_end_names_its_stragglers_once() -> None:
+    """Jedes Prozessende eines Werkzeugs geht über ``record_shutdown`` (Review 2, RF-18).
+
+    Wer die Rückgabe von ``shutdown_window`` verwirft, lässt den Haken am
+    Prozessende ein zweites Mal bis ``EXIT_WAIT_MS`` warten, und ein Nachzügler
+    endet mit Exit 3 ohne Namen im Fall; wer ``shutdown_complete`` selbst setzt,
+    meldet einen Abbau als fertig, den niemand geprüft hat. Gelesen wird der
+    Quelltext unter ``tools/``: Jeder Aufruf von ``shutdown_window`` und
+    ``wait_for_workers`` ist Argument von ``record_shutdown`` oder wird in eine
+    Variable gebunden, die ``record_shutdown`` in derselben Funktion bekommt.
+    """
+    import ast
+    from pathlib import Path
+
+    import tools
+
+    folder = Path(next(iter(tools.__path__)))
+    waits = {"shutdown_window", "wait_for_workers"}
+    seen: list[str] = []
+    loose: list[str] = []
+    for path in sorted(folder.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Subscript) and isinstance(node.ctx, ast.Store):
+                key = node.slice
+                owner = parents[node]
+                while not isinstance(owner, ast.FunctionDef | ast.Module):
+                    owner = parents[owner]
+                setter = getattr(owner, "name", "") == "record_shutdown"
+                named = isinstance(key, ast.Constant) and key.value == "shutdown_complete"
+                if named and not setter:
+                    loose.append(f"{path.name}:{node.lineno} setzt shutdown_complete selbst")
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in waits
+            ):
+                continue
+            where = f"{path.name}:{node.lineno} {node.func.id}"
+            seen.append(where)
+            parent = parents[node]
+            if isinstance(parent, ast.Call) and getattr(parent.func, "id", "") == "record_shutdown":
+                continue
+            function = parent
+            while not isinstance(function, ast.FunctionDef):
+                function = parents[function]
+            if function.name == "shutdown_window":
+                continue
+            names = (
+                {target.id for target in parent.targets if isinstance(target, ast.Name)}
+                if isinstance(parent, ast.Assign)
+                else set()
+            )
+            handed = {
+                argument.id
+                for call in ast.walk(function)
+                if isinstance(call, ast.Call) and getattr(call.func, "id", "") == "record_shutdown"
+                for argument in call.args
+                if isinstance(argument, ast.Name)
+            }
+            if not names & handed:
+                loose.append(f"{where}: Rückgabe geht nicht an record_shutdown")
+    assert len(seen) >= 7, seen
+    assert loose == [], loose

@@ -302,8 +302,8 @@ wieder her (`_drag_kind` bleibt `"slot"`).
   schiebt nicht alle Maße in eine Notreihe. Die Karte hält so viele
   Feldzeilen frei, wie die Maße nebeneinander brauchen (`rows_height`), nicht
   fest eine. Die Notanordnung (`emergency_places`) lässt die Nutzerkarte frei,
-  solange neben ihr Platz ist, und überdeckt sonst eher ein Feld als die Karte,
-  unter der es verschwände; Setzpunkt, Bewegungsgriff und Vorschauband erst mit,
+  solange neben ihr Platz ist, und stellt ein Feld sonst seitlich versetzt über
+  die anderen, ohne eines ganz zu decken; Setzpunkt, Bewegungsgriff und Vorschauband erst mit,
   dann ohne Abstand: Überdecken ist das kleinere Übel, ein Feld außerhalb des Bildes
   keines.
 

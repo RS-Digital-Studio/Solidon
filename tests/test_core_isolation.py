@@ -201,8 +201,9 @@ def test_two_threads_may_import_the_same_package() -> None:
     ist der Unterschied. Ein Test nur auf ``scene`` hätte genau den einen Fall
     festgehalten, den jemand schon behoben hat.
 
-    Sieben davon lösen ihre Namen jetzt erst beim Zugriff auf
-    (:mod:`app.core.lazy`). Im Subprozess, weil die Module beim Start des Tests
+    Sechs davon lösen ihre Namen jetzt erst beim Zugriff auf
+    (:mod:`app.core.lazy`); ``agent`` exportiert nichts mehr und lädt im
+    ``__init__`` nichts. Im Subprozess, weil die Module beim Start des Tests
     längst geladen wären und der Fall dann nicht mehr auftritt.
     """
     script = textwrap.dedent(

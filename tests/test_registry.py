@@ -462,6 +462,46 @@ def test_unknown_operation_is_an_internal_error(registry: Registry) -> None:
     assert not registry.has("nothing_like_this")
 
 
+# --- Die Reihenfolge der Registrierung ist Vertrag (Konzept Codestruktur 3.1, Regel 3) ---
+
+
+def test_the_registry_hands_out_its_registration_order(registry: Registry) -> None:
+    """``in_registration_order()`` folgt der Registrierung, ``all()`` dem Namen (CS-17).
+
+    Die Folge hält ``bootstrap._OPERATION_MODULES``; der Registerabzug (W3)
+    zeigt mit ihr, ob ein Schnitt die Importfolge verschoben hat. Gegenprobe:
+    Registriert wird gegen das Alphabet, also kann ``all()`` nicht antworten.
+    Ein Eintrag, der zurückgenommen und neu registriert wird (ein ersetztes
+    Rezept), steht danach hinten.
+    """
+    resize, scatter = registry.get("resize_hole"), registry.get("scatter_pins")
+    own = Registry()
+    own.register(scatter)
+    own.register(resize)
+
+    assert own.in_registration_order() == (scatter, resize)
+    assert own.all() == (resize, scatter)
+
+    own.remove("scatter_pins")
+    own.register(scatter)
+    assert own.in_registration_order() == (resize, scatter)
+
+
+def test_the_part_registry_hands_out_its_registration_order() -> None:
+    """Dasselbe für die Bausteine: Registrierung, nicht Name (CS-17)."""
+    from app.core.knowledge.parts import builtin
+    from app.core.knowledge.parts.registry import PartRegistry
+
+    shipped = builtin.load()
+    screw, heatset = shipped.get("screw_hole"), shipped.get("heatset_m4")
+    own = PartRegistry()
+    own.register(screw)
+    own.register(heatset)
+
+    assert own.in_registration_order() == (screw, heatset)
+    assert own.all() == (heatset, screw)
+
+
 # --- Die Deklarationen des echten Registers müssen zueinander passen -------------
 
 

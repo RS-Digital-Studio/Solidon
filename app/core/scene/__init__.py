@@ -12,9 +12,6 @@ from app.core.lazy import install
 
 if TYPE_CHECKING:
     from app.core.scene.cache import (
-        CachedResult,
-        DiskCache,
-        MeshCodec,
         ResultCache,
         disk_backed_cache,
         drop_other_versions,
@@ -30,17 +27,12 @@ if TYPE_CHECKING:
         values_for,
         values_for_object,
     )
-    from app.core.scene.project import Project, new_project
-    from app.core.scene.variants import VariantSet
     from app.core.scene.variants import build as build_variants
 
 #: Welcher Name in welchem Untermodul steht, und wie er dort heißt. Der zweite
 #: Eintrag ist der Name **im Untermodul** — er weicht nur bei ``build_variants``
 #: ab, das dort schlicht ``build`` heißt.
 _EXPORTS: Final[dict[str, tuple[str, str]]] = {
-    "CachedResult": ("cache", "CachedResult"),
-    "DiskCache": ("cache", "DiskCache"),
-    "MeshCodec": ("cache", "MeshCodec"),
     "ResultCache": ("cache", "ResultCache"),
     "disk_backed_cache": ("cache", "disk_backed_cache"),
     "drop_other_versions": ("cache", "drop_other_versions"),
@@ -56,9 +48,6 @@ _EXPORTS: Final[dict[str, tuple[str, str]]] = {
     "bore_advice": ("placement", "bore_advice"),
     "values_for": ("placement", "values_for"),
     "values_for_object": ("placement", "values_for_object"),
-    "Project": ("project", "Project"),
-    "new_project": ("project", "new_project"),
-    "VariantSet": ("variants", "VariantSet"),
     "build_variants": ("variants", "build"),
 }
 
@@ -68,25 +57,19 @@ install(__name__, _EXPORTS)
 
 __all__ = [
     "FORMAT_VERSION",
-    "CachedResult",
     "CancelSignal",
-    "DiskCache",
     "EdgeTarget",
     "EvaluationResult",
     "History",
-    "MeshCodec",
     "NeverCancelled",
     "OperationDraft",
-    "Project",
     "ResultCache",
-    "VariantSet",
     "advises_on_bores",
     "bore_advice",
     "build_variants",
     "disk_backed_cache",
     "drop_other_versions",
     "evaluate",
-    "new_project",
     "values_for",
     "values_for_object",
 ]

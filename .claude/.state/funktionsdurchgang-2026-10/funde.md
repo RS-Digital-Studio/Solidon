@@ -1041,7 +1041,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Die Maßkarte hielt fest eine Feldzeile frei, gleich wie viele Felder hineinmussten; die Notreihen brachen ohne Prüfung der Unterkante um und wichen nur dem Setzpunkt aus, nicht dem Bewegungsgriff. Offscreen ausgelöst durch breitere Schrift mit Stylesheet, dazu zwei Testbauannahmen über Schriftbreiten und ein stehen gebliebenes dunkles Thema aus `customer_theme`.
 - Vorschlag: Freihaltung nach den Zeilen, die die Felder brauchen (`measure_field_places.rows_height`), Notanordnung je Feld am ersten freien Platz im Bild mit Stufen vom Abstand bis zum Überdecken (`emergency_places`); Testziele aus dem freien Raum statt fester Punkte; Aussehen nach jedem Fall zurückgeben.
 - Wirkung beim Kunden: Bei schmalem Bildraum, kleinem Bildschirm oder langer Sprache stand ein Maßfeld außerhalb der Ansicht oder über dem Bewegungsgriff, dessen Pfeile und Ringe dann nicht mehr auf den Zeiger reagierten.
-- Stand: behoben `377f1b552`, Testbau `cbc883304`, Nachzug `c5b25728f`, Themenleck zentral über `bf3c6d5e8`; in welle4 `b4e515c7b`, gezielt 580 grün am gemergten Stand. Schlussreview D0: Grifffall im Kundenthema `dabd95e26` (ohne `marked.append(grip)` rot), Changelog 0.6.1 `37801525b`, der letzte Rückfall der Notanordnung legt ein Feld eher über ein anderes als auf die Karte `ccb9bd87f`.
+- Stand: behoben `377f1b552`, Testbau `cbc883304`, Nachzug `c5b25728f`, Themenleck zentral über `bf3c6d5e8`; in welle4 `b4e515c7b`, gezielt 580 grün am gemergten Stand. Schlussreview D0: Grifffall mit echter Schrift `c87e0b166` — ohne `marked.append(grip)` rot unter Windows offscreen und mit DejaVu Sans wie in der Linux-CI; der Fall aus `dabd95e26` war das nur in Windows' schriftloser Offscreen-Lage (Review 2, RF-15). Changelog 0.6.1 `37801525b`; der letzte Rückfall der Notanordnung legt ein Feld neben der Karte versetzt über die anderen und deckt keines ganz (`ccb9bd87f`, `ed2ba4504`).
 
 ### FD-85 Abhakliste lässt einen offenen Fund hinter einem älteren behobenen verschwinden
 
@@ -1959,7 +1959,7 @@ Auskunft.
 - Beleg: Nativer Lauf am echten Fenster auf welle4 `7d978c4ee`, Fall 032 EN: `filament.picker` und `filament.section` enden „nicht auffindbar: Rollanschlag oder kein geeigneter Radschritt“, obwohl der Rollbalken 170 px Restweg hat und 132 px fehlen; zwei lesende Diagnoseläufe (`output/konsolidierung-2026-10-12/native-d0-claude.md`, Nachweis 1).
 - Ursache: Die Trefferprobe in `guide_targets._scroll_needed` trifft in der Mitte der Sichtfläche eine verschachtelte Liste (`_ListScroller`) statt des äußeren Rollbereichs und verwirft jeden Rollschritt; Regression aus FD-77.
 - Vorschlag: Den Rollschritt an den Rollbereich geben, der das Ziel enthält und weiter rollen kann, nicht an das Widget unter der Mitte; Gegenprobe mit verschachtelter Liste.
-- Wirkung beim Kunden: Die Anleitung kommt am Filamentwähler nicht ans Ziel, obwohl der Kunde ihn selbst ins Bild rollen kann.
+- Wirkung beim Kunden: Kein Produktfehler; `next_click` rufen nur die Prüfstandsmodule, Tour und Bildanleitungen gehen über `area_for`. Der Prüfstand erreicht den Filamentwähler nicht (032 EN), seine Zeilen bleiben dort ungemessen.
 - Stand: offen RM-737
 
 ### FD-160 Nach „Abbrechen“ der Maßgruppe steht der Fokus auf dem Kartengriff „Objekte“
