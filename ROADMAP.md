@@ -1045,7 +1045,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Paket, Regel in `auslieferung.md`); nach dem Bau prüft `--check` das Bündel. Offengelegt in
   `THIRD-PARTY-NOTICES.md` und in der Stückliste (`pedigree`). Belegt auf dem Intel-Runner: ohne
   Korrektur fünf Abstürze, mit ihr grün (Lauf 38083944884).
-  **Offen:** Antwort auf die Meldung [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67). Jeder Versionswechsel
+  **Stand der Meldung:** [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67)
+  ist angenommen; der Bau ändert sich im nächsten Build, voraussichtlich mit OCCT 8.1.0
+  (Antwort des Projekts am 15.10.2026). Bis dahin bleibt die Korrektur. Jeder Versionswechsel
   von OCP hält `test_the_pinned_wheel_is_the_checked_one` an; dann das neue Rad mit
   `python tools/fix_unwind_info.py --scan <Rad>` zählen.
   **Abnahme:** Ein OCP-Rad zeigt im Scan keinen falschen Eintrag mehr. Dann entfallen Werkzeug,
