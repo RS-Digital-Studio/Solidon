@@ -15,7 +15,9 @@ Drei Teile halten das:
   ``glob`` auf ``*.py``, dessen Ordner nicht statisch ``tests/`` oder
   ``tools/`` ist — beide bleiben nach Konzept 3.4 flach. Ein Ordner, der sich
   nicht auflösen lässt (Parameter, ``tmp_path``, Arbeitsordner), ist rot; der
-  Fix ist der Helfer oder ``rglob``, eine Ausnahmeliste gibt es nicht.
+  Fix ist der Helfer oder ``rglob``, eine Ausnahmeliste gibt es nicht. Den
+  Ordner löst ``tools/tree_reads.py`` auf, derselbe Auflöser, mit dem
+  ``tools/affected_tests.py`` die Leser eines Ordners findet.
 - **Die Gegenproben im Unterpaket:** Jede umgestellte Prüfung wird an einer
   Kopie des Baums gefahren, in deren Unterpaket ein Verstoß liegt, und muss
   ihn mit seinem Dateinamen melden.
@@ -23,19 +25,17 @@ Drei Teile halten das:
 
 from __future__ import annotations
 
-import ast
 import importlib
 import inspect
 import re
 import shutil
-from collections import defaultdict
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 import pytest
 
 from tests import source_tree
+from tools import tree_reads
 
 # --- Der Helfer -----------------------------------------------------------------
 
@@ -106,364 +106,11 @@ def test_a_definition_inside_a_string_or_a_class_does_not_count(
 
 # --- Der Wächter: kein flaches glob über ein Paket --------------------------------
 
-#: Konstruktoren, deren erstes Argument ein Pfad ist.
-_PATH_TYPES = frozenset(
-    {"Path", "PurePath", "PosixPath", "WindowsPath", "PurePosixPath", "PureWindowsPath"}
-)
-
 #: Die Ordner, die flach bleiben (Konzept 3.4) und deshalb flach gelesen werden dürfen.
 _FLAT_FOLDERS = frozenset({"tests", "tools"})
 
-_SCOPES = (
-    ast.FunctionDef,
-    ast.AsyncFunctionDef,
-    ast.Lambda,
-    ast.ListComp,
-    ast.SetComp,
-    ast.DictComp,
-    ast.GeneratorExp,
-)
-
-
-@dataclass(frozen=True)
-class _Module:
-    """Ein Modul oder Paket unter der Wurzel, als Punktname."""
-
-    name: str
-
-
-@dataclass(frozen=True)
-class _Place:
-    """Ein Ort relativ zur Wurzel."""
-
-    parts: tuple[str, ...]
-
-
-_Value = _Module | _Place | str | None
-
-
-@dataclass(frozen=True)
-class _Glob:
-    """Ein flaches ``glob`` auf ``*.py``: wo es steht und welchen Ordner es liest."""
-
-    where: str
-    line: int
-    folder: str | None
-    pattern: str
-
-
-class _Resolver:
-    """Löst Ordnerausdrücke statisch auf: ``Path(__file__)``-Ketten, ``ROOT / "…"``,
-    ``Path(M.__file__)``, Konstanten der Modul- und Funktionsebene, Importe aus
-    eigenen Modulen. Was sich nicht eindeutig auflösen lässt, ist ``None``.
-
-    Ein Name gilt in dem Bereich, in dem er gebunden ist, so wie Python ihn
-    sucht: Funktion, umgebende Funktionen, Modul; ein Klassenrumpf nur für
-    Code direkt darin. Mehr als eine Bindung oder eine Bindung ohne Wert
-    (Parameter, Schleife, ``with``) heißt „nicht auflösbar“.
-    """
-
-    def __init__(self, root: Path) -> None:
-        self.root = root
-        self._trees: dict[str, tuple[ast.Module, dict[ast.AST, ast.AST]]] = {}
-        self._bindings: dict[ast.AST, dict[str, list[tuple[str, object]]]] = {}
-        self._busy: set[tuple[int, str]] = set()
-
-    # Module ---------------------------------------------------------------------
-
-    def module_path(self, name: str) -> Path | None:
-        base = self.root.joinpath(*name.split("."))
-        if (base / "__init__.py").is_file():
-            return base / "__init__.py"
-        if base.with_suffix(".py").is_file():
-            return base.with_suffix(".py")
-        return None
-
-    def module_exists(self, name: str) -> bool:
-        return self.module_path(name) is not None or self.root.joinpath(*name.split(".")).is_dir()
-
-    def parsed(self, relative: str) -> tuple[ast.Module, dict[ast.AST, ast.AST]]:
-        if relative not in self._trees:
-            tree = ast.parse((self.root / relative).read_text(encoding="utf-8"), filename=relative)
-            parents = {
-                child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)
-            }
-            self._trees[relative] = (tree, parents)
-        return self._trees[relative]
-
-    @staticmethod
-    def module_name(relative: str) -> str:
-        parts = list(PurePosixPath(relative).with_suffix("").parts)
-        if parts[-1] == "__init__":
-            parts.pop()
-        return ".".join(parts)
-
-    # Bereiche -------------------------------------------------------------------
-
-    def scopes(self, node: ast.AST, parents: dict[ast.AST, ast.AST]) -> list[ast.AST]:
-        """Die Bereiche, in denen ein Name an ``node`` gesucht wird, innen zuerst."""
-        found: list[ast.AST] = []
-        current = parents.get(node)
-        in_function = False
-        while current is not None:
-            if isinstance(current, _SCOPES):
-                found.append(current)
-                in_function = in_function or not isinstance(
-                    current, ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
-                )
-            elif isinstance(current, ast.Module) or (
-                isinstance(current, ast.ClassDef) and not in_function
-            ):
-                found.append(current)
-            current = parents.get(current)
-        return found
-
-    def bindings(self, scope: ast.AST) -> dict[str, list[tuple[str, object]]]:
-        if scope in self._bindings:
-            return self._bindings[scope]
-        found: dict[str, list[tuple[str, object]]] = defaultdict(list)
-        if isinstance(scope, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
-            arguments = scope.args
-            for argument in (
-                *arguments.posonlyargs,
-                *arguments.args,
-                *arguments.kwonlyargs,
-                *(one for one in (arguments.vararg, arguments.kwarg) if one is not None),
-            ):
-                found[argument.arg].append(("unknown", None))
-        if isinstance(scope, ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp):
-            for generator in scope.generators:
-                for name in _target_names(generator.target):
-                    found[name].append(("unknown", None))
-            self._bindings[scope] = found
-            return found
-        body = [scope.body] if isinstance(scope, ast.Lambda) else list(scope.body)  # type: ignore[attr-defined]
-        for statement in body:
-            self._bind(statement, found)
-        self._bindings[scope] = found
-        return found
-
-    def _bind(self, node: ast.AST, found: dict[str, list[tuple[str, object]]]) -> None:
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-            found[node.name].append(("unknown", None))
-            return
-        if isinstance(node, _SCOPES):
-            return
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    found[target.id].append(("value", node.value))
-                else:
-                    for name in _target_names(target):
-                        found[name].append(("unknown", None))
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            found[node.target.id].append(("value", node.value) if node.value else ("unknown", None))
-        elif isinstance(node, ast.AugAssign | ast.For | ast.AsyncFor):
-            for name in _target_names(node.target):
-                found[name].append(("unknown", None))
-        elif isinstance(node, ast.NamedExpr):
-            found[node.target.id].append(("unknown", None))
-        elif isinstance(node, ast.With | ast.AsyncWith):
-            for item in node.items:
-                if item.optional_vars is not None:
-                    for name in _target_names(item.optional_vars):
-                        found[name].append(("unknown", None))
-        elif isinstance(node, ast.ExceptHandler) and node.name:
-            found[node.name].append(("unknown", None))
-        elif isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.asname:
-                    found[alias.asname].append(("module", alias.name))
-                else:
-                    head = alias.name.split(".")[0]
-                    found[head].append(("module", head))
-        elif isinstance(node, ast.ImportFrom):
-            for alias in node.names:
-                found[alias.asname or alias.name].append(("from", (node, alias.name)))
-        for child in ast.iter_child_nodes(node):
-            self._bind(child, found)
-
-    # Werte ----------------------------------------------------------------------
-
-    def lookup(self, name: str, scopes: list[ast.AST], relative: str) -> _Value:
-        for index, scope in enumerate(scopes):
-            entries = self.bindings(scope).get(name)
-            if not entries:
-                continue
-            if len(entries) != 1:
-                return None
-            kind, data = entries[0]
-            if kind == "value":
-                key = (id(data), relative)
-                if key in self._busy:
-                    return None
-                self._busy.add(key)
-                try:
-                    return self.evaluate(data, scopes[index:], relative)  # type: ignore[arg-type]
-                finally:
-                    self._busy.discard(key)
-            if kind == "module":
-                return _Module(str(data)) if self.module_exists(str(data)) else None
-            if kind == "from":
-                statement, imported = data  # type: ignore[misc]
-                return self.imported(statement, imported, relative)
-            return None
-        if name == "__file__":
-            return _Place(PurePosixPath(relative).parts)
-        return None
-
-    def imported(self, statement: ast.ImportFrom, name: str, relative: str) -> _Value:
-        if statement.level:
-            package = self.module_name(relative).split(".")
-            if not relative.endswith("__init__.py"):
-                package = package[:-1]
-            package = package[: len(package) - (statement.level - 1)]
-            source = ".".join([*package, statement.module] if statement.module else package)
-        else:
-            source = statement.module or ""
-        return self.attribute(_Module(source), name) if self.module_exists(source) else None
-
-    def attribute(self, module: _Module, name: str) -> _Value:
-        path = self.module_path(module.name)
-        if path is not None:
-            relative = path.relative_to(self.root).as_posix()
-            tree, _parents = self.parsed(relative)
-            if name in self.bindings(tree):
-                return self.lookup(name, [tree], relative)
-        inner = f"{module.name}.{name}"
-        return _Module(inner) if self.module_exists(inner) else None
-
-    def evaluate(self, node: ast.expr, scopes: list[ast.AST], relative: str) -> _Value:
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            return node.value
-        if isinstance(node, ast.Name):
-            return self.lookup(node.id, scopes, relative)
-        if isinstance(node, ast.Call):
-            function = node.func
-            called = function.id if isinstance(function, ast.Name) else None
-            if isinstance(function, ast.Attribute):
-                if function.attr in ("resolve", "absolute") and not node.args:
-                    value = self.evaluate(function.value, scopes, relative)
-                    return value if isinstance(value, _Place) else None
-                called = function.attr
-            if called in _PATH_TYPES and len(node.args) == 1 and not node.keywords:
-                value = self.evaluate(node.args[0], scopes, relative)
-                # Ein Text als Pfad hängt am Arbeitsordner — nicht auflösbar.
-                return value if isinstance(value, _Place) else None
-            return None
-        if isinstance(node, ast.Attribute):
-            value = self.evaluate(node.value, scopes, relative)
-            if isinstance(value, _Place) and node.attr == "parent":
-                return _Place(value.parts[:-1]) if value.parts else None
-            if isinstance(value, _Module):
-                if node.attr == "__file__":
-                    path = self.module_path(value.name)
-                    return _Place(path.relative_to(self.root).parts) if path else None
-                return self.attribute(value, node.attr)
-            return None
-        if (
-            isinstance(node, ast.Subscript)
-            and isinstance(node.value, ast.Attribute)
-            and node.value.attr == "parents"
-            and isinstance(node.slice, ast.Constant)
-            and isinstance(node.slice.value, int)
-        ):
-            value = self.evaluate(node.value.value, scopes, relative)
-            depth = node.slice.value + 1
-            if isinstance(value, _Place) and 0 < depth <= len(value.parts):
-                return _Place(value.parts[:-depth])
-            return None
-        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-            left = self.evaluate(node.left, scopes, relative)
-            right = self.evaluate(node.right, scopes, relative)
-            if isinstance(left, _Place) and isinstance(right, str):
-                return _joined(left, right)
-        return None
-
-
-def _target_names(target: ast.AST) -> Iterator[str]:
-    for node in ast.walk(target):
-        if isinstance(node, ast.Name):
-            yield node.id
-
-
-def _joined(place: _Place, text: str) -> _Place | None:
-    parts = list(place.parts)
-    for part in PurePosixPath(text.replace("\\", "/")).parts:
-        if part == "..":
-            if not parts:
-                return None
-            parts.pop()
-        elif part not in ("", "."):
-            parts.append(part)
-    return _Place(tuple(parts))
-
-
-def _pattern(node: ast.expr) -> str | None:
-    """Das Muster eines Globs als Text; Platzhalter eines f-Strings werden ``{}``."""
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
-    if isinstance(node, ast.JoinedStr):
-        return "".join(
-            part.value if isinstance(part, ast.Constant) else "{}" for part in node.values
-        )
-    return None
-
-
-#: Ein Muster, das Python-Quellen meint: ``*.py``, ``test_*.py``, ``*.pyi``, ``*.py*``.
-_SOURCE_PATTERN = re.compile(r"\.pyi?\*?$")
-
-
-def flat_globs(root: Path, relative: str, resolver: _Resolver | None = None) -> list[_Glob]:
-    """Jedes ``glob`` auf Python-Quellen ohne ``**`` in einer Datei, mit dem Ordner, den es
-    liest.
-
-    Gesucht werden ``<pfad>.glob(…)`` und das Modul ``glob`` (``glob.glob``,
-    ``glob.iglob``, ``from glob import glob``); dieses liest relativ zum
-    Arbeitsordner und ist damit nie auflösbar. Ein Verzeichnisteil im Muster
-    gehört zum Ordner.
-    """
-    resolver = resolver or _Resolver(root)
-    tree, parents = resolver.parsed(relative)
-    found: list[_Glob] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or not node.args:
-            continue
-        pattern = _pattern(node.args[0])
-        if pattern is None or not _SOURCE_PATTERN.search(pattern) or "**" in pattern:
-            continue
-        function = node.func
-        through_module = (
-            isinstance(function, ast.Attribute)
-            and function.attr in ("glob", "iglob")
-            and isinstance(function.value, ast.Name)
-            and function.value.id == "glob"
-        ) or (isinstance(function, ast.Name) and function.id in ("glob", "iglob"))
-        if through_module:
-            receiver: _Value = None
-        elif isinstance(function, ast.Attribute) and function.attr == "glob":
-            receiver = resolver.evaluate(function.value, resolver.scopes(node, parents), relative)
-        else:
-            continue
-        folder = None
-        directory = PurePosixPath(pattern).parent.as_posix()
-        if isinstance(receiver, _Place) and not any(mark in directory for mark in "*?[{"):
-            place = _joined(receiver, directory)
-            folder = "/".join(place.parts) if place is not None else None
-        found.append(_Glob(f"{relative}:{node.lineno}", node.lineno, folder, pattern))
-    return found
-
-
-def _sources_with_globs(root: Path, folders: tuple[str, ...]) -> list[str]:
-    """Die Dateien unter ``folders``, in denen überhaupt ein ``glob(`` steht — der Rest
-    braucht keinen Syntaxbaum (Plan 4, Laufzeit)."""
-    mention = re.compile(r"\bi?glob\s*\(")
-    return [
-        path.relative_to(root).as_posix()
-        for folder in folders
-        for path in sorted((root / folder).rglob("*.py"))
-        if "__pycache__" not in path.parts and mention.search(path.read_text(encoding="utf-8"))
-    ]
+# Der Auflöser steht in ``tools/tree_reads.py``, weil auch die Auswahl der betroffenen Tests
+# ihn braucht (RQ-7). Gerufen wird über das Modul, damit eine Gegenprobe ihn ersetzen kann.
 
 
 def test_no_source_check_reads_a_package_flat() -> None:
@@ -475,11 +122,11 @@ def test_no_source_check_reads_a_package_flat() -> None:
     bereinigt.
     """
     root = source_tree.ROOT
-    resolver = _Resolver(root)
+    resolver = tree_reads.Resolver(root)
     globs = [
         one
-        for relative in _sources_with_globs(root, ("tests", "tools"))
-        for one in flat_globs(root, relative, resolver)
+        for relative in tree_reads.sources_with_globs(root, ("tests", "tools"))
+        for one in tree_reads.flat_globs(root, relative, resolver)
     ]
     flat = [f"{one.where}  {one.pattern!r} liest {one.folder or 'Unauflösbares'}" for one in globs]
     red = [line for one, line in zip(globs, flat, strict=True) if one.folder not in _FLAT_FOLDERS]
@@ -499,6 +146,7 @@ def test_no_source_check_reads_a_package_flat() -> None:
 
 #: Die synthetische Testquelle: jede Zeile mit einem Glob trägt ihr Urteil.
 _PROBE_TEST = """\
+from glob import glob as find
 from pathlib import Path
 
 import app.ui
@@ -509,6 +157,8 @@ UI = ROOT / "app" / "ui"
 TOOLS = HERE.parent / "tools"
 TWICE = HERE
 TWICE = UI
+PATTERN = "*.py"
+OWN_PATTERN = "test_*.py"
 
 
 def surface():
@@ -571,7 +221,29 @@ def local_shadow():
 
 
 def comprehension():
-    return [path for UI in (HERE,) for path in UI.glob("*.py")]  # rot
+    return [path for UI in (HERE,) for path in UI.glob("*.py")]  # grün
+
+
+def loop_over_both():
+    return [path for folder in (HERE, UI) for path in folder.glob("*.py")]  # rot
+
+
+def constant_pattern():
+    return sorted(UI.glob(PATTERN))  # rot
+
+
+def constant_own_pattern():
+    return sorted(HERE.glob(OWN_PATTERN))  # grün
+
+
+def renamed_glob():
+    return find("app/ui/*.py")  # rot
+
+
+def module_alias():
+    import glob as g
+
+    return g.glob("app/ui/*.py")  # rot
 
 
 def recursive():
@@ -588,7 +260,11 @@ APP = Path(__file__).resolve().parent.parent / "app"
 
 
 def own():
-    return sorted(BASE.joinpath("tools").glob("*.py"))  # rot
+    return sorted(BASE.joinpath("tools").glob("*.py"))  # grün
+
+
+def own_surface():
+    return sorted(BASE.joinpath("app", "ui").glob("*.py"))  # rot
 
 
 def tools_flat():
@@ -633,26 +309,34 @@ def _verdicts(root: Path, relative: str) -> tuple[set[int], set[int]]:
 @pytest.mark.parametrize("relative", ["tests/test_probe.py", "tools/probe_tool.py"])
 def test_the_flat_glob_guard_sees_every_form(probe_tree: Path, relative: str) -> None:
     """Gegenprobe des Wächters: Jede rote Zeile der Attrappe ist rot, jede grüne grün,
-    und rekursive oder fremde Muster zählen gar nicht erst."""
+    und rekursive oder fremde Muster zählen gar nicht erst. Eine Schleife über zwei Ordner
+    ist rot, wenn einer davon es ist; ein Muster aus einer Konstanten und ein umbenanntes
+    ``glob`` sind Globs wie jedes andere (RQ-6)."""
     expected_red, expected_green = _verdicts(probe_tree, relative)
-    globs = flat_globs(probe_tree, relative)
+    globs = tree_reads.flat_globs(probe_tree, relative)
 
     red = {one.line for one in globs if one.folder not in _FLAT_FOLDERS}
-    green = {one.line for one in globs if one.folder in _FLAT_FOLDERS}
+    green = {one.line for one in globs} - red
     assert expected_red and expected_green, "die Attrappe trägt beide Urteile"
     assert red == expected_red, sorted(red ^ expected_red)
     assert green == expected_green, sorted(green ^ expected_green)
 
 
 def test_the_guard_reads_only_files_that_mention_glob(probe_tree: Path) -> None:
-    """Die Vorauswahl übergeht keine Datei mit einem Glob — sonst sähe der Wächter
-    den Bestand nur halb."""
+    """Die Vorauswahl übergeht keine Datei mit einem Glob, auch keine, die ``glob`` unter
+    anderem Namen ruft — sonst sähe der Wächter den Bestand nur halb."""
     _write(probe_tree, "tests/test_quiet.py", "VALUE = 1\n")
     _write(probe_tree, "tests/sub/test_deep.py", "import glob\nFILES = glob.glob('x/*.py')\n")
+    _write(
+        probe_tree,
+        "tests/test_renamed.py",
+        "from glob import glob as find\nFILES = find('x/*.py')\n",
+    )
 
-    assert _sources_with_globs(probe_tree, ("tests", "tools")) == [
+    assert tree_reads.sources_with_globs(probe_tree, ("tests", "tools")) == [
         "tests/sub/test_deep.py",
         "tests/test_probe.py",
+        "tests/test_renamed.py",
         "tools/probe_tool.py",
     ]
 
