@@ -90,7 +90,7 @@ scrive in `website/version.json`.
 - Un rifiuto in una finestra non ripete più il suo titolo sotto. *Correggi l'inserimento* porta il cursore nel campo interessato.
 - La finestra *Dettagli* nomina corpo e passaggio e dà il punto nell'unità scelta. *Mostra i valori* mostra i nomi dei campi ed è alto solo quanto serve.
 - I campi delle barre *Analisi* e *Dividi*, la descrizione in *Genera modello*, la scelta *Tipo* e la casella «Includi i valori» si spiegano nel suggerimento e allo screen reader.
-- Da una scheda del riquadro a destra, il tasto Tab entra nella pagina in primo piano e la percorre dall'alto in basso.
+- Da una linguetta del riquadro a destra, il tasto Tab entra nella pagina in primo piano e la percorre dall'alto in basso.
 
 ### Stampare e passare allo slicer
 
@@ -116,6 +116,7 @@ scrive in `website/version.json`.
 - Per ritagliare un cubo e provare un accoppiamento, ora la posizione si sceglie in *Posizione del cubo*. La riga *Punto* sopra la mostra.
 - La finestra dietro *Dai spessore* dice nella prima riga che dà spessore alla superficie.
 - La finestra *Rinomina oggetto* parte dal nome attuale nel campo.
+- Nella linguetta *Selezione*, *Applica* resta grigio finché non cambia un valore e indica il primo campo. Ruotare o duplicare con i valori predefiniti resta immediato.
 
 ## 0.6.0
 

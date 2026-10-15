@@ -116,6 +116,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ao recortar um cubo para experimentar um ajuste, a posição escolhe-se agora em *Posição do cubo*. A linha *Ponto* acima mostra-a.
 - O diálogo por trás de *Dar espessura* diz na primeira linha que dá espessura à superfície.
 - O diálogo *Mudar o nome do objeto* começa com o nome atual no campo.
+- No separador *Seleção*, *Aplicar* fica cinzento até mudar um valor e indica o primeiro campo. Rodar ou duplicar com os valores predefinidos continua imediato.
 
 ## 0.6.0
 

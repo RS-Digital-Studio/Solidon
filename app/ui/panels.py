@@ -187,6 +187,7 @@ from app.ui.change_lock import (
 from app.ui.dialogs import ADDRESS_VALUES, NEEDS_OP, handlers_of, unhandled_advice
 from app.ui.feature_editing import advanced_fields, configure_scope, explain_value_help
 from app.ui.feature_footer import keep_in_sight, place_below
+from app.ui.first_change import first_change_sentence, offered_values, typed, waits_for_change
 from app.ui.icons import icon, icon_name_for, svg_pixmap
 from app.ui.labels import (
     BoundedLengthSpin,
@@ -8710,6 +8711,10 @@ class _Handling:
     Bis dahin *war* das Übernehmen der Weg ins Bild, und wer eine Bohrung
     ändern wollte, landete in der Platzierung statt bei seinem Ergebnis
     (Robert: „auch 2 mal übernehmen einmal unten und einmal rechts")."""
+    offered: dict[str, Any] | None = None
+    """Die Werte, mit denen die Handlung beim heutigen Stand angeboten wurde —
+    ``None``, wo ihre Vorgabe schon etwas tut. Solange die Felder sie tragen,
+    wartet *Übernehmen* auf die erste Änderung (``first_change``, FD-99)."""
 
 
 class _FeatureAnswers(NamedTuple):
@@ -9450,6 +9455,9 @@ class FeaturePanel(QWidget):
         self._in_view.setProperty(guides.TARGET_PROPERTY, "feature.in_view")
         below.addWidget(self._in_view)
         self._every = QCheckBox("", self._footer)
+        self._scope_start = False
+        """Wie der Haken stand, als die scharfe Handlung es wurde — ihn
+        umzuschalten ist eine Änderung (``first_change``)."""
         self._every.setVisible(False)
         self._every.setProperty(guides.TARGET_PROPERTY, "feature.every")
         self._every.toggled.connect(self._group_changed)
@@ -10532,12 +10540,21 @@ class FeaturePanel(QWidget):
 
     def _apply_allowed(self) -> bool:
         """Die lokalen Sperren ohne erneuten Aufruf des Vorschauverwalters prüfen."""
+        entry = self._runs.get(self._armed or "")
+        row = next((row for row in self._shown_rows.values() if row.key == self._armed), None)
         return (
             not self._locked
             and self._apply_blocked_reason is None
             and self._apply_stands()
-            and self._armed in self._runs
+            and entry is not None
             and not self._active_field_refusal()
+            # Beim heutigen Stand gibt es nichts zu übernehmen (FD-99, ``first_change``).
+            and not waits_for_change(
+                entry.offered,
+                entry.values,
+                touched=self._every.isChecked() != self._scope_start
+                or (row is not None and typed(row.widgets.values())),
+            )
         )
 
     def _settle_apply_block(self) -> None:
@@ -10555,8 +10572,17 @@ class FeaturePanel(QWidget):
             self._apply.setToolTip(control_reason)
             self._apply.setAccessibleDescription(control_reason)
         elif (entry := self._runs.get(self._armed or "")) is not None:
-            self._apply.setToolTip(entry.title)
-            self._apply.setAccessibleDescription(entry.reason)
+            # **Vor der ersten Änderung nennt der graue Knopf den Weg** (FD-99):
+            # dasselbe erste offene Feld und derselbe Satz wie an der Maßgruppe.
+            # Ohne Sperrgrund ist grau hier genau das Warten darauf.
+            row = next((row for row in self._shown_rows.values() if row.key == self._armed), None)
+            said = (
+                first_change_sentence(row.widgets.values(), self)
+                if row is not None and entry.offered is not None and not self._apply.isEnabled()
+                else ""
+            )
+            self._apply.setToolTip(said or entry.title)
+            self._apply.setAccessibleDescription(said or entry.reason)
 
     def _active_field_refusal(self) -> str:
         """Die erste sichtbare Grenzablehnung der scharfgestellten Handlung — mit dem Feld.
@@ -10879,6 +10905,7 @@ class FeaturePanel(QWidget):
             members=members,
             values=partial(self._row_values, row),
             action=action,
+            offered=offered_values(action, partial(self._row_values, row)),
         )
         if self._armed is None:
             self._arm(key)
@@ -11658,6 +11685,7 @@ class FeaturePanel(QWidget):
         if entry is None:
             return
         changed = self._armed is not None and self._armed != key
+        switched = self._armed != key
         self._armed = key
         self._open_only(key)
         self._armed_title.setText(entry.title)
@@ -11688,6 +11716,8 @@ class FeaturePanel(QWidget):
             # eine Handlung mit Gruppe anfasst.
             with QSignalBlocker(self._every):
                 self._every.setChecked(False)
+        if switched:
+            self._scope_start = self._every.isChecked()
         _set_shown(self._every, applies_to_all and not self._measuring)
         self._settle_apply_block()
         if changed and entry.op != NO_OPERATION and not self._active_field_refusal():
@@ -12170,7 +12200,11 @@ class FeaturePanel(QWidget):
         self._show_armed_in_view()
 
     def _group_changed(self, _checked: bool) -> None:
-        """Ein geänderter Umfang braucht dieselbe Vorschau wie geänderte Maße."""
+        """Ein geänderter Umfang braucht dieselbe Vorschau wie geänderte Maße.
+
+        Und er ist eine Änderung: *Übernehmen* wartet dann nicht mehr (FD-99).
+        """
+        self._settle_apply_block()
         self.preview_armed()
 
     def preview_armed(self) -> None:

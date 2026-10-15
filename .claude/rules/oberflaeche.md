@@ -41,8 +41,9 @@ Sperre (`hold_inputs`), Griffe. Grau trägt den Grund in Kurzhilfe und
 Beschreibung (`say_refusal`), und der Grund nennt den Weg.
 
 **Vor der ersten Änderung ist *Übernehmen* grau** und nennt das erste offene
-Feld als Weg (`first_change.first_change_sentence`, eine Quelle für Maßgruppe
-und Dialog). Ein Fokus ändert nichts, ein Umfangshaken schon.
+Feld als Weg (`first_change`, eine Quelle für Maßgruppe, Dialog und
+Merkmalfenster). Ein Fokus ändert nichts, ein Umfangshaken schon; eine
+Vorgabe, die selbst etwas tut, ist sofort übernehmbar (`offered_unchanged`).
 
 ## Texte
 

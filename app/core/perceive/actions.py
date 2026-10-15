@@ -574,6 +574,12 @@ class ActionField:
     """Wirkungssatz aus dem Parameterschema, zusätzlich zur Maßherkunft."""
     placement: str = "front"
     """Schemaeinordnung; eine belegte Vorbelegung darf ausdrücklich nach vorn rücken."""
+    current: bool = False
+    """Ob der Wert der heutige Stand ist: am Merkmal gelesen, ein Weg, der bei null
+    beginnt, oder ein gespeicherter Schrittwert. Steht jedes Zahlenfeld einer
+    Handlung so da, änderte sie übernommen nichts, und *Übernehmen* wartet auf die
+    erste Änderung (FD-31, FD-99; ``first_change.offered_unchanged``). Anders als
+    :attr:`measurement` ist das keine Aussage über eine Messung."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -782,6 +788,8 @@ def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
         else None,
         doc=doc,
         placement=entry.placement,
+        current=(op, entry.name) in _STARTS_AT_ZERO
+        or (source is not None and not derived and feature.params.get(source[0]) is not None),
     )
 
 
@@ -1166,7 +1174,12 @@ def _beside_the_original(
     along = 1 if 1 in reach and (0 not in reach or reach[1] < reach[0] - EPS_GEOM) else 0
     name = ("x", "y")[along]
     return tuple(
-        replace(entry, value=float(entry.value) + BESIDE_SHARE * reach[along], measurement=None)
+        replace(
+            entry,
+            value=float(entry.value) + BESIDE_SHARE * reach[along],
+            measurement=None,
+            current=False,
+        )
         if entry.name == name
         and isinstance(entry.value, int | float)
         and not isinstance(entry.value, bool)
@@ -1331,6 +1344,7 @@ def chamber_action(
                 measurement=MeasureStatus("exact", "facets", available=True),
                 doc=entry.doc or "",
                 placement=entry.placement,
+                current=True,
             )
         )
     return FeatureAction(
@@ -1396,6 +1410,8 @@ def closure_action(
             measurement=MeasureStatus("exact", "parameter", available=True),
             doc=entry.doc or "",
             placement=entry.placement,
+            # Mehr Spiel und mehr Drehweg beginnen bei null: der heutige Stand.
+            current=True,
         )
         for entry in spec.params.spec()
         if entry.name in missing and missing[entry.name] is None
@@ -1935,6 +1951,7 @@ def texture_actions(operation: Any, spec: Any) -> list[FeatureAction]:
                 minimum=entry.minimum,
                 maximum=entry.maximum,
                 choices=tuple((choice, choice) for choice in (entry.choices or ())),
+                current=True,
             )
         )
     shown = {entry.name for entry in fields}
@@ -1974,6 +1991,7 @@ def _saved_fields(
             depends_on=entry.depends_on,
             doc=entry.doc or "",
             placement=entry.placement,
+            current=True,
         )
         for name in names
         if (entry := schema.get(name)) is not None

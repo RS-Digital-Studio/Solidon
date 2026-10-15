@@ -80,6 +80,20 @@ an `plate_holes.stl`: null Transaktionen). Geändert ist seither, was von den
 Werten zu Beginn des Entwurfs abweicht (`QuietHost.begun_with`), oder der
 umgeschaltete Sammelhaken, der den Umfang ändert und keinen Wert.
 
+Im Merkmalfenster gilt dieselbe Regel, aber nicht an jeder Handlung: *Merkmal
+drehen* steht auf 90°, *Merkmal verdoppeln* legt die Kopie daneben, *Zum
+Langloch ziehen* macht aus einer runden Bohrung ein Langloch — ihre Vorgabe
+tut schon etwas, und wer sie will, übernimmt sofort. Gewartet wird nur, wo die
+Felder den heutigen Stand tragen: am Merkmal gelesen, ein Weg ab null
+(*Fläche versetzen*) oder ein gespeicherter Schrittwert. Das sagt der Kern je
+Feld (`ActionField.current`), weil nur er weiß, woher ein Wert kam;
+`measurement` taugt dafür nicht, es fehlt bei unsicherer Messung und bei einem
+Weg ab null. `first_change.offered_unchanged` fasst die Handlung zusammen,
+`waits_for_change` vergleicht mit den Werten beim Anbieten. Getippter, noch
+ungelesener Text ist schon eine Änderung (`typed`): Ein Ausdruck wird erst
+beim Verlassen des Felds zum Wert, und der Klick auf einen grauen Knopf, der
+das Feld verlassen sollte, ginge ins Leere.
+
 ## Texte
 
 **Eine Tabelle, und Auswahlwerte stehen an zwei Stellen.** Die

@@ -117,6 +117,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al recortar un cubo para probar un ajuste, su posición se elige ahora en *Posición del cubo*. La línea *Punto* de arriba la muestra.
 - El diálogo tras *Dar grosor* dice en su primera línea que da grosor a la superficie.
 - El diálogo *Renombrar objeto* empieza con el nombre actual en el campo.
+- En la pestaña *Selección*, *Aplicar* sigue en gris hasta que cambia un valor e indica el primer campo. Girar o duplicar con sus valores previstos sigue siendo inmediato.
 
 ## 0.6.0
 

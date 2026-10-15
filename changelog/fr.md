@@ -117,6 +117,7 @@ dans `website/version.json`.
 - Pour découper un cube afin d'essayer un ajustement, sa position se choisit désormais sous *Position du cube*. La ligne *Emplacement* au-dessus l'affiche.
 - Le dialogue derrière *Donner une épaisseur* dit dès sa première ligne qu'il donne une épaisseur à la surface.
 - Le dialogue *Renommer l'objet* s'ouvre avec le nom actuel dans le champ.
+- Dans l'onglet *Sélection*, *Appliquer* reste grisé tant qu'aucune valeur ne change, et indique le premier champ. Pivoter ou dupliquer avec leurs valeurs prévues reste immédiat.
 
 ## 0.6.0
 

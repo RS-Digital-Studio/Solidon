@@ -5839,7 +5839,11 @@ def test_a_halted_chain_locks_the_feature_panel_and_lets_go_after_undo(
         if widget.isVisibleTo(panel) and widget.property("handlingKey")
     ]
     assert felder, "ohne Felder prüft dieser Test nichts"
-    assert panel._apply.isEnabled(), "Voraussetzung: ohne Halt nimmt das Fenster Zahlen an"
+    # *Übernehmen* wartet ohnehin auf die erste Änderung (FD-99); die Zusage
+    # gilt den Feldern.
+    assert all(feld.isEnabled() for feld in felder), (
+        "Voraussetzung: ohne Halt nimmt das Fenster Zahlen an"
+    )
 
     window.session.apply(
         "Bohrung setzen",
@@ -5880,7 +5884,7 @@ def test_a_halted_chain_locks_the_feature_panel_and_lets_go_after_undo(
     QApplication.processEvents()
 
     assert window.session.last_result.stopped_at is None, "zurückgenommen rechnet sie wieder"
-    assert panel._apply.isEnabled(), "und das Fenster gibt ohne Neuauswahl wieder frei"
+    assert panel._apply.toolTip() != grund, "und das Fenster gibt ohne Neuauswahl wieder frei"
     assert not panel._lock_note.isVisibleTo(window.feature_dock)
     frei = [
         widget

@@ -116,6 +116,7 @@ it into `website/version.json`.
 - When you cut out a cube to try a fit, you now choose its position under *Cube position*. The *Place* line above shows it.
 - The dialog behind *Add thickness* says in its first line that it gives the surface a thickness.
 - The *Rename object* dialog starts with the current name in the field.
+- In the *Selection* tab, *Apply* stays grey until a value changes and names the first field. Rotating or duplicating with their preset values still works right away.
 
 ## 0.6.0
 

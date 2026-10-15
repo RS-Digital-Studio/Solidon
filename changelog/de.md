@@ -141,6 +141,7 @@ Nutzen da und sonst nichts.
 - Wer einen Würfel zum Ausprobieren einer Passung ausschneidet, wählt dessen Lage jetzt unter *Lage des Würfels*. Die Zeile *Stelle* darüber zeigt sie an.
 - Der Dialog hinter *Dicke geben* sagt in seiner ersten Zeile, dass er der Fläche eine Dicke gibt.
 - Der Dialog *Objekt umbenennen* beginnt mit dem jetzigen Namen im Feld.
+- Im Reiter *Auswahl* bleibt *Übernehmen* grau, bis sich ein Wert ändert, und nennt das erste Feld. Drehen oder Verdoppeln mit ihrer Vorgabe gehen weiter sofort.
 
 ## 0.6.0
 

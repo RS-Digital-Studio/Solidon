@@ -182,8 +182,11 @@ def test_texture_fields_keep_expressions_and_hidden_parameters(qt_app: QApplicat
     }
     assert {"width", "height", "pitch", "depth", "angle"} == set(fields)
     assert fields["width"].value() == "=@span"
+    # Übernommen wird erst eine Änderung (FD-99); die übrigen Werte gehen mit.
+    fields["height"].set_value(18.0)
     panel._apply.click()
     assert seen[0][0] == 8
+    assert seen[0][1]["height"] == pytest.approx(18.0)
     assert seen[0][1]["width"] == "=@span"
     assert seen[0][1]["x"] == pytest.approx(12.0)
     assert "at_feature" not in seen[0][1]
@@ -987,6 +990,8 @@ def test_a_locked_panel_says_why_before_anyone_clicks(qt_app: QApplication) -> N
         if isinstance(widget, LengthSpin | NumberSpin) and widget.isVisibleTo(panel)
     ]
     assert felder, "ohne Felder prüft dieser Test nichts"
+    # Übernommen wird erst eine Änderung (FD-99).
+    felder[0].setValue(felder[0].value() + 0.5)
     assert panel._apply.isEnabled(), "Voraussetzung: ohne Halt geht es"
 
     panel.set_locked(grund)
@@ -1330,7 +1335,11 @@ def test_return_rechecks_preview_permission_after_interpreting_text(qt_app: QApp
     spin.setKeyboardTracking(False)
     editor = spin.lineEdit()
     assert editor is not None
+    # Wie getippt: Das Feld benennt seine Handlung, und ungelesener Text ist
+    # schon eine Änderung (``first_change.typed``).
+    panel._arm(next(key for key, entry in panel._runs.items() if entry.title == "Bohrung ändern"))
     editor.setText("6")
+    editor.setModified(True)
     assert not changed and panel.can_accept()
     QTest.keyClick(editor, Qt.Key.Key_Return)
 
@@ -1663,17 +1672,11 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     assert spin.isVisibleTo(panel), "der gemessene Durchmesser steht nicht sichtbar im Panel"
     assert spin.value_mm() == pytest.approx(measured), "das Panel klemmt den Messwert"
 
-    # **Beide Wege zählen.** *Bohrung ändern* führt seit dem 10.09.2026 ins
-    # Bild statt sofort auszuführen (``LEADS_INTO_THE_VIEW``); was der Knopf
-    # dabei weiterreicht, ist dieselbe Wertetabelle — und genau die prüft
-    # dieser Test.
-    emitted: list[tuple[str, dict[str, object]]] = []
-    panel.operationRequested.connect(lambda op, params: emitted.append((op, params)))
-    panel.inViewRequested.connect(lambda op, params: emitted.append((op, params)))
-    press(panel, str(action.title))
-
-    assert len(emitted) == 1
-    emitted_op, params = emitted[0]
+    # **Gelesen wird die Wertetabelle der Handlung** — dieselbe, die *Übernehmen*
+    # und der Weg ins Bild weiterreichen. Beim heutigen Stand wartet der Knopf
+    # auf eine Änderung (FD-99); was danach unberührt bleibt, kommt von hier.
+    entry = next(entry for entry in panel._runs.values() if entry.title == str(action.title))
+    emitted_op, params = entry.op, entry.values()
     assert emitted_op == operation
     assert float(params["diameter"]) == pytest.approx(measured)
     # Der Ort ebenso: Die vergrößerte Platte trägt ihre Bohrungen über einen
@@ -1763,7 +1766,11 @@ def test_a_round_wall_offers_radius_instead_of_removing_a_corner(
 def test_the_radius_panel_edits_a_detected_rounding_without_changing_its_neighbours(
     qt_app: QApplication, kind: str
 ) -> None:
-    """Anklicken und unverändert übernehmen bewahrt das Teil; ein neuer Radius wirkt lokal."""
+    """Die Werte beim Anklicken bewahren das Teil; ein neuer Radius wirkt lokal.
+
+    Unverändert übernehmen lässt der Knopf nicht mehr zu (FD-99); gelesen wird
+    deshalb die Wertetabelle der Handlung, die er danach weiterreicht.
+    """
     from app.core.brep import edit
     from app.core.brep.features import features_of
     from app.core.types import SceneObject
@@ -1778,9 +1785,9 @@ def test_the_radius_panel_edits_a_detected_rounding_without_changing_its_neighbo
     panel.show_feature(rounding.id, rounding)
     sent: list[tuple[str, dict[str, Any]]] = []
     panel.operationRequested.connect(lambda op, values: sent.append((op, values)))
-    press(panel, "Merkmal ändern")
-    op, values = sent.pop()
-    assert run(op, source, **values).outputs[0] is source
+    entry = next(entry for entry in panel._runs.values() if entry.title == "Merkmal ändern")
+    assert not panel._apply.isEnabled(), "beim heutigen Stand gibt es nichts zu übernehmen"
+    assert run(entry.op, source, **entry.values()).outputs[0] is source
 
     row = row_of(panel, "Merkmal ändern")
     spin = next(widget for widget in fields(row) if isinstance(widget, LengthSpin))
@@ -1809,6 +1816,13 @@ def test_pressing_an_action_names_the_operation_and_its_feature(qt_app: QApplica
     panel.show_feature(identifier, feature)
     seen: list[tuple[str, dict[str, object]]] = []
     panel.operationRequested.connect(lambda op, params: seen.append((op, params)))
+    # Übernommen wird erst eine Änderung (FD-99).
+    spin = next(
+        widget
+        for widget in fields(row_of(panel, "Merkmal verschieben"))
+        if isinstance(widget, LengthSpin)
+    )
+    spin.set_value_mm(spin.value_mm() + 1.0)
 
     press(panel, "Merkmal verschieben")
 
@@ -1893,9 +1907,12 @@ def test_a_honeycomb_pattern_stands_in_the_panel_with_its_own_fields(qt_app: QAp
     panel.operationRequested.connect(lambda op, params: seen.append((op, params)))
     press(panel, "Merkmal entfernen")
     assert seen and seen[0][0] == "remove_feature" and seen[0][1]["at_feature"] == identifier
-    press(panel, "Merkmal ändern")
-    assert seen[-1][0] == "resize_feature" and seen[-1][1]["at_feature"] == identifier
-    assert math.isclose(float(seen[-1][1]["pitch"]), pitch, abs_tol=0.01)
+    # Ändern wartet beim heutigen Stand auf eine Änderung (FD-99); gelesen wird,
+    # was der Knopf danach weiterreicht.
+    entry = next(entry for entry in panel._runs.values() if entry.title == "Merkmal ändern")
+    values = entry.values()
+    assert entry.op == "resize_feature" and values["at_feature"] == identifier
+    assert math.isclose(float(values["pitch"]), pitch, abs_tol=0.01)
 
 
 def test_textures_from_other_bodies_have_distinct_visible_numbers() -> None:
@@ -3250,12 +3267,22 @@ def test_a_part_shows_its_step_and_writes_back_into_it(qt_app: QApplication) -> 
 
         # **Der zweite Knopf schreibt nur die Lage.** Wer beim Verschieben die
         # Maße mitschickte, setzte die Schraubengröße auf ihre Vorgabe zurück.
+        # Übernommen wird erst eine Änderung (FD-99): Y wandert, X bleibt.
+        from app.ui.op_dialog import ValueField
+
+        along = next(
+            field
+            for field in row_of(panel, "Baustein verschieben").findChildren(ValueField)
+            if field._entry.name == "y"
+        )
+        along.set_value(1.5)
         press(panel, "Baustein verschieben")
         assert len(changed) == 1, "ein Zug, eine Meldung"
         op_id, params = changed[0]
         assert op_id == 7, "der Schritt, der den Baustein gesetzt hat"
         assert set(params) == {"x", "y", "z"}, params
         assert params["x"] == pytest.approx(4.0), "der Wert aus dem Schritt steht im Feld"
+        assert params["y"] == pytest.approx(1.5)
 
         # Und Entfernen fragt nichts und nennt nur den Schritt.
         press(panel, "Baustein entfernen")
@@ -4252,12 +4279,19 @@ def test_a_bound_part_still_offers_moving_and_removing(qt_app: QApplication) -> 
         ]
         assert len(bound) == 1, "die gebundene Achse trägt das Ausdrucksfeld"
 
+        # Übernommen wird erst eine Änderung (FD-99): X wandert, die Bindung bleibt.
+        across = next(
+            field
+            for field in row_of(panel, "Baustein verschieben").findChildren(ValueField)
+            if field._entry.name == "x"
+        )
+        across.set_value(-19.0)
         press(panel, "Baustein verschieben")
         assert len(changed) == 1, changed
         op_id, params = changed[0]
         assert op_id == 2
         assert params["z"] == "=@staerke", "der Ausdruck kommt unverändert zurück"
-        assert params["x"] == pytest.approx(-20.0)
+        assert params["x"] == pytest.approx(-19.0)
     finally:
         panel.deleteLater()
 

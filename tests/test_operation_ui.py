@@ -6276,6 +6276,9 @@ def test_exact_group_scope_previews_and_commits_the_same_members(
     panel = window.feature_panel
     key = next(key for key, entry in panel._runs.items() if entry.op == "move_feature")
     panel._arm(key)
+    # Übernommen wird erst eine Änderung (FD-99).
+    row = next(row for row in panel._shown_rows.values() if row.key == key)
+    row.widgets["x"].set_value_mm(row.widgets["x"].value_mm() + 1.0)
     window._preview_feature_change()
     single = _exact_difference(window)
     requests[-1][0](single)

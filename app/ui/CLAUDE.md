@@ -134,7 +134,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `op_dialog.py` | aus dem Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence`, `front_fields` (Einfachform) und die Lesezeile *Stelle*, hinten die Klappe mit `advanced_summary`; `show_seat` (*Auf das Bett*) |
 | `feature_list.py` | `FeatureList`: Inhaltshöhe und Pixelrollweg für `FeatureSetField`; Vertrag in `karte-app-ui.md` |
 | `dialog_footer.py` | `DialogFooter`: vollständige Aktionsleiste bei automatischer und manueller Breite; Vertrag in `karte-app-ui.md` |
-| `first_change.py` | Satz am grauen *Übernehmen* vor der ersten Änderung (Maßgruppe, Dialog) |
+| `first_change.py` | Satz am grauen *Übernehmen* vor der ersten Änderung (Maßgruppe, Dialog, Merkmalfenster) |
 | `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung, Spende, Über, `confirm_export`/`_handover`, `open_link`, `align_to_the_front` |
 | `parameter_dialog.py` · `form_fields.py` · `refusal_details.py` | Projektmaß (§13) · Name und Satz je Formularfeld, Wächter `unnamed_inputs` · Absage in Fensterwörtern |
 | `message_dialog.py` | Meldung und Ansage (`announce`), Quittung am Ort (`acknowledge`, `withdraw`), Knopfnamen (`name_button`) |
