@@ -1019,28 +1019,36 @@ def test_every_reason_to_build_the_bed_again_still_builds_it(
     from tests.render_fakes import RecordingRenderer
 
     viewport, renderer = _with_recorder(profile)
+    # Wie viele Aktoren ein Bett hat, sagt sein erster Aufbau. Seit ``bc4fe912a``
+    # zeichnet das Raster Haupt- und Nebenlinien getrennt, es sind fünf statt vier;
+    # eine feste Vier wurde damit rot, ohne dass ein Grund verschluckt war.
+    per_bed = _bed_actors(renderer)
+    assert per_bed >= 4, per_bed
+    three = 3 * per_bed
 
     larger = dataclasses.replace(
         profile,
         printer=dataclasses.replace(profile.printer, build_volume=(300.0, 300.0, 400.0)),
     )
-    assert _rebuilds(viewport, renderer, lambda: viewport.show_build_volume(larger)) == 4, (
+    assert _rebuilds(viewport, renderer, lambda: viewport.show_build_volume(larger)) == per_bed, (
         "ein anderer Bauraum"
     )
 
     viewport._plate_count = lambda: 3  # type: ignore[method-assign]
-    assert _rebuilds(viewport, renderer, lambda: viewport.show_build_volume(larger)) == 12, (
+    assert _rebuilds(viewport, renderer, lambda: viewport.show_build_volume(larger)) == three, (
         "drei Platten, drei Betten"
     )
 
     # Der Themenwechsel baut die Kulisse selbst neu — er ruft
     # ``show_build_volume``, und genau das muss durchkommen, sonst stünde ein
     # fast schwarzes Bett auf hellem Grund.
-    assert _rebuilds(viewport, renderer, lambda: viewport.set_theme("light")) == 12, "andere Farben"
+    assert _rebuilds(viewport, renderer, lambda: viewport.set_theme("light")) == three, (
+        "andere Farben"
+    )
 
     zweiter = RecordingRenderer(size=(900, 600))
     viewport.renderer = zweiter
-    assert _rebuilds(viewport, zweiter, lambda: viewport.show_build_volume(larger)) == 12, (
+    assert _rebuilds(viewport, zweiter, lambda: viewport.show_build_volume(larger)) == three, (
         "ein anderer Renderer braucht seine eigenen Aktoren"
     )
 

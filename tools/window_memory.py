@@ -51,6 +51,7 @@ sys.path.insert(0, str(ROOT))
 from tools.window_bench import (  # noqa: E402  (der Pfad muss zuerst stehen)
     EVENT_DRAIN_ROUNDS,
     isolate,
+    record_shutdown,
     shutdown_window,
     working_set_mb,
 )
@@ -127,7 +128,7 @@ def main() -> int:
             window.show()
             drain(application)
             standing = working_set_mb()
-            shutdown_window(window, application)
+            record_shutdown({}, lambda: None, shutdown_window(window, application))
             del window
             drain(application)
             gone = working_set_mb()
@@ -167,7 +168,7 @@ def main() -> int:
                 flush=True,
             )
         print(f"Steigung über die zweite Hälfte: {slope(after):+.1f} MiB je Wechsel")
-        shutdown_window(window, application)
+        record_shutdown({}, lambda: None, shutdown_window(window, application))
         drain(application)
         print(f"Nach dem Abbau: {working_set_mb():.0f} MiB")
 

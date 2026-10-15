@@ -36,7 +36,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Findet die Suche, was der Kunde tippt? | `test_search.py`; das Suchfeld der Karte in `test_selection_operations.py` |
 | Bleiben Änderungswege gesperrt, Gründe aktuell und Fokus nach Befundhandlung im Bericht? | `test_change_lock.py`, `test_licence_lock_offers.py`, `test_finding_action_focus.py` |
 | Systemdialoge, Maßkarten und Feldhilfe? | `test_process.py`, `test_in_view_arming.py`, `test_sketch_editor_measure_field.py`, `test_feature_front_contract.py`, `test_measure_group_layout.py`, `test_measure_card_*.py`, `test_measure_field_places.py` |
-| Funktionsdurchgang: Zeilen, Pakete, Szenen · Urteile und Gegenproben · der Prüfstand am Fenster · der Wortschatz der Ziele, aufgelöst am Fenster | `test_function_*.py` (Attrappen in `bench_fakes.py`) · `test_guide_targets.py`, `test_bench_findings.py`; Bildanleitungen und Wortschatz im Kern in `test_guides.py` |
+| Funktionsdurchgang: Zeilen, Pakete, Szenen · Urteile und Gegenproben · der Prüfstand am Fenster · der Wortschatz der Ziele, aufgelöst am Fenster | `test_function_*.py` (Attrappen in `bench_fakes.py`) · `test_guide_targets.py` (Fenster: `guide_window.py`), `test_bench_findings.py`; Bildanleitungen und Wortschatz im Kern in `test_guides.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
 | Erkennt der druckgleich-Vergleich (§11.2) jede Verletzung? | `test_print_equal.py` |
 | Verhindert eine abweisende Nachprüfung das Schreiben einer Vergleichsmarke und bleibt sie außerhalb der API-Zeit? | `test_performance_marks.py` — nachgestellte Prüfablehnungen, gestellte Uhr, eigene temporäre Marken; keine Leistungsmessung |
@@ -127,7 +127,8 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | `print_equal.py` | Druckgleich (§11.2): `shot`, `save`/`load`, `compare`; zwei Codestände: `tools/check_print_equal.py` |
 | `gcode_contact.py` | Stützkontakt im G-Code (`support_contact`): Abstand und Trennschichten je Rasterzelle; `support_in_box`: Stütze im Quader — nur für `test_real_slicers.py` |
 | `render_fakes.py` | Renderer-Doppel der Ansichtstests: schreibt Aktoren, Stile, Beschriftungen und Kamera mit, statt zu zeichnen — wer das Bild misst, nimmt den echten Renderer ohne Fenster |
-| `release_signing.py` | Eigenes Schlüsselpaar der Suite für unterschriebene Versionsdateien (`signed`, auch mit fremdem Schlüssel); die echten Schlüssel (`REAL_PUBLIC_KEYS`) samt Abdruck des ersten und Besitzproben (`KEY_PROOFS`) prüfen `test_the_published_version_file_is_signed` und `test_the_shipped_release_keys_are_proven` |
+| `release_signing.py` | Eigenes Schlüsselpaar der Suite für unterschriebene Versionsdateien; die echten Schlüssel in `karte-tests.md`, „Helfer“ |
+| `bundled_fonts.py` | Gebündelte DejaVu-Prüfschrift laden, setzen, prüfen, entfernen (`bundled_font`) |
 | `qt_roots.py` | Qt-Wurzeln am Testende geordnet abbauen; im Modul `roots = qt_roots.roots` |
 | `evaluation_helpers.py` | `window_evaluation`, `short_chain_finds_nothing`: volle Rückfallkette und erzwungene Absage der kurzen Kette |
 | `workflow_helpers.py` | Grenzt Jobs und Schritte der Workflows ab, ohne allgemeiner YAML-Parser zu sein |

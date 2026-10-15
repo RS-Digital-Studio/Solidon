@@ -58,7 +58,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Sin activación, también *Crear parámetro …*, *Mover*, *Dividir*, las teclas del historial y las medidas en la vista salen en gris. Cada motivo indica el camino, como *Ayuda → Desbloquear Solidon …*.
 - Si una acción del *Informe de comprobación* espera al cálculo en curso, dice que después vuelve a estar disponible, también a los lectores de pantalla.
 - En una escena vacía, las herramientas en gris como *Sección* y *Medir* indican el motivo: necesitan un cuerpo. Hasta ahora la sugerencia solo mostraba su nombre.
-- Si falta espacio en la vista, todos los campos de medida siguen visibles y dejan libre el tirador para mover. Hasta ahora un campo podía quedar bajo el borde de la vista o tapar sus flechas.
+- Si falta espacio en la vista, los campos de medida siguen visibles y dejan libre el tirador para mover. Hasta ahora un campo podía quedar bajo el borde de la vista o tapar las flechas del tirador.
 - Los mensajes de la barra de estado ya no ponen dos puntos detrás de una frase completa.
 - Con un solo cuerpo, el árbol de objetos es tan alto como su contenido, y lo mismo el historial con un paso. En la versión 0.6.0 quedaba espacio vacío debajo.
 - El paso más reciente sigue visible en el historial cuando nuevos cuerpos hacen crecer el árbol de objetos. En la versión 0.6.0 quedaba bajo el borde del panel.

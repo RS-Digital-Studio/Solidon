@@ -773,8 +773,9 @@ def check_finding_rows(
     keine Zelle, und der Fund fehlt still in der Abhakliste; ebenso eine Kennung
     mit Komma oder „und“ ohne Backticks, die beim Trennen zerfällt. Mit der ganzen
     Funktionsliste (``complete``) muss zudem jeder **offene** Fund wenigstens eine
-    Zeile treffen oder mit :data:`NO_ROW` ausdrücklich keine nennen; ein
-    behobener darf eine Zeile tragen, die sein Fix entfernt hat (FD-24). Der
+    Zeile treffen oder mit :data:`NO_ROW` ausdrücklich keine nennen, und jede
+    Kennung in Backticks muss bekannt sein; ein behobener darf eine Zeile
+    tragen, die sein Fix entfernt hat (FD-24). Der
     Bericht über einen Lauf kennt nur die Zeilen seiner Pakete und prüft nur
     Teile mit Zusatz und zerfallende Kennungen: Ein bloßes Ende wie
     ``place_on_bed`` ist dort oft eine Zeile eines anderen Pakets.
@@ -804,6 +805,11 @@ def check_finding_rows(
                 f"{finding.key}: offen, trifft aber keine Zeile — Kennung ausschreiben "
                 f"oder „{NO_ROW} …“"
             )
+        # Was in Backticks steht, ist als Kennung gemeint, auch neben einer
+        # bekannten (Review 2, RF-17); freier Text ohne Backticks darf daneben stehen.
+        if complete and finding.stand.startswith("offen") and not explicit:
+            for name in sorted(set(re.findall(r"`([^`]+)`", raw)) - ids):
+                problems.append(f"{finding.key}: „{name}“ ist keine bekannte Zeile")
     return problems
 
 
