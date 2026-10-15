@@ -18587,6 +18587,12 @@ class MainWindow(QMainWindow):
         target = None if kind == "deviation" else maps.location_of(entry, finding)
         if target is not None:
             self._show_finding_at(str(finding.message), entry, target, finding.outline)
+        else:
+            # **Ohne eigenen Ort ist der Körper die Stelle** (FD-111): Zu groß
+            # für den Bauraum, Erkennung übersprungen, Netzfehler einer
+            # Operation. Die Kamera blieb sonst, wo sie war — im Prüfstand in
+            # der Nahsicht der vorigen Szene, und der Körper füllte das Bild.
+            self.viewport.reset_camera()
         if kind is not None:
             self._analysis_map(kind, entry.id, finding=finding if target is None else None)
 
@@ -26073,6 +26079,10 @@ class MainWindow(QMainWindow):
             self._bodies_shown = ()
             self._feature_shown = None
             self.feature_dock.forget_dismissal()
+            # **Und ein neuer Rahmen** (FD-111): Dieselbe Kennung galt der
+            # Ansicht als verschobener Körper, und das neue Projekt stand in
+            # der Kamera des alten — bis zum Fünffachen der Größe.
+            self.viewport.frame_next_scene()
         self._selection_document = document
         request = self._map_request
         if request is not None and not self._map_is_current(request):

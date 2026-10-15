@@ -108,7 +108,10 @@ def test_report_navigation_preserves_a_started_draft_before_any_side_effect(
         _quiet_command_allowed=lambda: MainWindow._quiet_command_allowed(state),
         _say_the_change_comes_first=lambda: events.append("refused"),
         _object_of=lambda error: MainWindow._object_of(state, error),
-        viewport=SimpleNamespace(clear_finding_mark=lambda: events.append("clear_mark")),
+        viewport=SimpleNamespace(
+            clear_finding_mark=lambda: events.append("clear_mark"),
+            reset_camera=lambda: events.append("frame"),
+        ),
         history_panel=SimpleNamespace(
             point_at=lambda op_id: events.append(("history", op_id)) or False
         ),

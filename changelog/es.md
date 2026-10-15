@@ -55,6 +55,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los avisos de cama y adhesión usan la unidad elegida. Al cambiar mm/pulgadas se conservan aviso seleccionado, detalles abiertos, pestaña y estado desplegado de los cuerpos.
 - Los números a lo largo de la cama siguen la unidad elegida y la indican. La versión 0.6.0 mostraba milímetros aunque se hubieran elegido pulgadas.
 - En la vista *Ortográfica*, un clic en un aviso muestra el lugar a un tamaño adecuado. Hasta ahora se mantenía el zoom anterior.
+- Un clic en un aviso sin lugar propio muestra el cuerpo entero, y un proyecto abierto se ve completo.
 - Un taladro seleccionado se ve entero, con su borde. Los tiradores quedan fuera del borde y las flechas empiezan detrás de ellos.
 - Ctrl+Z y Ctrl+Y funcionan también con el cursor en un campo vacío, por ejemplo en el campo de búsqueda. Si escribió algo allí, primero se deshace lo escrito.
 - Sin activación, las acciones que cambian algo en el *Informe de comprobación*, *Selección*, los menús contextuales y el filamento salen en gris con el motivo. Antes el rechazo llegaba tras el clic.
