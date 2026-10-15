@@ -241,6 +241,7 @@ from app.ui.style import (
     SPACE,
     TARGET_SIZE,
     TIGHT,
+    WrappedNote,
     leading_action,
     make_primary,
     rule,
@@ -3734,9 +3735,13 @@ class ParameterPanel(QWidget):
         self._form = QFormLayout(self._sheet)
         self._form.setContentsMargins(0, 0, 0, 0)
         self._form.setSpacing(TIGHT)
-        self._empty = QLabel(_empty_parameters_text(), self)
-        self._empty.setWordWrap(True)
-        fit_wrapped(self._empty)
+        # **Der Satz misst sich an seiner Breite, bei jeder** (FD-126): Einmal
+        # beim Bau gemessen (``fit_wrapped``) brauchte er mit der echten Schrift
+        # und Spaltenbreite mehr, und *Parameter anlegen …* stand über seiner
+        # letzten Zeile. ``WrappedNote`` misst neu und meldet ``grown``.
+        self._empty = WrappedNote(self)
+        self._empty.setText(_empty_parameters_text())
+        self._empty.grown.connect(self._fit)
         self._form.addRow(self._empty)
         self._editors: dict[str, QDoubleSpinBox] = {}
         self._unit_editors: dict[str, QComboBox] = {}
@@ -4467,9 +4472,9 @@ class ParameterPanel(QWidget):
         self._rows.clear()
 
         if not document.parameters:
-            self._empty = QLabel(_empty_parameters_text(), self)
-            self._empty.setWordWrap(True)
-            fit_wrapped(self._empty)
+            self._empty = WrappedNote(self)
+            self._empty.setText(_empty_parameters_text())
+            self._empty.grown.connect(self._fit)
             self._form.addRow(self._empty)
             self._fit()
             return
