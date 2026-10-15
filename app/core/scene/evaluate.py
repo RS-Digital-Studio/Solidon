@@ -1483,6 +1483,29 @@ def _evaluate(
                         detections=detections,
                     )
                 )
+                # **Ein Merkmal behält seinen Platz** (FD-161): Die Zuordnung
+                # liefert in der Folge der Erkennung, und was der Schritt selbst
+                # ausgibt — die geänderte Bohrung —, hängt sie hinten an. Der
+                # Objektbaum zeigt diese Folge, und nach *Bohrung ändern* stand
+                # die Bohrung am Ende der Liste. Bekannte Namen nehmen deshalb
+                # die Plätze, die sie vorher hatten, in der alten Reihenfolge;
+                # ein neues Merkmal bleibt, wo die Erkennung es einreiht.
+                ordered_before = previous_features.get(object_id, {})
+                shaped = prepared_objects[object_id]
+                if ordered_before:
+                    place = {name: index for index, name in enumerate(ordered_before)}
+                    known = iter(
+                        sorted(
+                            (name for name in shaped.features if name in place),
+                            key=place.__getitem__,
+                        )
+                    )
+                    kept: dict[FeatureId, Feature] = {}
+                    for name in shaped.features:
+                        slot = next(known) if name in place else name
+                        kept[slot] = shaped.features[slot]
+                    if list(kept) != list(shaped.features):
+                        prepared_objects[object_id] = dataclasses.replace(shaped, features=kept)
                 if remembered is None and cache is not None:
                     remembered = _remember_step(
                         step_ways,
