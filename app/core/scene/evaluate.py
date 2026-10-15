@@ -1710,7 +1710,7 @@ def _evaluate(
         findings.extend(
             checks.run(
                 "scene.fits",
-                lambda: check_fits(scene, profile, document=document, cancelled=token),
+                lambda: check_fits(scene, profile, document=document, cancelled=token, names=names),
                 applicable=bool(scene.fits),
             )
         )

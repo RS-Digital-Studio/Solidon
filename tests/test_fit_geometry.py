@@ -933,3 +933,47 @@ def test_a_fit_names_its_partners_by_body_and_kind(profile: Profile) -> None:
     ]
     assert str(missing.values["a"]) == "Platte", "ohne Merkmal bleibt der Körper"
     assert str(missing.values["b"]) == "Stift: Zapfen"
+
+
+def test_a_removed_partner_keeps_its_last_name(profile: Profile) -> None:
+    """RB-6: Nach *Objekt entfernen* stand der Partner als „obj_2:dowel_pin_1“ da.
+
+    Der Befund, der sagt, dass ein Partner fehlt, nennt ihn mit dem Namen, den
+    der Körper zuletzt trug (``EvaluationResult.object_names``), am echten
+    Projekt mit Passung.
+    """
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from tools import function_scenes
+
+    project = function_scenes.build_scene("passung.netz")
+    document = project.document
+    gone = document.fits[0].a.object_id
+    before = evaluate(document, profile)
+    last_name = before.object_names[gone]
+    History(document).apply("weg", [OperationDraft(op="delete_object", inputs=(gone,), params={})])
+    after = evaluate(document, profile)
+    missing = [
+        finding for finding in after.scene.report.findings if finding.code == "fit.missing_feature"
+    ]
+    assert missing, "ohne Partner kein Befund"
+    for finding in missing:
+        assert str(finding.values["a"]) == last_name
+        assert gone not in str(finding.values["a"])
+
+
+def test_a_partner_never_seen_is_named_as_removed(profile: Profile) -> None:
+    """Ohne bekannten Namen eine Beschreibung, keine Kennung."""
+    scene = pair(profile)
+    scene = replace(
+        scene,
+        fits=[
+            Fit(
+                "pair", FeatureRef("obj_9", "hole_1"), FeatureRef("pin", "mating"), "clearance", 0.4
+            )
+        ],
+    )
+    found = [finding for finding in check(scene, profile) if finding.code.startswith("fit.")]
+    assert found
+    assert all("obj_9" not in str(finding.values["a"]) for finding in found)
+    assert str(found[0].values["a"]) == "ein entferntes Objekt"
