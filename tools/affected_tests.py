@@ -16,13 +16,20 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
 1. sie ein geändertes Modul importiert — auch mittelbar, auch träge in einer
    Funktion, auch nur unter ``TYPE_CHECKING``; oder
 2. sie selbst geändert wurde; oder
-3. sie den Baum liest statt ihn zu importieren — ``rglob``, ``walk_packages``,
-   ``iterdir`` über die Quellen: Sprachregel, Kerntrennung, Fehlertexte,
-   Verzeichniskarten. Diese Wächter sehen jede Änderung an ``app/`` oder
-   ``tools/`` und gehören deshalb zu jeder dazu; oder
+3. sie den Baum liest statt ihn zu importieren — ``rglob``, ``glob``,
+   ``walk_packages``, ``iterdir`` über die Quellen: Sprachregel,
+   Kerntrennung, Fehlertexte, Verzeichniskarten —, selbst oder über ein
+   Modul unter ``tests/`` oder ``tools/``, das Python-Quellen sucht
+   (``tests/source_tree.py``, ``tools/code_facts.py``). Diese Wächter sehen
+   jede Änderung an ``app/`` oder ``tools/`` und gehören deshalb zu jeder
+   dazu; oder
 4. eine geänderte Nicht-Python-Datei oder ein Skript außerhalb der Pakete
    bei ihrem Namen genannt wird — ``ROADMAP.md``, ``constraints.txt``, ein
-   Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/``.
+   Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/`` —, auch über
+   einen Helfer, der sie nennt.
+
+Gewählt werden nur Testdateien: Aus einem Helfer sammelt pytest nichts, er
+steht für die Testdateien, die ihn importieren.
 
 Und ``tests/conftest.py`` ist die Ausnahme von allem: Wer es ändert, ändert
 jeden Test.
@@ -70,8 +77,18 @@ PACKAGES = ("app", "tools", "tests")
 #: Aufrufe, an denen eine Testdatei den Baum liest statt ihn zu importieren.
 #: Wer so einen Wächter schreibt, benutzt eines dieser Wörter — und wer eines
 #: benutzt, ohne den Baum zu lesen, bekommt einen Test zu viel, nie einen zu
-#: wenig.
-_TREE_READERS = re.compile(r"\b(rglob|walk_packages|iterdir|iter_modules)\s*\(")
+#: wenig. Auch ein flacher ``glob`` liest den Baum (Konzept Codestruktur 4.1).
+_TREE_READERS = re.compile(r"\b(rglob|glob|walk_packages|iterdir|iter_modules)\s*\(")
+
+#: Woran ein Modul unter ``tests/`` oder ``tools/`` erkennbar Python-Quellen
+#: sucht: ein Glob auf ``.py`` oder der Gang über Pakete. Wer es importiert,
+#: liest den Baum mit ihm (Codestruktur Schritt 0, E5). Enger als
+#: ``_TREE_READERS``, weil ein Helfer viele Importeure hat: Das ``rglob("*")``
+#: über ein Paketarchiv in ``tests/helpers.py`` zöge sonst jede zweite
+#: Testdatei in jede Auswahl.
+_SOURCE_SEARCH = re.compile(
+    r"\br?glob\s*\(\s*[fr]?[\"'][^\"']*\.pyi?[\"'*]|\b(?:walk_packages|iter_modules)\s*\("
+)
 
 #: Änderungen hieran betreffen jeden Test.
 _EVERYTHING = frozenset({"tests/conftest.py", "pyproject.toml", "constraints.txt"})
@@ -223,11 +240,43 @@ def changed_files(root: Path = ROOT) -> list[Path]:
     return sorted(root / name for name in files)
 
 
-def _tree_readers(graph: ImportGraph) -> set[str]:
-    found: set[str] = set()
-    for name, path in graph.modules.items():
-        if name.startswith("tests.") and _TREE_READERS.search(path.read_text(encoding="utf-8")):
-            found.add(name)
+def _is_test_file(graph: ImportGraph, name: str) -> bool:
+    """Ob pytest aus dem Modul Tests sammelt — ein Helfer unter ``tests/`` sammelt keine."""
+    return name.startswith("tests.") and graph.modules[name].name.startswith("test_")
+
+
+def _test_files_behind(graph: ImportGraph, name: str) -> list[str]:
+    """Die Testdateien, die ``name`` mittelbar importieren, sortiert."""
+    return sorted(one for one in graph.dependents([name]) if _is_test_file(graph, one))
+
+
+def _tree_readers(graph: ImportGraph) -> dict[str, str]:
+    """Die Testdateien, die den Baum lesen, je mit dem Grund — selbst oder über ein Modul.
+
+    Zählte nur der eigene Text, liefe ein Wächter, der den Baum über
+    ``tests/source_tree.py`` oder ``tools/code_facts.py`` liest, bei keiner
+    Änderung an ``app/`` mit (Codestruktur Schritt 0, E5) — ebenso
+    ``test_wording.py``, das die Quellen über ``application_sources`` aus
+    ``test_text_length.py`` liest. Ein Modul, das Python-Quellen sucht,
+    überträgt das deshalb auf jede Testdatei, die es mittelbar importiert;
+    der eigene Grund einer Testdatei geht vor.
+    """
+    texts = {
+        name: path.read_text(encoding="utf-8")
+        for name, path in graph.modules.items()
+        if name.startswith(("tests.", "tools."))
+    }
+    found = {
+        name: "liest den ganzen Baum"
+        for name, text in sorted(texts.items())
+        if _is_test_file(graph, name) and _TREE_READERS.search(text)
+    }
+    for lender, text in sorted(texts.items()):
+        if not _SOURCE_SEARCH.search(text):
+            continue
+        where = graph.modules[lender].relative_to(graph.root).as_posix()
+        for name in _test_files_behind(graph, lender):
+            found.setdefault(name, f"liest den ganzen Baum über {where}")
     return found
 
 
@@ -288,10 +337,31 @@ def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
             ):
                 continue
             for importer in graph.importers.get(name, ()):
-                if importer.startswith("tests."):
+                # Nur Testdateien: Über einen Helfer wäre es das zweite Glied der
+                # Kette — ``tests/helpers.py`` importiert ein Modul, das den
+                # Changelog nennt, und zöge so jede Testdatei nach, die ihn benutzt.
+                if _is_test_file(graph, importer):
                     # Der Namensweg oben ist der genauere — er behält den Vorrang.
                     found.setdefault(importer, f"hängt an einem Modul, das {folder}/ liest")
     return found
+
+
+def _note_readers(graph: ImportGraph, reasons: dict[Path, str], found: dict[str, str]) -> None:
+    """Trägt die Leser einer Datei ein: Testdateien selbst, für einen Helfer die Testdateien,
+    die ihn mittelbar importieren.
+
+    Ein Helfer in der Auswahl sammelt keinen Test, und sein Importeur liefe
+    nicht. Die Testdateien zuerst, damit ihr genauerer Grund stehen bleibt.
+    """
+    for name in sorted(found):
+        if _is_test_file(graph, name):
+            reasons.setdefault(graph.modules[name], found[name])
+    for name in sorted(found):
+        if _is_test_file(graph, name):
+            continue
+        helper = graph.modules[name].relative_to(graph.root).as_posix()
+        for test in _test_files_behind(graph, name):
+            reasons.setdefault(graph.modules[test], f"über {helper}: {found[name]}")
 
 
 def affected(
@@ -334,22 +404,23 @@ def affected(
                 touches_code |= name.split(".", 1)[0] in {"app", "tools"}
                 changed_modules.add(name)
                 deleted_modules.add(name)
-                for test_name, test_path in graph.modules.items():
-                    if (
-                        test_name.startswith("tests.")
-                        and test_path.name.startswith("test_")
-                        and name in test_path.read_text(encoding="utf-8")
-                    ):
-                        reasons.setdefault(test_path, f"nennt {name}, und die Datei ist gelöscht")
+                _note_readers(
+                    graph,
+                    reasons,
+                    {
+                        reader: f"nennt {name}, und die Datei ist gelöscht"
+                        for reader, reader_path in graph.modules.items()
+                        if reader.startswith("tests.")
+                        and name in reader_path.read_text(encoding="utf-8")
+                    },
+                )
             else:
                 # Ein Skript außerhalb der Pakete — der gemeinsame Hook, ein
                 # Läufer unter ``.claude/.state/`` — importiert niemand; seine
                 # Tests laden es über den Pfad und nennen dabei den Namen.
-                for test_name, reason in _named_readers(graph, graph.root / relative).items():
-                    reasons.setdefault(graph.modules[test_name], reason)
+                _note_readers(graph, reasons, _named_readers(graph, graph.root / relative))
         else:
-            for name, reason in _named_readers(graph, graph.root / relative).items():
-                reasons.setdefault(graph.modules[name], reason)
+            _note_readers(graph, reasons, _named_readers(graph, graph.root / relative))
     for name in graph.dependents(changed_modules):
         path = graph.modules[name]
         if name.startswith("tests.") and path.name.startswith("test_"):
@@ -365,17 +436,19 @@ def affected(
     # Importkanten, damit deren genauerer Grund stehen bleibt.
     if named_tools:
         texts = {
-            test_path: test_path.read_text(encoding="utf-8")
+            name: test_path.read_text(encoding="utf-8")
             for name, test_path in graph.modules.items()
-            if name.startswith("tests.") and test_path.name.startswith("test_")
+            if name.startswith("tests.")
         }
         for file_name in named_tools:
-            for test_path, text in texts.items():
-                if file_name in text:
-                    reasons.setdefault(test_path, f"nennt {file_name}")
+            _note_readers(
+                graph,
+                reasons,
+                {name: f"nennt {file_name}" for name, text in texts.items() if file_name in text},
+            )
     if touches_code:
-        for name in _tree_readers(graph):
-            reasons.setdefault(graph.modules[name], "liest den ganzen Baum")
+        for name, reason in _tree_readers(graph).items():
+            reasons.setdefault(graph.modules[name], reason)
     return set(reasons), reasons
 
 

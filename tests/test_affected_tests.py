@@ -105,6 +105,165 @@ def test_an_unrelated_module_selects_only_the_tree_readers(tree: Path) -> None:
     assert _names(files, tree) == {"tests/test_unrelated.py", "tests/test_reader.py"}
 
 
+def test_a_flat_glob_reads_the_tree_too(tree: Path) -> None:
+    """CS-6, RM-725: Wer den Baum über ``glob`` liest, statt ihn zu importieren, sieht jede
+    Änderung an ``app/`` — auch über das Modul ``glob``."""
+    _write(tree, "tests/test_globber.py", "from pathlib import Path\nFILES = Path('t').glob('*')\n")
+    _write(tree, "tests/test_globmodule.py", "import glob\nFILES = glob.glob('t/*')\n")
+
+    files, reasons = affected([tree / "app" / "z.py"], ImportGraph(tree))
+
+    assert {"tests/test_globber.py", "tests/test_globmodule.py"} <= _names(files, tree)
+    assert reasons[tree / "tests" / "test_globber.py"] == "liest den ganzen Baum"
+
+
+def test_a_test_reading_through_a_source_helper_is_a_tree_reader(tree: Path) -> None:
+    """E5: Ein Wächter, der den Baum nur über einen gemeinsamen Helfer liest, steht in keinem
+    eigenen Text als Baumleser — er wird über den Helfer gewählt, mittelbar und aus
+    ``tests/`` wie aus ``tools/``. Der Helfer selbst sammelt keinen Test und gehört nicht in
+    die Auswahl."""
+    _write(
+        tree,
+        "tests/source_tree.py",
+        "from pathlib import Path\n"
+        "def files(folder):\n"
+        "    return sorted(Path(folder).rglob('*.py'))\n",
+    )
+    _write(tree, "tests/test_guard.py", "from tests import source_tree\n")
+    _write(tree, "tests/guard_helpers.py", "from tests.source_tree import files\n")
+    _write(tree, "tests/test_far_guard.py", "from tests.guard_helpers import files\n")
+    _write(tree, "tools/code_scan.py", "def scan(root):\n    return sorted(root.glob('**/*.py'))\n")
+    _write(tree, "tests/test_scan_guard.py", "from tools.code_scan import scan\n")
+
+    files, reasons = affected([tree / "app" / "z.py"], ImportGraph(tree))
+
+    assert {
+        "tests/test_guard.py",
+        "tests/test_far_guard.py",
+        "tests/test_scan_guard.py",
+    } <= _names(files, tree)
+    assert reasons[tree / "tests" / "test_guard.py"] == (
+        "liest den ganzen Baum über tests/source_tree.py"
+    )
+    assert reasons[tree / "tests" / "test_scan_guard.py"] == (
+        "liest den ganzen Baum über tools/code_scan.py"
+    )
+    assert all(path.name.startswith("test_") for path in files), sorted(files)
+
+
+def test_a_test_borrowing_a_source_search_from_another_test_reads_the_tree(tree: Path) -> None:
+    """Wie ``test_wording`` die Quellen über ``application_sources`` aus ``test_text_length``
+    liest: Auch eine Testdatei kann ihren Baumgang verleihen. Wer dort nur einen Körper
+    leiht (``box`` aus ``test_boolean``), liest dadurch keine Quellen und bleibt draußen."""
+    _write(
+        tree,
+        "tests/test_lengths.py",
+        "from pathlib import Path\n"
+        "def application_sources():\n"
+        "    return sorted(Path('app').rglob('*.py'))\n",
+    )
+    _write(tree, "tests/test_words.py", "from tests.test_lengths import application_sources\n")
+    _write(tree, "tests/test_solids.py", "def box():\n    return None\n")
+    _write(tree, "tests/test_empty_result.py", "from tests.test_solids import box\n")
+
+    files, reasons = affected([tree / "app" / "z.py"], ImportGraph(tree))
+
+    assert reasons[tree / "tests" / "test_words.py"] == (
+        "liest den ganzen Baum über tests/test_lengths.py"
+    )
+    assert reasons[tree / "tests" / "test_lengths.py"] == "liest den ganzen Baum"
+    assert not {"tests/test_solids.py", "tests/test_empty_result.py"} & _names(files, tree)
+
+
+def test_a_helper_listing_a_foreign_tree_is_no_source_reader(tree: Path) -> None:
+    """Die Gegenrichtung zu E5: Ein Helfer, der ein Paketarchiv oder ein Profil durchgeht
+    (``rglob("*")``), sucht keine Python-Quellen. Seine Importeure laufen bei einer Änderung
+    an ``app/`` nicht mit — sonst zöge ``tests/helpers.py`` jede zweite Testdatei hinein —,
+    und er selbst steht auch dann nicht in der Auswahl, wenn er das Wort ``rglob`` trägt."""
+    _write(tree, "tests/archive.py", "def pack(tree):\n    return sorted(tree.rglob('*'))\n")
+    _write(tree, "tests/test_archive.py", "from tests.archive import pack\n")
+
+    files, _ = affected([tree / "app" / "z.py"], ImportGraph(tree))
+
+    assert _names(files, tree) == {"tests/test_unrelated.py", "tests/test_reader.py"}
+
+
+def test_a_file_named_by_a_helper_selects_the_tests_behind_it(tree: Path) -> None:
+    """Nennt ein Helfer unter ``tests/`` eine Datei, zählen die Testdateien, die ihn
+    importieren — der Helfer allein sammelt keinen Test, und sein Importeur liefe nicht."""
+    _write(tree, "tests/roadmap_helper.py", "TEXT = 'ROADMAP.md'\n")
+    _write(tree, "tests/test_roadmap_view.py", "from tests.roadmap_helper import TEXT\n")
+
+    files, reasons = affected([tree / "ROADMAP.md"], ImportGraph(tree))
+
+    assert _names(files, tree) == {"tests/test_roadmap.py", "tests/test_roadmap_view.py"}
+    assert reasons[tree / "tests" / "test_roadmap_view.py"] == (
+        "über tests/roadmap_helper.py: nennt ROADMAP.md"
+    )
+    assert reasons[tree / "tests" / "test_roadmap.py"] == "nennt ROADMAP.md"
+
+
+def test_a_tool_or_a_deleted_module_named_by_a_helper_selects_the_tests_behind_it(
+    tree: Path,
+) -> None:
+    """Dieselbe Regel für die zwei anderen Namenswege: ein Werkzeug, das seine Tests über den
+    Pfad laden, und ein gelöschtes Modul, das nur noch als Text vorkommt — nennt es ein
+    Helfer, zählen dessen Importeure, nicht er."""
+    tool = _write(tree, "tools/runner_unit.py", "VALUE = 1\n")
+    _write(tree, "tests/runner_loader.py", "SCRIPT = 'runner_unit.py'\n")
+    _write(tree, "tests/test_runner.py", "from tests.runner_loader import SCRIPT\n")
+    _write(tree, "tests/module_names.py", "NAME = 'app.x'\n")
+    _write(tree, "tests/test_module_names.py", "from tests.module_names import NAME\n")
+
+    files, reasons = affected([tool], ImportGraph(tree))
+
+    assert reasons[tree / "tests" / "test_runner.py"] == (
+        "über tests/runner_loader.py: nennt runner_unit.py"
+    )
+    assert all(path.name.startswith("test_") for path in files), sorted(files)
+
+    removed = tree / "app" / "x.py"
+    removed.unlink()
+    files, reasons = affected([removed], ImportGraph(tree))
+
+    assert reasons[tree / "tests" / "test_module_names.py"] == (
+        "über tests/module_names.py: nennt app.x, und die Datei ist gelöscht"
+    )
+    assert all(path.name.startswith("test_") for path in files), sorted(files)
+
+
+def test_the_real_guards_are_chosen_for_any_change_under_app() -> None:
+    """Gegen den echten Baum (E5, RM-725): Die Wächter, die den Baum über
+    ``tools/code_index.py``, ``tests/source_tree.py`` oder eine andere Testdatei lesen,
+    laufen bei einer Änderung an einem Modul mit, das sie nicht importieren — und kein
+    Helfer steht in der Auswahl. Ohne den mittelbaren Weg fehlten ``test_leash``,
+    ``test_native_keys`` und ``test_widget_lifetime``, seit sie über den Helfer lesen.
+
+    Geändert ist ein neues Modul, das noch niemand importiert: So hängt die Auswahl
+    an keiner Importkante des heutigen Baums, nur am Lesen."""
+    graph = ImportGraph()
+    changed = graph.root / "app" / "core" / "perceive" / "zz_not_yet_imported.py"
+    assert not changed.exists()
+
+    files, reasons = affected([changed], graph)
+
+    for name in ("test_patch_targets.py", "test_import_resolution.py"):
+        assert reasons[graph.root / "tests" / name] == (
+            "liest den ganzen Baum über tools/code_facts.py"
+        ), name
+    for name in ("test_leash.py", "test_native_keys.py", "test_widget_lifetime.py"):
+        assert reasons[graph.root / "tests" / name] == (
+            "liest den ganzen Baum über tests/source_tree.py"
+        ), name
+    assert reasons[graph.root / "tests" / "test_wording.py"].startswith(
+        "liest den ganzen Baum über tests/"
+    )
+    assert reasons[graph.root / "tests" / "test_source_readers.py"].startswith(
+        "liest den ganzen Baum"
+    )
+    assert all(path.name.startswith("test_") for path in files)
+
+
 def test_a_changed_test_file_selects_itself(tree: Path) -> None:
     """Eine geänderte Testdatei ist selbst betroffen, und nur sie."""
     files, reasons = affected([tree / "tests" / "test_unrelated.py"], ImportGraph(tree))
@@ -253,6 +412,21 @@ def test_a_data_file_does_not_drag_in_the_whole_tree(tree: Path) -> None:
     assert "tests/test_far.py" not in _names(files, tree), (
         "ein Test zwei Glieder weiter gehört nicht in die Auswahl einer Datendatei"
     )
+
+
+def test_a_helper_of_a_data_reader_stays_out_and_drags_in_nothing(tree: Path) -> None:
+    """Der Ordnerweg bleibt auch über einen Helfer bei einem Glied: ``tests/helpers.py``
+    importiert ein Modul, das ``changelog/`` nennt, und zöge sonst jede Testdatei, die ihn
+    benutzt, in die Auswahl einer Changelog-Datei. Der Helfer selbst sammelt keinen Test
+    und steht deshalb auch nicht darin."""
+    _write(tree, "app/reader.py", 'from pathlib import Path\nDIR = Path("daten")\n')
+    _write(tree, "tests/shared.py", "from app import reader\n")
+    _write(tree, "tests/test_shared.py", "from tests.shared import reader\n")
+    _write(tree, "daten/tabelle.toml", "wert = 1\n")
+
+    files, _ = affected([tree / "daten" / "tabelle.toml"], ImportGraph(tree))
+
+    assert _names(files, tree) == set()
 
 
 def test_a_script_outside_the_packages_selects_the_test_that_loads_it(tree: Path) -> None:
