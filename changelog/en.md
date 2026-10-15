@@ -90,6 +90,7 @@ it into `website/version.json`.
 - Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
 - If only slivers remain beside one printable part, *Split into separate parts* names them and offers *Keep slivers*. Before, it said the body was all one piece.
 - If a fillet radius or chamfer width is too large for the edges, the message offers *Pick different edges*.
+- If a selected face does not suit *Apply draft angle* or *Offset face*, the message offers *Pick different faces*.
 
 ## 0.6.0
 

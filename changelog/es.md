@@ -91,6 +91,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
 - Si junto a una pieza imprimible solo quedan astillas, *Dividir en piezas sueltas* las nombra y ofrece *Conservar las astillas*. Antes decía que el cuerpo era de una sola pieza.
 - Si el radio de un redondeo o el ancho de un chaflán es demasiado grande para las aristas, el mensaje ofrece *Elegir otras aristas*.
+- Si una cara seleccionada no sirve para *Aplicar ángulo de desmoldeo* o *Desplazar cara*, el mensaje ofrece *Elegir otras caras*.
 
 ## 0.6.0
 

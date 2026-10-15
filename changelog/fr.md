@@ -91,6 +91,7 @@ dans `website/version.json`.
 - Les champs du perçage et la case de modification simultanée des éléments similaires expliquent leur effet. « Compenser les écarts d'impression » précise la correction issue du profil du matériau.
 - S'il ne reste que des éclats à côté d'une pièce imprimable, *Diviser en pièces distinctes* les nomme et propose *Garder les éclats*. Avant, le corps était dit d'un seul tenant.
 - Si le rayon d'un congé ou la largeur d'un chanfrein est trop grand pour les arêtes, le message propose *Choisir d'autres arêtes*.
+- Si une face sélectionnée ne convient pas à *Appliquer une dépouille* ou *Décaler la face*, le message propose *Choisir d'autres faces*.
 
 ## 0.6.0
 

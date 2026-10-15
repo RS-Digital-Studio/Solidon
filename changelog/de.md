@@ -115,6 +115,7 @@ Nutzen da und sonst nichts.
 - Bohrungsfelder und der Haken zum gemeinsamen Ändern gleichartiger Merkmale erklären ihre Wirkung. „Druckabweichung ausgleichen“ beschreibt die Korrektur aus dem Materialprofil verständlicher.
 - Bleiben neben einem druckbaren Teil nur Splitter, nennt *In Einzelteile aufteilen* sie und bietet *Splitter behalten* an. Bisher hieß es, der Körper bestehe aus einem Stück.
 - Ist der Radius einer Rundung oder die Breite einer Fase für die Kanten zu groß, bietet die Meldung *Andere Kanten wählen* an.
+- Passt eine gewählte Fläche nicht zu *Formschräge anstellen* oder *Fläche versetzen*, bietet die Meldung *Andere Flächen wählen* an.
 
 ## 0.6.0
 

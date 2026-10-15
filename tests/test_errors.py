@@ -84,9 +84,11 @@ def test_selection_errors_offer_a_new_selection(case: str) -> None:
         elif case == "empty-group":
             edges.wanted([], "vertical", ())
 
-    # Kanten wählt man im Dialog des Schritts, nicht im Objektbaum (FD-123).
-    chosen = errors.CHANGE_EDGES if case.endswith("edge") or case == "empty-group" else None
-    assert caught.value.suggestions == (chosen or errors.CHANGE_SELECTION, errors.CANCEL)
+    # Kanten und Flächen wählt man im Dialog des Schritts, nicht im Objektbaum
+    # (FD-123, FD-165).
+    edge = case.endswith("edge") or case == "empty-group"
+    chosen = errors.CHANGE_EDGES if edge else errors.CHANGE_FACES
+    assert caught.value.suggestions == (chosen, errors.CANCEL)
 
 
 def _import_every_core_module() -> None:

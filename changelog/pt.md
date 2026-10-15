@@ -90,6 +90,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os campos do furo e a caixa para alterar elementos iguais em conjunto explicam o seu efeito. «Compensar desvios de impressão» esclarece a correção do perfil do material.
 - Se junto a uma peça imprimível só restarem lascas, *Dividir em peças soltas* nomeia-as e oferece *Manter as lascas*. Antes dizia que o corpo era de uma só peça.
 - Se o raio de um arredondamento ou a largura de um chanfro for grande demais para as arestas, a mensagem oferece *Escolher outras arestas*.
+- Se uma face selecionada não servir para *Aplicar o ângulo de saída* ou *Deslocar a face*, a mensagem oferece *Escolher outras faces*.
 
 ## 0.6.0
 

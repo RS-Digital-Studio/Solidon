@@ -78,6 +78,10 @@ CHANGE_SELECTION = Action("change_selection", _("Andere Objekte wählen"), prima
 #: markierten Körper, und an einem Kantenfehler wählte der Kunde damit einen
 #: anderen Körper statt einer anderen Kante (FD-123).
 CHANGE_EDGES = Action("change_step", _("Andere Kanten wählen"), primary=True)
+#: Andere **Flächen** für *Formschräge anstellen* oder *Fläche versetzen* —
+#: im Dialog des Schritts, wo *Flächen* beziehungsweise *Fläche* stehen; der
+#: Zwilling von :data:`CHANGE_EDGES` (FD-165).
+CHANGE_FACES = Action("change_step", _("Andere Flächen wählen"), primary=True)
 #: Eine Zeichenebene, die sich nicht lesen lässt (``sketch.planes._unreadable``):
 #: den Schritt mit dem Cursor in seinem Ebenenfeld öffnen — derselbe Weg wie
 #: *Eingabe korrigieren*, mit dem Satz, der sagt, was dort zu tun ist. Bis zum
