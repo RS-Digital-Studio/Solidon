@@ -64,17 +64,42 @@ BUILD_DIR = ROOT / "packaging" / "build"
 #: Bau bricht ab — ein Manifest, das niemand prüft, wäre schlimmer als keins.
 PLACEHOLDER = "MANIFEST_PUBLIC_KEY: bytes | None = None"
 
+#: Das Paket, das kompiliert statt als Bytecode reist (H5).
+PACKAGE = "app.core.activation"
+
+
+def nested_modules(source_dir: Path) -> list[Path]:
+    """Die Module des Prüfpakets, die nicht direkt im Paketordner liegen.
+
+    Gelesen wird rekursiv, damit ein Unterordner auffällt, statt still
+    übergangen zu werden: Ein vergessenes Modul bliebe Bytecode oder fehlte im
+    Paket (W4).
+    """
+    return [path for path in sorted(source_dir.rglob("*.py")) if path.parent != source_dir]
+
 
 def stage_sources(staging: Path, manifest_public: bytes, source_dir: Path | None = None) -> None:
     """Kopiert die Prüfmodul-Quellen und setzt den Bau-Schlüssel ein.
 
+    Das Paket reist flach: Die Spec legt jede gebaute Erweiterung direkt nach
+    ``app/core/activation``. Ein Modul in einem Unterordner hält den Bau an,
+    statt an falscher Stelle oder gar nicht anzukommen.
+
     ``source_dir`` ist nur für die Suite da — der Bau liest immer aus dem
     Repository.
     """
-    staging.mkdir(parents=True, exist_ok=True)
     if source_dir is None:
         source_dir = ROOT / "app" / "core" / "activation"
-    for source in sorted(source_dir.glob("*.py")):
+    nested = nested_modules(source_dir)
+    if nested:
+        names = ", ".join(path.relative_to(source_dir).as_posix() for path in nested)
+        raise SystemExit(
+            f"Das Prüfmodul hat Module in Unterordnern ({names}), die Spec legt aber jede "
+            "Erweiterung direkt nach app/core/activation. Die Module in den Paketordner "
+            "ziehen oder Bau und Spec zusammen um Unterordner erweitern."
+        )
+    staging.mkdir(parents=True, exist_ok=True)
+    for source in sorted(source_dir.rglob("*.py")):
         shutil.copy2(source, staging / source.name)
 
     integrity_copy = staging / "integrity.py"
@@ -90,24 +115,34 @@ def stage_sources(staging: Path, manifest_public: bytes, source_dir: Path | None
     integrity_copy.write_text(text.replace(PLACEHOLDER, replacement), encoding="utf-8")
 
 
+def extension_modules(staging: Path) -> list[tuple[str, Path]]:
+    """Je Quelle im Bauordner der volle Modulname, unter dem sie übersetzt wird.
+
+    Der Name ist der **volle** (``app.core.activation.key``): er steckt im
+    Init-Symbol der gebauten Datei, und ein falscher lädt nicht. Das Paket
+    selbst heißt nach seinem Paketnamen — CPython sucht das Symbol nach dem
+    Modulnamen, nicht nach dem Dateinamen.
+    """
+    modules: list[tuple[str, Path]] = []
+    for source in sorted(staging.rglob("*.py")):
+        parts = source.relative_to(staging).with_suffix("").parts
+        if parts[-1] == "__init__":
+            parts = parts[:-1]
+        modules.append((".".join((PACKAGE, *parts)), source))
+    return modules
+
+
 def compile_extensions(staging: Path, target: Path) -> list[Path]:
     """Übersetzt die Kopien nach C und baut sie zu Erweiterungen.
 
-    Der Modulname jeder Erweiterung ist der **volle** (``app.core.activation.key``):
-    er steckt im Init-Symbol der gebauten Datei, und ein falscher lädt nicht.
-    Das Paket selbst wird über seinen Paketnamen gebaut und als
-    ``__init__`` abgelegt — CPython sucht das Symbol nach dem Modulnamen,
-    nicht nach dem Dateinamen.
+    Die Namen kommen aus :func:`extension_modules`; das Paket selbst wird als
+    ``__init__`` abgelegt.
     """
     from Cython.Build import cythonize
     from setuptools import Extension
     from setuptools.dist import Distribution
 
-    extensions = []
-    for source in sorted(staging.glob("*.py")):
-        stem = source.stem
-        name = "app.core.activation" if stem == "__init__" else f"app.core.activation.{stem}"
-        extensions.append(Extension(name, [str(source)]))
+    extensions = [Extension(name, [str(source)]) for name, source in extension_modules(staging)]
 
     with tempfile.TemporaryDirectory(prefix="solidon-licence-build-") as scratch:
         distribution = Distribution(
