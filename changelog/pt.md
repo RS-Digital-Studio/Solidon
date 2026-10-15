@@ -75,6 +75,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O cabeçalho só encurta o nome da impressora quando a linha está cheia. O nome do projeto e as medidas ficam juntos à esquerda, a impressora à direita ao lado de *Definições de impressão …*.
 - Se *Dividir automaticamente* não encontrar um corte, a linha de estado diz porquê. Até agora dizia então que a peça já cabia na mesa.
 - A breve confirmação após uma ação aparece ao lado dos cartões, não por cima, por exemplo ao lado do relatório. O passo seguinte retira-a com a linha de estado, também um «Anulado» antigo.
+- Numa observação de um modelo gerado, *Gerar de novo* abre o gerador com a sua descrição e a semente seguinte.
 
 ### Imprimir e entregar ao slicer
 

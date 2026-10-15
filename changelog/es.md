@@ -76,6 +76,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La barra superior solo acorta el nombre de la impresora si la fila está llena. Proyecto y medidas quedan a la izquierda, la impresora a la derecha junto a *Ajustes de impresión …*.
 - Si *Dividir automáticamente* no encuentra un corte, la línea de estado indica el motivo. Hasta ahora decía entonces que la pieza ya cabía en la placa.
 - La breve confirmación tras una acción aparece junto a las tarjetas, no encima, por ejemplo junto al informe. El siguiente paso la retira con la línea de estado, también un «Deshecho» antiguo.
+- En un aviso de un modelo generado, *Volver a generar* abre el generador con su descripción y la siguiente semilla.
 
 ### Imprimir y entregar al slicer
 

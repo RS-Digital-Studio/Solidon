@@ -325,7 +325,12 @@ from app.ui.filament_picker import (
     swatch,
 )
 from app.ui.filament_usage import UsageNotice
-from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
+from app.ui.generate_dialog import (
+    IMAGE_SUFFIXES,
+    GenerateDialog,
+    generated_origin,
+    image_filter,
+)
 from app.ui.guide_targets import (
     MissingTargetError,
     menu_entries,
@@ -8439,7 +8444,8 @@ class MainWindow(QMainWindow):
         """
         self._generate(Path(path))
 
-    def _generate(self, image: Path | None) -> None:
+    def _generate(self, image: Path | None, again: Any = None) -> None:
+        """Den Erzeugen-Dialog öffnen; ``again`` ist der Befund hinter *Neu erzeugen*."""
         if self._drawing_refuses():
             return
         # **Gefragt wird vor dem Start, wie beim Import** (RM-361). Der Lauf
@@ -8453,7 +8459,7 @@ class MainWindow(QMainWindow):
                 refusal,
                 self,
                 tr("Einfügen beenden und Modell erzeugen"),
-                partial(self._generate, image),
+                partial(self._generate, image, again),
             )
             return
         # **Nichtmodal, und einer zur Zeit** (RM-371, §2.8). Der Dialog lief
@@ -8463,9 +8469,18 @@ class MainWindow(QMainWindow):
         # bedienbar. Ein zweiter Aufruf holt denselben Dialog nach vorn: Zwei
         # Läufe auf derselben Grafikkarte wären doppelte Wartezeit.
         dialog = self._generator
+        # **Neu erzeugen bringt die Beschreibung mit** (FD-117): Der Befund
+        # nennt den erzeugten Körper, seine Quelle Beschreibung und Startwert.
+        origin = (
+            generated_origin(self.session.project.document, getattr(again, "object_id", None))
+            if again is not None
+            else None
+        )
         if dialog is not None:
             if image is not None:
                 dialog.set_image(image)
+            if again is not None:
+                dialog.start_over(origin)
             self._show_generator(dialog, activate=True)
             return
         # Der Aufbau fragt einmal, ob ein Generator läuft, und das ist ein
@@ -8497,6 +8512,8 @@ class MainWindow(QMainWindow):
         self._generator_project = self.session._project_generation
         if image is not None:
             dialog.set_image(image)
+        if again is not None:
+            dialog.start_over(origin)
         self._show_generator(dialog, activate=True)
 
     def _show_generator(self, dialog: GenerateDialog, *, activate: bool) -> None:
@@ -27551,7 +27568,7 @@ class MainWindow(QMainWindow):
             # Die Rücknahme-Warnung des Agenten zeigt in den Verlauf — dort
             # stehen die Transaktionen, die eine Annahme mitnähme (H-1).
             "show_history": lambda _error: self._flash_area("history"),
-            "generate_again": lambda _error: self._generate(None),
+            "generate_again": lambda error: self._generate(None, error),
             # **Ein Rat, den nur der Kunde ausführen kann, ist ein halber.**
             # „Die Teilung läuft schon" schlägt vor, sie abzubrechen, und die
             # Handlung gibt es (``Session.cancel_split`` hält an *und*

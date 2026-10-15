@@ -76,6 +76,7 @@ dans `website/version.json`.
 - L'en-tête ne raccourcit le nom de l'imprimante que lorsque la ligne est pleine. Le nom du projet et les dimensions restent ensemble à gauche, l'imprimante à droite à côté de *Réglages d'impression …*.
 - Si *Diviser automatiquement* ne trouve aucune coupe, la ligne d'état en donne la raison. Jusqu'ici, elle annonçait alors que la pièce tenait déjà sur le plateau.
 - La brève confirmation après une action s'affiche à côté des cartes, pas dessus, par exemple à côté du rapport. L'étape suivante l'efface avec la ligne d'état, même un ancien « Annulé ».
+- Sur un constat d'un modèle généré, *Générer de nouveau* ouvre le générateur avec sa description et la graine suivante.
 
 ### Imprimer et transmettre au slicer
 

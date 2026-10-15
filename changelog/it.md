@@ -75,6 +75,7 @@ scrive in `website/version.json`.
 - L'intestazione accorcia il nome della stampante solo quando la riga è piena. Nome del progetto e misure stanno insieme a sinistra, la stampante a destra accanto a *Impostazioni di stampa …*.
 - Se *Dividi automaticamente* non trova un taglio, la riga di stato dice perché. Finora diceva invece che il pezzo entrava già nel piano.
 - La breve conferma dopo un'azione compare accanto alle schede, non sopra, per esempio accanto al rapporto. Il passaggio successivo la toglie insieme alla riga di stato, anche un vecchio «Annullato».
+- Su una segnalazione di un modello generato, *Genera di nuovo* apre il generatore con la sua descrizione e il seme successivo.
 
 ### Stampare e passare allo slicer
 
