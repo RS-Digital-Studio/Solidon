@@ -550,7 +550,8 @@ class FileRewrite:
         ]
         if binders and len(plain) == len(binders):
             return f'importlib.import_module("{module}")'
-        if binders or "importlib" in self.identifiers:
+        assigned = assignment_binders(self.source, "importlib", base)
+        if binders or assigned or self._binds_at_module("importlib"):
             self.ctx.problem(
                 f"{self.path}:{getattr(base, 'lineno', '?')}: {module} liegt hinter einem "
                 "gleichnamigen trägen Export und ist nur über importlib.import_module zu "
@@ -569,6 +570,27 @@ class FileRewrite:
             plan.after.append("import importlib")
             plan.rules.append(rule)
         return f'importlib.import_module("{module}")'
+
+    def _binds_at_module(self, name: str) -> bool:
+        """Ob die Modulebene ``name`` bindet (Import, Definition, Zuweisung) — eine Bindung in
+        einer Funktion zählt nicht."""
+        for stmt in own_statements(self.source.tree):
+            if isinstance(stmt, IMPORTS):
+                if any(bound_name(a) == name for a in stmt.names):
+                    return True
+                continue
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if stmt.name == name:
+                    return True
+                continue
+            for node in ast.walk(stmt):
+                if (
+                    isinstance(node, ast.Name)
+                    and node.id == name
+                    and isinstance(node.ctx, ast.Store)
+                ):
+                    return True
+        return False
 
     def _assigned_module(
         self, base: ast.Name, module: str, old_module: str, rule: str

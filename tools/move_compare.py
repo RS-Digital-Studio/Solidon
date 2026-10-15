@@ -723,6 +723,11 @@ class ReaderComparison(Comparison):
                 # prüft jede Stelle (``_covered``).
                 self.import_changes.append(f"neu {binding.text()}")
                 continue
+            if loader and _importlib_or_free(TopLevel(self.old).identity("importlib")):
+                # Funktionen, die importlib selbst importieren, meinen dasselbe Modul.
+                self.added.add(binding.bound)
+                self.import_changes.append(f"neu {binding.text()}")
+                continue
             if binding.bound in self.old_identifiers:
                 self.errors.append(
                     f"{self.path}:{new[0].lineno}: neuer Import bindet {binding.bound!r}, den die "
@@ -883,6 +888,17 @@ class ReaderComparison(Comparison):
         if ast.dump(old) != ast.dump(new):
             self.accept(f"Patch {site_old.text} → {site_new.text}")
         return True
+
+
+def _importlib_or_free(identity: Identity) -> bool:
+    """Ob ``importlib`` auf Modulebene frei ist oder schon das Modul ``importlib`` bindet."""
+    if identity[0] == "unbound":
+        return True
+    entries = identity[1:]
+    return identity[0] == "imp" and all(
+        isinstance(e, tuple) and str(e[1]).partition(".")[0] == "importlib" and e[2] == ""
+        for e in entries
+    )
 
 
 def _removable_target(stmt: ast.stmt) -> str | None:

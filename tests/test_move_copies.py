@@ -117,8 +117,9 @@ def test_a_hidden_original_is_read_through_its_lazy_package(tmp_path: Path) -> N
         '"""Ein Halter am verdeckten Modul."""\n\nfrom app.core.kit.measure import measure\n\n\n'
         "def gauge(text: str) -> int:\n    return measure(text)\n"
     )
+    helper = "def helper():\n    import importlib\n\n    return importlib\n\n\n"
     patch = (
-        "from app.core import consumer\n\n\ndef test_kit(monkeypatch):\n"
+        f"from app.core import consumer\n\n\n{helper}def test_kit(monkeypatch):\n"
         '    monkeypatch.setattr(consumer, "measure", len)\n'
     )
     files = fx.COPIES_OLD | {"app/core/gauge.py": holder, "tests/test_kit.py": patch}
@@ -129,7 +130,7 @@ def test_a_hidden_original_is_read_through_its_lazy_package(tmp_path: Path) -> N
         "def gauge(text: str) -> int:\n    return kit.measure(text)\n"
     )
     assert (root / "tests/test_kit.py").read_text(encoding="utf-8") == (
-        "import importlib\n\n\ndef test_kit(monkeypatch):\n"
+        f"import importlib\n\n\n{helper}def test_kit(monkeypatch):\n"
         '    monkeypatch.setattr(importlib.import_module("app.core.kit.measure"), "measure", len)\n'
     )
 
