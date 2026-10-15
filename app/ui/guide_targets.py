@@ -1682,17 +1682,15 @@ def _scroll_needed(widget: QWidget, name: str) -> Click | None:
         travel = min(remaining, bar.pageStep(), (span * angle + 119) // 120)
         if travel > distance + seen.height() - reach.height():
             continue
-        use_bar = bar.isVisible() and (angle != 120 or area is not areas[0])
+        # Ein innerer Bereich am Anschlag reicht das Rad weiter wie Qt; nimmt er es
+        # selbst, dreht es über der Leiste des Bereichs, der das Ziel trägt (FD-159).
+        hit = widget_under(seen.center())
+        while hit is not None and hit is not area and not _takes_wheel(hit, direction):
+            hit = hit.parentWidget()
+        use_bar = bar.isVisible() and (angle != 120 or area is not areas[0] or hit is not area)
         surface = _unclipped(bar.parentWidget() or bar) if use_bar else seen
-        hit = widget_under(surface.center())
-        if use_bar and hit is not bar:
+        if (widget_under(surface.center()) is not bar) if use_bar else (hit is not area):
             continue
-        if not use_bar:
-            # Ein innerer Bereich am Anschlag reicht das Rad weiter wie Qt (FD-131).
-            while hit is not None and hit is not area and not _takes_wheel(hit, direction):
-                hit = hit.parentWidget()
-            if hit is not area:
-                continue
         return Click(surface, Qt.MouseButton.NoButton, "rollen", name, direction, angle)
     raise MissingTargetError(
         f"{name}: Rollanschlag oder kein geeigneter Radschritt zum ganzen Ziel"

@@ -107,7 +107,8 @@ def test_the_heading_itself_is_reached_through_the_card_not_refused(
 
 
 def test_an_inner_area_that_still_rolls_keeps_the_wheel(qt_app: Any) -> None:
-    """Gegenprobe: Ein innerer Bereich, der selbst noch rollt, nähme das Rad — kein Rollen dort.
+    """Ein innerer Bereich, der selbst noch rollt, nähme das Rad: Gedreht wird über der
+    Leiste des Bereichs, der das Ziel trägt (FD-159), nie über dem inneren.
 
     Und am Anschlag reicht er es weiter: Dann rollt die Navigation über ihm.
     """
@@ -146,7 +147,11 @@ def test_an_inner_area_that_still_rolls_keeps_the_wheel(qt_app: Any) -> None:
                 inner.mapToGlobal(QPoint(0, 0)), inner.size()
             ).contains(click.rect.center())
             if rolls_itself:
-                assert not over_inner, click
+                assert click is not None and not over_inner, click
+                bar = outer.verticalScrollBar()
+                assert QRect(bar.mapToGlobal(QPoint(0, 0)), bar.size()).contains(
+                    click.rect.center()
+                ), click
             else:
                 assert click is not None and click.why == "rollen" and click.direction == 1
     finally:
