@@ -79,9 +79,16 @@ class ApplicationEvents(QObject):
         self._drop(id(listener))
 
     def listening(self, listener: QObject) -> bool:
-        """Ob dieser Zuhörer irgendeine Art angemeldet hat. Der Test fragt danach."""
+        """Ob dieser Zuhörer irgendeine Art angemeldet hat. Der Test fragt danach.
+
+        Gelesen wird ein Schnappschuss der Arten: ``gone`` läuft aus der
+        Speicherbereinigung heraus an jedem Prüfpunkt der Schleife und nimmt
+        eine Art ohne Zuhörer ganz heraus (FD-167).
+        """
         return any(
-            known() is listener for present in self._listeners.values() for _ident, known in present
+            known() is listener
+            for present in tuple(self._listeners.values())
+            for _ident, known in present
         )
 
     def _drop(self, ident: int) -> None:
