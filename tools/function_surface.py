@@ -70,6 +70,31 @@ def immediate_feature(window: Any, target: str) -> bool:
     return heading is not None and not heading.isCheckable()
 
 
+#: Ziele ohne Art, deren Klick schon die Handlung ist: die erste Handlung des
+#: Prüfberichts zum gewählten Befund (``guide_targets._report_action``).
+AT_ONCE_TARGETS: Final[frozenset[str]] = frozenset({"report.action"})
+
+
+def acts_at_once(window: Any, target: str) -> bool:
+    """Ob der Klick auf das Ziel schon die Handlung ausführt, statt eine Fläche zu öffnen.
+
+    Dann steht ihre Fläche **vor** dem Klick (FD-37, FD-115): Befundhandlungen
+    und die erste Handlung des Berichts wirken mit dem Klick, eine Operation
+    ohne Werte ebenso — ``MainWindow.run_operation`` fragt dann nichts —, eine
+    Merkmalshandlung, deren Kopf nicht aufklappt (:func:`immediate_feature`).
+    Entschieden an der Art der Handlung; vorher am Präfix des Ziels, und
+    *Objekt entfernen* wurde nach seiner Wirkung gemessen.
+    """
+    from app.core.registry import REGISTRY
+
+    kind, _separator, rest = target.partition(":")
+    if kind == "feature":
+        return immediate_feature(window, target)
+    if kind == "operation":
+        return REGISTRY.has(rest) and not REGISTRY.get(rest).params.spec()
+    return kind == "finding.action" or target in AT_ONCE_TARGETS
+
+
 def feature_in_view(window: Any, target: str) -> bool:
     """Die Zielhandlung steht sichtbar im Bild, auch ohne Eingaben in der Sprachspezifikation."""
     return (

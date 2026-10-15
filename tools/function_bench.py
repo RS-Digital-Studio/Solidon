@@ -646,7 +646,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase):
             for name, button in route_of(self.row)
         ]
 
-    def action_step(self, target: str, *, measure_surface: bool = False) -> Step:
+    def action_step(self, target: str, *, stop_before: bool | Callable[[], bool] = False) -> Step:
         """Die Handlung am Merkmal: ihr Kopf im Merkmalfenster — oder schon offen im Bild.
 
         Mit Bild rückt das Fenster *Bohrung ändern* nach der Auswahl in die
@@ -654,6 +654,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase):
         der Kunde tippt dort, ohne zu klicken (Probelauf F-20: nach zwei
         Sekunden „nicht auffindbar“, offscreen ohne Bild war die Zeile da). Der
         Schritt steht dann ohne Klick als Ziel in ``steps``, Zone ``ansicht``.
+        ``stop_before`` hält vor dem Klick auf den Kopf an (``Walk.step``).
         """
         inputs = list(self.spec.get("inputs") or {})
         since: dict[str, float] = {}
@@ -685,18 +686,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase):
                         f"im_bild:{target}",
                         f"die Maßgruppe im Bild trägt {shown}, nicht {wanted}",
                     )
-                machine.insert(
-                    [
-                        self.walker.step(
-                            target,
-                            stop_before_target=(
-                                lambda: surfaces.immediate_feature(self.window, target)
-                            )
-                            if measure_surface
-                            else False,
-                        )
-                    ]
-                )
+                machine.insert([self.walker.step(target, stop_before_target=stop_before)])
                 return
             if self.walker.before_target is not None:
                 self.walker.before_target(target)
@@ -1873,6 +1863,13 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase):
         from tools.function_protocol import safe_name
 
         before: dict[str, Any] = {}
+        decided = {"at_once": False}
+
+        def at_once() -> bool:
+            # Gefragt, wenn das Ziel dasteht: Eine Merkmalshandlung zeigt erst
+            # dann, ob ihr Kopf aufklappt (FD-115).
+            decided["at_once"] = surfaces.acts_at_once(self.window, target)
+            return decided["at_once"]
 
         def take(machine: StepMachine) -> None:
             root = self.surface()
@@ -1883,8 +1880,15 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase):
             self.picture(
                 surfaces.picture_label(self.variant, str(self.row.get("id") or ""), "flaeche")
             )
-            if target.startswith("finding.action:"):
+            if decided["at_once"]:
                 before.update(deepcopy(self.data))
+                machine.insert(
+                    [
+                        self.walker.step(target),
+                        self.still_step("geöffnete fläche steht still", self.surface),
+                        Step("geöffnete fläche aufnehmen", opened),
+                    ]
+                )
 
         def opened(machine: StepMachine) -> None:
             dialog = surfaces.open_dialog(self.window)
@@ -1903,14 +1907,18 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase):
                 surfaces.picture_label(self.variant, str(self.row["id"]), "flaeche-geoeffnet")
             )
 
-        route = self.path_steps()
         target = walk_target(self.row)
-        if target.startswith("finding.action:") and route:
-            # Erst vor Wirkung messen, dann wirklich klicken: Manche Handlungen
-            # öffnen weitere Eingaben. Deren Fläche wird getrennt aufgenommen.
-            route[-1] = self.walker.step(target, stop_before_target=True)
-        elif target.startswith("feature:") and route:
-            route[-1] = self.action_step(target, measure_surface=True)
+        route = self.path_steps()
+        last, button = route_of(self.row)[-1] if route else ("", "left")
+        if route and last == target:
+            # Wirkt die Handlung mit dem Klick, wird erst vor ihrer Wirkung
+            # gemessen, dann wirklich geklickt (:func:`take`): Manche öffnen
+            # weitere Eingaben, deren Fläche getrennt aufgenommen wird.
+            route[-1] = (
+                self.action_step(target, stop_before=at_once)
+                if target.startswith("feature:")
+                else self.walker.step(target, button, stop_before_target=at_once)
+            )
         self.run_steps(
             PATH_PHASE,
             [
@@ -1918,15 +1926,6 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase):
                 # Aufgenommen wird nach dem letzten Übergang (Review M1).
                 self.still_step("fläche steht still", self.surface),
                 Step("aufnehmen", take),
-                *(
-                    [
-                        self.walker.step(target),
-                        self.still_step("geöffnete fläche steht still", self.surface),
-                        Step("geöffnete fläche aufnehmen", opened),
-                    ]
-                    if target.startswith("finding.action:")
-                    else []
-                ),
             ],
         )
 
