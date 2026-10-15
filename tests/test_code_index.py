@@ -705,18 +705,3 @@ def test_known_case_cost_matrix_has_no_reader() -> None:
     assert any((f.module, f.name) == key for f in index.patch_findings()["d"]), (
         "d) meldet _cost_matrix nicht"
     )
-
-
-def test_known_case_head_copy_of_configured_spools() -> None:
-    """``filament_inventory.py`` hält ``configured_spools`` aus ``filament_picker`` als
-    Kopfkopie; ``test_first_run.py`` patcht das Original (CS-9a). Paket P1 setzt den Patch
-    auf die Kopie um; dann wird dieser Fall gestrichen, W2 c) hält es."""
-    index = _real()
-    key = ("app.ui.filament_picker", "configured_spools")
-    assert key in index.patched_names(), "kein Patch am Original mehr: P1 hat CS-9a behoben"
-    copies = [
-        f
-        for f in index.patch_findings()["c"]
-        if (f.path, f.name) == ("app/ui/filament_inventory.py", "configured_spools")
-    ]
-    assert copies, "c) meldet die Kopie configured_spools nicht"
