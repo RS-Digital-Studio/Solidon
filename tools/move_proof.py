@@ -39,7 +39,7 @@ from pathlib import Path
 from tools.code_index import Index, PatchSite
 from tools.move_compare import module_of_expression
 from tools.move_cut import Cut
-from tools.move_forms import Calls, folded_names
+from tools.move_forms import Calls, folded_names, reported_calls
 from tools.move_proof_component import ComponentProof
 from tools.move_proof_copies import CopiesProof
 from tools.move_proof_module import ModuleProof
@@ -131,10 +131,11 @@ def check_queries(proof: Proof, trees: Trees, mapping: Mapping) -> None:
     (abgebildet) etwas fand: ``hasattr(M, "N")``, ``getattr(M, "N", vorgabe)``,
     ``setattr``/``delattr`` und jeder dieser Aufrufe über einen Alias (``has = hasattr``,
     ``builtins.hasattr``; Review 2, RM-M20). Eine Leere meldet der Auflöser nur für
-    ``getattr(M, "N")`` ohne Vorgabe über den eingebauten Namen (W5); die übrigen sind nach dem
-    Schnitt weder Bezug noch unauflösbar — einen Bezug nennt er nur, solange es den Namen gibt
-    (CS-27). Der Beweis sucht sie deshalb selbst, über ``tools/move_forms.py`` und
-    ``resolve``/``exists`` aus R, in jeder Datei beider Bäume."""
+    ``getattr(M, "N")`` ohne Vorgabe, über den eingebauten Namen und über einen Alias
+    derselben Datei (W5, :func:`check_unresolved`); die übrigen sind nach dem Schnitt weder
+    Bezug noch unauflösbar — einen Bezug nennt er nur, solange es den Namen gibt (CS-27). Der
+    Beweis sucht sie deshalb selbst, über ``tools/move_forms.py`` und ``resolve``/``exists``
+    aus R, in jeder Datei beider Bäume."""
     every = _queries(trees, "new")
     proof.counts["queries"] = sum(len(sites) for sites in every.values())
     before = {
@@ -161,23 +162,29 @@ def check_queries(proof: Proof, trees: Trees, mapping: Mapping) -> None:
 def _queries(trees: Trees, side: str) -> dict[tuple[str, str], list[str]]:
     """Je ``(M, N)`` die Stellen eines Baums mit Attributnamen auf ein Modul, deren Leere der
     Auflöser nicht als W5 meldet, deren erstes Argument laut R genau ein Modul ist; der Name
-    auch gefaltet."""
+    auch gefaltet. Was er als ``getattr`` ohne Vorgabe führt — fehlt der Name, als W5-Fund,
+    sonst als Bezug —, entscheidet er selbst, auch über einen Alias (RR2-8); hier stünde
+    es ein zweites Mal."""
     index = trees.old_index if side == "old" else trees.new_index
     files = trees.old_files if side == "old" else trees.new_files
     calls = Calls(index, files)
+    absent = {(u.path, u.line, u.col) for u in index.unresolved() if u.kind == "getattr"}
     found: dict[tuple[str, str], list[str]] = {}
     for path, data in files.items():
         if not path.endswith(".py") or not calls.may_call(data):
             continue
         source = trees.old(path) if side == "old" else trees.new(path)
         for named in calls.every(path, source.tree):
-            reference = named.plain and named.kind == "getattr" and len(named.call.args) == 2
-            if reference or named.call.keywords or len(named.call.args) > 3:
+            at = (path, named.call.lineno, named.call.col_offset)
+            if at in absent or named.call.keywords or len(named.call.args) > 3:
                 continue
             module = module_of_expression(index, path, named.target)
             if module is None:
                 continue
+            without_default = named.kind == "getattr" and len(named.call.args) == 2
             for name in sorted(folded_names(index, path, named.name) or ()):
+                if without_default and at in reported_calls(index, module, name):
+                    continue
                 found.setdefault((module, name), []).append(f"{path}:{named.call.lineno}")
     return found
 

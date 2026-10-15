@@ -346,3 +346,25 @@ def test_a_reference_in_a_script_names_the_script_text(
     assert f"{QUERY}:6: {expected}" in found, (label, result.problems)
     assert not [p for p in found if "als Import oder Attribut" in p], (label, found)
     assert fx.tree_bytes(root) == {p: fx.text_of(t).encode("utf-8") for p, t in files.items()}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "from app.core import legacy\n\n\ndef test_get():\n    assert getattr(legacy, 'bump')\n",
+        "from app.core import legacy\n\nlook = getattr\n\n\ndef test_get():\n"
+        "    assert look(legacy, 'bump')\n",
+    ],
+    ids=["eingebaut", "alias"],
+)
+def test_a_getattr_without_default_left_standing_is_reported_once(
+    tmp_path: Path, text: str
+) -> None:
+    """RR2-8: Die Leere von ``getattr(M, "N")`` ohne Vorgabe meldet der Auflöser als W5, über
+    den eingebauten Namen wie über einen Alias derselben Datei (CS-27); der Beweis meldet sie
+    nicht noch einmal als Abfrage."""
+    extra = {QUERY: text}
+    proof = _prove(tmp_path, fx.MODULE_OLD | extra, MODULE_EXPECTED | extra, fx.MODULE_CUT)
+    found = [error for error in proof.errors if QUERY in error]
+    assert len(found) == 1, found
+    assert "getattr-Bezug app.core.legacy.bump" in found[0] and "(W5)" in found[0], found

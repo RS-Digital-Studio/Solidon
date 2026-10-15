@@ -92,13 +92,11 @@ class NamedCall:
     """Ein Aufruf mit einem Attributnamen an zweiter Stelle.
 
     ``kind``: ``getattr``, ``hasattr``, ``setattr``, ``delattr`` (eingebaut) oder ``patch``
-    (``monkeypatch.setattr``/``delattr``, ``patch.object``). ``plain``: über den eingebauten
-    Namen selbst gerufen. Welche Stellen der Auflöser als Bezug nennt, sagt
-    :func:`reported_calls`."""
+    (``monkeypatch.setattr``/``delattr``, ``patch.object``). Welche Stellen der Auflöser als
+    Bezug nennt, sagt :func:`reported_calls`."""
 
     call: ast.Call
     kind: str
-    plain: bool
 
     @property
     def target(self) -> ast.expr:
@@ -181,8 +179,7 @@ class Calls:
         kind = self._function(path, call.func)
         if kind is None or kind not in ATTRIBUTE_FUNCTIONS.values():
             return None
-        plain = isinstance(call.func, ast.Name) and call.func.id == kind
-        return NamedCall(call, kind, plain)
+        return NamedCall(call, kind)
 
     def namespace(self, path: str, node: ast.AST) -> ast.expr | None:
         """Das Objekt, dessen Namensraum ``node`` als Ganzes liest (``vars(X)``, ``dir(X)``,
