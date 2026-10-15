@@ -391,6 +391,17 @@ wartet, bis keine Seitenkarte mehr gleitet (`at_rest`) — gelesen wird die Lage
 die der Kunde nach dem Gleiten sieht, nicht eine Zwischenlage, die an der
 Rechnerlast hängt (FD-157).
 
+`licence_states.py` gehört den Fenstertests der Sperre (`test_licence_lock_offers.py`,
+`test_lock_reason_once.py`): `set_licence` stellt einen Freischaltzustand über
+`tools.function_setup` her. Er stand in `ui_helpers.py` und zog das
+Prüfstandswerkzeug in siebzig Fenstertestdateien (RA-9).
+
+`hole_window.py` gibt den Fenstertests der Auswahlkarte ein Fenster mit
+gewählter Bohrung in einer bestimmten Größe (`hole_window`) und `settle`, das
+wartet, bis die Karte nach ihrer Öffnungsbewegung steht
+(`test_feature_footer_window.py`, `test_feature_footer_low_window.py`,
+`test_card_tab_chain.py`).
+
 ## Stolperfallen
 
 *Früher unter „Die Fahrweise steht einmal — in `CLAUDE.md`“.*

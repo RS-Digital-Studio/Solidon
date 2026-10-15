@@ -45,7 +45,8 @@ from app.ui.main_window import MainWindow
 from app.ui.message_dialog import MessageDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
-from tests.ui_helpers import set_licence, wait_for_print_findings
+from tests.licence_states import set_licence
+from tests.ui_helpers import wait_for_print_findings
 from tools import function_scenes
 
 #: Die kleinste Arbeitsfläche (Festlegung Robert, Bauplan §19.3).

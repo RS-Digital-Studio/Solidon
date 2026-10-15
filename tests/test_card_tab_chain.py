@@ -9,12 +9,22 @@ dann in die Kopfzeile, bevor das Merkmalfenster oben kam.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.ui.main_window import MainWindow
-from tests.test_feature_footer_window import a_hole as a_hole
+from tests.hole_window import hole_window
+
+
+@pytest.fixture
+def a_hole(qt_app: QApplication, tmp_path: Path) -> Iterator[MainWindow]:
+    with hole_window(qt_app, tmp_path, 1920, 1080) as window:
+        yield window
 
 
 def _tab_from_the_bar(qt_app: QApplication, window: MainWindow, times: int = 1) -> QWidget:

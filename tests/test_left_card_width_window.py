@@ -9,10 +9,8 @@ zeigt es ganz.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
-from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QApplication
 
 from app.core.scene import OperationDraft
@@ -20,30 +18,21 @@ from app.ui.main_window import MainWindow
 from app.ui.overlay import LEFT_WIDTH
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from tests.bundled_fonts import bundled_font
 
 
 @pytest.fixture
 def window(qt_app: QApplication) -> Iterator[MainWindow]:
-    fonts = Path(__file__).parents[1] / "app/core/geom/data/fonts"
-    font_ids = [
-        QFontDatabase.addApplicationFont(str(fonts / name))
-        for name in ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf")
-    ]
-    assert min(font_ids) >= 0, "Die gebündelte Prüfschrift wurde nicht geladen"
-    before = qt_app.font()
-    qt_app.setFont(QFont("DejaVu Sans", 9))
-    built = MainWindow(Session(), UiSettings())
-    built.resize(1920, 1080)
-    built.show()
-    built._show_start_screen(False)
-    yield built
-    assert built.session.wait_for_idle(60_000)
-    built.release()
-    built.deleteLater()
-    qt_app.processEvents()
-    qt_app.setFont(before)
-    for font_id in font_ids:
-        QFontDatabase.removeApplicationFont(font_id)
+    with bundled_font(qt_app, 9):
+        built = MainWindow(Session(), UiSettings())
+        built.resize(1920, 1080)
+        built.show()
+        built._show_start_screen(False)
+        yield built
+        assert built.session.wait_for_idle(60_000)
+        built.release()
+        built.deleteLater()
+        qt_app.processEvents()
 
 
 def test_a_crooked_measure_widens_the_left_card(qt_app: QApplication, window: MainWindow) -> None:

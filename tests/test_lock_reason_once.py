@@ -20,8 +20,9 @@ from PySide6.QtWidgets import QApplication, QLabel, QListWidget
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from tests.licence_states import set_licence
 from tests.test_licence_lock_offers import LOCKED
-from tests.ui_helpers import set_licence, wait_for_print_findings
+from tests.ui_helpers import wait_for_print_findings
 
 
 @pytest.fixture
