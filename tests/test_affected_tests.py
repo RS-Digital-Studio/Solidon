@@ -1650,6 +1650,37 @@ def test_the_selection_leaves_out_generated_comparisons_like_the_gate(release: b
     assert ("--with-rendered" in lines[0]) is release
 
 
+def test_run_spreads_a_large_plain_group_over_a_fixed_number_of_workers() -> None:
+    """``--run`` fuhr die Gruppe ``plain`` in einem Prozess; eine Auswahl über ``viewport`` lief
+    so 1 bis 1,5 Stunden, das Tor mit Arbeitern dieselbe Menge in 18 Minuten (Zusatzauftrag Q).
+    Ab ``PARALLEL_FROM`` Dateien bekommt sie eine feste Zahl Arbeiter mit ``worksteal``, nie
+    ``-n auto``; darunter kostet der Start der Arbeiter mehr, als sie sparen, und ``--workers 0``
+    fährt seriell. Eine Arbeiterzahl, die keine ganze Zahl ab 0 ist, lehnt die Kommandozeile
+    ab."""
+    from tools import affected_tests
+    from tools.affected_tests import PARALLEL_FROM, WORKERS, _commands
+
+    def files(count: int) -> list[Path]:
+        return [Path(f"tests/test_probe_{index}.py").resolve() for index in range(count)]
+
+    def options(line: list[str]) -> list[str]:
+        return line[: line.index("--window-group")]
+
+    assert WORKERS == 4
+    assert "-n" not in options(_commands([], files(PARALLEL_FROM - 1), release=False)[0])
+    large = options(_commands([], files(PARALLEL_FROM), release=False)[0])
+    start = large.index("-n")
+    assert large[start : start + 4] == ["-n", "4", "--dist", "worksteal"]
+    assert "-n" not in options(_commands([], files(PARALLEL_FROM), release=False, workers=0)[0])
+    two = options(_commands([], files(PARALLEL_FROM), release=False, workers=2)[0])
+    assert two[two.index("-n") : two.index("-n") + 2] == ["-n", "2"]
+    windowed = _commands(files(PARALLEL_FROM), [], release=True)
+    assert all("-n" not in line for line in windowed)
+    for wrong in ("auto", "-1", "zwei"):
+        with pytest.raises(SystemExit):
+            affected_tests.main(["--workers", wrong, "--split", "ROADMAP.md"])
+
+
 @pytest.mark.parametrize("exit_code", [0, 5, 139])
 def test_a_successful_summary_cannot_hide_the_process_exit(
     monkeypatch: pytest.MonkeyPatch, exit_code: int

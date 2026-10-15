@@ -120,6 +120,15 @@ _PROJECT = "app.core.scene.project"
 #: Änderungen hieran betreffen jeden Test.
 _EVERYTHING = frozenset({"tests/conftest.py", "pyproject.toml", "constraints.txt"})
 
+#: Arbeiter für die Gruppe ``plain`` von ``--run`` — fest, nie ``-n auto`` (``tests.md``):
+#: Agenten laufen nebeneinander, und eine Zahl an der Kernzahl ist eine stille Variable.
+WORKERS = 4
+#: Ab so vielen Dateien lohnen die Arbeiter; darunter kostet ihr Start mehr, als sie sparen.
+#: Gemessen im Wechsel an Teilen der Auswahl für ``chamber_ops``: Bei acht Dateien sinkt die
+#: Wanduhr auf ein Drittel für 15 % mehr CPU-Zeit, bei vier und zwei Dateien kostet der Start
+#: der Arbeiter 40 bis 100 % mehr CPU-Zeit.
+PARALLEL_FROM = 8
+
 
 def module_name(path: Path, root: Path = ROOT) -> str:
     """``app/core/units.py`` → ``app.core.units``; ``app/core/__init__.py`` → ``app.core``."""
@@ -880,10 +889,13 @@ def commands(
     release: bool = False,
     keyword: str | None = None,
     markexpr: str | None = None,
+    workers: int = WORKERS,
 ) -> list[list[str]]:
     """Die regulären Aufrufe; nur beim Release kommt je Release-Datei einer dazu."""
     windowed, plain = split_windowed(files, release=release)
-    return _commands(windowed, plain, release=release, keyword=keyword, markexpr=markexpr)
+    return _commands(
+        windowed, plain, release=release, keyword=keyword, markexpr=markexpr, workers=workers
+    )
 
 
 def _commands(
@@ -893,7 +905,10 @@ def _commands(
     release: bool,
     keyword: str | None = None,
     markexpr: str | None = None,
+    workers: int = WORKERS,
 ) -> list[list[str]]:
+    """Die Aufrufe: die Gruppe ``plain`` in einem Prozess, ab :data:`PARALLEL_FROM` Dateien mit
+    ``workers`` Arbeitern (``0`` seriell), Release-Dateien je einzeln."""
     base = [
         str(PYTHON),
         "-m",
@@ -915,9 +930,15 @@ def _commands(
     # bleibt ein ``-m`` aus Umgebung oder Konfiguration wirksam.
     lines: list[list[str]] = []
     if plain:
+        parallel = (
+            ["-n", str(workers), "--dist", "worksteal"]
+            if workers > 0 and len(plain) >= PARALLEL_FROM
+            else []
+        )
         lines.append(
             [
                 *base,
+                *parallel,
                 "--window-group",
                 "plain",
                 *(str(path.relative_to(ROOT).as_posix()) for path in plain),
@@ -976,6 +997,19 @@ def run(lines: list[list[str]]) -> int:
     return failed
 
 
+def _workers(text: str) -> int:
+    """``--workers``: eine Zahl ab 0 — ``auto`` gibt es nicht."""
+    try:
+        value = int(text)
+    except ValueError:
+        value = -1
+    if value < 0:
+        raise argparse.ArgumentTypeError(
+            f"{text!r} ist keine Arbeiterzahl — eine ganze Zahl ab 0 angeben, 0 fährt seriell"
+        )
+    return value
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("files", nargs="*", help="geänderte Dateien; leer: aus git")
@@ -988,6 +1022,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--release", action="store_true", help="beim Release auch Fenster- und Rendererfälle fahren"
+    )
+    parser.add_argument(
+        "--workers",
+        type=_workers,
+        default=WORKERS,
+        help=f"Arbeiter für die Tests ohne Fenster ab {PARALLEL_FROM} Dateien; 0 fährt seriell",
     )
     arguments = parser.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
@@ -1039,6 +1079,7 @@ def main(argv: list[str] | None = None) -> int:
         release=arguments.release,
         keyword=arguments.keyword,
         markexpr=arguments.markexpr,
+        workers=arguments.workers,
     )
     if not lines:
         print("Keine regulären Tests ausgewählt; kein Testlauf gestartet.")
