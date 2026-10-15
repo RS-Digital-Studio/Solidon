@@ -1515,6 +1515,7 @@
   "Der Körper besteht aus einem Stück. Es gibt nichts aufzuteilen.": "Il corpo è di un pezzo solo. Non c'è nulla da dividere.",
   "Der Körper besteht aus festen Dreiecken. Dieses Werkzeug braucht echte Flächen und Kanten: „In Flächen und Kanten umwandeln“ macht sie aus dem Netz, eine ältere Grundform bekommt sie im Verlauf über „Mit echten Flächen und Kanten rechnen“.": "Il corpo è composto da triangoli fissi. Questo strumento ha bisogno di facce e spigoli veri: «Converti in facce e spigoli» li crea dalla mesh; una forma di base più vecchia li ottiene nella cronologia con «Calcolare con facce e spigoli veri».",
   "Der Körper besteht bereits aus festen Dreiecken.": "Il corpo è già fatto di triangoli fissi.",
+  "Der Körper besteht nur aus {count} Splittern, die der Drucker nicht abbildet.": "Il corpo è fatto solo di {count} schegge che la stampante non riproduce.",
   "Der Körper des Skeletts ist nicht mehr da — die Sitzung bleibt offen.": "Il corpo dello scheletro non c'è più — la sessione resta aperta.",
   "Der Körper dieser Zeichnung ist nicht mehr da. Gezeichnet wird für einen neuen.": "Il corpo di questo disegno non c'è più. Si disegna per uno nuovo.",
   "Der Körper folgt jetzt der eingestellten Stellung.": "Il corpo ora segue la posa impostata.",

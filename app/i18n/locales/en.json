@@ -1515,6 +1515,7 @@
   "Der Körper besteht aus einem Stück. Es gibt nichts aufzuteilen.": "The body is a single piece. There is nothing to split.",
   "Der Körper besteht aus festen Dreiecken. Dieses Werkzeug braucht echte Flächen und Kanten: „In Flächen und Kanten umwandeln“ macht sie aus dem Netz, eine ältere Grundform bekommt sie im Verlauf über „Mit echten Flächen und Kanten rechnen“.": "The body consists of fixed triangles. This tool needs real faces and edges: “Convert to faces and edges” makes them from the mesh; an older primitive gets them in the history through “Compute with true faces and edges”.",
   "Der Körper besteht bereits aus festen Dreiecken.": "The body already consists of fixed triangles.",
+  "Der Körper besteht nur aus {count} Splittern, die der Drucker nicht abbildet.": "The body consists only of {count} slivers the printer cannot reproduce.",
   "Der Körper des Skeletts ist nicht mehr da — die Sitzung bleibt offen.": "The armature's body is gone — the session stays open.",
   "Der Körper dieser Zeichnung ist nicht mehr da. Gezeichnet wird für einen neuen.": "The body of this drawing is gone. You are now drawing a new one.",
   "Der Körper folgt jetzt der eingestellten Stellung.": "The body now follows the pose that was set.",

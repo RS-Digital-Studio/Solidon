@@ -1515,6 +1515,7 @@
   "Der Körper besteht aus einem Stück. Es gibt nichts aufzuteilen.": "O corpo é de uma só peça. Não há nada para dividir.",
   "Der Körper besteht aus festen Dreiecken. Dieses Werkzeug braucht echte Flächen und Kanten: „In Flächen und Kanten umwandeln“ macht sie aus dem Netz, eine ältere Grundform bekommt sie im Verlauf über „Mit echten Flächen und Kanten rechnen“.": "O corpo é formado por triângulos fixos. Esta ferramenta precisa de faces e arestas reais: «Converter em faces e arestas» cria-as a partir da malha; uma forma base mais antiga obtém-nas no histórico através de «Calcular com faces e arestas verdadeiras».",
   "Der Körper besteht bereits aus festen Dreiecken.": "O corpo já é feito de triângulos fixos.",
+  "Der Körper besteht nur aus {count} Splittern, die der Drucker nicht abbildet.": "O corpo é composto apenas por {count} lascas que a impressora não reproduz.",
   "Der Körper des Skeletts ist nicht mehr da — die Sitzung bleibt offen.": "O corpo do esqueleto já não existe — a sessão continua aberta.",
   "Der Körper dieser Zeichnung ist nicht mehr da. Gezeichnet wird für einen neuen.": "O corpo deste desenho já não existe. Desenha-se para um novo.",
   "Der Körper folgt jetzt der eingestellten Stellung.": "O corpo segue agora a pose definida.",

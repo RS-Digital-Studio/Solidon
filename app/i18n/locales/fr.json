@@ -1515,6 +1515,7 @@
   "Der Körper besteht aus einem Stück. Es gibt nichts aufzuteilen.": "Le corps est d'un seul tenant. Il n'y a rien à diviser.",
   "Der Körper besteht aus festen Dreiecken. Dieses Werkzeug braucht echte Flächen und Kanten: „In Flächen und Kanten umwandeln“ macht sie aus dem Netz, eine ältere Grundform bekommt sie im Verlauf über „Mit echten Flächen und Kanten rechnen“.": "Le corps est composé de triangles figés. Cet outil a besoin de vraies faces et arêtes : « Convertir en faces et arêtes » les crée à partir du maillage ; une forme de base plus ancienne les obtient dans l'historique via « Calculer avec de vraies faces et arêtes ».",
   "Der Körper besteht bereits aus festen Dreiecken.": "Le corps est déjà constitué de triangles fixes.",
+  "Der Körper besteht nur aus {count} Splittern, die der Drucker nicht abbildet.": "Le corps ne se compose que de {count} éclats que l'imprimante ne reproduit pas.",
   "Der Körper des Skeletts ist nicht mehr da — die Sitzung bleibt offen.": "Le corps du squelette n'est plus là — la session reste ouverte.",
   "Der Körper dieser Zeichnung ist nicht mehr da. Gezeichnet wird für einen neuen.": "Le corps de ce dessin n'existe plus. Le dessin sert à un nouveau corps.",
   "Der Körper folgt jetzt der eingestellten Stellung.": "Le corps suit maintenant la pose définie.",
