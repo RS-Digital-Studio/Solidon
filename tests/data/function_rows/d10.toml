@@ -88,3 +88,14 @@ route = [{ target = "menu:menubar.filamentlager" }, { target = "filament.add" }]
 
 [row."filament.colour"]
 route = [{ target = "menu:menubar.filamentlager" }, { target = "filament.add" }]
+
+# Die Rückfrage nach der Größe stellt *Gegenstücke setzen …* an einem Gewinde, das
+# zu Größen zweier Reihen passt: gewählt sind das Gewinde und eine Fläche der
+# Platte (FD-101).
+[row."meldung:action_counterpart"]
+start_scene = "gewinde_zwei_reihen.netz"
+route = [
+  { target = "tree.row:obj_1.thread_1" },
+  { target = "tree.row:obj_2.face_1", modifier = "ctrl" },
+  { target = "menu:menubar.gegenstuecke_setzen" },
+]

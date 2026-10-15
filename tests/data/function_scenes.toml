@@ -988,6 +988,22 @@ op = "thread_exact"
 op = "brep_to_mesh"
 inputs = ["obj_1"]
 
+# Gemessen trennt ein Netz M4 und #8-36 UNF nicht: 0,17 mm im Durchmesser, 0,8 %
+# in der Steigung. Das Gegenstück fragt nach der Größe (RM-544, Regel 21; FD-101).
+[scene."gewinde_zwei_reihen.netz"]
+summary = "Ein gemessener Gewindebolzen Ø 4,08 × 0,703 mm neben einer Platte."
+kernel = "netz"
+promises = { objects = 2, kinds = ["thread", "face"] }
+[[scene."gewinde_zwei_reihen.netz".ops]]
+op = "thread_exact"
+params = { diameter = 4.08, pitch = 0.703, length = 10.0 }
+[[scene."gewinde_zwei_reihen.netz".ops]]
+op = "brep_to_mesh"
+inputs = ["obj_1"]
+[[scene."gewinde_zwei_reihen.netz".ops]]
+op = "create_box"
+params = { width = 20.0, depth = 20.0, height = 5.0, x = 30.0 }
+
 [scene."merkmal.pin.exakt"]
 summary = "Der exakte Quader mit aufgesetztem Zapfen Ø 6 × 10 mm."
 kernel = "exakt"

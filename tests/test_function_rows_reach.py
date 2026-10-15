@@ -95,6 +95,16 @@ REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
             "menu:menubar.gegenstuecke_setzen",
         ),
     ),
+    "meldung:action_counterpart": (
+        "gewinde_zwei_reihen.netz",
+        (
+            "tree.row:obj_1",
+            "tree.row:obj_2",
+            "tree.row:obj_1.thread_1",
+            "tree.row:obj_2.face_1",
+            "menu:menubar.gegenstuecke_setzen",
+        ),
+    ),
     # D12: Der Druckhinweis vor dem Druckdialog, im eigenen Sprachfall mit offenem Hinweis.
     "dialog:print_disclosure_dialog": ("quader.exakt", ("menu:menubar.an_den_slicer_uebergeben",)),
 }
@@ -148,3 +158,22 @@ def test_a_way_over_a_finding_the_scene_does_not_promise_is_no_way(
     assert "sagt den Befund arrange.below_bed nicht zu" in function_surface.without_way(row)
     row["spec"] = {**row["spec"], "route": [{"target": "finding.action:place_on_bed"}]}
     assert "sagt die Handlung place_on_bed nicht zu" in function_surface.without_way(row)
+
+
+def test_the_thread_of_its_scene_asks_for_its_size() -> None:
+    """``gewinde_zwei_reihen.netz`` trägt ein Gewinde, das M4 und #8-36 UNF nicht trennt:
+    Nur dann stellt *Gegenstücke setzen …* die Rückfrage, deren Fenster die Zeile
+    ``meldung:action_counterpart`` misst."""
+    from app.core import counterpart
+    from app.core.errors import AppError
+    from app.core.knowledge import standards
+    from tests.helpers import exact_kernel
+    from tools import function_scenes
+
+    exact_kernel()
+    result = function_scenes.evaluate_scene(function_scenes.build_scene("gewinde_zwei_reihen.netz"))
+    thread = result.scene.objects["obj_1"].features["thread_1"]
+    with pytest.raises(AppError) as asked:
+        counterpart.thread_values_for(thread, families=standards.shown_thread_families())
+    assert asked.value.constraint == counterpart.AMBIGUOUS_THREAD
+    assert set(asked.value.values["choices"]) == {"M4", "#8-36 UNF"}
