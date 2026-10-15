@@ -40,7 +40,9 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
    ein Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/`` —, auch
    über einen Helfer, den die Testdatei direkt importiert, oder ihr Ordner
    über seinen Pfad (``Path(__file__).parent / "data"``). Ein Kommentar oder
-   Docstring nennt nichts.
+   Docstring nennt nichts. Eine Datendatei unter ``app/`` zählt dazu wie eine
+   Änderung an dem Modul, das sie liest: ``materials.toml`` wählt, was
+   ``knowledge.profiles`` mittelbar importiert.
 
 Gewählt werden nur Testdateien: Aus einem Helfer sammelt pytest nichts, er
 steht für die Testdateien, die ihn importieren.
@@ -511,6 +513,69 @@ def _goes_over_everything(graph: ImportGraph, name: str) -> str | None:
     return None
 
 
+def _data_readers(graph: ImportGraph, file: PurePosixPath) -> list[str]:
+    """Die Module, die eine Datendatei unter ``app/`` lesen; eine Änderung an der Datei ist eine
+    Änderung an ihnen (Entscheidung Koordinator).
+
+    Gelesen wird über einen Pfad, der sich auf die Datei auflöst
+    (``_DATA_DIR / "printers.toml"``), über einen offenen Namen im Ordner, wenn das Modul die
+    Datei als Text nennt (``_DATA_DIR / table`` mit ``_shipped("materials.toml")``), oder über
+    eine Lesestelle, deren Ordner und Muster die Datei decken (``LOCALES.glob("*.json")``).
+    Nur aufgelöste Orte zählen — ein offener Ordner läse jede Datei —, und nur ein Muster, das
+    eine Art Datei meint: ``make_installer`` kopiert ``app/**/*`` und hinge sonst mit
+    163 Testdateien an jeder ``CLAUDE.md``.
+    """
+    folder = re.compile(_folder_pattern(file.parent.name))
+    stem = re.compile(f"[\"']{re.escape(file.stem)}[\"']")
+    found: list[str] = []
+    for name, path in graph.modules.items():
+        # Erst der Text: die Datei beim Namen, oder ihr Ordner neben einer Lesestelle.
+        text = graph.text(name)
+        if (
+            file.name not in text
+            and stem.search(text) is None
+            and (folder.search(text) is None or tree_reads.READ_WORDS.search(text) is None)
+        ):
+            continue
+        if _reads_data(graph, name, path.relative_to(graph.root).as_posix(), file):
+            found.append(name)
+    return found
+
+
+def _reads_data(graph: ImportGraph, name: str, relative: str, file: PurePosixPath) -> bool:
+    """Ob das Modul ``name`` die Datei ``file`` liest (:func:`_data_readers`)."""
+    resolver = graph.resolver
+    tree, _parents = resolver.parsed(relative)
+    named = bool({file.name, file.stem} & set(graph.strings(name)))
+    for node in ast.walk(tree):
+        if not _is_path_expression(node):
+            continue
+        assert isinstance(node, ast.expr)
+        values = tree_reads.options(resolver.value_at(relative, node))
+        if any(isinstance(one, tree_reads.Place) and one.parts == file.parts for one in values):
+            return True
+        if not named or all(isinstance(one, tree_reads.Place) for one in values):
+            continue
+        base: ast.expr | None = None
+        if isinstance(node, ast.BinOp):
+            base = node.left
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            base = node.func.value
+        if base is not None:
+            left = resolver.value_at(relative, base)
+            if isinstance(left, tree_reads.Place) and left.parts == file.parent.parts:
+                return True
+    for site in tree_reads.sites(resolver, relative):
+        for read in tree_reads.evaluate_site(resolver, site, None):
+            if (
+                isinstance(read.folder, tree_reads.Place)
+                and read.pattern[-1] != "*"
+                and read.covers(file)
+            ):
+                return True
+    return False
+
+
 def _folder_pattern(folder: str) -> str:
     """Der Ordnername, wie er in einem Pfadausdruck steht.
 
@@ -693,6 +758,8 @@ def affected(
     changed_modules: set[str] = set()
     deleted_modules: set[str] = set()
     named_tools: list[str] = []
+    #: Die Module, die eine geänderte Datendatei unter ``app/`` lesen, je mit der Datei.
+    data_readers: dict[str, str] = {}
     #: Jede geänderte Datei, neu oder gelöscht — für die, die ihren Ordner lesen.
     paths: list[PurePosixPath] = []
     for path in changed:
@@ -734,6 +801,17 @@ def affected(
                 _note_readers(graph, reasons, _named_readers(graph, graph.root / relative))
         else:
             _note_readers(graph, reasons, _named_readers(graph, graph.root / relative))
+            if relative.startswith("app/"):
+                for reader in _data_readers(graph, PurePosixPath(relative)):
+                    data_readers.setdefault(reader, PurePosixPath(relative).name)
+    # Eine Datendatei unter ``app/`` ändert, was ihr Leser tut: Sie zählt wie eine Änderung an
+    # ihm, mit seinen mittelbaren Importeuren (``materials.toml`` → ``knowledge.profiles``).
+    for reader, file_name in sorted(data_readers.items()):
+        where = graph.modules[reader].relative_to(graph.root).as_posix()
+        for name in sorted({reader} | graph.dependents({reader})):
+            if _is_test_file(graph, name):
+                reasons.setdefault(graph.modules[name], f"hängt an {where}, das {file_name} liest")
+    changed_modules.update(data_readers)
     dependents = graph.dependents(changed_modules)
     for name in sorted(dependents):
         path = graph.modules[name]

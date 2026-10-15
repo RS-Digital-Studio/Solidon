@@ -589,6 +589,66 @@ def test_a_test_over_the_whole_registry_or_the_examples_runs_for_every_operation
     assert not {f"tests/{name}.py" for name in over} & _names(files, tree)
 
 
+def test_a_data_file_under_app_counts_as_a_change_to_the_module_that_reads_it(
+    tree: Path,
+) -> None:
+    """``materials.toml`` liest ``knowledge/profiles.py``, und 33 von 78 Testdateien, die sie
+    gemessen öffnen, erreichen ``profiles`` erst über eine Op (Entscheidung Koordinator: wie
+    eine Änderung am Leser). Gelesen wird über den Pfad der Datei, über einen offenen Namen
+    im Ordner, wenn das Modul die Datei nennt, oder über eine Lesestelle, deren Muster sie
+    deckt — nicht über die gleichnamige Datei im Nutzerordner und nicht über eine Kopie des
+    ganzen Baums (``make_installer`` über ``app/**/*``)."""
+    _write(
+        tree,
+        "app/knowledge/profiles.py",
+        "from pathlib import Path\nDATA = Path(__file__).parent / 'data'\n"
+        "def printers():\n    return (DATA / 'printers.toml').read_text()\n"
+        "def shipped(table):\n    return (DATA / table).read_text()\n"
+        "MATERIALS = shipped('materials.toml')\n",
+    )
+    _write(
+        tree,
+        "app/knowledge/user.py",
+        "from pathlib import Path\nOWN = Path.home() / 'knowledge' / 'data'\n"
+        "def own():\n    return (OWN / 'colours.toml').read_text()\n",
+    )
+    _write(
+        tree,
+        "app/catalog.py",
+        "from pathlib import Path\nLOCALES = Path(__file__).parent / 'locales'\n"
+        "def languages():\n    return sorted(LOCALES.glob('*.json'))\n",
+    )
+    _write(
+        tree,
+        "tools/installer.py",
+        "from pathlib import Path\nROOT = Path(__file__).resolve().parents[1]\n"
+        "def stage():\n    return sorted((ROOT / 'app').rglob('*'))\n",
+    )
+    _write(tree, "tools/release.py", "from tools import installer\n")
+    _write(tree, "app/ops.py", "from app.knowledge import profiles\nfrom app import catalog\n")
+    _write(tree, "tests/test_deep.py", "from app.ops import profiles\n")
+    _write(tree, "tests/test_user.py", "from app.knowledge import user\n")
+    _write(tree, "tests/test_release.py", "from tools import release\n")
+    for name in ("materials.toml", "printers.toml", "colours.toml"):
+        _write(tree, f"app/knowledge/data/{name}", "[x]\n")
+    _write(tree, "app/locales/en.json", "{}\n")
+    graph = ImportGraph(tree)
+
+    for changed in ("materials.toml", "printers.toml"):
+        files, reasons = affected([tree / "app" / "knowledge" / "data" / changed], graph)
+        assert reasons[tree / "tests" / "test_deep.py"] == (
+            f"hängt an app/knowledge/profiles.py, das {changed} liest"
+        )
+        assert not {"tests/test_user.py", "tests/test_release.py"} & _names(files, tree)
+    files, _reasons = affected([tree / "app" / "knowledge" / "data" / "colours.toml"], graph)
+    assert "tests/test_deep.py" not in _names(files, tree)
+    files, reasons = affected([tree / "app" / "locales" / "en.json"], graph)
+    assert reasons[tree / "tests" / "test_deep.py"] == "hängt an app/catalog.py, das en.json liest"
+    _write(tree, "app/defaults.toml", "[x]\n")
+    files, _reasons = affected([tree / "app" / "defaults.toml"], graph)
+    assert "tests/test_release.py" not in _names(files, tree)
+
+
 def test_an_application_module_reading_its_own_tree_lends_that_reading(tree: Path) -> None:
     """CS-32: ``app/i18n/extract.py`` liest die Quellen unter ``app/`` nach ``tr()``-Schlüsseln;
     ``tools/registry_dump.py`` ruft es, und ``test_registry_dump`` fehlte bei einem neuen Text
@@ -668,10 +728,17 @@ def test_the_real_operation_and_data_changes_reach_what_runs_them(
 ) -> None:
     """Gegen den echten Baum und die Messung der Ausführung: ``chamber_ops`` führen
     ``test_registry_consistency`` (ganzes Register), ``test_examples`` (Beispielprojekte) und
-    ``test_closure_ops`` (über ``closure_ops``) aus, ohne ``resize_chamber`` zu nennen."""
+    ``test_closure_ops`` (über ``closure_ops``) aus, ohne ``resize_chamber`` zu nennen;
+    ``materials.toml`` öffnen ``test_bore_mouth_resize`` und ``test_cli`` über eine Op und
+    ``knowledge.profiles``."""
     root = real_graph.root
     files, _reasons = affected([root / "app" / "core" / "geom" / "chamber_ops.py"], real_graph)
     for test in ("test_registry_consistency.py", "test_examples.py", "test_closure_ops.py"):
+        assert root / "tests" / test in files, test
+    files, _reasons = affected(
+        [root / "app" / "core" / "knowledge" / "data" / "materials.toml"], real_graph
+    )
+    for test in ("test_bore_mouth_resize.py", "test_cli.py"):
         assert root / "tests" / test in files, test
 
 
