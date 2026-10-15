@@ -3770,6 +3770,7 @@
   "Erst wenn die laufende Aufgabe fertig ist.": "Seulement une fois la tâche en cours terminée.",
   "Erst „Dichtweg aus: Zeichnung“ wählen.": "Choisissez d'abord « Tracé du joint à partir de : Dessin ».",
   "Erst „Dichtweg aus: Öffnung am Körper“ wählen.": "Choisissez d'abord « Tracé du joint à partir de : Ouverture sur le corps ».",
+  "Erst „{field}“ ausfüllen, dann übernehmen.": "Remplissez d'abord « {field} », puis appliquez.",
   "Erst „{field}“ ändern, dann übernehmen.": "Modifiez d'abord « {field} », puis appliquez.",
   "Erste Art": "Premier type",
   "Erste Bedingung": "Première contrainte",

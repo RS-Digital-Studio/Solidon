@@ -87,6 +87,7 @@ from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.organizer_dialog import OrganizerLayoutField
 from app.ui.outline_dialog import ContourField
 from app.ui.panels import collapsible
+from app.ui.required_inputs import CHOSEN_SOURCES, is_required_text, missing_input
 from app.ui.seal_dialog import SealPathField
 from app.ui.style import (
     NORMAL,
@@ -250,11 +251,6 @@ def accept_text(spec: OperationSpec) -> str:
     if spec.category == "parts" and not _ENDS_IN_A_VERB.search(source_text(spec.title)):
         return str(tr("Einsetzen"))
     return str(spec.title)
-
-
-#: Feldarten, deren Wert eine Projektquelle nennt, die erst gewählt werden muss
-#: (:meth:`OperationDialog.source_missing`).
-_CHOSEN_SOURCES: Final = ("image", "source")
 
 
 def placement_hint() -> str:
@@ -2467,7 +2463,8 @@ class OperationDialog(QDialog):
                 (entry.kind == "material" and entry.required)
                 or (entry.targets_feature and entry.required)
                 or (entry.kind == "sketch" and (entry.required or entry.depends_on is not None))
-                or (entry.kind in _CHOSEN_SOURCES and entry.required)
+                or (entry.kind in CHOSEN_SOURCES and entry.required)
+                or is_required_text(entry)
                 for entry in self.spec.params.spec()
             )
         ):
@@ -2786,29 +2783,18 @@ class OperationDialog(QDialog):
         return ""
 
     def source_missing(self) -> str:
-        """Ein Pflichtfeld für Bild oder Datei ohne Wahl — und der Knopf, der es füllt (RM-775).
+        """Eine Pflichtangabe ohne Wert — Bild, Datei oder Text — als Satz, sonst leer.
 
         Kundenprotokoll zu 0.5.3: „op.displace_image.ValidationError: Diese
         Quelle gibt es im Projekt nicht.“ Das Bild war noch gar nicht gewählt:
         Die Vorschau lief beim Öffnen von *Relief auflegen* mit leerer Quelle,
-        und der Kern meldete eine Kennung, die es nicht gibt. Solange der Satz
-        hier steht, rechnet keine Vorschau, und *Übernehmen* nennt den Knopf.
+        und der Kern meldete eine Kennung, die es nicht gibt (RM-775). Ebenso
+        ein leerer Pflichttext: *Schriftzug als Körper* zeigte beim Öffnen eine
+        Absage (FD-134). Solange der Satz hier steht, rechnet keine Vorschau,
+        und *Übernehmen* nennt den Knopf oder das Feld
+        (:func:`app.ui.required_inputs.missing_input`).
         """
-        schema = self.spec.params.spec()
-        wanted = [
-            entry
-            for entry in schema
-            if entry.kind in _CHOSEN_SOURCES and entry.required and not entry.internal
-        ]
-        if not wanted:
-            return ""
-        values = self.values()
-        for entry in wanted:
-            if inactive_dependency(entry, schema, values) is not None or values.get(entry.name):
-                continue
-            choose = tr("Bild wählen …") if entry.kind == "image" else tr("Datei wählen …")
-            return tr("{name}: {value}", name=entry.title, value=choose)
-        return ""
+        return missing_input(self.spec, self.values)
 
     def _seeks_a_place(self) -> bool:
         """Ob dieser Dialog einen Baustein einsetzt — nur dort gibt es eine Stelle zu fragen."""
@@ -4097,6 +4083,11 @@ class OperationDialog(QDialog):
         line = QLineEdit(self)
         if start:
             line.setText(str(start))
+        if is_required_text(entry):
+            # Ein leerer Pflichttext ist ein Hinweis im Feld, kein Fehler
+            # (FD-134): der erste Satz seiner Beschreibung, etwa „Was
+            # daraufstehen soll.“ Den Knopf hält ``source_missing``.
+            line.setPlaceholderText(first_sentence(str(entry.doc or entry.title)))
         # Ein vorgegebener Text (der Name beim Umbenennen) ist beim ersten
         # Fokus markiert: Tippen ersetzt ihn, Ende ergänzt ihn (FD-114).
         select_on_first_focus(line)
