@@ -114,6 +114,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un aviso hace crecer la tarjeta de medidas, se queda en su sitio y solo se desplaza lo que exigen el borde o el tirador, con un movimiento breve. Antes saltaba a otro lugar.
 - Al recortar un cubo para probar un ajuste, su posición se elige ahora en *Posición del cubo*. La línea *Punto* de arriba la muestra.
 - El diálogo tras *Dar grosor* dice en su primera línea que da grosor a la superficie.
+- El diálogo *Renombrar objeto* empieza con el nombre actual en el campo.
 
 ## 0.6.0
 

@@ -22212,6 +22212,12 @@ class MainWindow(QMainWindow):
                 values.update(dict(zip(("angle_x", "angle_y", "angle_z"), angles, strict=True)))
             except AppError:
                 pass  # Der relative Weg bleibt offen; „nach“ erklärt seinen fehlenden Bezug.
+        # **Umbenennen beginnt beim jetzigen Namen** (FD-114): Mit leerem Feld
+        # tippte man für eine kleine Änderung den ganzen Namen neu.
+        if spec.unchanged_effect == "name" and len(chosen) == 1 and result is not None:
+            named = result.scene.objects.get(chosen[0])
+            if named is not None:
+                values["name"] = named.name
         # Leere Materialrollen übernehmen die Projektvorgabe. Ausdrücklich
         # mitgebrachte Werte folgen danach und behalten damit Vorrang.
         for parameter in spec.params.spec():

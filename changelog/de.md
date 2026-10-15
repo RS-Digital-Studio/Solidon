@@ -138,6 +138,7 @@ Nutzen da und sonst nichts.
 - Wird die Maßkarte durch einen Hinweis höher, bleibt sie stehen und rückt nur so weit, wie Bildrand oder Griff es verlangen, mit kurzer Bewegung. Bisher sprang sie an eine andere Stelle.
 - Wer einen Würfel zum Ausprobieren einer Passung ausschneidet, wählt dessen Lage jetzt unter *Lage des Würfels*. Die Zeile *Stelle* darüber zeigt sie an.
 - Der Dialog hinter *Dicke geben* sagt in seiner ersten Zeile, dass er der Fläche eine Dicke gibt.
+- Der Dialog *Objekt umbenennen* beginnt mit dem jetzigen Namen im Feld.
 
 ## 0.6.0
 

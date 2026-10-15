@@ -114,6 +114,7 @@ dans `website/version.json`.
 - Si un message agrandit la carte de cotes, elle reste en place et ne se déplace que de ce qu'exigent le bord ou la poignée, avec un mouvement bref. Avant, elle sautait ailleurs.
 - Pour découper un cube afin d'essayer un ajustement, sa position se choisit désormais sous *Position du cube*. La ligne *Emplacement* au-dessus l'affiche.
 - Le dialogue derrière *Donner une épaisseur* dit dès sa première ligne qu'il donne une épaisseur à la surface.
+- Le dialogue *Renommer l'objet* s'ouvre avec le nom actuel dans le champ.
 
 ## 0.6.0
 

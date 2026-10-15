@@ -113,6 +113,7 @@ scrive in `website/version.json`.
 - Se un avviso fa crescere la scheda delle misure, resta al suo posto e si sposta solo quanto richiedono il bordo o la maniglia, con un breve movimento. Prima saltava altrove.
 - Per ritagliare un cubo e provare un accoppiamento, ora la posizione si sceglie in *Posizione del cubo*. La riga *Punto* sopra la mostra.
 - La finestra dietro *Dai spessore* dice nella prima riga che dà spessore alla superficie.
+- La finestra *Rinomina oggetto* parte dal nome attuale nel campo.
 
 ## 0.6.0
 

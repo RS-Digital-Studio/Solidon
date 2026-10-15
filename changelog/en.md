@@ -113,6 +113,7 @@ it into `website/version.json`.
 - When a note makes the measurement card taller, it stays put and moves only as far as the view edge or handle requires, with a short movement. Previously it jumped elsewhere.
 - When you cut out a cube to try a fit, you now choose its position under *Cube position*. The *Place* line above shows it.
 - The dialog behind *Add thickness* says in its first line that it gives the surface a thickness.
+- The *Rename object* dialog starts with the current name in the field.
 
 ## 0.6.0
 
