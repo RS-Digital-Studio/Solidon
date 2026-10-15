@@ -550,7 +550,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
             click_step("operation:drill_hole"),
             click_step("feature.in_view"),
             click_step("feature.every"),
-            click_step("feature.apply"),
+            click_step("feature.apply", "dialog", phase="übernehmen"),
         ),
     ),
     BrokenSample(
@@ -732,7 +732,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
             click_step("operation:drill_hole"),
             click_step("feature.in_view"),
             click_step("feature.every"),
-            click_step("feature.apply"),
+            click_step("feature.apply", "dialog", phase="übernehmen"),
         ),
     ),
     BrokenSample(
@@ -744,7 +744,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
                 click_step("tree.row:body1.hole1", "karte_links"),
                 click_step("feature:resize_hole"),
                 click_step("feature.in_view"),
-                click_step("feature.apply"),
+                click_step("feature.apply", "dialog", phase="übernehmen"),
             ),
         ),
     ),
@@ -1104,6 +1104,19 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample(6, "Zeiger erst nach 0,5 s", change=_set("timing.first_feedback_s", 0.5)),
     # --- Beide Sätze am Feld (Review L17).
     BrokenSample("V3", "Feld ohne Kurzhilfe", change=_set("fields.0.tooltip", "")),
+    # --- Schritte zählen nur bis zum Beispielziel (FD-146): Ein Weg, der an der
+    # Fläche endet, misst nichts, was danach käme.
+    *(
+        BrokenSample(
+            key,
+            "Weg endet vor dem Übernehmen",
+            change=_steps(
+                click_step("tree.row:body1", "karte_links"), click_step("operation:drill_hole")
+            ),
+            expect="nicht_gelaufen",
+        )
+        for key in ("E1", "E2", "E3")
+    ),
 )
 
 
