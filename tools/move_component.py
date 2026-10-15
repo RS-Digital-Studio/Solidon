@@ -349,6 +349,10 @@ class Shape:
                     ):
                         text = f"{ast.unparse(base)}.{node.attr}"
                         found.direct.append((node.lineno, text, False))
+                if mine(base) and scopes is not None and _connected(scopes.source, node):
+                    # ``signal.connect(self.m)``: Empfänger bleibt der Wirt, vor wie nach dem
+                    # Schnitt (``self._host.m``) — kein Aufruf während des Slots.
+                    continue
                 if mine(base) or (
                     isinstance(base, (ast.Name, ast.Attribute))
                     and not mine(_root_name(base))
@@ -1646,6 +1650,18 @@ def _reach(graph: dict[str, _Member], start: str) -> list[str] | None:
     return None
 
 
+def _connected(source: Source, node: ast.Attribute) -> bool:
+    """Ob ``node`` (``self.m``) das Argument von ``….connect(…)``/``….disconnect(…)`` ist: Die
+    Verbindung bindet den Wirt als Empfänger — ein Verweis, kein Aufruf."""
+    parent = source.parent(node)
+    return (
+        isinstance(parent, ast.Call)
+        and isinstance(parent.func, ast.Attribute)
+        and parent.func.attr in ("connect", "disconnect")
+        and any(argument is node for argument in parent.args)
+    )
+
+
 def _root_name(node: ast.expr) -> ast.expr:
     """Der Anfang einer Attributkette (``self`` in ``self.a.b``)."""
     while isinstance(node, ast.Attribute):
@@ -1668,8 +1684,10 @@ def _class_object(values: frozenset[Val]) -> bool:
 
 
 def _self_assignments(method: Method) -> Iterator[tuple[str, ast.expr]]:
-    """``self.x = <wert>`` in einer Methode: ein Verweis, über den später gerufen werden kann
-    (``self._done = self._take``)."""
+    """``self.x = <wert>`` in einer Methode, wenn der Wert etwas Rufbares sein kann: ein
+    Verweis (``self._done = self._take``), ein Lambda oder ein Aufruf, der einen Verweis bindet
+    (``functools.partial(self._take, …)``). Das Ergebnis eines Aufrufs (``self.x =
+    self.sender()``) ist kein Weg zu einer Methode."""
     me = self_name(method)
     for node in ast.walk(method):
         if isinstance(node, ast.Assign):
@@ -1678,14 +1696,20 @@ def _self_assignments(method: Method) -> Iterator[tuple[str, ast.expr]]:
             targets = [node.target]
         else:
             continue
+        value = node.value
+        callable_ = isinstance(value, (ast.Attribute, ast.Lambda, ast.Name)) or (
+            isinstance(value, ast.Call)
+            and any(isinstance(a, (ast.Attribute, ast.Lambda)) for a in value.args)
+        )
+        if value is None or not callable_:
+            continue
         for target in targets:
             if (
                 isinstance(target, ast.Attribute)
                 and isinstance(target.value, ast.Name)
                 and target.value.id == me
-                and node.value is not None
             ):
-                yield target.attr, node.value
+                yield target.attr, value
 
 
 def _class(source: Source, name: str) -> ast.ClassDef | None:

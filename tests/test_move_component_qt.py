@@ -93,6 +93,11 @@ else:
         result = not seen
     elif mode == "mixin":
         result = window.run() == 1
+    elif mode == "wired":
+        source = Source()
+        holder(window, "wire").wire(source)
+        source.fired.emit()
+        result = holder(window, "seen_sender").seen_sender is source
     else:
         if mode == "watch":
             holder(window, "watch").watch()
@@ -549,8 +554,9 @@ def test_that_tree_behaves_differently_at_runtime(
 
 def test_a_slot_that_reaches_no_sender_of_the_host_still_moves(tmp_path: Path) -> None:
     """Die Kontrolle zu RM-M16: Liest die bleibende Methode den Sender eines anderen Objekts
-    (``self.session.sender()``), oder wandert die Methode, die ``sender()`` erreicht, gar nicht,
-    schreibt das Werkzeug."""
+    (``self.session.sender()``), wandert die Methode, die ``sender()`` erreicht, gar nicht, oder
+    verbindet die verschobene Methode die Leserin nur (``connect(self._who)`` — Empfänger bleibt
+    der Wirt), schreibt das Werkzeug; die Sonde misst danach denselben Sender."""
     other, cut, _naive = _sender_case(
         "    def on_signal(self) -> None:\n        self.seen_sender = self._other()\n",
         "    def on_signal(self) -> None:\n        self.seen_sender = self._host._other()\n",
@@ -562,6 +568,20 @@ def test_a_slot_that_reaches_no_sender_of_the_host_still_moves(tmp_path: Path) -
     old = SENDER_CASES["sender-über-bleibende-methode"][0]
     _root, result = _run(tmp_path / "slot-bleibt", old, fx.COMPONENT_CUT)
     assert result.status == "written", result.problems
+    wired, cut, _naive = _sender_case(
+        "    def on_signal(self) -> None:\n        self.seen_sender = None\n\n"
+        "    def wire(self, source: QObject) -> None:\n"
+        "        source.fired.connect(self._who_seen)  # type: ignore[attr-defined]\n",
+        "",
+        "    def _who_seen(self) -> None:\n        self.seen_sender = self.sender()\n",
+        ("_who_seen",),
+        methods=("on_signal", "wire"),
+    )
+    root, result = _run(tmp_path / "nur-verbunden", wired, cut)
+    assert result.status == "written", result.problems
+    assert "self._host._who_seen" in (root / AREA).read_text(encoding="utf-8")
+    assert _probe(tmp_path, fx.write_tree(tmp_path / "vorher", wired), "wired") is True
+    assert _probe(tmp_path, root, "wired") is True
 
 
 #: Eigene Gegenproben zu RM-M17: (Name, Werkzeug, Erklärung, Ausgang, Meldung).
