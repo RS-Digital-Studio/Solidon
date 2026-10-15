@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from tests import move_fixtures as fx
-from tools import move_cut, move_proof
+from tools import move_cut, move_names, move_proof
 
 EXPECTED = fx.changed_tree(fx.MODULE_OLD, fx.MODULE_NEW)
 
@@ -233,6 +233,58 @@ def test_a_forgotten_query_that_answers_silently_is_red(
     assert not proof.ok, f"{label}: Beweis grün\n{proof.text()}"
     where = f"{path}:7: fragt app.core.legacy nach bump, das es nachher nicht gibt"
     assert any(where in error for error in proof.errors), (label, proof.errors)
+
+
+#: Das Elternpaket der Quelle mit trägem Export wie ``app.core.scene`` (Review RM-M6).
+LAZY_CORE = (
+    '"""Kern der Attrappe, mit trägem Export."""\n\n'
+    "from app.core.lazy import install\n\n"
+    "_EXPORTS = {\n"
+    '    "read_count": ("legacy", "read_count"),\n'
+    '    "adjust_shape": ("legacy", "_adjust"),\n'
+    "}\n\n"
+    "install(__name__, _EXPORTS)\n"
+)
+LAZY_CORE_NEW = LAZY_CORE.replace('("legacy", "read_count")', '("legacy.state", "read_count")')
+LAZY_CORE_NEW = LAZY_CORE_NEW.replace('("legacy", "_adjust")', '("legacy.rules", "adjust")')
+LAZY_OLD = fx.MODULE_OLD | {"app/core/lazy.py": fx.LAZY, "app/core/__init__.py": LAZY_CORE}
+LAZY_NEW = EXPECTED | {"app/core/lazy.py": fx.LAZY, "app/core/__init__.py": LAZY_CORE_NEW}
+
+
+def test_a_cut_under_a_lazy_parent_package_is_proven(tmp_path: Path) -> None:
+    """RM-M6: Der träge Export des Elternpakets zeigt danach auf das Zielmodul (samt erklärter
+    Umbenennung) — der Planer schreibt es so, und der Beweis nimmt genau das an."""
+    root = fx.write_tree(tmp_path / "tree", LAZY_OLD)
+    cut_file = tmp_path / "cut.toml"
+    cut_file.write_text(fx.MODULE_CUT, encoding="utf-8")
+    work = tmp_path / "work"
+    work.mkdir()
+    result = move_names.run(move_cut.load(cut_file), root, work=work, cache=False)
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    assert fx.tree_bytes(root) == {
+        path: fx.text_of(text).encode("utf-8") for path, text in LAZY_NEW.items()
+    }
+    assert result.proof is not None
+    assert "träger Export ('legacy', '_adjust') → ('legacy.rules', 'adjust')" in (
+        result.proof.text()
+    )
+
+
+@pytest.mark.parametrize(
+    ("label", "old", "new"),
+    [
+        ("falsches-ziel", '("legacy.state", "read_count")', '("legacy.rules", "read_count")'),
+        ("alter-name", '("legacy.rules", "adjust")', '("legacy.rules", "_adjust")'),
+        ("vergessen", '("legacy.state", "read_count")', '("legacy", "read_count")'),
+        ("unverändert", "", ""),
+    ],
+)
+def test_a_wrong_lazy_export_is_red(tmp_path: Path, label: str, old: str, new: str) -> None:
+    text = LAZY_CORE if label == "unverändert" else LAZY_CORE_NEW.replace(old, new)
+    files = LAZY_NEW | {"app/core/__init__.py": text}
+    proof = _prove(tmp_path, files, old_files=LAZY_OLD)
+    assert not proof.ok, f"{label}: Beweis grün\n{proof.text()}"
+    assert any("app/core/__init__.py" in error for error in proof.errors), (label, proof.errors)
 
 
 def test_a_cut_that_separates_a_global_writer_from_its_variable_is_red(tmp_path: Path) -> None:

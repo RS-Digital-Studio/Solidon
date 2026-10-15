@@ -97,6 +97,7 @@ class ModuleProof:
                 and module_of(path) not in self.targets
             ):
                 self._reader(path)
+        self._lazy_parent()
         for number, reader in enumerate(self.cut.source_readers):
             if number not in self.used_readers:
                 self.proof.error(
@@ -365,6 +366,24 @@ class ModuleProof:
             )
         )
 
+    def _lazy_parent(self) -> None:
+        """Das ``__init__`` des Elternpakets mit einem trägen Export auf einen verschobenen Namen
+        wird verglichen, auch wenn es unverändert blieb: Dann zeigte der Export ins Leere."""
+        parent = self.src.rpartition(".")[0]
+        path = path_of(parent, package=True) if parent else ""
+        if not path or path in self.trees.changed or path not in self.trees.new_files:
+            return
+        comparison = ModuleReaderComparison(self, path)
+        if not any(
+            isinstance(node, ast.Tuple) and comparison.lazy_entry(node) is not None
+            for node in ast.walk(comparison.old.tree)
+        ):
+            return
+        comparison.label = "Leser, unverändert"
+        comparison.run()
+        for error in comparison.errors:
+            self.proof.error(error)
+
     def _stale_strings(self) -> None:
         """Keine Zeichenkette im neuen Baum zeigt noch auf die alte Quelldatei oder einen
         verschobenen Namen unter dem alten Modul (Pfad, Punktname)."""
@@ -574,6 +593,50 @@ class ModuleReaderComparison(ReaderComparison):
                     return True
             return False
         return super().reference(old, new, before, after)
+
+    def special(self, old: ast.AST, new: ast.AST) -> bool:
+        if isinstance(old, ast.Tuple) and self.lazy_entry(old) is not None:
+            return self._lazy_export(old, new)
+        return super().special(old, new)
+
+    def lazy_entry(self, node: ast.Tuple) -> str | None:
+        """Der Name eines Eintrags ``("quelle", "N")`` im ``__init__`` des Elternpakets der
+        Quelle (``app.core.lazy``), wenn ``N`` verschoben wird; sonst ``None``."""
+        parent, _, last = self.owner.src.rpartition(".")
+        if not parent or self.path != path_of(parent, package=True) or len(node.elts) != 2:
+            return None
+        first, second = node.elts
+        if not (
+            isinstance(first, ast.Constant)
+            and first.value == last
+            and isinstance(second, ast.Constant)
+            and isinstance(second.value, str)
+            and second.value in self.owner.mapping.moves
+        ):
+            return None
+        return second.value
+
+    def _lazy_export(self, old: ast.Tuple, new: ast.AST) -> bool:
+        """Ein träger Export des Elternpakets zeigt danach auf das Zielmodul und den neuen
+        Namen: ``("legacy", "N")`` → ``("legacy.<ziel>", "N'")`` mit ``ref(Quelle, N)``."""
+        name = self.lazy_entry(old)
+        assert name is not None
+        parent = self.owner.src.rpartition(".")[0]
+        module, new_name = self.mapping.ref(self.owner.src, name)
+        expected = (module.removeprefix(parent + "."), new_name)
+        got = (
+            tuple(e.value if isinstance(e, ast.Constant) else None for e in new.elts)
+            if isinstance(new, ast.Tuple)
+            else None
+        )
+        first = old.elts[0]
+        assert isinstance(first, ast.Constant)
+        before = (str(first.value), name)
+        if not module.startswith(parent + ".") or got != expected:
+            self.fail(old, new, f"träger Export {before} → {got}, erwartet {expected}")
+            return True
+        self.accept(f"träger Export {before} → {expected}")
+        return True
 
     def constant(self, old: ast.Constant, new: ast.Constant) -> bool:
         for number, entry in self.lists.items():

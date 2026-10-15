@@ -735,6 +735,13 @@ class ModulePlanner:
                     self.ctx.problem(f"{path}:{node.lineno}: Lazy-Export auf {name!r} ohne Ziel")
                 continue
             module, new_name = moved[name]
+            if not module.startswith(parent + "."):
+                self.ctx.problem(
+                    f"{path}:{node.lineno}: der träge Export auf {name!r} zeigte nach {module}, "
+                    f"außerhalb von {parent} — das Ziel ins Paket legen oder den Export vorher "
+                    "umstellen"
+                )
+                continue
             rewrite = self.ctx.rewrite(path)
             sub = module[len(parent) + 1 :]
             rewrite.replace(first, quoted(source, first, sub), "Lazy-Export folgt dem Namen")
