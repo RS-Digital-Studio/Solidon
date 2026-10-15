@@ -26,13 +26,11 @@ anderen formt** (`registry/CLAUDE.md`).
 - `requires_kind="brep"` nur bei fachlicher Notwendigkeit (Formschräge auf
   Fläche, Schalenkörper, STEP). Menü nennt den Sperrgrund am Netz; der Kern
   prüft ebenfalls. Keine UI-Zweitliste (Regel 19).
-- `requires_body`: `open`, `parts`, `cavity` (`void` oder durch Aushöhlen),
-  `colour` (Farbinformation, `texture.carries_colour`).
+- `requires_body`: `open`, `parts`, `cavity` (`void` oder durch Aushöhlen).
   `labels.body_requirement` verwendet dieselbe Konstante wie die Op
-  (`mesh_ops.ALREADY_CLOSED`, `prepare_ops.ONE_PIECE`, `lattice.NO_CAVITY`,
-  `colour_ops.NO_COLOUR`). `labels.body_facts` misst je Körper/Auswertung; über
-  `BODY_FACTS_LIMIT` bleibt der Zustand unbekannt und sperrt nicht — außer was
-  nichts kostet (die Farbe).
+  (`mesh_ops.ALREADY_CLOSED`, `prepare_ops.ONE_PIECE`, `lattice.NO_CAVITY`).
+  `labels.body_facts` misst je Körper/Auswertung; über `BODY_FACTS_LIMIT`
+  bleibt der Zustand unbekannt und sperrt nicht.
 - Flächenabhängige Voraussetzungen fragt das Fenster an der Op:
   `lid.reason_against`, `MainWindow._lid_reason`, `LID_OPS`.
 - Ops prüfen Merkmalsarten über ihren `applies_to`-Registereintrag und

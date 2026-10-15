@@ -66,7 +66,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La tarjeta de selección sigue contenido y letra, conservando texto y columnas. Las pestañas separadas mantienen su tamaño. Si se ofrece editar una característica, «Aplicar» es la acción principal.
 - Los elementos correspondientes piden par y tamaño y explican ambas mitades. Forma y ajuste están en «Más ajustes». La altura inicial del diálogo se adapta al contenido.
 - Tras rechazarse una vista previa, los textos de la siguiente siguen siendo totalmente legibles.
-- En un cuerpo sin color, *Convertir la textura en filamentos* aparece en gris e indica el motivo, en lugar de rechazarse solo en la vista previa.
 - Para parámetros, ajustes, impresora, material y deshacer, el chat indica el lugar de la ventana donde se hace lo mismo a mano.
 - El informe de comprobación nombra los cuerpos de un ajuste en lugar de mostrar un identificador interno.
 - El inglés y el portugués distinguen ahora el saliente de un gancho, o de un cuerpo bajo la placa, del voladizo al imprimir.

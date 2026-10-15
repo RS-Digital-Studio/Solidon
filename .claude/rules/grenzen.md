@@ -264,8 +264,7 @@ gegen `operations_for_feature` als Sollmenge.
 - **Was am gewählten Körper nie etwas tun kann, sagt es am Menüeintrag**
   (`requires_body` und `lid.reason_against`, deklariert nach `operationen.md`,
   „Was die Operation verlangt, steht im Register“) — *Offene Fläche schließen*,
-  *In Einzelteile aufteilen*, *Gitter füllen*, *Textur in Filamente
-  umrechnen*, die Deckel an der gewählten
+  *In Einzelteile aufteilen*, *Gitter füllen*, die Deckel an der gewählten
   Fläche, einmal je Merkmal und Auswertung gerechnet; *An Merkmal ausrichten*
   verlangt sein Ziel (`_NEEDS_TARGET`), und der Dialog sperrt mit demselben
   Satz, wenn die Liste leer ist. Was an einer Zahl im Dialog hängt, sagt das

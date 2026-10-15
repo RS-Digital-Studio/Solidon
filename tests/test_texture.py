@@ -309,8 +309,6 @@ def test_whether_a_body_carries_colour_is_known_before_the_dialog() -> None:
     from app.core.geom.colour_ops import NO_COLOUR
     from app.core.registry.registry import BODY_REQUIREMENTS
 
-    spec = REGISTRY.get("slots_from_texture")
-    assert spec.requires_body == "colour"
     assert "colour" in BODY_REQUIREMENTS
     image = Image.new("RGB", (2, 1))
     for body in (plate(), painted([(255, 0, 0), (0, 0, 255)]), textured(image)):

@@ -65,7 +65,6 @@ it into `website/version.json`.
 - The selection card follows content and font, preserving text and action columns. Detached tabs keep their size. When a feature edit is offered, “Apply” is the primary action.
 - Counterparts ask for pair and size first and explain both halves. Shape and fit are under “More settings”. The initial dialog height fits its content.
 - After a preview is refused, the next preview's text remains fully readable.
-- On a body without colour, *Convert texture to filaments* is greyed out and gives the reason, instead of refusing only in the preview.
 - For parameters, fits, printer, material and undo, the chat names the place in the window where you can do the same yourself.
 - The check report names the bodies of a fit instead of showing an internal identifier.
 - English and Portuguese now tell the protrusion of a hook, or of a body below the plate, apart from an overhang in printing.

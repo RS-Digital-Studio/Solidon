@@ -90,7 +90,6 @@ Nutzen da und sonst nichts.
 - Die Auswahlkarte folgt Inhalt und Schrift; Text und Handlungsspalten bleiben erhalten. Freie Reiterfenster behalten ihre Größe. Bei angebotener Merkmaländerung ist „Übernehmen“ die Hauptaktion.
 - Gegenstücke fragen zuerst nach Paar und Größe; die Auswahl erklärt beide Hälften. Form und Passung stehen unter „Weitere Einstellungen“. Die Anfangshöhe passt zum Inhalt.
 - Nach einer Vorschauabsage bleiben die Texte der nächsten Vorschau vollständig lesbar.
-- An einem Körper ohne Farbe steht *Textur in Filamente umrechnen* grau und nennt den Grund, statt erst in der Vorschau abzusagen.
 - Der Chat nennt bei Parametern, Passungen, Drucker, Material und Rückgängig den Ort im Fenster, an dem man dasselbe selbst tut.
 - Der Prüfbericht nennt die Körper einer Passung beim Namen statt mit einer internen Kennung.
 - Englisch und Portugiesisch unterscheiden den Überstand eines Hakens oder eines Körpers unter dem Bett vom Überhang beim Drucken.
