@@ -276,6 +276,7 @@ In `app/core/guides.py`: `TARGET_PROPERTY = "guideTarget"`, `menubar_name(msgid,
 | `matrix{}` | sechs Auswahlstufen: angeboten, grau mit Grund oder fehlt; Klick wirksam |
 | `search{}` | je Probe Rang und Treffer |
 | `place` | Ort (karte, menue, werkzeugleiste, kuerzel, kontext), Pfad |
+| `spot` | E4: an Merkmal oder Kante `point` und `covered_by` vor dem Übernehmen; an einer Handlung am ganzen Körper `frame` der geänderten `bodies` im Ergebnisbild, `view`, `inside`, `covered_by` (`tools/function_spot.py`) |
 | `layout[]`, `fonts[]`, `state_images[]`, `contrast[]`, `icons[]`, `animations[]`, `scrollbars[]` | G1–G8, Z6 |
 | `hover_labels[]`, `empty_states[]` | I1, Z4 |
 | `licence_runs{}`, `halt`, `insertion`, `switch` | Prüfpunkte 18, 15, 16 |

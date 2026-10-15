@@ -1052,6 +1052,31 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         expect="nicht_gelaufen",
     ),
     BrokenSample("E4", "Stelle nicht gemessen", change=_drop("spot"), expect="nicht_gelaufen"),
+    # Eine Handlung am ganzen Körper: Die Stelle ist der Körper im Ergebnisbild (FD-169).
+    BrokenSample(
+        "E4",
+        "Körper nach dem Ergebnis außerhalb des Bildes",
+        change=_set(
+            "spot",
+            {
+                "frame": [400, -60, 300, 260],
+                "view": [0, 0, 1280, 820],
+                "inside": False,
+                "bodies": ["obj_1"],
+                "covered_by": None,
+            },
+        ),
+    ),
+    BrokenSample(
+        "E4",
+        "Rahmen des Körpers ohne Bild nicht gemessen",
+        change=_all(
+            _set("row.requirement", ""),
+            _drop("spot"),
+            _set("unmeasured.spot", "ohne Bild der Ansicht"),
+        ),
+        expect="nicht_gelaufen",
+    ),
     BrokenSample(
         "Z6",
         "Fall lief nur bei 1920 x 1080",

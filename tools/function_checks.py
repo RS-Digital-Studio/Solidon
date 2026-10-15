@@ -416,7 +416,12 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     "matrix": ProtocolField("tabelle", frozenset(SELECTION_STAGES)),
     "search": ProtocolField("tabelle"),
     "place": ProtocolField("tabelle", _keys("where", "path", "error"), {"where": PLACES}),
-    "spot": ProtocolField("tabelle", _keys("point", "covered_by")),
+    # E4: ``point`` an Merkmal und Kante vor dem Übernehmen; an einer Handlung am
+    # ganzen Körper ``frame`` der geänderten ``bodies`` im Ergebnisbild, ``view``
+    # die Ansicht und ``inside``, ob er ganz darin liegt (FD-169).
+    "spot": ProtocolField(
+        "tabelle", _keys("point", "covered_by", "frame", "view", "inside", "bodies")
+    ),
     # G2: ``group`` ist das eine Layout, ``items`` zählt seine sichtbaren
     # Elemente — ein Abstand gilt erst zwischen zweien. ``spacing`` ist bei
     # Raster und Formular der senkrechte Abstand, ``horizontal`` der waagerechte

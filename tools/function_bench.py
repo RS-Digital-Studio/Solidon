@@ -84,6 +84,7 @@ from tools.function_setup import (
     selected_feature,
     walk_target,
 )
+from tools.function_spot import body_spot
 from tools.function_switch import LATE_WINDOW_S, SwitchPhase
 from tools.function_walk import (
     APPLY_PHASE,
@@ -1154,7 +1155,9 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
             return None
         try:
             click = self.ports.next_click(name)
-        except LookupError:
+        except LookupError as error:
+            # Die gewählte Stelle ist die Stelle — kein Ersatz durch den Körper.
+            unmeasured(self.data, "spot", f"{name}: {error}")
             return None
         point = self.ports.centre(click.rect)
         hit = self.ports.widget_under(point)
@@ -1302,6 +1305,8 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
         self.watch.poll()
         applied = self.snapshot("applied")
         self.picture("03-uebernommen")
+        # E4 an einer Handlung am ganzen Körper: ihr Rahmen im Ergebnisbild (FD-169).
+        body_spot(self.window, self.data)
         result = self.session.last_result
         if result is not None:
             self.data["result"] = {

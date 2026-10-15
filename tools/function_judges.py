@@ -60,6 +60,10 @@ from tools.function_checks import (
 )
 from tools.function_list import BODY_SELECTIONS, FEATURE_REQUIREMENT, FEATURE_SELECTIONS
 
+#: E4 an einer Handlung am ganzen Körper: Der Rahmen des geänderten Körpers reicht
+#: im Ergebnisbild über die Ansicht hinaus (``function_spot``, FD-169).
+OUTSIDE_AFTER_RESULT: Final = "Stelle nach dem Ergebnis außerhalb des Bildes"
+
 # --- Hilfen über dem Protokoll --------------------------------------------
 
 
@@ -393,15 +397,23 @@ def _e4(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     covered = spot.get("covered_by") if spot else None
     if covered:
         issues.append(Issue(f"{covered} verdeckt die bearbeitete Stelle", "mittel", "E4"))
+    # An einer Handlung am ganzen Körper ist die Stelle der Körper: Sein Rahmen
+    # im Ergebnisbild liegt ganz in der Ansicht (W-E4, FD-169).
+    inside = spot.get("inside") if spot else None
+    if inside is False:
+        issues.append(Issue(OUTSIDE_AFTER_RESULT, "mittel", "E4"))
     # „Kein Dialog verdeckt die Stelle“ ist nur gemessen, wo es eine Stelle gibt:
-    # an Zeilen mit Auswahl muss der Prüfstand sie nachsehen.
-    absent = ["spot"] if spot is None and _has_selection_relation(_row(protocol)) else []
+    # an Zeilen mit Auswahl muss der Prüfstand sie nachsehen; an einer Handlung
+    # am ganzen Körper steht, warum er ihren Rahmen nicht messen konnte.
+    unseen = "spot" in (_map(protocol, "unmeasured") or {})
+    selected = _has_selection_relation(_row(protocol))
+    absent = ["spot"] if spot is None and (selected or unseen) else []
     return _settled(
         "E4",
         issues,
         absent,
         f"{glances} Blickwechsel",
-        {"glances": glances, "zones": zones, "covered_by": covered},
+        {"glances": glances, "zones": zones, "covered_by": covered, "inside": inside},
     )
 
 
