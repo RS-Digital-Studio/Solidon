@@ -219,6 +219,18 @@ die Länge in Anzeigeeinheit im Parameter- und Bausteindialog;
 `test_dialog_texts.py` ohne Fenster, was ein Dialog vorn sagt (Lesezeile
 *Stelle*, erster Satz hinter *Dicke geben*).
 
+Der Operationsdialog hat je Fund eine eigene Datei:
+`test_operation_dialog_names.py` öffnet jede registrierte Operation und
+verlangt je Eingabefeld einen Namen, keinen doppelt;
+`test_operation_dialog_first_focus.py` den markierten Vorgabetext;
+`test_required_text_field.py` den leeren Pflichttext ohne Vorschau;
+`test_operation_dialog_height.py` die Anfangshöhe ohne Leerstreifen;
+`test_grouped_count_field.py` Dreiergruppen im Ganzzahlfeld;
+`test_operation_dialog_change.py` den Änderungsweg (*Übernehmen*, grau bis zur
+ersten Änderung). Ohne Fenster: `test_hole_compensation_words.py` (der Name des
+Ausgleichs an jeder Bohrung, in jeder Sprache). `test_calibration_units.py`
+prüft *Material kalibrieren* in Zoll.
+
 Statische Quellprüfungen teilen die Vorbereitung innerhalb eines Testfalls:
 `test_language_rules.py` prüft je Datei denselben AST auf alle Sprachregeln;
 `test_translations.py` extrahiert die Nachrichten einmal für alle Kataloge.

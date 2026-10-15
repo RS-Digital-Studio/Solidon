@@ -72,7 +72,7 @@ hier Sätze gibt: die Druckeinstellungen über `note`, jeder Parameter jeder
 Operation über seinen `doc`-Satz. Der Satz sagt, was der Wert bewirkt, nicht
 den Titel noch einmal, und hängt an **beiden** Hälften der Zeile — man zeigt
 auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
-`_explain` über `QFormLayout.labelForField`, samt Innenfeld).
+`form_fields.explain`, samt Innenfeld).
 Ist eine Zeile gesperrt, tragen beide Hälften den *Grund* statt des Satzes. Dazu `accessibleDescription`
 (Regel 18); ein eigener Tooltip bleibt, der Satz kommt dahinter. **Einen
 `statusTip` tragen nur Menüaktionen** (Entscheidung Robert, RM-509): An Feldern
@@ -190,7 +190,8 @@ eine Zeile nicht in Zoll sprechen.
 *Herein:* Ein Zahlenfeld ist eine `NumberSpin` (oder `LengthSpin`), **kein
 nacktes `QDoubleSpinBox`** — Qt liest den Punkt in deutscher Anzeigesprache als
 Tausendertrennung, aus „12.5“ wird still 125. Leseregel: **das letzte
-Trennzeichen ist das Dezimaltrennzeichen**, alle davor trennen Tausender; nur
+Trennzeichen ist das Dezimaltrennzeichen**, alle davor trennen Tausender (ein
+Ganzzahlfeld liest Dreiergruppen, `grouped_spin`); nur
 „1.000“ ohne Nachkomma bleibt zweideutig (eins), und was gelesen wurde, steht
 danach im Feld. **Der getippte Text bleibt unangetastet:** `validate` prüft
 beide Lesarten und gibt ihn unverändert zurück, gelesen wird in
@@ -260,8 +261,8 @@ selbst wenn der Dialog keinen zusätzlichen Handlungsknopf ausführen kann.
 Die nächste Vorschau räumt den alten Satz ab; das Vorschauband bleibt die
 Rückmeldung im Bild.
 
-**Ohne Pflichtwahl keine Vorschau:** Fehlt ein Bild, eine Datei
-(`OperationDialog.source_missing`) oder die Stelle eines Bausteins
+**Ohne Pflichtwahl keine Vorschau:** Fehlt ein Bild, eine Datei, ein Pflichttext
+(`source_missing`, `required_inputs`) oder die Stelle eines Bausteins
 (`place_missing`), rechnet der Dialog nicht, und *Übernehmen* nennt den Knopf
 oder „Stelle im Bild anklicken.“ (RM-773, RM-775).
 
