@@ -181,6 +181,26 @@ def test_an_open_finding_names_a_row_or_says_it_has_none() -> None:
     assert check_finding_rows(findings.values(), KNOWN, complete=False) == []
 
 
+def test_every_quoted_row_of_an_open_finding_is_known() -> None:
+    """Ein Tippfehler neben einer bekannten Kennung blieb still: Der Fund traf über die
+    bekannte eine Zeile, und die Zelle der gemeinten blieb ohne ihn (Review 2, RF-17,
+    die drei Sondenfunde). Freier Text ohne Backticks darf daneben stehen; ein
+    behobener Fund darf eine Zeile nennen, die es nicht mehr gibt."""
+    findings = _findings(
+        (1, "`drill_hole`, `resize_hol`", "19", "offen RM-737"),
+        (2, "`drill_hole`, `finding.action:instal`", "1", "offen RM-737"),
+        (3, "`dialog:body_choice_dialg`, `dialog:seal_path_dialog`", "1", "offen RM-737"),
+        (4, "`drill_hole`, Statusleiste", "9", "offen RM-737"),
+        (5, "`drill_hole`, `meldung:_online_completed`", "9", "behoben `544640f2a`"),
+    )
+    known = (*KNOWN, "dialog:seal_path_dialog")
+    assert check_finding_rows(findings.values(), known) == [
+        "FD-1: „resize_hol“ ist keine bekannte Zeile",
+        "FD-2: „finding.action:instal“ ist keine bekannte Zeile",
+        "FD-3: „dialog:body_choice_dialg“ ist keine bekannte Zeile",
+    ]
+
+
 def test_every_finding_names_the_rows_it_means() -> None:
     """Der Wächter über die eingecheckte Funddatei, gegen die ganze Funktionsliste samt
     den Fensterbefehlen der Abhaklisten (die Menüleiste entsteht erst am Fenster)."""
