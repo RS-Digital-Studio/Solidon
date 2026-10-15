@@ -437,9 +437,9 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `request_in_view` holt die Maßgruppe ins Bild, ohne ihre Handlung scharf zu machen, wie es der Knopf *Im Bild einstellen* tut.
 - Vorschlag: ein Weg für Auswahl und Knopf; die Handlung im Bild ist auch rechts die scharfe.
 - Wirkung beim Kunden: Rechts steht offen eine andere Handlung als die, deren Maße er im Bild sieht.
-- Stand: offen RM-737
+- Stand: offen RM-737; Fix `aa1bae3ba` (in welle4 `6238bf7fd`): Rechts ist die Handlung im Bild scharf, *Merkmal verschieben* steht im finalen Lauf nur noch als zugeklappter Kopf (007). Offen bleibt nach Stufe B (`resize_hole`, Prüfpunkt 1), dass mit der Maßgruppe die Verschiebepfeile des Merkmals an derselben Bohrung scharf im Bild stehen (02, 016, 019).
 
-## D0: Entwurf neuer Belege FD-35 bis FD-59
+## D0: Entwurf neuer Belege und Funde aus den Fixen (FD-35 bis FD-85)
 
 Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erhalten. Nachweis für den Stand ist der finale 48-Fall-Lauf auf `2ec37b23b` (Fortsetzung 03) mit den Stufe-B-Urteilen beider Prüfer.
 
@@ -1041,7 +1041,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Die Maßkarte hielt fest eine Feldzeile frei, gleich wie viele Felder hineinmussten; die Notreihen brachen ohne Prüfung der Unterkante um und wichen nur dem Setzpunkt aus, nicht dem Bewegungsgriff. Offscreen ausgelöst durch breitere Schrift mit Stylesheet, dazu zwei Testbauannahmen über Schriftbreiten und ein stehen gebliebenes dunkles Thema aus `customer_theme`.
 - Vorschlag: Freihaltung nach den Zeilen, die die Felder brauchen (`measure_field_places.rows_height`), Notanordnung je Feld am ersten freien Platz im Bild mit Stufen vom Abstand bis zum Überdecken (`emergency_places`); Testziele aus dem freien Raum statt fester Punkte; Aussehen nach jedem Fall zurückgeben.
 - Wirkung beim Kunden: Bei schmalem Bildraum, kleinem Bildschirm oder langer Sprache stand ein Maßfeld außerhalb der Ansicht oder über dem Bewegungsgriff, dessen Pfeile und Ringe dann nicht mehr auf den Zeiger reagierten.
-- Stand: behoben `377f1b552`, Testbau `cbc883304`, Nachzug `c5b25728f`, Themenleck zentral über `bf3c6d5e8`; in welle4 `b4e515c7b`, gezielt 580 grün am gemergten Stand.
+- Stand: behoben `377f1b552`, Testbau `cbc883304`, Nachzug `c5b25728f`, Themenleck zentral über `bf3c6d5e8`; in welle4 `b4e515c7b`, gezielt 580 grün am gemergten Stand. Schlussreview D0: Grifffall im Kundenthema `dabd95e26` (ohne `marked.append(grip)` rot), Changelog 0.6.1 `37801525b`, der letzte Rückfall der Notanordnung legt ein Feld eher über ein anderes als auf die Karte `ccb9bd87f`.
 
 ### FD-85 Abhakliste lässt einen offenen Fund hinter einem älteren behobenen verschwinden
 
@@ -1882,11 +1882,13 @@ Auskunft.
 - Schwere: leicht
 - Funktion: keine Zeile: Prüfanschlüsse des Prüfstands
 - Prüfpunkt: 19
-- Beleg: FD-35, FD-37, FD-38, FD-43, FD-61 und FD-64 stehen auf „offen RM-…; … integriert“, ihre Fixe sind Vorfahren von `2ec37b23b`; die Abweichungen 16, 18 und 24 hängen daran.
+- Beleg: FD-35, FD-37, FD-38, FD-43, FD-61 und FD-64 standen beim gemeinsamen Lauf auf „offen RM-…; … integriert“, obwohl ihre Fixe Vorfahren von `2ec37b23b` waren; die Abweichungen 16, 18 und 24 hängen daran. Nachgezogen hat sie `a00233340`, vor dem Eintrag dieses Funds.
 - Ursache: Der Stand wurde nach dem gemeinsamen Lauf nicht nachgezogen.
 - Vorschlag: Vor jeder Urteilsrunde den Stand der Funde nachziehen, deren Fix im Laufkopf liegt, mit Nachweis an ihrer Zeile.
 - Wirkung beim Kunden: Kein Produktfehler; *gut nach Fix* war eine Lesart statt einer Folge der Funddatei.
-- Stand: offen RM-737
+- Stand: offen RM-737; die sechs Einzelfälle sind nachgezogen (`a00233340`), offen ist der Prozessschritt vor jeder Urteilsrunde.
+
+## Folgefunde aus Fixen, Durchsichten und nativen Nachweisen (ab FD-154)
 
 ### FD-154 Fallprozess stirbt nach dem Abbau an einem noch laufenden Arbeiter
 
@@ -1916,7 +1918,7 @@ Auskunft.
 
 - Art: Fehler
 - Schwere: mittel
-- Funktion: `resize_hole`, `move_feature`, Bausteinkatalog an der Fläche, Suche nach Werkzeugen
+- Funktion: `search`, `tool:section`, `tool:measure`
 - Prüfpunkt: 19
 - Beleg: Sechs Fälle in `tests/test_ui.py` auf main grün, auf welle4 rot, auch allein (`output/konsolidierung-2026-10-12/d0-testfix-claude.md`, N1; Bisektion auf `6238bf7fd`, `b86381559`, `3d6a080c8`); je Fall Ursache, Gegenprobe und Lauf in `output/konsolidierung-2026-10-12/fd156-claude.md`.
 - Ursache: Fünf Fälle prüften das Verhalten vor FD-34, FD-63 und FD-16 (offene *Merkmal verschieben* neben der Maßgruppe, Stelle vorn, Katalog als zweiter Hauptknopf; die Höhe ohne Fokus getippt). Der sechste traf zusätzlich einen Produktfehler: `ToolStrip.set_shortcut` schrieb beim Bau des Fensters Titel und Kürzel über den Grund eines grauen Werkzeugs, und die Suche nannte seit FD-26 diesen Namen als Grund.
