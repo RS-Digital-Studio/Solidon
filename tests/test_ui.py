@@ -5401,6 +5401,14 @@ def test_panel_dimensions_and_placement_position_are_adopted_together(
 
         assert flow.active and flow._typed_off_surface
         assert not flow._measure_accept.isEnabled()
+        # Die Tastatur steht im Feld wie beim Kunden, und mit ihr wandert die
+        # Zahl nach rechts: Dort steht die Stelle hinter „Weitere Werte“ (FD-63,
+        # ``b86381559``), und das Feld mit dem Fokus klappt sie auf.
+        window.show()
+        window.activateWindow()
+        QApplication.processEvents()
+        fields["Z"].setFocus(Qt.FocusReason.MouseFocusReason)
+        assert fields["Z"].hasFocus(), "Voraussetzung: der Fokus steht im Feld"
         QTest.keyClick(fields["Z"].lineEdit(), Qt.Key.Key_Return)
         for _ in range(20):
             QApplication.processEvents()
@@ -5412,6 +5420,7 @@ def test_panel_dimensions_and_placement_position_are_adopted_together(
             and "Bohrung ändern" in field.accessibleName()
         }
         assert fields["Z"].value_mm() == pytest.approx(wanted_position[2])
+        assert fields["Z"].hasFocus(), "die Tastatur folgt der Zahl nach rechts"
     wanted_diameter = fields["Durchmesser"].value_mm() + 1.0
     fields["Durchmesser"].set_value_mm(wanted_diameter)
     assert window.session.wait_for_idle(30_000)
@@ -19397,8 +19406,10 @@ def test_a_chosen_part_reaches_the_catalogue_in_one_click(window: MainWindow) ->
 
     **Der Weg ist seit dem 11.09.2026 der Hauptknopf rechts**, nicht mehr eine
     Zeile im Kontextmenü: Das trägt keine Operationen mehr, und der Knopf
-    *Bausteinkatalog …* steht in Akzentfarbe unter der Karte der Handlungen — an
-    Körper und Fläche, ein Klick.
+    *Bausteinkatalog …* steht unter der Karte der Handlungen — an Körper und
+    Fläche, ein Klick. In Akzentfarbe steht er, solange keine Handlung offen ist;
+    an der Fläche ist *Fläche versetzen* offen, und deren *Übernehmen* ist der
+    eine Hauptknopf (FD-16, ``b86381559``).
     """
     from PySide6.QtWidgets import QMenu
 
@@ -19410,13 +19421,18 @@ def test_a_chosen_part_reaches_the_catalogue_in_one_click(window: MainWindow) ->
 
     knopf = window.selection_operations.catalog_button
     assert knopf.isVisibleTo(window.selection_operations), "der Knopf steht an der Fläche"
-    assert knopf.isDefault(), "und zwar als Hauptknopf"
+    assert window.feature_panel._apply.isDefault(), "dort führt das Übernehmen der Fläche"
+    assert not knopf.isDefault(), "und nur das: ein Hauptknopf je Karte"
 
     gerufen: list[bool] = []
     window.action_catalog = lambda: gerufen.append(True)  # type: ignore[method-assign]
     window.selection_operations.catalogRequested.connect(window.action_catalog)
     knopf.click()
     assert gerufen, "der Knopf steht da, öffnet den Katalog aber nicht"
+    window.object_tree.select_object(window.object_tree.selected())
+    QApplication.processEvents()
+    assert knopf.isVisibleTo(window.selection_operations), "der Knopf steht am Körper"
+    assert knopf.isDefault(), "und dort, ohne offene Handlung, als Hauptknopf"
 
     # Und die andere Hälfte: In der Menüleiste steht keiner mehr — gefragt
     # nach der **Kachel**, nicht nach der Kategorie. Hier stand
