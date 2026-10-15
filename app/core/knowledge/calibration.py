@@ -33,7 +33,7 @@ from app.core.knowledge.tables import read_table
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_profiles_dir
 from app.core.types import MaterialProfile, Profile
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -45,6 +45,17 @@ USER_MATERIALS = "materials.toml"
 FIELDS: tuple[str, ...] = profiles.CALIBRATION_FIELDS
 
 PROCESS_FIELDS = frozenset({"minimum_wall", "overhang_angle"})
+
+
+def state_text(material: MaterialProfile) -> TranslatableText:
+    """Ob ein Material gemessen ist — ein Wort für Dialog und Kommandozeile.
+
+    Bis FD-8 hieß der ungemessene Stand „Startwert“: Das Wort sagte nicht, dass
+    noch nicht gemessen wurde, und es meinte an anderer Stelle den Startwert
+    einer Erzeugung. Der Steckbrief für den Agenten schreibt weiter, was
+    Bauplan §23 zeigt.
+    """
+    return _("kalibriert") if material.calibrated else _("noch nicht kalibriert")
 
 
 @dataclass(slots=True)

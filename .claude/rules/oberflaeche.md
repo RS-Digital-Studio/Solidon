@@ -280,8 +280,8 @@ Handlungen da (`ReportPanel.set_running`, RM-534).
 
 **Wo Felder stehen, tragen sie ihren Namen — und „wo“ heißt jede Stelle**, nicht
 die zwei, die man gerade im Kopf hat. Ein `QFormLayout` verbindet Beschriftung
-und Feld nicht: `label.setBuddy(editor)` **und** ein Name am Feld selbst
-(`setBuddy` allein hängt nur das Tastenkürzel an).
+und Feld nicht: Name und Ziel setzt `form_fields.name_rows`, den Satz
+`explain_row` (Wächter `unnamed_inputs`).
 
 - **Der Name trägt die Handlung mit** („Durchmesser“ allein sagt nicht,
   welcher), wiederholte Zeilen nennen, wozu sie gehören („· {Parameter}“);

@@ -84,6 +84,12 @@ dans `website/version.json`.
 - La colonne des cotes de l'arborescence affiche en entier aussi les cotes non rondes ; la carte de gauche s'élargit un peu au besoin.
 - Les lignes de constat du rapport affichent leur mesure en entier et ne nomment chaque corps qu'une fois.
 - La barre des paramètres affiche les longueurs en pouces lorsque les pouces sont réglés. Un clic droit sur le champ de valeur ouvre *Modifier …*.
+- Le dialogue *Créer un paramètre …* explique chaque champ, y compris les bornes inférieure et supérieure, et un lecteur d'écran nomme chaque champ.
+- Si un nom de paramètre ne convient pas, la raison s'affiche juste sous le champ du nom, avec un bouton pour un nom qui convient.
+- En pouces, les paramètres de longueur se saisissent en pouces dans *Créer un paramètre …* et à l'enregistrement d'un bloc. La version 0.6.0 n'y affichait que des millimètres.
+- Le dialogue *Calibrer le matériau* indique « pas encore calibré » pour un matériau non mesuré, aussi en ligne de commande. Avant, on y lisait « valeurs de départ ».
+- Un refus dans un dialogue ne répète plus son titre en dessous. *Corriger la saisie* place le curseur dans le champ concerné.
+- La fenêtre *Détails* nomme le corps et l'étape et donne l'emplacement dans l'unité choisie. *Afficher les valeurs* montre le nom des champs et n'est pas plus haut que nécessaire.
 
 ### Imprimer et transmettre au slicer
 
@@ -106,6 +112,8 @@ dans `website/version.json`.
 - Dans la carte de cotes, *Appliquer* reste grisé tant qu'aucune valeur ni la case des éléments similaires ne change, et indique le premier champ. Avant, un clic dans un champ l'activait, sans effet.
 - Si la carte de cotes refuse une valeur, la raison apparaît une seule fois, juste sous le champ. Auparavant, la même phrase se répétait au-dessus des boutons.
 - Si un message agrandit la carte de cotes, elle reste en place et ne se déplace que de ce qu'exigent le bord ou la poignée, avec un mouvement bref. Avant, elle sautait ailleurs.
+- Pour découper un cube afin d'essayer un ajustement, sa position se choisit désormais sous *Position du cube*. La ligne *Emplacement* au-dessus l'affiche.
+- Le dialogue derrière *Donner une épaisseur* dit dès sa première ligne qu'il donne une épaisseur à la surface.
 
 ## 0.6.0
 

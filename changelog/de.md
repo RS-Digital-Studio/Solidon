@@ -108,6 +108,12 @@ Nutzen da und sonst nichts.
 - Die Maßspalte im Objektbaum zeigt auch krumme Maße ganz; die linke Karte wird dafür bei Bedarf etwas breiter.
 - Befundzeilen im Prüfbericht zeigen ihre Maßangabe vollständig und nennen jeden Körper nur einmal.
 - Die Parameterleiste zeigt Längen in Zoll, wenn Zoll eingestellt ist. Ein Rechtsklick auf das Wertfeld öffnet *Ändern …*.
+- Der Dialog *Parameter anlegen …* erklärt jedes Feld, auch Unter- und Obergrenze, und ein Bildschirmleser nennt jedes Feld beim Namen.
+- Passt ein Parametername nicht, steht der Grund direkt unter dem Namensfeld, mit einem Knopf für einen Namen, der geht.
+- Wer in Zoll arbeitet, gibt Längenparameter in *Parameter anlegen …* und beim Speichern eines Bausteins in Zoll ein. Version 0.6.0 zeigte dort nur Millimeter.
+- Der Dialog *Material kalibrieren* nennt ein ungemessenes Material „noch nicht kalibriert“, auch in der Kommandozeile. Bisher stand dort „Startwert“.
+- Eine Absage im Dialog wiederholt ihren Titel nicht mehr darunter. *Eingabe korrigieren* setzt dort den Cursor in das Feld, um das es geht.
+- Die *Einzelheiten* nennen Körper und Schritt beim Namen und die Stelle in der gewählten Einheit. *Werte ansehen* zeigt die Namen der Felder und ist nur so hoch wie nötig.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -130,6 +136,8 @@ Nutzen da und sonst nichts.
 - In der Maßkarte bleibt *Übernehmen* grau, bis sich ein Wert oder der Haken für gleichartige Merkmale ändert, und nennt das erste Feld. Bisher genügte ein Klick ins Feld, ohne Wirkung.
 - Lehnt die Maßkarte einen Wert ab, steht der Grund einmal, direkt unter dem Feld. Bisher stand derselbe Satz noch einmal über den Knöpfen.
 - Wird die Maßkarte durch einen Hinweis höher, bleibt sie stehen und rückt nur so weit, wie Bildrand oder Griff es verlangen, mit kurzer Bewegung. Bisher sprang sie an eine andere Stelle.
+- Wer einen Würfel zum Ausprobieren einer Passung ausschneidet, wählt dessen Lage jetzt unter *Lage des Würfels*. Die Zeile *Stelle* darüber zeigt sie an.
+- Der Dialog hinter *Dicke geben* sagt in seiner ersten Zeile, dass er der Fläche eine Dicke gibt.
 
 ## 0.6.0
 

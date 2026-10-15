@@ -135,7 +135,8 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `feature_list.py` | `FeatureList`: Inhaltshöhe und Pixelrollweg für `FeatureSetField`; Vertrag in `karte-app-ui.md` |
 | `dialog_footer.py` | `DialogFooter`: vollständige Aktionsleiste bei automatischer und manueller Breite; Vertrag in `karte-app-ui.md` |
 | `first_change.py` | Satz am grauen *Übernehmen* vor der ersten Änderung (Maßgruppe, Dialog) |
-| `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
+| `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung, Spende, Über, `confirm_export`/`_handover`, `open_link`, `align_to_the_front` |
+| `parameter_dialog.py` · `form_fields.py` · `refusal_details.py` | Projektmaß (§13) · Name und Satz je Formularfeld, Wächter `unnamed_inputs` · Absage in Fensterwörtern |
 | `message_dialog.py` | Meldung und Ansage (`announce`), Quittung am Ort (`acknowledge`, `withdraw`), Knopfnamen (`name_button`) |
 | `input_dialog.py` | Eingaben ohne Ort (`ask_text`, `ask_choice`) |
 | `place_popup.py` | Eingabe am Ort: Farbwähler, Wertfeld (`PlacePopup`) |
@@ -218,7 +219,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `motion.py` | Bewegung an einer Stelle, nicht an zwanzig |
 | `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht; Zuordnungen folgen `tabMoved` |
 | `tab_windows.py` | Reiter mit stabiler Inhaltshülle, Umordnung, eigenen OS-Fenstern und Rückweg; lokale Anordnung über `UiSettings.tab_layout`, vorhandene Bildschirme begrenzen die Geometrie |
-| `labels.py` | Befundwerte über `value_text` in Anzeigeeinheiten; Kurztexte (`slicer_title`, `feature_measure`, `cavity_name`, `group_summary`, `body_requirement`, `DateField`); `choice_label` mit Wert/Einheit aus `core/registry/surfaces.py`; `wheel_needs_focus` |
+| `labels.py` | Befundwerte (`value_text`) und Kurztexte in Anzeigeeinheiten, `choice_label`, `wheel_needs_focus`; Liste in `karte-app-ui.md` |
 
 ### Hilfe und Bedienung
 

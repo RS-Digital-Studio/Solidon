@@ -83,6 +83,12 @@ it into `website/version.json`.
 - The dimensions column in the object tree shows uneven dimensions in full; the left card grows a little wider when needed.
 - Finding rows in the check report show their measurement in full and name each body only once.
 - The parameter bar shows lengths in inches when inches are set. Right-clicking the value field opens *Change …*.
+- The *Create parameter …* dialog explains every field, including the lower and upper bound, and a screen reader names every field.
+- If a parameter name does not work, the reason appears right under the name field, with a button for a name that does.
+- If you work in inches, you enter length parameters in inches in *Create parameter …* and when saving a part. Version 0.6.0 showed only millimetres there.
+- The *Calibrate material* dialog calls an unmeasured material “not calibrated yet”, also on the command line. It used to say “starting values”.
+- A refusal in a dialog no longer repeats its title underneath. *Correct the input* puts the cursor into the field concerned.
+- The *Details* window names the body and the step and give the location in the chosen unit. *Show the values* shows the field names and is only as tall as needed.
 
 ### Printing and slicer handover
 
@@ -105,6 +111,8 @@ it into `website/version.json`.
 - In the measurement card, *Apply* stays grey until a value or the checkbox for matching features changes, and names the first field. Previously one click into a field enabled it, to no effect.
 - When the measurement card rejects a value, the reason appears once, directly below the field. Previously the same sentence was repeated above the buttons.
 - When a note makes the measurement card taller, it stays put and moves only as far as the view edge or handle requires, with a short movement. Previously it jumped elsewhere.
+- When you cut out a cube to try a fit, you now choose its position under *Cube position*. The *Place* line above shows it.
+- The dialog behind *Add thickness* says in its first line that it gives the surface a thickness.
 
 ## 0.6.0
 

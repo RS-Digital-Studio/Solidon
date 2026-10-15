@@ -2498,8 +2498,10 @@ ALREADY_CLOSED: Final = _(
     consumes=1,
     produces=1,
     requires_body="open",
+    # „Dicke“ im ersten Satz: Der Bericht führt mit *Dicke geben* hierher, und
+    # der Dialog sagte nur „Wand“ unter einem anderen Titel (FD-112).
     doc=_(
-        "Gibt einer offenen Fläche eine Wand und macht sie damit zu einem Körper. "
+        "Gibt einer offenen Fläche eine Dicke und macht sie damit zu einem Körper. "
         "Der Weg für ein Netz, das als Fläche ankommt statt als Volumen."
     ),
 )

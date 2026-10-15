@@ -83,6 +83,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A coluna de medidas da árvore de objetos mostra completas também as medidas com decimais; o cartão da esquerda alarga um pouco quando é preciso.
 - As linhas de constatações do relatório mostram a medida completa e nomeiam cada corpo uma só vez.
 - A barra de parâmetros mostra os comprimentos em polegadas quando estão definidas as polegadas. Um clique direito no campo do valor abre *Alterar …*.
+- O diálogo *Criar parâmetro …* explica cada campo, incluindo os limites inferior e superior, e um leitor de ecrã nomeia cada campo.
+- Se um nome de parâmetro não serve, o motivo aparece logo abaixo do campo do nome, com um botão para um nome que serve.
+- Quem trabalha em polegadas introduz os parâmetros de comprimento em polegadas em *Criar parâmetro …* e ao guardar um bloco. A versão 0.6.0 mostrava aí só milímetros.
+- O diálogo *Calibrar material* chama a um material por medir «ainda não calibrado», também na linha de comandos. Antes dizia «valores iniciais».
+- Uma recusa num diálogo já não repete o título por baixo. *Corrigir a entrada* põe o cursor no campo em causa.
+- A janela *Pormenores* nomeia o corpo e o passo e dá o ponto na unidade escolhida. *Mostrar os valores* mostra os nomes dos campos e só é tão alto quanto necessário.
 
 ### Imprimir e entregar ao slicer
 
@@ -105,6 +111,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No cartão de medidas, *Aplicar* fica cinzento até mudar um valor ou a caixa dos elementos iguais, e indica o primeiro campo. Antes bastava um clique num campo, sem efeito.
 - Se o cartão de medidas recusar um valor, o motivo aparece uma só vez, logo abaixo do campo. Antes a mesma frase repetia-se acima dos botões.
 - Se um aviso fizer crescer o cartão de medidas, fica no lugar e só se desloca o que o limite ou a pega exigirem, com um movimento curto. Antes saltava para outro sítio.
+- Ao recortar um cubo para experimentar um ajuste, a posição escolhe-se agora em *Posição do cubo*. A linha *Ponto* acima mostra-a.
+- O diálogo por trás de *Dar espessura* diz na primeira linha que dá espessura à superfície.
 
 ## 0.6.0
 

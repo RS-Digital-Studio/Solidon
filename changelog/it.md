@@ -83,6 +83,12 @@ scrive in `website/version.json`.
 - La colonna delle quote nell'albero degli oggetti mostra per intero anche le quote non tonde; se serve, la scheda a sinistra si allarga un poco.
 - Le righe dei rilievi nel rapporto mostrano la misura per intero e nominano ogni corpo una volta sola.
 - La barra dei parametri mostra le lunghezze in pollici quando sono impostati i pollici. Un clic destro sul campo del valore apre *Cambia …*.
+- La finestra *Crea parametro …* spiega ogni campo, anche i limiti inferiore e superiore, e un lettore di schermo nomina ogni campo.
+- Se un nome di parametro non va, il motivo compare subito sotto il campo del nome, con un pulsante per un nome che va.
+- Chi lavora in pollici inserisce i parametri di lunghezza in pollici in *Crea parametro …* e nel salvare un blocco. La versione 0.6.0 lì mostrava solo millimetri.
+- La finestra *Calibra il materiale* chiama un materiale non misurato «non ancora calibrato», anche dalla riga di comando. Prima diceva «valori iniziali».
+- Un rifiuto in una finestra non ripete più il suo titolo sotto. *Correggi l'inserimento* porta il cursore nel campo interessato.
+- La finestra *Dettagli* nomina corpo e passaggio e dà il punto nell'unità scelta. *Mostra i valori* mostra i nomi dei campi ed è alto solo quanto serve.
 
 ### Stampare e passare allo slicer
 
@@ -105,6 +111,8 @@ scrive in `website/version.json`.
 - Nella scheda delle misure *Applica* resta grigio finché non cambia un valore o la casella degli elementi uguali, e indica il primo campo. Prima bastava un clic in un campo, senza effetto.
 - Se la scheda delle misure rifiuta un valore, il motivo compare una sola volta, subito sotto il campo. Prima la stessa frase si ripeteva sopra i pulsanti.
 - Se un avviso fa crescere la scheda delle misure, resta al suo posto e si sposta solo quanto richiedono il bordo o la maniglia, con un breve movimento. Prima saltava altrove.
+- Per ritagliare un cubo e provare un accoppiamento, ora la posizione si sceglie in *Posizione del cubo*. La riga *Punto* sopra la mostra.
+- La finestra dietro *Dai spessore* dice nella prima riga che dà spessore alla superficie.
 
 ## 0.6.0
 

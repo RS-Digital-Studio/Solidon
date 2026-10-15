@@ -84,6 +84,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La columna de medidas del árbol de objetos muestra completas también las medidas con decimales; la tarjeta izquierda se ensancha un poco si hace falta.
 - Las filas de hallazgos del informe muestran su medida completa y nombran cada cuerpo una sola vez.
 - La barra de parámetros muestra las longitudes en pulgadas cuando están ajustadas las pulgadas. Un clic derecho en el campo del valor abre *Cambiar …*.
+- El diálogo *Crear parámetro …* explica cada campo, también los límites inferior y superior, y un lector de pantalla nombra cada campo.
+- Si un nombre de parámetro no sirve, el motivo aparece justo debajo del campo del nombre, con un botón para un nombre que sí sirve.
+- Quien trabaja en pulgadas introduce los parámetros de longitud en pulgadas en *Crear parámetro …* y al guardar un bloque. La versión 0.6.0 mostraba allí solo milímetros.
+- El diálogo *Calibrar material* llama a un material sin medir «aún sin calibrar», también en la línea de comandos. Antes ponía «valores de partida».
+- Un rechazo en un diálogo ya no repite su título debajo. *Corregir la entrada* pone el cursor en el campo afectado.
+- La ventana *Detalles* nombra el cuerpo y el paso y da el punto en la unidad elegida. *Mostrar los valores* muestra los nombres de los campos y solo es tan alto como hace falta.
 
 ### Imprimir y entregar al slicer
 
@@ -106,6 +112,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la tarjeta de medidas, *Aplicar* sigue en gris hasta que cambia un valor o la casilla de características iguales, e indica el primer campo. Antes bastaba un clic en un campo, sin efecto.
 - Si la tarjeta de medidas rechaza un valor, el motivo aparece una sola vez, justo debajo del campo. Antes la misma frase se repetía encima de los botones.
 - Si un aviso hace crecer la tarjeta de medidas, se queda en su sitio y solo se desplaza lo que exigen el borde o el tirador, con un movimiento breve. Antes saltaba a otro lugar.
+- Al recortar un cubo para probar un ajuste, su posición se elige ahora en *Posición del cubo*. La línea *Punto* de arriba la muestra.
+- El diálogo tras *Dar grosor* dice en su primera línea que da grosor a la superficie.
 
 ## 0.6.0
 
