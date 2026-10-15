@@ -71,6 +71,36 @@ def test_the_label_of_the_first_parameter_opens_the_menu_of_its_row(
     assert bind is panel.bind_button and bind.isVisible()
 
 
+def test_the_last_history_entry_is_found_also_without_a_step(
+    qt_app: Any, with_parameter: Any
+) -> None:
+    """``history.last`` ist die letzte sichtbare Zeile des Verlaufs, auch ein Eintrag
+    ohne Schritt wie „Parameter Höhe“ — der Weg zum Ändern eines Parameters per
+    Doppelklick (FD-127); ``history.row:<n>`` kennt nur Zeilen mit Schritt."""
+    from PySide6.QtCore import QRect
+
+    from app.core.types import Parameter
+    from app.ui import guide_targets
+
+    window = with_parameter
+    assert window.session.add_parameter(Parameter("hoehe", 20.0, title="Höhe"))
+    assert window.session.wait_for_idle(60_000)
+    _settle(qt_app)
+    listing = window.history_panel.list
+    last = next(
+        listing.item(row)
+        for row in range(listing.count() - 1, -1, -1)
+        if not listing.item(row).isHidden()
+    )
+    assert "Höhe" in last.text(), last.text()
+    place = listing.visualItemRect(last)
+    shown = QRect(listing.viewport().mapToGlobal(place.topLeft()), place.size())
+    click = guide_targets.next_click(window, "history.last")
+    assert click.why == "ziel"
+    assert shown.contains(click.rect.center()), (click.rect, shown)
+    assert guide_targets.area_for(window, "history.last") == shown
+
+
 def test_catalogue_and_new_spool_carry_the_names_of_their_buttons(qt_app: Any) -> None:
     from PySide6.QtWidgets import QWidget
 
