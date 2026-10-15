@@ -98,6 +98,10 @@ nicht. `names_a_way_out(reason, menus, buttons, *, phrases=(), fields=())` und
 `way_out(window, reason, widget=None)` prüfen Auswege. `surface_field_titles`
 nimmt nur offene Felder auf derselben Fläche, nicht die einer anderen Karte
 oder des gesamten Hauptfensters. Ein graues Feld ist kein Ausweg.
+`function_tooltips.reason_pictures` zeigt im Fehlfall die Kurzhilfe jedes
+grauen Ziels wie beim Überfahren und nimmt sie als eigenes Bild auf
+(`04-fehlfall-grund-<n>.png`): Ein Urteil über einen Sperrgrund stützt sich auf
+den angezeigten Satz, nicht auf das Protokoll.
 
 Lizenzläufe tragen `state` mit `angeboten`, `grau` oder `fehlt`; `reason`
 stammt aus `grey_reason`, zuerst aus der Kurzhilfe, dann aus der zugänglichen

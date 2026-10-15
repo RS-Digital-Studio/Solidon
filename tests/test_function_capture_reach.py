@@ -227,3 +227,41 @@ def test_the_chain_names_what_a_screen_reader_reads_and_finds_the_target(qt_app:
         assert links["QDoubleSpinBox"]["primary"] is False
     finally:
         root.close()
+
+
+# --- FD-149: der Sperrgrund eines grauen Knopfs als eigenes Bild ----------------------
+
+
+def test_the_reason_of_a_grey_button_becomes_its_own_picture(qt_app: Any, tmp_path: Any) -> None:
+    """Lauf 002: Der Sperrgrund stand nur im Protokoll, nicht im Bild des Fehlfalls."""
+    from PySide6.QtGui import QImage
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from tools import function_tooltips
+
+    root = QWidget()
+    layout = QVBoxLayout(root)
+    grey = QPushButton("Auf das Bett setzen", root)
+    grey.setToolTip("Erst nach der Berechnung — der Befund gehört zum vorigen Stand.")
+    grey.setEnabled(False)
+    silent = QPushButton("Ohne Grund", root)
+    silent.setEnabled(False)
+    open_ = QPushButton("Offen", root)
+    open_.setToolTip("Ein offener Knopf hat keinen Sperrgrund.")
+    for button in (grey, silent, open_):
+        layout.addWidget(button)
+    root.show()
+    qt_app.processEvents()
+    folder = tmp_path / "cases" / "002"
+    folder.mkdir(parents=True)
+    try:
+        found = {"grau": grey, "stumm": silent, "offen": open_}
+        images = function_tooltips.reason_pictures(
+            found.get, ["grau", "stumm", "offen", "fehlt"], folder, tmp_path
+        )
+        assert images == ["cases/002/04-fehlfall-grund-1.png"]
+        picture = QImage(str(tmp_path / images[0]))
+        assert not picture.isNull() and picture.width() > 0
+        assert function_tooltips._shown_tip() is None, "die Kurzhilfe ist danach wieder weg"
+    finally:
+        root.close()
