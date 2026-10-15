@@ -404,7 +404,13 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     ),
     # Die Kette, wie Tab sie geht; ihr letztes Glied ist das Widget, das
     # wiederkommt, oder das, das den Dialog verlässt (``inside: false``).
-    "tab_chain": ProtocolField("liste", _keys("name", "rect", "inside")),
+    # ``name`` liest ein Bildschirmleser, ``class`` steht daneben; ``mark``
+    # und ``primary`` erkennen die Zielhandlung (FD-141).
+    "tab_chain": ProtocolField(
+        "liste",
+        _keys("name", "rect", "inside", "class", "mark", "primary"),
+        types={"primary": bool, "class": str, "mark": str},
+    ),
     "names": ProtocolField("texte"),
     "focus_return": ProtocolField("wahr"),
     "matrix": ProtocolField("tabelle", frozenset(SELECTION_STAGES)),

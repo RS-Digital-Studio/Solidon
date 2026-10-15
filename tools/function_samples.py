@@ -71,6 +71,13 @@ def _scene_print(
     }
 
 
+def _link(
+    name: str, rect: list[int], cls: str, mark: str = "", *, primary: bool = False
+) -> dict[str, Any]:
+    """Ein Glied der Tab-Kette, wie ``function_capture.focus_entry`` es schreibt."""
+    return {"name": name, "rect": rect, "class": cls, "mark": mark, "primary": primary}
+
+
 def sample_protocol() -> dict[str, Any]:
     """Ein vollständiges Protokoll, an dem kein Prüfpunkt und kein Kriterium etwas findet.
 
@@ -257,9 +264,10 @@ def sample_protocol() -> dict[str, Any]:
             },
         ],
         "tab_chain": [
-            {"name": "Durchmesser", "rect": [12, 40, 120, 24]},
-            {"name": "Tiefe", "rect": [12, 72, 120, 24]},
-            {"name": "Übernehmen", "rect": [12, 120, 96, 28]},
+            _link("Durchmesser", [12, 40, 120, 24], "BoundedLengthSpin"),
+            _link("Tiefe", [12, 72, 120, 24], "BoundedLengthSpin"),
+            # Die Zielhandlung: der Hauptknopf der Fläche (Prüfpunkt 10, FD-141).
+            _link("Übernehmen", [12, 120, 96, 28], "QPushButton", "feature.apply", primary=True),
         ],
         "names": ["Durchmesser", "Tiefe", "Übernehmen"],
         "focus_return": True,
@@ -662,6 +670,15 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     ),
     BrokenSample(10, "doppelter Name", change=_set("names.1", "Durchmesser")),
     BrokenSample(10, "Fokus kommt nicht zurück", change=_set("focus_return", False)),
+    # --- FD-141: Ein Klassenname ist kein Name, und die Kette erreicht das Ziel.
+    BrokenSample(
+        10, "Glied heißt nach seiner Klasse", change=_set("tab_chain.1.name", "BoundedLengthSpin")
+    ),
+    BrokenSample(
+        10,
+        "Kette verlässt die Fläche vor der Zielhandlung",
+        change=_all(_set("tab_chain.2.primary", False), _set("tab_chain.2.mark", "")),
+    ),
     BrokenSample(11, "Operation ohne Handbuchstelle", context={"manual_place": lambda row: None}),
     BrokenSample(
         11,

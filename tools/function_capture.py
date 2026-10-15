@@ -888,17 +888,67 @@ def _inside(widget: Any, root: Any) -> bool:
     return bool(widget is not None and (root is widget or root.isAncestorOf(widget)))
 
 
+def _named_holder(widget: Any) -> Any:
+    """Das Bedienelement hinter dem Fokus: die Zahl oder Auswahl um ihre Textzeile."""
+    from PySide6.QtWidgets import QAbstractSpinBox, QComboBox, QLineEdit
+
+    parent = widget.parentWidget()
+    if isinstance(widget, QLineEdit) and isinstance(parent, (QAbstractSpinBox, QComboBox)):
+        return parent
+    return widget
+
+
+def accessible_name(widget: Any) -> str:
+    """Was ein Bildschirmleser als Namen liest — leer, wo er keinen hat (FD-141).
+
+    Wie ``QAccessibleWidget``: der zugängliche Name, sonst der Text einer
+    Beschriftung, die das Element als Partner trägt (``QLabel.setBuddy``, auch
+    die Zeile eines Formulars), oder der Titel seines Rahmens; ein Knopf liest
+    seinen Text. Ein Kennzeichen, ein ``objectName`` oder der Klassenname ist
+    kein Name — „FittedScroller“ hieß im Protokoll einmal so.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QAbstractButton, QGroupBox, QLabel, QTabBar
+
+    holder = _named_holder(widget)
+    name = str(holder.accessibleName() or "")
+    parent = holder.parentWidget()
+    if not name and parent is not None:
+        direct = Qt.FindChildOption.FindDirectChildrenOnly
+        partners = [
+            label for label in parent.findChildren(QLabel, "", direct) if label.buddy() is holder
+        ]
+        if partners:
+            name = _text_of(partners[0])
+        elif isinstance(parent, QGroupBox):
+            name = _plain(parent.title(), mnemonic=True)
+    if not name and isinstance(holder, QAbstractButton):
+        name = _text_of(holder)
+    if not name and isinstance(holder, QTabBar) and holder.currentIndex() >= 0:
+        name = _plain(holder.tabText(holder.currentIndex()), mnemonic=True)
+    return name.strip()
+
+
 def focus_entry(widget: Any, root: Any) -> dict[str, Any]:
     """Das Fokuswidget als Kettenglied: Name, Rechteck relativ zu ``root``, drinnen oder nicht.
 
     Auch ein Glied außerhalb steht in Koordinaten von ``root`` (Review S4) —
-    sonst verglichen die Urteile Lagen aus zwei Bezugssystemen.
+    sonst verglichen die Urteile Lagen aus zwei Bezugssystemen. ``name`` ist,
+    was ein Bildschirmleser liest (:func:`accessible_name`), ``class`` die
+    Klasse daneben; ``mark`` und ``primary`` sagen, ob das Glied die
+    Zielhandlung ist — ihr Wortschatzname oder der Hauptknopf der Fläche
+    (Prüfpunkt 10, FD-141).
     """
     from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QPushButton
 
+    holder = _named_holder(widget)
     corner = root.mapFromGlobal(widget.mapToGlobal(QPoint(0, 0)))
     return {
-        "name": widget.accessibleName() or name_of(widget),
+        "name": accessible_name(widget),
+        "class": type(holder).__name__,
+        "mark": vocabulary_name(holder) or vocabulary_name(widget),
+        "primary": isinstance(holder, QPushButton) and bool(holder.isDefault()),
         "rect": [corner.x(), corner.y(), widget.width(), widget.height()],
         "inside": _inside(widget, root),
     }

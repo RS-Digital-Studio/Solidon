@@ -5,7 +5,8 @@ immer „nicht gelaufen“; einer, der an einem Weg zählt, der vor dem Ziel end
 heißt „erfüllt“, ohne gemessen zu haben. Beides prüft diese Datei ohne Fenster
 am Probeprotokoll (``tools/function_samples.sample_protocol``): Schrittzahlen
 nur bis zum Beispielziel (FD-146), Rückweg und Projektwechsel nur in den Lagen
-der Zeile (FD-128).
+der Zeile (FD-128), die Tab-Kette bis zur Zielhandlung und mit Namen statt
+Klassen (FD-141).
 """
 
 from __future__ import annotations
@@ -192,3 +193,51 @@ def test_the_bench_writes_the_reasons_the_judges_read() -> None:
     assert f'"states.escape", "{NO_DRAFT}"' in bench or "NO_DRAFT" in bench
     for name in ("SWITCH_WITHOUT_INPUTS", "SWITCH_WITHOUT_PREVIEW", "SWITCH_RUN_OVER"):
         assert name in switch, name
+
+
+# --- FD-141: die Tab-Kette erreicht die Zielhandlung, und eine Klasse ist kein Name ---
+
+
+def _old_chain(protocol: dict[str, Any]) -> None:
+    """Die Kette eines älteren Laufs: nur Name, Rechteck und drinnen (Lauf 001, 002)."""
+    protocol["tab_chain"] = [
+        {"name": "FittedScroller", "rect": [0, 0, 300, 400], "inside": True},
+        {"name": "Durchmesser", "rect": [12, 40, 120, 24], "inside": True},
+        {"name": "Hilfe", "rect": [0, 600, 40, 40], "inside": False},
+    ]
+    protocol["names"] = ["FittedScroller", "Durchmesser"]
+
+
+def test_a_class_name_in_an_older_chain_is_a_missing_name() -> None:
+    """Lauf 001/002: „FittedScroller“ zählte als Name, P10 hieß „2 Tab-Schritte, erfüllt“."""
+    outcome = _judged(_old_chain).points[10]
+    assert outcome.verdict == "fund", outcome
+    assert any("FittedScroller" in issue.text for issue in outcome.issues)
+
+
+def test_a_chain_without_the_target_action_is_a_finding() -> None:
+    def change(protocol: dict[str, Any]) -> None:
+        for link in protocol["tab_chain"]:
+            link["primary"], link["mark"] = False, ""
+
+    outcome = _judged(change).points[10]
+    assert outcome.verdict == "fund"
+    assert any("Zielhandlung" in issue.text for issue in outcome.issues)
+
+
+def test_the_target_action_counts_by_its_mark_where_no_main_button_is() -> None:
+    """Eine Befundhandlung: Ihr Knopf ist das Ziel der Zeile, kein Hauptknopf."""
+
+    def change(protocol: dict[str, Any]) -> None:
+        protocol["tab_chain"][2].update(primary=False, mark="operation:drill_hole")
+
+    assert _judged(change).points[10].verdict == "erfuellt"
+
+
+def test_an_empty_chain_is_not_measured() -> None:
+    """Brachte der Prüfstand den Fokus nicht in die Fläche, ist nichts gemessen — nie erfüllt."""
+
+    def change(protocol: dict[str, Any]) -> None:
+        protocol["tab_chain"], protocol["names"] = [], []
+
+    assert _judged(change).points[10].verdict == "nicht_gelaufen"

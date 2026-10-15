@@ -171,3 +171,59 @@ def test_a_row_without_wrapping_is_measured_across(qt_app: Any) -> None:
         assert _cell(listing)["cut"] is False
     finally:
         listing.close()
+
+
+# --- FD-141: Name wie ein Bildschirmleser ihn liest, Zielhandlung erkannt -------------
+
+
+def test_the_chain_names_what_a_screen_reader_reads_and_finds_the_target(qt_app: Any) -> None:
+    """Eine Zahl heißt nach ihrer Formularzeile, eine Rollfläche ohne Namen hat keinen.
+
+    Vorher fiel der Name auf Kennzeichen und Klasse zurück: „FittedScroller“ und
+    „DialogScrollArea“ standen als Namen in der Kette (FD-141, Lauf 001, 002).
+    Der Hauptknopf ist die Zielhandlung, ein Wortschatzname nennt sie ebenfalls.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import (
+        QApplication,
+        QDoubleSpinBox,
+        QFormLayout,
+        QPushButton,
+        QScrollArea,
+        QVBoxLayout,
+        QWidget,
+    )
+
+    from app.core.guides import TARGET_PROPERTY
+
+    root = QWidget()
+    layout = QVBoxLayout(root)
+    form_holder = QWidget(root)
+    form = QFormLayout(form_holder)
+    width = QDoubleSpinBox(form_holder)
+    form.addRow("Breite", width)
+    layout.addWidget(form_holder)
+    scroller = QScrollArea(root)
+    scroller.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    layout.addWidget(scroller)
+    accept = QPushButton("Übernehmen", root)
+    accept.setDefault(True)
+    accept.setProperty(TARGET_PROPERTY, "feature.apply")
+    layout.addWidget(accept)
+    root.show()
+    try:
+        width.setFocus()
+        qt_app.processEvents()
+        chain = capture.tab_chain(
+            root, lambda: QTest.keyClick(QApplication.focusWidget(), Qt.Key.Key_Tab)
+        )
+        links = {entry["class"]: entry for entry in chain}
+        assert links["QDoubleSpinBox"]["name"] == "Breite", chain
+        assert links["QScrollArea"]["name"] == "", chain
+        assert links["QPushButton"]["name"] == "Übernehmen"
+        assert links["QPushButton"]["primary"] is True
+        assert links["QPushButton"]["mark"] == "feature.apply"
+        assert links["QDoubleSpinBox"]["primary"] is False
+    finally:
+        root.close()

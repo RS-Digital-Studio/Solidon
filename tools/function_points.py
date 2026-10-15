@@ -14,6 +14,7 @@ Eigenes Modul, damit keine Datei des Pakets die Größengrenze der Codestruktur
 
 from __future__ import annotations
 
+import functools
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace
@@ -622,6 +623,47 @@ def _same_link(first: Mapping[str, Any], second: Mapping[str, Any]) -> bool:
     return first.get("name") == second.get("name") and first.get("rect") == second.get("rect")
 
 
+@functools.cache
+def widget_class_names() -> frozenset[str]:
+    """Die Klassennamen aller Widgets von Qt und der Oberfläche (FD-141).
+
+    Ein älteres Protokoll schrieb, wo der Name fehlte, die Klasse als Namen
+    („FittedScroller“); ohne ``class`` daneben erkennt das Urteil ihn hier.
+    """
+    from PySide6.QtWidgets import QWidget
+
+    import app.ui.main_window  # noqa: F401 — lädt die Klassen der Oberfläche
+
+    found: set[str] = set()
+    pending: list[type] = [QWidget]
+    while pending:
+        cls = pending.pop()
+        if cls.__name__ not in found:
+            found.add(cls.__name__)
+            pending.extend(cls.__subclasses__())
+    return frozenset(found)
+
+
+def _unnamed(entry: Mapping[str, Any]) -> bool:
+    """Ein Kettenglied ohne Namen: leer, oder nur seine Klasse (FD-141)."""
+    name = str(entry.get("name") or "").strip()
+    if not name:
+        return True
+    if "class" in entry:
+        return name == str(entry.get("class"))
+    return name in widget_class_names()
+
+
+def _goals(protocol: Mapping[str, Any]) -> frozenset[str]:
+    """Die Zielhandlung der Zeile: ihr Ziel und das Ziel des Klicks, der übernahm."""
+    taken = {
+        str(step.get("target"))
+        for step in _path(protocol) or ()
+        if step.get("phase") == MAIN_PHASES[-1] and step.get("why") == "ziel"
+    }
+    return frozenset({str(_row(protocol).get("target") or ""), *taken} - {""})
+
+
 def _point_10(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
@@ -633,9 +675,13 @@ def _point_10(
     without_dialog = (_map(protocol, "unmeasured") or {}).get("focus_return") == WITHOUT_DIALOG
     if chain is None or names is None or not (isinstance(focus, bool) or without_dialog):
         return _missing(10, "tab_chain", "names", "focus_return")
+    if not chain:
+        # Der Prüfstand brachte den Fokus nicht in die Fläche: keine Kette, keine Messung.
+        return _missing(10, "tab_chain (leer)")
     issues = []
     absent = []
-    placed = [(str(entry.get("name")), _rect(entry)) for entry in _within_chain(chain)]
+    links = _within_chain(chain)
+    placed = [(str(entry.get("name")), _rect(entry)) for entry in links]
     if any(rect is None for _name, rect in placed):
         absent.append("tab_chain.rect")
     else:
@@ -644,8 +690,24 @@ def _point_10(
             for jump in _reading_order_jumps([(name, rect) for name, rect in placed if rect])
         ]
     shown = [str(name) for name in names]
-    if any(not name.strip() for name in shown):
-        issues.append(Issue("Bedienelement ohne zugänglichen Namen", "mittel"))
+    unnamed = sorted(
+        {str(entry.get("class") or entry.get("name")) for entry in links if _unnamed(entry)}
+    )
+    if unnamed or any(not name.strip() for name in shown):
+        issues.append(Issue(f"Bedienelement ohne zugänglichen Namen: {unnamed}", "mittel"))
+    # Die Kette erreicht die Zielhandlung der Zeile, bevor sie die Fläche
+    # verlässt (FD-141): den Hauptknopf der Fläche oder das Ziel, das übernimmt.
+    if any("primary" not in entry and "mark" not in entry for entry in links):
+        absent.append("tab_chain.primary/mark (Zielhandlung)")
+    elif not any(
+        entry.get("primary") is True or entry.get("mark") in _goals(protocol) for entry in links
+    ):
+        issues.append(
+            Issue(
+                "die Tab-Kette erreicht die Zielhandlung nicht, bevor sie die Fläche verlässt",
+                "mittel",
+            )
+        )
     doubled = sorted({name for name in shown if name.strip() and shown.count(name) > 1})
     if doubled:
         issues.append(Issue(f"doppelte Namen: {doubled}", "mittel"))
