@@ -1,7 +1,10 @@
-"""Ein Fall verträgt jeden Bericht der Suite."""
+"""Ein Fall verträgt jeden Bericht der Suite und hinterlässt den Prozess, wie er ihn fand."""
 
 import ast
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 TESTS = Path(__file__).parent
 
@@ -57,3 +60,54 @@ def test_the_scan_finds_every_way_of_requesting_them() -> None:
         "def test_c(record_trace, record_testsuite_property): pass\n"
     )
     assert xunit1_requests(planted) == [1, 3, 4, 5]
+
+
+#: Das Aussehen der Anwendung vor dem ersten der beiden folgenden Fälle.
+_FOUND: list[tuple[object, ...]] = []
+
+
+def _look(application: Any) -> tuple[object, ...]:
+    from PySide6.QtGui import QFont, QPalette
+
+    from app.ui import theme
+
+    return (
+        application.style().name(),
+        QPalette(application.palette()),
+        application.styleSheet(),
+        QFont(application.font()),
+        application.property("solidonTheme"),
+        theme.current_theme(),
+    )
+
+
+def test_a_case_may_leave_theme_style_and_font_changed(qt_app: Any) -> None:
+    """Erster Teil: dunkles Thema, fremder Stil und große Schrift, ohne Rückgabe.
+
+    So hinterließ ``customer_theme`` (``test_feature_front_contract.py``) das
+    dunkle Thema für jeden Nachfolger im Prozess.
+    """
+    from PySide6.QtGui import QFont
+
+    from app.ui.style import apply_style
+    from app.ui.theme import apply_theme
+
+    _FOUND[:] = [_look(qt_app)]
+    target = "light" if _FOUND[0][-1] == "dark" else "dark"
+    apply_theme(qt_app, target)
+    apply_style(qt_app, target)
+    font = QFont(qt_app.font())
+    font.setPointSize(font.pointSize() + 7 if font.pointSize() > 0 else 23)
+    qt_app.setFont(font)
+    changed = _look(qt_app)
+    assert all(new != old for new, old in zip(changed[1:], _FOUND[0][1:], strict=True))
+
+
+def test_the_next_case_finds_the_look_its_predecessor_found(qt_app: Any) -> None:
+    """Zweiter Teil: Der Nachfolger findet alles so, wie der erste Teil es vorfand."""
+    if not _FOUND:
+        pytest.skip("aussagekräftig nur nach dem ersten Teil im selben Prozess")
+    found = _look(qt_app)
+    names = ("Stil", "Palette", "Stylesheet", "Schrift", "Themenmerker", "Thema")
+    left = [name for name, now, then in zip(names, found, _FOUND[0], strict=True) if now != then]
+    assert not left, f"Vom Vorgänger stehen geblieben: {left}"
