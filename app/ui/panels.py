@@ -10703,7 +10703,18 @@ class FeaturePanel(QWidget):
             layout.setSpacing(TIGHT)
             # Titel und Grund in **einer** umbrechenden Zeile: Der Grund ist
             # ein Satz, und ein Satz gehört nicht in eine Formularspalte.
-            name = QLabel(f"{action.title} — {action.reason}", box)
+            # **Die Absage zuerst** (FD-138): „Zum Langloch ziehen — Gezogen
+            # wird ein Loch …“ las sich als Aufzählung mit einem Absatz
+            # dahinter; dass die genannten Handlungen hier fehlen, stand
+            # nirgends. Der Grund folgt als eigener Satz.
+            name = QLabel(
+                tr(
+                    "Hier nicht möglich: {actions}. {reason}",
+                    actions=str(action.title),
+                    reason=str(action.reason),
+                ),
+                box,
+            )
             name.setWordWrap(True)
             name.setAccessibleDescription(str(action.reason))
             name.setProperty(guides.TARGET_PROPERTY, guides.action_target(action))

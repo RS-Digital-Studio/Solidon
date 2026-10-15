@@ -4534,6 +4534,7 @@
   "Hier liegt schon ein Punkt der Kurve — zwischen zwei Punkten klicken.": "Aqui já há um ponto da curva — clique entre dois pontos.",
   "Hier ließ sich keine Wandstärke messen — auf eine Wand klicken.": "Não foi possível medir a espessura de parede aqui — clique numa parede.",
   "Hier lässt sich der Schritt nicht einfügen.": "O passo não pode ser inserido aqui.",
+  "Hier nicht möglich: {actions}. {reason}": "Aqui não é possível: {actions}. {reason}",
   "Hier spannt eine Decke frei, ihre Bahnen hängen durch. Ein Übergang unter 45 Grad oder eine Stütze hilft.": "Aqui um teto fica no ar e as suas linhas cedem. Ajuda uma transição abaixo de 45 graus ou um suporte.",
   "Hier treffen sich keine zwei Linien — Verrunden braucht eine Ecke aus zwei Linien.": "Aqui não se encontram duas linhas — arredondar precisa de um canto feito de duas linhas.",
   "Hier treffen sich keine zwei Linien — eine Fase braucht eine Ecke aus zwei Linien.": "Aqui não se encontram duas linhas — um chanfro precisa de um canto feito de duas linhas.",

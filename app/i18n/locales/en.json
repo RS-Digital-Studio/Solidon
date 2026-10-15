@@ -4534,6 +4534,7 @@
   "Hier liegt schon ein Punkt der Kurve — zwischen zwei Punkten klicken.": "There is already a point of the curve here — click between two points.",
   "Hier ließ sich keine Wandstärke messen — auf eine Wand klicken.": "No wall thickness could be measured here — click on a wall.",
   "Hier lässt sich der Schritt nicht einfügen.": "The step cannot be inserted here.",
+  "Hier nicht möglich: {actions}. {reason}": "Not possible here: {actions}. {reason}",
   "Hier spannt eine Decke frei, ihre Bahnen hängen durch. Ein Übergang unter 45 Grad oder eine Stütze hilft.": "A ceiling spans freely here, and its lines sag. A transition below 45 degrees or a support helps.",
   "Hier treffen sich keine zwei Linien — Verrunden braucht eine Ecke aus zwei Linien.": "No two lines meet here — a fillet needs a corner made of two lines.",
   "Hier treffen sich keine zwei Linien — eine Fase braucht eine Ecke aus zwei Linien.": "No two lines meet here — a chamfer needs a corner made of two lines.",

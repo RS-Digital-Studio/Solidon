@@ -4534,6 +4534,7 @@
   "Hier liegt schon ein Punkt der Kurve — zwischen zwei Punkten klicken.": "Il y a déjà un point de la courbe ici — cliquez entre deux points.",
   "Hier ließ sich keine Wandstärke messen — auf eine Wand klicken.": "Impossible de mesurer l'épaisseur de paroi ici — cliquez sur une paroi.",
   "Hier lässt sich der Schritt nicht einfügen.": "L'étape ne peut pas être insérée ici.",
+  "Hier nicht möglich: {actions}. {reason}": "Impossible ici : {actions}. {reason}",
   "Hier spannt eine Decke frei, ihre Bahnen hängen durch. Ein Übergang unter 45 Grad oder eine Stütze hilft.": "Ici, un plafond est suspendu dans le vide et ses lignes s'affaissent. Une transition sous 45 degrés ou un support aide.",
   "Hier treffen sich keine zwei Linien — Verrunden braucht eine Ecke aus zwei Linien.": "Aucune paire de lignes ne se rejoint ici — un congé exige un coin formé par deux lignes.",
   "Hier treffen sich keine zwei Linien — eine Fase braucht eine Ecke aus zwei Linien.": "Aucune paire de lignes ne se rejoint ici — un chanfrein exige un coin formé par deux lignes.",
