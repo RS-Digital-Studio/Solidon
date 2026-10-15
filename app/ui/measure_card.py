@@ -15,23 +15,14 @@ Auge“). Was eine Feldzeile schon sagt, wiederholt der Hinweis nicht
 from __future__ import annotations
 
 from itertools import pairwise
-from typing import cast, override
+from typing import override
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QResizeEvent
-from PySide6.QtWidgets import (
-    QApplication,
-    QFormLayout,
-    QFrame,
-    QGridLayout,
-    QLabel,
-    QLayout,
-    QLayoutItem,
-    QScrollArea,
-    QWidget,
-)
+from PySide6.QtWidgets import QApplication, QFrame, QLabel, QScrollArea, QWidget
 
 from app.ui.overlay import _round_corners
+from app.ui.tab_stops import tab_stops
 
 
 def stands_in(surface: QWidget | None, sentence: str) -> bool:
@@ -50,82 +41,6 @@ def stands_in(surface: QWidget | None, sentence: str) -> bool:
         sentence in label.text() and label.isVisibleTo(surface)
         for label in surface.findChildren(QLabel)
     )
-
-
-#: Die Rollen einer Formularzeile in Lesereihenfolge.
-_ROW_ROLES = (
-    QFormLayout.ItemRole.LabelRole,
-    QFormLayout.ItemRole.FieldRole,
-    QFormLayout.ItemRole.SpanningRole,
-)
-
-
-def tab_stops(root: QWidget) -> list[QWidget]:
-    """Die Halte der Tabulatortaste unter ``root`` in der Reihenfolge des Layouts.
-
-    Ein Halt ist ein Widget, das Fokus per Tabulatortaste nimmt; sein
-    Innenleben (das Textfeld eines Drehfelds) zählt nicht extra. Ein
-    Rollbereich ist kein Halt, er reicht an seinen Inhalt weiter. Gefragt wird
-    das Layout und nicht die Fokuskette: Die folgt der Entstehung, nicht dem
-    Bild — und in Python an ihr entlangzulaufen räumt Widgets mit ab
-    (``oberflaeche.md``).
-    """
-    stops: list[QWidget] = []
-    # Gehalten, nicht nur gezählt: So bleibt jede Hülle bis zum Ende dieselbe.
-    seen: dict[int, QWidget] = {}
-
-    def visit(widget: QWidget) -> None:
-        # Eine Zeile über die ganze Breite meldet das Formular unter zwei Rollen.
-        if id(widget) in seen:
-            return
-        seen[id(widget)] = widget
-        if isinstance(widget, QScrollArea):
-            content = widget.widget()
-            if content is not None:
-                visit(content)
-            return
-        if widget.focusPolicy().value & Qt.FocusPolicy.TabFocus.value:
-            stops.append(widget)
-            return
-        layout = widget.layout()
-        if layout is not None:
-            walk(layout)
-
-    def walk(layout: QLayout) -> None:
-        for item in _items_in_reading_order(layout):
-            inner = item.layout()
-            if inner is not None:
-                walk(inner)
-                continue
-            widget = item.widget()
-            if widget is not None:
-                visit(widget)
-
-    layout = root.layout()
-    if layout is not None:
-        walk(layout)
-    return stops
-
-
-def _items_in_reading_order(layout: QLayout) -> list[QLayoutItem]:
-    """Die Elemente eines Layouts, wie das Auge sie liest — Zeile für Zeile."""
-    if isinstance(layout, QFormLayout):
-        return [
-            item
-            for row in range(layout.rowCount())
-            for role in _ROW_ROLES
-            if (item := layout.itemAt(row, role)) is not None
-        ]
-    count = layout.count()
-    if isinstance(layout, QGridLayout):
-        cells = sorted(
-            (cast(tuple[int, int, int, int], layout.getItemPosition(index))[:2], index)
-            for index in range(count)
-        )
-        order = [index for _cell, index in cells]
-    else:
-        order = list(range(count))
-    return [item for index in order if (item := layout.itemAt(index)) is not None]
 
 
 class MeasureCard(QFrame):

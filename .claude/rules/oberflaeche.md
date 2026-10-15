@@ -312,8 +312,8 @@ verdächtigen, dann den Code** — die Reichweite ist der Prozess.
 ## Die Tabulatortaste geht denselben Weg wie das Auge
 
 Die Fokuskette folgt der Reihenfolge, in der Widgets **entstanden** sind, nicht
-dem Layout. Wer ein Element später umhängt, zieht sie mit
-`QWidget.setTabOrder` von hinten nach (`FeaturePanel._settle_tab_order`;
+dem Layout. Wer ein Element später umhängt, zieht sie nach dem
+Layout nach (`tab_stops.chain_after`, `FeaturePanel._settle_tab_order`;
 unsichtbare und gesperrte übergeht Qt). Geprüft wird gegen das Layout, nicht
 gegen Bildpunkte. Ein Rollbereich ist nie namenloser Halt (`scroll_areas`).
 **Nie in Python über `nextInFocusChain` laufen:** PySide

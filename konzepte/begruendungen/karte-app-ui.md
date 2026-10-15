@@ -1433,9 +1433,9 @@ Inhalt, Qt rollt das fokussierte Kind ins Bild) und `ReadingScrollArea` für
 Lesetext (Halt mit Name und Beschreibung, Pfeil- und Bildtasten).
 `DialogScrollArea`, `FittedScroller`, `ContentScroller` und `ColumnScroller`
 leiten von der ersten ab. `feature_footer.py` hängt die Knopfzeile des
-Merkmalfensters unter die scharfe Handlung, solange sie dem Panel gehört, und
-holt sie über `keep_in_sight` ins Sichtfeld des Rollbereichs; ihr eigener
-Titel entfällt dort. `report_rows.WrappedRowDelegate` misst Befundzeilen eine
+Merkmalfensters unter die scharfe Handlung und holt sie über `keep_in_sight`
+ins Sichtfeld des Rollbereichs, mit möglichst wenig Rollweg auch, während die
+Karte noch wächst (`_Follower`); ihr eigener Titel entfällt dort. `report_rows.WrappedRowDelegate` misst Befundzeilen eine
 Zeichenbreite schmaler, als sie gezeichnet werden — bei gebrochener
 Skalierung brauchte eine knapp passende Zeile sonst beim Zeichnen eine zweite
 und wurde gekürzt. `parameter_length.py` gibt der Parameterleiste Längenfelder
@@ -1443,6 +1443,13 @@ in der Anzeigeeinheit (Einheit in der Auswahl daneben, kein Suffix) und die
 Helfer, über die jede Stelle der Leiste in Millimetern liest und setzt. Das
 Panel der Handlungen hat keine feste Mindesthöhe mehr; die Liste wächst nicht
 über ihren Wunsch, und „Filament und Druck“ steht unter den Hauptaktionen.
+
+*Restpaket A (FD-177):* `tab_stops.py` liest die Halte der Tabulatortaste aus
+dem Layout (`tab_stops`, vorher in `measure_card.py`; ein Lesebereich ist selbst
+ein Halt) und legt sie mit `chain_after` hinter einen Einstieg. Die Reiterleiste
+der rechten Karte (`SignalTabBar.focusNextPrevChild`) tut das für die vordere
+Seite, bevor Tab sie verlässt: Bericht und Auswahl entstehen vor der Leiste, ihre
+Felder später oder an anderer Stelle, und Qt reihte sie nach der Entstehung ein.
 
 ### Dialoge
 

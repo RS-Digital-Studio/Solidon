@@ -103,7 +103,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `placement_flow.py` | Flächenplatzierung und Maße im Bild (§18.5), Dialog/`QuietHost` über `PlacementHost`; Maßgruppengröße im Ereignisfilter; Ablauf in `karte-app-ui.md`, `measured_frame` in `operationen.md` |
 | `measure_card_drag.py` | `MeasureCardDrag`/`CardPlace`: Auftragslage, Titel-/Freiflächenzug; Feldgesten bleiben; aktive Mausgesten nur `QWidget`, `QWindow` durchlassen; `update_room`/`placed_rect`/`reset` |
 | `measure_field_places.py` | Platz der Maßfelder bei Enge und nach Wachsen (`grown_place`) |
-| `measure_card.py` | `MeasureCard`: Tab nach Layout im Kreis, Fokus beim Verbergen an die Ansicht; `stands_in` |
+| `measure_card.py` · `tab_stops.py` | `MeasureCard`: Tab nach Layout im Kreis, Fokus beim Verbergen an die Ansicht; `stands_in` · Halte nach Layout, `chain_after` |
 | `slot_handle.py` | der Langlochgriff: zwei Knöpfe am gewählten Loch, der Zug gibt Länge und Richtung (`slotDragged`); übernommen wird im Merkmalfenster |
 | `scale_widget.py` | der Skalierwürfel am Gizmo (§18.11) |
 | `transform_bar.py` | die Bewegen-Leiste: drei Rollen, die Zahlen daneben (§18.11) |
@@ -217,7 +217,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `scroll_areas.py` | Rollbereich ohne Tab-Halt oder als Lesebereich |
 | `icons.py` | Symbole als themenabhängige SVGs (§19.3, Regel 18); `svg_pixmap` rastert scharf auf HiDPI |
 | `motion.py` | Bewegung an einer Stelle, nicht an zwanzig |
-| `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht; Zuordnungen folgen `tabMoved` |
+| `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht; Zuordnungen folgen `tabMoved`; Tab geht in die vordere Seite |
 | `tab_windows.py` | Reiter mit stabiler Inhaltshülle, Umordnung, eigenen OS-Fenstern und Rückweg; lokale Anordnung über `UiSettings.tab_layout`, vorhandene Bildschirme begrenzen die Geometrie |
 | `labels.py` | Befundwerte (`value_text`) und Kurztexte in Anzeigeeinheiten, `choice_label`, `wheel_needs_focus`; Liste in `karte-app-ui.md` |
 
