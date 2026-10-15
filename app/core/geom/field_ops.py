@@ -40,7 +40,7 @@ from app.i18n import TranslatableText, _
 
 MAX_FIELD_TOOLS: Final = 4096
 
-#: Die Öffnungsformen, die *Materialtoleranz berücksichtigen* um die
+#: Die Öffnungsformen, die *Druckabweichung ausgleichen* um die
 #: Lochkorrektur weitet; ein Sechseck behält sein Eckmaß. Eine Quelle für
 #: Haken, Schnitt und Druckrat (``scene.fits``, RM-589).
 COMPENSATED_SHAPES: Final[tuple[str, ...]] = ("circle", "slot")
@@ -343,12 +343,13 @@ class FieldCutParams(BaseParams):
         doc=_("Ursprung des Rasters in der senkrechten Richtung der Zeichenebene."),
     )
     compensate: bool = param(
-        title=_("Materialtoleranz berücksichtigen"),
+        title=_("Druckabweichung ausgleichen"),
         default=False,
         placement="advanced",
         depends_on=("shape", COMPENSATED_SHAPES),
         doc=_(
-            "Vergrößert Lochmaß und Langlochlänge um dieselbe Materialzugabe wie beim Bohren. "
+            "Gibt Lochmaß und Langlochlänge dieselbe Lochkorrektur des Materials dazu wie beim "
+            "Bohren. "
             "Sechseckige Öffnungen behalten ihr Eckmaß."
         ),
     )
