@@ -26,7 +26,9 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
    der sich nicht auflösen lässt, liest jede Python-Datei, wenn sein Muster
    Python nennt. So wählt eine reine Teständerung die Wächter über
    ``tests/`` (``test_toolchain``, ``test_size_ratchet``,
-   ``test_source_readers``), aber keinen, der nur ``app/`` liest; oder
+   ``test_source_readers``), aber keinen, der nur ``app/`` liest. Unter
+   ``app/`` zählt eine Lesestelle nur mit einem Ordner im Repository
+   (``extract.message_ids`` → ``test_registry_dump``); oder
 4. eine geänderte Nicht-Python-Datei oder ein Skript außerhalb der Pakete
    bei ihrem Namen genannt wird — ``ROADMAP.md``, ``constraints.txt``, ein
    Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/`` —, auch über

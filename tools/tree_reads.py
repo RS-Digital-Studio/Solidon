@@ -1075,6 +1075,11 @@ class Read:
     pattern: tuple[str, ...]
     site: str
 
+    @property
+    def origin(self) -> str:
+        """Der oberste Ordner der Datei, in der gelesen wird: ``app``, ``tools``, ``tests``."""
+        return self.site.split("/", 1)[0]
+
     def meets_python(self) -> bool:
         """Ob diese Stelle überhaupt eine Python-Datei des Baums lesen kann.
 
@@ -1082,12 +1087,14 @@ class Read:
         ``*.py``). Ein nicht auflösbarer Ordner zählt nur mit einem Muster, das Python nennt
         (``*.py``): Ein ``rglob("*")`` über einen unbekannten Ordner geht im Bestand über
         Programme, Archive, Profile und Temp-Bäume, und die Lesemessung aller Testdateien
-        fand darunter keinen Leser von Quellen.
+        fand darunter keinen Leser von Quellen. Unter ``app/`` zählt ein nicht auflösbarer
+        Ordner nie: Die Anwendung liest so Nutzer- und Profilordner, und zählte das, wäre
+        jede Änderung die Suite (CS-32).
         """
         if isinstance(self.folder, Outside):
             return False
         if self.folder is None:
-            return ".py" in self.pattern[-1]
+            return self.origin != "app" and ".py" in self.pattern[-1]
         return python_pattern(self.pattern[-1])
 
     def covers(self, path: PurePosixPath) -> bool:
@@ -1462,12 +1469,11 @@ class TreeReads:
     ``importers`` jedem Modul die Module, die es direkt importieren (der Graph der Auswahl).
 
     Eine **Einheit** ist eine Funktion, eine Methode, ein Klassenrumpf oder eine Zuweisung auf
-    Modulebene unter ``tests/`` oder ``tools/``. Sie liest, wenn sie eine Lesestelle trägt, die
-    nicht sicher draußen liegt, oder eine lesende Einheit nennt. Gesucht wird von den
-    Lesestellen aus über die Module, die den Namen der Einheit tragen und ihr Modul
-    mittelbar importieren — geparst wird nur, wer den Namen trägt. Mit ``python_only``
-    zählen nur Lesestellen, deren Muster eine ``.py`` treffen kann: Das genügt für eine
-    Änderung an Python und spart ein Drittel der Zeit.
+    Modulebene. Sie liest, wenn sie eine Lesestelle trägt, die nicht sicher draußen liegt, oder
+    eine lesende Einheit nennt. Gesucht wird von den Lesestellen aus über die Module, die den
+    Namen der Einheit tragen und ihr Modul mittelbar importieren — geparst wird nur, wer den
+    Namen trägt. Mit ``python_only`` zählen nur Lesestellen, deren Muster eine ``.py`` treffen
+    kann: Das genügt für eine Änderung an Python und spart ein Drittel der Zeit.
     """
 
     def __init__(
@@ -1488,7 +1494,6 @@ class TreeReads:
         self.texts = {
             relative: (root / relative).read_text(encoding="utf-8")
             for relative in self.relative.values()
-            if not relative.startswith("app/")
         }
         self._sites: dict[str, dict[ast.AST | None, list[Site]]] = {}
         self._refs: dict[str, dict[ast.AST | None, list[tuple[ast.expr, ast.Call | None]]]] = {}
@@ -1614,12 +1619,14 @@ class TreeReads:
         for relative, text in self.texts.items():
             if not READ_WORDS.search(text):
                 continue
-            # Ein offener Ordner kann an einer Aufrufstelle einer im Baum werden.
+            # Ein offener Ordner kann an einer Aufrufstelle einer im Baum werden — außer unter
+            # ``app/``, wo nur ein Ordner zählt, der ohne Aufrufstelle feststeht (CS-32).
+            counts = Place if relative.startswith("app/") else (Place, type(None))
             for unit, found in self._sites_by_unit(relative).items():
                 if unit is None:
                     continue
                 if any(
-                    not isinstance(read.folder, Outside)
+                    isinstance(read.folder, counts)
                     and (not self.python_only or python_pattern(read.pattern[-1]))
                     for site in found
                     for read in evaluate_site(self.resolver, site, None)
@@ -1649,11 +1656,17 @@ class TreeReads:
         """Die Datei selbst, jede, die ihr Modul mittelbar importiert, und jede, die ihren
         Dateinamen nennt — so laden Tests ein Werkzeug über den Pfad
         (``spec_from_file_location``).
+
+        Eine lesende Einheit unter ``app/`` geht nur an Module unter ``tools/`` und ``tests/``
+        weiter, nicht an andere Module der Anwendung: Sonst trüge der Stempel aus
+        Änderungszeiten in ``paths.py`` die Lesung in jede Funktion, die den Zwischenspeicher
+        öffnet, und jede Änderung unter ``app/core`` wählte fast jede Testdatei.
         """
         yield relative
         if relative not in self._importers:
             found: list[str] = []
             module = self.names.get(relative)
+            inside_app = relative.startswith("app/")
             seen = {module}
             queue = [module] if module is not None else []
             while queue:
@@ -1662,15 +1675,21 @@ class TreeReads:
                         seen.add(importer)
                         queue.append(importer)
                         path = self.relative.get(importer)
-                        if path is not None and path in self.texts:
+                        if path is not None and not (inside_app and path.startswith("app/")):
                             found.append(path)
-            file_name = PurePosixPath(relative).name
-            known = set(found)
-            found.extend(
-                other
-                for other, text in self.texts.items()
-                if other not in known and other != relative and file_name in text
-            )
+            if not inside_app:
+                # Über den Pfad lädt ein Test ein Werkzeug oder einen Helfer, kein Modul der
+                # Anwendung.
+                file_name = PurePosixPath(relative).name
+                known = set(found)
+                found.extend(
+                    other
+                    for other, text in self.texts.items()
+                    if other not in known
+                    and other != relative
+                    and not other.startswith("app/")
+                    and file_name in text
+                )
             self._importers[relative] = found
         yield from self._importers[relative]
 

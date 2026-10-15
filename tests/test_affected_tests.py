@@ -386,6 +386,58 @@ def test_a_tool_or_a_deleted_module_named_by_a_helper_selects_the_tests_behind_i
     assert all(path.name.startswith("test_") for path in files), sorted(files)
 
 
+def test_an_application_module_reading_its_own_tree_lends_that_reading(tree: Path) -> None:
+    """CS-32: ``app/i18n/extract.py`` liest die Quellen unter ``app/`` nach ``tr()``-Schlüsseln;
+    ``tools/registry_dump.py`` ruft es, und ``test_registry_dump`` fehlte bei einem neuen Text
+    unter ``app/ui``. Unter ``app/`` zählt nur ein Ordner im Repository — ein Nutzerordner,
+    eine Umgebungsvariable oder ein offener Parameter zählte sonst bei jeder Änderung."""
+    _write(
+        tree,
+        "app/extract.py",
+        "from pathlib import Path\n"
+        "import os\n"
+        "PACKAGE_DIR = Path(__file__).resolve().parent\n"
+        "def message_ids():\n"
+        "    return sorted(PACKAGE_DIR.rglob('*.py'))\n"
+        "def user_parts():\n"
+        "    return sorted((Path.home() / 'parts').rglob('*.py'))\n"
+        "def profiles():\n"
+        "    return sorted(Path(os.environ['APPDATA']).rglob('*.py'))\n"
+        "def anything(folder):\n"
+        "    return sorted(folder.rglob('*.py'))\n",
+    )
+    _write(
+        tree,
+        "tools/dump.py",
+        "from app import extract\ndef registered():\n    return extract.message_ids()\n",
+    )
+    _write(tree, "tests/test_dump.py", "from tools import dump\nX = dump.registered()\n")
+    _write(
+        tree,
+        "tests/test_user_parts.py",
+        "from app import extract\nX = extract.user_parts()\nY = extract.profiles()\n"
+        "Z = extract.anything(None)\n",
+    )
+
+    files, reasons = affected([tree / "app" / "ui_new.py"], ImportGraph(tree))
+
+    assert "tests/test_dump.py" in _names(files, tree)
+    assert reasons[tree / "tests" / "test_dump.py"] == "liest app/**/*.py über app/extract.py:5"
+    assert "tests/test_user_parts.py" not in _names(files, tree)
+
+
+def test_the_real_extraction_of_texts_reaches_the_registry_dump(real_graph: ImportGraph) -> None:
+    """CS-32 gegen den echten Baum: Ein neuer Text unter ``app/ui`` ändert, was
+    ``app/i18n/extract.py`` einsammelt, und ``tools/registry_dump.py`` schreibt es in den Abzug.
+    ``test_registry_dump`` importiert ``gizmo`` nicht und lief bei einer Änderung dort nicht mit."""
+    changed = real_graph.root / "app" / "ui" / "render" / "gizmo.py"
+
+    _files, reasons = affected([changed], real_graph)
+
+    reason = reasons.get(real_graph.root / "tests" / "test_registry_dump.py", "")
+    assert reason.startswith("liest app/") and "app/i18n/extract.py" in reason, reason
+
+
 def test_the_real_guards_are_chosen_for_any_change_under_app(real_graph: ImportGraph) -> None:
     """Gegen den echten Baum (E5, RM-725): Die Wächter, die den Baum über
     ``tools/code_index.py``, ``tests/source_tree.py`` oder eine andere Testdatei lesen,
