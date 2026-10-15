@@ -223,6 +223,17 @@ in Kurzhilfe und Beschreibung an Generatorbeschreibung, „Werte mitgeben“ und
 `test_measure_refusal_status.py`, dass die Statusleiste keine Ablehnung
 wiederholt, die am Maßfeld steht.
 
+Aus Review 1 des Restpakets A: `test_parameter_panel_units.py` (Zoll in der
+Leiste, ein Maß ohne Einheit bleibt eine Zahl), `test_parameter_unit_switch_window.py`
+(Wechsel bei offener Leiste: abgeleitete Maße, Grenze, Einheitenliste),
+`test_halt_ways_window.py` (Wege am haltenden Befund frei, hinter einem fremden
+Halt grau), `test_history_change_rows.py` (Doppelklick auf Drucker-, Material-
+und Passungsänderung), `test_step_values_copy.py` (*Kopieren* gibt gespeicherte
+Werte), `test_literal_shared.py` (ein Literal für TOML und OpenSCAD),
+`test_rename_dialog.py` (Vorgabe des Namens, Übernehmen erst nach einer
+Änderung) und `test_foundation_crash_window.py` (nach einem Absturz des
+Grundlagenarbeiters die Tabelle, nichts Vorläufiges).
+
 Statische Quellprüfungen teilen die Vorbereitung innerhalb eines Testfalls:
 `test_language_rules.py` prüft je Datei denselben AST auf alle Sprachregeln;
 `test_translations.py` extrahiert die Nachrichten einmal für alle Kataloge.
