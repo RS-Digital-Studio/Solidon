@@ -4205,8 +4205,8 @@ def test_the_tangential_search_gives_up_on_a_skin_without_rounds(
         return _band_seed(*args, **kwargs)
 
     monkeypatch.setattr(features_module, "_band_seed", counted)
-    monkeypatch.setattr(features_module, "TANGENTIAL_FIRST_SEEDS", 64, raising=False)
-    monkeypatch.setattr(features_module, "TANGENTIAL_FUTILE_SEEDS", 128, raising=False)
+    monkeypatch.setattr(features_module, "TANGENTIAL_FIRST_SEEDS", 64)
+    monkeypatch.setattr(features_module, "TANGENTIAL_FUTILE_SEEDS", 128)
     forget_cache()
     solid = trimesh.creation.icosphere(subdivisions=5, radius=10.0)
     solid.apply_scale((1.0, 1.3, 0.7))

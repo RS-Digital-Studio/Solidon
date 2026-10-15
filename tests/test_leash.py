@@ -249,7 +249,6 @@ def test_a_full_collection_waits_for_the_drag_and_keeps_what_arrives_meanwhile(
         leash_module,
         "QGuiApplication",
         SimpleNamespace(instance=lambda: object(), mouseButtons=lambda: pressed[0]),
-        raising=False,
     )
     late = 4096
     starts: list[str] = []
