@@ -3526,7 +3526,7 @@
   "Eine NVIDIA-Karte erkennt Solidon hier nicht. Rechnet keine Grafikkarte, dauert jede Anfrage Minuten.": "Solidon no reconoce aquí ninguna tarjeta NVIDIA. Si no calcula ninguna tarjeta gráfica, cada petición tarda minutos.",
   "Eine Nummerierungsangabe des Rezepts ist ungültig.": "Una especificación de numeración de la receta es inválida.",
   "Eine Operation ausführen": "Ejecutar una operación",
-  "Eine Passung hat keinen eigenen Dialog. Ob sie hält, zeigt der Prüfbericht; Strg+Z nimmt sie zurück.": "Un ajuste no tiene diálogo propio. El informe de comprobación muestra si se cumple; Ctrl+Z lo deshace.",
+  "Eine Passung hat keinen eigenen Dialog. Ob sie hält, zeigt der Prüfbericht, und Strg+Z nimmt sie zurück.": "Un ajuste no tiene diálogo propio. El informe de comprobación muestra si se cumple, y Ctrl+Z lo deshace.",
   "Eine Passung in der Datei trägt eine unbekannte Art. Entfernen Sie die Passung, oder öffnen Sie die Datei mit einer neueren Version.": "Un ajuste del archivo lleva un tipo desconocido. Elimine el ajuste o abra el archivo con una versión más reciente.",
   "Eine Passung ist entfallen — ihr Teil wurde noch einmal geteilt. Die neuen Nahtstellen haben ihre eigenen.": "Se ha eliminado un ajuste: su pieza se dividió otra vez. Las nuevas juntas tienen los suyos.",
   "Eine Passung verbindet zwei Merkmale. Wählen Sie genau zwei aus.": "Un ajuste une dos características. Seleccione exactamente dos.",

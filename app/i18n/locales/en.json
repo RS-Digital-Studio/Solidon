@@ -3526,7 +3526,7 @@
   "Eine NVIDIA-Karte erkennt Solidon hier nicht. Rechnet keine Grafikkarte, dauert jede Anfrage Minuten.": "Solidon does not recognise an NVIDIA card here. If no graphics card does the work, every request takes minutes.",
   "Eine Nummerierungsangabe des Rezepts ist ungültig.": "A numbering field in the recipe is invalid.",
   "Eine Operation ausführen": "Run one operation",
-  "Eine Passung hat keinen eigenen Dialog. Ob sie hält, zeigt der Prüfbericht; Strg+Z nimmt sie zurück.": "A fit has no dialog of its own. The Report shows whether it holds; Ctrl+Z takes it back.",
+  "Eine Passung hat keinen eigenen Dialog. Ob sie hält, zeigt der Prüfbericht, und Strg+Z nimmt sie zurück.": "A fit has no dialog of its own. The Report shows whether it holds, and Ctrl+Z takes it back.",
   "Eine Passung in der Datei trägt eine unbekannte Art. Entfernen Sie die Passung, oder öffnen Sie die Datei mit einer neueren Version.": "A fit in the file carries an unknown kind. Remove the fit, or open the file with a newer version.",
   "Eine Passung ist entfallen — ihr Teil wurde noch einmal geteilt. Die neuen Nahtstellen haben ihre eigenen.": "A fit has been dropped — its part was split once more. The new seams have fits of their own.",
   "Eine Passung verbindet zwei Merkmale. Wählen Sie genau zwei aus.": "A fit connects two features. Select exactly two.",
