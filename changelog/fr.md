@@ -54,7 +54,7 @@ dans `website/version.json`.
 - Après une action dans le *Rapport de contrôle*, le rapport reste au premier plan, et Ctrl+Z l'annule aussitôt. Jusqu'ici, l'onglet *Sélection* passait devant.
 - Les avis de plateau et d’adhérence suivent l’unité choisie. Passer de mm à pouces conserve constat sélectionné, détails ouverts, onglet et état déplié des corps.
 - Les cotes au bord du plateau suivent l’unité choisie et l’indiquent. La version 0.6.0 y affichait des millimètres même en pouces.
-- Les lignes appuyées de la grille du plateau tombent sur les cotes. La grille part du centre du plateau, tous les 10 mm en millimètres et tous les demi-pouces en pouces.
+- La grille du plateau part du centre du plateau, tous les 10 mm en millimètres et tous les demi-pouces en pouces. Chaque cote tombe sur une ligne appuyée.
 - En vue *Orthographique*, un clic sur un constat montre l’endroit à une taille adaptée. Jusqu’ici, le zoom précédent restait.
 - Un perçage sélectionné reste visible, bord compris. Les poignées se placent à l’extérieur du bord et les flèches commencent au-delà.
 - Ctrl+Z et Ctrl+Y fonctionnent aussi quand le curseur se trouve dans un champ vide, par exemple le champ de recherche. Si vous y avez tapé du texte, c'est d'abord la saisie qui est annulée.

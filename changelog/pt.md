@@ -53,7 +53,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois de uma ação no *Relatório de verificação*, o relatório fica à frente e Ctrl+Z desfá-la logo. Até agora, o separador *Seleção* passava para a frente.
 - Os avisos de plataforma e adesão usam a unidade escolhida. Mudar mm/polegadas mantém a observação escolhida, detalhes abertos, separador e estado expandido dos corpos.
 - Os números ao longo da plataforma seguem a unidade escolhida e indicam-na. A versão 0.6.0 mostrava milímetros mesmo com polegadas definidas.
-- As linhas mais fortes da grelha da plataforma ficam nos números. A grelha conta a partir do centro da plataforma, a cada 10 mm em milímetros e a cada meia polegada em polegadas.
+- A grelha da plataforma conta a partir do centro da plataforma, a cada 10 mm em milímetros e a cada meia polegada em polegadas. Cada número fica numa linha mais forte.
 - Na vista *Ortográfica*, um clique numa observação mostra o local num tamanho adequado. Até agora ficava o zoom anterior.
 - Um furo selecionado fica visível, com a borda. As pegas ficam por fora da borda e as setas começam depois delas.
 - Ctrl+Z e Ctrl+Y funcionam também com o cursor num campo vazio, por exemplo no campo de pesquisa. Se escreveu algo ali, primeiro é desfeito o que escreveu.
