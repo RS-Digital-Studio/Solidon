@@ -897,7 +897,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Das eigene show_edges-Material übernimmt weder den abgeschalteten Tiefentest noch die festgelegte Vordergrundqueue der zugehörigen Fläche. Die Lücke bestand bereits vor der Alphakorrektur von FD70.
 - Vorschlag: Ausschließlich die zwei vorhandenen Materialargumente aus keep_in_front ableiten; Raumkanten behalten Tiefentest und automatische Queue. Deckkraftwechsel, force_opaque, Rückseitenanteile sowie erhaltene Geometrie und Pickflags gegenprüfen.
 - Wirkung beim Kunden: Der öffentliche Renderer-Vertrag erlaubt, dass Kanten einer ausdrücklich im Vordergrund gezeichneten Fläche verdeckt werden. Eine solche konkrete Kundenansicht ist hier nicht belegt; kein Abbruch und keine Modelländerung behauptet.
-- Stand: offen RM-737; Fix `1e37ebc10` (welle4 `d4e7305f3`, Rottest 8 rot), aber keine Kundenansicht nutzt beide Schalter, der Lauf kann die Wirkung nicht zeigen; offen ist die Entscheidung, ob der Renderertest als Nachweis genügt.
+- Stand: behoben `1e37ebc10`; in welle4 `d4e7305f3`, Renderertest am Original 8 rot. Keine Kundenansicht nutzt beide Schalter, Stufe A hat dafür keine Zeile; der Renderertest ist deshalb der Nachweis (Entscheidung Koordinator, 15.10.).
 
 ### FD-73 Freistehende Griffmaße verschwinden auf hellen Modellflächen
 
@@ -1017,7 +1017,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: `0036e21ea` führte `_measure_drag.update_room` in `PlacementFlow.redraw` ein; die zwei Doubles der Datei wurden nicht nachgezogen.
 - Vorschlag: Beide Doubles tragen einen stummen Zug wie ihre übrigen Maßhelfer.
 - Wirkung beim Kunden: Kein Produktfehler; 88 Prüfungen der Werkzeugausrichtung an der Fläche erreichten ihre Zusicherung nicht, das Entwicklungstor wäre rot.
-- Stand: behoben `0df73f13d`
+- Stand: behoben `0df73f13d`; `tests/test_surface_placement.py` vorher 88 von 381 rot (`AttributeError _measure_drag`), nachher 381/381 grün, gepinnt.
 
 ### FD-83 Tooltipfall des Prüfstands hängt von der Reihenfolge ab
 
@@ -1126,14 +1126,14 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 ### FD-92 Die Bettmaßzahlen folgen der Anzeigeeinheit nicht
 
 - Art: Verständlichkeit
-- Schwere: leicht
+- Schwere: mittel
 - Funktion: Druckbett in der 3D-Ansicht
 - Prüfpunkt: 9
 - Beleg: Lauf 004/flaeche-zoll.png (`F:\tmp-suche\urteile-d04-claude\crops\004-bett.png`): „0“, „100“ ohne Einheit bei Zollanzeige; 006/flaeche-zoll.png: „50“ (`F:\tmp-suche\urteile-d10-claude\crops\006-bett50.png`); Kopf und Baum zeigen Zoll (d04 Nr. 5, d10 Nr. 1).
 - Ursache: belegt: `bed_scale` schreibt `f"{value:.0f}"` in Millimetern, ohne Anzeigeeinheit und ohne Einheitenzeichen (`viewport.py:2808–2812`). Zwilling zu FD-69 (Farbe derselben Zahlen), andere Ursache.
 - Vorschlag: Die Zahlen über den Längenformatter der Anzeige setzen, Schrittweite passend zur Einheit, das Einheitenzeichen einmal an der Skala; beim Einheitenwechsel neu zeichnen.
 - Wirkung beim Kunden: In Zoll liest er Millimeterzahlen ohne Hinweis und schätzt Größe und Lage falsch ein.
-- Stand: offen RM-737
+- Stand: offen RM-737; Schwere von leicht auf mittel wie die Zwillinge FD-61 und FD-125, weil die Anzeigeeinheit zugesagt ist (Prüfpunkt 9; Review RD-6).
 
 ### FD-93 Die Auswahlkarte hält am Katalogknopf Leerraum
 
@@ -1733,4 +1733,157 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: `mouseDClick` schickt nur das Doppelklickereignis; Qt hält die linke Taste danach im ganzen Prozess für gedrückt.
 - Vorschlag: Dieselbe Folge wie der Kunde (Klick, Doppelklick, Loslassen) an allen Stellen; als Wächter eine Fixture, die nach jedem `qt_app`-Fall `QGuiApplication.mouseButtons() == NoButton` zusichert.
 - Wirkung beim Kunden: Kein Produktfehler; spätere Fälle im selben Prozess und Werkstattvideos sehen Bewegungen als Zug.
+- Stand: offen RM-737
+
+## Einordnung der Prüferabweichungen (FD-143 bis FD-153)
+
+Einordnung aller 37 Abweichungen zwischen Primär- und Zweitprüfer am finalen
+Lauf: `output/konsolidierung-2026-10-12/abweichungen-claude.md` (Klassen,
+Diffs, Nachurteilsliste `F:\tmp-suche\abweichungen-claude\nachurteil.toml`).
+Entscheidung Koordinator zu FD-145: Die Übereinstimmung ≥ 90 % gilt je
+Prüfpunkt gepoolt über alle Pakete einer Urteilsrunde; die Werte je Paket sind
+Auskunft.
+
+### FD-143 Funde mit mehreren Zeilen erreichen keine Zelle der Abhakliste
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: `F:\tmp-suche\abweichungen-claude\mehrzeilig.txt`: 43 Funde nennen mehrere Zeilen in „Funktion“ (FD-94, FD-100, FD-101, FD-109, FD-128, FD-129, FD-132 …) und erreichen keine Zelle; neuer Fall `test_a_finding_of_several_rows_holds_each_of_them_open` am alten Code dreimal rot (`_finding_for` liefert `None`).
+- Ursache: `_finding_for` und die Fundspalte der Abhakliste verglichen das ganze Feld „Funktion“ mit der Zeilenkennung.
+- Vorschlag: Die Zeilen aus „Funktion“ trennen wie die Prüfpunkte (Komma, Semikolon, „und“); ein Fund gehört jeder genannten Zeile.
+- Wirkung beim Kunden: Kein Produktfehler; Zellen der Abhakliste galten als erledigt, obwohl ein offener Fund sie offen halten muss.
+- Stand: behoben `3ea60bd0e`; Abhaklisten danach neu erzeugt.
+
+### FD-144 Die Übereinstimmung lässt Zellen ohne Gegenurteil still weg
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: Gegenprobe an einer Kopie (`F:\tmp-suche\abweichungen-claude\gegenprobe.txt`): an den 13 Zeilen des Zweitprüfers 77 Zellen nur primär, 5 nur zweit; G1–G8, Z1, Z2, Z5 und Z6 haben keinen einzigen Übereinstimmungswert.
+- Ursache: `function_report.agreement` zählt nur Paare und meldet ungepaarte Zellen nicht.
+- Vorschlag: `agreement` gibt die ungepaarten Zellen aus, die Abhakliste führt sie als „ohne Gegenurteil“; jeder Prüfpunkt braucht Paare, sonst ist er nicht gemessen.
+- Wirkung beim Kunden: Kein Produktfehler; die Abnahme „≥ 90 % je Prüfpunkt“ war für zwölf Kriterien nicht prüfbar.
+- Stand: offen RM-737
+
+### FD-145 Ob die Übereinstimmung gepoolt oder je Paket gilt, war nicht festgelegt
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: Konzept §4 (Urteil und Schwere) gegen §10 (Abnahme); die Abhaklisten markieren je Paket 7, 14 und 7 Punkte, gepoolt sind es 11 (`F:\tmp-suche\koord-claude-1014\ue.txt`); bei zwei bis drei Zeilen je Paket heißt 90 % „keine Abweichung“.
+- Ursache: Konzept und Prüfstand nennen die Grundmenge der Quote nicht.
+- Vorschlag: Entschieden (Koordinator, 15.10.): gepoolt je Prüfpunkt über alle Pakete einer Urteilsrunde ist bindend, je Paket Auskunft; Konzept §4 und `report` erhalten den Rundenwert.
+- Wirkung beim Kunden: Kein Produktfehler; die Abnahme maß bei kleinen Paketen nichts.
+- Stand: offen RM-737
+
+### FD-146 E1 bis E3 gelten als erfüllt an Wegen, die vor dem Beispielziel enden
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: E1, E2, E3
+- Beleg: Alle Sprachflächenzeilen haben keine Zeilenspezifikation (`F:\tmp-suche\abweichungen-claude\zeilen.txt`); Stufe A meldet trotzdem „0 Eingaben, erfüllt“ (`stufe-a-paare.txt`, Abweichungen 01, 07–09, 11–15); neun Abweichungen gehen darauf zurück.
+- Ursache: `_e1`, `_e2`, `_e3` (`tools/function_judges.py`) prüfen weder Spezifikation noch Übernahmeschritt; der E2-Paketanteil zählt diese Zeilen mit.
+- Vorschlag: E1–E3 nur an einem Weg, der das Beispielziel erreicht hat; sonst nicht gemessen, *offen* mit Paket-RM; Gegenprobe Sprachflächenprotokoll ohne Spezifikation.
+- Wirkung beim Kunden: Kein Produktfehler; Schrittzahlen galten als gemessen, die es nicht waren.
+- Stand: offen RM-737
+
+### FD-147 Englisch übersetzt „Überstand“ und „Überhang“ beide mit „Overhang“
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `finding.action:place_on_bed`
+- Prüfpunkt: V1
+- Beleg: `app/i18n/locales/en.json` Befund „An object sits below the build plate … Overhang: 10.00 mm“ (Fall 044, Ausschnitt `F:\tmp-suche\abweichungen-claude\crops2\pob-6spr.png`); dazu „overhang“ für Überstand an Haken, Rastnase und Widerhaken.
+- Ursache: Zwei deutsche Begriffe teilen im englischen Katalog ein Slicer-Wort mit anderer Bedeutung.
+- Vorschlag: Den Überstand unter dem Bett neu übersetzen (etwa „Below plate“), die Bausteintexte auf „protrusion“; alle Kataloge auf dieselbe Verwechslung prüfen.
+- Wirkung beim Kunden: Ein englischsprachiger Kunde liest einen Überhang, wo ein Teil unter dem Bett steckt.
+- Stand: offen RM-745
+
+### FD-148 V4 nimmt jede geschriebene Vorhersage an, auch eine nachträgliche
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: V4
+- Beleg: `tools/function_report.py` prüft an V4 nur, dass `prediction` nicht leer ist; die Fälle 29, 36 und 37 wurden so als *gut* angenommen.
+- Ursache: Die Vorhersage ist nicht an den Zeitpunkt vor dem Klick gebunden.
+- Vorschlag: Feld `prediction_bound` (Pfad und SHA256 der vor dem Klick freigegebenen Vorhersage); ohne Bindung ist V4 *offen*; Vorhersagetor im Fallprozess auch im Sprachdurchgang.
+- Wirkung beim Kunden: Kein Produktfehler; V4 konnte ohne echte Vorhersage gelten.
+- Stand: offen RM-737
+
+### FD-149 Der Sperrgrund des grauen Knopfs im Fehlfall steht nicht im Bild
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `finding.action:place_on_bed`
+- Prüfpunkt: 7
+- Beleg: `cases/002/04-fehlfall.png` (Ausschnitt `F:\tmp-suche\abweichungen-claude\crops2\002-04-karte.png`): unter „Auf das Bett setzen“ nur der Wirkungssatz; der Sperrgrund steht nur in `function.json#messages`, beide Prüfer stützen Punkt 7 darauf.
+- Ursache: Der Prüfstand nimmt Tooltip und Sperrgrund eines grauen Elements nicht als Bild auf.
+- Vorschlag: Sperrgrund bzw. Tooltip des grauen Elements als eigenes Bild aufnehmen; eine JSON-Eigenschaft ersetzt kein angezeigtes Bild.
+- Wirkung beim Kunden: Kein Produktfehler; Punkt 7 wurde an einer nicht gezeigten Zeile geurteilt.
+- Stand: offen RM-737
+
+### FD-150 Prüfpunkt 11 findet außerhalb des Registers und an Bildtexten keine Fundstelle
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 11
+- Beleg: `tools/function_report.py` sucht Fundstellen nur über Registernamen und entfernt `alt` aus dem Websitetext; `resize_hole` hat `website: []` trotz `website/funktionen.html` (Abschnitt Bohrungen).
+- Ursache: Website- und Handbuchstellen hängen am Registernamen; Zeilen ohne Op und Bildtexte fallen heraus.
+- Vorschlag: Zeilenspezifikation um `manual` und `website` je Zeile; `_point_11` misst damit auch Nicht-Operationen; `alt` und `title` zählen zum Websitetext.
+- Wirkung beim Kunden: Kein Produktfehler; Versprechen ohne Fundstelle blieben ungeprüft.
+- Stand: offen RM-737
+
+### FD-151 auto_split hat kein Beispielziel, und die Szene erlaubt kein Teilen
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `auto_split`
+- Prüfpunkt: G9
+- Beleg: Fall 043 (Ausschnitt `F:\tmp-suche\abweichungen-claude\crops2\043-autosplit.png`): „Dieses Objekt passt bereits auf das Bett“; die Spezifikation fehlt. Zwilling zu FD-101.
+- Ursache: Szenenkatalog und Zeilenspezifikation decken nur den Fall „passt bereits“.
+- Vorschlag: Spezifikation mit Beispielziel („passt bereits“ als Rückmeldung) und ein zweiter Fall mit zu großem Körper für Vorschlag und G9.
+- Wirkung beim Kunden: Kein Produktfehler; G9 und E1–E3 an auto_split waren nicht messbar.
+- Stand: offen RM-737
+
+### FD-152 I1 „jede Art“ ist aus dem Protokoll nicht prüfbar
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: I1
+- Beleg: `cases/002/function.json`: `hover_labels` hat einen Eintrag, ein Feld der erkannten Arten fehlt.
+- Ursache: Das Protokoll hält nicht fest, welche Merkmalsarten die Erkennung an der Szene liefert.
+- Vorschlag: Protokollfeld `recognized_kinds` neben `hover_labels`; `_i1` vergleicht beide.
+- Wirkung beim Kunden: Kein Produktfehler; die Bauplanzusage zu I1 war nicht prüfbar.
+- Stand: offen RM-737
+
+### FD-153 Funde mit integriertem Fix stehen in der Funddatei weiter offen
+
+- Art: Aufräumen
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: FD-35, FD-37, FD-38, FD-43, FD-61 und FD-64 stehen auf „offen RM-…; … integriert“, ihre Fixe sind Vorfahren von `2ec37b23b`; die Abweichungen 16, 18 und 24 hängen daran.
+- Ursache: Der Stand wurde nach dem gemeinsamen Lauf nicht nachgezogen.
+- Vorschlag: Vor jeder Urteilsrunde den Stand der Funde nachziehen, deren Fix im Laufkopf liegt, mit Nachweis an ihrer Zeile.
+- Wirkung beim Kunden: Kein Produktfehler; *gut nach Fix* war eine Lesart statt einer Folge der Funddatei.
+- Stand: offen RM-737
+
+### FD-155 Parameter anlegen lehnt einen Namen ohne Handlung und abseits des Felds ab
+
+- Art: Verständlichkeit
+- Schwere: mittel
+- Funktion: `Bearbeiten/Parameter anlegen …`
+- Prüfpunkt: 7, E7, V5
+- Beleg: Fall 003 `04-fehlfall-dialog.png` und `function.json#messages` im finalen Lauf: „Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.“ steht unter „Weitere Einstellungen“, das Feld ist nicht markiert, eine Handlung fehlt (`output/konsolidierung-2026-10-12/funde-stand-claude.md`, neuer Punkt). Die D10-Urteile führten das bisher unter FD-39, das nur die Aufnahme betraf.
+- Ursache: offen; die Ablehnung des Namens wird als allgemeiner Hinweis des Dialogs gesetzt, nicht am Feld.
+- Vorschlag: Die Ablehnung steht am Namensfeld, das Feld wird markiert und bekommt den Fokus; der Satz nennt den Weg (etwa einen gültigen Vorschlag aus dem eingegebenen Text).
+- Wirkung beim Kunden: Der Kunde sucht, welches Feld falsch ist, und findet den Satz an anderer Stelle.
 - Stand: offen RM-737
