@@ -203,7 +203,7 @@ def test_redundant_faces_do_not_reach_the_comparison_solver(
     from app.core.geom.prepare import drill
 
     module = import_module("app.core.geom.difference")
-    monkeypatch.setattr(module, "COMPARISON_FLATTEN_FROM", 100, raising=False)
+    monkeypatch.setattr(module, "COMPARISON_FLATTEN_FROM", 100)
     raw = cube(20.0).raw
     for _ in range(4):
         vertices, faces = trimesh.remesh.subdivide(raw.vertices, raw.faces)
