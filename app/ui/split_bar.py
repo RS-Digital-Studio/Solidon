@@ -100,6 +100,8 @@ class SplitBar(QWidget):
             )
         )
         self.connect_halves.toggled.connect(self._follow_connection)
+        # Der Satz auch für den Bildschirmleser (FD-78), an allen drei Feldern.
+        self.connect_halves.setAccessibleDescription(self.connect_halves.toolTip())
 
         self.count = QSpinBox(self)
         self.count.setRange(1, 6)
@@ -107,6 +109,7 @@ class SplitBar(QWidget):
         self.count.setToolTip(
             tr("Zwei Stifte halten die Hälften gegen Verdrehen. Einer wäre ein Scharnier.")
         )
+        self.count.setAccessibleDescription(self.count.toolTip())
         self.count_label = QLabel(tr("Stifte"), self)
         self.count_label.setBuddy(self.count)
 
@@ -132,6 +135,7 @@ class SplitBar(QWidget):
         # Der Umschalter nennt das Werkzeug, der Knopf seine Handlung — sonst
         # stehen zwei gleich beschriftete Bedienelemente übereinander, und der
         # obere tut etwas anderes als der untere.
+        self.shape.setAccessibleDescription(self.shape.toolTip())
         self.apply = QPushButton(tr("Jetzt teilen"), self)
         make_primary(self.apply)
         self.apply.setEnabled(False)

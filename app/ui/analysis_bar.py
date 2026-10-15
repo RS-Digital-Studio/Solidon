@@ -389,6 +389,14 @@ class AnalysisBar(QWidget):
 
         self.selector = BarComboBox(self)
         self.selector.setAccessibleName(tr("Analysekarte"))
+        # Und am Feld selbst, nicht nur an seinen Einträgen (FD-78): derselbe
+        # Satz wie am Werkzeug *Analyse*.
+        chooses = tr(
+            "Karte wählen — der Körper färbt sich nach Zahlen, die Legende nennt "
+            "den Bereich. Ein Klick auf eine Warnung im Prüfbericht fährt hin."
+        )
+        self.selector.setToolTip(chooses)
+        self.selector.setAccessibleDescription(chooses)
         # **Der Name benennt, der Satz sagt, was die Karte zeigt.** Sieben
         # Fachwörter ohne ein Wort Erklärung waren für den Kunden ohne
         # CAD-Kenntnisse ein Ratespiel (Review 02.09.2026); der Satz hängt als
