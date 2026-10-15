@@ -1002,18 +1002,21 @@ def _cell(
     said = verdict.get("verdict") if verdict else None
     rms = tuple(_RM.findall(str((verdict or {}).get("rm") or "")))
     known_open = known is not None and known.stand.startswith("offen")
+    # Eine offene Zelle nennt den Fund ihres Urteils oder einen offenen; ein
+    # behobener ist kein Grund dafür, dass sie offen ist (Zwilling von FD-85).
+    reason = (verdict or {}).get("finding") or (known.key if known_open else None)
     if outcome.verdict == "entfaellt":
         return Cell("—", "erledigt")
     if outcome.verdict == "fund":
         if said == "offen":
-            return Cell(number or "offen", "offen", rms)
+            return Cell(str(reason or "offen"), "offen", rms)
         if known is not None and known_open:
             return Cell(known.key, "offen", tuple(_RM.findall(known.stand)))
         return Cell(number or "Fund", "ausstehend")
     if said == "entfaellt":
         return Cell("—", "erledigt")
     if said == "offen":
-        return Cell(number or "offen", "offen", rms)
+        return Cell(str(reason or "offen"), "offen", rms)
     if outcome.verdict == "nicht_pruefbar":
         return Cell("n.p.", "ausstehend")
     if outcome.verdict == "nicht_gelaufen":
@@ -1176,6 +1179,10 @@ def render_checklist(
             if outcome.verdict != "fund" and not (entry and entry.get("verdict") == "offen"):
                 continue
             known = _finding_for(row_id, key, findings)
+            # Wie in ``_cell``: Ein offenes Urteil nennt keinen behobenen Fund als Grund.
+            said_open = bool(entry and entry.get("verdict") == "offen")
+            if said_open and known is not None and not known.stand.startswith("offen"):
+                known = None
             number = (entry or {}).get("finding") or (known.key if known else "—")
             measured = "; ".join(issue.text for issue in outcome.issues) or outcome.summary
             second.append(
