@@ -48,6 +48,7 @@ BENCH_MODULES: Final[tuple[str, ...]] = (
     "function_start",
     "function_language",
     "function_capture",
+    "function_spot",
 )
 
 #: Die Namen, über die eine Bedienung umgangen wird (Konzept §12 „Die Abkürzungen
