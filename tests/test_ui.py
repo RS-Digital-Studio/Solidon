@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QToolBar,
+    QToolButton,
     QWidget,
 )
 
@@ -5243,7 +5244,17 @@ def test_the_measures_in_the_view_take_their_twins_out_of_the_panel(window: Main
     assert not any("Bohrung ändern" in name for name in shown()), (
         "rechts steht kein Zwilling davon: " + ", ".join(sorted(shown()))
     )
-    assert any("Merkmal verschieben" in name for name in shown()), "die übrigen Handlungen bleiben"
+    # Die Handlung im Bild ist auch rechts die scharfe (FD-34, ``6238bf7fd``):
+    # Bis dahin stand *Merkmal verschieben* rechts offen daneben. Die übrigen
+    # Handlungen bleiben als Köpfe stehen, zugeklappt (RM-510).
+    assert panel.preview_values()[0] == "resize_hole", "im Bild und rechts dieselbe Handlung"
+    assert not shown(), "rechts ist keine andere Handlung offen: " + ", ".join(sorted(shown()))
+    heads = {
+        row.op
+        for row in panel._shown_rows.values()
+        if row.toggle is not None and row.toggle.isVisibleTo(panel)
+    }
+    assert {"move_feature", "slot_hole", "rotate_feature"} <= heads, "die übrigen bleiben"
 
     window.end_quiet_placement()
     for _ in range(10):
@@ -5256,15 +5267,19 @@ def test_the_measures_in_the_view_take_their_twins_out_of_the_panel(window: Main
 def _the_resize_row_comes_back(panel: Any, shown: Any) -> None:
     """Mit dem Ende des Messens steht *Bohrung ändern* wieder rechts (RM-199).
 
-    Zugeklappt und mit ihren Werten: Offen ist genau die scharfe Handlung, und
-    die bleibt, was sie war (RM-510). Ein Klick auf den Kopf öffnet die Felder.
+    Offen ist genau die scharfe Handlung (RM-510), und das ist seit FD-34
+    (``6238bf7fd``) die, deren Maße eben im Bild standen — also diese. Vorn
+    stehen Durchmesser und Tiefe, die Stelle hinter „Weitere Werte“ wie in der
+    Maßgruppe (FD-63, ``b86381559``); ein Klick auf die Klappe zeigt sie.
     """
     row = next(row for row in panel._shown_rows.values() if row.op == "resize_hole")
     assert row.toggle is not None and row.toggle.isVisibleTo(panel), "der Kopf steht wieder"
-    assert row.summary is not None and row.summary.text(), "zugeklappt nennt sie ihre Werte"
-    assert not any("Bohrung ändern" in name for name in shown()), "zugeklappt, nicht offen"
-    row.toggle.click()
-    assert {"Bohrung ändern — Durchmesser", "Bohrung ändern — X"} <= shown(), sorted(shown())
+    assert row.toggle.isChecked() and panel.preview_values()[0] == "resize_hole", "offen, scharf"
+    assert {"Bohrung ändern — Durchmesser", "Bohrung ändern — Tiefe"} <= shown(), sorted(shown())
+    assert "Bohrung ändern — X" not in shown(), "die Stelle steht hinter „Weitere Werte“"
+    assert row.more is not None
+    row.more.findChild(QToolButton, "sectionHeading").click()
+    assert {"Bohrung ändern — X", "Bohrung ändern — Z"} <= shown(), sorted(shown())
 
 
 def test_the_next_hole_hides_its_twins_too_and_the_end_brings_them_back(
@@ -5305,7 +5320,11 @@ def test_the_next_hole_hides_its_twins_too_and_the_end_brings_them_back(
         assert panel.feature_id == hole
         assert window._quiet_placement is not None and panel._measuring
         assert not any("Bohrung ändern" in name for name in shown()), sorted(shown())
-        assert any("Merkmal verschieben" in name for name in shown())
+        # Auch an der nächsten Bohrung ist rechts die Handlung im Bild scharf
+        # und sonst nichts offen (FD-34); *Merkmal verschieben* steht als Kopf.
+        assert panel.preview_values()[0] == "resize_hole" and not shown(), sorted(shown())
+        mover = next(row for row in panel._shown_rows.values() if row.op == "move_feature")
+        assert mover.toggle is not None and mover.toggle.isVisibleTo(panel)
 
     window.end_quiet_placement()
     for _ in range(10):
@@ -5382,6 +5401,14 @@ def test_panel_dimensions_and_placement_position_are_adopted_together(
 
         assert flow.active and flow._typed_off_surface
         assert not flow._measure_accept.isEnabled()
+        # Die Tastatur steht im Feld wie beim Kunden, und mit ihr wandert die
+        # Zahl nach rechts: Dort steht die Stelle hinter „Weitere Werte“ (FD-63,
+        # ``b86381559``), und das Feld mit dem Fokus klappt sie auf.
+        window.show()
+        window.activateWindow()
+        QApplication.processEvents()
+        fields["Z"].setFocus(Qt.FocusReason.MouseFocusReason)
+        assert fields["Z"].hasFocus(), "Voraussetzung: der Fokus steht im Feld"
         QTest.keyClick(fields["Z"].lineEdit(), Qt.Key.Key_Return)
         for _ in range(20):
             QApplication.processEvents()
@@ -5393,6 +5420,7 @@ def test_panel_dimensions_and_placement_position_are_adopted_together(
             and "Bohrung ändern" in field.accessibleName()
         }
         assert fields["Z"].value_mm() == pytest.approx(wanted_position[2])
+        assert fields["Z"].hasFocus(), "die Tastatur folgt der Zahl nach rechts"
     wanted_diameter = fields["Durchmesser"].value_mm() + 1.0
     fields["Durchmesser"].set_value_mm(wanted_diameter)
     assert window.session.wait_for_idle(30_000)
@@ -5746,6 +5774,9 @@ def test_the_return_key_in_a_feature_field_writes_exactly_one_step(window: MainW
     Gemessen am gebauten Fenster (13.09.2026): Durchmesser gesetzt, ``Return``
     im Feld, Verlauf 1 → 1. Der Knopf daneben tat es, und er stand an dieser
     Fensterhöhe unter dem Rand.
+
+    Seit FD-34 (``6238bf7fd``) ist nach der Auswahl *Bohrung ändern* scharf;
+    *Merkmal verschieben* öffnet der Kunde mit einem Klick auf ihren Kopf.
     """
     from PySide6.QtTest import QTest
 
@@ -5754,6 +5785,10 @@ def test_the_return_key_in_a_feature_field_writes_exactly_one_step(window: MainW
     object_id, hole = _a_chosen_hole(window)
     panel = window.feature_panel
     before = len(window.session.project.document.ops)
+    mover = next(row for row in panel._shown_rows.values() if row.op == "move_feature")
+    assert mover.toggle is not None and not mover.toggle.isChecked(), "zugeklappt bis zum Klick"
+    mover.toggle.click()
+    QApplication.processEvents()
     feld = next(
         widget
         for widget in panel.findChildren(LengthSpin)
@@ -19371,8 +19406,10 @@ def test_a_chosen_part_reaches_the_catalogue_in_one_click(window: MainWindow) ->
 
     **Der Weg ist seit dem 11.09.2026 der Hauptknopf rechts**, nicht mehr eine
     Zeile im Kontextmenü: Das trägt keine Operationen mehr, und der Knopf
-    *Bausteinkatalog …* steht in Akzentfarbe unter der Karte der Handlungen — an
-    Körper und Fläche, ein Klick.
+    *Bausteinkatalog …* steht unter der Karte der Handlungen — an Körper und
+    Fläche, ein Klick. In Akzentfarbe steht er, solange keine Handlung offen ist;
+    an der Fläche ist *Fläche versetzen* offen, und deren *Übernehmen* ist der
+    eine Hauptknopf (FD-16, ``b86381559``).
     """
     from PySide6.QtWidgets import QMenu
 
@@ -19384,13 +19421,18 @@ def test_a_chosen_part_reaches_the_catalogue_in_one_click(window: MainWindow) ->
 
     knopf = window.selection_operations.catalog_button
     assert knopf.isVisibleTo(window.selection_operations), "der Knopf steht an der Fläche"
-    assert knopf.isDefault(), "und zwar als Hauptknopf"
+    assert window.feature_panel._apply.isDefault(), "dort führt das Übernehmen der Fläche"
+    assert not knopf.isDefault(), "und nur das: ein Hauptknopf je Karte"
 
     gerufen: list[bool] = []
     window.action_catalog = lambda: gerufen.append(True)  # type: ignore[method-assign]
     window.selection_operations.catalogRequested.connect(window.action_catalog)
     knopf.click()
     assert gerufen, "der Knopf steht da, öffnet den Katalog aber nicht"
+    window.object_tree.select_object(window.object_tree.selected())
+    QApplication.processEvents()
+    assert knopf.isVisibleTo(window.selection_operations), "der Knopf steht am Körper"
+    assert knopf.isDefault(), "und dort, ohne offene Handlung, als Hauptknopf"
 
     # Und die andere Hälfte: In der Menüleiste steht keiner mehr — gefragt
     # nach der **Kachel**, nicht nach der Kategorie. Hier stand
@@ -20035,10 +20077,14 @@ def test_the_search_shows_explanations_without_repeating_window_titles(
     )
     assert row.text().splitlines()[1] == first_sentence(str(entry.doc)).strip()
 
-    for key, tool in window.tools.tools().items():
+    # Ohne Körper sind die Werkzeuge grau (FD-26, ``3d6a080c8``): Ihre Zeile
+    # nennt den Grund — nicht den Namen des Knopfes — und erklärt nichts, was
+    # gerade nicht geht. Mit zwei Körpern geht jedes, und es erklärt sich.
+    needs_a_body = str(tr("Dafür braucht es einen Körper in der Szene."))
+    for key in window.tools.tools():
         tool_entry = next(candidate for candidate in entries if candidate.name == f"tool.{key}")
-        assert tool_entry.doc == str(tool.hint), key
-        assert tool_entry.doc.strip() and tool_entry.doc != tool_entry.title, key
+        assert not tool_entry.available and tool_entry.reason == needs_a_body, tool_entry
+        assert not tool_entry.doc, key
 
     for name in ("file.part_adopt", "file.part_share"):
         part_entry = next(candidate for candidate in entries if candidate.name == name)
@@ -20056,6 +20102,17 @@ def test_the_search_shows_explanations_without_repeating_window_titles(
     assert window_row.text().splitlines()[1] == first_sentence(str(window_entry.doc)).strip()
     tooltip_lines = window_row.toolTip().splitlines()
     assert tooltip_lines == [str(window_entry.title), str(window_entry.doc)]
+
+    for _ in range(2):
+        window.session.import_model(MESHES / "cube_clean.stl")
+        assert window.session.wait_for_idle(60_000)
+    window.object_tree.select_object(next(iter(window.session.evaluate_now().scene.objects)))
+    QApplication.processEvents()
+    entries = window.selection_operations._search_rows()
+    for key, tool in window.tools.tools().items():
+        tool_entry = next(candidate for candidate in entries if candidate.name == f"tool.{key}")
+        assert tool_entry.available and tool_entry.doc == str(tool.hint), tool_entry
+        assert tool_entry.doc.strip() and tool_entry.doc != tool_entry.title, key
 
 
 def test_a_question_of_several_words_still_finds_something(window: MainWindow) -> None:

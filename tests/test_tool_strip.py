@@ -192,6 +192,27 @@ def test_no_tool_opens_without_saying_anything(window: MainWindow, key: str) -> 
     )
 
 
+def test_a_grey_tool_keeps_its_reason_when_it_gets_its_key(qt_app: QApplication) -> None:
+    """Grau trägt der Hinweis den Grund, auch wenn das Kürzel danach kommt (FD-156).
+
+    Das Fenster vergibt die Alt-Kürzel beim Bau, nachdem die leere Szene die
+    Werkzeuge schon ausgegraut hat, und ``set_shortcut`` schrieb Titel und
+    Kürzel über den Grund: Auf der leeren Szene stand am grauen Knopf nur
+    „Schnitt  (Alt+1)“, und die Suche nannte das als Grund (``usable``). Mit
+    der Freigabe kommt das Kürzel in den Hinweis zurück.
+    """
+    reason = "Dafür braucht es einen Körper in der Szene."
+    view = MainWindow(Session(), UiSettings())
+    strip = view.tools
+    for key in TOOLS:
+        assert strip.usable(key) == (False, reason), key
+        assert strip._buttons[key].toolTip() == reason, key
+    strip.set_usable(True)
+    for key, tool in strip.tools().items():
+        assert tool.shortcut.startswith("Alt+"), key
+        assert strip._buttons[key].toolTip() == f"{tool.title}  ({tool.shortcut})", key
+
+
 def test_the_strip_does_not_hold_itself_through_its_buttons(qt_app: QApplication) -> None:
     """Ein losgelassener Streifen geht — seine Knöpfe halten ihn nicht fest.
 

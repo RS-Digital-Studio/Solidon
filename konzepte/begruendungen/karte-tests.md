@@ -339,7 +339,9 @@ importiert kein Test: pytest lädt es als Plugin, und ein zweiter Import führte
 es noch einmal aus.
 
 Die übrigen Helfer in `ui_helpers.py`: `shown_window` für ein gezeigtes Fenster
-ohne Startbildschirm, `with_a_body` für die ausgewählte Korpusfigur,
+ohne Startbildschirm, die Fixture `prepared_window` für den Wortschatz des
+Funktionsdurchgangs (Quader mit Bohrung unter dem Bett, im Kundenthema),
+`with_a_body` für die ausgewählte Korpusfigur,
 `on_the_bore_wall` für einen Klick auf eine Bohrungswand, `wait_until` für
 zugestellte Qt-Ereignisse, `wait_for_export` und `wait_for_print_findings` für
 Arbeiter, die `wait_for_idle` nicht sieht, sowie `PlacementItem`,
