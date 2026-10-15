@@ -4,8 +4,9 @@
 verbietet ``configured_spools`` an der Bindung, die das Filamentlager liest: Eine
 Slicererhebung der Ersteinrichtung übernimmt keine Spulen aus dem Slicer. Ein
 Verbot prüft nur dann etwas, wenn der verbotene Aufruf über genau diese Bindung
-läuft (Konzept Codestruktur 4.1, W2; Entscheidung E8 im Plan zu Schritt 0). Ein
-Verbot an einer Bindung, die das Lager nicht liest — etwa am Original in
+läuft (Konzept Codestruktur 4.1, W2) — statisch: Die verbotene Bindung hat zur
+Aufrufzeit einen Leser, Regel d) in ``test_patch_targets.py``. Ein Verbot an
+einer Bindung, die das Lager nicht liest — etwa am Original in
 ``filament_picker``, solange das Lager eine eigene Kopie hält (CS-9a) —,
 erreicht nie einen Aufruf und ist immer grün.
 
