@@ -32,9 +32,12 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
 4. sie eine Operation oder einen Baustein beim Namen nennt, den ein
    geändertes oder mittelbar betroffenes Modul registriert
    (``@register_op(name="resize_chamber")``) — Module wie ``chamber_ops``
-   lädt nur eine Namensliste, und ihre Tests importieren sie nie —, oder
-   über das ganze Register oder die Beispielprojekte geht
-   (``REGISTRY.all()``, ``app.core.examples``) und damit jede Op rechnet; oder
+   lädt nur eine Namensliste, und ihre Tests importieren sie nie —, auch als
+   Op eines Bausteins (``insert_pipe_clamp``); oder sie die Op über einen
+   Schritt erreicht, den ein direkt importiertes Modul anlegt
+   (``ingest/plan.py`` legt ``load_step`` an), über eine Projektdatei, die
+   sie rechnet, oder über das ganze Register oder die Beispielprojekte
+   (``REGISTRY.all()``, ``app.core.examples``); oder
 5. eine geänderte Nicht-Python-Datei oder ein Skript außerhalb der Pakete
    in einer Zeichenkette genannt wird — ``ROADMAP.md``, ``constraints.txt``,
    ein Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/`` —, auch
@@ -75,6 +78,7 @@ import os
 import re
 import subprocess
 import sys
+import zipfile
 from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
@@ -101,6 +105,19 @@ _REGISTRATIONS = {"register_op": "die Operation", "register_part": "den Baustein
 
 #: Ein Wort in Anführungszeichen — die Vorauswahl des Namenswegs.
 _QUOTED_WORD = re.compile(r"([\"'])(\w+)\1")
+
+#: Die Vorsätze der Ops, die ``parts/ops.py`` je Baustein registriert.
+_PART_OPS = ("insert_", "create_")
+
+#: Wo ein Modul einen Schritt einer Op anlegt: ``OperationDraft(op="load")`` oder eine
+#: Funktion, die den Namen der Op liefert (``return "load_step"`` in ``ingest/plan.py``).
+_CREATES = re.compile(r"\bop\s*=\s*[\"']\w+[\"']|\breturn\s+[\"']\w+[\"']")
+
+#: Ein Projekt im Text eines Moduls, und die Ops in einer Projektdatei.
+_PROJECT_NAME = re.compile(r"[\w.-]+\.p3d\b")
+_PROJECT_OP = re.compile(r"\"op\"\s*:\s*\"(\w+)\"")
+#: Wo Projektdateien liegen: Beispiele, Korpus, Website.
+_PROJECT_FOLDERS = ("app", "tests", "website")
 
 #: Die Register der Operationen und der Bausteine, und ihre Methoden, die jeden Eintrag
 #: liefern; ``get`` und ``has`` fragen nach einem Namen.
@@ -272,6 +289,57 @@ class ImportGraph:
             if _is_test_file(self, name):
                 for match in _QUOTED_WORD.finditer(self.text(name)):
                     found[match.group(2)].add(name)
+        return found
+
+    @functools.cached_property
+    def creators(self) -> dict[str, set[str]]:
+        """Je Op-Name die Module außerhalb der Testdateien, die einen Schritt von ihr anlegen
+        (:data:`_CREATES`) — ``ingest/plan.py`` für ``load`` und ``load_step``."""
+        found: dict[str, set[str]] = defaultdict(set)
+        for name in self.modules:
+            if _is_test_file(self, name) or _CREATES.search(self.text(name)) is None:
+                continue
+            relative = self.modules[name].relative_to(self.root).as_posix()
+            tree, parents = self.resolver.parsed(relative)
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+                    continue
+                parent = parents.get(node)
+                if (isinstance(parent, ast.keyword) and parent.arg == "op") or isinstance(
+                    parent, ast.Return
+                ):
+                    found[node.value].add(name)
+        return found
+
+    @functools.cached_property
+    def projects(self) -> dict[PurePosixPath, frozenset[str]]:
+        """Je Projektdatei (``*.p3d``) die Ops, die ihr Laden rechnet."""
+        found: dict[PurePosixPath, frozenset[str]] = {}
+        for folder in _PROJECT_FOLDERS:
+            if not (self.root / folder).is_dir():
+                continue
+            for path in sorted((self.root / folder).rglob("*.p3d")):
+                try:
+                    with zipfile.ZipFile(path) as archive:
+                        text = "".join(
+                            archive.read(member).decode("utf-8", "replace")
+                            for member in archive.namelist()
+                            if member.endswith(".json")
+                        )
+                except OSError, zipfile.BadZipFile:
+                    continue
+                relative = PurePosixPath(path.relative_to(self.root).as_posix())
+                found[relative] = frozenset(_PROJECT_OP.findall(text))
+        return found
+
+    @functools.cached_property
+    def project_mentions(self) -> dict[str, set[str]]:
+        """Je Name einer Projektdatei die Module, die ihn im Text tragen — die Vorauswahl."""
+        found: dict[str, set[str]] = defaultdict(set)
+        for name in self.modules:
+            if ".p3d" in self.text(name):
+                for match in _PROJECT_NAME.finditer(self.text(name)):
+                    found[match.group(0)].add(name)
         return found
 
     @functools.cached_property
@@ -447,6 +515,10 @@ def _registered(graph: ImportGraph, name: str) -> list[tuple[str, str]]:
                 value = graph.resolver.value_at(relative, keyword.value)
                 if isinstance(value, str):
                     found.append((_REGISTRATIONS[called], value))
+                    if called == "register_part":
+                        # Je Baustein entstehen die Ops ``insert_<name>`` und, steht er
+                        # allein, ``create_<name>`` (``parts/ops.py``) — Tests rufen diese.
+                        found.extend(("die Operation", f"{one}{value}") for one in _PART_OPS)
     return found
 
 
@@ -520,6 +592,31 @@ def _goes_over_everything(graph: ImportGraph, name: str) -> str | None:
         ):
             return "geht über das ganze Register"
     return None
+
+
+def _loaders(
+    graph: ImportGraph, registering: Iterable[str]
+) -> tuple[dict[str, str], list[PurePosixPath]]:
+    """Wer eine Op dieser Module über einen Schritt oder eine Datei erreicht, ohne sie zu nennen:
+    Module, die einen Schritt von ihr anlegen (``ingest/plan.py`` legt ``load`` und
+    ``load_step`` an, ``test_import_placement`` ruft nur ``import_plan``), und Module, die eine
+    Projektdatei mit ihr beim Namen laden (``test_orphans`` lädt ``weg4-stein-formen.p3d``, die
+    ``sculpt_strokes`` rechnet). Dazu die Projektdateien selbst, für die, die sie über einen
+    Ordner lesen.
+    """
+    owners = set(registering)
+    ops = {op for name in owners for _label, op in _registered(graph, name)}
+    found: dict[str, str] = {}
+    for op in sorted(ops):
+        for creator in sorted(graph.creators.get(op, set()) - owners):
+            found.setdefault(creator, f"legt einen Schritt {op} an")
+    projects = sorted(path for path, inside in graph.projects.items() if inside & ops)
+    for path in projects:
+        op = min(graph.projects[path] & ops)
+        for module in sorted(graph.project_mentions.get(path.name, set())):
+            if graph.names_in_strings(module, path.name):
+                found.setdefault(module, f"lädt {path.name} mit {op}")
+    return found, projects
 
 
 def _data_readers(graph: ImportGraph, file: PurePosixPath) -> list[str]:
@@ -859,6 +956,10 @@ def affected(
             reasons.setdefault(graph.modules[test], reason)
     if registering:
         _note_readers(graph, reasons, graph.over_everything)
+        loaders, projects = _loaders(graph, registering)
+        _note_readers(graph, reasons, loaders)
+        for name, reason in _tree_readers(graph, projects).items():
+            reasons.setdefault(graph.modules[name], reason)
     if paths:
         for name, reason in _tree_readers(graph, paths).items():
             reasons.setdefault(graph.modules[name], reason)

@@ -649,6 +649,71 @@ def test_a_data_file_under_app_counts_as_a_change_to_the_module_that_reads_it(
     assert "tests/test_release.py" not in _names(files, tree)
 
 
+def test_an_operation_reached_through_a_created_step_or_a_project_file_selects_its_tests(
+    tree: Path,
+) -> None:
+    """Gemessen gegen die Ausführung fehlten zehn Paare (Entscheidung Koordinator: 0 von 990):
+    ``test_import_placement`` ruft nur ``import_plan``, und ``ingest/plan.py`` legt den Schritt
+    ``load`` oder ``load_step`` an; ``test_platform_identity`` nennt ``insert_pipe_clamp``, die
+    Op des Bausteins ``pipe_clamp``; ``test_orphans`` lädt ``weg4-stein-formen.p3d``, die
+    ``sculpt_strokes`` rechnet. Ein Vergleich mit dem Namen legt keinen Schritt an, und eine
+    Projektdatei ohne die Op lädt sie nicht."""
+    import json
+    import zipfile
+
+    loading = _write(
+        tree,
+        "app/load_ops.py",
+        "from app.registry import register_op\n"
+        "@register_op(name='zz_load')\ndef load(ctx):\n    return ctx\n"
+        "@register_op(name='zz_load_step')\ndef load_step(ctx):\n    return ctx\n",
+    )
+    _write(
+        tree,
+        "app/plan.py",
+        "def loader(suffix):\n    if suffix == '.step':\n        return 'zz_load_step'\n"
+        "    return 'zz_other'\n"
+        "def draft():\n    return OperationDraft(op='zz_load')\n",
+    )
+    _write(tree, "app/history.py", "def special(entry):\n    return entry.op == 'zz_load'\n")
+    _write(tree, "tests/test_import.py", "from app import plan\n")
+    _write(tree, "tests/test_history_only.py", "from app import history\n")
+    part = _write(
+        tree,
+        "app/mounting.py",
+        "from app.parts import register_part\n"
+        "@register_part(name='zz_pipe_clamp')\ndef clamp(ctx):\n    return ctx\n",
+    )
+    _write(tree, "tests/test_part_op.py", "STEP = run_op('insert_zz_pipe_clamp')\n")
+    sculpt = _write(
+        tree,
+        "app/sculpt.py",
+        "from app.registry import register_op\n"
+        "@register_op(name='zz_sculpt')\ndef sculpt(ctx):\n    return ctx\n",
+    )
+    for name, ops in (("stein.p3d", ["create_box", "zz_sculpt"]), ("leer.p3d", ["create_box"])):
+        path = tree / "website" / "teile" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("project.json", json.dumps({"ops": [{"op": op} for op in ops]}))
+    _write(tree, "tests/test_stone.py", "PROJECT = ('website', 'teile', 'stein.p3d')\n")
+    _write(tree, "tests/test_empty.py", "PROJECT = ('website', 'teile', 'leer.p3d')\n")
+    graph = ImportGraph(tree)
+
+    files, reasons = affected([loading], graph)
+    assert reasons[tree / "tests" / "test_import.py"] == (
+        "über app/plan.py: legt einen Schritt zz_load an"
+    )
+    assert "tests/test_history_only.py" not in _names(files, tree)
+    _files, reasons = affected([part], graph)
+    assert reasons[tree / "tests" / "test_part_op.py"] == (
+        "nennt die Operation insert_zz_pipe_clamp"
+    )
+    files, reasons = affected([sculpt], graph)
+    assert reasons[tree / "tests" / "test_stone.py"] == "lädt stein.p3d mit zz_sculpt"
+    assert "tests/test_empty.py" not in _names(files, tree)
+
+
 def test_an_application_module_reading_its_own_tree_lends_that_reading(tree: Path) -> None:
     """CS-32: ``app/i18n/extract.py`` liest die Quellen unter ``app/`` nach ``tr()``-Schlüsseln;
     ``tools/registry_dump.py`` ruft es, und ``test_registry_dump`` fehlte bei einem neuen Text
@@ -730,16 +795,24 @@ def test_the_real_operation_and_data_changes_reach_what_runs_them(
     ``test_registry_consistency`` (ganzes Register), ``test_examples`` (Beispielprojekte) und
     ``test_closure_ops`` (über ``closure_ops``) aus, ohne ``resize_chamber`` zu nennen;
     ``materials.toml`` öffnen ``test_bore_mouth_resize`` und ``test_cli`` über eine Op und
-    ``knowledge.profiles``."""
+    ``knowledge.profiles``. Die letzten zehn Paare der Messung: ``load_step`` über
+    ``import_plan`` (``test_paint``), ``pipe_clamp`` als ``insert_pipe_clamp``
+    (``test_platform_identity``), ``sculpt_strokes`` in ``weg4-stein-formen.p3d``
+    (``test_orphans``)."""
     root = real_graph.root
-    files, _reasons = affected([root / "app" / "core" / "geom" / "chamber_ops.py"], real_graph)
-    for test in ("test_registry_consistency.py", "test_examples.py", "test_closure_ops.py"):
-        assert root / "tests" / test in files, test
-    files, _reasons = affected(
-        [root / "app" / "core" / "knowledge" / "data" / "materials.toml"], real_graph
-    )
-    for test in ("test_bore_mouth_resize.py", "test_cli.py"):
-        assert root / "tests" / test in files, test
+    for module, tests in (
+        (
+            "app/core/geom/chamber_ops.py",
+            ("test_registry_consistency.py", "test_examples.py", "test_closure_ops.py"),
+        ),
+        ("app/core/ingest/step_ops.py", ("test_paint.py", "test_exact_patterns.py")),
+        ("app/core/knowledge/parts/mounting.py", ("test_platform_identity.py",)),
+        ("app/core/geom/sculpt.py", ("test_orphans.py",)),
+        ("app/core/knowledge/data/materials.toml", ("test_bore_mouth_resize.py", "test_cli.py")),
+    ):
+        files, _reasons = affected([root / module], real_graph)
+        for test in tests:
+            assert root / "tests" / test in files, (module, test)
 
 
 def test_the_real_guards_are_chosen_for_any_change_under_app(real_graph: ImportGraph) -> None:
