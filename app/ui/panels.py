@@ -180,6 +180,7 @@ from app.ui.change_lock import (
     action_refusal,
     change_refusal,
     computing_refusal,
+    halt_line,
     hold_inputs,
     say_refusal,
 )
@@ -6881,6 +6882,9 @@ class ReportPanel(QWidget):
         )
         self.offer_effect.clear()
         self.offer_effect.hide()
+        # Hält die Kette an, legt eine ändernde Handlung ihren Schritt dahinter,
+        # wo nichts gerechnet wird: grau mit dem Halt als Grund (FD-104).
+        halt = halt_line(self._document, self._stopped_at)
         previous: QWidget = self.finding_place
         for action in offered:
             button = QPushButton(str(action.label), self._offers)
@@ -6910,7 +6914,7 @@ class ReportPanel(QWidget):
                 # Sperre fällt (FD-30).
                 button.setEnabled(False)
                 say_refusal(button, computing_refusal())
-            refusal = action_refusal(action.id)
+            refusal = action_refusal(action.id, halt=halt)
             if refusal:
                 # **Gesperrt heißt grau mit Grund, vor dem Klick** (FD-5): In
                 # der Demo und ohne Geräteaktivierung endete *Auf das Bett
@@ -8001,12 +8005,13 @@ class ReportPanel(QWidget):
         menu = QMenu(self)
         menu.setToolTipsVisible(True)
         chosen: dict[Any, Any] = {}
+        halt = halt_line(self._document, self._stopped_at)
         for action in offered:
             entry = menu.addAction(str(action.label))
             entry.setObjectName(f"report.{action.id}")
             # Dieselben Sperren wie an den Knöpfen darunter (RM-534, FD-5),
             # jede mit ihrem Grund (FD-27).
-            refusal = action_refusal(action.id) or (
+            refusal = action_refusal(action.id, halt=halt) or (
                 computing_refusal() if self._previous(item) else ""
             )
             entry.setEnabled(not refusal)
