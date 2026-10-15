@@ -72,6 +72,7 @@ scrive in `website/version.json`.
 - In spagnolo e portoghese menu, ricerca e finestra di dialogo mostrano di nuovo solo la prima frase di *Perno per foro* e *Orienta per la stampa*.
 - Diverse traduzioni si leggono con più chiarezza, tra cui l'introduzione di *Crea parametro …*. Il perno inizia con la maiuscola in tutte le lingue.
 - Nella finestra *Sblocca Solidon …*, *Acquista Solidon* resta disponibile anche su un computer attivato, ad esempio per un secondo dispositivo. Gli altri pulsanti in grigio ne indicano il motivo.
+- In francese il primo giorno del mese si scrive ora «1er», ad esempio «1er décembre 2026».
 
 ### Stampare e passare allo slicer
 

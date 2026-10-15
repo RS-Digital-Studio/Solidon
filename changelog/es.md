@@ -73,6 +73,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En español y portugués, el menú, la búsqueda y el diálogo vuelven a mostrar solo la primera frase de *Pasador para taladro* y *Orientar para imprimir*.
 - Varias traducciones se leen con más claridad, entre ellas la introducción de *Crear parámetro …*. La espiga empieza con mayúscula en todos los idiomas.
 - En la ventana *Desbloquear Solidon …*, *Comprar Solidon* sigue disponible también en un ordenador activado, por ejemplo para un segundo equipo. Los demás botones en gris indican su motivo.
+- En francés, el primer día del mes se escribe ahora «1er», por ejemplo «1er décembre 2026».
 
 ### Imprimir y entregar al slicer
 

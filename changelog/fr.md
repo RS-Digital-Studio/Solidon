@@ -73,6 +73,7 @@ dans `website/version.json`.
 - En espagnol et en portugais, le menu, la recherche et la boîte de dialogue n'affichent de nouveau que la première phrase de *Goupille pour perçage* et *Orienter pour l'impression*.
 - Plusieurs traductions se lisent plus clairement, dont l'introduction de *Créer un paramètre …*. Le tenon commence par une majuscule dans toutes les langues.
 - Dans la fenêtre *Déverrouiller Solidon …*, *Acheter Solidon* reste disponible même sur un ordinateur activé, par exemple pour un deuxième appareil. Les autres boutons grisés indiquent leur raison.
+- Le premier jour du mois s'écrit désormais « 1er », par exemple « 1er décembre 2026 ».
 
 ### Imprimer et transmettre au slicer
 

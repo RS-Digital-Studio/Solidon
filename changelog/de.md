@@ -97,6 +97,7 @@ Nutzen da und sonst nichts.
 - Auf Spanisch und Portugiesisch zeigen Menü, Suche und Dialog bei *Stift für Bohrung* und *Druckoptimal ausrichten* wieder nur den ersten Satz.
 - Einige Übersetzungen lesen sich klarer, darunter die Einleitung von *Parameter anlegen …*. Der Zapfen beginnt in allen Sprachen groß.
 - Im Fenster *Solidon freischalten …* bleibt *Solidon kaufen* auch auf einem freigeschalteten Rechner bedienbar, etwa für ein zweites Gerät. Die anderen grauen Knöpfe dort nennen ihren Grund.
+- Auf Französisch heißt der Erste eines Monats jetzt „1er“, etwa „1er décembre 2026“.
 
 ### Drucken und Übergabe an den Slicer
 
