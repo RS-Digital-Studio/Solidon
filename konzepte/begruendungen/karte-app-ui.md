@@ -2326,7 +2326,7 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 
 | Ort / Frage | Vertrag |
 |---|---|
-| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError` |
+| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError`. Was die Größengrenze nicht mehr fasst, steht in `guide_wheel.py` (`takes_wheel`: nimmt ein Rollbereich das Rad selbst, oder reicht er es am Anschlag weiter) und `guide_finders.py` (Finder fester Namen wie `parameters.first.label`, `parameters.bind`) |
 
 Die ausführlichen Zuordnungen der kompakten Karte:
 

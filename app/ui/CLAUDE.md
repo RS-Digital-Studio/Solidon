@@ -219,9 +219,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | Datei | Zweck |
 |---|---|
 | `manual_window.py` | Suche in `core/manual_search.py`; F1-Anker nur für geprüfte `MarkdownNoHTML`-Überschriften (`core/manual.py`) |
-| `guide_targets.py` | Gemeinsame Ziele für Tour, Anleitungen und Prüfstand: `TARGET_PROPERTY`, Menü-`objectName`, `next_click`; `view.edge:<körper>`/`edge_point_for` wählt eine gepickte Kante. Fehlend: `MissingTargetError`; API in `karte-app-ui.md` |
-| `guide_wheel.py` | `takes_wheel`: ob ein Rollbereich ein Rad selbst nimmt oder am Anschlag weiterreicht — für die Rollschritte von `guide_targets` |
-| `guide_finders.py` | Finder fester Namen, die `guide_targets` an seiner Größengrenze nicht mehr fasst (`parameters.first.label`, `parameters.bind`) |
+| `guide_targets.py`, `guide_wheel.py`, `guide_finders.py` | Gemeinsame Ziele für Tour, Anleitungen und Prüfstand: `TARGET_PROPERTY`, Menü-`objectName`, `next_click`; Rad und Finder fester Namen in den Teilen. Fehlend: `MissingTargetError`; API in `karte-app-ui.md` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
 | `shortcut_schemes.py` | Kürzel und Plattformtasten; `nothing_to_take_back`: Strg+Z/Y ans Fenster, wenn das Feld nichts zurückzunehmen hat; weitere Helfer in `karte-app-ui.md` |

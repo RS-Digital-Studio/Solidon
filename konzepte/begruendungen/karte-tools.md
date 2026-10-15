@@ -209,6 +209,9 @@ Das allgemeine Anwendungsminimum bleibt davon unberührt.
 öffentliche Zustellschnittstelle; die API-Vorbedingung wird statisch geprüft.
 Die allgemeine Ereignissperre gilt weiter: direkte Widget-Handler,
 Handleraliase und dynamische `getattr`-Umwege bleiben unzulässig.
+Ein Radschritt, der in derselben Richtung weiterrückte, zählt nicht als
+Wegklick; nach `function_walk.STILL_ROLLS` Radschritten ohne Annäherung hält
+der Weg an (FD-131). Direktes `click_button` bleibt synchron mit letztem Guard.
 
 Vor einem Export für die ganze Szene stellt der Prüfstand eine leere Auswahl
 über den Kundenweg her; `function_surface.require_full_export_scope` liest
