@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QToolButton,
@@ -1673,11 +1674,19 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     assert spin.isVisibleTo(panel), "der gemessene Durchmesser steht nicht sichtbar im Panel"
     assert spin.value_mm() == pytest.approx(measured), "das Panel klemmt den Messwert"
 
-    # **Gelesen wird die Wertetabelle der Handlung** — dieselbe, die *Übernehmen*
-    # und der Weg ins Bild weiterreichen. Beim heutigen Stand wartet der Knopf
-    # auf eine Änderung (FD-99); was danach unberührt bleibt, kommt von hier.
-    entry = next(entry for entry in panel._runs.values() if entry.title == str(action.title))
-    emitted_op, params = entry.op, entry.values()
+    # **Beide Wege zählen.** *Bohrung ändern* führt ins Bild statt sofort
+    # auszuführen (``LEADS_INTO_THE_VIEW``); was der Knopf dabei weiterreicht, ist
+    # dieselbe Wertetabelle. Beim heutigen Stand wartet er auf eine Änderung
+    # (FD-99) — wie getippt, ohne die Zahl zu ändern, nimmt er an
+    # (``first_change.typed``), und der Messwert geht unverändert durch.
+    emitted: list[tuple[str, dict[str, object]]] = []
+    panel.operationRequested.connect(lambda op, params: emitted.append((op, params)))
+    panel.inViewRequested.connect(lambda op, params: emitted.append((op, params)))
+    spin.lineEdit().setModified(True)
+    press(panel, str(action.title))
+
+    assert len(emitted) == 1
+    emitted_op, params = emitted[0]
     assert emitted_op == operation
     assert float(params["diameter"]) == pytest.approx(measured)
     # Der Ort ebenso: Die vergrößerte Platte trägt ihre Bohrungen über einen
@@ -1908,12 +1917,14 @@ def test_a_honeycomb_pattern_stands_in_the_panel_with_its_own_fields(qt_app: QAp
     panel.operationRequested.connect(lambda op, params: seen.append((op, params)))
     press(panel, "Merkmal entfernen")
     assert seen and seen[0][0] == "remove_feature" and seen[0][1]["at_feature"] == identifier
-    # Ändern wartet beim heutigen Stand auf eine Änderung (FD-99); gelesen wird,
-    # was der Knopf danach weiterreicht.
-    entry = next(entry for entry in panel._runs.values() if entry.title == "Merkmal ändern")
-    values = entry.values()
-    assert entry.op == "resize_feature" and values["at_feature"] == identifier
-    assert math.isclose(float(values["pitch"]), pitch, abs_tol=0.01)
+    # Ändern wartet beim heutigen Stand auf eine Änderung (FD-99) — wie getippt,
+    # ohne die Zahl zu ändern, nimmt der Knopf an, und die Teilung geht durch.
+    changing = row_of(panel, "Merkmal ändern")
+    for line in changing.findChildren(QLineEdit):
+        line.setModified(True)
+    press(panel, "Merkmal ändern")
+    assert seen[-1][0] == "resize_feature" and seen[-1][1]["at_feature"] == identifier
+    assert math.isclose(float(seen[-1][1]["pitch"]), pitch, abs_tol=0.01)
 
 
 def test_textures_from_other_bodies_have_distinct_visible_numbers() -> None:

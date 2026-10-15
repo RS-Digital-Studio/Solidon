@@ -24,11 +24,12 @@ def test_no_field_is_named_like_the_place_line_in_front() -> None:
 
     bootstrap.load_operations()
     place = str(tr("Stelle"))
+    with_place = [spec for spec in REGISTRY.all() if place_fields(spec) is not None]
+    assert with_place, "keine Operation mit Lesezeile — die Prüfung prüft nichts"
     clashing = sorted(
         spec.name
-        for spec in REGISTRY.all()
-        if place_fields(spec) is not None
-        and any(str(entry.title) == place for entry in spec.params.spec())
+        for spec in with_place
+        if any(str(entry.title) == place for entry in spec.params.spec())
     )
     assert clashing == [], f"Feld „Stelle“ neben der Lesezeile „Stelle“: {clashing}"
 

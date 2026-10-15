@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -178,5 +179,7 @@ def test_every_field_of_the_dialog_has_its_own_name(qt_app: QApplication, name: 
     """Der Wächter über die Formulare von Parameter-, Kalibrier-, Baustein- und
     Chatdialog: kein Eingabefeld ohne Namen, keine zwei mit demselben."""
     with DIALOGS[name]() as dialog:
+        inputs = dialog.findChildren(QAbstractSpinBox) + dialog.findChildren(QLineEdit)
+        assert inputs, f"{name}: ohne Eingabefelder prüft der Wächter nichts"
         assert unnamed_inputs(dialog) == [], f"{name}: Felder ohne Namen"
         assert repeated_names(dialog) == [], f"{name}: Namen doppelt"

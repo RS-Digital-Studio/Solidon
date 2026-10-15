@@ -55,9 +55,11 @@ def _names_scroll_area(node: ast.expr) -> bool:
 
 def test_no_file_of_the_interface_builds_a_bare_scroll_area() -> None:
     """Jeder Rollbereich ist einer der zwei aus ``scroll_areas`` — kein dritter mit Qts Vorgabe."""
+    sources = sorted(UI.rglob("*.py"))
+    assert len(sources) > 100, f"nur {len(sources)} Dateien — der Wächter prüft nichts"
     found = {
         path.name: places
-        for path in sorted(UI.rglob("*.py"))
+        for path in sources
         if path != HOME and (places := _bare_scroll_areas(path))
     }
     waiting = {name: found.pop(name, []) for name in PENDING}

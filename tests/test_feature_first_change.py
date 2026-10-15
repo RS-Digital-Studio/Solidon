@@ -68,8 +68,7 @@ def test_the_scope_box_is_a_change_of_its_own(qt_app: QApplication) -> None:
     panel = _panel("hole")
     try:
         _arm(panel, "resize_hole")
-        if panel._every.isHidden():
-            return  # ohne gleichartige Geschwister kein Haken
+        assert not panel._every.isHidden(), "Voraussetzung: gleichartige Bohrungen, ein Haken"
         panel._every.toggle()
         QApplication.processEvents()
         assert panel._apply.isEnabled(), "der Haken ändert den Umfang, keinen Wert"
