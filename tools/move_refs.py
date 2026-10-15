@@ -162,6 +162,38 @@ def lazy_table(source: Source) -> dict[str, tuple[ast.Constant, ast.Constant]]:
     return found
 
 
+def _function_of(source: Source, node: ast.AST) -> ast.AST:
+    """Die innerste Funktion um ``node``, sonst das Modul."""
+    for outer in source.ancestors(node):
+        if isinstance(outer, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            return outer
+    return source.tree
+
+
+def _within(source: Source, node: ast.AST, scope: ast.AST) -> bool:
+    """Ob ``node`` in ``scope`` liegt (das Modul enthält alles)."""
+    if scope is source.tree or node is scope:
+        return True
+    return any(outer is scope for outer in source.ancestors(node))
+
+
+def _merged_from(text: str, module: str, name: str) -> str | None:
+    """``from module import a`` mit ``name`` dazu, wenn ``text`` eine solche Anweisung ohne
+    ``as`` ist; sonst ``None``."""
+    parsed = ast.parse(text).body[0]
+    if not (
+        isinstance(parsed, ast.ImportFrom)
+        and parsed.level == 0
+        and parsed.module == module
+        and all(a.asname is None for a in parsed.names)
+    ):
+        return None
+    names = [a.name for a in parsed.names]
+    if name not in names:
+        names.append(name)
+    return from_text(module, [(n, None) for n in names])
+
+
 def _module_level(source: Source, node: ast.AST) -> bool:
     """Ob ``node`` außerhalb jeder Funktion steht (Modulebene, auch in ``if``/``try``)."""
     return not any(
@@ -297,6 +329,7 @@ class FileRewrite:
         self._ranges: list[tuple[int, int, str]] = []
         #: Je ersetzter Stelle der alte Knoten und der neue Text (wer liest danach welchen Namen).
         self._replaced: list[tuple[ast.AST, str]] = []
+        self._requests: list[tuple[ast.Import | ast.ImportFrom, str, ast.AST, str]] = []
         self.plans: dict[int, ImportPlan] = {}
         self.chosen: dict[str, str] = {}
         self.identifiers = identifiers(self.source.tree)
@@ -478,7 +511,7 @@ class FileRewrite:
             if alias is None:
                 return None
             for binder in binders:
-                self.add_import(binder, import_text(module, alias), rule)
+                self.request_import(binder, import_text(module, alias), base, rule)
             self._watch(binders, base.id, old_module, plain=False)
             return alias
         chain = dotted(base)
@@ -513,27 +546,67 @@ class FileRewrite:
         ``from P import …``-Anweisung desselben Blocks, wenn es eine gibt — sonst führte isort
         zwei Anweisungen mit ``noqa`` zusammen, und die Freigabe stünde an der falschen Zeile."""
         parsed = ast.parse(text).body[0]
-        if isinstance(parsed, ast.ImportFrom) and len(parsed.names) == 1 and parsed.module:
-            alias = parsed.names[0]
-            for other in self._block(anchor):
+        # Ein Name mit ``as`` bleibt eine eigene Anweisung: isort fasst ihn nicht zusammen.
+        if (
+            isinstance(parsed, ast.ImportFrom)
+            and len(parsed.names) == 1
+            and parsed.module
+            and parsed.names[0].asname is None
+        ):
+            name = parsed.names[0].name
+            block = self._block(anchor)
+            for other in block:
                 if (
                     isinstance(other, ast.ImportFrom)
                     and other.level == 0
                     and other.module == parsed.module
+                    and all(a.asname is None for a in other.names)
                 ):
                     plan = self.plan(other)
-                    entry = (alias.name, alias.asname)
-                    present = (
-                        any((a.name, a.asname) == entry for a in other.names) or entry in plan.extra
-                    )
-                    if not present:
+                    entry: tuple[str, str | None] = (name, None)
+                    if not any(a.name == name for a in other.names) and entry not in plan.extra:
                         plan.extra.append(entry)
                         plan.rules.append(rule)
                     return
+            # Schon geplant im selben Block: dort hinein (``from P import a, b``).
+            for other in block:
+                pending = self.plans.get(id(other))
+                if pending is None:
+                    continue
+                for number, planned in enumerate(pending.after):
+                    merged = _merged_from(planned, parsed.module, name)
+                    if merged is not None:
+                        pending.after[number] = merged
+                        pending.rules.append(rule)
+                        return
         plan = self.plan(anchor)
         if text not in plan.after:
             plan.after.append(text)
             plan.rules.append(rule)
+
+    def request_import(
+        self, binder: ast.Import | ast.ImportFrom, text: str, site: ast.AST, rule: str
+    ) -> None:
+        """Ein Import neben ``binder`` für die Stelle ``site``; gesetzt wird er erst in
+        :meth:`finish`, wenn kein Import desselben Texts in einem inneren Bereich die Stelle
+        schon versorgt (sonst stünde außen ein Import, den niemand liest)."""
+        self._requests.append((binder, text, site, rule))
+
+    def _place_requests(self) -> None:
+        for binder, text, site, rule in self._requests:
+            scope = _function_of(self.source, binder)
+            inner = any(
+                other_text == text
+                and other is not binder
+                and _function_of(self.source, other) is not scope
+                and _within(self.source, _function_of(self.source, other), scope)
+                and _within(self.source, other_site, _function_of(self.source, other))
+                and _within(self.source, site, _function_of(self.source, other))
+                for other, other_text, other_site, _rule in self._requests
+            )
+            if not inner:
+                self.add_import(binder, text, rule)
+        self._requests = []
 
     def _block(self, stmt: ast.stmt) -> list[ast.stmt]:
         """Die Anweisungsliste, in der ``stmt`` steht."""
@@ -742,6 +815,7 @@ class FileRewrite:
 
     def finish(self) -> list[Edit]:
         """Die gesammelten Zeilen samt Importänderungen; ungelesene Importe fallen weg."""
+        self._place_requests()
         for watch in self.watches:
             plan = self.plan(watch.stmt)
             if watch.number in plan.replace or watch.number in plan.drop:

@@ -211,6 +211,73 @@ def test_a_new_import_joins_the_statement_of_its_module(tmp_path: Path) -> None:
     assert "from app.core import engine, kit  # noqa: E402\n" in text, text
 
 
+def test_an_inner_import_serves_its_function_and_none_is_added_outside(tmp_path: Path) -> None:
+    """Zwei Bindungen in verschachtelten Bereichen brauchen dasselbe neue Modul: Die innere
+    versorgt die Stelle, außen kommt kein Import dazu, den niemand liest."""
+    test = (
+        "from app.core import consumer\n\n\n"
+        "def test_nested(monkeypatch):\n    from app.core import relay\n\n"
+        '    monkeypatch.setattr(relay, "operation", len)\n'
+        '    monkeypatch.setattr(consumer, "operation", len)\n\n\n'
+        "def test_outer():\n    assert consumer.LIMIT == 3\n"
+    )
+    root, result = _run(tmp_path, fx.COPIES_OLD | {"tests/test_nested.py": test})
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    assert (root / "tests/test_nested.py").read_text(encoding="utf-8") == (
+        "from app.core import consumer\n\n\n"
+        "def test_nested(monkeypatch):\n    from app.core import engine\n\n"
+        '    monkeypatch.setattr(engine, "compute", len)\n'
+        '    monkeypatch.setattr(engine, "compute", len)\n\n\n'
+        "def test_outer():\n    assert consumer.LIMIT == 3\n"
+    )
+
+
+TWO_COPIES = '''\
+"""Ein Werkzeug mit zwei Kopien aus zwei Modulen desselben Pakets."""
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.core.engine import scale  # noqa: E402
+from app.core.kit import measure  # noqa: E402
+
+
+def both(text: str) -> int:
+    return scale(len(text)) + measure(text)
+'''
+
+
+def test_two_new_imports_of_one_package_become_one_statement(tmp_path: Path) -> None:
+    """``from app.core import engine`` und ``… import kit`` aus zwei Anweisungen mit ``noqa``
+    werden eine — sonst stünde die Freigabe nach isort an den Einträgen."""
+    root, result = _run(tmp_path, fx.COPIES_OLD | {"tools/both.py": TWO_COPIES})
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    text = (root / "tools/both.py").read_text(encoding="utf-8")
+    assert "from app.core import engine, kit  # noqa: E402\n\n\ndef both" in text, text
+    assert "    return engine.scale(len(text)) + kit.measure(text)\n" in text
+
+
+def test_a_name_with_as_stays_its_own_statement(tmp_path: Path) -> None:
+    """``engine as core_engine`` kommt nicht in ``from app.core import kit``: isort hielte es
+    getrennt und ließe die Freigabe bei ``kit``."""
+    tool = TWO_COPIES.replace(
+        "def both(text: str) -> int:\n    return scale(len(text)) + measure(text)\n",
+        "def both(engine: str) -> int:\n    return scale(len(engine)) + measure(engine)\n",
+    ).replace(
+        "from app.core.kit import measure  # noqa: E402\n",
+        "from app.core.kit import measure  # noqa: E402\nfrom app.core import kit  # noqa: E402\n",
+    )
+    root, result = _run(tmp_path, fx.COPIES_OLD | {"tools/both.py": tool})
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    text = (root / "tools/both.py").read_text(encoding="utf-8")
+    assert "from app.core import engine as core_engine  # noqa: E402\n" in text, text
+    assert "from app.core import kit  # noqa: E402\n" in text, text
+
+
 def test_a_rewrite_that_breaks_a_rule_of_the_project_is_rejected(tmp_path: Path) -> None:
     """Wird eine Zeile durch ``engine.scale`` zu lang und lässt sie sich nicht umbrechen (ein
     f-String), hält der Schnitt mit der Regel und der Stelle an, statt rot zu schreiben."""
