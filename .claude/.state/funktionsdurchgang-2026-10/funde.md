@@ -1926,17 +1926,17 @@ Auskunft.
 - Wirkung beim Kunden: Auf einer leeren Szene stand an einem grauen Werkzeug seit v0.1.1 nur sein Name statt des Grundes, in der Suche auf welle4 auch als Grund; die übrigen fünf Fälle waren kein Produktfehler, hätten aber die Fensterprüfung nach dem Push nach main rot gemacht.
 - Stand: behoben `bbd2c2c59`, `fae59424c`, `bbff466e0`; in welle4 `b156f8f4d`, test_ui 802 offscreen grün.
 
-### FD-157 Der Wortschatzfall verlangte das Ziel der Verlaufszeile ohne Rollen
+### FD-157 Der Wortschatzfall las die Verlaufszeile, während die Seitenkarte noch glitt
 
 - Art: Fehler
 - Schwere: leicht
 - Funktion: keine Zeile: Prüfanschlüsse des Prüfstands
 - Prüfpunkt: 19
-- Beleg: `tests/test_guide_targets.py::test_every_new_kind_resolves_on_a_prepared_window` verlangte nach dem Aufklappen der Verlaufsgruppe sofort `ziel`; im dunklen Thema am Stand `d1f4fd3f2` 3 von 3 Läufen `rollen` (`output/konsolidierung-2026-10-12/d0-testfix-claude.md`, N2; `fd156-claude.md`, Abschnitt 4).
-- Ursache: Das Fenster des Falls stand ohne Thema; im Kundenthema sind die Zeilen höher, und je nachdem, wie weit die Karte nach dem Aufklappen gewachsen ist, steht die Zeile erst nach einem Rollen ganz da.
-- Vorschlag: `prepared_window` im Kundenthema bauen; der Fall rollt, solange die Zeile in der Höhe nicht ganz zu sehen ist, und nur dann, bis `ziel` (Entscheidung Koordinator).
-- Wirkung beim Kunden: Kein Produktfehler; der Fall prüfte eine Lage ohne Thema, die kein Kunde hat.
-- Stand: behoben `99d057c12`; drei Gegenproben rot (Rollen ohne Not, Ziel an abgeschnittener Zeile, Fenster ohne Thema).
+- Beleg: `tests/test_guide_targets.py::test_every_new_kind_resolves_on_a_prepared_window` verlangte nach dem Aufklappen der Verlaufsgruppe sofort `ziel`; im dunklen Thema am Stand `d1f4fd3f2` 3 von 3 Läufen `rollen` (`output/konsolidierung-2026-10-12/d0-testfix-claude.md`, N2; `fd156-claude.md`, Abschnitt 4). Schlussreview D0 (RF-1): In der langen Dateireihenfolge von Lauf B/B2 waren dieser Fall und `test_next_click_names_each_step_in_order_and_reveals_nothing` rot (`('ziel', 0)`, `MissingTargetError` an `tree.row:obj_1.hole_1`), nachgestellt am Stand `3d9ede08f` mit 2 failed, 629 passed; die Sonde `ruhe_sonde.py` zeigt fast jede Antwort von `next_click` während einer laufenden Kartenbewegung, nach dem Gleiten heißt es sofort `ziel` (`output/konsolidierung-2026-10-12/review-d0-final-claude.md`, `d0-final-fix-claude.md`).
+- Ursache: `prepared_window` und die Fälle lasen nach 20 Ereignisrunden, während die Seitenkarte noch `overlay.MOVE_MS` zu ihrem Platz glitt. Wie weit sie kam, hing an der Rechnerlast: Eine halb gewachsene Karte zeigte die Zeile halb (`rollen`) oder gar nicht (`MissingTargetError`). Das Kundenthema allein erzwingt kein Rollen.
+- Vorschlag: Fenster und Fälle warten nach dem Aufbau und nach jedem Aufklappen, bis keine Karte mehr gleitet und kein Setzen vorgemerkt ist (`tests/guide_window.py`, `at_rest`); danach verlangt der Fall ohne Rollen `ziel` und die ganz sichtbare Zeile.
+- Wirkung beim Kunden: Kein Produktfehler; nach dem Gleiten der Karte steht die Zeile ganz da. Der Fall war uhrabhängig und hätte bis zu drei Rollschritte zugelassen, die der Kunde nicht braucht.
+- Stand: behoben `88ae173a2` (zuvor `99d057c12`); Gegenprobe ohne Warten rot (`'rollen' == 'ziel'`), die Reihenfolge von Lauf B2 grün (630 passed), die Datei allein 50 passed.
 
 ### FD-158 Vorschaurückrufe greifen nach dem Abbau auf den Objektbaum zu
 
