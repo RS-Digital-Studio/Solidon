@@ -53,6 +53,12 @@ PATH_PHASE, APPLY_PHASE = MAIN_PHASES
 #: Klappe und Rollen in der Karte — sieben. Einer Luft.
 MOST_WAY_CLICKS: Final = 8
 
+#: Nach so vielen Radschritten in Folge, die nichts näher brachten, kommt das Ziel
+#: nicht ins Bild. Ein Radschritt mit Annäherung zählt nicht als Wegklick: Eine
+#: lange Karte braucht auf der kleinsten Arbeitsfläche mehr Schritte, als
+#: :data:`MOST_WAY_CLICKS` Wegklicks erlaubt (FD-131).
+STILL_ROLLS: Final = 2
+
 #: Wie lange der nächste Klick unverändert stehen muss, bevor er fällt (Sekunden):
 #: Die Karten setzen ihre Höhen über Nullzeitgeber, mehrere Ereignisrunden nach
 #: einem Aufklappen. Die Probezeile ``resize_hole`` traf nach 120 ms noch die
@@ -122,7 +128,9 @@ class Ports(Protocol):
     def widget_under(self, point: Any) -> Any: ...
     def covers(self, click: ClickLike, hit: Any) -> bool: ...
     def centre(self, rect: Any) -> Any: ...
-    def press(self, widget: Any, point: Any, button: str, *, wheel_angle: int = 120) -> None: ...
+    def press(
+        self, widget: Any, point: Any, button: str, *, wheel_angle: int = 120
+    ) -> bool | None: ...
     def move(self, point: Any) -> None: ...
     def keys(self, sequence: Any) -> None: ...
     def type_text(self, text: str) -> None: ...
@@ -194,11 +202,20 @@ class Walk:
         Ereignisrunden (``fenster.md``, „Wie die Karten ihre Höhe teilen“);
         vorher lag an der genannten Stelle noch die Karte oder die nächste
         Klappe, und die Probe meldete „verdeckt“, wo nur gewartet werden musste.
-        Was :data:`COVERED_S` lang deckt, bleibt der Fund.
+        Was :data:`COVERED_S` lang deckt, bleibt der Fund. Ein Radschritt, der
+        in derselben Richtung weiterrückte, zählt nicht als Wegklick; nach
+        :data:`STILL_ROLLS` Radschritten in Folge ohne Annäherung hält der Weg
+        an (FD-131). Sagt die Oberfläche nicht, ob er rückte, zählt er.
         """
-        counter = {"way": 0}
+        counter = {"way": 0, "still": 0}
+        rolling = {"wheel": ""}
         way: list[tuple[Any, ...]] = []
         waited: dict[str, str] = {}
+
+        def again(machine: StepMachine) -> None:
+            machine.insert(
+                [Step(f"weg zu {name}", act, ready=self.stable(name, waited), settle_ms=SETTLE_MS)]
+            )
 
         def act(machine: StepMachine) -> None:
             if waited.get("silent"):
@@ -207,9 +224,26 @@ class Walk:
             why = self.click_once(name, button, stop_before_target=stop_before_target)
             if why == TARGET_REASON:
                 return
-            counter["way"] += 1
             last = self.steps[-1] if self.steps else {}
             way.append((last.get("why"), tuple(last.get("rect") or ())))
+            wheel = str(last.get("button") or "")
+            if why != "rollen":
+                counter["still"], rolling["wheel"] = 0, ""
+            elif last.get("moved") is not None:
+                if last["moved"] and rolling["wheel"] in ("", wheel):
+                    # Annäherung, kein Kreis: Der Rollbereich rückte zum Ziel.
+                    counter["still"], rolling["wheel"] = 0, wheel
+                    again(machine)
+                    return
+                counter["still"] += 1
+                if counter["still"] >= STILL_ROLLS:
+                    raise BenchFinding(
+                        NOT_FOUND,
+                        name,
+                        f"{STILL_ROLLS} Radschritte in Folge brachten es nicht näher,"
+                        " das Ziel kam nicht ins Bild",
+                    )
+            counter["way"] += 1
             if counter["way"] > MOST_WAY_CLICKS:
                 detail = f"nach {MOST_WAY_CLICKS} Wegklicks noch nicht am Ziel"
                 same = len(way) - next(
@@ -224,9 +258,7 @@ class Walk:
                         " das Ziel kam nicht ins Bild"
                     )
                 raise BenchFinding(NOT_FOUND, name, detail)
-            machine.insert(
-                [Step(f"weg zu {name}", act, ready=self.stable(name, waited), settle_ms=SETTLE_MS)]
-            )
+            again(machine)
 
         return Step(f"weg zu {name}", act, ready=self.stable(name, waited), settle_ms=SETTLE_MS)
 
@@ -385,13 +417,37 @@ class Walk:
         if why == "rollen":
             record["wheel_angle"] = angle
         if angle != 120:
-            self.ports.press(hit, point, record["button"], wheel_angle=angle)
+            moved = self.ports.press(hit, point, record["button"], wheel_angle=angle)
         else:
-            self.ports.press(hit, point, record["button"])
+            moved = self.ports.press(hit, point, record["button"])
+        if why == "rollen":
+            # Ob ein Rollbereich um den Treffer in diese Richtung rückte (FD-131).
+            record["moved"] = moved
         return why
 
     def _t(self) -> float:
         return round(self.ports.now() - self.began, 4)
+
+
+def rolled_values(widget: Any) -> tuple[int, ...]:
+    """Die Stände der senkrechten Rollleisten um ein Widget, von innen nach außen (FD-131).
+
+    Auch die Leiste selbst, wenn das Rad über ihr dreht: Dann ist sie der Treffer.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QAbstractScrollArea, QScrollBar
+
+    values: list[int] = []
+    node = widget
+    while node is not None:
+        if isinstance(node, QAbstractScrollArea):
+            values.append(node.verticalScrollBar().value())
+        elif isinstance(node, QScrollBar) and node.orientation() == Qt.Orientation.Vertical:
+            values.append(node.value())
+        if node.isWindow():
+            break
+        node = node.parentWidget()
+    return tuple(values)
 
 
 def click_button(ports: Any, walker: Walk, button: Any, label: str) -> bool:
@@ -677,7 +733,12 @@ class QtPorts:
     def centre(self, rect: Any) -> Any:
         return rect.center()
 
-    def press(self, widget: Any, point: Any, button: str, *, wheel_angle: int = 120) -> None:
+    def press(self, widget: Any, point: Any, button: str, *, wheel_angle: int = 120) -> bool | None:
+        """Drücken, Doppelklick oder Radschritt an der Stelle; beim Rad, ob es weiterrückte.
+
+        Ein Radschritt sagt, ob ein Rollbereich um ``widget`` in seine Richtung
+        weiterrückte — gelesen an den Rollleisten vorher und nachher (FD-131).
+        """
         from PySide6.QtCore import QPoint, Qt
         from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QApplication
@@ -722,10 +783,13 @@ class QtPorts:
             # Der Qt-Eingabepfad reicht ignorierte Radereignisse an die Eltern
             # weiter. Direktes sendEvent bleibt dagegen beim getroffenen Kind.
             handle = top.windowHandle()
+            before = rolled_values(widget)
             QTest.wheelEvent(
                 handle, handle.mapFromGlobal(point), QPoint(0, step), stateKey=modifiers
             )
-            return
+            after = rolled_values(widget)
+            towards = 1 if button == "wheel_down" else -1
+            return any((late - early) * towards > 0 for early, late in zip(before, after))
         if button == "double":
             # Ein Doppelklick des Kunden ist erst ein Klick, dann der zweite
             # Druck: ``mouseDClick`` allein schickt nur das Doppelklickereignis,

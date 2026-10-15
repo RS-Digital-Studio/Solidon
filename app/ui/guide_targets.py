@@ -1618,7 +1618,9 @@ def _obstacle_click(obstacle: _Obstacle, name: str) -> Click:
     """Der Klick, der das erste Hindernis wegnimmt — wenn der Kunde es sehen kann."""
     if not obstacle.clicked.isVisible():
         raise MissingTargetError(f"{name}: der Weg führt über etwas, das gerade nicht dasteht")
-    return Click(obstacle.rect(), Qt.MouseButton.LeftButton, obstacle.why, name)
+    # Eine Klappe unter dem Rand rollt erst heran wie jedes Ziel (FD-131).
+    scrolled = _scroll_needed(obstacle.clicked, name)
+    return scrolled or Click(obstacle.rect(), Qt.MouseButton.LeftButton, obstacle.why, name)
 
 
 def _widget_click(widget: QWidget, name: str, button: Qt.MouseButton) -> Click:
@@ -1686,7 +1688,8 @@ def _scroll_needed(widget: QWidget, name: str) -> Click | None:
         if use_bar and hit is not bar:
             continue
         if not use_bar:
-            while hit is not None and not isinstance(hit, QAbstractScrollArea):
+            # Ein innerer Bereich am Anschlag reicht das Rad weiter wie Qt (FD-131).
+            while hit is not None and hit is not area and not _takes_wheel(hit, direction):
                 hit = hit.parentWidget()
             if hit is not area:
                 continue
@@ -1795,14 +1798,20 @@ def _can_roll(surface: QWidget, direction: int) -> bool:
     """
     holder = surface.parentWidget()
     while holder is not None and not holder.isWindow():
-        if isinstance(holder, QAbstractScrollArea):
-            bar = holder.verticalScrollBar()
-            if bar is not None and (
-                bar.value() < bar.maximum() if direction > 0 else bar.value() > bar.minimum()
-            ):
-                return True
+        if _takes_wheel(holder, direction):
+            return True
         holder = holder.parentWidget()
     return False
+
+
+def _takes_wheel(widget: QWidget, direction: int) -> bool:
+    """Ob ein Rollbereich ein Rad in diese Richtung selbst nimmt, statt es weiterzureichen."""
+    if not isinstance(widget, QAbstractScrollArea):
+        return False
+    bar = widget.verticalScrollBar()
+    return bar is not None and (
+        bar.value() < bar.maximum() if direction > 0 else bar.value() > bar.minimum()
+    )
 
 
 def _expander_click(view: QAbstractItemView, item: QTreeWidgetItem, name: str) -> Click:
