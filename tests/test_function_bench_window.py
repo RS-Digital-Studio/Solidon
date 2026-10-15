@@ -486,6 +486,59 @@ def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:
         qt_app.processEvents()
 
 
+def test_a_double_click_that_removes_its_widget_releases_at_the_pointer(
+    qt_app: Any, monkeypatch: Any
+) -> None:
+    """FD-83, Rückfallzweig: Baut der Doppelklick das gedrückte Widget ab, lässt das los,
+    was jetzt unter dem Zeiger liegt — wie Qt beim Kunden.
+
+    Offscreen lässt sich das gedrückte Widget im Doppelklick nicht abbauen, ohne
+    den Prozess zu verlieren. Der Fall öffnet deshalb an derselben Stelle eine
+    neue Fläche und meldet die Liste über ``shiboken6.isValid`` als abgebaut;
+    ``press`` holt ``isValid`` erst im Aufruf.
+    """
+    import shiboken6
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication, QListWidget, QStackedWidget, QWidget
+
+    stack = QStackedWidget()
+    listing = QListWidget()
+    listing.addItems(["1  Quader anlegen", "2  Bohrung setzen"])
+    opened = QWidget()
+    stack.addWidget(listing)
+    stack.addWidget(opened)
+    listing.itemDoubleClicked.connect(lambda _item: stack.setCurrentWidget(opened))
+    stack.resize(300, 200)
+    stack.show()
+    qt_app.processEvents()
+    pressed = listing.viewport()
+    valid = shiboken6.isValid
+    monkeypatch.setattr(shiboken6, "isValid", lambda thing: thing is not pressed and valid(thing))
+    released: list[Any] = []
+    release = QTest.mouseRelease
+
+    def record(widget: Any, *args: Any) -> None:
+        released.append(widget)
+        release(widget, *args)
+
+    monkeypatch.setattr(QTest, "mouseRelease", record)
+    try:
+        point = pressed.mapToGlobal(listing.visualItemRect(listing.item(1)).center())
+        ports = function_walk.QtPorts(None, 0.0)
+        assert ports.widget_under(point) is pressed
+        ports.press(pressed, point, "double")
+        qt_app.processEvents()
+        assert stack.currentWidget() is opened
+        assert ports.widget_under(point) is opened
+        assert released == [opened]
+        assert QApplication.mouseButtons() == Qt.MouseButton.NoButton
+    finally:
+        stack.close()
+        stack.deleteLater()
+        qt_app.processEvents()
+
+
 def test_a_click_into_a_field_lands_in_its_box_not_beside_it(qt_app: Any, monkeypatch: Any) -> None:
     """F-34: Ein Feld, breiter als sein Kästchen, wird im Kästchen geklickt.
 
