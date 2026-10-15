@@ -1418,8 +1418,27 @@ class Index:
                 if not values:
                     break
 
+    def _query_kinds(self, facts: Facts, ref: Ref) -> set[str]:
+        """``getattr``, ``getattr-default`` oder ``hasattr`` — bei einem Alias (``query``) das,
+        woran sein Name gebunden ist."""
+        if not ref.kind.startswith("query") or ref.func is None:
+            return {ref.kind}
+        found = {value.ref for _env, value in self._fold(facts, ref.func) if value.kind == "ext"}
+        kinds = set()
+        if "builtins.getattr" in found:
+            kinds.add("getattr-default" if ref.kind == "query-default" else "getattr")
+        if "builtins.hasattr" in found and ref.kind == "query":
+            kinds.add("hasattr")
+        return kinds
+
     def _scan_getattr(self, facts: Facts, ref: Ref, indexed_file: bool) -> None:
+        """``getattr(M, "N")`` muss auflösen (W5). Mit Vorgabe und ``hasattr`` fragt der Code nach
+        einer Abwesenheit, das ist kein Fund; gibt es ``N``, sind beide ein Bezug und lesen es zur
+        Aufrufzeit (CS-27)."""
         assert ref.name is not None
+        kinds = self._query_kinds(facts, ref)
+        if not kinds:
+            return
         for _env, pair in self._fold(facts, Seq((ref.base, ref.name))):
             if pair.kind != "seq" or not isinstance(pair.data, tuple):
                 continue
@@ -1427,20 +1446,21 @@ class Index:
             name = _text(name_value)
             if target.kind != "module" or name is None:
                 continue
-            if not self.exists(target.ref, name, checking=ref.checking):
-                if ref.kind == "getattr":
-                    text = f"getattr({target.ref}, {name!r})"
-                    at = (ref.line, ref.col)
-                    self._unresolvable(facts, at, "getattr", target.ref, name, text)
-                else:
-                    self._count(f"absent.{ref.kind}")
-                continue
-            if ref.kind == "hasattr":
-                continue
-            where = (facts.path, ref.line, ref.col)
-            self._refer(Reference(*where, "getattr", target.ref, name, ref.runtime, ref.checking))
-            if indexed_file and not ref.checking:
-                self._read(self._owner(target.ref, name), facts, ref.scope, ref.line, "getattr")
+            for kind in sorted(kinds):
+                if not self.exists(target.ref, name, checking=ref.checking):
+                    if kind == "getattr":
+                        text = f"getattr({target.ref}, {name!r})"
+                        at = (ref.line, ref.col)
+                        self._unresolvable(facts, at, "getattr", target.ref, name, text)
+                    else:
+                        self._count(f"absent.{kind}")
+                    continue
+                label = "hasattr" if kind == "hasattr" else "getattr"
+                where = (facts.path, ref.line, ref.col)
+                self._refer(Reference(*where, label, target.ref, name, ref.runtime, ref.checking))
+                if indexed_file and not ref.checking:
+                    owner = self._owner(target.ref, name)
+                    self._read(owner, facts, ref.scope, ref.line, label)
 
     def _scan_globals(self, facts: Facts) -> None:
         module_binds = facts.scopes[0].binds

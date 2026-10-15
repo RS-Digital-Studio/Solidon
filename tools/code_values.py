@@ -57,8 +57,8 @@ class PatchSite(NamedTuple):
 
 class Reader(NamedTuple):
     """Wer ``M.N`` zur Aufrufzeit erreicht: ``kind`` ist ``global`` (Funktion in ``M``, die ``N``
-    als Global liest), ``attribute`` (``M.N`` über einen Modulalias), ``getattr`` oder
-    ``import`` (später ``from M import N`` in einer Funktion)."""
+    als Global liest), ``attribute`` (``M.N`` über einen Modulalias), ``getattr`` (auch mit
+    Vorgabe), ``hasattr`` oder ``import`` (später ``from M import N`` in einer Funktion)."""
 
     module: str
     qualname: str
@@ -86,9 +86,9 @@ class Reference(NamedTuple):
     """Ein aufgelöster Bezug auf ``module.name`` an einer Stelle des Baums.
 
     ``kind``: ``import`` (``import M``, dann ist ``name`` leer), ``from``, ``import_module``,
-    ``attribute``, ``store``, ``delete``, ``getattr`` oder ``patch``. ``runtime`` sagt, ob der
-    Bezug zur Aufrufzeit (in einer Funktion) läuft, ``checking``, ob er unter ``TYPE_CHECKING``
-    steht.
+    ``attribute``, ``store``, ``delete``, ``getattr`` (auch mit Vorgabe), ``hasattr`` oder
+    ``patch``. ``runtime`` sagt, ob der Bezug zur Aufrufzeit (in einer Funktion) läuft,
+    ``checking``, ob er unter ``TYPE_CHECKING`` steht.
     """
 
     path: str

@@ -285,7 +285,12 @@ class Fn:
 
 
 class Ref(NamedTuple):
-    kind: str  # attr, store, del, getattr, getattr-default, hasattr
+    """Ein Bezug. ``kind``: ``attr``, ``store``, ``del``, ``getattr``, ``getattr-default``,
+    ``hasattr`` — oder ``query``/``query-default``: ein Aufruf über einen Namen, der in der Datei
+    an ``getattr``/``hasattr`` gebunden wird (``has = hasattr``, ``builtins.hasattr``); welcher
+    der beiden, faltet der Index aus ``func``."""
+
+    kind: str
     scope: int
     line: int
     col: int
@@ -294,6 +299,7 @@ class Ref(NamedTuple):
     name: IR | None
     runtime: bool
     checking: bool
+    func: IR | None = None
 
 
 class Imp(NamedTuple):
@@ -564,6 +570,8 @@ class _Extractor:
         self.grows: list[tuple[int, str, tuple[int, int], str, IR]] = []
         self.patch_until: tuple[int, int] | None = None
         self.contexts: dict[str, tuple[int, int]] = {}
+        #: Aufrufe mit zwei Argumenten über einen Namen oder ``….getattr``/``….hasattr``.
+        self.maybe: list[tuple[ast.Call, int, bool, bool]] = []
 
     # ---- Bereiche und Bindungen
 
@@ -1085,6 +1093,13 @@ class _Extractor:
             self.f.refs.append(
                 Ref(kind, self.scope, *at, base, (), name, self.runtime, self.checking)
             )
+        elif len(node.args) >= 2 and (
+            isinstance(func, ast.Name)
+            or (isinstance(func, ast.Attribute) and func.attr in ("getattr", "hasattr"))
+        ):
+            # Vielleicht ``has(M, "N")`` mit ``has = hasattr``: ob ``has`` in der Datei so
+            # gebunden wird, steht erst am Ende fest (:meth:`queries`).
+            self.maybe.append((node, self.scope, self.runtime, self.checking))
         last = func.id if isinstance(func, ast.Name) else _dotted(func) or ""
         last = last.rpartition(".")[2]
         if last in ("import_module", "importorskip") and node.args:
@@ -1189,8 +1204,32 @@ class _Extractor:
         for scope in facts.scopes:
             scope.loads = {}
         self.grown()
+        self.queries()
         if self.in_tests:
             self.helper_calls()
+
+    def queries(self) -> None:
+        """Behält die Aufrufe, die ``getattr``/``hasattr`` unter anderem Namen sein können: über
+        einen Namen, den die Datei an einen von beiden bindet (``has = hasattr``, ``from
+        builtins import hasattr as has``), oder als Attribut (``builtins.hasattr``). Welcher es
+        ist, faltet der Index; ein Alias aus einem anderen Modul sieht der Auszug nicht."""
+        aliases = {
+            name
+            for scope in self.f.scopes
+            for name, binds in scope.binds.items()
+            if any(_query_alias(bind.value) for bind in binds)
+        }
+        for node, number, runtime, checking in self.maybe:
+            func = node.func
+            if isinstance(func, ast.Name) and func.id not in aliases:
+                continue
+            kind = "query-default" if len(node.args) >= 3 else "query"
+            at = (node.lineno, node.col_offset)
+            base, name, called = (
+                to_ir(part, number, comps=self.comps, checking=checking)
+                for part in (node.args[0], node.args[1], func)
+            )
+            self.f.refs.append(Ref(kind, number, *at, base, (), name, runtime, checking, called))
 
     def grown(self) -> None:
         """Hängt an jede Bindung eines Behälters, was der Code später hineinlegt.
@@ -1245,6 +1284,16 @@ class _Extractor:
 
 #: Methoden, die einen Behälter füllen; ``setdefault`` legt ein Paar ab, ``update`` öffnet.
 _FILLS = frozenset({"append", "add", "insert", "extend", "appendleft", "setdefault", "update"})
+
+
+def _query_alias(value: IR) -> bool:
+    """Ob eine Bindung ``getattr``/``hasattr`` unter anderem Namen sein kann."""
+    queries = ("getattr", "hasattr")
+    if isinstance(value, Use):
+        return value.name in queries
+    if isinstance(value, FromRef):
+        return value.module == "builtins" and value.name in queries
+    return isinstance(value, Attr) and value.attr in queries and isinstance(value.base, Use)
 
 
 def _container(value: IR) -> bool:
