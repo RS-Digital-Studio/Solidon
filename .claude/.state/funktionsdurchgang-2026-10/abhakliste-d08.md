@@ -5,7 +5,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | | |
 |---|---|
 | Paket | D8 |
-| Prüfsumme | a7648a06ba2b011683dcce231cd89399ef7074d21a5d11b220dae2dd0c6ad980 |
+| Prüfsumme | 4aa03b77d2dc23bc439b4403c307426af6204fa9aa0ce251f3f60b64f7652392 |
 | Commit | 2ec37b23bbc18bd76fc604c794ecd0c7231adaec |
 | Datum | 2026-10-15 |
 | Laufordner | `probelauf-d0-final-2ec37b23b-fortsetzung-03` |
@@ -31,16 +31,16 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | duplicate_object | operation | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-745 |  |
 | hollow_object | operation | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-745 |  |
 | orient_for_print | operation | zwei_koerper.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-737, RM-745 | FD-101 |
-| rename_object | operation | quader.exakt | offen | offen | FD-116 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-51 | offen RM-745 | FD-51, FD-114, FD-116 |
+| rename_object | operation | quader.exakt | offen | offen | FD-116 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-745 | FD-51, FD-114, FD-116 |
 | set_material | operation | quader.exakt | offen | offen | FD-116 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-745 | FD-116 |
 | split_bodies | operation | mehrteilig.netz | offen | offen | offen | offen | offen | offen | FD-95 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-745 | FD-95, FD-113 |
 | split_line | operation | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-745 |  |
 | split_pinned | operation | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-745 |  |
 | test_piece | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-745 | FD-119 |
-| command:edit.auto_split | fensterbefehl | quader.exakt | FD-56 | FD-56 | offen | offen | offen | offen | offen | offen | FD-56 | offen | offen | offen | offen | offen | offen | offen | — | offen | FD-56 | offen RM-737, RM-745 | FD-56 |
-| dialog:body_choice_dialog | bedienflaeche | unter_dem_bett.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
-| dialog:seal_path_dialog | bedienflaeche | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
-| dialog:step_values_dialog | bedienflaeche | leer | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
+| command:edit.auto_split | fensterbefehl | quader.exakt | FD-56 | FD-56 | offen | offen | offen | offen | offen | offen | FD-56 | offen | offen | offen | offen | offen | offen | offen | — | offen | FD-56 | offen RM-737, RM-745 | FD-56, FD-151 |
+| dialog:body_choice_dialog | bedienflaeche | unter_dem_bett.netz | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-101 |
+| dialog:seal_path_dialog | bedienflaeche | merkmal.face.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-101 |
+| dialog:step_values_dialog | bedienflaeche | leer | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-101 |
 | finding.action:adopt_printer | bedienflaeche | fremder_drucker.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
 | finding.action:arrange_on_bed | bedienflaeche | deckungsgleich.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
 | finding.action:calibrate_material | bedienflaeche | passung.netz | offen | offen | offen | offen | offen | offen | offen | offen | FD-20 | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-20, FD-105 |
@@ -53,19 +53,19 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | finding.action:correct_input | bedienflaeche | halt | offen | offen | offen | offen | offen | offen | FD-95 | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-95 |
 | finding.action:decimate_and_retry | bedienflaeche | duenner_stab.netz | offen | offen | offen | offen | offen | offen | offen | offen | FD-108 | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-108 |
 | finding.action:decimate_mesh | bedienflaeche | ueber_erkennungsgrenze | offen | offen | offen | offen | offen | offen | offen | offen | FD-124 | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-107, FD-124 |
-| finding.action:export_as_mesh | bedienflaeche | export_gemischt | offen | offen | offen | offen | offen | offen | offen | offen | FD-53 | offen | offen | offen | offen | offen | offen | offen | — | offen | FD-122 | offen RM-737, RM-745 | FD-53, FD-55, FD-122 |
+| finding.action:export_as_mesh | bedienflaeche | export_gemischt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | FD-122 | offen RM-737, RM-745 | FD-53, FD-55, FD-122 |
 | finding.action:generate_again | bedienflaeche | erzeugte_haut.netz | offen | offen | offen | offen | offen | offen | offen | FD-78 | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-745 | FD-78, FD-117 |
 | finding.action:give_thickness | bedienflaeche | offen_gelassen.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-112 |
-| finding.action:install | bedienflaeche | ohne_opencascade.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
-| finding.action:keep_saved_parts | bedienflaeche | baustein_geaendert.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
+| finding.action:install | bedienflaeche | ohne_opencascade.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-101 |
+| finding.action:keep_saved_parts | bedienflaeche | baustein_geaendert.netz | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-101 |
 | finding.action:leave_open | bedienflaeche | offen_repariert.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
 | finding.action:mesh_and_retry | bedienflaeche | kasten_runden.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-20 | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-20 |
 | finding.action:mesh_to_exact | bedienflaeche | schale_am_netz.netz | offen | offen | offen | offen | offen | offen | FD-104 | offen | offen | offen | offen | offen | offen | offen | FD-104 | offen | — | offen | offen | offen RM-737, RM-745 | FD-104 |
 | finding.action:open_print_settings | bedienflaeche | geglaettet.netz | FD-121 | offen | offen | offen | offen | offen | offen | FD-78 | FD-20 | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-745 | FD-20, FD-78, FD-121 |
 | finding.action:orient_for_print | bedienflaeche | kreuzend.netz | offen | offen | offen | offen | offen | offen | FD-104 | offen | FD-97 | offen | offen | offen | offen | offen | FD-104 | offen | — | offen | offen | offen RM-737, RM-745 | FD-97, FD-104 |
-| finding.action:place_on_bed | bedienflaeche | unter_dem_bett.netz | FD-17 | FD-38 | offen | ja | FD-128 | ja | FD-149 | FD-35 | FD-20 | FD-139 | offen | — | FD-100 | offen | offen | FD-128 | — | FD-5 | FD-37 | offen RM-737, RM-745 | FD-4, FD-5, FD-17, FD-18, FD-20, FD-21, FD-23, FD-25, FD-27, FD-30, FD-35, FD-37, FD-38, FD-40, FD-100, FD-109, FD-128, FD-139, FD-140, FD-147, FD-149 |
+| finding.action:place_on_bed | bedienflaeche | unter_dem_bett.netz | FD-17 | offen | offen | ja | FD-128 | ja | FD-149 | offen | FD-20 | FD-139 | offen | — | FD-100 | offen | offen | FD-128 | — | FD-5 | offen | offen RM-737, RM-745 | FD-4, FD-5, FD-17, FD-18, FD-20, FD-21, FD-23, FD-25, FD-27, FD-30, FD-35, FD-37, FD-38, FD-40, FD-100, FD-109, FD-128, FD-139, FD-140, FD-147, FD-149 |
 | finding.action:reactivate_step | bedienflaeche | ausgeschaltet.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
-| finding.action:recognize_fully | bedienflaeche | ueber_erkennungsgrenze | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
+| finding.action:recognize_fully | bedienflaeche | ueber_erkennungsgrenze | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-101 |
 | finding.action:recognize_local | bedienflaeche | ueber_erkennungsgrenze | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-111 |
 | finding.action:recount_and_retry | bedienflaeche | kreuzend.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
 | finding.action:release_protection | bedienflaeche | geschuetzte_leiste.netz | offen | offen | offen | offen | offen | FD-106 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-106 |
@@ -84,7 +84,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | finding.action:show_locations | bedienflaeche | offen.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
 | finding.action:show_step_values | bedienflaeche | alter_farbschritt.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-105, FD-118 |
 | finding.action:show_support_need | bedienflaeche | kreuzend.netz | offen | offen | offen | offen | offen | offen | offen | offen | FD-108 | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-108 |
-| finding.action:sketch.pick_plane | bedienflaeche | ebene_durch_linie.netz | offen | offen | offen | offen | offen | offen | FD-95 | FD-78 | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | FD-44 | offen RM-745 | FD-44, FD-78, FD-95 |
+| finding.action:sketch.pick_plane | bedienflaeche | ebene_durch_linie.netz | offen | offen | offen | offen | offen | offen | FD-95 | FD-78 | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-745 | FD-44, FD-78, FD-95 |
 | finding.action:split_along_line | bedienflaeche | geschuetzte_leiste.netz | offen | offen | offen | offen | offen | FD-106 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 | FD-106 |
 | finding.action:split_and_retry | bedienflaeche | lose_teile.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737, RM-745 |  |
 | finding.action:split_bodies | bedienflaeche | kreuzend.netz | offen | offen | offen | offen | offen | offen | FD-104 | offen | offen | offen | offen | offen | offen | offen | FD-104 | offen | — | offen | offen | offen RM-737, RM-745 | FD-104 |
@@ -265,7 +265,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | command:edit.auto_split | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
 | command:edit.auto_split | V5 | nicht gemessen | jede Handlung löst das Problem | — |
 | command:edit.auto_split | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
-| command:edit.auto_split | G9 | Gestaltungsurteil | Gestaltungsurteil, höchstens leicht | — |
+| command:edit.auto_split | G9 | Gestaltungsurteil | Gestaltungsurteil, höchstens leicht | FD-151 |
 | command:edit.auto_split | Z3 | Wegklick nach der Auswahl: reiter auf command:edit.auto_split | ja je Zeile mit Merkmals- oder Körperbezug | — |
 | command:edit.auto_split | Z6 | Rollleiste vorn in _SelectionPage bei 2560 x 1369; Rollleiste vorn in _SelectionPage bei 2560 x 1369; Rollleiste vorn in _SelectionPage bei 2560 x 1369; Rollleiste vorn in _SelectionPage bei 2560 x 1369; Rollleiste vorn in _SelectionPage bei 2560 x 1369; Rollleiste vorn in _SelectionPage bei 2560 x 1369 | 1920 x 1080 logisch (maximiert, Task- und Titelleiste ab) ohne Rollleiste vorn; Symbole scharf bei 100%, 150%, 200%, solange ≥ 1920 x 1080 logisch | — |
 | dialog:body_choice_dialog | E1 | nicht gemessen | ≤ 3; am Merkmal ≤ 2 nach der Auswahl | — |
@@ -508,7 +508,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | finding.action:orient_for_print | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
 | finding.action:orient_for_print | G9 | Gestaltungsurteil | Gestaltungsurteil, höchstens leicht | — |
 | finding.action:place_on_bed | E4 | 0 Blickwechsel | ≤ 2; kein Dialog verdeckt die bearbeitete Stelle | — |
-| finding.action:place_on_bed | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | FD-27 |
+| finding.action:place_on_bed | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | — |
 | finding.action:place_on_bed | G5 | nicht gemessen | jeder unterscheidbar, zweite Kodierung, Fokus sichtbar | — |
 | finding.action:place_on_bed | G8 | 0 Übergänge | Übergang aus `motion`, 110-220 ms, abschaltbar | — |
 | finding.action:place_on_bed | G9 | Gestaltungsurteil | Gestaltungsurteil, höchstens leicht | — |
