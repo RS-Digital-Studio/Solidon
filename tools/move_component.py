@@ -1114,7 +1114,7 @@ class ComponentPlanner:
                     target.append(binding.text())
             return
         if host_top.units.get(name):
-            annotation = _in_annotation(self.host, node)
+            annotation = in_annotation(self.host, node)
             if annotation and future:
                 text = f"from {self.shape.module} import {name}"
                 if text not in self.checking:
@@ -1369,7 +1369,7 @@ def _inside(outer: ast.AST, node: ast.AST) -> bool:
     return first <= line <= last
 
 
-def _in_annotation(source: Source, node: ast.AST) -> bool:
+def in_annotation(source: Source, node: ast.AST) -> bool:
     current: ast.AST = node
     for outer in source.ancestors(node):
         if _is_annotation_node(outer, current):

@@ -398,6 +398,83 @@ def test_a_forgotten_reader_in_an_unchanged_file_is_red(
     assert any(where in error for error in proof.errors), (label, proof.errors)
 
 
+# ------------------------------------------------------------------ Typ aus dem Wirtsmodul
+
+HOST_HEAD = "\n\nclass Board(QObject):"
+BUMP = "    def bump(self) -> None:\n        self.count += 1"
+SESSION_TYPE = "    from app.ui.session import Session\n"
+
+
+def _typed(files: dict[str, str], path: str) -> dict[str, str]:
+    """``bump`` nimmt einen Typ aus dem Modul des Wirts an (``Mode``), nur in der Annotation."""
+    files = fx.edit(files, BOARD, HOST_HEAD, "\n\nclass Mode:\n    pass\n" + HOST_HEAD)
+    typed = "    def bump(self, mode: Mode | None = None) -> None:\n        self.count += 1"
+    return fx.edit(files, path, BUMP, typed)
+
+
+TYPED_OLD = _typed(fx.COMPONENT_OLD, BOARD)
+#: Der Sollbaum: ``Mode`` steht in der Komponente nur unter ``TYPE_CHECKING`` (kein Kreis).
+TYPED_NEW = fx.edit(
+    _typed(EXPECTED, AREA), AREA, SESSION_TYPE, "    from app.ui.board import Mode\n" + SESSION_TYPE
+)
+
+
+def test_a_host_type_in_an_annotation_moves_under_type_checking(tmp_path: Path) -> None:
+    """RM-M3: Der Planer legt den Typ unter ``TYPE_CHECKING`` der Komponente, und der Beweis
+    nimmt genau das an — die Bindungen des Blocks gelten als Typprüfung."""
+    root, result = _run(tmp_path, TYPED_OLD)
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    assert fx.tree_bytes(root) == _expected_bytes(TYPED_NEW)
+    assert result.proof is not None
+    assert "Mode: Typ aus dem Wirtsmodul unter TYPE_CHECKING" in result.proof.text()
+
+
+def _runtime_reads() -> list[tuple[str, dict[str, str], dict[str, str], str]]:
+    step_old = fx.edit(
+        fx.edit(fx.COMPONENT_OLD, BOARD, HOST_HEAD, "\n\nSTEP = 2\n" + HOST_HEAD),
+        BOARD,
+        BUMP,
+        BUMP.replace("+= 1", "+= STEP"),
+    )
+    step_new = fx.edit(
+        fx.edit(
+            fx.edit(EXPECTED, BOARD, HOST_HEAD, "\n\nSTEP = 2\n" + HOST_HEAD),
+            AREA,
+            BUMP,
+            BUMP.replace("+= 1", "+= STEP"),
+        ),
+        AREA,
+        SESSION_TYPE,
+        "    from app.ui.board import STEP\n" + SESSION_TYPE,
+    )
+    runtime_import = fx.edit(
+        fx.edit(TYPED_NEW, AREA, "    from app.ui.board import Mode\n", ""),
+        AREA,
+        "from app.ui.flow import Flow\n",
+        "from app.ui.board import Mode\nfrom app.ui.flow import Flow\n",
+    )
+    return [
+        ("wert-nur-zur-typprüfung", step_old, step_new, "STEP meint vorher"),
+        ("typ-zur-laufzeit-importiert", TYPED_OLD, runtime_import, "Mode meint vorher"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("label", "old_files", "new_files", "where"),
+    _runtime_reads(),
+    ids=[case[0] for case in _runtime_reads()],
+)
+def test_a_host_definition_read_at_runtime_is_red_for_that_reason(
+    tmp_path: Path, label: str, old_files: dict[str, str], new_files: dict[str, str], where: str
+) -> None:
+    """RM-M3: Ein Wert des Wirtsmoduls zur Laufzeit, aber nur unter ``TYPE_CHECKING`` importiert
+    (danach ``NameError``), und ein Typ, zur Laufzeit importiert (ein Kreis): rot, weil der Name
+    an dieser Stelle nachher etwas anderes meint — nicht über einen Nebenbefund."""
+    proof = _prove(tmp_path, new_files, old_files)
+    assert not proof.ok, f"{label}: Beweis grün\n{proof.text()}"
+    assert any(where in error for error in proof.errors), (label, proof.errors)
+
+
 # ------------------------------------------------------------------------------ abgewiesen
 
 

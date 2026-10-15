@@ -42,6 +42,7 @@ from tools.move_compare import (
     ReaderComparison,
     Scopes,
     TopLevel,
+    _difference,
     _text,
     comments,
     qualname_of,
@@ -51,6 +52,7 @@ from tools.move_component import (
     Method,
     Shape,
     call_position,
+    in_annotation,
     lifetime,
     named_call,
     refers_to,
@@ -652,7 +654,14 @@ class MethodComparison(_Rules):
         if before == after:
             return True
         typed = ("imp", self.shape.module, old.id, True)
-        if before == ("def", self.shape.module, old.id) and typed in after[1:]:
+        if (
+            before == ("def", self.shape.module, old.id)
+            and typed in after[1:]
+            and in_annotation(self.old, old)
+            and in_annotation(self.new, new)
+        ):
+            # Nur in einer Annotation: Mit ``from __future__ import annotations`` (der Planer
+            # verlangt es in beiden Modulen) wird sie zur Laufzeit nicht ausgewertet.
             self.accept(f"{old.id}: Typ aus dem Wirtsmodul unter TYPE_CHECKING")
             return True
         self.fail(old, new, f"{old.id} meint vorher {before}, nachher {after}")
@@ -750,34 +759,27 @@ class ComponentFileComparison(_FileRules):
         return super().blocks(owner, old, new)
 
     def imports(self, owner: ast.AST, old: list[ast.stmt], new: list[ast.stmt]) -> None:
-        from tools.move_compare import _difference
-
-        removed, added = _difference(self.path, old, new)
+        """Neu sind nur Importe, die die verschobenen Methoden im Wirtsmodul lasen — im selben
+        Kontext (Laufzeit oder ``TYPE_CHECKING``) —, und Typen des Wirtsmoduls, nur unter
+        ``TYPE_CHECKING``; ob sie dann nur in Annotationen stehen, prüft
+        :meth:`MethodComparison._global` je Stelle."""
+        removed, added = _difference(self.path, old, new, self.checking)
         for binding in removed:
             self.errors.append(f"{self.path}: Import {binding.text()} entfernt")
         for binding in added:
-            plain = ImportBinding(binding.form, binding.module, binding.name, binding.bound, False)
-            needed = binding in self.needed or (not binding.checking and plain in self.needed)
             typed = (
                 binding.checking
                 and binding.form == "from"
                 and binding.module == self.shape.module
                 and binding.name in self.host_definitions
             )
-            if needed or typed or self._checking_needed(binding):
+            if binding in self.needed or typed:
                 self.import_changes.append(f"neu {binding.text()}")
             else:
                 self.errors.append(
                     f"{self.path}: neuer Import {binding.text()} gehört nicht zu den "
                     "verschobenen Methoden"
                 )
-
-    def _checking_needed(self, binding: ImportBinding) -> bool:
-        return binding.checking and any(
-            (b.form, b.module, b.name, b.bound)
-            == (binding.form, binding.module, binding.name, binding.bound)
-            for b in self.needed
-        )
 
 
 def _class(source: Source, name: str) -> ast.ClassDef | None:

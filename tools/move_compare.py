@@ -347,6 +347,15 @@ class Comparison:
         self.errors: list[str] = []
         self.accepted: list[str] = []
         self.compared = 0
+        #: Je offene Anweisungsliste, ob sie der Rumpf eines ``if TYPE_CHECKING:`` ist.
+        self._checking: list[bool] = []
+
+    @property
+    def checking(self) -> bool:
+        """Ob die Anweisungsliste, deren Importe gerade verglichen werden, nur zur Typprüfung
+        läuft (Rumpf eines ``if TYPE_CHECKING:``) — ihre Bindungen tragen das als
+        ``ImportBinding.checking``."""
+        return bool(self._checking) and self._checking[-1]
 
     # ---- Meldungen
 
@@ -378,6 +387,17 @@ class Comparison:
         self, owner: ast.AST, name: str, old: list[ast.stmt], new: list[ast.stmt]
     ) -> None:
         """Vergleicht zwei Anweisungslisten; Importblöcke gehen an :meth:`imports`."""
+        self._checking.append(
+            name == "body" and isinstance(owner, ast.If) and is_type_checking(owner.test)
+        )
+        try:
+            self._statements(owner, name, old, new)
+        finally:
+            self._checking.pop()
+
+    def _statements(
+        self, owner: ast.AST, name: str, old: list[ast.stmt], new: list[ast.stmt]
+    ) -> None:
         old_items, new_items = self.blocks(owner, old, new)
         if len(old_items) != len(new_items):
             self.errors.append(
@@ -406,8 +426,8 @@ class Comparison:
 
     def imports(self, owner: ast.AST, old: list[ast.stmt], new: list[ast.stmt]) -> None:
         """Vergleicht zwei Importblöcke; Vorgabe: dieselben Bindungen."""
-        before = Counter(_binding_keys(self.old.path, old))
-        after = Counter(_binding_keys(self.new.path, new))
+        before = Counter(block_bindings(self.old.path, old, self.checking))
+        after = Counter(block_bindings(self.new.path, new, self.checking))
         if before != after:
             self.errors.append(
                 f"{self.where(new[0], self.new)} ({self.label}): Importe geändert — vorher "
@@ -492,16 +512,14 @@ def _blocks(body: list[ast.stmt]) -> Iterator[ast.stmt | list[ast.stmt]]:
         yield run
 
 
-def _binding_keys(path: str, block: list[ast.stmt]) -> list[ImportBinding]:
+def block_bindings(path: str, block: list[ast.stmt], checking: bool = False) -> list[ImportBinding]:
+    """Die Bindungen eines Importblocks; ``checking``: Er steht im Rumpf eines
+    ``if TYPE_CHECKING:``."""
     found: list[ImportBinding] = []
     for stmt in block:
         assert isinstance(stmt, (ast.Import, ast.ImportFrom))
-        found.extend(import_bindings(path, stmt, checking=False))
+        found.extend(import_bindings(path, stmt, checking))
     return found
-
-
-def block_bindings(path: str, block: list[ast.stmt]) -> list[ImportBinding]:
-    return _binding_keys(path, block)
 
 
 def _short(source: Source, node: ast.AST) -> str:
@@ -662,8 +680,8 @@ class ReaderComparison(Comparison):
         before: dict[str, Counter[ImportBinding]] = {}
         after: dict[str, Counter[ImportBinding]] = {}
         for tree, found in ((old, before), (new, after)):
-            for block in _import_blocks(tree):
-                for binding in block_bindings(self.path, block):
+            for block, checking in _import_blocks(tree):
+                for binding in block_bindings(self.path, block, checking):
                     found.setdefault(binding.bound, Counter())[binding] += 1
         for name in set(before) | set(after):
             if before.get(name) != after.get(name):
@@ -699,7 +717,7 @@ class ReaderComparison(Comparison):
             kept_new: list[ast.stmt | list[ast.stmt]] = []
             for item in new_items:
                 if isinstance(item, list) and all(ast.dump(s) not in old_dumps for s in item):
-                    bindings = block_bindings(self.path, item)
+                    bindings = block_bindings(self.path, item, self.checking)
                     if bindings and all(self.allowed_module_alias(b) for b in bindings):
                         self.imports(owner, [], item)
                         continue
@@ -712,7 +730,7 @@ class ReaderComparison(Comparison):
         return False
 
     def imports(self, owner: ast.AST, old: list[ast.stmt], new: list[ast.stmt]) -> None:
-        removed, added = _difference(self.path, old, new)
+        removed, added = _difference(self.path, old, new, self.checking)
         if not removed and not added:
             return
         removed_names = {b.bound for b in removed}
@@ -738,7 +756,7 @@ class ReaderComparison(Comparison):
                     "Schnitt"
                 )
                 continue
-            if _same_root(binding, block_bindings(self.path, old)):
+            if _same_root(binding, block_bindings(self.path, old, self.checking)):
                 # ``import a.b.ziel`` neben ``import a.b``: dieselbe Wurzel ``a``, die Kette
                 # prüft jede Stelle (``_covered``).
                 self.import_changes.append(f"neu {binding.text()}")
@@ -977,24 +995,28 @@ def _imports_module(tree: ast.AST, module: str) -> bool:
     return False
 
 
-def _import_blocks(tree: ast.AST) -> Iterator[list[ast.stmt]]:
+def _import_blocks(tree: ast.AST) -> Iterator[tuple[list[ast.stmt], bool]]:
+    """Jeder Importblock eines Baums und ob er im Rumpf eines ``if TYPE_CHECKING:`` steht."""
     for node in ast.walk(tree):
         for name in ("body", "orelse", "finalbody"):
             body = getattr(node, name, None)
             if isinstance(body, list) and body and isinstance(body[0], ast.stmt):
+                checking = (
+                    name == "body" and isinstance(node, ast.If) and is_type_checking(node.test)
+                )
                 run: list[ast.stmt] = []
                 for stmt in [*body, None]:
                     if isinstance(stmt, IMPORTS):
                         run.append(stmt)
                         continue
                     if run:
-                        yield run
+                        yield run, checking
                         run = []
 
 
 def _difference(
-    path: str, old: list[ast.stmt], new: list[ast.stmt]
+    path: str, old: list[ast.stmt], new: list[ast.stmt], checking: bool = False
 ) -> tuple[list[ImportBinding], list[ImportBinding]]:
-    before = Counter(block_bindings(path, old))
-    after = Counter(block_bindings(path, new))
+    before = Counter(block_bindings(path, old, checking))
+    after = Counter(block_bindings(path, new, checking))
     return list((before - after).elements()), list((after - before).elements())
