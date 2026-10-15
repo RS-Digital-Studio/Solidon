@@ -315,18 +315,28 @@ def _website_hits(row: Mapping[str, Any]) -> tuple[str, ...]:
 
 
 def agent_place(row: Mapping[str, Any]) -> tuple[str, str] | None:
-    """Ort und Menüpfad, die das Agentenwerkzeug nennt.
+    """Ort und Weg, die das Agentenwerkzeug einer Zeile nennt.
 
-    Der Ort kommt aus ``registry.menu_place`` — derselben Verzweigung, der
-    ``menu_path`` folgt —, nicht aus einer zweiten Herleitung über Kategorien.
+    Bei einer Operation aus ``registry.menu_place`` — derselben Verzweigung,
+    der ``menu_path`` folgt —, nicht aus einer zweiten Herleitung über
+    Kategorien. Jede andere Zeile hat ein Werkzeug, wenn ein Zusatzwerkzeug sie
+    unter seinen Zeilen nennt (``extra_tool_rows``, FD-129): *Parameter
+    anlegen* über ``add_parameter``, *Ändern …* der Parameterleiste über
+    ``set_parameter``. Ort und Weg nennt dann ``extra_tool_place``.
     """
+    from app.core.agent.tools import EXTRA_TOOL_PLACES, extra_tool_place, extra_tool_rows
     from app.core.registry import REGISTRY, menu_path, menu_place
 
     name = str(row.get("id", ""))
-    if row.get("kind") != "operation" or not REGISTRY.has(name):
-        return None
-    spec = REGISTRY.get(name)
-    return menu_place(spec), menu_path(spec)
+    if row.get("kind") == "operation":
+        if not REGISTRY.has(name):
+            return None
+        spec = REGISTRY.get(name)
+        return menu_place(spec), menu_path(spec)
+    for tool in sorted(EXTRA_TOOL_PLACES):
+        if name in extra_tool_rows(tool):
+            return extra_tool_place(tool)
+    return None
 
 
 def repository_context() -> Context:

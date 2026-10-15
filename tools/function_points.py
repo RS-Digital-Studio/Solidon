@@ -982,10 +982,9 @@ def _switch_notes(protocol: Mapping[str, Any]) -> dict[str, str]:
 def _point_17(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
-    row = _row(protocol)
-    agent = (
-        context.agent_place(row) if row.get("kind", protocol.get("kind")) == "operation" else None
-    )
+    # Auch eine Zeile außerhalb des Registers hat ein Werkzeug, wenn ein
+    # Zusatzwerkzeug sie nennt (FD-129: *Parameter anlegen* über ``add_parameter``).
+    agent = context.agent_place(_row(protocol))
     if agent is None:
         return Outcome(17, "A", "entfaellt", "ohne Agentenwerkzeug", reason="ohne_agentenwerkzeug")
     place = _map(protocol, "place")
@@ -993,14 +992,27 @@ def _point_17(
         return _missing(17, "place")
     said, path = agent
     where = str(place.get("where") or "")
-    seen = {"menue": "menue", "karte": "karte"}.get(where)
-    if seen is None:
+    allowed = AGENT_COUNTERPARTS.get(said, ())
+    if where not in {"menue", "karte", *allowed}:
         return Outcome(
             17, "A", "nicht_pruefbar", where, reason=f"Ort {where} ohne Gegenstück im Agentenweg"
         )
-    told = "menue" if said == "katalog" else said
-    issues = [] if told == seen else [Issue(f"Agent nennt „{path}“, gefunden {where}", "mittel")]
+    issues = (
+        [] if where in allowed else [Issue(f"Agent nennt „{path}“, gefunden {where}", "mittel")]
+    )
     return _result(17, issues, path, {"agent": path, "found": where})
+
+
+#: Wo der Prüfstand eine Funktion findet (``place.where``), die das Werkzeug
+#: an einem Ort nennt: Menü und Katalog stehen in der Menüleiste, die Karte
+#: rechts, die Parameterleiste links — dort in der Zeile oder in ihrem
+#: Kontextmenü (``set_parameter``, FD-129).
+AGENT_COUNTERPARTS: Final[dict[str, tuple[str, ...]]] = {
+    "menue": ("menue",),
+    "katalog": ("menue",),
+    "karte": ("karte",),
+    "leiste": ("karte", "kontext"),
+}
 
 
 def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:

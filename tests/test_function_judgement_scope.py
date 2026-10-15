@@ -375,3 +375,54 @@ def test_a_promise_in_a_picture_text_is_a_place(tmp_path: Any) -> None:
     _repository_promises()
     hits = function_report._website_hits({"id": "resize_hole", "kind": "operation"})
     assert "website/funktionen.html" in hits
+
+
+# --- FD-129: Prüfpunkt 17 an Zeilen, deren Agentenwerkzeug nicht im Register steht ----
+
+
+@pytest.mark.parametrize(
+    ("row", "said"),
+    [
+        ("Bearbeiten/Parameter anlegen …", "menue"),
+        ("dialog:parameter_dialog", "menue"),
+        ("menu:parameters.edit", "leiste"),
+    ],
+)
+def test_a_tool_outside_the_register_names_its_rows(row: str, said: str) -> None:
+    """Abweichung 04: Stufe A meldete „ohne Agentenwerkzeug“, obwohl ``add_parameter`` es tut."""
+    from tools import function_report
+
+    place = function_report.agent_place({"id": row, "kind": "fensterbefehl"})
+    assert place is not None and place[0] == said, place
+    assert function_report.agent_place({"id": "Datei/Speichern", "kind": "fensterbefehl"}) is None
+
+
+def _agent_row(said: str, where: str) -> Callable[[dict[str, Any]], None]:
+    def change(protocol: dict[str, Any]) -> None:
+        protocol["row"] = {**protocol["row"], "id": "Bearbeiten/Parameter anlegen …"}
+        protocol["row"]["kind"] = protocol["kind"] = "fensterbefehl"
+        protocol["place"] = {"where": where, "path": [], "error": None}
+
+    return change
+
+
+@pytest.mark.parametrize(
+    ("said", "where", "verdict"),
+    [
+        ("menue", "menue", "erfuellt"),
+        ("leiste", "kontext", "erfuellt"),
+        ("leiste", "karte", "erfuellt"),
+        ("leiste", "menue", "fund"),
+        ("menue", "kontext", "nicht_pruefbar"),
+    ],
+)
+def test_the_agent_place_of_a_window_command_is_compared(
+    said: str, where: str, verdict: str
+) -> None:
+    """Der Ort ``leiste`` (Parameterleiste) hat sein Gegenstück in Karte und Kontextmenü."""
+    from dataclasses import replace
+
+    protocol = copy.deepcopy(sample_protocol())
+    _agent_row(said, where)(protocol)
+    context = replace(sample_context(), agent_place=lambda row: (said, "Weg"))
+    assert judge_case(protocol, context).points[17].verdict == verdict

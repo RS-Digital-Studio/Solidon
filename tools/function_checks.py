@@ -572,7 +572,8 @@ class Context:
     #: Prüfpunkt 11: Website-Seiten, die die Funktion nennen.
     website_hits: Callable[[Mapping[str, Any]], tuple[str, ...]]
     #: Prüfpunkt 17: Ort laut Agentenwerkzeug (``menue``, ``karte``,
-    #: ``katalog``) und sein Menüpfad, ``None`` ohne Werkzeug.
+    #: ``katalog``, ``leiste``) und sein Weg, ``None`` ohne Werkzeug — auch an
+    #: Zeilen außerhalb des Registers, die ein Zusatzwerkzeug nennt (FD-129).
     agent_place: Callable[[Mapping[str, Any]], tuple[str, str] | None]
     #: I3: die Ziele (``target``) der häufigsten Kundenziele. Nur an ihren
     #: Zeilen wird I3 gemessen; der Anteil steht in den Paketwerten.
