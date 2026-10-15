@@ -117,7 +117,8 @@ class MeasureCard(QFrame):
     **Die Tabulatortaste bleibt in der Karte** (FD-86): Sie geht die Halte nach
     dem Layout (:func:`tab_stops`) und schließt sich am Ende zum ersten Feld.
     Graue und verborgene Halte übergeht sie. Verlassen wird die Karte mit
-    Escape, *Übernehmen* oder *Abbrechen*.
+    Escape, *Übernehmen* oder *Abbrechen*, und jeder dieser Ausgänge gibt den
+    Fokus an die Ansicht zurück (FD-160).
     """
 
     def settle_tab_order(self) -> None:
@@ -136,6 +137,15 @@ class MeasureCard(QFrame):
         focused = QApplication.focusWidget()
         if focused is None or not self.isAncestorOf(focused):
             return super().focusNextPrevChild(next)
+        view = self.parentWidget()
+        if not self.isVisible() and view is not None and view.isVisible():
+            # **Wer die Karte schließt, steht wieder in der Ansicht** (FD-160).
+            # Qt fragt beim Verbergen hier nach dem nächsten Halt; der lag
+            # hinter der Karte in der Fokuskette des Fensters — nach
+            # *Abbrechen* der Kartengriff „Objekte“, nach *Übernehmen* und
+            # Strg+Z dagegen die Ansicht, aus der die Maßgruppe kam.
+            view.setFocus(Qt.FocusReason.OtherFocusReason)
+            return True
         stops = [stop for stop in tab_stops(self) if stop.isVisibleTo(self) and stop.isEnabled()]
         held: int | None = None
         for index, stop in enumerate(stops):

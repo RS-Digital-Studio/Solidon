@@ -81,6 +81,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Nos furos, vista e *Seleção* mostram a mesma alteração. Dimensão, profundidade e entrada associada ficam à frente; compensação de impressão e ajustes finos, em «Mais valores».
 - Os campos do furo e a caixa para alterar elementos iguais em conjunto explicam o seu efeito. «Compensar desvios de impressão» esclarece a correção do perfil do material.
 - No cartão de medidas da vista, a tecla Tab passa dos campos para *Mais valores* e para a caixa dos elementos iguais, depois para *Aplicar* e *Cancelar*, e volta ao primeiro campo. A caixa fica agora acima dos botões.
+- Depois de *Cancelar* ou Esc no cartão de medidas, o teclado volta à vista 3D, como depois de *Aplicar*. Antes ia parar ao cartão *Objetos*.
 
 ## 0.6.0
 

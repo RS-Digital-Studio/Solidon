@@ -81,6 +81,7 @@ scrive in `website/version.json`.
 - Per i fori, vista e *Selezione* mostrano la stessa modifica. Misura, profondità e imbocco collegato sono davanti; compensazione di stampa e regolazioni fini, in «Altri valori».
 - I campi del foro e la casella per modificare insieme elementi uguali spiegano il loro effetto. «Compensare gli scostamenti di stampa» chiarisce la correzione del profilo del materiale.
 - Nella scheda delle misure nella vista, il tasto Tab passa dai campi ad *Altri valori* e alla casella degli elementi uguali, poi ad *Applica* e *Annulla*, e torna al primo campo. La casella ora sta sopra i pulsanti.
+- Dopo *Annulla* o Esc nella scheda delle misure, la tastiera torna nella vista 3D, come dopo *Applica*. Prima finiva sulla scheda *Oggetti*.
 
 ## 0.6.0
 

@@ -81,6 +81,7 @@ it into `website/version.json`.
 - For holes, the view and *Selection* show the same edit. Size, depth and a linked entrance stay in front; print compensation and fine settings are under “More values”.
 - Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
 - In the measurement card in the view, the Tab key moves from the fields through *More values* and the checkbox for matching features to *Apply* and *Cancel*, then back to the first field. The checkbox now sits above the buttons.
+- After *Cancel* or Esc in the measurement card, the keyboard is back in the 3D view, as after *Apply*. Previously it landed on the *Objects* card.
 
 ## 0.6.0
 
