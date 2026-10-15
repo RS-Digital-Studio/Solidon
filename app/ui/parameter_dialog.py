@@ -8,10 +8,12 @@ neue Definition mehr auf. ``dialogs.ParameterDialog`` bleibt als Name stehen.
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+import re
+import unicodedata
+from collections.abc import Collection, Mapping
 from contextlib import suppress
 from itertools import pairwise
-from typing import Any
+from typing import Any, Final
 
 from PySide6.QtCore import QLocale, QTimer
 from PySide6.QtGui import QShowEvent
@@ -24,6 +26,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMenu,
+    QPushButton,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -43,6 +46,7 @@ from app.ui.style import (
     ContentHeight,
     DialogScrollArea,
     make_primary,
+    set_role,
 )
 
 #: Formelsymbole sind keine übersetzbaren Wörter. Als Namen statt als Literale
@@ -50,6 +54,41 @@ from app.ui.style import (
 #: Text am Katalog vorbeiläuft.
 FORMULA_MARKER = "fx"
 PARAMETER_MARKER = expressions.REFERENCE_PREFIX
+
+#: Wie ein Umlaut in einem Namen aussieht, den ``@name`` lesen kann — dieselbe
+#: Umschrift wie bei Dateinamen (``export.writer.safe_name``).
+_SPELLED_OUT: Final = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"}
+
+
+def usable_name(name: str) -> bool:
+    """Ob sich der Name in einem Ausdruck als ``@name`` schreiben lässt."""
+    try:
+        expressions.check(f"{PARAMETER_MARKER}{name}")
+    except AppError:
+        return False
+    return True
+
+
+def suggested_name(typed: str, taken: Collection[str]) -> str | None:
+    """Ein freier, schreibbarer Name aus dem Getippten — der Weg aus der Ablehnung.
+
+    „Breite Platte“ wird ``Breite_Platte``, „Höhe“ ``Hoehe``, „3fach“
+    ``_3fach``; ein vergebener Name bekommt ``_2``, ``_3`` angehängt. Ohne
+    einen einzigen lesbaren Buchstaben gibt es keinen Vorschlag.
+    """
+    spelled = "".join(_SPELLED_OUT.get(character, character) for character in typed.strip())
+    plain = unicodedata.normalize("NFKD", spelled).encode("ascii", "ignore").decode("ascii")
+    stem = re.sub(r"[^A-Za-z0-9_]+", "_", plain).strip("_")
+    if not stem:
+        return None
+    if stem[0].isdigit():
+        stem = f"_{stem}"
+    candidate, number = stem, 2
+    while candidate in taken or not usable_name(candidate):
+        if number > 99:
+            return None
+        candidate, number = f"{stem}_{number}", number + 1
+    return candidate
 
 
 class _ParameterValueSpin(NumberSpin):
@@ -225,6 +264,21 @@ class ParameterDialog(QDialog):
         form.setVerticalSpacing(NORMAL)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         form.addRow(tr("Name"), self.name_field)
+        # **Die Ablehnung des Namens steht am Namensfeld** (FD-155) — mit dem
+        # Weg: ein freier Name aus dem Getippten als Knopf. Sie stand unter
+        # „Weitere Einstellungen“, das Feld unmarkiert, und der Kunde suchte.
+        self.name_refusal = QWidget(content)
+        refusal_layout = QHBoxLayout(self.name_refusal)
+        refusal_layout.setContentsMargins(0, 0, 0, 0)
+        refusal_layout.setSpacing(NORMAL)
+        self.name_note = QLabel(self.name_refusal)
+        self.name_note.setWordWrap(True)
+        refusal_layout.addWidget(self.name_note, 1)
+        self.name_suggestion = QPushButton(self.name_refusal)
+        self.name_suggestion.clicked.connect(weak_slot(self, ParameterDialog._take_suggestion))
+        refusal_layout.addWidget(self.name_suggestion)
+        self._suggested: str | None = None
+        form.addRow(QLabel(content), self.name_refusal)
         form.addRow(tr("Wert"), value_row)
         form.addRow(tr("Ausdruck"), self.expression_row)
         form.addRow(tr("Einheit"), self.unit_field)
@@ -264,6 +318,7 @@ class ParameterDialog(QDialog):
         # Dieselben Sätze, mit denen der Agent die Grenzen kennt (``agent/tools``).
         below = tr("Kleinster Wert, den die Parameterleiste annimmt.")
         above = tr("Größter Wert, den die Parameterleiste annimmt.")
+        self._name_sentence = str(name_sentence)
         for row_form, field, sentence in (
             (form, self.name_field, name_sentence),
             (form, value_row, tr("Mit dieser Zahl rechnet jede Operation, die das Maß nennt.")),
@@ -284,6 +339,7 @@ class ParameterDialog(QDialog):
         )
         chain = (
             self.name_field,
+            self.name_suggestion,
             self.value_field,
             self.fx_button,
             self.expression_field,
@@ -302,6 +358,9 @@ class ParameterDialog(QDialog):
             weak_slot(self, ParameterDialog._expression_typed, forward=True)
         )
         self._set_expression_mode(False)
+        form.setRowVisible(self.name_refusal, False)
+        # Wer am Namen tippt, hat die Ablehnung gelesen; sie galt dem alten Text.
+        self.name_field.textEdited.connect(weak_slot(self, ParameterDialog._clear_name_refusal))
 
         if existing is not None:
             # Vorbelegt mit dem heutigen Stand — ein Änderungsdialog, der leer
@@ -373,21 +432,26 @@ class ParameterDialog(QDialog):
         """Rollt die nach der Eingabe sichtbare Fehlermeldung ins Sichtfeld."""
         self._scroll.ensureWidgetVisible(self.problem, 0, NORMAL)
 
-    def validation_problem(self) -> str | None:
-        """Was dem Anlegen im Weg steht — oder None. Eigene Funktion, weil
-        sie sich ohne modales Fenster prüfen lassen muss."""
+    def name_problem(self) -> str | None:
+        """Was am Namen nicht geht — oder None. Steht am Namensfeld (FD-155)."""
         name = self.name_field.text().strip()
         if not name:
             return tr("Der Parameter braucht einen Namen.")
         if name in self._existing:
             return tr("Diesen Namen gibt es schon.")
-        try:
-            expressions.check(f"@{name}")
-        except AppError:
+        if not usable_name(name):
             return tr(
                 "Der Name muss sich in einem Ausdruck als @name schreiben "
                 "lassen — Buchstaben, Ziffern und Unterstriche."
             )
+        return None
+
+    def validation_problem(self) -> str | None:
+        """Was dem Anlegen im Weg steht — oder None. Eigene Funktion, weil
+        sie sich ohne modales Fenster prüfen lassen muss."""
+        named = self.name_problem()
+        if named is not None:
+            return named
         expression = self.expression_field.text().strip() if self.fx_button.isChecked() else ""
         if self.fx_button.isChecked() and not expression:
             return tr("Ein Ausdruck beginnt mit = und rechnet in Millimetern.")
@@ -496,6 +560,12 @@ class ParameterDialog(QDialog):
         self.expression_field.insert(reference)
 
     def _accept(self) -> None:
+        named = self.name_problem()
+        if named is not None:
+            self.problem.setVisible(False)
+            self._refuse_name(str(named))
+            return
+        self._clear_name_refusal()
         problem = self.validation_problem()
         if problem is not None:
             if problem in self._limit_problems():
@@ -509,6 +579,51 @@ class ParameterDialog(QDialog):
             QTimer.singleShot(0, self, self._reveal_problem)
             return
         self.accept()
+
+    def _refuse_name(self, sentence: str) -> None:
+        """Die Ablehnung am Namensfeld: Satz und Zeichen darunter, Feld markiert, Fokus.
+
+        Der Weg ist ein Knopf mit einem freien Namen aus dem Getippten
+        (:func:`suggested_name`); ohne getippten Text gibt es keinen, dann sagt
+        der Satz, was fehlt.
+        """
+        typed = self.name_field.text()
+        self._suggested = suggested_name(typed, self._existing) if typed.strip() else None
+        set_role(self.name_note, "warning", sentence)
+        if self._suggested is not None:
+            way = tr("„{name}“ verwenden", name=self._suggested)
+            self.name_suggestion.setText(way)
+            self.name_suggestion.setAccessibleDescription(sentence)
+        self.name_suggestion.setVisible(self._suggested is not None)
+        self._form.setRowVisible(self.name_refusal, True)
+        self.name_field.setAccessibleDescription(sentence)
+        self.name_field.setToolTip(sentence)
+        self.name_field.setFocus()
+        self.name_field.selectAll()
+        self._fit_soon()
+        QTimer.singleShot(0, self, self._reveal_name_refusal)
+
+    def _reveal_name_refusal(self) -> None:
+        """Rollt die Ablehnung am Namen ins Sichtfeld."""
+        self._scroll.ensureWidgetVisible(self.name_refusal, 0, NORMAL)
+
+    def _clear_name_refusal(self) -> None:
+        """Nimmt die Ablehnung vom Namensfeld; das Feld sagt wieder, wofür es da ist."""
+        if not self._form.isRowVisible(self.name_refusal):
+            return
+        self._form.setRowVisible(self.name_refusal, False)
+        self._suggested = None
+        self.name_field.setAccessibleDescription(self._name_sentence)
+        self.name_field.setToolTip(self._name_sentence)
+        self._fit_soon()
+
+    def _take_suggestion(self) -> None:
+        """Der vorgeschlagene Name kommt ins Feld; danach steht nichts mehr im Weg."""
+        if self._suggested is None:
+            return
+        self.name_field.setText(self._suggested)
+        self._clear_name_refusal()
+        self.name_field.setFocus()
 
     def parameter(self) -> Any:
         """Was angelegt oder übernommen werden soll — erst nach einem

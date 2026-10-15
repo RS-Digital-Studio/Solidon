@@ -8777,6 +8777,7 @@
   "„{name}“ steht in „{file}“ nicht so, wie er geschrieben werden sollte.": "«{name}» no está en «{file}» tal como debía escribirse.",
   "„{name}“ stützt mit organischen Bäumen, und die druckt {slicer} nur mit gleichen Schichten. Mit Gitterstützen gelten die feinen Schichten.": "«{name}» usa soportes en árbol orgánicos, y {slicer} solo los imprime con capas iguales. Con soportes en cuadrícula se aplican las capas finas.",
   "„{name}“ trägt einen Bereich, den der Slicer als „{kind}“ führt. Er gehört jetzt zum Körper, die Farben fehlen.": "«{name}» lleva una zona que el slicer trata como «{kind}». Ahora forma parte del cuerpo, y faltan los colores.",
+  "„{name}“ verwenden": "Usar «{name}»",
   "„{name}“: {before} → {after}": "«{name}»: {before} → {after}",
   "„{object}“ liegt nicht im Einsatz, es gibt keine Tasche zu schneiden. Legen Sie das Teil dorthin, wo es im Einsatz liegen soll.": "«{object}» no está en el inserto, no hay ningún alojamiento que rebajar. Coloque la pieza donde debe quedar en el inserto.",
   "„{operation}“ hat „{object}“ in ein Dreiecksmodell umgewandelt, Rundungen sind gerade Teilstücke, Flächen und Kanten bleiben bearbeitbar. Rückgängig holt ihn zurück.": "«{operation}» ha convertido «{object}» en un modelo de triángulos: los redondeos son segmentos rectos, y caras y aristas siguen siendo editables. Deshacer lo recupera.",

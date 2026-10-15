@@ -8777,6 +8777,7 @@
   "„{name}“ steht in „{file}“ nicht so, wie er geschrieben werden sollte.": "“{name}” is not in “{file}” the way it was meant to be written.",
   "„{name}“ stützt mit organischen Bäumen, und die druckt {slicer} nur mit gleichen Schichten. Mit Gitterstützen gelten die feinen Schichten.": "“{name}” uses organic tree supports, and {slicer} prints those only with even layers. With grid supports the fine layers apply.",
   "„{name}“ trägt einen Bereich, den der Slicer als „{kind}“ führt. Er gehört jetzt zum Körper, die Farben fehlen.": "“{name}” carries an area that the slicer treats as “{kind}”. It now belongs to the body, and the colours are missing.",
+  "„{name}“ verwenden": "Use “{name}”",
   "„{name}“: {before} → {after}": "“{name}”: {before} → {after}",
   "„{object}“ liegt nicht im Einsatz, es gibt keine Tasche zu schneiden. Legen Sie das Teil dorthin, wo es im Einsatz liegen soll.": "“{object}” is not in the insert, so there is no pocket to cut. Place the part where it should sit in the insert.",
   "„{operation}“ hat „{object}“ in ein Dreiecksmodell umgewandelt, Rundungen sind gerade Teilstücke, Flächen und Kanten bleiben bearbeitbar. Rückgängig holt ihn zurück.": "“{operation}” turned “{object}” into a triangle model: curves are straight segments, and faces and edges remain editable. Undo brings it back.",
