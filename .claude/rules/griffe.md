@@ -9,6 +9,7 @@ paths:
   - "app/ui/scale_widget.py"
   - "app/ui/placement_flow.py"
   - "app/ui/measure_field_places.py"
+  - "app/ui/measure_card.py"
 ---
 
 # Regeln für die Griffe in der Szene
@@ -307,6 +308,16 @@ wieder her (`_drag_kind` bleibt `"slot"`).
   frei, Setzpunkt, Bewegungsgriff und Vorschauband erst mit, dann ohne
   Abstand: Überdecken ist das kleinere Übel, ein Feld außerhalb des Bildes
   keines.
+
+* **Eine gewachsene Karte bleibt stehen** (`grown_place`): Ecke oben links,
+  gerückt nur um das, was Raum, Setzpunkt, Griff und Band verlangen, gleitend
+  über `motion.glide` — sonst springt das Feld weg, das man gerade korrigiert.
+
+* **Die Maßkarte hält die Tastatur** (`measure_card.MeasureCard`): Tab geht
+  nach dem Layout — Felder, „Weitere Werte“, Sammelhaken über den Knöpfen,
+  *Übernehmen*, *Abbrechen* — und schließt sich zum ersten Feld; verschwindet
+  die Karte mit Fokus darin, geht er an die Ansicht. Eine Feldablehnung steht
+  nur am Feld, der Hinweis wiederholt sie nicht (`stands_in`).
 
 * **Nach Übernehmen Maße/Griffe wiederherstellen:**
   `MainWindow._measures_to_resume` → `_show_feature_fields` (Konzept

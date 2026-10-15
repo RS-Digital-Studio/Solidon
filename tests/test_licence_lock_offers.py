@@ -436,7 +436,9 @@ def test_the_measure_group_says_what_comes_before_apply(
     """FD-31: *Übernehmen* der Maßgruppe war vor der ersten Eingabe grau ohne Grund.
 
     Der Satz nennt das erste Feld der Gruppe, wie der Kunde es liest, in
-    Kurzhilfe und Beschreibung; nach der ersten Eingabe fällt er.
+    Kurzhilfe und Beschreibung. Eine Taste ohne Änderung beginnt den Entwurf,
+    lässt den Knopf aber grau mit demselben Satz; mit der ersten Änderung
+    fällt er.
     """
     flow = with_a_hole._quiet_placement
     assert flow is not None and flow.measure_group is not None
@@ -453,6 +455,10 @@ def test_the_measure_group_says_what_comes_before_apply(
     QTest.keyClick(first.lineEdit(), Qt.Key.Key_End)
     qt_app.processEvents()
     assert flow.dialog.begun, "die Taste im Feld beginnt den Entwurf"
+    assert not apply.isEnabled() and apply.toolTip() == said, "aber sie ändert nichts"
+    QTest.keyClick(first, Qt.Key.Key_Up)
+    assert with_a_hole.session.wait_for_idle(30_000)
+    qt_app.processEvents()
     assert said not in (apply.toolTip(), apply.accessibleDescription())
 
 

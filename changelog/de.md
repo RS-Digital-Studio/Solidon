@@ -125,6 +125,11 @@ Nutzen da und sonst nichts.
 - Im Reiter *Auswahl* steht *Übernehmen* direkt unter der offenen Handlung, „Filament und Druck“ steht oben mit der Farbe der Zuweisung, und unter der Liste bleibt keine leere Fläche.
 - Eine geänderte Bohrung behält ihren Platz im Objektbaum.
 - Handlungen, die an einem Merkmal nicht gehen, stehen als „Hier nicht möglich: …“ mit ihrem Grund da.
+- Die Tabulatortaste geht in der Maßkarte von den Feldern über den Haken für gleichartige Merkmale zu *Übernehmen* und *Abbrechen* und zurück. Der Haken steht jetzt über den Knöpfen.
+- Nach *Abbrechen* oder Esc in der Maßkarte steht die Tastatur wieder in der 3D-Ansicht, wie nach *Übernehmen*. Bisher landete sie auf der Karte *Objekte*.
+- In der Maßkarte bleibt *Übernehmen* grau, bis sich ein Wert oder der Haken für gleichartige Merkmale ändert, und nennt das erste Feld. Bisher genügte ein Klick ins Feld, ohne Wirkung.
+- Lehnt die Maßkarte einen Wert ab, steht der Grund einmal, direkt unter dem Feld. Bisher stand derselbe Satz noch einmal über den Knöpfen.
+- Wird die Maßkarte durch einen Hinweis höher, bleibt sie stehen und rückt nur so weit, wie Bildrand oder Griff es verlangen, mit kurzer Bewegung. Bisher sprang sie an eine andere Stelle.
 
 ## 0.6.0
 

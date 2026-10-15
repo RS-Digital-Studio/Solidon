@@ -100,6 +100,11 @@ it into `website/version.json`.
 - In the *Selection* tab, *Apply* sits directly below the open action, “Filament and printing” sits at the top with the colour of the assignment, and no empty space is left below the list.
 - A changed hole keeps its place in the object tree.
 - Actions that do not work on a feature read “Not possible here: …” with their reason.
+- In the measurement card, the Tab key goes from the fields to the checkbox for matching features, then *Apply* and *Cancel*, and back. The checkbox now sits above the buttons.
+- After *Cancel* or Esc in the measurement card, the keyboard is back in the 3D view, as after *Apply*. Previously it landed on the *Objects* card.
+- In the measurement card, *Apply* stays grey until a value or the checkbox for matching features changes, and names the first field. Previously one click into a field enabled it, to no effect.
+- When the measurement card rejects a value, the reason appears once, directly below the field. Previously the same sentence was repeated above the buttons.
+- When a note makes the measurement card taller, it stays put and moves only as far as the view edge or handle requires, with a short movement. Previously it jumped elsewhere.
 
 ## 0.6.0
 

@@ -101,6 +101,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la pestaña *Selección*, *Aplicar* queda justo debajo de la acción abierta, «Filamento e impresión» está arriba con el color de la asignación, y bajo la lista no queda espacio vacío.
 - Un taladro modificado conserva su lugar en el árbol de objetos.
 - Las acciones que no funcionan en un elemento aparecen como «Aquí no es posible: …» con su motivo.
+- En la tarjeta de medidas, el tabulador va de los campos a la casilla de características iguales, a *Aplicar* y *Cancelar*, y vuelve. La casilla está ahora encima de los botones.
+- Tras *Cancelar* o Esc en la tarjeta de medidas, el teclado vuelve a la vista 3D, como tras *Aplicar*. Antes acababa en la tarjeta *Objetos*.
+- En la tarjeta de medidas, *Aplicar* sigue en gris hasta que cambia un valor o la casilla de características iguales, e indica el primer campo. Antes bastaba un clic en un campo, sin efecto.
+- Si la tarjeta de medidas rechaza un valor, el motivo aparece una sola vez, justo debajo del campo. Antes la misma frase se repetía encima de los botones.
+- Si un aviso hace crecer la tarjeta de medidas, se queda en su sitio y solo se desplaza lo que exigen el borde o el tirador, con un movimiento breve. Antes saltaba a otro lugar.
 
 ## 0.6.0
 

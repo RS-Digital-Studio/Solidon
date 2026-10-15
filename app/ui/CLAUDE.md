@@ -102,7 +102,8 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 |---|---|
 | `placement_flow.py` | Flächenplatzierung und Maße im Bild (§18.5), Dialog/`QuietHost` über `PlacementHost`; Maßgruppengröße im Ereignisfilter; Ablauf in `karte-app-ui.md`, `measured_frame` in `operationen.md` |
 | `measure_card_drag.py` | `MeasureCardDrag`/`CardPlace`: Auftragslage, Titel-/Freiflächenzug; Feldgesten bleiben; aktive Mausgesten nur `QWidget`, `QWindow` durchlassen; `update_room`/`placed_rect`/`reset` |
-| `measure_field_places.py` | Platz der Maßfelder bei Enge |
+| `measure_field_places.py` | Platz der Maßfelder bei Enge und nach Wachsen (`grown_place`) |
+| `measure_card.py` | `MeasureCard`: Tab nach Layout im Kreis, Fokus beim Verbergen an die Ansicht; `stands_in` |
 | `slot_handle.py` | der Langlochgriff: zwei Knöpfe am gewählten Loch, der Zug gibt Länge und Richtung (`slotDragged`); übernommen wird im Merkmalfenster |
 | `scale_widget.py` | der Skalierwürfel am Gizmo (§18.11) |
 | `transform_bar.py` | die Bewegen-Leiste: drei Rollen, die Zahlen daneben (§18.11) |
@@ -133,6 +134,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `op_dialog.py` | aus dem Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence`, `front_fields` (Einfachform) und die Lesezeile *Stelle*, hinten die Klappe mit `advanced_summary`; `show_seat` (*Auf das Bett*) |
 | `feature_list.py` | `FeatureList`: Inhaltshöhe und Pixelrollweg für `FeatureSetField`; Vertrag in `karte-app-ui.md` |
 | `dialog_footer.py` | `DialogFooter`: vollständige Aktionsleiste bei automatischer und manueller Breite; Vertrag in `karte-app-ui.md` |
+| `first_change.py` | Satz am grauen *Übernehmen* vor der ersten Änderung (Maßgruppe, Dialog) |
 | `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
 | `message_dialog.py` | Meldung und Ansage (`announce`), Quittung am Ort (`acknowledge`, `withdraw`), Knopfnamen (`name_button`) |
 | `input_dialog.py` | Eingaben ohne Ort (`ask_text`, `ask_choice`) |
@@ -254,11 +256,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   `handlingArmed` ändert keine Werte. Feldhilfe nennt zuerst `ActionField.doc`,
   danach die Maßherkunft; Ausdrucksinnenfelder behalten Grammatik und Ablehnung.
   `editingOffered` meldet den Auftrag unabhängig von vorübergehenden Sperren.
-  Maßkarten: Handlungstitel `section`, Herkunft `caption`.
-  Freie Orte beziehen sich auf den Abgaberaum; Randorte bleiben angedockt.
-  Raumgrenzen, Klappen und Werte ändern den Wunschort nicht. Neue Aufträge
-  oder andere Gruppen setzen ihn zurück; Parken trennt `positionChanged`
-  über `_links`. Die Karte bleibt Hindernis für andere Maßfelder.
+  Maßkarten: Handlungstitel `section`, Herkunft `caption`; ihr Ort in
+  `karte-app-ui.md`, „Muster“.
 - **Wiederverwendung:** `FeaturePanel` und `PlacementFlow` erhalten Zeilen,
   Maßgruppen und schwebende Bedienelemente; Signaturen, Zustandsvergleich und
   Abschluss in `karte-app-ui.md`, „Muster“.

@@ -100,6 +100,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No separador *Seleção*, *Aplicar* fica logo abaixo da ação aberta, «Filamento e impressão» fica em cima com a cor da atribuição, e abaixo da lista não fica espaço vazio.
 - Um furo alterado mantém o seu lugar na árvore de objetos.
 - As ações que não funcionam num elemento aparecem como «Aqui não é possível: …» com o seu motivo.
+- No cartão de medidas, a tecla Tab vai dos campos à caixa dos elementos iguais, depois a *Aplicar* e *Cancelar*, e volta ao início. A caixa fica agora acima dos botões.
+- Depois de *Cancelar* ou Esc no cartão de medidas, o teclado volta à vista 3D, como depois de *Aplicar*. Antes ia parar ao cartão *Objetos*.
+- No cartão de medidas, *Aplicar* fica cinzento até mudar um valor ou a caixa dos elementos iguais, e indica o primeiro campo. Antes bastava um clique num campo, sem efeito.
+- Se o cartão de medidas recusar um valor, o motivo aparece uma só vez, logo abaixo do campo. Antes a mesma frase repetia-se acima dos botões.
+- Se um aviso fizer crescer o cartão de medidas, fica no lugar e só se desloca o que o limite ou a pega exigirem, com um movimento curto. Antes saltava para outro sítio.
 
 ## 0.6.0
 

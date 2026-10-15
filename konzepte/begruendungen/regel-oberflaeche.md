@@ -64,6 +64,22 @@ die Nebenfolge statt des Grundes (FD-27). Und ein Grund ohne Weg ist eine
 halbe Antwort (V5): „Aktivieren Sie diesen Rechner einmal online …“ stammte
 aus der gescheiterten Vorschau der Maßgruppe, nicht aus `change_lock`.
 
+**Vor der ersten Änderung ist *Übernehmen* grau** — Entscheidung Koordinator
+im Funktionsdurchgang (FD-31 an der Maßgruppe, FD-99 am Operationsdialog).
+Je Fläche verhielt sich der Knopf anders: die Maßgruppe grau ohne Satz,
+Merkmalfenster und Flächenkarte boten ihn ohne Änderung an, der Änderungsweg
+des Dialogs war grau ohne Grund. Eine Regel für alle: grau, und ein Satz
+nennt das erste offene Feld derselben Fläche als Weg. Der Funktionsdurchgang
+zählt genau diesen Feldtitel als Ausweg
+(`tools/function_capture.surface_field_titles`); ein verborgenes Feld zählt
+nicht, deshalb fragt `first_change.first_field` Sichtbarkeit und
+Bedienbarkeit auf der Fläche. An der Maßgruppe begann schon der Fokus im
+Feld den Entwurf — er bindet die Auswahl gegen Außenklicks (`griffe.md`) —
+und gab *Übernehmen* frei; der Klick legte dann keinen Schritt an (offscreen
+an `plate_holes.stl`: null Transaktionen). Geändert ist seither, was von den
+Werten zu Beginn des Entwurfs abweicht (`QuietHost.begun_with`), oder der
+umgeschaltete Sammelhaken, der den Umfang ändert und keinen Wert.
+
 ## Texte
 
 **Eine Tabelle, und Auswahlwerte stehen an zwei Stellen.** Die
@@ -323,6 +339,10 @@ nicht vollständig geprüft sind, sagt dieselbe Zeile, und „behoben" heißt
 weiterhin nur, was eine vollständige Gegenprüfung nicht mehr findet. Neue
 und behobene Befunde teilen sich höchstens drei Zeilen, die letzte zählt den
 Rest — vorher je vier und je eine Zählzeile.
+
+**Ohne Pflichtwahl rechnet der Dialog nicht**, weil die Auswertung sicher
+anhielte und das Band eine Absage nennte, bevor jemand gewählt hat (RM-773,
+RM-775).
 
 ## Ein Feld ohne Namen ist für einen Bildschirmleser ein leeres Kästchen
 
