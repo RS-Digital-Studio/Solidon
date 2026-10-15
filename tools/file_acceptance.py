@@ -1081,6 +1081,14 @@ def child(out: Path, number: int, screen: str = "") -> int:
     isolate(folder / "profile")
     sys.path.insert(0, str(ROOT))
     crash_records(folder)
+    # Dasselbe Dateiprotokoll wie ``app.main``, im Profil des Falls (FD-163):
+    # Ohne es stand die Wartezeile des Abbaus (FD-154) in keinem Protokoll. Unter
+    # macOS liegt es sonst in ``~/Library/Logs``, außerhalb des Profils.
+    from app.core.log import configure
+    from app.core.paths import user_log_dir
+
+    mac = sys.platform == "darwin"
+    configure(to_console=False, directory=folder / "profile" / "logs" if mac else user_log_dir())
     if case.kind == "start":
         return start_child(out, case, folder)
     if case.kind != "file":
