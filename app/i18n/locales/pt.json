@@ -4386,7 +4386,7 @@
   "Geöffnet wird an einer Fläche — dieses Merkmal ist keine.": "A abertura fica numa face — esta característica não o é.",
   "Gibt diesem Körper ein eigenes Material. Toleranzen, Schwund und Elefantenfuß werden dann damit gerechnet und nicht mit dem des Projekts.": "Dá a este corpo um material próprio. As tolerâncias, a contração e o pé de elefante passam a ser calculados com ele e não com o do projeto.",
   "Gibt einem Objekt einen anderen Namen. Die Geometrie bleibt unberührt.": "Dá outro nome a um objeto. A geometria fica intocada.",
-  "Gibt einer offenen Fläche eine Wand und macht sie damit zu einem Körper. Der Weg für ein Netz, das als Fläche ankommt statt als Volumen.": "Dá uma parede a uma superfície aberta e faz dela um corpo. A saída para uma malha que chega como superfície em vez de volume.",
+  "Gibt einer offenen Fläche eine Dicke und macht sie damit zu einem Körper. Der Weg für ein Netz, das als Fläche ankommt statt als Volumen.": "Dá espessura a uma superfície aberta e faz dela um corpo. A saída para uma malha que chega como superfície em vez de volume.",
   "Gilt allen Teilen: Keines verlangt diesen Vorschlag für sich.": "Aplica-se a todas as peças: nenhuma precisa desta sugestão por si só.",
   "Gilt auch für dieses Teil: Dieser Slicer übernimmt die Einstellung nur für die ganze Platte, nicht für einzelne Teile.": "Também se aplica a esta peça: este slicer só aceita a definição para toda a placa, não para peças individuais.",
   "Gilt bei angehaktem {field}.": "Aplica-se quando {field} está marcado.",
