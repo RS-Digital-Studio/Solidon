@@ -768,10 +768,7 @@ class ComponentPlanner:
             return None
         text = f"from {module} import {component}"
         for binder in binders:
-            plan = rewrite.plan(binder)
-            if text not in plan.after:
-                plan.after.append(text)
-                plan.rules.append(RULE_CLASS)
+            rewrite.add_import(binder, text, RULE_CLASS)
         rewrite.watch_name(binders, base.id)
         return component
 
@@ -1040,11 +1037,8 @@ class ComponentPlanner:
                     f"{self.component_path}: kein Importkopf — im Gerüst-Commit anlegen"
                 )
                 return
-            plan = rewrite.plan(anchor)
             for text in self.runtime:
-                if text not in plan.after:
-                    plan.after.append(text)
-            plan.rules.append("Importe der verschobenen Methoden")
+                rewrite.add_import(anchor, text, "Importe der verschobenen Methoden")
         if self.checking:
             blocks = [
                 s
@@ -1059,11 +1053,8 @@ class ComponentPlanner:
                 return
             last = blocks[0].body[-1]
             assert isinstance(last, (ast.Import, ast.ImportFrom))
-            plan = rewrite.plan(last)
             for text in self.checking:
-                if text not in plan.after:
-                    plan.after.append(text)
-            plan.rules.append("Typimporte der verschobenen Methoden")
+                rewrite.add_import(last, text, "Typimporte der verschobenen Methoden")
 
     def _host_imports(self, rewrite: FileRewrite) -> None:
         """Ein Import des Wirtsmoduls, den nach dem Schnitt niemand mehr liest, fällt weg."""

@@ -177,6 +177,55 @@ def test_a_comment_between_import_entries_is_rejected(tmp_path: Path) -> None:
     assert "Kommentar in einer mehrzeiligen Importanweisung" in _rejected(tmp_path, files)
 
 
+def test_a_local_import_falls_away_only_where_nobody_reads_it(tmp_path: Path) -> None:
+    """Zwei Funktionen importieren ``consumer`` je für sich; nur in der, deren Patch aufs
+    Original zieht, fällt der Import weg — der Leser der anderen hält ihn dort nicht fest."""
+    test = (
+        "def test_patch(monkeypatch):\n    from app.core import consumer\n\n"
+        '    monkeypatch.setattr(consumer, "scale", len)\n\n\n'
+        "def test_other():\n    from app.core import consumer\n\n"
+        "    assert consumer.LIMIT == 3\n"
+    )
+    root, result = _run(tmp_path, fx.COPIES_OLD | {"tests/test_scope.py": test})
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    assert (root / "tests/test_scope.py").read_text(encoding="utf-8") == (
+        "def test_patch(monkeypatch):\n    from app.core import engine\n\n"
+        '    monkeypatch.setattr(engine, "scale", len)\n\n\n'
+        "def test_other():\n    from app.core import consumer\n\n"
+        "    assert consumer.LIMIT == 3\n"
+    )
+
+
+def test_a_new_import_joins_the_statement_of_its_module(tmp_path: Path) -> None:
+    """Steht im Block schon ``from app.core import … # noqa: E402``, kommt der neue Name dort
+    hinein — zwei Anweisungen führte isort zusammen, und die Freigabe stünde am Eintrag."""
+    tool = TOOL.replace(
+        "from app.core.engine import (  # noqa: E402\n",
+        "from app.core import kit  # noqa: E402\nfrom app.core.engine import (  # noqa: E402\n",
+    ).replace(
+        "    return scale(value) + LIMIT\n", "    return scale(value) + LIMIT + len(kit.__name__)\n"
+    )
+    root, result = _run(tmp_path, fx.COPIES_OLD | {"tools/doubler.py": tool})
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    text = (root / "tools/doubler.py").read_text(encoding="utf-8")
+    assert "from app.core import engine, kit  # noqa: E402\n" in text, text
+
+
+def test_a_rewrite_that_breaks_a_rule_of_the_project_is_rejected(tmp_path: Path) -> None:
+    """Wird eine Zeile durch ``engine.scale`` zu lang und lässt sie sich nicht umbrechen (ein
+    f-String), hält der Schnitt mit der Regel und der Stelle an, statt rot zu schreiben."""
+    long_line = (
+        "def message(value: int) -> str:\n"
+        '    return f"Der verdoppelte Wert für die Anzeige beträgt gerundet genau '
+        '{scale(value)} Einheiten"\n'
+    )
+    files = fx.edit(
+        fx.COPIES_OLD, CONSUMER, "def limit() -> int:\n", long_line + "\n\ndef limit() -> int:\n"
+    )
+    message = _rejected(tmp_path, files)
+    assert "ruff check nach dem Umschreiben" in message and "E501" in message
+
+
 def _aliased(name: str) -> str:
     return fx.COPIES_CUT.replace(
         'mode = "copies"\n',

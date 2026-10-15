@@ -195,6 +195,26 @@ def tidy(tree: Path, paths: Sequence[str], config: Path | None) -> list[str]:
             problems.append(
                 f"ruff ({' '.join(command[3:5])}): {(done.stdout + done.stderr).strip()}"
             )
+    if problems:
+        return problems
+    # Danach gelten die Regeln des Projekts: Was der Schnitt hinterließe (eine zu lange Zeile in
+    # einem f-String, ein ungelesener Import), hält ihn an, statt nach dem Schreiben rot zu sein.
+    done = subprocess.run(
+        [*base, "check", "--quiet", "--output-format", "concise", *settings, *paths],
+        cwd=tree,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if done.returncode != 0:
+        for line in (done.stdout + done.stderr).splitlines():
+            if line.strip() and not line.startswith(("Found ", "[*]")):
+                problems.append(
+                    f"ruff check nach dem Umschreiben: {line.strip()} — die Stelle vor dem "
+                    "Schnitt so schreiben, dass sie danach den Regeln genügt"
+                )
     return problems
 
 

@@ -14,11 +14,17 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-#: Ruff-Einstellung der Attrappe wie im Projekt; das Werkzeug formatiert damit.
+#: Ruff-Einstellung der Attrappe: Zeilenlänge und Importordnung wie im Projekt, die Regeln
+#: ausdrücklich nur ``E``, ``F`` und ``I`` — die Attrappe trägt mit Absicht Formen, die strengere
+#: Regeln des Projekts anmahnten (``getattr`` mit festem Namen, Annotation als Zeichenkette).
+#: Das Werkzeug formatiert damit und prüft sein Ergebnis gegen genau diese Regeln.
 PYPROJECT = """\
 [tool.ruff]
 line-length = 100
 target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app", "tools", "tests"]

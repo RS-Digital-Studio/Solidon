@@ -213,6 +213,8 @@ class ImportPlan:
     replace: dict[int, list[str]] = field(default_factory=dict)
     after: list[str] = field(default_factory=list)
     rules: list[str] = field(default_factory=list)
+    #: Namen, die in diese ``from``-Anweisung dazukommen (Name, Alias).
+    extra: list[tuple[str, str | None]] = field(default_factory=list)
 
 
 @dataclass
@@ -293,6 +295,8 @@ class FileRewrite:
         self.source = ctx.source(path)
         self.edits: list[Edit] = []
         self._ranges: list[tuple[int, int, str]] = []
+        #: Je ersetzter Stelle der alte Knoten und der neue Text (wer liest danach welchen Namen).
+        self._replaced: list[tuple[ast.AST, str]] = []
         self.plans: dict[int, ImportPlan] = {}
         self.chosen: dict[str, str] = {}
         self.identifiers = identifiers(self.source.tree)
@@ -332,6 +336,7 @@ class FileRewrite:
                 )
                 return
         self._ranges.append((start, end, text))
+        self._replaced.append((node, text))
         old = " ".join(self.source.node_text(node).split())
         self.edits.append(Edit.at(self.path, "expr", node, text, rule, f"{old} → {text}"))
 
@@ -473,11 +478,7 @@ class FileRewrite:
             if alias is None:
                 return None
             for binder in binders:
-                plan = self.plan(binder)
-                text = import_text(module, alias)
-                if text not in plan.after:
-                    plan.after.append(text)
-                    plan.rules.append(rule)
+                self.add_import(binder, import_text(module, alias), rule)
             self._watch(binders, base.id, old_module, plain=False)
             return alias
         chain = dotted(base)
@@ -506,6 +507,42 @@ class FileRewrite:
             "festem Text schreiben"
         )
         return None
+
+    def add_import(self, anchor: ast.Import | ast.ImportFrom, text: str, rule: str) -> None:
+        """Ein neuer Import im Block von ``anchor``. ``from P import n [as a]`` kommt in eine
+        ``from P import …``-Anweisung desselben Blocks, wenn es eine gibt — sonst führte isort
+        zwei Anweisungen mit ``noqa`` zusammen, und die Freigabe stünde an der falschen Zeile."""
+        parsed = ast.parse(text).body[0]
+        if isinstance(parsed, ast.ImportFrom) and len(parsed.names) == 1 and parsed.module:
+            alias = parsed.names[0]
+            for other in self._block(anchor):
+                if (
+                    isinstance(other, ast.ImportFrom)
+                    and other.level == 0
+                    and other.module == parsed.module
+                ):
+                    plan = self.plan(other)
+                    entry = (alias.name, alias.asname)
+                    present = (
+                        any((a.name, a.asname) == entry for a in other.names) or entry in plan.extra
+                    )
+                    if not present:
+                        plan.extra.append(entry)
+                        plan.rules.append(rule)
+                    return
+        plan = self.plan(anchor)
+        if text not in plan.after:
+            plan.after.append(text)
+            plan.rules.append(rule)
+
+    def _block(self, stmt: ast.stmt) -> list[ast.stmt]:
+        """Die Anweisungsliste, in der ``stmt`` steht."""
+        parent = self.source.parent(stmt)
+        for name in ("body", "orelse", "finalbody"):
+            body = getattr(parent, name, None)
+            if isinstance(body, list) and any(s is stmt for s in body):
+                return body
+        return [stmt]
 
     def _literal_module(self, base: ast.expr, old_module: str) -> Callable[[str], str] | None:
         """``importlib.import_module("M")`` als Ausdruck: der Text mit neuem Modulnamen.
@@ -621,10 +658,7 @@ class FileRewrite:
                         f"{text!r} — vor dem Schnitt einen Import an den Kopf stellen"
                     )
                     return None
-                plan = self.plan(anchor)
-                if text not in plan.after:
-                    plan.after.append(text)
-                    plan.rules.append(rule)
+                self.add_import(anchor, text, rule)
             elif (id(assign), text) not in self._after_assign:
                 self._after_assign.add((id(assign), text))
                 detail = f"neu hinter Zeile {assign.lineno}: {text}"
@@ -661,18 +695,26 @@ class FileRewrite:
         kein Name ``name`` in der Datei mehr gelesen wird."""
         self._watch(binders, name, "", plain=False)
 
-    def _replaced_reads(self, name: str) -> bool:
-        """Ob ein neuer Text dieser Tabelle ``name`` liest (``state.bump`` liest ``state``)."""
-        for _start, _end, text in self._ranges:
-            if not text:
-                continue
+    def _replaced_reads(self, name: str, binder: ast.stmt) -> bool:
+        """Ob ein neuer Text dieser Tabelle ``name`` liest (``state.bump`` liest ``state``) —
+        und zwar an einer Stelle, an der ``binder`` den Namen bindet."""
+        for node, text in self._replaced:
             try:
                 tree = ast.parse(text, mode="eval")
             except SyntaxError:
                 continue
-            if any(isinstance(n, ast.Name) and n.id == name for n in ast.walk(tree)):
+            if not any(isinstance(n, ast.Name) and n.id == name for n in ast.walk(tree)):
+                continue
+            if self._binds_here(binder, name, node):
                 return True
         return False
+
+    def _binds_here(self, binder: ast.stmt, name: str, node: ast.AST) -> bool:
+        """Ob an der Stelle ``node`` der Name ``name`` über die Anweisung ``binder`` gebunden
+        ist (Import oder Zuweisung im innersten bindenden Bereich)."""
+        if isinstance(binder, IMPORTS):
+            return any(b is binder for b in import_binders(self.source, name, node))
+        return any(a is binder for a in assignment_binders(self.source, name, node))
 
     def _watch(
         self, binders: list[ast.Import | ast.ImportFrom], name: str, module: str, *, plain: bool
@@ -741,12 +783,14 @@ class FileRewrite:
     def _assignment_used(self, watch: AssignWatch) -> bool:
         """Ob ``x`` aus ``x = importlib.import_module(…)`` außerhalb der ersetzten Stellen noch
         als dieses Modul gelesen wird."""
-        if self._replaced_reads(watch.name):
+        if self._replaced_reads(watch.name, watch.stmt):
             return True
         for node in ast.walk(self.source.tree):
             if not isinstance(node, ast.Name) or node.id != watch.name:
                 continue
             if not isinstance(node.ctx, ast.Load) or self.covered(node):
+                continue
+            if not self._binds_here(watch.stmt, watch.name, node):
                 continue
             if self.ctx.is_module(self.path, node, watch.module):
                 return True
@@ -754,12 +798,14 @@ class FileRewrite:
 
     def _still_used(self, watch: Watch) -> bool:
         name = bound_name(watch.stmt.names[watch.number])
-        if not watch.plain and self._replaced_reads(name):
+        if not watch.plain and self._replaced_reads(name, watch.stmt):
             return True
         for node in ast.walk(self.source.tree):
             if not isinstance(node, ast.Name) or node.id != name:
                 continue
             if not isinstance(node.ctx, ast.Load) or self.covered(node):
+                continue
+            if not self._binds_here(watch.stmt, name, node):
                 continue
             if watch.plain:
                 parent = self.source.parent(node)
@@ -779,14 +825,14 @@ class FileRewrite:
 
     def _import_edit(self, plan: ImportPlan) -> Edit | None:
         stmt = plan.stmt
-        if not plan.drop and not plan.replace and not plan.after:
+        if not plan.drop and not plan.replace and not plan.after and not plan.extra:
             return None
         statements: list[str] = []
         kept = [n for n in range(len(stmt.names)) if n not in plan.drop and n not in plan.replace]
-        if kept and len(kept) == len(stmt.names):
+        if kept and len(kept) == len(stmt.names) and not plan.extra:
             statements.append(self._original(stmt))
-        elif kept:
-            statements.append(self._rebuilt(stmt, kept))
+        elif kept or plan.extra:
+            statements.append(self._rebuilt(stmt, kept, plan.extra))
         for number in sorted(plan.replace):
             statements.extend(plan.replace[number])
         for text in plan.after:
@@ -809,7 +855,7 @@ class FileRewrite:
                 f"{self.path}:{stmt.lineno}: der Import ist die einzige Anweisung seines Blocks "
                 "und fiele weg — Block vorher umschreiben"
             )
-        if self._inner_comments(stmt) and (plan.drop or plan.replace):
+        if self._inner_comments(stmt) and (plan.drop or plan.replace or plan.extra):
             self.ctx.problem(
                 f"{self.path}:{stmt.lineno}: Kommentar in einer mehrzeiligen Importanweisung, die "
                 "umgebaut wird — Kommentar vorher hinter die Anweisung stellen"
@@ -821,10 +867,16 @@ class FileRewrite:
         comment = trailing_comment(self.source, stmt)
         return f"{text}  {comment}" if comment else text
 
-    def _rebuilt(self, stmt: ast.Import | ast.ImportFrom, kept: list[int]) -> str:
+    def _rebuilt(
+        self,
+        stmt: ast.Import | ast.ImportFrom,
+        kept: list[int],
+        extra: list[tuple[str, str | None]] | None = None,
+    ) -> str:
         if isinstance(stmt, ast.ImportFrom):
             prefix = "." * stmt.level + (stmt.module or "")
-            return from_text(prefix, [(stmt.names[n].name, stmt.names[n].asname) for n in kept])
+            names = [(stmt.names[n].name, stmt.names[n].asname) for n in kept]
+            return from_text(prefix, [*names, *(extra or [])])
         parts = [
             stmt.names[n].name + (f" as {stmt.names[n].asname}" if stmt.names[n].asname else "")
             for n in kept

@@ -265,11 +265,7 @@ class CopiesPlanner:
                 )
                 continue
             aliases[module] = alias
-            plan = rewrite.plan(anchor)
-            text = import_text(module, alias)
-            if text not in plan.after:
-                plan.after.append(text)
-                plan.rules.append(RULE_HOLDER)
+            rewrite.add_import(anchor, import_text(module, alias), RULE_HOLDER)
         for copy in group:
             bound = copy.head.bound
             alias = aliases.get(copy.access[0])
