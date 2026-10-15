@@ -765,6 +765,12 @@ def field_entries(root: Any) -> list[dict[str, Any]]:
     eigene, sonst die des nächsten Elternteils bis zur Fläche (Probelauf F-9).
     Die zugängliche Beschreibung bleibt die des Felds selbst — die liest ein
     Bildschirmleser am fokussierten Feld.
+
+    Ein Feld, das sein Besitzer selbst versteckt (``isHidden``), gehört nicht
+    zur Fläche, wie sie dasteht: Der Haken „Auf alle … anwenden“ im
+    Merkmalfenster steht leer und versteckt, bis es mehrere gleichartige
+    Merkmale gibt (FD-102). Ein Feld hinter einer zugeklappten Klappe bleibt
+    dagegen eines — nur nicht vorn; versteckt ist dort die Klappe, nicht es.
     """
     from PySide6.QtWidgets import QCheckBox
 
@@ -796,6 +802,7 @@ def field_entries(root: Any) -> list[dict[str, Any]]:
             "front": bool(widget.isVisible()),
         }
         for widget in _input_widgets(root)
+        if not widget.isHidden()
     ]
 
 
