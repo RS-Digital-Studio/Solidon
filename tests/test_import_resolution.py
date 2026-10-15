@@ -48,7 +48,7 @@ def _of(*kinds: str) -> list[Unresolved]:
 
 def test_the_ground_set_holds_every_import() -> None:
     """Ohne Importe wäre jede Regel grün, weil nichts geprüft wurde."""
-    imports = sum(len(facts.imports) for facts in _index().files.values())
+    imports = _index().import_count()
     assert imports > LEAST_IMPORTS, imports
 
 

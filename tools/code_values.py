@@ -124,6 +124,22 @@ class Finding(NamedTuple):
     detail: str
 
 
+class Results(NamedTuple):
+    """Was ein analysierter Index beantwortet, ohne einen Auszug zu brauchen: die Abfragen von
+    W2, W5, W6 und dem Verschiebewerkzeug. Der Ergebnisspeicher (``tools/code_store.py``) hält
+    genau das. ``readers`` je ``(M, N)``: ``(halter, qualname, art) → (pfad, zeile)``;
+    ``references`` je ``(M, N)`` sortiert und ohne Doppel."""
+
+    sites: tuple[PatchSite, ...]
+    heads: tuple[HeadCopy, ...]
+    unresolved: tuple[Unresolved, ...]
+    findings: dict[str, tuple[Finding, ...]]
+    readers: dict[tuple[str, str], dict[tuple[str, str, str], tuple[str, int]]]
+    references: dict[tuple[str, str], tuple[Reference, ...]]
+    counts: dict[str, int]
+    timings: dict[str, float]
+
+
 def constant(value: object) -> Val:
     """Typ und Wert bleiben gemeinsam eindeutig (False ist kein Integer 0)."""
     return Val("const", type(value).__name__, value)

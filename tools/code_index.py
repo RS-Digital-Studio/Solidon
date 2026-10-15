@@ -41,9 +41,11 @@ Klassenebene, in Vorgabewerten oder Dekoratoren gelesen wird, läuft beim Import
 Kopie, kein Leser — ein Patch danach erreicht es nicht, außer der Test lädt das Modul danach in
 derselben Funktion mit ``importlib.reload`` neu (``test_advise.py``, B12).
 
-**Zwischenspeicher.** Die Auszüge liegen nach SHA-256 des Inhalts und dem Stand von
+**Zwischenspeicher.** Die Auszüge liegen je Datei nach SHA-256 des Inhalts und dem Stand von
 ``code_facts.py`` und dem Datenformat in ``tools/__pycache__/code_index.data``. Jeder Bau prüft
-sie gegen die Dateien; kalt und warm liefern dasselbe (``tests/test_code_index.py``).
+sie gegen die Dateien; kalt und warm liefern dasselbe (``tests/test_code_index.py``). Die
+Antworten eines analysierten Index hält ``tools/code_store.py`` je Baumstand; :func:`shared`
+liest sie von dort (``tests/test_code_store.py``).
 """
 
 from __future__ import annotations
@@ -52,10 +54,11 @@ import argparse
 import ast
 import builtins
 import functools
+import gc
 import hashlib
 import sys
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -182,6 +185,7 @@ _REF_KINDS = {"attr": "attribute", "store": "store", "del": "delete"}
 # --------------------------------------------------------------------------- öffentliche Werte
 
 
+from tools.code_report import inventory, reach_text  # noqa: E402
 from tools.code_values import (  # noqa: E402
     Finding,
     HeadCopy,
@@ -189,6 +193,7 @@ from tools.code_values import (  # noqa: E402
     PatchTarget,
     Reader,
     Reference,
+    Results,
     Unresolved,
     Val,
     keyword_arguments,
@@ -201,6 +206,8 @@ from tools.code_values import elements as _elements  # noqa: E402
 #: Eine Zeile der Faltung: je Quelle (Schleife, ``parametrize``, Aufrufstelle) der Zeilenindex.
 Env = tuple[tuple[str, int], ...]
 Res = list[tuple[Env, Val]]
+#: Je Modul: Namen zur Laufzeit, Namen für die Typprüfung, Paket.
+Names = tuple[frozenset[str], frozenset[str], bool]
 
 
 def _merge(first: Env, second: Env) -> Env | None:
@@ -288,22 +295,54 @@ def _compare(op: str, values: tuple[Val, ...]) -> Val:
     return Val("unknown", "Vergleich mit offenem Teil")
 
 
-class Index:
-    """Der Index über einen Baum; gebaut mit :meth:`build`."""
+def _name_table(modules: Mapping[str, Facts]) -> dict[str, Names]:
+    """Je Modul die Namen, die es zur Laufzeit und für die Typprüfung hat, und ob es ein Paket
+    ist — :meth:`Index.exists` fragt nur noch diese Tafel, auch ohne geladene Auszüge."""
+    table: dict[str, Names] = {}
+    for module, facts in modules.items():
+        given = {*facts.exports, *facts.dynamic_names}
+        binds = facts.scopes[0].binds
+        runtime = given | {name for name in binds if effective(binds[name], facts.stub)}
+        checking = given | {name for name in binds if effective(binds[name], facts.stub, True)}
+        table[module] = frozenset(runtime), frozenset(checking), facts.package
+    return table
 
-    def __init__(self, root: Path, files: dict[str, Facts]) -> None:
+
+class Index:
+    """Der Index über einen Baum; gebaut mit :meth:`build`, aus dem Ergebnisspeicher mit
+    :func:`tools.code_store.load` (dann lädt er Auszüge erst, wenn eine Frage sie braucht)."""
+
+    def __init__(
+        self,
+        root: Path,
+        files: Mapping[str, Facts],
+        *,
+        modules: Mapping[str, Facts] | None = None,
+        packages: set[str] | None = None,
+        names: dict[str, Names] | None = None,
+    ) -> None:
         self.root = root
         self.files = files
-        self.modules: dict[str, Facts] = {}
-        for facts in files.values():
-            # ``x.py`` steht vor ``x.pyi``: Der Stub zählt nur, wo es kein Python gibt (Cython).
-            self.modules.setdefault(facts.module, facts)
-        self.packages: set[str] = set()
-        for facts in files.values():
-            parts = facts.module.split(".")
-            self.packages.update(".".join(parts[:size]) for size in range(1, len(parts)))
-            if facts.package:
-                self.packages.add(facts.module)
+        if modules is None:
+            found: dict[str, Facts] = {}
+            for facts in files.values():
+                # ``x.py`` steht vor ``x.pyi``: Der Stub zählt nur, wo es kein Python gibt.
+                found.setdefault(facts.module, facts)
+            modules = found
+        self.modules = modules
+        if packages is None:
+            packages = set()
+            for facts in files.values():
+                parts = facts.module.split(".")
+                packages.update(".".join(parts[:size]) for size in range(1, len(parts)))
+                if facts.package:
+                    packages.add(facts.module)
+        self.packages = packages
+        #: Je Modul die Namen zur Laufzeit und für die Typprüfung und ob es ein Paket ist.
+        self.module_names = _name_table(modules) if names is None else names
+        #: Inhaltshash je Pfad, wie :meth:`build` ihn las (leer bei einem Index aus Auszügen).
+        self.digests: dict[str, str] = {}
+        self._findings: dict[str, tuple[Finding, ...]] | None = None
         self.timings: dict[str, float] = {}
         self.counts: dict[str, int] = {}
         self._memo: dict[tuple[object, ...], Res] = {}
@@ -332,21 +371,27 @@ class Index:
         started = time.perf_counter()
         current = stamp()
         cache_file = base / CACHE
-        stored = load_cache(cache_file, current) if cache else {}
+        sources = source_files(base)
+        digests = {path: hashlib.sha256(full.read_bytes()).hexdigest() for path, full in sources}
+        stored = load_cache(cache_file, current, digests) if cache else {}
         entries: dict[str, tuple[str, Facts]] = {}
         fresh = 0
-        for relative, full in source_files(base):
-            data = full.read_bytes()
-            digest = hashlib.sha256(data).hexdigest()
+        for relative, full in sources:
+            digest = digests[relative]
             hit = stored.get(relative)
             if hit is not None and hit[0] == digest:
                 entries[relative] = hit
-            else:
-                entries[relative] = (digest, extract(relative, data))
-                fresh += 1
-        if cache and (fresh or stored.keys() != entries.keys()):
+                continue
+            data = full.read_bytes()
+            # Der Hash gehört zum Inhalt, der ausgezogen wird: Die Datei kann sich seit dem
+            # ersten Lesen geändert haben.
+            digests[relative] = hashlib.sha256(data).hexdigest()
+            entries[relative] = (digests[relative], extract(relative, data))
+            fresh += 1
+        if cache and fresh:
             save_cache(cache_file, current, entries)
         index = cls(base, {relative: facts for relative, (_d, facts) in entries.items()})
+        index.digests = digests
         index.timings["read"] = time.perf_counter() - started
         index.counts["extracted"] = fresh
         index.counts["cached"] = len(entries) - fresh
@@ -363,16 +408,14 @@ class Index:
         Typprüfung)."""
         if self.module_exists(f"{module}.{name}"):
             return True
-        facts = self.modules.get(module)
-        if facts is None:
+        entry = self.module_names.get(module)
+        if entry is None:
             # Ein Namensraumpaket wie ``tools`` hat nur, was jedes Paket hat.
             return module in self.packages and (name in _MODULE_DUNDERS or name == "__path__")
-        if name in facts.exports or name in facts.dynamic_names:
+        runtime, typing, package = entry
+        if name in (typing if checking else runtime):
             return True
-        binds = facts.scopes[0].binds.get(name)
-        if effective(binds, facts.stub, checking):
-            return True
-        return name in _MODULE_DUNDERS or (name == "__path__" and facts.package)
+        return name in _MODULE_DUNDERS or (name == "__path__" and package)
 
     def _module_value(self, module: str) -> Val:
         if self.module_exists(module):
@@ -1693,8 +1736,56 @@ class Index:
             for key in sorted(self.patched_names())
         }
 
+    def import_count(self) -> int:
+        """Wie viele Importe die Dateien des Baums haben (Grundmenge von W5, Plan 2.5)."""
+        self._analyse()
+        return sum(count for key, count in self.counts.items() if key.startswith("imports."))
+
+    def results(self) -> Results:
+        """Was die Abfragen beantwortet, für den Ergebnisspeicher (:mod:`tools.code_store`)."""
+        self._analyse()
+        return Results(
+            tuple(self._patch_sites),
+            tuple(self._heads),
+            tuple(self._unresolved),
+            self.patch_findings(),
+            self._readers,
+            {key: tuple(sorted(set(found))) for key, found in self._references.items()},
+            dict(self.counts),
+            dict(self.timings),
+        )
+
+    @classmethod
+    def restored(
+        cls,
+        root: Path,
+        files: Mapping[str, Facts],
+        modules: Mapping[str, Facts],
+        packages: set[str],
+        names: dict[str, Names],
+        results: Results,
+    ) -> Index:
+        """Ein Index aus gespeicherten Ergebnissen: Die Abfragen antworten aus ``results``,
+        ``files`` und ``modules`` laden einen Auszug erst, wenn eine Frage ihn braucht."""
+        index = cls(root, files, modules=modules, packages=packages, names=names)
+        index._patch_sites = list(results.sites)
+        index._heads = list(results.heads)
+        index._unresolved = list(results.unresolved)
+        index._findings = results.findings
+        index._readers = results.readers
+        index._references = {key: list(found) for key, found in results.references.items()}
+        index.counts = dict(results.counts)
+        index.timings = dict(results.timings)
+        index._analysed = True
+        return index
+
     def patch_findings(self) -> dict[str, tuple[Finding, ...]]:
         """Die Verstöße gegen W2, je Regel ``a`` bis ``e`` (Plan 2.2)."""
+        if self._findings is None:
+            self._findings = self._find()
+        return dict(self._findings)
+
+    def _find(self) -> dict[str, tuple[Finding, ...]]:
         found: dict[str, list[Finding]] = {rule: [] for rule in "abcde"}
         for site in self.patch_sites():
             reloaded = self._reloaded.get((site.path, site.line, site.col), frozenset())
@@ -1764,111 +1855,18 @@ class Index:
 
 @functools.cache
 def shared() -> Index:
-    """Der Index dieses Repositorys, einmal je Prozess gebaut: W2, W5 und
-    ``test_code_index.py`` teilen ihn, statt den Baum dreimal zu lesen."""
-    return Index.build()
+    """Der Index dieses Repositorys, einmal je Prozess: W2, W5, W6 und ``test_code_index.py``
+    teilen ihn. Er kommt aus dem Ergebnisspeicher (:func:`tools.code_store.load`) — gebaut wird
+    einmal je Baumstand, nicht je Prozess.
 
+    Danach friert der Sammler alles ein, was lebt: Der Index lebt bis zum Prozessende, und
+    ``tests/conftest.py`` ruft je Fenstertest zweimal ``gc.collect()`` (CS-23)."""
+    from tools import code_store
 
-def inventory(index: Index) -> str:
-    """Das Inventar als Text: Grundmengen, W2 a bis e, W5, Kopfkopien, Laufzeit."""
-    sites = index.patch_sites()
-    findings = index.patch_findings()
-    unresolved = index.unresolved()
-    heads = index.head_copies()
-    areas = {area: sum(1 for f in index.files.values() if f.area == area) for area in AREAS}
-    lines = [f"Codeindex über {index.root}", ""]
-    lines.append(
-        "Dateien: "
-        + ", ".join(f"{area} {count}" for area, count in areas.items())
-        + f"; Zeilen {sum(f.lines for f in index.files.values())}"
-    )
-    lazy = sum(1 for facts in index.modules.values() if facts.exports)
-    stubs = sum(1 for facts in index.files.values() if facts.stub)
-    names = sum(len(facts.scopes[0].binds) for facts in index.modules.values())
-    lines.append(
-        f"Module: {len(index.modules)}, Pakete {len(index.packages)}, Lazy-Pakete {lazy}, "
-        f"Stubs {stubs}, Namen auf Modulebene {names}"
-    )
-    imports = [imp for facts in index.files.values() for imp in facts.imports]
-    lines.append(
-        f"Importe: {len(imports)} (from {sum(i.kind == 'from' for i in imports)}, "
-        f"import {sum(i.kind == 'import' for i in imports)}, "
-        f"dynamisch {sum(i.kind == 'dynamic' for i in imports)}; "
-        f"spät {sum(i.runtime for i in imports)}, "
-        f"unter TYPE_CHECKING {sum(i.checking for i in imports)})"
-    )
-    statuses: dict[str, int] = {}
-    forms: dict[str, int] = {}
-    for site in sites:
-        forms[site.form] = forms.get(site.form, 0) + 1
-        for target in site.targets:
-            statuses[target.status] = statuses.get(target.status, 0) + 1
-    lines.append(
-        f"Patch-Stellen in tests/: {len(sites)} ("
-        + ", ".join(f"{form} {count}" for form, count in sorted(forms.items()))
-        + "); Ziele: "
-        + ", ".join(f"{status} {count}" for status, count in sorted(statuses.items()))
-    )
-    lines.append(f"Gepatchte Namen in app/tools: {len(index.patched_names())}")
-    copies_from = sum(c.kind == "from" for c in heads)
-    lines.append(
-        f"Kopfkopien in app/tools: {len(heads)} (from {copies_from}, "
-        f"Zuweisung {len(heads) - copies_from})"
-    )
-    refs = sum(count for key, count in index.counts.items() if key.startswith("refs."))
-    lines.append(
-        f"Bezüge auf Namen: {refs - index.counts.get('refs.empty', 0)}, "
-        f"davon ohne gefaltete Zeile {index.counts.get('refs.empty', 0)}"
-    )
-    absent = {key: count for key, count in index.counts.items() if key.startswith("absent.")}
-    if absent:
-        lines.append(
-            "Abfragen auf fehlende Namen, kein W5-Fund: "
-            + ", ".join(f"{key[7:]} {count}" for key, count in sorted(absent.items()))
-        )
-    lines.append("")
-    for rule in "abcde":
-        items = findings[rule]
-        lines.append(f"W2 {rule}): {len(items)}")
-        if rule == "c":
-            originals = {f.detail.rpartition(" von ")[2] for f in items}
-            holders = {f.module for f in items}
-            by_area = {a: sum(1 for f in items if f.path.startswith(a + "/")) for a in INDEXED}
-            lines.append(
-                f"   {len(originals)} Originale in {len(holders)} Haltern; "
-                f"app {by_area['app']}, tools {by_area['tools']}"
-            )
-        lines.extend(
-            f"   {f.path}:{f.line}  {f.module}.{f.name}  {f.detail}".rstrip() for f in items
-        )
-    lines.append("")
-    kinds: dict[str, int] = {}
-    for item in unresolved:
-        kinds[item.kind] = kinds.get(item.kind, 0) + 1
-    lines.append(
-        f"W5: {len(unresolved)} unaufgelöst ("
-        + ", ".join(f"{kind} {count}" for kind, count in sorted(kinds.items()))
-        + ")"
-    )
-    lines.extend(
-        f"   {u.path}:{u.line}  [{u.kind}] {u.module}.{u.name}  {u.text}" for u in unresolved
-    )
-    lines.append("")
-    lines.append(
-        f"Laufzeit: Lesen {index.timings.get('read', 0.0):.1f} s "
-        f"({index.counts.get('extracted', 0)} Dateien ausgezogen, "
-        f"{index.counts.get('cached', 0)} aus dem Zwischenspeicher), "
-        f"Auflösen {index.timings.get('resolve', 0.0):.1f} s"
-    )
-    return "\n".join(lines)
-
-
-def reach_text(index: Index) -> str:
-    """Der Lesermengenabzug als Text, je gepatchtem Namen eine Zeile."""
-    return "\n".join(
-        f"{module}:{name} <- {', '.join(readers) or '(niemand)'}"
-        for (module, name), readers in index.reach_dump().items()
-    )
+    index = code_store.load(ROOT)
+    gc.collect()
+    gc.freeze()
+    return index
 
 
 def main(argv: list[str] | None = None) -> int:

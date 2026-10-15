@@ -1423,11 +1423,14 @@ def stamp() -> str:
     return _STAMP
 
 
-def load_cache(path: Path, current: str) -> dict[str, tuple[str, Facts]]:
-    """Die gespeicherten Auszüge je Pfad mit ihrem Inhaltshash; leer bei anderem Stand."""
+def load_cache(
+    path: Path, current: str, wanted: dict[str, str] | None = None
+) -> dict[str, tuple[str, Facts]]:
+    """Die gespeicherten Auszüge je Pfad mit ihrem Inhaltshash; leer bei anderem Stand. Mit
+    ``wanted`` (Pfad → Hash) nur die Auszüge, deren Inhalt noch so aussieht."""
     from tools.code_cache import decode
 
-    return decode(path, current)
+    return decode(path, current, wanted)
 
 
 def save_cache(path: Path, current: str, files: dict[str, tuple[str, Facts]]) -> None:

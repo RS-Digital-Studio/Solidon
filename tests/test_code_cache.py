@@ -47,10 +47,38 @@ def _damage(value: object, record: str, field: str, replacement: object) -> tupl
     return tuple(item for item, _count in children), sum(count for _item, count in children)
 
 
+def _records(packed: object) -> list[tuple[str, str, bytes]]:
+    """Eine gepackte Tafel ``pfad → (hash, auszug)`` wird je Datei ein Datensatz; jede andere
+    Form steht als einziger Datensatz von ``tests/test_case.py`` im Rahmen."""
+    if (
+        isinstance(packed, tuple)
+        and len(packed) == 2
+        and packed[0] == 2
+        and isinstance(packed[1], tuple)
+        and all(
+            isinstance(pair, tuple)
+            and len(pair) == 2
+            and isinstance(pair[0], str)
+            and isinstance(pair[1], tuple)
+            and len(pair[1]) == 2
+            and pair[1][0] == 0
+            and len(pair[1][1]) == 2
+            for pair in packed[1]
+        )
+    ):
+        return [
+            (name, digest, marshal.dumps(facts, allow_code=False))
+            for name, (_tag, (digest, facts)) in packed[1]
+        ]
+    record = marshal.dumps(cast(code_cache.Packed, packed), allow_code=False)
+    return [("tests/test_case.py", "hash", record)]
+
+
 def _write(path: Path, packed: object) -> None:
+    """Schreibt ``packed`` im Rahmen des Speichers, damit jeder Datensatz die Prüfung je Feld
+    erreicht (ungeschädigt dekodiert er: ``test_an_undamaged_frame_decodes``)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    header = code_cache.MAGIC + code_facts.stamp().encode("ascii") + b"\n"
-    path.write_bytes(header + marshal.dumps(cast(code_cache.Packed, packed), allow_code=False))
+    path.write_bytes(code_cache.frame(code_facts.stamp(), _records(packed)))
 
 
 @pytest.mark.parametrize(
@@ -137,22 +165,81 @@ def test_invalid_record_field_is_rebuilt_from_source(
     assert warm.files == rebuilt.files
 
 
-@pytest.mark.parametrize("nested", [False, True])
-def test_current_cache_rejects_code_objects(tmp_path: Path, nested: bool) -> None:
+@pytest.mark.parametrize("where", ["record", "nested", "directory"])
+def test_current_cache_rejects_code_objects(tmp_path: Path, where: str) -> None:
     source = tmp_path / "tests/test_case.py"
     source.parent.mkdir()
     source.write_bytes(SOURCE)
     cache = tmp_path / CACHE
     cache.parent.mkdir(parents=True)
-    header = code_cache.MAGIC + code_facts.stamp().encode("ascii") + b"\n"
     code = (lambda: None).__code__
-    body = (2, (("tests/test_case.py", (0, ("hash", code))),)) if nested else code
-    cache.write_bytes(header + marshal.dumps(body))
+    # Der Inhaltshash der Quelle: Sonst übersprünge der Bau den Datensatz, ohne ihn zu lesen.
+    digest = hashlib.sha256(SOURCE).hexdigest()
+    if where == "directory":
+        header = code_cache.MAGIC + code_facts.stamp().encode("ascii") + b"\n"
+        directory = marshal.dumps((("tests/test_case.py", digest, 0, 0), code))
+        data = header + len(directory).to_bytes(8, "little") + directory
+    else:
+        record = marshal.dumps((0, (code,)) if where == "nested" else code)
+        data = code_cache.frame(code_facts.stamp(), [("tests/test_case.py", digest, record)])
+    cache.write_bytes(data)
     assert code_cache.decode(cache, code_facts.stamp()) == {}
+    assert code_cache.decode_one(cache, code_facts.stamp(), "tests/test_case.py", digest) is None
     rebuilt = Index.build(tmp_path)
     assert rebuilt.counts["extracted"] == 1
     assert rebuilt.counts["cached"] == 0
     assert rebuilt.exists("tests.test_case", "VALUE")
+
+
+def test_an_undamaged_frame_decodes(tmp_path: Path) -> None:
+    """Gegenprobe zu den Schäden: Derselbe Weg ohne Schaden liefert den Auszug — sonst wiese
+    der Rahmen alles ab, und jede Schadensprobe wäre grün, ohne ein Feld zu prüfen."""
+    cache = tmp_path / "cache.data"
+    files = _stored()
+    _write(cache, code_cache._pack(files))
+    assert code_cache.decode(cache, code_facts.stamp()) == files
+    name, (digest, facts) = next(iter(files.items()))
+    assert code_cache.decode_one(cache, code_facts.stamp(), name, digest) == facts
+
+
+def test_one_record_is_read_without_the_others(tmp_path: Path) -> None:
+    """Ein Datensatz je Datei: ``decode_one`` liest nur den einen, ``wanted`` nur die
+    passenden; ein anderer Inhaltshash oder Pfad ist kein Treffer."""
+    files = _stored()
+    other = code_facts.extract("app/mod.py", b"VALUE = 1\n")
+    files[other.path] = "anderer", other
+    cache = tmp_path / "cache.data"
+    current = code_facts.stamp()
+    cache.write_bytes(code_cache.encode(current, files))
+    assert code_cache.decode_one(cache, current, "app/mod.py", "anderer") == other
+    assert code_cache.decode_one(cache, current, "app/mod.py", "geändert") is None
+    assert code_cache.decode_one(cache, current, "app/fehlt.py", "anderer") is None
+    wanted = {"app/mod.py": "anderer"}
+    assert code_cache.decode(cache, current, wanted) == {"app/mod.py": ("anderer", other)}
+    assert code_cache.decode(cache, current, {"app/mod.py": "geändert"}) == {}
+    # Ein Datensatz, der eine andere Datei beschreibt, als sein Verzeichniseintrag sagt.
+    swapped = code_cache.frame(current, [("tests/test_case.py", "hash", code_cache.dumps(other))])
+    cache.write_bytes(swapped)
+    assert code_cache.decode(cache, current) == {}
+    assert code_cache.decode_one(cache, current, "tests/test_case.py", "hash") is None
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        ("tests/test_case.py", "hash", 0, 10**9),
+        ("tests/test_case.py", "hash", -1, 1),
+        ("tests/test_case.py", 1, 0, 1),
+        ("tests/test_case.py", "hash", 0),
+    ],
+)
+def test_a_damaged_directory_is_a_cache_miss(tmp_path: Path, entry: tuple[object, ...]) -> None:
+    header = code_cache.MAGIC + code_facts.stamp().encode("ascii") + b"\n"
+    directory = marshal.dumps((entry,))
+    cache = tmp_path / "cache.data"
+    cache.write_bytes(header + len(directory).to_bytes(8, "little") + directory + b"\0")
+    assert code_cache.decode(cache, code_facts.stamp()) == {}
+    assert code_cache.decode_one(cache, code_facts.stamp(), "tests/test_case.py", "hash") is None
 
 
 def test_roundtrip_preserves_typed_constants_and_reads_fresh_bytes(tmp_path: Path) -> None:
