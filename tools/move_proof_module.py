@@ -549,6 +549,9 @@ class ModuleReaderComparison(ReaderComparison):
             binding.form == "from" and binding.module == self.owner.src
         )
 
+    def removable_module(self, module: str) -> bool:
+        return module == self.owner.src
+
     def reference(
         self, old: ast.expr, new: ast.expr, before: tuple[str, str], after: tuple[str, str]
     ) -> bool:

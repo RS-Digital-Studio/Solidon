@@ -240,7 +240,8 @@ def test_a_module_reached_through_a_parameter_is_rejected(tmp_path: Path) -> Non
         )
     }
     message = _rejected(tmp_path, files)
-    assert "tests/test_fixture.py:12" in message and "nicht über einen Import gebunden" in message
+    assert "tests/test_fixture.py:12" in message
+    assert "nicht über einen Import oder importlib.import_module gebunden" in message
 
 
 @pytest.mark.parametrize(

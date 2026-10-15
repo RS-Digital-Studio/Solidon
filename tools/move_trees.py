@@ -113,6 +113,11 @@ class Mapping:
     def ref(self, module: str, name: str) -> tuple[str, str]:
         return module, name
 
+    def reach_key(self, module: str, name: str) -> tuple[str, str]:
+        """Unter welchem Namen die Lesermenge von ``module.name`` nachher steht; Vorgabe wie
+        :meth:`ref`. Im Modus ``copies`` das Original, auf das die Patches danach zielen."""
+        return self.ref(module, name)
+
     def reader(self, module: str, qualname: str) -> tuple[str, str]:
         head, dot, rest = qualname.partition(".")
         new_module, new_head = self.ref(module, head)

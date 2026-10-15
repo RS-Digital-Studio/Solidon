@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from tools.move_compare import Scopes, qualname_of, string_constants, top_names
 from tools.move_cut import Target
 from tools.move_edits import Edit
-from tools.move_refs import Context, FileRewrite, quoted
+from tools.move_refs import AlreadyAppliedError, Context, quoted
 from tools.move_source import (
     AREAS,
     IMPORTS,
@@ -48,10 +48,6 @@ from tools.move_source import (
     spans,
     statement_names,
 )
-
-
-class AlreadyAppliedError(Exception):
-    """Der Schnitt steht schon im Baum: Die Quelle fehlt, jedes Ziel ist da."""
 
 
 @dataclass
@@ -541,17 +537,14 @@ class ModulePlanner:
                 if ref.path == self.path or ref.kind == "patch":
                     continue
                 rewrite = self.ctx.rewrite(ref.path)
+                where = (ref.line, ref.col, self.src, name, module, new_name, rule)
                 if ref.kind == "from":
-                    self._from(rewrite, ref.line, ref.col, name, module, new_name, rule)
+                    rewrite.rebind_from(*where)
                 elif ref.kind in ("attribute", "store", "delete"):
-                    node = rewrite.attribute_at(ref.line, ref.col, name, self.src)
-                    if node is None:
-                        continue  # über einen Lazy-Export des Pakets: den schreibt _lazy_exports um
-                    text = rewrite.module_expression(node.value, module, self.src, rule)
-                    if text is not None:
-                        rewrite.replace(node, f"{text}.{new_name}", rule)
+                    # Ohne Zugriff über das Modul: ein Lazy-Export, den _lazy_exports umschreibt.
+                    rewrite.retarget_attribute(*where)
                 elif ref.kind == "getattr":
-                    self._getattr(rewrite, ref.line, ref.col, name, module, new_name, rule)
+                    rewrite.retarget_getattr(*where)
                 else:
                     self.ctx.problem(
                         f"{ref.path}:{ref.line}: Bezug auf {self.src}.{name} über {ref.kind} — "
@@ -563,55 +556,6 @@ class ModulePlanner:
                     f"{ref.path}:{ref.line}: liest die Quelldatei über __file__ — in "
                     "[[source_readers]] das Modul nennen, dessen Definition die Prüfung sucht"
                 )
-
-    def _from(
-        self,
-        rewrite: FileRewrite,
-        line: int,
-        col: int,
-        name: str,
-        module: str,
-        new_name: str,
-        rule: str,
-    ) -> None:
-        stmt = rewrite.import_statement(line, col)
-        if stmt is None:
-            self.ctx.problem(f"{rewrite.path}:{line}: Importanweisung nicht gefunden")
-            return
-        if absolute_module(rewrite.path, stmt) != self.src:
-            return  # über ein anderes Modul (Rückexport, Lazy-Export) — dort umgeschrieben
-        for number, alias in enumerate(stmt.names):
-            if alias.name == name:
-                rewrite.rebind(stmt, number, module, new_name, rule)
-
-    def _getattr(
-        self,
-        rewrite: FileRewrite,
-        line: int,
-        col: int,
-        name: str,
-        module: str,
-        new_name: str,
-        rule: str,
-    ) -> None:
-        call = rewrite.call_at(line, col)
-        if (
-            call is None
-            or len(call.args) < 2
-            or not isinstance(call.args[1], ast.Constant)
-            or call.args[1].value != name
-        ):
-            self.ctx.problem(
-                f"{rewrite.path}:{line}: getattr auf {self.src}.{name} ohne festen Namen — vor dem "
-                "Schnitt mit fester Zeichenkette schreiben"
-            )
-            return
-        text = rewrite.module_expression(call.args[0], module, self.src, rule)
-        if text is None:
-            return
-        rewrite.replace(call.args[0], text, rule)
-        if new_name != name:
-            rewrite.replace(call.args[1], quoted(rewrite.source, call.args[1], new_name), rule)
 
     def _patches(self) -> None:
         moved = self._moved()
@@ -637,42 +581,15 @@ class ModulePlanner:
             if name not in moved:
                 continue
             module, new_name = moved[name]
-            self._patch(site.path, site.line, site.col, site.form, module, new_name)
-
-    def _patch(self, path: str, line: int, col: int, form: str, module: str, name: str) -> None:
-        rewrite = self.ctx.rewrite(path)
-        call = rewrite.call_at(line, col)
-        rule = "Patch-Ziel folgt dem Namen"
-        if call is None or not call.args:
-            self.ctx.problem(f"{path}:{line}: Patch-Stelle nicht gefunden")
-            return
-        first = call.args[0]
-        if (
-            form in ("setattr", "delattr", "patch")
-            and isinstance(first, ast.Constant)
-            and isinstance(first.value, str)
-        ):
-            rewrite.replace(first, quoted(rewrite.source, first, f"{module}.{name}"), rule)
-            return
-        if form in ("setattr", "delattr", "patch.object") and len(call.args) >= 2:
-            second = call.args[1]
-            if not isinstance(second, ast.Constant) or not isinstance(second.value, str):
-                self.ctx.problem(
-                    f"{path}:{line}: Patch-Stelle mit gefaltetem Namen — vor dem Schnitt mit "
-                    "festem Namen schreiben"
-                )
-                return
-            text = rewrite.module_expression(first, module, self.src, rule)
-            if text is None:
-                return
-            rewrite.replace(first, text, rule)
-            if second.value != name:
-                rewrite.replace(second, quoted(rewrite.source, second, name), rule)
-            return
-        self.ctx.problem(
-            f"{path}:{line}: Patch-Stelle mit gefaltetem Ziel — vor dem Schnitt mit festem Text "
-            "schreiben"
-        )
+            self.ctx.rewrite(site.path).retarget_patch(
+                site.line,
+                site.col,
+                site.form,
+                self.src,
+                module,
+                new_name,
+                "Patch-Ziel folgt dem Namen",
+            )
 
     def _source_readers(self) -> None:
         refs = self.ctx.index.references(self.src, "__file__")

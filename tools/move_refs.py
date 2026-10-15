@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -29,9 +29,13 @@ from tools.move_source import (
     SourceError,
     absolute_module,
     bound_name,
+    docstring_node,
     dotted,
     identifiers,
     import_binders,
+    own_statements,
+    path_of,
+    scope_of,
 )
 
 
@@ -41,6 +45,10 @@ class PlanError(Exception):
     def __init__(self, problems: list[str]) -> None:
         super().__init__("\n".join(problems))
         self.problems = problems
+
+
+class AlreadyAppliedError(Exception):
+    """Der Schnitt steht schon im Baum; es gibt nichts zu tun."""
 
 
 class Context:
@@ -56,6 +64,7 @@ class Context:
         self._sources: dict[str, Source] = {}
         self._rewrites: dict[str, FileRewrite] = {}
         self._sites: dict[str, list[PatchSite]] | None = None
+        self._lazy: dict[str, frozenset[str]] = {}
 
     def problem(self, text: str) -> None:
         if text not in self.problems:
@@ -103,6 +112,62 @@ class Context:
         return bool(values) and all(
             v.kind == "module" and v.ref == module and v.data != "loaded" for v in values
         )
+
+    def shadowed(self, module: str) -> bool:
+        """Ob ``module`` hinter einem gleichnamigen trägen Export seines Pakets liegt
+        (``app.core.scene.evaluate``): ``from app.core.scene import evaluate`` bindet dann die
+        Funktion, und auch ein Pfad als Text endet bei ihr. Gelesen wird nur die Tabelle
+        ``_EXPORTS`` des Pakets (``app.core.lazy``), keine Auflösung."""
+        parent, _, last = module.rpartition(".")
+        return last in self.lazy_names(parent)
+
+    def lazy_names(self, package: str) -> frozenset[str]:
+        """Die Schlüssel der Tabelle ``_EXPORTS`` im ``__init__`` von ``package``."""
+        found = self._lazy.get(package)
+        if found is None:
+            found = frozenset()
+            path = path_of(package, package=True) if package else ""
+            if path and (self.root / path).is_file():
+                found = frozenset(lazy_table(self.source(path)))
+            self._lazy[package] = found
+        return found
+
+
+def lazy_table(source: Source) -> dict[str, tuple[ast.Constant, ast.Constant]]:
+    """Die Einträge ``"N": ("untermodul", "name")`` der Tabelle ``_EXPORTS`` auf Modulebene
+    eines Paket-``__init__`` (``app.core.lazy``), je Schlüssel die beiden Textknoten."""
+    found: dict[str, tuple[ast.Constant, ast.Constant]] = {}
+    for stmt in source.tree.body:
+        target: ast.expr | None = None
+        if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+            target = stmt.targets[0]
+        elif isinstance(stmt, ast.AnnAssign):
+            target = stmt.target
+        value = stmt.value if isinstance(stmt, (ast.Assign, ast.AnnAssign)) else None
+        if not (isinstance(target, ast.Name) and target.id == "_EXPORTS"):
+            continue
+        if not isinstance(value, ast.Dict):
+            continue
+        for key, item in zip(value.keys, value.values, strict=True):
+            if (
+                isinstance(key, ast.Constant)
+                and isinstance(key.value, str)
+                and isinstance(item, ast.Tuple)
+                and len(item.elts) == 2
+                and all(isinstance(e, ast.Constant) and isinstance(e.value, str) for e in item.elts)
+            ):
+                first, second = item.elts
+                assert isinstance(first, ast.Constant) and isinstance(second, ast.Constant)
+                found[key.value] = (first, second)
+    return found
+
+
+def _module_level(source: Source, node: ast.AST) -> bool:
+    """Ob ``node`` außerhalb jeder Funktion steht (Modulebene, auch in ``if``/``try``)."""
+    return not any(
+        isinstance(outer, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef))
+        for outer in source.ancestors(node)
+    )
 
 
 def import_text(module: str, alias: str) -> str:
@@ -160,6 +225,65 @@ class Watch:
     plain: bool
 
 
+@dataclass
+class AssignWatch:
+    """Eine Zuweisung ``x = importlib.import_module("M")``, die wegfällt, wenn ``x`` nach allen
+    Ersetzungen niemand mehr liest (sonst bliebe eine tote lokale Variable, ruff F841)."""
+
+    stmt: ast.Assign
+    name: str
+    module: str
+
+
+def assignment_binders(source: Source, name: str, use: ast.AST) -> list[ast.Assign]:
+    """Die Zuweisungen ``name = …``, die ``name`` für die Stelle ``use`` binden, wenn der innerste
+    bindende Bereich ihn **nur** über einfache Zuweisungen bindet (kein Import, kein Parameter).
+    Ob der Wert das Modul ist, fragt der Aufrufer beim Auflöser."""
+    scope: ast.AST = scope_of(source, use)
+    while True:
+        own = list(own_statements(scope))
+        imports = [
+            s for s in own if isinstance(s, IMPORTS) and any(bound_name(a) == name for a in s.names)
+        ]
+        found = [
+            s
+            for s in own
+            if isinstance(s, ast.Assign)
+            and len(s.targets) == 1
+            and isinstance(s.targets[0], ast.Name)
+            and s.targets[0].id == name
+        ]
+        if imports:
+            return []
+        if found:
+            return found
+        if _binds_otherwise(scope, name):
+            return []
+        if isinstance(scope, ast.Module):
+            return []
+        scope = _outer_scope(source, scope)
+
+
+def _binds_otherwise(scope: ast.AST, name: str) -> bool:
+    """Ob ``scope`` ``name`` als Parameter oder Definition bindet."""
+    if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        args = scope.args
+        every = [*args.posonlyargs, *args.args, *args.kwonlyargs, args.vararg, args.kwarg]
+        if any(a is not None and a.arg == name for a in every):
+            return True
+    return any(
+        isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and s.name == name
+        for s in own_statements(scope)
+    )
+
+
+def _outer_scope(source: Source, scope: ast.AST) -> ast.AST:
+    for outer in source.ancestors(scope):
+        if isinstance(outer, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            return outer
+    return source.tree
+
+
 class FileRewrite:
     """Die Tabelle einer Datei, Zeile für Zeile gesammelt."""
 
@@ -173,6 +297,8 @@ class FileRewrite:
         self.chosen: dict[str, str] = {}
         self.identifiers = identifiers(self.source.tree)
         self.watches: list[Watch] = []
+        self.assign_watches: list[AssignWatch] = []
+        self._after_assign: set[tuple[int, str]] = set()
 
     # ---- Ausdrücke
 
@@ -208,6 +334,20 @@ class FileRewrite:
         self._ranges.append((start, end, text))
         old = " ".join(self.source.node_text(node).split())
         self.edits.append(Edit.at(self.path, "expr", node, text, rule, f"{old} → {text}"))
+
+    def remove_statement(self, stmt: ast.stmt, rule: str) -> None:
+        """Entfernt eine Anweisung samt ihrer Zeilen; was darin stand, gilt als ersetzt (ein Import,
+        den nur sie las, fällt dann weg)."""
+        if self._only_statement(stmt):
+            self.ctx.problem(
+                f"{self.path}:{stmt.lineno}: die Anweisung ist die einzige ihres Blocks und fiele "
+                "weg — Block vorher umschreiben"
+            )
+            return
+        start, end = self._range(stmt)
+        self._ranges.append((start, end, ""))
+        old = " ".join(self.source.node_text(stmt).split())
+        self.edits.append(Edit.at(self.path, "stmt", stmt, "", rule, f"{old} → (entfällt)"))
 
     # ---- Importe
 
@@ -268,16 +408,23 @@ class FileRewrite:
     ) -> str | None:
         """Der Text eines Ausdrucks, der an der Stelle von ``base`` (heute das Modul
         ``old_module``) das Modul ``module`` liefert; der nötige Import kommt neben den, der
-        ``base`` bindet."""
+        ``base`` bindet — neben einen Import, neben eine Zuweisung aus
+        ``importlib.import_module`` (in einer Funktion dahinter, auf Modulebene in den Kopf).
+        ``import_module("…")`` und ``sys.modules["…"]`` als Ausdruck bekommen den neuen Namen."""
+        literal = self._literal_module(base, old_module)
+        if literal is not None:
+            return literal(module)
+        if self.ctx.shadowed(module):
+            self.ctx.problem(
+                f"{self.path}:{getattr(base, 'lineno', '?')}: {module} liegt hinter dem "
+                "gleichnamigen trägen Export seines Pakets — ein Import bände den Namen, nicht "
+                "das Modul; vor dem Schnitt hier importlib.import_module mit festem Text verwenden"
+            )
+            return None
         if isinstance(base, ast.Name):
             binders = import_binders(self.source, base.id, base)
             if not binders:
-                self.ctx.problem(
-                    f"{self.path}:{base.lineno}: {base.id!r} ist das Modul {old_module}, aber "
-                    "nicht über einen Import gebunden (Parameter, Fixture, Zuweisung) — vor dem "
-                    "Schnitt als Import schreiben"
-                )
-                return None
+                return self._assigned_module(base, module, old_module, rule)
             existing = {self._block_binding(b, module) for b in binders}
             if len(existing) == 1 and None not in existing:
                 found = existing.pop()
@@ -317,9 +464,117 @@ class FileRewrite:
         self.ctx.problem(
             f"{self.path}:{getattr(base, 'lineno', '?')}: Ausdruck "
             f"{self.source.node_text(base)!r} lässt sich nicht auf {module} umstellen — vor dem "
-            "Schnitt als Import oder Attributkette eines Imports schreiben"
+            "Schnitt als Import, Attributkette eines Imports oder importlib.import_module mit "
+            "festem Text schreiben"
         )
         return None
+
+    def _literal_module(self, base: ast.expr, old_module: str) -> Callable[[str], str] | None:
+        """``importlib.import_module("M")`` als Ausdruck: der Text mit neuem Modulnamen.
+        ``sys.modules["M"]`` wird abgewiesen — nach dem Schnitt ist das Zielmodul dort nur, wenn
+        es jemand vorher geladen hat."""
+        if isinstance(base, ast.Subscript) and isinstance(base.slice, ast.Constant):
+            values = self.ctx.index.resolve(self.path, base.value)
+            if values and all(v.kind == "ext" and v.ref == "sys.modules" for v in values):
+                self.ctx.problem(
+                    f"{self.path}:{base.lineno}: sys.modules[{base.slice.value!r}] — nach dem "
+                    "Schnitt steht das Zielmodul dort nur, wenn es jemand geladen hat; vor dem "
+                    "Schnitt importlib.import_module verwenden"
+                )
+                return lambda _module: self.source.node_text(base)
+        if not (
+            isinstance(base, ast.Call)
+            and len(base.args) == 1
+            and not base.keywords
+            and isinstance(base.args[0], ast.Constant)
+            and base.args[0].value == old_module
+        ):
+            return None
+        values = self.ctx.index.resolve(self.path, base.func)
+        if not values or not all(
+            v.kind == "ext" and v.ref == "importlib.import_module" for v in values
+        ):
+            return None
+        func = self.source.node_text(base.func)
+        argument = base.args[0]
+        return lambda module: f"{func}({quoted(self.source, argument, module)})"
+
+    def _assigned_module(
+        self, base: ast.Name, module: str, old_module: str, rule: str
+    ) -> str | None:
+        """``base`` ist über ``x = importlib.import_module("M")`` gebunden: Der Import des
+        neuen Moduls kommt in einer Funktion direkt hinter die Zuweisung, auf Modulebene in den
+        Importkopf — dieselbe Ladezeit. Die Zuweisung fällt weg, wenn ``x`` niemand mehr liest."""
+        assigns = assignment_binders(self.source, base.id, base)
+        if not assigns or not all(
+            self.ctx.is_module(self.path, a.value, old_module) for a in assigns
+        ):
+            self.ctx.problem(
+                f"{self.path}:{base.lineno}: {base.id!r} ist das Modul {old_module}, aber nicht "
+                "über einen Import oder importlib.import_module gebunden (Parameter, Fixture) — "
+                "vor dem Schnitt als Import schreiben"
+            )
+            return None
+        alias = self.alias(module)
+        if alias is None:
+            return None
+        text = import_text(module, alias)
+        for assign in assigns:
+            if _module_level(self.source, assign):
+                anchor = self.head_anchor()
+                if anchor is None:
+                    self.ctx.problem(
+                        f"{self.path}:{assign.lineno}: kein Importkopf auf Modulebene für "
+                        f"{text!r} — vor dem Schnitt einen Import an den Kopf stellen"
+                    )
+                    return None
+                plan = self.plan(anchor)
+                if text not in plan.after:
+                    plan.after.append(text)
+                    plan.rules.append(rule)
+            elif (id(assign), text) not in self._after_assign:
+                self._after_assign.add((id(assign), text))
+                detail = f"neu hinter Zeile {assign.lineno}: {text}"
+                self.edits.append(Edit.at(self.path, "after", assign, text, rule, detail))
+            if not any(w.stmt is assign for w in self.assign_watches):
+                self.assign_watches.append(AssignWatch(assign, base.id, old_module))
+        return alias
+
+    def head_anchor(self) -> ast.Import | ast.ImportFrom | None:
+        """Die letzte Anweisung des ersten Importblocks auf Modulebene (ohne ``__future__``)."""
+        last: ast.Import | ast.ImportFrom | None = None
+        for stmt in self.source.tree.body:
+            if isinstance(stmt, ast.ImportFrom) and stmt.module == "__future__":
+                continue
+            if isinstance(stmt, IMPORTS):
+                last = stmt
+                continue
+            if last is not None:
+                break
+            if docstring_node(self.source.tree.body) is stmt:
+                continue
+            break
+        return last
+
+    def watch_import(
+        self, binders: list[ast.Import | ast.ImportFrom], name: str, module: str
+    ) -> None:
+        """Der Import, der ``name`` an ``module`` bindet, fällt weg, wenn ihn danach niemand
+        mehr liest."""
+        self._watch(binders, name, module, plain=False)
+
+    def _replaced_reads(self, name: str) -> bool:
+        """Ob ein neuer Text dieser Tabelle ``name`` liest (``state.bump`` liest ``state``)."""
+        for _start, _end, text in self._ranges:
+            if not text:
+                continue
+            try:
+                tree = ast.parse(text, mode="eval")
+            except SyntaxError:
+                continue
+            if any(isinstance(n, ast.Name) and n.id == name for n in ast.walk(tree)):
+                return True
+        return False
 
     def _watch(
         self, binders: list[ast.Import | ast.ImportFrom], name: str, module: str, *, plain: bool
@@ -358,14 +613,51 @@ class FileRewrite:
             plan.drop.add(watch.number)
             plan.rules.append("Import ohne Leser fällt weg")
         out = list(self.edits)
+        for assign_watch in self.assign_watches:
+            if self._assignment_used(assign_watch):
+                continue
+            stmt = assign_watch.stmt
+            if self._only_statement(stmt):
+                self.ctx.problem(
+                    f"{self.path}:{stmt.lineno}: die Zuweisung ist die einzige Anweisung ihres "
+                    "Blocks und fiele weg — Block vorher umschreiben"
+                )
+                continue
+            old = " ".join(self.source.node_text(stmt).split())
+            out.append(
+                Edit.at(
+                    self.path,
+                    "stmt",
+                    stmt,
+                    "",
+                    "Zuweisung des Moduls ohne Leser fällt weg",
+                    f"{old} → (entfällt)",
+                )
+            )
         for plan in self.plans.values():
             edit = self._import_edit(plan)
             if edit is not None:
                 out.append(edit)
         return out
 
+    def _assignment_used(self, watch: AssignWatch) -> bool:
+        """Ob ``x`` aus ``x = importlib.import_module(…)`` außerhalb der ersetzten Stellen noch
+        als dieses Modul gelesen wird."""
+        if self._replaced_reads(watch.name):
+            return True
+        for node in ast.walk(self.source.tree):
+            if not isinstance(node, ast.Name) or node.id != watch.name:
+                continue
+            if not isinstance(node.ctx, ast.Load) or self.covered(node):
+                continue
+            if self.ctx.is_module(self.path, node, watch.module):
+                return True
+        return False
+
     def _still_used(self, watch: Watch) -> bool:
         name = bound_name(watch.stmt.names[watch.number])
+        if not watch.plain and self._replaced_reads(name):
+            return True
         for node in ast.walk(self.source.tree):
             if not isinstance(node, ast.Name) or node.id != name:
                 continue
@@ -373,9 +665,9 @@ class FileRewrite:
                 continue
             if watch.plain:
                 parent = self.source.parent(node)
-                chain = node
+                chain: ast.expr = node
                 while isinstance(parent, ast.Attribute):
-                    chain = parent  # type: ignore[assignment]
+                    chain = parent
                     parent = self.source.parent(parent)
                 text = dotted(chain) or ""
                 if self.covered(chain):
@@ -467,6 +759,125 @@ class FileRewrite:
     def call_at(self, line: int, col: int) -> ast.Call | None:
         found = find_nodes(self.source, ast.Call, line, col)
         return found[0] if found else None
+
+    # ---- Umschreiben eines Bezugs (gemeinsam für alle Modi)
+
+    def rebind_from(
+        self,
+        line: int,
+        col: int,
+        old_module: str,
+        name: str,
+        module: str,
+        new_name: str,
+        rule: str,
+    ) -> None:
+        """``from old_module import name [as b]`` an der Lage eines Bezugs wird ``from module
+        import new_name as b``."""
+        stmt = self.import_statement(line, col)
+        if stmt is None:
+            self.ctx.problem(f"{self.path}:{line}: Importanweisung nicht gefunden (Werkzeugfehler)")
+            return
+        if absolute_module(self.path, stmt) != old_module:
+            return  # über ein anderes Modul (Rückexport, Lazy-Export) — dort umgeschrieben
+        for number, alias in enumerate(stmt.names):
+            if alias.name == name:
+                self.rebind(stmt, number, module, new_name, rule)
+
+    def retarget_attribute(
+        self,
+        line: int,
+        col: int,
+        old_module: str,
+        name: str,
+        module: str,
+        new_name: str,
+        rule: str,
+    ) -> bool:
+        """``M.name`` an der Lage eines Bezugs wird ``<modul>.new_name``; ``False``, wenn dort
+        kein Zugriff über das Modul steht (Lazy-Export eines Pakets)."""
+        node = self.attribute_at(line, col, name, old_module)
+        if node is None:
+            return False
+        text = self.module_expression(node.value, module, old_module, rule)
+        if text is not None:
+            self.replace(node, f"{text}.{new_name}", rule)
+        return True
+
+    def retarget_getattr(
+        self,
+        line: int,
+        col: int,
+        old_module: str,
+        name: str,
+        module: str,
+        new_name: str,
+        rule: str,
+    ) -> None:
+        """``getattr(M, "name")`` wird ``getattr(<modul>, "new_name")``."""
+        call = self.call_at(line, col)
+        if (
+            call is None
+            or len(call.args) < 2
+            or not isinstance(call.args[1], ast.Constant)
+            or call.args[1].value != name
+        ):
+            self.ctx.problem(
+                f"{self.path}:{line}: getattr auf {old_module}.{name} ohne festen Namen — vor dem "
+                "Schnitt mit fester Zeichenkette schreiben"
+            )
+            return
+        text = self.module_expression(call.args[0], module, old_module, rule)
+        if text is None:
+            return
+        self.replace(call.args[0], text, rule)
+        if new_name != name:
+            self.replace(call.args[1], quoted(self.source, call.args[1], new_name), rule)
+
+    def retarget_patch(
+        self, line: int, col: int, form: str, old_module: str, module: str, name: str, rule: str
+    ) -> None:
+        """Eine Patch-Stelle auf ``old_module.<alt>`` zielt danach auf ``module.name``: als Text
+        (``setattr``/``delattr``/``patch``), über ein Modul (``setattr``/``delattr``) oder
+        ``patch.object``."""
+        call = self.call_at(line, col)
+        if call is None or not call.args:
+            self.ctx.problem(f"{self.path}:{line}: Patch-Stelle nicht gefunden (Werkzeugfehler)")
+            return
+        first = call.args[0]
+        if (
+            form in ("setattr", "delattr", "patch")
+            and isinstance(first, ast.Constant)
+            and isinstance(first.value, str)
+        ):
+            if self.ctx.shadowed(module):
+                self.ctx.problem(
+                    f"{self.path}:{line}: der Pfad {module}.{name} als Text endete beim "
+                    "gleichnamigen trägen Export, nicht beim Modul — vor dem Schnitt mit "
+                    "importlib.import_module und patch.object/setattr schreiben"
+                )
+                return
+            self.replace(first, quoted(self.source, first, f"{module}.{name}"), rule)
+            return
+        if form in ("setattr", "delattr", "patch.object") and len(call.args) >= 2:
+            second = call.args[1]
+            if not isinstance(second, ast.Constant) or not isinstance(second.value, str):
+                self.ctx.problem(
+                    f"{self.path}:{line}: Patch-Stelle mit gefaltetem Namen — vor dem Schnitt mit "
+                    "festem Namen schreiben"
+                )
+                return
+            text = self.module_expression(first, module, old_module, rule)
+            if text is None:
+                return
+            self.replace(first, text, rule)
+            if second.value != name:
+                self.replace(second, quoted(self.source, second, name), rule)
+            return
+        self.ctx.problem(
+            f"{self.path}:{line}: Patch-Stelle mit gefaltetem Ziel — vor dem Schnitt mit festem "
+            "Text schreiben"
+        )
 
 
 def all_imports(source: Source) -> list[ast.Import | ast.ImportFrom]:

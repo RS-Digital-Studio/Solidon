@@ -472,6 +472,300 @@ MODULE_NEW: dict[str, str | None] = {
 }
 
 
+# ------------------------------------------------------------------------------ copies
+
+LAZY = '''
+    """Träge Pakete wie ``app.core.lazy``: Ein eingetragener Name gewinnt vor dem Untermodul."""
+
+    from __future__ import annotations
+
+    import importlib
+    import sys
+    from types import ModuleType
+    from typing import Any
+
+
+    def install(package: str, exports: dict[str, tuple[str, str]]) -> None:
+        module = sys.modules[package]
+
+        class LazyPackage(ModuleType):
+            def __getattribute__(self, name: str) -> Any:
+                if not name.startswith("_"):
+                    entry = exports.get(name)
+                    if entry is not None:
+                        submodule, attribute = entry
+                        loaded = importlib.import_module(f"{package}.{submodule}")
+                        return getattr(loaded, attribute)
+                return ModuleType.__getattribute__(self, name)
+
+        module.__class__ = LazyPackage
+'''
+
+#: Originale in ``engine`` und hinter einem trägen Export, Halter mit Kopfkopien als Import (mit
+#: und ohne ``as``), als Zuweisung und als Kopie einer Kopie, Patches auf Kopien in allen Formen.
+COPIES_OLD: dict[str, str] = BASE | {
+    "app/core/bootstrap.py": '''
+        """Lädt die Module mit Operationen in fester Reihenfolge."""
+
+        from __future__ import annotations
+
+        import importlib
+
+        _OPERATION_MODULES = (
+            "app.core.engine",
+            "app.core.other",
+        )
+
+
+        def load_operations() -> None:
+            for name in _OPERATION_MODULES:
+                importlib.import_module(name)
+    ''',
+    "app/core/lazy.py": LAZY,
+    "app/core/engine.py": '''
+        """Rechenkern der Attrappe: die Originale."""
+
+        from __future__ import annotations
+
+        from app.core.registry import register
+
+        LIMIT = 3
+
+
+        @register("compute", check="value")
+        def compute(value: int) -> int:
+            return value + 1
+
+
+        def scale(value: int) -> int:
+            return value * 2
+
+
+        class Settings:
+            factor = 3
+
+
+        def direct(value: int) -> int:
+            return compute(value)
+    ''',
+    "app/core/kit/__init__.py": '''
+        """Ein träges Paket: ``measure`` heißt wie sein Untermodul."""
+
+        from app.core.lazy import install
+
+        _EXPORTS = {"measure": ("measure", "measure")}
+
+        install(__name__, _EXPORTS)
+    ''',
+    "app/core/kit/measure.py": '''
+        """Das Original hinter dem trägen Export."""
+
+
+        def measure(text: str) -> int:
+            return len(text)
+    ''',
+    "app/core/consumer.py": '''
+        """Halter mit Kopfkopien in allen Formen."""
+
+        from __future__ import annotations
+
+        from app.core.engine import LIMIT, Settings, scale
+        from app.core.engine import compute as operation
+        from app.core.kit import measure
+
+        TABLE = {"op": operation}
+
+
+        def read(value: int) -> int:
+            return operation(value) + scale(value)
+
+
+        def settings() -> Settings:
+            return Settings()
+
+
+        def shadow(operation: object) -> object:
+            return operation
+
+
+        def late(value: int) -> int:
+            from app.core.engine import compute
+
+            return compute(value)
+
+
+        def size(text: str) -> int:
+            return measure(text)
+
+
+        def typed(value: "Settings") -> int:
+            return value.factor
+
+
+        def limit() -> int:
+            return LIMIT
+    ''',
+    "app/core/relay.py": '''
+        """Eine Kopie der Kopie."""
+
+        from app.core.consumer import operation
+
+
+        def relay(value: int) -> int:
+            return operation(value)
+    ''',
+    "tools/engine_tool.py": '''
+        """Ein Werkzeug mit einer Kopie als Zuweisung."""
+
+        from app.core import engine
+
+        operation = engine.compute
+
+
+        def read(value: int) -> int:
+            return operation(value)
+    ''',
+    "tests/test_engine.py": '''
+        """Patches auf Kopien und Originale."""
+
+        import importlib
+        from unittest.mock import patch
+
+        from app.core import consumer, relay
+        from app.core.consumer import operation
+
+
+        def test_copy(monkeypatch):
+            monkeypatch.setattr(consumer, "operation", lambda value: 0)
+            monkeypatch.setattr("app.core.relay.operation", lambda value: 0)
+            with patch.object(consumer, "scale", lambda value: 0):
+                pass
+            monkeypatch.setattr("app.core.engine.compute", lambda value: 5)
+            monkeypatch.setattr("tools.engine_tool.operation", lambda value: 6)
+            assert operation is not None
+            assert relay is not None
+
+
+        def test_late(monkeypatch):
+            holder = importlib.import_module("app.core.consumer")
+            monkeypatch.setattr(holder, "Settings", object)
+            assert holder.LIMIT == 3
+    ''',
+}
+
+COPIES_CUT = """\
+schema_version = 1
+id = "engine-copies"
+mode = "copies"
+
+[[bindings]]
+module = "app.core.engine"
+name = "compute"
+
+[[bindings]]
+module = "app.core.engine"
+name = "scale"
+
+[[bindings]]
+module = "app.core.engine"
+name = "Settings"
+
+[[bindings]]
+module = "app.core.kit.measure"
+name = "measure"
+"""
+
+#: Der Sollbaum nach dem Schnitt im Modus ``copies``, von Hand geschrieben.
+COPIES_NEW: dict[str, str | None] = {
+    "app/core/consumer.py": '''
+        """Halter mit Kopfkopien in allen Formen."""
+
+        from __future__ import annotations
+
+        from app.core import engine, kit
+        from app.core.engine import LIMIT
+
+        TABLE = {"op": engine.compute}
+
+
+        def read(value: int) -> int:
+            return engine.compute(value) + engine.scale(value)
+
+
+        def settings() -> engine.Settings:
+            return engine.Settings()
+
+
+        def shadow(operation: object) -> object:
+            return operation
+
+
+        def late(value: int) -> int:
+            from app.core.engine import compute
+
+            return compute(value)
+
+
+        def size(text: str) -> int:
+            return kit.measure(text)
+
+
+        def typed(value: "engine.Settings") -> int:
+            return value.factor
+
+
+        def limit() -> int:
+            return LIMIT
+    ''',
+    "app/core/relay.py": '''
+        """Eine Kopie der Kopie."""
+
+        from app.core import engine
+
+
+        def relay(value: int) -> int:
+            return engine.compute(value)
+    ''',
+    "tools/engine_tool.py": '''
+        """Ein Werkzeug mit einer Kopie als Zuweisung."""
+
+        from app.core import engine
+
+
+        def read(value: int) -> int:
+            return engine.compute(value)
+    ''',
+    "tests/test_engine.py": '''
+        """Patches auf Kopien und Originale."""
+
+        import importlib
+        from unittest.mock import patch
+
+        from app.core import engine, relay
+        from app.core.engine import compute as operation
+
+
+        def test_copy(monkeypatch):
+            monkeypatch.setattr(engine, "compute", lambda value: 0)
+            monkeypatch.setattr("app.core.engine.compute", lambda value: 0)
+            with patch.object(engine, "scale", lambda value: 0):
+                pass
+            monkeypatch.setattr("app.core.engine.compute", lambda value: 5)
+            monkeypatch.setattr("app.core.engine.compute", lambda value: 6)
+            assert operation is not None
+            assert relay is not None
+
+
+        def test_late(monkeypatch):
+            holder = importlib.import_module("app.core.consumer")
+            from app.core import engine
+
+            monkeypatch.setattr(engine, "Settings", object)
+            assert holder.LIMIT == 3
+    ''',
+}
+
+
 # --------------------------------------------------------------------------- Werkzeuge
 
 

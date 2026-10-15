@@ -59,7 +59,7 @@ from tools.code_index import CACHE, Index  # noqa: E402
 from tools.move_cut import Cut, CutError, load  # noqa: E402
 from tools.move_edits import apply_text  # noqa: E402
 from tools.move_proof import Proof, prove  # noqa: E402
-from tools.move_refs import Context, PlanError  # noqa: E402
+from tools.move_refs import AlreadyAppliedError, Context, PlanError  # noqa: E402
 from tools.move_source import AREAS  # noqa: E402
 
 #: Größte Zeilenzahl eines neuen Moduls (Konzept 3.1, Regel 1); darüber nur mit ``over_limit``.
@@ -95,6 +95,10 @@ def plan(cut: Cut, root: Path, index: Index) -> Change:
         change.files.update(result.files)
         change.removed.extend(result.removed)
         edits = result.edits
+    elif cut.mode == "copies":
+        from tools.move_copies import CopiesPlanner
+
+        edits = CopiesPlanner(ctx).plan()
     else:
         raise PlanError([f"Modus {cut.mode}: der Planer folgt im nächsten Schritt — abgewiesen"])
     for path, rows in edits.items():
@@ -241,8 +245,6 @@ def run(
     cache: bool = True,
 ) -> Result:
     """Plant, beweist und schreibt (außer ``check``) einen Schnitt."""
-    from tools.move_module import AlreadyAppliedError
-
     index = Index.build(root, cache=cache)
     try:
         change = plan(cut, root, index)
@@ -278,8 +280,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     root = args.root.resolve()
     if args.list_copies:
-        print("move_names: --list-copies folgt mit dem Modus copies", file=sys.stderr)
-        return 2
+        from tools.move_copies import bindings_toml, list_copies
+
+        print(bindings_toml(list_copies(Index.build(root))), end="")
+        return 0
     if args.cut is None:
         parser.error("eine Zuschnittliste angeben")
     try:

@@ -40,6 +40,7 @@ from tools.move_source import (
     identifiers,
     is_type_checking,
     module_of,
+    spans,
 )
 from tools.move_trees import Mapping, Trees
 
@@ -234,9 +235,12 @@ class Scopes:
                 self.table_of[id(node)] = candidates[used]
                 self._used[key] = used + 1
 
-    def is_global(self, node: ast.Name) -> bool:
-        """Ob ``node`` die Bindung der Modulebene liest (oder schreibt)."""
-        name = node.id
+    def is_global(self, node: ast.expr, name: str | None = None) -> bool:
+        """Ob ``node`` die Bindung der Modulebene liest (oder schreibt); mit ``name``: ob an der
+        Stelle von ``node`` der Name ``name`` die Bindung der Modulebene meinte."""
+        if name is None:
+            assert isinstance(node, ast.Name)
+            name = node.id
         current: ast.AST = node
         for outer in self.source.ancestors(node):
             if isinstance(outer, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
@@ -272,6 +276,43 @@ class Scopes:
                 return True
             current = outer
         return True
+
+
+class FileScopes:
+    """:class:`Scopes` für jede Anweisung der Modulebene einer Datei — ob ein Name an einer
+    beliebigen Stelle die Bindung der Modulebene meint."""
+
+    def __init__(self, source: Source) -> None:
+        self.source = source
+        body = source.tree.body
+        self._items = list(zip(body, spans(source, body), strict=True))
+        self._scopes: dict[int, Scopes] = {}
+
+    def of(self, node: ast.AST) -> Scopes:
+        line = getattr(node, "lineno", 0)
+        for stmt, span in self._items:
+            if span.start <= line <= (stmt.end_lineno or span.start):
+                found = self._scopes.get(id(stmt))
+                if found is None:
+                    found = Scopes(self.source, stmt, span)
+                    self._scopes[id(stmt)] = found
+                return found
+        raise SourceError(
+            f"{self.source.path}:{line}: keine Anweisung der Modulebene (Werkzeugfehler)"
+        )
+
+    def is_global(self, node: ast.expr, name: str | None = None) -> bool:
+        return self.of(node).is_global(node, name)
+
+    def global_names(self, name: str) -> list[ast.Name]:
+        """Jedes Vorkommen von ``name``, das die Bindung der Modulebene meint (lesend,
+        schreibend, löschend), in Reihenfolge."""
+        found = [
+            node
+            for node in ast.walk(self.source.tree)
+            if isinstance(node, ast.Name) and node.id == name and self.is_global(node)
+        ]
+        return sorted(found, key=lambda n: (n.lineno, n.col_offset))
 
 
 def _in_body(function: ast.AST, child: ast.AST) -> bool:
@@ -337,8 +378,7 @@ class Comparison:
         self, owner: ast.AST, name: str, old: list[ast.stmt], new: list[ast.stmt]
     ) -> None:
         """Vergleicht zwei Anweisungslisten; Importblöcke gehen an :meth:`imports`."""
-        old_items = list(_blocks(old))
-        new_items = list(_blocks(new))
+        old_items, new_items = self.blocks(owner, old, new)
         if len(old_items) != len(new_items):
             self.errors.append(
                 f"{self.where(owner, self.new)} ({self.label}): {len(new_items)} Anweisungen "
@@ -356,6 +396,13 @@ class Comparison:
                 )
             else:
                 self.compare(before, after)
+
+    def blocks(
+        self, owner: ast.AST, old: list[ast.stmt], new: list[ast.stmt]
+    ) -> tuple[list[ast.stmt | list[ast.stmt]], list[ast.stmt | list[ast.stmt]]]:
+        """Die Anweisungen beider Seiten, zusammenhängende Importe als ein Block; Unterklassen
+        nehmen erklärte Zu- und Abgänge heraus."""
+        return list(_blocks(old)), list(_blocks(new))
 
     def imports(self, owner: ast.AST, old: list[ast.stmt], new: list[ast.stmt]) -> None:
         """Vergleicht zwei Importblöcke; Vorgabe: dieselben Bindungen."""
@@ -600,6 +647,46 @@ class ReaderComparison(Comparison):
 
     # ---- Haken
 
+    def blocks(
+        self, owner: ast.AST, old: list[ast.stmt], new: list[ast.stmt]
+    ) -> tuple[list[ast.stmt | list[ast.stmt]], list[ast.stmt | list[ast.stmt]]]:
+        """Erklärte Zu- und Abgänge einer Leserdatei: Eine Zuweisung ``x =
+        importlib.import_module("M")``, die nach dem Schnitt niemand mehr liest, fällt weg (``M``
+        laut :meth:`removable_module`); ein Import des neuen Moduls kommt in einer Funktion als
+        eigener Block hinter die Zuweisung. Jede Stelle von ``x`` wird danach über R
+        verglichen — ein Leser, der bliebe, meint nachher nichts mehr."""
+        new_dumps = {ast.dump(s) for s in new}
+        kept_old: list[ast.stmt] = []
+        for stmt in old:
+            target = _removable_target(stmt)
+            if target is not None and ast.dump(stmt) not in new_dumps:
+                assert isinstance(stmt, ast.Assign)
+                values = self.trees.old_index.resolve(self.path, stmt.value)
+                modules = {v.ref for v in values if v.kind == "module" and v.data != "loaded"}
+                if len(values) == 1 and len(modules) == 1 and self.removable_module(modules.pop()):
+                    self.changed.add(target)
+                    self.import_changes.append(f"entfällt {_text(self.old, stmt)}")
+                    continue
+            kept_old.append(stmt)
+        old_items = list(_blocks(kept_old))
+        new_items = list(_blocks(new))
+        if len(new_items) > len(old_items):
+            old_dumps = {ast.dump(s) for s in old}
+            kept_new: list[ast.stmt | list[ast.stmt]] = []
+            for item in new_items:
+                if isinstance(item, list) and all(ast.dump(s) not in old_dumps for s in item):
+                    bindings = block_bindings(self.path, item)
+                    if bindings and all(self.allowed_module_alias(b) for b in bindings):
+                        self.imports(owner, [], item)
+                        continue
+                kept_new.append(item)
+            new_items = kept_new
+        return old_items, new_items
+
+    def removable_module(self, module: str) -> bool:
+        """Ob eine Zuweisung, die das Modul ``module`` bindet, wegfallen darf."""
+        return False
+
     def imports(self, owner: ast.AST, old: list[ast.stmt], new: list[ast.stmt]) -> None:
         removed, added = _difference(self.path, old, new)
         if not removed and not added:
@@ -790,6 +877,17 @@ class ReaderComparison(Comparison):
         if ast.dump(old) != ast.dump(new):
             self.accept(f"Patch {site_old.text} → {site_new.text}")
         return True
+
+
+def _removable_target(stmt: ast.stmt) -> str | None:
+    """Der Name einer einfachen Zuweisung ``x = …``, sonst ``None``."""
+    if (
+        isinstance(stmt, ast.Assign)
+        and len(stmt.targets) == 1
+        and isinstance(stmt.targets[0], ast.Name)
+    ):
+        return stmt.targets[0].id
+    return None
 
 
 def _same_root(binding: ImportBinding, block: list[ImportBinding]) -> bool:

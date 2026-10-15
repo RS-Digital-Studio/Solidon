@@ -35,6 +35,7 @@ from pathlib import Path
 
 from tools.code_index import Index, PatchSite
 from tools.move_cut import Cut
+from tools.move_proof_copies import CopiesProof
 from tools.move_proof_module import ModuleProof
 from tools.move_source import SourceError
 from tools.move_trees import Mapping, Proof, Trees
@@ -65,6 +66,8 @@ def prove(
     try:
         if cut.mode == "module":
             mapping: Mapping = ModuleProof(proof, trees, cut).run()
+        elif cut.mode == "copies":
+            mapping = CopiesProof(proof, trees, cut).run()
         else:
             proof.error(f"Modus {cut.mode}: der Beweis dafür folgt im nächsten Schritt")
             return proof
@@ -134,7 +137,7 @@ def check_readers(proof: Proof, trees: Trees, mapping: Mapping) -> None:
                 ":".join(mapping.reader(*reader.split(":", 1)))
                 for reader in _readers(trees.old_index, key)
             }
-        new_key = mapping.ref(*key)
+        new_key = mapping.reach_key(*key)
         actual = set(_readers(trees.new_index, new_key))
         if new_key in new_reach:
             actual = set(new_reach[new_key])
@@ -148,7 +151,7 @@ def check_readers(proof: Proof, trees: Trees, mapping: Mapping) -> None:
                 f"Leser {key[0]}.{key[1]} → {new_key[0]}.{new_key[1]}: {len(actual)} gleich"
                 + (f" ({', '.join(sorted(actual))})" if actual else "")
             )
-    for key in sorted(set(new_reach) - {mapping.ref(*k) for k in old_reach}):
+    for key in sorted(set(new_reach) - {mapping.reach_key(*k) for k in old_reach}):
         proof.error(f"{key[0]}.{key[1]}: nachher gepatcht, vorher nicht")
 
 
