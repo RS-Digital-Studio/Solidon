@@ -74,6 +74,7 @@ scrive in `website/version.json`.
 - Materiale e durata di stampa sono sempre interi nella barra di stato. Se la barra è piena, il messaggio accanto si accorcia e la frase intera compare nel suggerimento.
 - L'intestazione accorcia il nome della stampante solo quando la riga è piena. Nome del progetto e misure stanno insieme a sinistra, la stampante a destra accanto a *Impostazioni di stampa …*.
 - Se *Dividi automaticamente* non trova un taglio, la riga di stato dice perché. Finora diceva invece che il pezzo entrava già nel piano.
+- La breve conferma dopo un'azione compare accanto alle schede, non sopra, per esempio accanto al rapporto. Il passaggio successivo la toglie insieme alla riga di stato, anche un vecchio «Annullato».
 
 ### Stampare e passare allo slicer
 

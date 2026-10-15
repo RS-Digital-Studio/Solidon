@@ -74,6 +74,7 @@ it into `website/version.json`.
 - Material and print time always show in full in the status bar. When the bar is full, the message beside them is shortened, and its full sentence is in the tooltip.
 - The header shortens the printer name only when the row is full. Project name and dimensions stand together on the left, the printer on the right next to *Print settings …*.
 - If *Split automatically* finds no cut, the status line says why. Until now it then reported that the part already fits on the bed.
+- The short confirmation after an action stands beside the cards instead of over them, for example beside the report. The next step clears it and the status line, including an old “Undone”.
 
 ### Printing and slicer handover
 

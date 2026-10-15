@@ -99,6 +99,7 @@ Nutzen da und sonst nichts.
 - Material und Druckdauer stehen in der Statusleiste immer ganz da. Ist die Leiste voll, kürzt sich die Meldung daneben, ihr ganzer Satz steht in der Kurzhilfe.
 - Die Kopfzeile kürzt den Druckernamen erst, wenn die Zeile voll ist. Projektname und Maße stehen links beisammen, der Drucker rechts neben *Druckeinstellungen …*.
 - Findet *Automatisch teilen* keinen Schnitt, sagt die Statuszeile den Grund. Bisher meldete sie dann, das Teil passe bereits auf das Bett.
+- Die kurze Quittung nach einer Handlung steht neben den Karten statt darüber, etwa neben dem Prüfbericht. Der nächste Schritt nimmt sie samt Statuszeile mit, auch ein altes „Zurückgenommen“.
 
 ### Drucken und Übergabe an den Slicer
 

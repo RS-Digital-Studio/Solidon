@@ -279,6 +279,7 @@ from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
 from app.i18n import TranslatableText, _, format_decimal, tr
 from app.ui import app_events, change_lock, first_run
 from app.ui import settings as settings_module
+from app.ui.action_notice import ActionNotice
 from app.ui.ai_disclosure import (
     DisclosureResult,
     ensure_ai_disclosure,
@@ -366,7 +367,7 @@ from app.ui.labels import (
 )
 from app.ui.labels import area as area_label
 from app.ui.labels import set_display_unit as set_length_unit
-from app.ui.leash import Worker, WorkerLeash, stop_watching_the_dying, wait_for_all, weak_slot
+from app.ui.leash import Worker, WorkerLeash, wait_for_all, weak_slot
 from app.ui.loading import (
     BAR_AFTER_MS,
     DELAY_MS,
@@ -461,7 +462,6 @@ from app.ui.start_screen import StartScreen, accepted_paths, accepted_url, dropp
 from app.ui.status_line import StatusLine
 from app.ui.style import (
     NORMAL,
-    ROOMY,
     TIGHT,
     divider,
     make_danger,
@@ -480,7 +480,7 @@ from app.ui.transform_bar import ROLES as TRANSFORM_ROLES
 from app.ui.transform_bar import TransformBar
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
-from app.ui.viewport import DisplayMode, Projection, SketchSelectionBadge, Viewport
+from app.ui.viewport import DisplayMode, Projection, Viewport
 
 _log = get_logger(__name__)
 
@@ -939,66 +939,6 @@ class _DialogsStayAbove(QObject):
         for dialog in dialogs_above(window, windows):
             dialog.raise_()
         return False
-
-
-class _ActionNotice(SketchSelectionBadge):
-    """Dieselbe passive Quittung wie in der Skizze, am Ort der letzten Handlung."""
-
-    def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent)
-        self.setTextFormat(Qt.TextFormat.PlainText)
-        self.setWordWrap(True)
-        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._anchor = QPoint()
-        self._expiry = QTimer(self)
-        self._expiry.setSingleShot(True)
-        self._expiry.timeout.connect(self.clear)
-        parent.installEventFilter(self)
-
-    def show_message(self, text: str, anchor: QPoint) -> None:
-        """Ersetzt die alte Meldung; Fortschritt besitzt weder Text noch Zeitgeber."""
-        self.clear()
-        if not text:
-            return
-        self._anchor = anchor
-        self.setText(text)
-        self.place()
-        self.show()
-        # Der volle Text bleibt zusätzlich in der Statuszeile. Hier reichen
-        # kurze Sätze mindestens acht Sekunden, lange bekommen mehr Lesezeit.
-        self._expiry.start(max(8000, len(text) * 60))
-
-    def clear(self) -> None:
-        """Projektwechsel und Fensterabbau nehmen auch den Zeitgeber mit."""
-        self._expiry.stop()
-        super().clear()
-        self.hide()
-
-    def place(self) -> None:
-        """Am gemerkten Ort, umbrochen und innerhalb der aktuellen Zeichenfläche."""
-        parent = self.parentWidget()
-        if parent is None:
-            return
-        available = max(1, parent.width() - 2 * ROOMY)
-        self.setMaximumWidth(min(available, max(1, self.fontMetrics().averageCharWidth() * 60)))
-        self.adjustSize()
-        x = min(max(ROOMY, self._anchor.x()), max(ROOMY, parent.width() - self.width() - ROOMY))
-        y = self._anchor.y() + ROOMY
-        if y + self.height() > parent.height() - ROOMY:
-            y = self._anchor.y() - self.height() - ROOMY
-        y = min(max(ROOMY, y), max(ROOMY, parent.height() - self.height() - ROOMY))
-        self.move(x, y)
-        self.raise_()
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
-        """Größe und Schrift dürfen den gemerkten Satz nicht außerhalb stehen lassen."""
-        if stop_watching_the_dying(self, watched, event):
-            return False
-        if event.type() in (QEvent.Type.Resize, QEvent.Type.FontChange, QEvent.Type.StyleChange):
-            self.place()
-        elif event.type() == QEvent.Type.Hide:
-            self.clear()
-        return super().eventFilter(watched, event)
 
 
 class _SelectionPage(QWidget):
@@ -1890,7 +1830,7 @@ _WORKED_ALONGSIDE: Final = frozenset({"generate", "agent"})
 SLICER_WARMUP_DELAY_MS: Final = 2000
 
 #: Wie lange eine Ansage neben einem solchen Lauf in der Zeile steht —
-#: so lange wie ihre Blase mindestens (``_ActionNotice.show_message``).
+#: so lange wie ihre Blase mindestens (``ActionNotice.show_message``).
 SPOKEN_HOLD_MS: Final = 8000
 
 
@@ -4519,7 +4459,7 @@ class MainWindow(QMainWindow):
         for notice in (self._survey_notice, self._support_notice):
             for zone in (left, self.right_column, bottom, self.viewport.view_bar):
                 notice.keep_clear_of(zone)
-        self._action_notice = _ActionNotice(self.overlay)
+        self._action_notice = ActionNotice(self.overlay)
         self._announcement_document = self.session.project.document
         self._tour_project = self.session.project
         # Parameterzeilen entstehen nach dem Öffnen eines Projekts neu. Ihre
@@ -26107,7 +26047,15 @@ class MainWindow(QMainWindow):
             self.viewport.set_analysis_map(None, None)
             self.viewport.clear_finding_mark()
             self.analysis_bar.show_legend(None)
-        if self._announcement_document is not self.session.project.document:
+        # **Die Statuszeile folgt dem letzten Schritt** (FD-162): Ein Projekt-
+        # wechsel räumt die Quittung ab, und ebenso ein Schritt nach ihr, der
+        # keine eigene sagt — sonst stand „zurückgenommen“ noch nach der
+        # nächsten Übernahme da.
+        steps = tuple(entry.id for entry in self.session.project.document.transactions)
+        if self._announcement_document is not self.session.project.document or (
+            (self._announcement or self._action_notice.isVisible())
+            and self._action_notice.outlived_by(steps)
+        ):
             self._announcement_document = self.session.project.document
             self.announce("")
         # Eine Änderung während der Erkennung meldet kein ``busyChanged``; das
@@ -26574,6 +26522,11 @@ class MainWindow(QMainWindow):
                 self._render_progress_state()
             return
         self._announcement = text
+        # Nach welchem Schritt gesagt wurde: Der nächste nimmt die Quittung mit
+        # (FD-162, :meth:`ActionNotice.outlived_by`).
+        self._action_notice.remember(
+            tuple(entry.id for entry in self.session.project.document.transactions)
+        )
         # Nur was neben einem solchen Lauf gesagt wird, nimmt ihm die Zeile:
         # Eine Ansage unter einer Teilung oder einem Export gehört zu diesem
         # und soll danach nicht über dem Agenten stehen bleiben.

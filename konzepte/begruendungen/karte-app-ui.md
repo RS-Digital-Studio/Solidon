@@ -99,6 +99,7 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 | Ort / Frage | Vertrag |
 |---|---|
 | `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export samt `_warm_the_slicer`, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
+| `action_notice.py` | `ActionNotice`, die Quittung über der Ansicht, und `free_spot`, ihre Stelle ohne Fenster gerechnet; Regel im Absatz zu `announce` unten (FD-108, FD-162) |
 | `status_line.py` | `StatusLine`, die Meldung der Statusleiste: `text()` bleibt der ganze Satz, gezeichnet wird gekürzt, gekürzt steht er in der Kurzhilfe. Sie gibt als Erste nach; die Zahlenzeile (`facts.PrintFacts`) ist nie schmaler als ihre zwei Zeilen (FD-90) |
 
 *Früher unter „Die Karte › Rahmen und Einstieg“, HEAD-Fassung.*
@@ -123,12 +124,23 @@ einen zweiten Bericht über den Prozessschutz auszulösen.
 *Früher unter „Kopf der Karte“.*
 
 `MainWindow.announce` gibt dieselbe Rückmeldung zusätzlich als passive,
-umgebrochene Quittung am Maus- beziehungsweise Tastaturort aus. `_ActionNotice`
-verwendet die vorhandene `SketchSelectionBadge`-Darstellung im bestehenden
-Overlay. Fortschritt besitzt ihren Text und Zeitgeber nicht; neue Meldungen
-ersetzen die alte. Projektwechsel, ausgeblendeter Arbeitsbereich und
-Fensterabbau räumen Quittung und Zeitgeber gemeinsam ab. Die Statuszeile
-bleibt erhalten, ein zweites Live-Ereignis wird nicht erzeugt.
+umgebrochene Quittung nahe dem Maus- beziehungsweise Tastaturort aus.
+`action_notice.ActionNotice` verwendet die vorhandene
+`SketchSelectionBadge`-Darstellung im bestehenden Overlay. Fortschritt besitzt
+ihren Text und Zeitgeber nicht; neue Meldungen ersetzen die alte.
+Projektwechsel, ausgeblendeter Arbeitsbereich und Fensterabbau räumen Quittung
+und Zeitgeber gemeinsam ab. Die Statuszeile bleibt erhalten, ein zweites
+Live-Ereignis wird nicht erzeugt.
+**Nie über einer Karte** (FD-108, FD-162): Hindernis ist jedes frei gesetzte
+Kind der Fläche und der Seiten der Ansicht, die ein Layout trägt — Zonen,
+Maßkarte, Leisten —, nicht die Zeichenfläche und kein Schleier über allem.
+`free_spot` nimmt die freie Stelle nächst dem Ort der Handlung, nie über ihm;
+ohne Platz steht der Satz nur in der Statuszeile. Solange die Quittung gilt,
+hört sie über `app_events.listen` auf Zeigen, Verbergen, Wandern und Größe der
+schwebenden Kinder und rückt nach. **Weg mit dem nächsten Schritt:**
+`remember` merkt die Transaktionsfolge beim Sagen; ein späterer Schritt ohne
+eigene Quittung räumt Statuszeile und Blase ab (`outlived_by`). Gesagt in
+derselben Runde der Ereignisschleife wie der Schritt, gehört sie zu ihm.
 **Ein Hinweis ist keine Quittung:** `announce(text, receipt=False)` schreibt
 nur die Statuszeile, solange der Hinweis gilt, und ein leerer Hinweis stellt
 die letzte Quittung wieder her — so laufen die Griffsätze der Ansicht
