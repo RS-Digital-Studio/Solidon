@@ -319,15 +319,27 @@ def test_a_word_wider_than_the_notice_widens_it(qt_app: QApplication) -> None:
     """
     from app.ui.ai_disclosure import target_for_comfy
 
-    restore = _large_system_font(qt_app, 3)
-    dialog = AiDisclosureDialog(target_for_comfy("https://comfy.example"))
-    try:
+    # Ab welchem Faktor das Wort nicht mehr passt, hängt an der Schrift der
+    # Plattform: Unter Windows reicht der dreifache, mit DejaVu (Linux-CI)
+    # braucht es den fünffachen. Gesucht wird der kleinste in Viertelschritten,
+    # damit der Bildschirm noch Platz hat.
+    factor = 3.0
+    while True:
+        restore = _large_system_font(qt_app, factor)
+        dialog = AiDisclosureDialog(target_for_comfy("https://comfy.example"))
         dialog.show()
         for _ in range(20):
             qt_app.processEvents()
             QTest.qWait(5)
         widest = dialog.content.minimumSizeHint().width()
-        assert widest > 600, "das längste Wort passt nicht in die Öffnungsbreite"
+        if widest > 600 or factor >= 8:
+            break
+        dialog.deleteLater()
+        _flush_deletes(qt_app)
+        restore()
+        factor += 0.25
+    try:
+        assert widest > 600, f"premise: das längste Wort passt nicht in die Öffnungsbreite ({widest})"
         screen = dialog.screen()
         assert screen is not None
         assert widest < screen.availableGeometry().width() - 2 * WIDE, "der Bildschirm hat Platz"
