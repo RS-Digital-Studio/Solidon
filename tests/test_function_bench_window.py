@@ -460,8 +460,8 @@ def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:
     im Verlauf — der Fehlfall von *Auf das Bett setzen* fand sein Feld nie.
 
     Danach ist die Taste wieder los (FD-83): ``mouseDClick`` lässt sie nicht
-    los, und Qt hielt sie für den Rest des Prozesses gedrückt — jede spätere
-    Bewegung war ein Zug ohne Leave, ein Tooltip blieb über dem nächsten Ziel.
+    los, und Qt hielt sie bis zum nächsten Klick für gedrückt — jede Bewegung
+    bis dahin war ein Zug ohne Leave, ein Tooltip blieb über dem nächsten Ziel.
     """
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication, QListWidget
