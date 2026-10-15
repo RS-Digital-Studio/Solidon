@@ -2244,7 +2244,8 @@ def test_the_menu_entry_opens_that_step(window: MainWindow) -> None:
     deadline = time.monotonic() + 60
     while not dialog.can_accept() and time.monotonic() < deadline:
         QApplication.processEvents()
-        window.session.wait_for_idle(100)
+        assert window.session.wait_for_idle(60_000)
+        time.sleep(0.01)
     assert dialog.can_accept(), dialog._accept_button.toolTip()
     dialog.accept()
     assert window.session.wait_for_idle(60_000)

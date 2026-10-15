@@ -145,7 +145,7 @@ class CalibrationDialog(QDialog):
                 editor.setDecimals(2)
                 editor.setRange(-100.0, 500.0)
                 editor.setSingleStep(0.1)
-                editor.setSuffix(" %")
+                editor.setSuffix(tr(" %"))
                 editor.setValue(value * 100.0)
             else:
                 # **Eine Länge spricht in der Anzeigeeinheit** (§19.3, FD-176),
