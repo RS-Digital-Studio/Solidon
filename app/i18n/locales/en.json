@@ -3333,7 +3333,7 @@
   "Ein Operationsdialog: vorn die zwei bis drei Werte, die man tatsächlich ändert, darunter der zugeklappte Bereich „Weitere Einstellungen“.": "An operation dialog: at the front the two or three values you actually change, below them the collapsed “More settings” section.",
   "Ein Parameter braucht einen Namen.": "A parameter needs a name.",
   "Ein Parameter des Rezepts ist ungültig.": "A recipe parameter is invalid.",
-  "Ein Parameter ist ein benanntes Maß. Operationen und Skizzen verweisen mit @name darauf, und an der Zahl zu drehen baut das Modell neu.": "A parameter is a named dimension. Operations and sketches reference it as @name, and turning the number rebuilds the model.",
+  "Ein Parameter ist ein benanntes Maß. Operationen und Skizzen verweisen mit @name darauf, und an der Zahl zu drehen baut das Modell neu.": "A parameter is a named dimension. Operations and sketches refer to it as @name, and changing its value rebuilds the model.",
   "Ein Parameter liegt außerhalb seiner Grenzen, gerechnet wird trotzdem mit ihm. Ausdruck oder Grenzen prüfen.": "A parameter is outside its limits, but it is still used. Check the expression or the limits.",
   "Ein Parameterausdruck lässt sich nicht auflösen — bis er stimmt, rechnet Solidon die Szene nicht.": "A parameter expression cannot be resolved — until it is right, Solidon does not compute the scene.",
   "Ein Passungspaar braucht zwei Merkmale als obj_1:hole_2.": "A fit needs two features written as obj_1:hole_2.",

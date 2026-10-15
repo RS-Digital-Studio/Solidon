@@ -81,3 +81,33 @@ def test_a_protrusion_is_never_called_an_overhang(language: str) -> None:
         if PROTRUSION.search(key) and not OVERHANG.search(key) and word in text.lower()
     ]
     assert not mixed, f"{language}: Überstand als „{word}“ übersetzt:\n" + "\n".join(mixed)
+
+
+#: Die Einleitung von *Parameter anlegen …* (``dialogs.py``) und die Beschreibung
+#: von *Schrift einlegen* (``inlay_text``).
+PARAMETER_INTRO = (
+    "Ein Parameter ist ein benanntes Maß. Operationen und Skizzen verweisen mit @name darauf, "
+    "und an der Zahl zu drehen baut das Modell neu."
+)
+INLAY_DOC = (
+    "Legt Text bündig in eine Fläche ein. Die Buchstaben werden aus dem Körper geschnitten und "
+    "als eigenes Teil in einer zweiten Farbe zurückgesetzt — ohne Spalt, ohne Überlappung, "
+    "die Oberfläche bleibt eben."
+)
+
+
+@pytest.mark.parametrize(
+    ("language", "key", "literal"),
+    [
+        # „An der Zahl drehen“ heißt ändern, nicht am Knopf drehen.
+        ("en", PARAMETER_INTRO, "turning"),
+        ("fr", PARAMETER_INTRO, "tourner"),
+        ("it", PARAMETER_INTRO, "girare"),
+        # „bündig“ ist rente/à face; zweimal „face“ hintereinander las sich doppelt.
+        ("pt", INLAY_DOC, "à face numa face"),
+    ],
+)
+def test_two_dialog_intros_say_what_the_german_means(language: str, key: str, literal: str) -> None:
+    """FD-137: Zwei Einleitungen waren wörtlich oder doppeldeutig übersetzt."""
+    text = read_catalog(language)[key]
+    assert literal not in text, f"{language}: „{literal}“ in {text!r}"

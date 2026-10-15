@@ -3333,7 +3333,7 @@
   "Ein Operationsdialog: vorn die zwei bis drei Werte, die man tatsächlich ändert, darunter der zugeklappte Bereich „Weitere Einstellungen“.": "Un dialogue d'opération : devant, les deux ou trois valeurs que l'on change vraiment, en dessous la section repliée « Autres réglages ».",
   "Ein Parameter braucht einen Namen.": "Un paramètre a besoin d'un nom.",
   "Ein Parameter des Rezepts ist ungültig.": "Un paramètre de la recette n'est pas valide.",
-  "Ein Parameter ist ein benanntes Maß. Operationen und Skizzen verweisen mit @name darauf, und an der Zahl zu drehen baut das Modell neu.": "Un paramètre est une cote nommée. Les opérations et les esquisses y renvoient par @nom, et tourner le chiffre reconstruit le modèle.",
+  "Ein Parameter ist ein benanntes Maß. Operationen und Skizzen verweisen mit @name darauf, und an der Zahl zu drehen baut das Modell neu.": "Un paramètre est une cote nommée. Les opérations et les esquisses y renvoient par @nom, et modifier sa valeur reconstruit le modèle.",
   "Ein Parameter liegt außerhalb seiner Grenzen, gerechnet wird trotzdem mit ihm. Ausdruck oder Grenzen prüfen.": "Un paramètre sort de ses limites, mais le calcul l'utilise quand même. Vérifiez l'expression ou les limites.",
   "Ein Parameterausdruck lässt sich nicht auflösen — bis er stimmt, rechnet Solidon die Szene nicht.": "Une expression de paramètre ne peut pas être résolue — tant qu'elle n'est pas juste, Solidon ne calcule pas la scène.",
   "Ein Passungspaar braucht zwei Merkmale als obj_1:hole_2.": "Une paire d'ajustement a besoin de deux caractéristiques sous la forme obj_1:hole_2.",
