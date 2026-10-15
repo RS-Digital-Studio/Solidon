@@ -603,7 +603,12 @@ def without_way(row: Mapping[str, Any]) -> str:
     Ohne Startszene steht der Befund nicht da, dessen Handlung die Zeile ist; ein
     Dialog einer Klasse und ein Meldungsfenster gehen nur über einen benannten
     Weg auf (``spec.route``). Solche Zeilen sind nicht gelaufen, kein Fund (F-32).
+    Ebenso ein Weg über einen Befund oder eine Befundhandlung, die die Startszene
+    nicht zusagt (``promises``): Er hieße „nicht auffindbar“ gegen die Anwendung,
+    wo die Szene fehlt (FD-101).
     """
+    from tools.function_scenes import load_scenes
+
     spec = row.get("spec") or {}
     scene = str(spec.get("start_scene") or row.get("start_scene") or "")
     if not scene:
@@ -611,4 +616,14 @@ def without_way(row: Mapping[str, Any]) -> str:
     kind = str(row.get("target") or "").partition(":")[0]
     if kind in OPENED_ELSEWHERE and not spec.get("route"):
         return f"Zeile ohne Weg zu ihrem Fenster ({kind}:, keine route in der Spezifikation)"
+    promises = getattr(load_scenes().get(scene), "promises", None)
+    if promises is None:
+        return f"Startszene {scene} steht nicht im Szenenkatalog"
+    steps = [*(row.get("route") or ()), *(spec.get("route") or ()), {"target": row.get("target")}]
+    for step in steps:
+        name = str(step.get("target") or "")
+        if name.startswith("finding:") and name[8:] not in promises.get("findings", ()):
+            return f"Startszene {scene} sagt den Befund {name[8:]} nicht zu"
+        if name.startswith("finding.action:") and name[15:] not in promises.get("actions", {}):
+            return f"Startszene {scene} sagt die Handlung {name[15:]} nicht zu"
     return ""

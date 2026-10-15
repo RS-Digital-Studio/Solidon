@@ -17,3 +17,28 @@ fault_case = { start_scene = "unter_dem_bett_langsam", route = [{ target = "hist
 [row."finding.action:place_on_bed".expectation]
 "bounds.z_min" = { value = 0.0, tolerance = 0.000001, origin = "Konstruktion: Würfel 20 mm um den Ursprung (cube_clean.stl), aufgesetzt liegt seine Unterseite bei 0" }
 volume = { value = 8000.0, tolerance = 0.001, origin = "Korpus: cube_clean.stl ist ein Würfel 20 mm, 20³ mm³" }
+
+# Die Werte eines alten Schritts zeigt die Handlung *Werte anzeigen* am Befund, dass
+# er nicht mehr gerechnet wird (FD-101).
+[row."dialog:step_values_dialog"]
+start_scene = "alter_farbschritt.netz"
+route = [
+  { target = "finding:evaluate.legacy_point_paint" },
+  { target = "finding.action:show_step_values" },
+]
+
+# Nach den Körpern fragt die Handlung einer Sammelzeile: zwei Würfel unter dem Bett,
+# ein Befund für beide (FD-101).
+[row."dialog:body_choice_dialog"]
+start_scene = "zwei_unter_dem_bett.netz"
+route = [{ target = "finding.action:place_on_bed" }]
+
+# *Automatisch teilen* teilt einen Körper, der nicht auf das Bett passt: Nach der
+# Rechnung stehen die Teile auseinandergezogen da, mit Schritt und Passungen. An
+# einem Körper, der passt, sagt es nur, dass er schon passt — der zweite Fall der
+# Zeile, ihre Absage. Vorher lief die Zeile nur am passenden Quader und maß weder
+# Ergebnis noch Gestaltung der Teilung (FD-151).
+[row."command:edit.auto_split"]
+start_scene = "zu_gross.netz"
+example_goal = "Die Platte, die nicht auf das Bett passt, in druckbare Teile teilen."
+fault_case = { start_scene = "quader.exakt", expected = "meldung" }

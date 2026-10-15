@@ -18,3 +18,28 @@ fault_case = { inputs = { "feature.field:resize_hole.diameter" = 0.1 }, expected
 [row."resize_hole".expectation]
 "hole.diameter" = { value = 8.0, tolerance = 0.01, origin = "Konstruktion: getippte 8 mm; resize_hole gleicht nicht aus (compensate = false)" }
 volume = { value = 31089.64, tolerance = 3.0, origin = "Formel 80 · 50 · 8 − 3 · 8 · A − π · 4² · 8 mm³ mit A = 24 · 2,6² · sin 7,5°, dem Querschnitt einer Korpusbohrung (48 Ecken auf r = 2,6 mm, make_corpus.plate_holes); die Toleranz deckt die Sehnen der neuen Bohrung (gemessen 31090,79 am Netz, 31091,58 exakt), nicht 0,1 mm Durchmesser (10 mm³)" }
+
+# An einer gebohrten Bohrung trägt die Maßgruppe im Bild den Bohrschritt, und
+# *Zum Langloch ziehen* tritt rechts zurück (panels.py ``set_measuring``); an einer
+# erkannten steht im Bild *Bohrung ändern*, und die Handlung bleibt rechts (FD-101).
+[row."slot_hole"]
+start_scene = "erkannte_bohrung.netz"
+
+# Die Fußknöpfe des Merkmalfensters stehen nur an einer offenen Handlungszeile und
+# nie neben einer Maßgruppe im Bild. *Merkmal verschieben* hat keinen Weg ins Bild:
+# Ihr Kopf öffnet die Zeile, die Maßgruppe geht (FD-101).
+[row."feature.apply"]
+route = [{ target = "feature:move_feature" }]
+
+[row."feature.in_view"]
+route = [{ target = "feature:move_feature" }]
+
+# *Auf alle N gleichartigen anwenden* steht erst ab zwei gleichen Bohrungen
+# (Startszene ``gleiche_bohrungen.exakt`` der Anforderung ``gleichartig``).
+[row."feature.every"]
+route = [{ target = "feature:move_feature" }]
+
+# Die örtliche Erkennung ist erst scharf; ihr Dialog öffnet mit dem Klick auf die
+# Stelle im Bild (``local_recognition_flow``, FD-101).
+[row."dialog:local_recognition_dialog"]
+route = [{ target = "operation:detect_region" }, { target = "view:obj_1" }]

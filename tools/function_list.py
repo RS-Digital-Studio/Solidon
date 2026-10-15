@@ -1343,9 +1343,8 @@ def selection_route(row: Row, scenes: Mapping[str, Scene]) -> tuple[dict[str, st
     Baumzeile, die die Szene in ``select`` nennt, ein Befund seine Zeile im
     Bericht — bei einer Befundhandlung der Befund, an dem sie steht. Eine Kante
     wählt nur ein Klick ins Bild: erst die Baumzeile des Körpers, dann
-    ``view.edge:`` auf eine seiner Kanten. Eine Operation über die ganze Szene
-    steht am gewählten ersten Körper. Ohne Auswahl (leer, Startbildschirm,
-    Ansicht) ist der Weg leer.
+    ``view.edge:`` auf eine seiner Kanten. Ohne Auswahl (leer, Startbildschirm,
+    Ansicht, eine Operation über die ganze Szene) ist der Weg leer.
     """
     action = row.id.removeprefix("finding.action:") if row.id.startswith("finding.") else ""
     return route_for(row.requirement, row.start_scene, scenes, action)
@@ -1383,11 +1382,11 @@ def route_for(
         return (_click("tree.row:obj_1"), _click("view.edge:obj_1"))
     if requirement in BODY_SELECTIONS:
         return (_click("tree.row:obj_1"),)
-    if requirement == "szene":
-        # Eine Operation über die ganze Szene steht in der Karte am gewählten
-        # Körper (selection_operations.body_operations) — ohne Auswahl fand
-        # der Sprachfall *Druckoptimal ausrichten* nicht (Probelauf F-32).
-        return (_click("tree.row:obj_1"),)
+    # Eine Operation über die ganze Szene steht seit RM-735 nur ohne Auswahl in der
+    # Karte (``SelectionOperationsPanel``: die Handlungen für alle Körper gehören
+    # zur Stufe ohne Auswahl und zu keiner anderen). Der Weg wählte den ersten
+    # Körper, und *Anordnen*, *Kollisionen prüfen* und *Druckoptimal ausrichten*
+    # hießen „nicht auffindbar“ (FD-101). Ohne Auswahl ist der Weg leer.
     return ()
 
 

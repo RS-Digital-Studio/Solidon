@@ -638,11 +638,14 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
     # --- Wege, Eingaben, Vorschau --------------------------------------------------------------
 
     def path_steps(self) -> list[Step]:
+        """Der Weg der Zeile als Schritte. Ein Fenster als Ziel ist erreicht, sobald es
+        dasteht: Ein Klick in seine Mitte träfe ein Bedienelement darin (FD-101)."""
         target = walk_target(self.row)
+        standing = target.partition(":")[0] in surfaces.OPENED_ELSEWHERE
         return [
             self.action_step(name)
             if name == target and name.startswith("feature:")
-            else self.walker.step(name, button)
+            else self.walker.step(name, button, stop_before_target=standing and name == target)
             for name, button in route_of(self.row)
         ]
 
@@ -670,23 +673,41 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
                 or waited >= EFFECT_WINDOW_S
             )
 
+        wanted = target.partition(":")[2]
+
+        def foreign_in_view() -> bool:
+            group = self.widget("measure.apply")
+            shown = surfaces.op_in_view(self.window)
+            return bool(shown) and group is not None and group.isVisible() and shown != wanted
+
+        def handed_over(machine: StepMachine) -> None:
+            # Der Klick auf den Kopf übergibt die Maßgruppe oder schließt sie
+            # (*Zum Langloch ziehen*, *Merkmal verschieben*): Steht danach keine
+            # fremde Handlung mehr im Bild, gilt der Vermerk nicht (FD-101).
+            if not foreign_in_view():
+                self.data.get("unmeasured", {}).pop(f"im_bild:{target}", None)
+
         def act(machine: StepMachine) -> None:
             if not (
                 surfaces.feature_in_view(self.window, target)
                 or surfaces.in_view(self.window, inputs)
             ):
-                shown, wanted = surfaces.op_in_view(self.window), target.partition(":")[2]
-                group = self.widget("measure.apply")
-                if shown and group is not None and group.isVisible() and shown != wanted:
+                if foreign_in_view():
                     # Im Bild steht eine andere Handlung — an einer gesetzten Bohrung
                     # *Bohrung im ursprünglichen Schritt ändern* (N5). Gemessen wird
                     # die Handlung der Zeile, nicht die im Bild.
                     unmeasured(
                         self.data,
                         f"im_bild:{target}",
-                        f"die Maßgruppe im Bild trägt {shown}, nicht {wanted}",
+                        f"die Maßgruppe im Bild trägt "
+                        f"{surfaces.op_in_view(self.window)}, nicht {wanted}",
                     )
-                machine.insert([self.walker.step(target, stop_before_target=stop_before)])
+                machine.insert(
+                    [
+                        self.walker.step(target, stop_before_target=stop_before),
+                        Step(f"im bild nach {target}", handed_over, settle_ms=SETTLE_MS),
+                    ]
+                )
                 return
             if self.walker.before_target is not None:
                 self.walker.before_target(target)
@@ -1782,7 +1803,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
         target = walk_target(self.row)
         route = self.path_steps()
         last, button = route_of(self.row)[-1] if route else ("", "left")
-        if route and last == target:
+        if route and last == target and target.partition(":")[0] not in surfaces.OPENED_ELSEWHERE:
             # Wirkt die Handlung mit dem Klick, wird erst vor ihrer Wirkung
             # gemessen, dann wirklich geklickt (:func:`take`): Manche öffnen
             # weitere Eingaben, deren Fläche getrennt aufgenommen wird.

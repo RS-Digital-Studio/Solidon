@@ -130,6 +130,25 @@ promises = { objects = 1, body = "closed", findings = ["arrange.below_bed"], act
 op = "load"
 params = { source = "src_1", unit = "mm" }
 
+[scene."zwei_unter_dem_bett.netz"]
+summary = "Zwei gleiche Netzwürfel 20 mm nebeneinander, beide halb unter dem Druckbett: Der Bericht fasst ihren Befund in einer Sammelzeile, deren Handlung nach den Körpern fragt."
+kernel = "netz"
+promises = { objects = 2, body = "closed", findings = ["arrange.below_bed"], actions = { place_on_bed = "arrange.below_bed" } }
+[[scene."zwei_unter_dem_bett.netz".ops]]
+op = "create_box"
+params = { width = 20.0, depth = 20.0, height = 20.0 }
+[[scene."zwei_unter_dem_bett.netz".ops]]
+op = "create_box"
+params = { width = 20.0, depth = 20.0, height = 20.0 }
+[[scene."zwei_unter_dem_bett.netz".ops]]
+op = "translate_object"
+inputs = ["obj_1"]
+params = { dz = -10.0 }
+[[scene."zwei_unter_dem_bett.netz".ops]]
+op = "translate_object"
+inputs = ["obj_2"]
+params = { dx = 40.0, dz = -10.0 }
+
 [scene."zu_gross.netz"]
 summary = "Eine Platte 400 × 300 × 20 mm: größer als der Bauraum des Vorgabedruckers."
 kernel = "netz"

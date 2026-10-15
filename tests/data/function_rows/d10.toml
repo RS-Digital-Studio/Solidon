@@ -25,3 +25,18 @@ route = [
   { target = "tree.row:obj_1.face_1" },
   { target = "tree.row:obj_2.face_1", modifier = "ctrl" },
 ]
+
+# Die Fenster der Parameter, des Kalibrierens und der Gegenstücke öffnet ihr
+# Menüeintrag; ohne Weg lief die Zeile im Sprachfall nie (FD-101).
+[row."dialog:parameter_dialog"]
+route = [{ target = "menu:menubar.parameter_anlegen" }]
+
+[row."dialog:calibration_dialog"]
+route = [{ target = "menu:menubar.material_kalibrieren" }]
+
+[row."dialog:counterpart_dialog"]
+route = [
+  { target = "tree.row:obj_1.face_1" },
+  { target = "tree.row:obj_2.face_1", modifier = "ctrl" },
+  { target = "menu:menubar.gegenstuecke_setzen" },
+]

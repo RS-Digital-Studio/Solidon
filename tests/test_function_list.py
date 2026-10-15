@@ -949,9 +949,9 @@ def test_every_selecting_row_carries_its_selection_clicks(rows: list[fl.Row]) ->
     assert targets("finding.action:place_on_bed") == [("finding:arrange.below_bed", "")]
     assert targets("feature:part.move") == [("tree.row:obj_1.screw_hole_bore_1", "")]
     assert targets("create_box") == []
-    # Eine Operation über die ganze Szene steht in der Karte am gewählten Körper
-    # (Probelauf F-32: ohne Auswahl fand der Sprachfall sie nicht).
-    assert targets("arrange_bed") == [("tree.row:obj_1", "")]
+    # Eine Operation über die ganze Szene steht seit RM-735 nur ohne Auswahl in
+    # der Karte; am gewählten Körper hieß sie „nicht auffindbar“ (FD-101).
+    assert targets("arrange_bed") == []
     # Eine Kante wählt ein Klick ins Bild, nachdem der Körper gewählt ist
     # (gestufte Tiefe, §18.5) — vorher wählte der Weg nur den Körper, und keine
     # Kantenzeile lief an einer Kante (Durchsicht welle4 C-M4).
