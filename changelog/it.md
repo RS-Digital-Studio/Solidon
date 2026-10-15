@@ -80,11 +80,11 @@ scrive in `website/version.json`.
 - Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
 - Per i fori, vista e *Selezione* mostrano la stessa modifica. Misura, profondità e imbocco collegato sono davanti; compensazione di stampa e regolazioni fini, in «Altri valori».
 - I campi del foro e la casella per modificare insieme elementi uguali spiegano il loro effetto. «Compensare gli scostamenti di stampa» chiarisce la correzione del profilo del materiale.
-- Nella scheda delle misure nella vista, il tasto Tab passa dai campi ad *Altri valori* e alla casella degli elementi uguali, poi ad *Applica* e *Annulla*, e torna al primo campo. La casella ora sta sopra i pulsanti.
+- Nella scheda delle misure il tasto Tab va dai campi alla casella degli elementi uguali, poi ad *Applica* e *Annulla*, e torna indietro. La casella ora sta sopra i pulsanti.
 - Dopo *Annulla* o Esc nella scheda delle misure, la tastiera torna nella vista 3D, come dopo *Applica*. Prima finiva sulla scheda *Oggetti*.
-- *Applica* nella scheda delle misure resta grigio finché non cambia un valore o la casella degli elementi uguali, e indica il campo da cui partire. Prima si attivava già con un clic in un campo e non faceva nulla.
+- Nella scheda delle misure *Applica* resta grigio finché non cambia un valore o la casella degli elementi uguali, e indica il primo campo. Prima bastava un clic in un campo, senza effetto.
 - Se la scheda delle misure rifiuta un valore, il motivo compare una sola volta, subito sotto il campo. Prima la stessa frase si ripeteva sopra i pulsanti.
-- Se la scheda delle misure cresce, per esempio per un avviso sotto un campo, resta al suo posto e si sposta solo quanto richiedono il bordo della vista o la maniglia, con un breve movimento. Prima saltava in un altro punto della vista.
+- Se un avviso fa crescere la scheda delle misure, resta al suo posto e si sposta solo quanto richiedono il bordo o la maniglia, con un breve movimento. Prima saltava altrove.
 
 ## 0.6.0
 

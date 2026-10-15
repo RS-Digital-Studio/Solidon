@@ -80,11 +80,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
 - Nos furos, vista e *Seleção* mostram a mesma alteração. Dimensão, profundidade e entrada associada ficam à frente; compensação de impressão e ajustes finos, em «Mais valores».
 - Os campos do furo e a caixa para alterar elementos iguais em conjunto explicam o seu efeito. «Compensar desvios de impressão» esclarece a correção do perfil do material.
-- No cartão de medidas da vista, a tecla Tab passa dos campos para *Mais valores* e para a caixa dos elementos iguais, depois para *Aplicar* e *Cancelar*, e volta ao primeiro campo. A caixa fica agora acima dos botões.
+- No cartão de medidas, a tecla Tab vai dos campos à caixa dos elementos iguais, depois a *Aplicar* e *Cancelar*, e volta ao início. A caixa fica agora acima dos botões.
 - Depois de *Cancelar* ou Esc no cartão de medidas, o teclado volta à vista 3D, como depois de *Aplicar*. Antes ia parar ao cartão *Objetos*.
-- *Aplicar* no cartão de medidas fica cinzento até mudar um valor ou a caixa dos elementos iguais, e indica o campo por onde começar. Antes ficava ativo logo com um clique num campo e não fazia nada.
+- No cartão de medidas, *Aplicar* fica cinzento até mudar um valor ou a caixa dos elementos iguais, e indica o primeiro campo. Antes bastava um clique num campo, sem efeito.
 - Se o cartão de medidas recusar um valor, o motivo aparece uma só vez, logo abaixo do campo. Antes a mesma frase repetia-se acima dos botões.
-- Se o cartão de medidas crescer, por exemplo por causa de um aviso sob um campo, fica no seu lugar e só se desloca o que o limite da vista ou a pega exigirem, com um movimento curto. Antes saltava para outro ponto da vista.
+- Se um aviso fizer crescer o cartão de medidas, fica no lugar e só se desloca o que o limite ou a pega exigirem, com um movimento curto. Antes saltava para outro sítio.
 
 ## 0.6.0
 

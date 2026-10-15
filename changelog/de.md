@@ -105,11 +105,11 @@ Nutzen da und sonst nichts.
 - Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
 - Bei Bohrungen zeigen Bild und *Auswahl* dieselbe Änderung. Zielmaß, Tiefe und mitgehender Einlauf stehen vorn; Druckkorrektur und Feinwerte unter „Weitere Werte“.
 - Bohrungsfelder und der Haken zum gemeinsamen Ändern gleichartiger Merkmale erklären ihre Wirkung. „Druckabweichung ausgleichen“ beschreibt die Korrektur aus dem Materialprofil verständlicher.
-- In der Maßkarte im Bild geht die Tabulatortaste von den Feldern über *Weitere Werte* und den Haken für gleichartige Merkmale zu *Übernehmen* und *Abbrechen* und danach zurück zum ersten Feld. Der Haken steht jetzt über den Knöpfen.
+- Die Tabulatortaste geht in der Maßkarte von den Feldern über den Haken für gleichartige Merkmale zu *Übernehmen* und *Abbrechen* und zurück. Der Haken steht jetzt über den Knöpfen.
 - Nach *Abbrechen* oder Esc in der Maßkarte steht die Tastatur wieder in der 3D-Ansicht, wie nach *Übernehmen*. Bisher landete sie auf der Karte *Objekte*.
-- *Übernehmen* in der Maßkarte bleibt grau, bis sich ein Wert oder der Haken für gleichartige Merkmale ändert, und nennt das Feld, mit dem es losgeht. Bisher war es schon nach einem Klick ins Feld frei und tat nichts.
+- In der Maßkarte bleibt *Übernehmen* grau, bis sich ein Wert oder der Haken für gleichartige Merkmale ändert, und nennt das erste Feld. Bisher genügte ein Klick ins Feld, ohne Wirkung.
 - Lehnt die Maßkarte einen Wert ab, steht der Grund einmal, direkt unter dem Feld. Bisher stand derselbe Satz noch einmal über den Knöpfen.
-- Wird die Maßkarte höher, etwa durch einen Hinweis unter einem Feld, bleibt sie an ihrem Platz und rückt nur so weit, wie Bildrand oder Griff es verlangen, mit einer kurzen Bewegung. Bisher sprang sie an eine andere Stelle des Bildes.
+- Wird die Maßkarte durch einen Hinweis höher, bleibt sie stehen und rückt nur so weit, wie Bildrand oder Griff es verlangen, mit kurzer Bewegung. Bisher sprang sie an eine andere Stelle.
 
 ## 0.6.0
 

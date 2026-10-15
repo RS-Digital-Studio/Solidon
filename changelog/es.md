@@ -81,11 +81,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro o un recipiente solo sale adelante moviendo las esquinas una cantidad mínima, la abertura queda libre. En la versión 0.6.0 podía quedar encima una piel finísima.
 - En agujeros, vista y *Selección* muestran el mismo cambio. Medida, profundidad y entrada vinculada están delante; compensación de impresión y ajustes finos, en «Más valores».
 - Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
-- En la tarjeta de medidas de la vista, el tabulador va de los campos a *Más valores* y a la casilla de características iguales, luego a *Aplicar* y *Cancelar*, y vuelve al primer campo. La casilla está ahora encima de los botones.
+- En la tarjeta de medidas, el tabulador va de los campos a la casilla de características iguales, a *Aplicar* y *Cancelar*, y vuelve. La casilla está ahora encima de los botones.
 - Tras *Cancelar* o Esc en la tarjeta de medidas, el teclado vuelve a la vista 3D, como tras *Aplicar*. Antes acababa en la tarjeta *Objetos*.
-- *Aplicar* en la tarjeta de medidas sigue en gris hasta que cambia un valor o la casilla de características iguales, e indica el campo por el que empezar. Antes se activaba con solo hacer clic en un campo y no hacía nada.
+- En la tarjeta de medidas, *Aplicar* sigue en gris hasta que cambia un valor o la casilla de características iguales, e indica el primer campo. Antes bastaba un clic en un campo, sin efecto.
 - Si la tarjeta de medidas rechaza un valor, el motivo aparece una sola vez, justo debajo del campo. Antes la misma frase se repetía encima de los botones.
-- Si la tarjeta de medidas crece, por ejemplo por un aviso bajo un campo, se queda en su sitio y solo se desplaza lo que exigen el borde de la vista o el tirador, con un movimiento breve. Antes saltaba a otro lugar de la vista.
+- Si un aviso hace crecer la tarjeta de medidas, se queda en su sitio y solo se desplaza lo que exigen el borde o el tirador, con un movimiento breve. Antes saltaba a otro lugar.
 
 ## 0.6.0
 

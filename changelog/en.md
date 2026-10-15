@@ -80,11 +80,11 @@ it into `website/version.json`.
 - If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
 - For holes, the view and *Selection* show the same edit. Size, depth and a linked entrance stay in front; print compensation and fine settings are under “More values”.
 - Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
-- In the measurement card in the view, the Tab key moves from the fields through *More values* and the checkbox for matching features to *Apply* and *Cancel*, then back to the first field. The checkbox now sits above the buttons.
+- In the measurement card, the Tab key goes from the fields to the checkbox for matching features, then *Apply* and *Cancel*, and back. The checkbox now sits above the buttons.
 - After *Cancel* or Esc in the measurement card, the keyboard is back in the 3D view, as after *Apply*. Previously it landed on the *Objects* card.
-- *Apply* in the measurement card stays grey until a value or the checkbox for matching features changes, and names the field to start with. Previously it was enabled as soon as you clicked into a field, and did nothing.
+- In the measurement card, *Apply* stays grey until a value or the checkbox for matching features changes, and names the first field. Previously one click into a field enabled it, to no effect.
 - When the measurement card rejects a value, the reason appears once, directly below the field. Previously the same sentence was repeated above the buttons.
-- When the measurement card grows, for example because of a note below a field, it stays where it is and moves only as far as the edge of the view or the handle requires, with a short movement. Previously it jumped to another part of the view.
+- When a note makes the measurement card taller, it stays put and moves only as far as the view edge or handle requires, with a short movement. Previously it jumped elsewhere.
 
 ## 0.6.0
 
