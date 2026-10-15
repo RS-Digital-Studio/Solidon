@@ -523,6 +523,19 @@ def test_a_binding_the_cut_cannot_use_is_rejected(
     assert where in _rejected(tmp_path, fx.COPIES_OLD, fx.COPIES_CUT.replace(old, new)), label
 
 
+def test_a_copy_of_an_assignment_copy_declared_as_original_is_rejected(tmp_path: Path) -> None:
+    """RM-M12: Ist die erklärte Bindung selbst eine Zuweisungskopie, die ein anderer Halter
+    kopiert, endet ``families()`` nicht mehr mit ``StopIteration``, sondern weist ab."""
+    relay = (
+        '"""Kopie einer Zuweisungskopie."""\n\nfrom tools.engine_tool import operation\n\n\n'
+        "def again(value: int) -> int:\n    return operation(value)\n"
+    )
+    cut = fx.COPIES_CUT + '\n[[bindings]]\nmodule = "tools.engine_tool"\nname = "operation"\n'
+    message = _rejected(tmp_path, fx.COPIES_OLD | {"tools/relay_tool.py": relay}, cut)
+    assert "tools.engine_tool.operation ist selbst eine Kopie" in message
+    assert "tools/relay_tool.py:3: operation kopiert tools.engine_tool.operation" in message
+
+
 def _with_test(text: str) -> dict[str, str]:
     return fx.COPIES_OLD | {"tests/test_extra.py": text}
 
@@ -635,6 +648,16 @@ def _with_test(text: str) -> dict[str, str]:
                 '    assert hasattr(consumer, "operation")\n'
             ),
             "fragt nach der Kopie",
+        ),
+        (
+            "annotierte-kopie",
+            fx.edit(
+                fx.COPIES_OLD,
+                "tools/engine_tool.py",
+                "operation = engine.compute\n",
+                "operation: object = engine.compute\n",
+            ),
+            "tools/engine_tool.py:5: operation ist eine annotierte Kopie",
         ),
         (
             "annotation-mit-praefix",

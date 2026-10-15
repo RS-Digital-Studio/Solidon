@@ -102,8 +102,16 @@ def families(
         origin = head.chain[-1]
         if origin not in selected:
             continue
-        access = route(next(link for link in head.chain if link not in by_key), package)
-        copies[(head.holder, head.bound)] = Copy(head, access, origin)
+        first = next((link for link in head.chain if link not in by_key), None)
+        if first is None:
+            # Die Kette endet bei einer Kopie (einer Zuweisungskopie, der der Auflöser nicht
+            # weiter folgt); dass das erklärte Original selbst eine Kopie ist, steht oben.
+            problems.append(
+                f"{head.path}:{head.line}: {head.bound} kopiert {origin[0]}.{origin[1]}, das "
+                "selbst eine Kopie ist — in bindings das Original nennen, nicht die Kopie"
+            )
+            continue
+        copies[(head.holder, head.bound)] = Copy(head, route(first, package), origin)
     return copies, problems
 
 
@@ -213,6 +221,15 @@ class CopiesPlanner:
             bound = copy.head.bound
             count = len(top.units.get(bound, [])) + len(top.imports.get(bound, []))
             stmt = self._statement(source, copy)
+            annotated = self._annotated(source, copy)
+            if count == 1 and stmt is None and annotated is not None:
+                self.ctx.problem(
+                    f"{path}:{copy.head.line}: {bound} ist eine annotierte Kopie "
+                    f"({source.node_text(annotated)!r}) — fiele sie weg, ginge die Annotation "
+                    f"verloren; vor dem Schnitt ohne Annotation schreiben ({bound} = …) oder die "
+                    "Leser selbst auf das Original stellen"
+                )
+                continue
             if count != 1 or stmt is None:
                 self.ctx.problem(
                     f"{path}:{copy.head.line}: {bound} wird auf Modulebene {count}-mal gebunden — "
@@ -295,6 +312,18 @@ class CopiesPlanner:
                 and node.targets[0].id == copy.head.bound
             ):
                 return node
+        return None
+
+    def _annotated(self, source: Source, copy: Copy) -> ast.AnnAssign | None:
+        """Die annotierte Zuweisung ``b: T = M.N`` der Modulebene, die die Kopie bindet."""
+        for stmt in source.tree.body:
+            if (
+                isinstance(stmt, ast.AnnAssign)
+                and stmt.lineno == copy.head.line
+                and isinstance(stmt.target, ast.Name)
+                and stmt.target.id == copy.head.bound
+            ):
+                return stmt
         return None
 
     def _watch_assignment(self, rewrite: FileRewrite, stmt: ast.Assign) -> None:

@@ -358,6 +358,48 @@ def test_the_source_read_as_a_value_is_rejected(
     assert "tests/test_value.py:" in message and "als Wert" in message, (label, message)
 
 
+def _limit_old() -> dict[str, str]:
+    """``LIMIT`` liest ``read_count`` (state) und ``_adjust`` (rules): doppelt mitgenommen."""
+    files = fx.edit(fx.MODULE_OLD, "app/core/legacy.py", "COUNT = 0\n", "COUNT = 0\nLIMIT = 3\n")
+    files = fx.edit(files, "app/core/legacy.py", "    return COUNT\n", "    return COUNT + LIMIT\n")
+    return fx.edit(
+        files,
+        "app/core/legacy.py",
+        "    return len(shape.points) + read_count()\n",
+        "    return len(shape.points) + read_count() + LIMIT\n",
+    )
+
+
+@pytest.mark.parametrize(
+    ("label", "text", "where"),
+    [
+        (
+            "patch",
+            "from app.core import legacy\n\n\n"
+            'def test_limit(monkeypatch):\n    monkeypatch.setattr(legacy, "LIMIT", 9)\n',
+            "tests/test_limit.py:5: Patch auf app.core.legacy.LIMIT, das der Zuschnitt in jedes "
+            "lesende Ziel kopiert",
+        ),
+        (
+            "leser",
+            "from app.core import legacy\n\n\ndef test_limit():\n    assert legacy.LIMIT == 3\n",
+            "tests/test_limit.py:5: liest app.core.legacy.LIMIT von außen",
+        ),
+    ],
+)
+def test_a_duplicate_that_someone_else_reaches_is_rejected(
+    tmp_path: Path, label: str, text: str, where: str
+) -> None:
+    """RM-M12: Ein doppelt mitgenommener Name, den ein Test patcht oder ein Leser von außen
+    liest, hält den Schnitt mit Ausweg an — bisher schwieg der Planer, und der Beweis meldete
+    nur eine fehlende Lesermenge."""
+    cut = fx.MODULE_CUT.replace(
+        'package_docstring = "', 'duplicate = ["LIMIT"]\npackage_docstring = "'
+    )
+    message = _rejected(tmp_path, _limit_old() | {"tests/test_limit.py": text}, cut)
+    assert where in message, (label, message)
+
+
 @pytest.mark.parametrize(
     ("label", "change", "where"),
     [

@@ -603,6 +603,15 @@ class ModulePlanner:
                         f"{ref.path}:{ref.line}: Bezug auf {self.src}.{name} über {ref.kind} — "
                         "vor dem Schnitt als Import oder Attribut schreiben"
                     )
+        for name in self.cut.duplicate:
+            for ref in self.ctx.index.references(self.src, name):
+                if ref.path == self.path or ref.kind == "patch":
+                    continue
+                self.ctx.problem(
+                    f"{ref.path}:{ref.line}: liest {self.src}.{name} von außen, das der Zuschnitt "
+                    "in jedes lesende Ziel kopiert (duplicate) — danach gäbe es den Namen dort "
+                    "nicht; vor dem Schnitt nicht doppelt mitnehmen, sondern in ein Ziel legen"
+                )
         for ref in self.ctx.index.references(self.src, "__file__"):
             if not any(r.path == ref.path for r in self.cut.source_readers):
                 self.ctx.problem(
@@ -625,6 +634,13 @@ class ModulePlanner:
                 )
                 continue
             name = hits[0].name or ""
+            if name in self.cut.duplicate:
+                self.ctx.problem(
+                    f"{site.path}:{site.line}: Patch auf {self.src}.{name}, das der Zuschnitt in "
+                    "jedes lesende Ziel kopiert (duplicate) — danach träfe der Patch keine der "
+                    "Kopien; vor dem Schnitt nicht doppelt mitnehmen, sondern in ein Ziel legen"
+                )
+                continue
             if name in reexports:
                 self.ctx.problem(
                     f"{site.path}:{site.line}: Patch auf die Kopie {self.src}.{name} — vor dem "
