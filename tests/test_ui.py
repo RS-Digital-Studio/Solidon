@@ -20077,10 +20077,14 @@ def test_the_search_shows_explanations_without_repeating_window_titles(
     )
     assert row.text().splitlines()[1] == first_sentence(str(entry.doc)).strip()
 
-    for key, tool in window.tools.tools().items():
+    # Ohne Körper sind die Werkzeuge grau (FD-26, ``3d6a080c8``): Ihre Zeile
+    # nennt den Grund — nicht den Namen des Knopfes — und erklärt nichts, was
+    # gerade nicht geht. Mit zwei Körpern geht jedes, und es erklärt sich.
+    needs_a_body = str(tr("Dafür braucht es einen Körper in der Szene."))
+    for key in window.tools.tools():
         tool_entry = next(candidate for candidate in entries if candidate.name == f"tool.{key}")
-        assert tool_entry.doc == str(tool.hint), key
-        assert tool_entry.doc.strip() and tool_entry.doc != tool_entry.title, key
+        assert not tool_entry.available and tool_entry.reason == needs_a_body, tool_entry
+        assert not tool_entry.doc, key
 
     for name in ("file.part_adopt", "file.part_share"):
         part_entry = next(candidate for candidate in entries if candidate.name == name)
@@ -20098,6 +20102,17 @@ def test_the_search_shows_explanations_without_repeating_window_titles(
     assert window_row.text().splitlines()[1] == first_sentence(str(window_entry.doc)).strip()
     tooltip_lines = window_row.toolTip().splitlines()
     assert tooltip_lines == [str(window_entry.title), str(window_entry.doc)]
+
+    for _ in range(2):
+        window.session.import_model(MESHES / "cube_clean.stl")
+        assert window.session.wait_for_idle(60_000)
+    window.object_tree.select_object(next(iter(window.session.evaluate_now().scene.objects)))
+    QApplication.processEvents()
+    entries = window.selection_operations._search_rows()
+    for key, tool in window.tools.tools().items():
+        tool_entry = next(candidate for candidate in entries if candidate.name == f"tool.{key}")
+        assert tool_entry.available and tool_entry.doc == str(tool.hint), tool_entry
+        assert tool_entry.doc.strip() and tool_entry.doc != tool_entry.title, key
 
 
 def test_a_question_of_several_words_still_finds_something(window: MainWindow) -> None:

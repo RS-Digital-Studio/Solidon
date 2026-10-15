@@ -56,6 +56,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Sem ativação, as ações que alteram algo em *Relatório de verificação*, *Seleção*, menus de contexto e filamento ficam a cinzento com o motivo. Antes, a recusa surgia depois do clique.
 - Sem ativação, também *Criar parâmetro …*, *Mover*, *Dividir*, as teclas do histórico e as medidas na vista ficam a cinzento. Cada motivo indica o caminho, como *Ajuda → Desbloquear o Solidon …*.
 - Quando uma ação do *Relatório de verificação* espera pelo cálculo em curso, indica que depois volta a ficar disponível, também para leitores de ecrã.
+- Numa cena vazia, as ferramentas a cinzento como *Corte* e *Medir* indicam o motivo: precisam de um corpo. Até agora a dica mostrava apenas o nome.
 - As mensagens da barra de estado já não colocam dois pontos depois de uma frase completa.
 - Com um só corpo, a árvore de objetos tem a altura do seu conteúdo, e o histórico com um só passo também. Na versão 0.6.0 ficava espaço vazio por baixo.
 - O passo mais recente continua visível no histórico quando novos corpos fazem crescer a árvore de objetos. Na versão 0.6.0 deslizava para baixo do limite do painel.

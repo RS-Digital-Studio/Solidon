@@ -56,6 +56,7 @@ scrive in `website/version.json`.
 - Senza attivazione, le azioni che modificano qualcosa in *Rapporto di verifica*, *Selezione*, menu contestuali e filamento sono in grigio con il motivo. Prima il rifiuto arrivava dopo il clic.
 - Senza attivazione sono in grigio anche *Crea parametro …*, *Sposta*, *Dividi*, i tasti della cronologia e le misure nella vista. Ogni motivo indica la strada, come *Aiuto → Sblocca Solidon …*.
 - Se un'azione del *Rapporto di verifica* attende il calcolo in corso, dice che poi torna disponibile, anche ai lettori di schermo.
+- In una scena vuota, gli strumenti in grigio come *Sezione* e *Misura* indicano il motivo: serve un corpo. Finora il suggerimento mostrava solo il nome.
 - I messaggi nella barra di stato non mettono più i due punti dopo una frase completa.
 - Con un solo corpo l'albero degli oggetti è alto quanto il suo contenuto, e così la cronologia con un solo passo. Nella versione 0.6.0 sotto restava spazio vuoto.
 - Il passo più recente resta visibile nella cronologia quando nuovi corpi fanno crescere l'albero degli oggetti. Nella versione 0.6.0 scivolava sotto il bordo del pannello.
