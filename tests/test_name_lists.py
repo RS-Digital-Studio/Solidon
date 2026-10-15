@@ -15,9 +15,9 @@ c) ``evaluate._STEP_WAY_MODULES``: ``_step_ways`` importiert jedes Modul und
    mitten in ``evaluate``.
 d) ``matching._MATCH_WAYS``: im Modul gebunden und zur Aufrufzeit gelesen; die
    Lesermenge des Auflösers wie in W2 d) (Entscheidung E8).
-e) Lazy-Exporte: Jeder Eintrag liefert genau das Objekt, das sein Untermodul
-   auf Modulebene bindet. Dass es Untermodul und Attribut gibt, prüft
-   ``test_lazy_exports.py``.
+e) Lazy-Exporte: Das Untermodul jedes Eintrags bindet den Namen auf
+   Modulebene (statisch, über den Auflöser). Dass es Untermodul und Attribut
+   zur Laufzeit gibt, prüft ``test_lazy_exports.py``.
 g) Jede Zeichenkette ``"app.…"`` in ``app/`` und ``tools/`` nennt ein Modul,
    einen Namen darin oder — mit Punkt am Ende — ein Paket.
 h) ``function_list.RAW_WINDOW_PACKAGES``: Jeder Schlüssel ist der Name genau
@@ -55,6 +55,11 @@ from tools.code_index import Index, shared
 
 ROOT = Path(__file__).resolve().parents[1]
 MATCHING = "app.core.perceive.matching"
+
+#: Das fehlende Modul der Gegenproben liegt außerhalb von ``app``: Ein erfundener Name
+#: unter ``app``, den ein Helfer hier importiert, wäre für W5
+#: (``test_import_resolution.py``) ein echter, unauflösbarer Bezug.
+ABSENT = "cs0_name_lists_absent"
 
 #: Die Grundmengen aus dem Plan (2.6, Anhang A S15 bis S17). ``RAW_WINDOW_PACKAGES``
 #: hatte dort 26 Schlüssel mit Modulstamm; seit D0 (E10) nennt eine Kennung nur
@@ -108,12 +113,16 @@ def _operation_problems(names: Iterable[str]) -> list[str]:
     return problems
 
 
+def _shipped_modules() -> list[str]:
+    """``SHIPPED_MODULES`` nennt Module relativ zu ``builtin``; hier stehen sie ganz."""
+    return [f"{builtin.__package__}.{short}" for short in builtin.SHIPPED_MODULES]
+
+
 def _part_problems(names: Iterable[str]) -> list[str]:
     """b) Jedes Bausteinmodul lässt sich importieren und liefert einen Baustein."""
     owners = Counter(spec.fn.__module__ for spec in builtin.load().all())
     problems = []
-    for short in names:
-        name = f"{builtin.__package__}.{short}"
+    for name in names:
         try:
             importlib.import_module(name)
         except ModuleNotFoundError as missing:
@@ -144,18 +153,18 @@ def _lazy_packages() -> list[str]:
     ]
 
 
-def _export_problems(
-    index: Index, package: str, exports: Mapping[str, tuple[str, str]]
-) -> list[str]:
-    """e) Das Untermodul bindet den Namen, und das Paket liefert dasselbe Objekt."""
-    module = importlib.import_module(package)
+def _export_problems(index: Index, package: str) -> list[str]:
+    """e) Das Untermodul bindet den Namen auf Modulebene.
+
+    Gefragt wird nur der Auflöser, nichts wird importiert: So steht ein erfundener
+    Eintrag einer Gegenprobe nie als echter Bezug im Baum (W5). Dass das Paket genau
+    dieses Objekt liefert, sichert ``app.core.lazy.install`` selbst zu.
+    """
     problems = []
-    for name, (submodule, attribute) in exports.items():
+    for name, (submodule, attribute) in index.modules[package].exports.items():
         origin = f"{package}.{submodule}"
         if not index.exists(origin, attribute):
             problems.append(f"{package}.{name}: {origin} bindet {attribute} nicht")
-        elif getattr(module, name) is not getattr(importlib.import_module(origin), attribute):
-            problems.append(f"{package}.{name}: liefert nicht {origin}.{attribute}")
     return problems
 
 
@@ -244,27 +253,20 @@ def test_a_every_operation_module_registers_an_operation() -> None:
 
 def test_a_a_missing_or_empty_operation_module_is_found() -> None:
     """Gegenprobe: ein fehlendes Modul und eines, das keine Operation trägt."""
-    problems = _operation_problems(
-        (*bootstrap._OPERATION_MODULES, "app.core.geom.not_there", "app.core.units")
-    )
-    assert [problem.split(":")[0] for problem in problems] == [
-        "app.core.geom.not_there",
-        "app.core.units",
-    ]
+    problems = _operation_problems((*bootstrap._OPERATION_MODULES, ABSENT, "app.core.units"))
+    assert [problem.split(":")[0] for problem in problems] == [ABSENT, "app.core.units"]
 
 
 def test_b_every_shipped_module_brings_a_part() -> None:
-    problems = _part_problems(builtin.SHIPPED_MODULES)
+    problems = _part_problems(_shipped_modules())
     assert not problems, "\n".join(problems)
 
 
 def test_b_a_missing_or_empty_part_module_is_found() -> None:
     """Gegenprobe: ein fehlendes Modul und das Register selbst, das keinen Baustein baut."""
-    problems = _part_problems((*builtin.SHIPPED_MODULES, "not_there", "registry"))
-    assert [problem.split(":")[0] for problem in problems] == [
-        f"{builtin.__package__}.not_there",
-        f"{builtin.__package__}.registry",
-    ]
+    registry = f"{builtin.__package__}.registry"
+    problems = _part_problems((*_shipped_modules(), ABSENT, registry))
+    assert [problem.split(":")[0] for problem in problems] == [ABSENT, registry]
 
 
 # ------------------------------------------------------------------------- c)
@@ -284,12 +286,8 @@ def test_c_a_missing_step_way_module_stops_instead_of_being_skipped(
 ) -> None:
     """Gegenprobe zu CS-10: Bis Schritt 0 übersprang ``_step_ways`` den Namen still."""
     evaluate = _step_way_module()
-    monkeypatch.setattr(
-        evaluate,
-        "_STEP_WAY_MODULES",
-        (*evaluate._STEP_WAY_MODULES, "app.core.perceive.not_there"),
-    )
-    with pytest.raises(ModuleNotFoundError, match="not_there"):
+    monkeypatch.setattr(evaluate, "_STEP_WAY_MODULES", (*evaluate._STEP_WAY_MODULES, ABSENT))
+    with pytest.raises(ModuleNotFoundError, match=ABSENT):
         evaluate._step_ways()
 
 
@@ -316,12 +314,8 @@ def test_c_the_evaluation_itself_stops_on_a_missing_step_way_module(
     from app.core.scene.project import new_project
 
     evaluate = _step_way_module()
-    monkeypatch.setattr(
-        evaluate,
-        "_STEP_WAY_MODULES",
-        (*evaluate._STEP_WAY_MODULES, "app.core.perceive.not_there"),
-    )
-    with pytest.raises(ModuleNotFoundError, match="not_there"):
+    monkeypatch.setattr(evaluate, "_STEP_WAY_MODULES", (*evaluate._STEP_WAY_MODULES, ABSENT))
+    with pytest.raises(ModuleNotFoundError, match=ABSENT):
         evaluate.evaluate(new_project().document, make_profile())
 
 
@@ -359,29 +353,36 @@ def test_d_an_unused_or_missing_match_way_is_found(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("package", _lazy_packages())
-def test_e_every_lazy_export_delivers_what_its_module_binds(index: Index, package: str) -> None:
-    exports = importlib.import_module(package).__dict__["_EXPORTS"]
-    assert exports, f"{package}: _EXPORTS ist leer"
-    problems = _export_problems(index, package, exports)
+def test_e_every_lazy_export_is_bound_by_its_module(index: Index, package: str) -> None:
+    assert index.modules[package].exports, f"{package}: der Auflöser sieht kein _EXPORTS"
+    problems = _export_problems(index, package)
     assert not problems, "\n".join(problems)
 
 
-def test_e_a_missing_unbound_or_foreign_export_is_found(index: Index) -> None:
-    """Gegenprobe: ein fehlendes Untermodul, ein nicht gebundener Name und ein
-    Eintrag, der unter dem Namen etwas anderes liefert."""
-    problems = _export_problems(
-        index,
-        "app.core.scene",
-        {
-            "Missing": ("not_there", "Missing"),
-            "Unbound": ("evaluate", "NOT_BOUND_ANYWHERE"),
-            "evaluate": ("cache", "ResultCache"),
-        },
+def test_e_a_missing_or_unbound_export_is_found(tmp_path: Path) -> None:
+    """Gegenprobe an einer Attrappe: ein Eintrag, dessen Untermodul fehlt, und einer,
+    dessen Untermodul den Namen nicht bindet."""
+    package = tmp_path / "app" / "pkg"
+    package.mkdir(parents=True)
+    (tmp_path / "app" / "__init__.py").write_text('"""Attrappe."""\n', encoding="utf-8")
+    (tmp_path / "app" / "lazy.py").write_text(
+        "def install(package, exports):\n    return None\n", encoding="utf-8"
     )
-    assert problems == [
-        "app.core.scene.Missing: app.core.scene.not_there bindet Missing nicht",
-        "app.core.scene.Unbound: app.core.scene.evaluate bindet NOT_BOUND_ANYWHERE nicht",
-        "app.core.scene.evaluate: liefert nicht app.core.scene.cache.ResultCache",
+    (package / "__init__.py").write_text(
+        "from app.lazy import install\n\n"
+        "_EXPORTS = {\n"
+        '    "used": ("sub", "used"),\n'
+        '    "unbound": ("sub", "absent"),\n'
+        '    "lost": ("gone", "lost"),\n'
+        "}\n"
+        "install(__name__, _EXPORTS)\n",
+        encoding="utf-8",
+    )
+    (package / "sub.py").write_text("def used():\n    return 1\n", encoding="utf-8")
+    fake = Index.build(tmp_path, cache=False)
+    assert _export_problems(fake, "app.pkg") == [
+        "app.pkg.unbound: app.pkg.sub bindet absent nicht",
+        "app.pkg.lost: app.pkg.gone bindet lost nicht",
     ]
 
 
