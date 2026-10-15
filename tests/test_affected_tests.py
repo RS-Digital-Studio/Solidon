@@ -511,6 +511,84 @@ def test_an_operation_module_selects_the_tests_that_name_its_operations(tree: Pa
     assert reasons[tree / "tests" / "test_panel.py"] == "nennt den Baustein zz_panel"
 
 
+def test_an_operation_module_reaches_the_tests_of_the_ops_that_import_it(tree: Path) -> None:
+    """``closure_ops`` importiert ``chamber_ops``; ``test_closure_ops`` nennt nur
+    ``resize_closure`` und lief bei einer Änderung an ``chamber_ops`` nicht mit, obwohl jede
+    Verschlussop die Kammer rechnet (Messung gegen die Ausführung)."""
+    chamber = _write(
+        tree,
+        "app/chamber_ops.py",
+        "from app.registry import register_op\n"
+        "@register_op(name='zz_resize_chamber')\ndef resize(ctx):\n    return ctx\n",
+    )
+    _write(
+        tree,
+        "app/closure_ops.py",
+        "from app.chamber_ops import resize\nfrom app.registry import register_op\n"
+        "@register_op(name='zz_resize_closure')\ndef close(ctx):\n    return resize(ctx)\n",
+    )
+    _write(tree, "tests/test_closure.py", "RESULT = run_op('zz_resize_closure')\n")
+
+    _files, reasons = affected([chamber], ImportGraph(tree))
+
+    assert reasons[tree / "tests" / "test_closure.py"] == "nennt die Operation zz_resize_closure"
+
+
+def test_a_test_over_the_whole_registry_or_the_examples_runs_for_every_operation_module(
+    tree: Path,
+) -> None:
+    """``test_registry_consistency`` geht über ``REGISTRY.all()``, ``test_examples`` rechnet die
+    Beispielprojekte — beide führen ``chamber_ops`` aus, ohne ``resize_chamber`` zu nennen
+    (Entscheidung Koordinator). Eine Frage nach einem Namen, ein Register als Gegenstand von
+    ``setattr`` und eine bloße Liste der Beispieldateien gehen nicht über alles; ein Modul, das
+    keine Op registriert, wählt keinen dieser Tests."""
+    chamber = _write(
+        tree,
+        "app/chamber_ops.py",
+        "from app.registry import register_op\n"
+        "@register_op(name='zz_resize_chamber')\ndef resize(ctx):\n    return ctx\n",
+    )
+    registry = "from app.core.registry import REGISTRY, PARTS\n"
+    over = {
+        "test_all": "NAMES = [spec.name for spec in REGISTRY.all()]\n",
+        "test_groups": "def test_groups():\n    for group in PARTS.by_group():\n        pass\n",
+        "test_passed": "ROWS = rows(registry=REGISTRY)\n",
+        "test_looped": "NAMES = [spec for spec in REGISTRY]\n",
+        "test_example_import": "from app.core import examples\n",
+        "test_example_load": "from pathlib import Path\n"
+        "from app.core.scene.project import load\n"
+        "PROJECTS = [load(p) for p in Path('app/examples').glob('*.p3d')]\n",
+    }
+    single = {
+        "test_get": registry + "SPEC = REGISTRY.get('zz_other')\nKNOWN = REGISTRY.has('zz_x')\n",
+        "test_patch": registry + "def test_patch(monkeypatch):\n"
+        "    monkeypatch.setattr(REGISTRY, '_ops', {})\n",
+        "test_example_list": "from pathlib import Path\n"
+        "FILES = sorted(Path('app/examples').glob('*.p3d'))\n",
+    }
+    for name, text in over.items():
+        _write(tree, f"tests/{name}.py", (registry if "REGISTRY" in text else "") + text)
+    for name, text in single.items():
+        _write(tree, f"tests/{name}.py", text)
+    _write(
+        tree,
+        "tests/helpers_registry.py",
+        registry + "def every():\n    return REGISTRY.in_registration_order()\n",
+    )
+    _write(tree, "tests/test_helped.py", "from tests import helpers_registry\n")
+    graph = ImportGraph(tree)
+
+    files, reasons = affected([chamber], graph)
+
+    chosen = _names(files, tree)
+    assert {f"tests/{name}.py" for name in over} | {"tests/test_helped.py"} <= chosen
+    assert not {f"tests/{name}.py" for name in single} & chosen
+    assert reasons[tree / "tests" / "test_all.py"] == "geht über das ganze Register"
+    assert reasons[tree / "tests" / "test_example_import.py"] == "rechnet die Beispielprojekte"
+    files, _reasons = affected([tree / "app" / "z.py"], graph)
+    assert not {f"tests/{name}.py" for name in over} & _names(files, tree)
+
+
 def test_an_application_module_reading_its_own_tree_lends_that_reading(tree: Path) -> None:
     """CS-32: ``app/i18n/extract.py`` liest die Quellen unter ``app/`` nach ``tr()``-Schlüsseln;
     ``tools/registry_dump.py`` ruft es, und ``test_registry_dump`` fehlte bei einem neuen Text
@@ -583,6 +661,18 @@ def test_the_real_operation_modules_reach_the_tests_that_name_their_operations(
     assert real_graph.root / "tests" / "test_slicer_placement.py" not in files, reasons.get(
         real_graph.root / "tests" / "test_slicer_placement.py"
     )
+
+
+def test_the_real_operation_and_data_changes_reach_what_runs_them(
+    real_graph: ImportGraph,
+) -> None:
+    """Gegen den echten Baum und die Messung der Ausführung: ``chamber_ops`` führen
+    ``test_registry_consistency`` (ganzes Register), ``test_examples`` (Beispielprojekte) und
+    ``test_closure_ops`` (über ``closure_ops``) aus, ohne ``resize_chamber`` zu nennen."""
+    root = real_graph.root
+    files, _reasons = affected([root / "app" / "core" / "geom" / "chamber_ops.py"], real_graph)
+    for test in ("test_registry_consistency.py", "test_examples.py", "test_closure_ops.py"):
+        assert root / "tests" / test in files, test
 
 
 def test_the_real_guards_are_chosen_for_any_change_under_app(real_graph: ImportGraph) -> None:

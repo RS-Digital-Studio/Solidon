@@ -30,9 +30,11 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
    ``app/`` zählt eine Lesestelle nur mit einem Ordner im Repository
    (``extract.message_ids`` → ``test_registry_dump``); oder
 4. sie eine Operation oder einen Baustein beim Namen nennt, den ein
-   geändertes Modul registriert (``@register_op(name="resize_chamber")``) —
-   Module wie ``chamber_ops`` lädt nur eine Namensliste, und ihre Tests
-   importieren sie nie; oder
+   geändertes oder mittelbar betroffenes Modul registriert
+   (``@register_op(name="resize_chamber")``) — Module wie ``chamber_ops``
+   lädt nur eine Namensliste, und ihre Tests importieren sie nie —, oder
+   über das ganze Register oder die Beispielprojekte geht
+   (``REGISTRY.all()``, ``app.core.examples``) und damit jede Op rechnet; oder
 5. eine geänderte Nicht-Python-Datei oder ein Skript außerhalb der Pakete
    in einer Zeichenkette genannt wird — ``ROADMAP.md``, ``constraints.txt``,
    ein Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/`` —, auch
@@ -94,6 +96,24 @@ _PATH_CALLS = frozenset({"Path", "PurePath", "PurePosixPath", "join"})
 
 #: Die Dekoratoren, über die ein Modul Operationen und Bausteine registriert.
 _REGISTRATIONS = {"register_op": "die Operation", "register_part": "den Baustein"}
+
+#: Ein Wort in Anführungszeichen — die Vorauswahl des Namenswegs.
+_QUOTED_WORD = re.compile(r"([\"'])(\w+)\1")
+
+#: Die Register der Operationen und der Bausteine, und ihre Methoden, die jeden Eintrag
+#: liefern; ``get`` und ``has`` fragen nach einem Namen.
+_REGISTRIES = frozenset({"REGISTRY", "PARTS"})
+_WHOLE_REGISTRY = frozenset(
+    {"all", "in_registration_order", "by_category", "for_feature", "by_group", "search", "versions"}
+)
+
+#: Aufrufe, die ein Register nur als Gegenstand nehmen, nicht seine Einträge.
+_NOT_OVER = frozenset({"setattr", "getattr", "type", "isinstance", "id"})
+
+#: Das Modul, das die Beispielprojekte lädt, ihr Ordner und das Modul, das ein Projekt lädt.
+_EXAMPLES = "app.core.examples"
+_EXAMPLES_FOLDER = PurePosixPath("app/examples")
+_PROJECT = "app.core.scene.project"
 
 #: Änderungen hieran betreffen jeden Test.
 _EVERYTHING = frozenset({"tests/conftest.py", "pyproject.toml", "constraints.txt"})
@@ -231,6 +251,29 @@ class ImportGraph:
         """Ob das Modul ``word`` in einer seiner Zeichenketten nennt; erst der Text, dann der
         Baum."""
         return word in self.text(name) and any(word in text for text in self.strings(name))
+
+    @functools.cached_property
+    def quoted(self) -> dict[str, set[str]]:
+        """Je Wort in Anführungszeichen die Testdateien, die es so im Text tragen — die
+        Vorauswahl des Namenswegs; ob es eine Zeichenkette ist, sagt erst :meth:`strings`."""
+        found: dict[str, set[str]] = defaultdict(set)
+        for name in self.modules:
+            if _is_test_file(self, name):
+                for match in _QUOTED_WORD.finditer(self.text(name)):
+                    found[match.group(2)].add(name)
+        return found
+
+    @functools.cached_property
+    def over_everything(self) -> dict[str, str]:
+        """Die Module unter ``tests/`` und ``tools/``, die über das ganze Register oder die
+        Beispielprojekte gehen, je mit dem Grund (:func:`_goes_over_everything`)."""
+        found: dict[str, str] = {}
+        for name in self.modules:
+            if name.startswith(("tests.", "tools.")):
+                reason = _goes_over_everything(self, name)
+                if reason is not None:
+                    found[name] = reason
+        return found
 
 
 #: ``tests/conftest.py`` lädt pytest als Plugin unter seinem bloßen Namen;
@@ -406,13 +449,66 @@ def _name_readers(graph: ImportGraph, name: str) -> dict[str, str]:
     """
     found: dict[str, str] = {}
     for label, registered in _registered(graph, name):
-        quoted = (f'"{registered}"', f"'{registered}'")
-        for test in graph.modules:
-            if not _is_test_file(graph, test) or test in found:
-                continue
-            if any(one in graph.text(test) for one in quoted) and registered in graph.strings(test):
+        for test in sorted(graph.quoted.get(registered, ())):
+            if test not in found and registered in graph.strings(test):
                 found[test] = f"nennt {label} {registered}"
     return found
+
+
+def _goes_over_everything(graph: ImportGraph, name: str) -> str | None:
+    """Ob das Modul jede Operation erreicht, ohne eine beim Namen zu nennen — und wie.
+
+    ``test_registry_consistency`` geht über ``REGISTRY.all()``, ``test_examples`` rechnet die
+    Beispielprojekte; beide führen die Ops von ``chamber_ops`` aus, und keine nennt
+    ``resize_chamber``. Über das ganze Register geht, wer ``REGISTRY`` oder ``PARTS`` mit einer
+    Methode liest, die jeden Eintrag liefert, darüber eine Schleife legt oder es einer Funktion
+    übergibt (``operation_rows(REGISTRY, …)``); ``REGISTRY.get("create_box")`` fragt nach
+    einem Namen, ``monkeypatch.setattr(REGISTRY, …)`` nimmt das Register als Gegenstand. Die
+    Beispielprojekte rechnet, wer ``app.core.examples`` importiert oder einen Pfad in
+    ``app/examples`` nennt und Projekte lädt — wer die Dateien nur listet
+    (``test_asset_rights``), rechnet nichts.
+    """
+    if name in graph.importers.get(_EXAMPLES, ()):
+        return "rechnet die Beispielprojekte"
+    text = graph.text(name)
+    if (
+        "examples" in text
+        and name in graph.importers.get(_PROJECT, ())
+        and _reads_folder(graph, name, _EXAMPLES_FOLDER, _EXAMPLES_FOLDER)
+    ):
+        return "rechnet die Beispielprojekte"
+    if not any(word in text for word in _REGISTRIES):
+        return None
+    relative = graph.modules[name].relative_to(graph.root).as_posix()
+    tree, parents = graph.resolver.parsed(relative)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            word = node.id
+        elif isinstance(node, ast.Attribute):
+            word = node.attr
+        else:
+            continue
+        if word not in _REGISTRIES or not isinstance(node.ctx, ast.Load):
+            continue
+        parent = parents.get(node)
+        if isinstance(parent, ast.Attribute):
+            if parent.attr in _WHOLE_REGISTRY:
+                return "geht über das ganze Register"
+        elif isinstance(parent, ast.Call | ast.keyword):
+            # Als Argument übergeben, auch als Schlüsselwort: ``rows(registry=REGISTRY)``.
+            call = parent if isinstance(parent, ast.Call) else parents.get(parent)
+            if (
+                isinstance(call, ast.Call)
+                and call.func is not node
+                and _called(call) not in _NOT_OVER
+            ):
+                return "geht über das ganze Register"
+        elif (
+            isinstance(parent, ast.For | ast.comprehension | ast.Starred)
+            and getattr(parent, "iter", node) is node
+        ):
+            return "geht über das ganze Register"
+    return None
 
 
 def _folder_pattern(folder: str) -> str:
@@ -597,7 +693,6 @@ def affected(
     changed_modules: set[str] = set()
     deleted_modules: set[str] = set()
     named_tools: list[str] = []
-    registering: list[str] = []
     #: Jede geänderte Datei, neu oder gelöscht — für die, die ihren Ordner lesen.
     paths: list[PurePosixPath] = []
     for path in changed:
@@ -618,8 +713,6 @@ def affected(
                     reasons.setdefault(graph.modules[name], "selbst geändert")
                 if name.startswith("tools."):
                     named_tools.append(path.name)
-                if name.startswith("app."):
-                    registering.append(name)
             elif name.split(".", 1)[0] in PACKAGES:
                 # Gelöschte Module und Paketinitialisierer bleiben über ihre
                 # Importkanten erreichbar, auch Helfer unter tests/.
@@ -641,7 +734,8 @@ def affected(
                 _note_readers(graph, reasons, _named_readers(graph, graph.root / relative))
         else:
             _note_readers(graph, reasons, _named_readers(graph, graph.root / relative))
-    for name in graph.dependents(changed_modules):
+    dependents = graph.dependents(changed_modules)
+    for name in sorted(dependents):
         path = graph.modules[name]
         if name.startswith("tests.") and path.name.startswith("test_"):
             reasons.setdefault(
@@ -664,9 +758,20 @@ def affected(
                 if name.startswith("tests.") and graph.names_in_strings(name, file_name)
             },
         )
+    # Ein Modul, das Ops registriert, erreichen seine Tests über die Namen — auch wenn es nur
+    # mittelbar betroffen ist: ``closure_ops`` importiert ``chamber_ops``, und
+    # ``test_closure_ops`` nennt nur ``resize_closure``. Wer über das ganze Register oder die
+    # Beispielprojekte geht, rechnet jede Op.
+    registering = [
+        name
+        for name in sorted(changed_modules | dependents)
+        if name.startswith("app.") and name in graph.modules and _registered(graph, name)
+    ]
     for name in registering:
         for test, reason in _name_readers(graph, name).items():
             reasons.setdefault(graph.modules[test], reason)
+    if registering:
+        _note_readers(graph, reasons, graph.over_everything)
     if paths:
         for name, reason in _tree_readers(graph, paths).items():
             reasons.setdefault(graph.modules[name], reason)
