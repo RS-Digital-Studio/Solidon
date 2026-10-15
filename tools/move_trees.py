@@ -129,7 +129,20 @@ class Mapping:
         if target.status == "module" and target.name is not None:
             module, name = self.ref(target.module, target.name)
             return target.status, module, name
+        if target.status == "object":
+            return target.status, self.object_ref(target.module), target.name
         return target.status, target.module, target.name
+
+    def object_ref(self, text: str) -> str:
+        """Ein Objektziel des Auflösers (``class M:Q``, ``obj M:Q()``) nach der Abbildung."""
+        kind, space, ref = text.partition(" ")
+        module, colon, qualname = ref.partition(":")
+        if not space or not colon:
+            return text
+        head, dot, rest = qualname.partition(".")
+        call = "()" if head.endswith("()") else ""
+        new_module, new_head = self.ref(module, head.removesuffix("()"))
+        return f"{kind} {new_module}:{new_head}{call}{dot}{rest}"
 
     def site_mismatch(self, old: PatchSite, new: PatchSite) -> str | None:
         """Warum die Ziele der Patch-Stelle ``new`` nicht die abgebildeten von ``old`` sind;

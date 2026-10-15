@@ -52,7 +52,8 @@ from tools.move_source import (
 
 @dataclass
 class Unit:
-    """Eine Anweisung der Quelle auf Modulebene mit ihren Namen."""
+    """Eine Anweisung der Quelle auf Modulebene mit ihren Namen — oder eine Gruppe: die
+    ``@overload``-Fassungen einer Funktion samt Umsetzung, die nur zusammen wandern."""
 
     stmt: ast.stmt
     span: Span
@@ -60,6 +61,28 @@ class Unit:
     target: Target | None
     facts: StatementNames
     duplicate: bool = False
+    group: list[tuple[ast.stmt, Span]] = field(default_factory=list)
+
+    def parts(self) -> list[tuple[ast.stmt, Span]]:
+        """Die Anweisungen der Einheit mit ihren eigenen Spannen."""
+        return self.group or [(self.stmt, self.span)]
+
+    def absorb(self, stmt: ast.stmt, span: Span, facts: StatementNames) -> None:
+        """Nimmt die nächste Fassung einer überladenen Funktion auf."""
+        if not self.group:
+            self.group.append((self.stmt, self.span))
+        self.group.append((stmt, span))
+        self.stmt = stmt
+        self.span = Span(self.span.first, self.span.head, self.span.start, span.last)
+        for name in ("binds", "reads", "writes", "string_reads", "identity"):
+            getattr(self.facts, name).update(getattr(facts, name))
+
+
+def is_overload(stmt: ast.stmt) -> bool:
+    """Ob ``stmt`` eine ``@overload``-Fassung einer Funktion ist."""
+    return isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
+        ast.unparse(d) in ("overload", "typing.overload") for d in stmt.decorator_list
+    )
 
 
 @dataclass
@@ -109,6 +132,8 @@ class ModulePlanner:
             files[path_of(self.src, package=True)] = _docstring_text(self.cut.package_docstring)
         self._references()
         self._patches()
+        self._long_patches()
+        self._hasattr()
         self._source_readers()
         self._name_lists()
         self._lazy_exports()
@@ -216,6 +241,15 @@ class ModulePlanner:
                 )
                 continue
             facts = statement_names(self.source, stmt, span)
+            previous = self.units[-1] if self.units else None
+            if (
+                previous is not None
+                and isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and previous.names == names
+                and all(is_overload(part) for part, _span in previous.parts())
+            ):
+                previous.absorb(stmt, span, facts)
+                continue
             unit = Unit(stmt, span, names, next(iter(targets.values()), None), facts, duplicate)
             self.units.append(unit)
             for name in names:
@@ -293,18 +327,19 @@ class ModulePlanner:
         Knoten, gelesene Definition, beim Import gelesen)."""
         found: list[tuple[Unit, ast.Name, Unit, bool]] = []
         for unit in self.units:
-            scopes = Scopes(self.source, unit.stmt, unit.span)
             homes = self._homes(unit)
-            for node in ast.walk(unit.stmt):
-                if not isinstance(node, ast.Name) or node.id in unit.names:
-                    continue
-                other = self.unit_of.get(node.id)
-                if other is None or other.duplicate or not scopes.is_global(node):
-                    continue
-                assert other.target is not None
-                if all(home == other.target.module for home in homes):
-                    continue
-                found.append((unit, node, other, self._import_time(unit.stmt, node)))
+            for part, span in unit.parts():
+                scopes = Scopes(self.source, part, span)
+                for node in ast.walk(part):
+                    if not isinstance(node, ast.Name) or node.id in unit.names:
+                        continue
+                    other = self.unit_of.get(node.id)
+                    if other is None or other.duplicate or not scopes.is_global(node):
+                        continue
+                    assert other.target is not None
+                    if all(home == other.target.module for home in homes):
+                        continue
+                    found.append((unit, node, other, self._import_time(part, node)))
         return found
 
     def _import_time(self, stmt: ast.stmt, node: ast.AST) -> bool:
@@ -403,31 +438,43 @@ class ModulePlanner:
             )
         renamed = {r.name: r.to for r in self.cut.renames}
         cross_nodes = {id(name) for _u, name, _o, _e in self.cross}
+        crossed = {o.names[0] for _u, _n, o, _e in self.cross}
         for unit in self.units:
-            scopes = Scopes(self.source, unit.stmt, unit.span)
-            for node in ast.walk(unit.stmt):
-                if (
-                    isinstance(node, ast.Name)
-                    and node.id in renamed
-                    and id(node) not in cross_nodes
-                    and scopes.is_global(node)
-                ):
-                    self.unit_edits.append(
-                        Edit.at(self.path, "expr", node, renamed[node.id], "Umbenennung", node.id)
+            for part, span in unit.parts():
+                self._part_rewrites(part, span, renamed, cross_nodes, crossed)
+
+    def _part_rewrites(
+        self,
+        part: ast.stmt,
+        span: Span,
+        renamed: dict[str, str],
+        cross_nodes: set[int],
+        crossed: set[str],
+    ) -> None:
+        scopes = Scopes(self.source, part, span)
+        for node in ast.walk(part):
+            if (
+                isinstance(node, ast.Name)
+                and node.id in renamed
+                and id(node) not in cross_nodes
+                and scopes.is_global(node)
+            ):
+                self.unit_edits.append(
+                    Edit.at(self.path, "expr", node, renamed[node.id], "Umbenennung", node.id)
+                )
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                touched = _string_annotation_names(self.source, node) & (set(renamed) | crossed)
+                if touched:
+                    self.ctx.problem(
+                        f"{self.path}:{node.lineno}: Annotation als Zeichenkette nennt "
+                        f"{', '.join(sorted(touched))}, das umbenannt oder über ein anderes "
+                        "Ziel gelesen wird — vor dem Schnitt ohne Anführung schreiben"
                     )
-                if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                    names = _string_annotation_names(self.source, node)
-                    touched = names & (set(renamed) | {o.names[0] for _u, _n, o, _e in self.cross})
-                    if touched:
-                        self.ctx.problem(
-                            f"{self.path}:{node.lineno}: Annotation als Zeichenkette nennt "
-                            f"{', '.join(sorted(touched))}, das umbenannt oder über ein anderes "
-                            "Ziel gelesen wird — vor dem Schnitt ohne Anführung schreiben"
-                        )
-            if isinstance(unit.stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                name = unit.stmt.name
-                if name in renamed:
-                    self.unit_edits.append(self._head_edit(unit.stmt, renamed[name]))
+        if (
+            isinstance(part, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            and part.name in renamed
+        ):
+            self.unit_edits.append(self._head_edit(part, renamed[part.name]))
 
     def _head_edit(
         self, stmt: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, new: str
@@ -634,6 +681,10 @@ class ModulePlanner:
             for node in string_constants(rewrite.source):
                 if node.value != entry.value:
                     continue
+                if entry.to == (entry.value,):
+                    rewrite.keep(node)
+                    self.used_lists.add(number)
+                    continue
                 parent = rewrite.source.parent(node)
                 if isinstance(parent, (ast.Tuple, ast.List, ast.Set)):
                     text = ", ".join(quoted(rewrite.source, node, v) for v in entry.to)
@@ -686,41 +737,107 @@ class ModulePlanner:
                     second, quoted(source, second, new_name), "Lazy-Export folgt dem Namen"
                 )
 
+    def _files(self, needles: tuple[str, ...]) -> list[str]:
+        """Die Dateien der Bereiche (ohne die Quelle), deren Text eine der Nadeln enthält."""
+        found: list[str] = []
+        for area in AREAS:
+            base = self.ctx.root / area
+            if not base.is_dir():
+                continue
+            for full in sorted(base.rglob("*.py")):
+                relative = full.relative_to(self.ctx.root).as_posix()
+                parts = relative.split("/")[:-1]
+                if relative == self.path or any(
+                    p == "__pycache__" or p.startswith(".") for p in parts
+                ):
+                    continue
+                data = full.read_bytes().decode("utf-8", "replace")
+                if any(n in data for n in needles):
+                    found.append(relative)
+        return found
+
+    def _long_patches(self) -> None:
+        """Ein Pfad als Text, der durch einen verschobenen Namen weiterführt
+        (``"app.x.Klasse.methode"``), führt danach durch das Zielmodul."""
+        moved = self._moved()
+        prefix = self.src + "."
+        for site in self.ctx.index.patch_sites():
+            if not site.targets or any(t.status != "object" for t in site.targets):
+                continue
+            source = self.ctx.source(site.path)
+            calls = [
+                n
+                for n in ast.walk(source.tree)
+                if isinstance(n, ast.Call)
+                and (n.lineno, n.col_offset) == (site.line, site.col)
+                and n.args
+            ]
+            first = calls[0].args[0] if calls else None
+            if not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
+                continue
+            head, dot, rest = first.value.removeprefix(prefix).partition(".")
+            if not first.value.startswith(prefix) or not dot or head not in moved:
+                continue
+            module, new_name = moved[head]
+            rewrite = self.ctx.rewrite(site.path)
+            text = quoted(source, first, f"{module}.{new_name}.{rest}")
+            rewrite.replace(first, text, "Patch-Ziel folgt dem Namen")
+
+    def _hasattr(self) -> None:
+        """``hasattr(M, "N")`` fragt danach das Zielmodul — der Auflöser zählt es nicht als
+        Bezug, und ohne Umschreiben antwortete es still ``False``."""
+        moved = self._moved()
+        for path in self._files(("hasattr(",)):
+            source = self.ctx.source(path)
+            for node in ast.walk(source.tree):
+                if not (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "hasattr"
+                    and len(node.args) == 2
+                    and isinstance(node.args[1], ast.Constant)
+                    and node.args[1].value in moved
+                    and self.ctx.is_module(path, node.args[0], self.src)
+                ):
+                    continue
+                name = str(node.args[1].value)
+                module, new_name = moved[name]
+                self.ctx.rewrite(path).retarget_getattr(
+                    node.lineno, node.col_offset, self.src, name, module, new_name, "verschoben"
+                )
+
     def _stale_strings(self) -> None:
-        """Jede Zeichenkette, die die alte Datei oder einen verschobenen Namen unter dem alten
-        Modul nennt, ist umgeschrieben oder erklärt — sonst ein Fund."""
+        """Jede Zeichenkette, die die alte Datei, das alte Modul oder einen verschobenen Namen
+        darunter nennt, ist umgeschrieben oder erklärt — sonst ein Fund."""
         moved = {f"{self.src}.{name}" for name in self.unit_of}
         file_name = self.path.rpartition("/")[2]
-        needles = (self.path, file_name, self.src)
-        files = [
-            full
-            for area in AREAS
-            if (self.ctx.root / area).is_dir()
-            for full in sorted((self.ctx.root / area).rglob("*.py"))
-        ]
-        for full in files:
-            relative = full.relative_to(self.ctx.root).as_posix()
-            parts = relative.split("/")[:-1]
-            if relative == self.path or any(p == "__pycache__" or p.startswith(".") for p in parts):
-                continue
-            data = full.read_bytes().decode("utf-8", "replace")
-            if not any(n in data for n in needles):
-                continue
-            rewrite = self.ctx.rewrite(relative) if relative in self.ctx.rewrites() else None
+        for relative in self._files((self.path, file_name, self.src)):
+            rewrite = self.ctx.rewrites().get(relative)
             source = rewrite.source if rewrite else self.ctx.source(relative)
+            gone = rewrite.removed_assignments() if rewrite else []
             for node in string_constants(source):
                 value = str(node.value)
+                slashed = value.replace("\\", "/")
                 stale = (
-                    self.path in value
-                    or value == file_name
-                    or value.endswith("/" + file_name)
+                    self.path in slashed
+                    or slashed == file_name
+                    or slashed.endswith("/" + file_name)
+                    or value == self.src
                     or any(value == m or value.startswith(m + ".") for m in moved)
                 )
-                if stale and not (rewrite and rewrite.covered(node)):
-                    self.ctx.problem(
-                        f"{relative}:{node.lineno}: Zeichenkette {value!r} nennt die alte Quelle — "
-                        "in [[name_lists]] oder [[source_readers]] erklären oder vorher umschreiben"
-                    )
+                if not stale or (rewrite and rewrite.covered(node)):
+                    continue
+                if any(_inside_statement(stmt, node) for stmt in gone):
+                    continue
+                self.ctx.problem(
+                    f"{relative}:{node.lineno}: Zeichenkette {value!r} nennt die alte Quelle — "
+                    "in [[name_lists]] (auch to = [derselbe Wert], wenn sie bleibt) oder "
+                    "[[source_readers]] erklären oder vorher umschreiben"
+                )
+
+
+def _inside_statement(stmt: ast.stmt, node: ast.AST) -> bool:
+    return any(child is node for child in ast.walk(stmt))
 
 
 def _reaches(graph: dict[str, set[str]], start: str, goal: str) -> bool:

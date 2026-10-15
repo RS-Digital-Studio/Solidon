@@ -103,12 +103,12 @@ class ModuleProof:
                     f"source_readers: {reader.path} ({reader.scope}) liest die Quelle nicht über "
                     "M.__file__ — Erklärung streichen"
                 )
+        self._stale_strings()
         for number, entry in enumerate(self.cut.name_lists):
             if number not in self.used_lists:
                 self.proof.error(
                     f"name_lists: {entry.value!r} steht nicht in {entry.path} — Erklärung streichen"
                 )
-        self._stale_strings()
         return self.mapping
 
     # ---- Dateien
@@ -156,11 +156,12 @@ class ModuleProof:
 
     # ---- Quelle
 
-    def _source_units(self, old: Source) -> dict[str, tuple[ast.stmt, Span]]:
-        """Die Definitionen der Quelle je gebundenem Namen, mit ihrer Spanne."""
+    def _source_units(self, old: Source) -> list[tuple[list[str], ast.stmt, Span]]:
+        """Die Anweisungen der Quelle mit ihren gebundenen Namen und Spannen, in Reihenfolge —
+        die ``@overload``-Fassungen einer Funktion je für sich."""
         body = old.tree.body
         found = spans(old, body)
-        units: dict[str, tuple[ast.stmt, Span]] = {}
+        units: list[tuple[list[str], ast.stmt, Span]] = []
         declared = {n for t in self.cut.targets for n in t.definitions} | set(self.cut.duplicate)
         for number, (stmt, span) in enumerate(zip(body, found, strict=True)):
             if number == 0 and docstring_node(body) is stmt:
@@ -173,8 +174,8 @@ class ModuleProof:
             if not names:
                 self.proof.error(f"{self.src_path}:{stmt.lineno}: Anweisung ohne Bindung")
                 continue
+            units.append((names, stmt, span))
             for name in names:
-                units[name] = (stmt, span)
                 if name not in declared:
                     self.proof.error(
                         f"{self.src_path}:{stmt.lineno}: {name!r} steht in keinem Ziel des "
@@ -184,7 +185,9 @@ class ModuleProof:
 
     # ---- Ziele
 
-    def _target(self, old: Source, units: dict[str, tuple[ast.stmt, Span]], target: Target) -> None:
+    def _target(
+        self, old: Source, units: list[tuple[list[str], ast.stmt, Span]], target: Target
+    ) -> None:
         path = path_of(target.module)
         if path not in self.trees.new_files:
             return
@@ -200,11 +203,12 @@ class ModuleProof:
             self.proof.error(f"{path}: Docstring fehlt oder weicht vom erklärten ab")
         old_top = TopLevel(old)
         new_top = TopLevel(new)
-        expected = [(name, units[name]) for name in units if name in target.definitions]
-        expected_statements: list[ast.stmt] = []
-        for _name, (stmt, _span) in expected:
-            if not expected_statements or expected_statements[-1] is not stmt:
-                expected_statements.append(stmt)
+        expected = [
+            (names, stmt, span)
+            for names, stmt, span in units
+            if set(names) & set(target.definitions)
+        ]
+        by_name = {name: (stmt, span) for names, stmt, span in units for name in names}
         new_units: list[tuple[ast.stmt, Span]] = []
         seen_unit = False
         used_imports: set[str] = set()
@@ -227,20 +231,19 @@ class ModuleProof:
             if set(top_names(stmt)) & set(self.cut.duplicate)
         ]
         own = [(stmt, span) for stmt, span in new_units if (stmt, span) not in duplicates]
-        if len(own) != len(expected_statements):
+        if len(own) != len(expected):
             self.proof.error(
-                f"{path}: {len(own)} Definitionen, erklärt sind {len(expected_statements)} "
-                f"({', '.join(n for n, _ in expected)})"
+                f"{path}: {len(own)} Definitionen, erklärt sind {len(expected)} "
+                f"({', '.join(n for names, _s, _p in expected for n in names)})"
             )
-        for (new_stmt, new_span), old_stmt in zip(own, expected_statements, strict=False):
-            old_span = next(s for st, s in units.values() if st is old_stmt)
+        for (new_stmt, new_span), (_names, old_stmt, old_span) in zip(own, expected, strict=False):
             self._unit(
                 old, old_top, old_stmt, old_span, new, new_top, new_stmt, new_span, target.module
             )
             used_imports |= self._used(new, new_stmt, new_span)
         for new_stmt, new_span in duplicates:
             name = top_names(new_stmt)[0]
-            old_stmt, old_span = units[name]
+            old_stmt, old_span = by_name[name]
             self._unit(
                 old, old_top, old_stmt, old_span, new, new_top, new_stmt, new_span, target.module
             )
@@ -373,15 +376,23 @@ class ModuleProof:
                 continue
             source = self.trees.new(path)
             sites = {(s.line, s.col) for (p, *_), s in self.trees.sites("new").items() if p == path}
+            kept = {e.value for e in self.cut.name_lists if e.path == path and e.to == (e.value,)}
             for node in string_constants(source):
                 value = node.value
                 assert isinstance(value, str)
+                slashed = value.replace("\\", "/")
                 stale = (
-                    self.src_path in value
-                    or value == file_name
-                    or value.endswith("/" + file_name)
+                    self.src_path in slashed
+                    or slashed == file_name
+                    or slashed.endswith("/" + file_name)
+                    or value == self.src
                     or any(value == m or value.startswith(m + ".") for m in moved)
                 )
+                if value in kept:
+                    for number, entry in enumerate(self.cut.name_lists):
+                        if (entry.path, entry.value) == (path, value):
+                            self.used_lists.add(number)
+                    continue
                 if stale and (node.lineno, node.col_offset) not in sites:
                     self.proof.error(
                         f"{path}:{node.lineno}: Zeichenkette {value!r} nennt die alte Quelle — in "

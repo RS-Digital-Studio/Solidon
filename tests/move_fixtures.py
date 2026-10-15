@@ -472,6 +472,141 @@ MODULE_NEW: dict[str, str | None] = {
 }
 
 
+# ------------------------------------------------------------------- Modulmodus, Randformen
+
+FORMS_TEST = '''
+    """Leser in weiteren Formen."""
+
+    from __future__ import annotations
+
+    import importlib
+    from typing import TYPE_CHECKING
+
+    import app.core.legacy as lg
+
+    if TYPE_CHECKING:
+        from app.core.legacy import Rule
+
+    EVALUATION = importlib.import_module("app.core.legacy")
+    KNOWN = ("app.core.legacy",)
+
+
+    def test_import_module(monkeypatch):
+        legacy_module = importlib.import_module("app.core.legacy")
+        monkeypatch.setattr(legacy_module, "bump", lambda: None)
+        assert legacy_module.read_count() == 0
+
+
+    def test_inline():
+        assert importlib.import_module("app.core.legacy").read_count() == 0
+
+
+    def test_alias(monkeypatch):
+        monkeypatch.setattr(lg.Rule, "apply", lambda self, hidden: 0)
+        monkeypatch.setattr("app.core.legacy.Rule.apply", lambda self, hidden: 1)
+        assert hasattr(lg, "bump")
+
+
+    def test_module_level():
+        assert EVALUATION.COUNT == 0
+
+
+    def typed(rule: Rule) -> Rule:
+        return rule
+'''
+
+FORMS_TEST_NEW = '''
+    """Leser in weiteren Formen."""
+
+    from __future__ import annotations
+
+    import importlib
+    from typing import TYPE_CHECKING
+
+    from app.core.legacy import rules, state
+
+    if TYPE_CHECKING:
+        from app.core.legacy.rules import Rule
+
+    KNOWN = ("app.core.legacy",)
+
+
+    def test_import_module(monkeypatch):
+        from app.core.legacy import state
+
+        monkeypatch.setattr(state, "bump", lambda: None)
+        assert state.read_count() == 0
+
+
+    def test_inline():
+        assert importlib.import_module("app.core.legacy.state").read_count() == 0
+
+
+    def test_alias(monkeypatch):
+        monkeypatch.setattr(rules.Rule, "apply", lambda self, hidden: 0)
+        monkeypatch.setattr("app.core.legacy.rules.Rule.apply", lambda self, hidden: 1)
+        assert hasattr(state, "bump")
+
+
+    def test_module_level():
+        assert state.COUNT == 0
+
+
+    def typed(rule: Rule) -> Rule:
+        return rule
+'''
+
+OVERLOADS = '''
+
+    @overload
+    def pick(value: int) -> int: ...
+
+
+    @overload
+    def pick(value: str) -> str: ...
+
+
+    def pick(value: int | str) -> int | str:
+        """Gibt den Wert zurück — überladen."""
+        return value
+'''
+
+
+def _forms() -> tuple[dict[str, str], str, dict[str, str]]:
+    """Die Attrappe des Modulmodus mit Randformen: Leser über ``importlib.import_module`` (in
+    einer Funktion, auf Modulebene, als Ausdruck), ``import … as``, ``TYPE_CHECKING``, ein
+    Patch auf eine Klasse über den Pfad, ``hasattr``, eine erklärt bleibende Zeichenkette und eine
+    überladene Funktion in der Quelle."""
+    source = "app/core/legacy.py"
+    state = "app/core/legacy/state.py"
+    old = MODULE_OLD | {"tests/test_forms.py": FORMS_TEST}
+    old = edit(
+        old,
+        source,
+        "from typing import TYPE_CHECKING\n",
+        "from typing import TYPE_CHECKING, overload\n",
+    )
+    old = edit(
+        old,
+        source,
+        "def read_count() -> int:\n    return COUNT\n",
+        "def read_count() -> int:\n    return COUNT\n" + textwrap.dedent(OVERLOADS),
+    )
+    cut = MODULE_CUT.replace('"bump", "read_count"]', '"bump", "read_count", "pick"]') + (
+        '\n[[name_lists]]\npath = "tests/test_forms.py"\nvalue = "app.core.legacy"\n'
+        'to = ["app.core.legacy"]\n'
+    )
+    new = changed_tree(MODULE_OLD, MODULE_NEW) | {"tests/test_forms.py": FORMS_TEST_NEW}
+    new = edit(new, state, "import logging\n", "import logging\nfrom typing import overload\n")
+    new = edit(
+        new,
+        state,
+        "def read_count() -> int:\n    return COUNT\n",
+        "def read_count() -> int:\n    return COUNT\n" + textwrap.dedent(OVERLOADS),
+    )
+    return old, cut, new
+
+
 # ------------------------------------------------------------------------------ copies
 
 LAZY = '''
@@ -1264,3 +1399,6 @@ def tree_bytes(root: Path) -> dict[str, bytes]:
         for path in sorted(root.rglob("*"))
         if path.is_file() and "__pycache__" not in path.parts
     }
+
+
+FORMS_OLD, FORMS_CUT, FORMS_NEW = _forms()

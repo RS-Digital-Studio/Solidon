@@ -335,6 +335,16 @@ class FileRewrite:
         old = " ".join(self.source.node_text(node).split())
         self.edits.append(Edit.at(self.path, "expr", node, text, rule, f"{old} → {text}"))
 
+    def keep(self, node: ast.AST) -> None:
+        """Eine Stelle, die laut Zuschnitt bleibt, wie sie ist: erklärt, ohne Änderung."""
+        start, end = self._range(node)
+        self._ranges.append((start, end, self.source.text[start:end]))
+
+    def removed_assignments(self) -> list[ast.Assign]:
+        """Die Zuweisungen ``x = importlib.import_module(…)``, die nach den Ersetzungen
+        niemand mehr liest und die deshalb wegfallen."""
+        return [w.stmt for w in self.assign_watches if not self._assignment_used(w)]
+
     def remove_lines(self, first: int, last: int, node: ast.AST, rule: str) -> None:
         """Entfernt die Zeilen ``first`` bis ``last`` (eine Methode samt Kopfkommentar); was
         darin stand, gilt als ersetzt."""
