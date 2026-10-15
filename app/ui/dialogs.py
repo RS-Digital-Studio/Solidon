@@ -7,7 +7,7 @@ nie in den Dialog.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -77,6 +77,7 @@ from app.core.errors import (
 )
 from app.core.knowledge import licences
 from app.core.log import get_logger
+from app.core.registry.registry import FEATURE_TITLES
 from app.core.types import Finding
 from app.core.units import UNIT_NAMES
 from app.i18n import format_decimal, get_language, tr
@@ -109,6 +110,7 @@ from app.ui.message_dialog import MessageDialog, acknowledge, inform, name_butto
 # Seit der Codestruktur ein eigenes Modul; Fenster, Werkzeuge und Tests holen
 # den Dialog weiter hier.
 from app.ui.parameter_dialog import ParameterDialog as ParameterDialog
+from app.ui.refusal_details import field_ways, input_dialog_of, silent_ways
 from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
@@ -2768,7 +2770,9 @@ def offered_actions(
 
 
 def unhandled_advice(
-    error: AppError, handlers: Mapping[str, Callable[[AppError], None]]
+    error: AppError,
+    handlers: Mapping[str, Callable[[AppError], None]],
+    left_out: Collection[str] = (),
 ) -> list[str]:
     """Die Vorschläge ohne Handler — als Sätze zum Lesen statt als Knopf.
 
@@ -2790,11 +2794,15 @@ def unhandled_advice(
     Grundsatz dazu stand längst daneben, bei den Knöpfen: „das Schließen ist
     kein Vorschlag, es steht ohnehin da" (:func:`offered_actions`). Der Textpfad
     hatte ihn nur nicht übernommen.
+
+    **Und außer dem, was der Ort selbst ist** (``left_out``, FD-95): Im offenen
+    Operationsdialog ist *Eingabe korrigieren* ohne genanntes Feld kein Rat —
+    die Eingabe steht darüber (``refusal_details.silent_ways``).
     """
     return [
         str(action.label)
         for action in error.suggestions
-        if action.id not in handlers and action.id != CANCEL.id
+        if action.id not in handlers and action.id != CANCEL.id and action.id not in left_out
     ]
 
 
@@ -2824,12 +2832,18 @@ def spoken_values(error: AppError) -> list[str]:
     bought_on / Bedingung: format" unter einem Satz, der längst sagt, dass
     das Datum nicht stimmt (Lagerdurchsicht 19.09.2026). Der Dialog setzt den
     Cursor ins Feld; das ist die Übersetzung der Adresse.
+
+    **„Art“ eines Schrittfehlers bleibt draußen** (FD-95, KUNDE-12): Bei einem
+    Fehler aus einem Schritt ist ``kind`` dessen Titel (``evaluate._finding_from``),
+    und unter der Absage stand „Art: Die Eingabe war so nicht verwendbar.“ — im
+    Dialog wie im Halt. Eine Merkmalsart („Bohrung“) bleibt, sie sagt etwas.
     """
     unit = unit_of(error.values)
     return [
         value_line(key, value, unit)
         for key, value in error.values.items()
         if key not in ADDRESS_VALUES
+        and not (key == "kind" and error.op_id is not None and str(value) not in FEATURE_TITLES)
         and not (unit and key == "unit")
         and value is not None
         and value != ""
@@ -2850,7 +2864,9 @@ ADDRESS_VALUES: Final = frozenset(
 
 
 def problem_text(
-    problem: object, handlers: Mapping[str, Callable[[AppError], None]] | None = None
+    problem: object,
+    handlers: Mapping[str, Callable[[AppError], None]] | None = None,
+    left_out: Collection[str] = (),
 ) -> str:
     """Ein eingebetteter Fehler bewahrt Angaben und nicht ausführbare Vorschläge."""
     if not isinstance(problem, AppError):
@@ -2861,7 +2877,8 @@ def problem_text(
     head = [str(problem.title)]
     if problem.detail:
         head.append(str(problem.detail))
-    return "\n".join([*head, *spoken_values(problem), *unhandled_advice(problem, handlers or {})])
+    advice = unhandled_advice(problem, handlers or {}, left_out)
+    return "\n".join([*head, *spoken_values(problem), *advice])
 
 
 class ErrorNotice(QWidget):
@@ -2920,7 +2937,12 @@ class ErrorNotice(QWidget):
             if name in inherited
         }
         known.update(handlers or {})
-        self.setText(problem_text(problem, known))
+        # Im Dialog, der selbst die Eingabe ist, heißt *Eingabe korrigieren*:
+        # Cursor ins genannte Feld — ohne Feld ist es kein Rat (FD-95).
+        owner = input_dialog_of(self)
+        for name, way in field_ways(problem, owner).items():
+            known.setdefault(name, way)
+        self.setText(problem_text(problem, known, silent_ways(problem, owner)))
         actions = [action for action in problem.suggestions if action.id in known]
         actions = actions or offered_actions(problem, known)
         if not actions:
