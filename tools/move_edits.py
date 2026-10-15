@@ -16,8 +16,10 @@ from dataclasses import dataclass
 from tools.move_source import Source
 
 #: ``expr``: einen Ausdruck ersetzen; ``stmt``: eine Anweisung samt ihrer Zeilen durch Anweisungen
-#: ersetzen (leerer Text: entfernen); ``after``: Anweisungen hinter eine Anweisung setzen.
-KINDS = ("expr", "stmt", "after")
+#: ersetzen (leerer Text: entfernen); ``after``: Anweisungen hinter eine Anweisung setzen;
+#: ``lines``: die Zeilen ``line`` bis ``end_line`` durch fertig eingerückten Text ersetzen (leer:
+#: entfernen); ``insert``: fertig eingerückten Text hinter Zeile ``end_line`` einfügen.
+KINDS = ("expr", "stmt", "after", "lines", "insert")
 
 
 @dataclass(frozen=True)
@@ -76,6 +78,16 @@ def apply_text(source: Source, edits: Iterable[Edit]) -> str:
             indent = source.indent_of(edit.line)
             at = source.line_end(edit.end_line)
             body = _indent_block(edit.text, indent, source.newline) + source.newline
+            if at == len(source.text) and not source.text.endswith("\n"):
+                body = source.newline + body
+            ops.append((at, at, order, body, edit))
+        elif edit.kind == "lines":
+            start = source.line_start(edit.line)
+            end = source.line_end(edit.end_line)
+            ops.append((start, end, order, edit.text.replace("\n", source.newline), edit))
+        elif edit.kind == "insert":
+            at = source.line_end(edit.end_line)
+            body = edit.text.replace("\n", source.newline)
             if at == len(source.text) and not source.text.endswith("\n"):
                 body = source.newline + body
             ops.append((at, at, order, body, edit))

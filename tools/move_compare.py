@@ -623,13 +623,17 @@ class ReaderComparison(Comparison):
             )
             if not uses:
                 self.errors.append(f"{self.path}: neuer Import {name!r} wird nicht gelesen")
-        if all_comments(self.old) != all_comments(self.new):
-            before = all_comments(self.old)
-            after = all_comments(self.new)
+        before = self.expected_comments(all_comments(self.old))
+        after = all_comments(self.new)
+        if before != after:
             self.errors.append(
                 f"{self.path}: Kommentare geändert — verloren "
                 f"{sorted((before - after).elements())}, neu {sorted((after - before).elements())}"
             )
+
+    def expected_comments(self, before: Counter[str]) -> Counter[str]:
+        """Die Kommentare, die die neue Fassung tragen muss; Vorgabe: dieselben."""
+        return before
 
     def _collect_import_changes(self, old: ast.AST, new: ast.AST) -> None:
         """Erster Durchgang: welche Namen ihre Importbindung ändern — je Name alle Bindungen der
@@ -862,10 +866,9 @@ class ReaderComparison(Comparison):
         if site_old.form != site_new.form:
             self.fail(old, new, f"Patch-Form {site_old.form} → {site_new.form}")
             return True
-        expected = [self.mapping.target(site_old, n) for n in range(len(site_old.targets))]
-        actual = [(t.status, t.module, t.name) for t in site_new.targets]
-        if expected != actual:
-            self.fail(old, new, f"Patch-Ziele {actual}, erwartet {expected}")
+        mismatch = self.mapping.site_mismatch(site_old, site_new)
+        if mismatch is not None:
+            self.fail(old, new, f"Patch-Stelle {mismatch}")
             return True
         skip = _designating(site_old.form, old)
         if skip != _designating(site_new.form, new):

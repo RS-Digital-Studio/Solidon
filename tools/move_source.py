@@ -262,13 +262,16 @@ def statement_start(stmt: ast.stmt) -> int:
     return min([stmt.lineno, *(d.lineno for d in decorators)])
 
 
-def spans(source: Source, body: list[ast.stmt]) -> list[Span]:
-    """Die Spannen der Anweisungen eines Rumpfs auf Modulebene. Was zwischen zwei Anweisungen
-    steht, gehört zur folgenden — ein Kopfkommentar wandert mit seiner Definition —, was hinter
-    der letzten steht, zur letzten. Teilen sich zwei Anweisungen eine Zeile (``a = 1; b = 2``),
-    bricht das ab: Eine solche Zeile lässt sich nicht zerschneiden."""
+def spans(
+    source: Source, body: list[ast.stmt], *, after: int = 0, until: int | None = None
+) -> list[Span]:
+    """Die Spannen der Anweisungen eines Rumpfs (Vorgabe: Modulebene). Was zwischen zwei
+    Anweisungen steht, gehört zur folgenden — ein Kopfkommentar wandert mit seiner Definition —,
+    was hinter der letzten steht, zur letzten. Teilen sich zwei Anweisungen eine Zeile (``a = 1;
+    b = 2``), bricht das ab: Eine solche Zeile lässt sich nicht zerschneiden. Für einen
+    Klassenrumpf nennt ``after`` die letzte Zeile des Kopfs und ``until`` die letzte der Klasse."""
     found: list[Span] = []
-    previous_end = 0
+    previous_end = after
     for stmt in body:
         start = statement_start(stmt)
         assert stmt.end_lineno is not None
@@ -292,8 +295,18 @@ def spans(source: Source, body: list[ast.stmt]) -> list[Span]:
         previous_end = stmt.end_lineno
     if found:
         last = found[-1]
-        found[-1] = Span(last.first, last.head, last.start, max(last.last, len(source.lines)))
+        end = len(source.lines) if until is None else until
+        found[-1] = Span(last.first, last.head, last.start, max(last.last, end))
     return found
+
+
+def class_spans(source: Source, cls: ast.ClassDef) -> list[Span]:
+    """Die Spannen der Anweisungen im Rumpf der Klasse ``cls``; der Docstring zählt mit."""
+    parts: list[ast.expr] = [*cls.bases, *(k.value for k in cls.keywords)]
+    head = max([cls.lineno, *(n.end_lineno or n.lineno for n in parts)])
+    first = cls.body[0]
+    head = min(head, statement_start(first) - 1)
+    return spans(source, cls.body, after=head, until=cls.end_lineno)
 
 
 # ------------------------------------------------------------- Namen einer Anweisung

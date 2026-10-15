@@ -35,6 +35,7 @@ from pathlib import Path
 
 from tools.code_index import Index, PatchSite
 from tools.move_cut import Cut
+from tools.move_proof_component import ComponentProof
 from tools.move_proof_copies import CopiesProof
 from tools.move_proof_module import ModuleProof
 from tools.move_source import SourceError
@@ -69,8 +70,7 @@ def prove(
         elif cut.mode == "copies":
             mapping = CopiesProof(proof, trees, cut).run()
         else:
-            proof.error(f"Modus {cut.mode}: der Beweis dafür folgt im nächsten Schritt")
-            return proof
+            mapping = ComponentProof(proof, trees, cut).run()
     except SourceError as error:
         proof.error(str(error))
         return proof
@@ -101,14 +101,10 @@ def check_patch_sites(proof: Proof, trees: Trees, mapping: Mapping) -> None:
             proof.error(f"{path}: {len(after)} Patch-Stellen statt {len(before)}")
             continue
         for old_site, new_site in zip(before, after, strict=True):
-            expected = [mapping.target(old_site, n) for n in range(len(old_site.targets))]
-            actual = [(t.status, t.module, t.name) for t in new_site.targets]
             proof.counts["patch_sites"] += 1
-            if expected != actual:
-                proof.error(
-                    f"{path}:{new_site.line}: Patch-Stelle {new_site.text!r} zielt auf {actual}, "
-                    f"erwartet {expected}"
-                )
+            mismatch = mapping.site_mismatch(old_site, new_site)
+            if mismatch is not None:
+                proof.error(f"{path}:{new_site.line}: Patch-Stelle {new_site.text!r} {mismatch}")
             elif old_site.text != new_site.text:
                 proof.note(f"Patch {path}:{old_site.line}: {old_site.text} → {new_site.text}")
 

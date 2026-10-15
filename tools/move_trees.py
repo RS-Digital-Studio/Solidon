@@ -131,6 +131,15 @@ class Mapping:
             return target.status, module, name
         return target.status, target.module, target.name
 
+    def site_mismatch(self, old: PatchSite, new: PatchSite) -> str | None:
+        """Warum die Ziele der Patch-Stelle ``new`` nicht die abgebildeten von ``old`` sind;
+        ``None``, wenn sie es sind."""
+        expected = [self.target(old, n) for n in range(len(old.targets))]
+        actual = [(t.status, t.module, t.name) for t in new.targets]
+        if expected != actual:
+            return f"zielt auf {actual}, erwartet {expected}"
+        return None
+
     def expected_readers(self, trees: Trees, key: tuple[str, str]) -> set[str] | None:
         """Die erwartete neue Lesermenge des alten Namens ``key`` (``None``: Abbildung)."""
         return None

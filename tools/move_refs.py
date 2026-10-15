@@ -335,6 +335,32 @@ class FileRewrite:
         old = " ".join(self.source.node_text(node).split())
         self.edits.append(Edit.at(self.path, "expr", node, text, rule, f"{old} → {text}"))
 
+    def remove_lines(self, first: int, last: int, node: ast.AST, rule: str) -> None:
+        """Entfernt die Zeilen ``first`` bis ``last`` (eine Methode samt Kopfkommentar); was
+        darin stand, gilt als ersetzt."""
+        start = self.source.line_start(first)
+        end = self.source.line_end(last)
+        self._ranges.append((start, end, ""))
+        name = getattr(node, "name", type(node).__name__)
+        self.edits.append(
+            Edit(
+                self.path,
+                "lines",
+                rule,
+                f"{name} (Zeilen {first} bis {last})",
+                "",
+                first,
+                0,
+                last,
+                0,
+            )
+        )
+
+    def insert_after_line(self, line: int, text: str, rule: str) -> None:
+        """Fügt fertig eingerückten Text hinter Zeile ``line`` ein."""
+        detail = f"hinter Zeile {line}: {text.count(chr(10))} Zeilen"
+        self.edits.append(Edit(self.path, "insert", rule, detail, text, line, 0, line, 0))
+
     def remove_statement(self, stmt: ast.stmt, rule: str) -> None:
         """Entfernt eine Anweisung samt ihrer Zeilen; was darin stand, gilt als ersetzt (ein Import,
         den nur sie las, fällt dann weg)."""
@@ -563,6 +589,11 @@ class FileRewrite:
         mehr liest."""
         self._watch(binders, name, module, plain=False)
 
+    def watch_name(self, binders: list[ast.Import | ast.ImportFrom], name: str) -> None:
+        """Der Import, der ``name`` bindet (eine Klasse, eine Funktion), fällt weg, wenn danach
+        kein Name ``name`` in der Datei mehr gelesen wird."""
+        self._watch(binders, name, "", plain=False)
+
     def _replaced_reads(self, name: str) -> bool:
         """Ob ein neuer Text dieser Tabelle ``name`` liest (``state.bump`` liest ``state``)."""
         for _start, _end, text in self._ranges:
@@ -675,7 +706,7 @@ class FileRewrite:
                 if text == watch.module or text.startswith(watch.module + "."):
                     return True
                 continue
-            if self.ctx.is_module(self.path, node, watch.module):
+            if not watch.module or self.ctx.is_module(self.path, node, watch.module):
                 return True
         return False
 

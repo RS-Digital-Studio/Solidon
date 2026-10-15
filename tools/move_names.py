@@ -100,7 +100,11 @@ def plan(cut: Cut, root: Path, index: Index) -> Change:
 
         edits = CopiesPlanner(ctx).plan()
     else:
-        raise PlanError([f"Modus {cut.mode}: der Planer folgt im nächsten Schritt — abgewiesen"])
+        from tools.move_component import ComponentPlanner
+
+        planned = ComponentPlanner(ctx).plan()
+        edits = planned.edits
+        change.notes.extend(planned.notes)
     for path, rows in edits.items():
         change.files[path] = apply_text(ctx.source(path), rows)
         change.notes.extend(f"{path}:{row.line}: {row.rule}: {row.detail}" for row in rows)

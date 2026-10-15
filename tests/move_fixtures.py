@@ -766,6 +766,459 @@ COPIES_NEW: dict[str, str | None] = {
 }
 
 
+# --------------------------------------------------------------------------- Komponente
+
+#: Ein Wirt ``Board`` (``QObject``) mit Sitzung, einer Komponente ``Area`` im Gerüst (schwache
+#: ``_host``/``_parent``, ``release``) und Lesern in ``app/``, ``tools/`` und ``tests/``. Die
+#: verschobenen Rümpfe tragen jede Rolle der Ersetzungsliste aus Konzept 3.3.
+COMPONENT_OLD: dict[str, str] = BASE | {
+    "app/core/bootstrap.py": '''
+        """Lädt die Module mit Operationen in fester Reihenfolge."""
+
+        from __future__ import annotations
+
+        import importlib
+
+        _OPERATION_MODULES = ("app.core.other",)
+
+
+        def load_operations() -> None:
+            for name in _OPERATION_MODULES:
+                importlib.import_module(name)
+    ''',
+    "app/ui/__init__.py": '"""Oberfläche der Attrappe."""\n',
+    "app/ui/leash.py": '''
+        """Besitzer von Arbeitern und Slots, wie in der Anwendung."""
+
+        from __future__ import annotations
+
+        from collections.abc import Callable
+
+
+        class WorkerLeash:
+            def __init__(self, owner: object) -> None:
+                self.owner = owner
+
+
+        def weak_slot(owner: object, method: Callable[..., object]) -> Callable[..., object]:
+            return method
+    ''',
+    "app/ui/session.py": '''
+        """Die Sitzung der Attrappe: meldet Änderungen."""
+
+        from PySide6.QtCore import QObject, Signal
+
+
+        class Session(QObject):
+            changed = Signal()
+    ''',
+    "app/ui/toast.py": '''
+        """Eine Meldung mit eigenem ``notify`` — derselbe Name wie am Wirt."""
+
+
+        class Toast:
+            def notify(self, menu: object) -> None:
+                self.last = menu
+    ''',
+    "app/ui/board_area.py": '''
+        """Der Bedienbereich des Bretts als Komponente."""
+
+        from __future__ import annotations
+
+        import weakref
+        from typing import TYPE_CHECKING, Protocol
+
+        from PySide6.QtCore import QObject
+
+        if TYPE_CHECKING:
+            from PySide6.QtCore import SignalInstance
+
+            from app.ui.session import Session
+
+
+        class AreaHost(Protocol):
+            """Was der Bereich vom Wirt anspricht, erhoben aus seinen Methoden."""
+
+            document: str
+            session: Session
+
+            @property
+            def changed(self) -> SignalInstance: ...
+
+            def statusBar(self) -> object: ...
+
+
+        class Area(QObject):
+            """Der Bedienbereich; hält Wirt und Elternteil schwach."""
+
+            def __init__(self, host: AreaHost, parent: QObject) -> None:
+                super().__init__(parent)
+                self._host_ref = weakref.ref(host)
+                self._parent_ref = weakref.ref(parent)
+
+            @property
+            def _host(self) -> AreaHost:
+                host = self._host_ref()
+                if host is None:
+                    raise RuntimeError("Der Wirt des Bereichs ist fort")
+                return host
+
+            @property
+            def _parent(self) -> QObject:
+                parent = self._parent_ref()
+                if parent is None:
+                    raise RuntimeError("Der Elternteil des Bereichs ist fort")
+                return parent
+
+            def release(self) -> None:
+                """Trennt, was der Bereich mit der Sitzung verbunden hat."""
+                self._host.session.disconnect(self)
+    ''',
+    "app/ui/board.py": '''
+        """Ein Wirt mit einem Bedienbereich, der Komponente wird."""
+
+        from __future__ import annotations
+
+        import weakref
+        from typing import TYPE_CHECKING
+
+        from PySide6.QtCore import QObject, QTimer, Signal
+        from PySide6.QtWidgets import QMenu
+
+        from app.ui.board_area import Area
+        from app.ui.leash import WorkerLeash, weak_slot
+
+        if TYPE_CHECKING:
+            from app.ui.session import Session
+
+
+        class Board(QObject):
+            """Der Wirt: hält die Sitzung und den Bereich."""
+
+            changed = Signal()
+
+            def __init__(self, session: Session) -> None:
+                super().__init__()
+                self.session = session
+                self.document = "Plan"
+                self.area = Area(self, self)
+                self.count = 0
+                self.session.changed.connect(self._on_changed)
+
+            def statusBar(self) -> object:
+                return self.document
+
+            # Kopfkommentar: gehört zu refresh und wandert mit.
+            def refresh(self) -> int:
+                """Zählt, baut ein Menü und meldet sich – Umlaute: äöüß."""
+                self.count += 1
+                menu = QMenu(self)
+                self._leash = WorkerLeash(self)
+                timer = QTimer(self)
+                self.document = self.document.strip()
+                self.findChild(QObject)
+                self.statusBar()
+                weak_slot(self, self.notify)
+                ref = weakref.ref(self)
+                self.session.installEventFilter(self)
+
+                def inner(self: object) -> object:
+                    return self
+
+                Board.notify(self, menu)
+                alive = ref() is not None
+                return self.count + len(str(timer)) + int(alive) + len(str(inner(menu)))
+
+            def notify(self, menu: object) -> None:
+                self.changed.emit()
+
+            def bump(self) -> None:
+                self.count += 1
+
+            def attach(self) -> None:
+                self.session.changed.connect(self.bump)
+
+            def eventFilter(self, watched: QObject, event: object) -> bool:
+                return False
+
+            def _on_changed(self) -> None:
+                self.bump()
+
+            def release(self) -> None:
+                self.area.release()
+                self.session.disconnect(self)
+    ''',
+    "app/ui/board_tools.py": '''
+        """Werkzeuge am Brett."""
+
+        from __future__ import annotations
+
+        from app.ui.board import Board
+        from app.ui.toast import Toast
+
+
+        def poke(window: Board) -> int:
+            window.count = 2
+            return window.refresh()
+
+
+        def by_class(window: Board) -> int:
+            return Board.refresh(window)
+
+
+        def shout(toast: Toast) -> None:
+            toast.notify("x")
+
+
+        def ring(window: Board) -> None:
+            window.notify("y")
+    ''',
+    "tools/board_probe.py": '''
+        """Ein Werkzeug, das das Brett befragt."""
+
+
+        def probe(window: object) -> object:
+            return getattr(window, "refresh")
+    ''',
+    "tests/test_board.py": '''
+        """Patches am Brett."""
+
+        from unittest import mock
+
+        from app.ui import board
+        from app.ui.board import Board
+        from app.ui.session import Session
+
+
+        def test_refresh(monkeypatch):
+            window = board.Board(Session())
+            monkeypatch.setattr(window, "bump", lambda: None)
+            with mock.patch.object(Board, "refresh", return_value=1):
+                pass
+            with mock.patch("app.ui.board.Board.bump"):
+                pass
+            assert window.count == 0
+    ''',
+}
+
+COMPONENT_CUT = """\
+schema_version = 1
+id = "board-area"
+mode = "component"
+source = "app/ui/board.py"
+host = "Board"
+component = "app.ui.board_area:Area"
+host_attribute = "area"
+host_protocol = "AreaHost"
+methods = ["refresh", "notify", "bump", "attach", "eventFilter"]
+own_attributes = ["count", "_leash"]
+host_members = ["document", "session", "changed", "statusBar"]
+parent_members = ["findChild"]
+
+[[self_roles]]
+scope = "Board.refresh"
+call = "QMenu"
+argument = 0
+role = "qt_parent"
+
+[[accesses]]
+path = "app/ui/board_tools.py"
+scope = "shout"
+member = "notify"
+decision = "keep"
+
+[[accesses]]
+path = "app/ui/board_tools.py"
+scope = "ring"
+member = "notify"
+decision = "component"
+"""
+
+#: Der Sollbaum nach dem Schnitt der Komponente, von Hand geschrieben.
+COMPONENT_NEW: dict[str, str | None] = {
+    "app/ui/board_area.py": '''
+        """Der Bedienbereich des Bretts als Komponente."""
+
+        from __future__ import annotations
+
+        import weakref
+        from typing import TYPE_CHECKING, Protocol
+
+        from PySide6.QtCore import QObject, QTimer
+        from PySide6.QtWidgets import QMenu
+
+        from app.ui.leash import WorkerLeash, weak_slot
+
+        if TYPE_CHECKING:
+            from PySide6.QtCore import SignalInstance
+
+            from app.ui.session import Session
+
+
+        class AreaHost(Protocol):
+            """Was der Bereich vom Wirt anspricht, erhoben aus seinen Methoden."""
+
+            document: str
+            session: Session
+
+            @property
+            def changed(self) -> SignalInstance: ...
+
+            def statusBar(self) -> object: ...
+
+
+        class Area(QObject):
+            """Der Bedienbereich; hält Wirt und Elternteil schwach."""
+
+            def __init__(self, host: AreaHost, parent: QObject) -> None:
+                super().__init__(parent)
+                self._host_ref = weakref.ref(host)
+                self._parent_ref = weakref.ref(parent)
+
+            @property
+            def _host(self) -> AreaHost:
+                host = self._host_ref()
+                if host is None:
+                    raise RuntimeError("Der Wirt des Bereichs ist fort")
+                return host
+
+            @property
+            def _parent(self) -> QObject:
+                parent = self._parent_ref()
+                if parent is None:
+                    raise RuntimeError("Der Elternteil des Bereichs ist fort")
+                return parent
+
+            def release(self) -> None:
+                """Trennt, was der Bereich mit der Sitzung verbunden hat."""
+                self._host.session.disconnect(self)
+
+            # Kopfkommentar: gehört zu refresh und wandert mit.
+            def refresh(self) -> int:
+                """Zählt, baut ein Menü und meldet sich – Umlaute: äöüß."""
+                self.count += 1
+                menu = QMenu(self._parent)
+                self._leash = WorkerLeash(self)
+                timer = QTimer(self)
+                self._host.document = self._host.document.strip()
+                self._parent.findChild(QObject)
+                self._host.statusBar()
+                weak_slot(self, self.notify)
+                ref = weakref.ref(self)
+                self._host.session.installEventFilter(self)
+
+                def inner(self: object) -> object:
+                    return self
+
+                Area.notify(self, menu)
+                alive = ref() is not None
+                return self.count + len(str(timer)) + int(alive) + len(str(inner(menu)))
+
+            def notify(self, menu: object) -> None:
+                self._host.changed.emit()
+
+            def bump(self) -> None:
+                self.count += 1
+
+            def attach(self) -> None:
+                self._host.session.changed.connect(self.bump)
+
+            def eventFilter(self, watched: QObject, event: object) -> bool:
+                return False
+    ''',
+    "app/ui/board.py": '''
+        """Ein Wirt mit einem Bedienbereich, der Komponente wird."""
+
+        from __future__ import annotations
+
+        from typing import TYPE_CHECKING
+
+        from PySide6.QtCore import QObject, Signal
+
+        from app.ui.board_area import Area
+
+        if TYPE_CHECKING:
+            from app.ui.session import Session
+
+
+        class Board(QObject):
+            """Der Wirt: hält die Sitzung und den Bereich."""
+
+            changed = Signal()
+
+            def __init__(self, session: Session) -> None:
+                super().__init__()
+                self.session = session
+                self.document = "Plan"
+                self.area = Area(self, self)
+                self.area.count = 0
+                self.session.changed.connect(self._on_changed)
+
+            def statusBar(self) -> object:
+                return self.document
+
+            def _on_changed(self) -> None:
+                self.area.bump()
+
+            def release(self) -> None:
+                self.area.release()
+                self.session.disconnect(self)
+    ''',
+    "app/ui/board_tools.py": '''
+        """Werkzeuge am Brett."""
+
+        from __future__ import annotations
+
+        from app.ui.board import Board
+        from app.ui.board_area import Area
+        from app.ui.toast import Toast
+
+
+        def poke(window: Board) -> int:
+            window.area.count = 2
+            return window.area.refresh()
+
+
+        def by_class(window: Board) -> int:
+            return Area.refresh(window.area)
+
+
+        def shout(toast: Toast) -> None:
+            toast.notify("x")
+
+
+        def ring(window: Board) -> None:
+            window.area.notify("y")
+    ''',
+    "tools/board_probe.py": '''
+        """Ein Werkzeug, das das Brett befragt."""
+
+
+        def probe(window: object) -> object:
+            return getattr(window.area, "refresh")
+    ''',
+    "tests/test_board.py": '''
+        """Patches am Brett."""
+
+        from unittest import mock
+
+        from app.ui import board
+        from app.ui.board_area import Area
+        from app.ui.session import Session
+
+
+        def test_refresh(monkeypatch):
+            window = board.Board(Session())
+            monkeypatch.setattr(window.area, "bump", lambda: None)
+            with mock.patch.object(Area, "refresh", return_value=1):
+                pass
+            with mock.patch("app.ui.board_area.Area.bump"):
+                pass
+            assert window.area.count == 0
+    ''',
+}
+
+
 # --------------------------------------------------------------------------- Werkzeuge
 
 
