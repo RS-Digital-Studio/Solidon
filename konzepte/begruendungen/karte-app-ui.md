@@ -2326,7 +2326,7 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 
 | Ort / Frage | Vertrag |
 |---|---|
-| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError`. Was die Größengrenze nicht mehr fasst, steht in `guide_wheel.py` (`takes_wheel`: nimmt ein Rollbereich das Rad selbst, oder reicht er es am Anschlag weiter) und `guide_finders.py` (Finder fester Namen wie `parameters.first.label`, `parameters.bind`) |
+| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError`. Was die Größengrenze nicht mehr fasst, steht in `guide_wheel.py` (`takes_wheel`: nimmt ein Rollbereich das Rad selbst, oder reicht er es am Anschlag weiter) und `guide_finders.py` (Finder fester Namen wie `parameters.first.label`, `parameters.bind`; die Kennzeichen `MARKED`/`MARKED_KINDS`; Orte, die ihren Weg selbst kennen, über `place_click`: `filament.spool`, `filaments.first`, `sketch.new_plane`, `sketch.point:N`, `sketch.at:X_Y`, `sketch.constraint:<art>`; `active_sketch_panel` für Skizzeneditor und Zeichenmodus) |
 
 Die ausführlichen Zuordnungen der kompakten Karte:
 

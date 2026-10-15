@@ -219,7 +219,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | Datei | Zweck |
 |---|---|
 | `manual_window.py` | Suche in `core/manual_search.py`; F1-Anker nur für geprüfte `MarkdownNoHTML`-Überschriften (`core/manual.py`) |
-| `guide_targets.py`, `guide_wheel.py`, `guide_finders.py` | Gemeinsame Ziele für Tour, Anleitungen und Prüfstand: `TARGET_PROPERTY`, Menü-`objectName`, `next_click`; Rad und Finder fester Namen in den Teilen. Fehlend: `MissingTargetError`; API in `karte-app-ui.md` |
+| `guide_targets.py`, `guide_wheel.py`, `guide_finders.py` | Gemeinsame Ziele für Tour, Anleitungen und Prüfstand: `TARGET_PROPERTY`, Menü-`objectName`, `next_click`; Rad, Kennzeichen und Orte mit eigenem Weg in den Teilen. Fehlend: `MissingTargetError`; API in `karte-app-ui.md` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
 | `shortcut_schemes.py` | Kürzel und Plattformtasten; `nothing_to_take_back`: Strg+Z/Y ans Fenster, wenn das Feld nichts zurückzunehmen hat; weitere Helfer in `karte-app-ui.md` |
