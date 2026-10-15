@@ -431,6 +431,16 @@ def _mutants() -> list[tuple[str, dict[str, str], str]]:
             "app/core/other.py",
         ),
         (
+            "neue-kopfkopie",
+            fx.edit(
+                EXPECTED,
+                CONSUMER,
+                "from app.core.engine import LIMIT\n",
+                "from app.core.engine import LIMIT, compute\n",
+            ),
+            "W2-Fund c neu: app/core/consumer.py:6 app.core.consumer.compute",
+        ),
+        (
             "zuweisung-bleibt-stehen",
             fx.edit(
                 EXPECTED,

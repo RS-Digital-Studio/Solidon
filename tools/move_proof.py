@@ -14,9 +14,12 @@ Geprüft wird in dieser Reihenfolge, jede Abweichung ist ein Eintrag in ``Proof.
 2. **Je Definition und Datei** der Strukturvergleich aus ``tools/move_compare.py``; je Modus die
    erklärten Abweichungen (Modulmodus hier, ``copies`` in ``tools/move_proof_copies.py``,
    Komponente in ``tools/move_proof_component.py``).
-3. **Baumweit über R:** jede Patch-Stelle mit ihren abgebildeten Zielen, keine neue unauflösbare
-   Stelle (W5), die Lesermenge jedes gepatchten und jedes verschobenen Namens, die Kopfkopien
-   und die Funde von W2 — vorher (abgebildet) gleich nachher.
+3. **Baumweit über R:** jede Patch-Stelle mit ihren abgebildeten Zielen (auch in unveränderten
+   Dateien), keine neue unauflösbare Stelle (W5), keine Abfrage ``hasattr``/``getattr`` mit
+   Vorgabe, die nachher still ins Leere fragt (R zählt sie nur), die Lesermenge jedes gepatchten
+   und jedes verschobenen Namens — vorher (abgebildet) gleich nachher — und kein neuer Fund von
+   W2 (Regeln a bis e, je Regel, Datei und abgebildetem Ziel; die Kopfkopien der Originale
+   prüft dazu der Modus ``copies``).
 4. **Registerabzug:** ``tools/registry_dump.py --out`` im alten und im neuen Baum, Byte für Byte.
 
 Das Protokoll (``Proof.text()``) nennt je Definition, Datei, Patch-Stelle und Lesermenge, was
@@ -80,6 +83,7 @@ def prove(
     check_unresolved(proof, trees, mapping)
     check_queries(proof, trees, mapping)
     check_readers(proof, trees, mapping)
+    check_findings(proof, trees, mapping)
     if registry:
         check_registry(proof, trees)
     return proof
@@ -215,6 +219,45 @@ def check_readers(proof: Proof, trees: Trees, mapping: Mapping) -> None:
             )
     for key in sorted(set(new_reach) - {mapping.reach_key(*k) for k in old_reach}):
         proof.error(f"{key[0]}.{key[1]}: nachher gepatcht, vorher nicht")
+
+
+def check_findings(proof: Proof, trees: Trees, mapping: Mapping) -> None:
+    """Kein neuer Fund von W2 (``patch_findings``, Regeln a bis e): Ein Patch-Ziel, das es
+    nachher nicht gibt (a), ein ``raising=False`` (b), eine Kopfkopie eines gepatchten Namens (c),
+    eine leere Lesermenge (d), ein unauflösbares Ziel (e). Verglichen wird je Regel, Datei und
+    abgebildetem Ziel; bei c je gebundenem Namen, denn der Halter kann wandern. Weniger Funde sind
+    erlaubt (der Modus ``copies`` beseitigt c-Funde)."""
+
+    def keys(index: Index, mapped: bool) -> Counter[tuple[str, ...]]:
+        found: Counter[tuple[str, ...]] = Counter()
+        for rule, items in index.patch_findings().items():
+            for item in items:
+                if rule == "c":
+                    found[("c", item.name)] += 1
+                    continue
+                target = (item.module, item.name)
+                module, name = mapping.reach_key(*target) if mapped else target
+                found[(rule, item.path, module, name)] += 1
+        return found
+
+    before = keys(trees.old_index, mapped=True)
+    after = keys(trees.new_index, mapped=False)
+    proof.counts["findings"] = sum(before.values())
+    new = after - before
+    for rule, items in trees.new_index.patch_findings().items():
+        for item in items:
+            key = ("c", item.name) if rule == "c" else (rule, item.path, item.module, item.name)
+            if new[key] <= 0:
+                continue
+            new[key] -= 1
+            proof.error(
+                f"W2-Fund {rule} neu: {item.path}:{item.line} {item.module}.{item.name} "
+                f"({item.detail}) — der Schnitt darf keinen Fund von W2 schaffen"
+            )
+    proof.note(
+        f"W2-Funde vorher {sum(before.values())}, nachher {sum(after.values())} "
+        f"({', '.join(f'{r}: {sum(v for k, v in after.items() if k[0] == r)}' for r in 'abcde')})"
+    )
 
 
 def _readers(index: Index, key: tuple[str, str]) -> list[str]:
