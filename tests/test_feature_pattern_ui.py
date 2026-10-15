@@ -50,7 +50,7 @@ def test_the_pattern_dialog_opened_at_a_hole_names_it_as_the_source(window: Main
     try:
         assert dialog.values()["at_features"] == [hole]
         field = dialog.findChild(FeatureSetField)
-        assert field is not None and not field.whole.isVisibleTo(dialog)
+        assert field is not None and field.whole is None
         assert dialog.values()["kind"] == "linear"
     finally:
         dialog.reject()

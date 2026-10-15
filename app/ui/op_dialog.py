@@ -23,7 +23,6 @@ from typing import TYPE_CHECKING, Any, Final
 from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractSpinBox,
     QCheckBox,
     QComboBox,
     QCompleter,
@@ -65,7 +64,8 @@ from app.i18n import source_text, tr
 from app.ui.change_lock import change_refusal
 from app.ui.dialog_footer import DialogFooter
 from app.ui.dialogs import ErrorNotice, align_to_the_front
-from app.ui.feature_list import FeatureList
+from app.ui.feature_set_field import FeatureSetField
+from app.ui.form_fields import explain, name_rows
 from app.ui.labels import (
     BoundedSpin,
     LengthSpin,
@@ -396,7 +396,7 @@ class ValueField(QWidget):
 
         self.spin = BoundedSpin(self)
         # Fokussiert wird das Drehfeld, nicht der Behälter: Es trägt den Namen
-        # der Zeile (FD-12), den Satz gibt ``_explain`` dazu.
+        # der Zeile (FD-12), den Satz gibt ``form_fields.explain`` dazu.
         self.spin.setAccessibleName(self.caption())
         self.spin.setDecimals(0 if entry.kind == "int" else _decimals_for(entry, self._shown))
         self.spin.setMinimum(
@@ -475,6 +475,9 @@ class ValueField(QWidget):
         self.text.setToolTip(self._grammar_help())
         self.text.installEventFilter(self)
         self.text.setAccessibleDescription(self._grammar_help())
+        # Zahl und Ausdruck sind zwei Felder derselben Zeile (FD-94): Der
+        # Ausdruck nennt die Zeile und sagt, dass er gerechnet wird.
+        self.text.setAccessibleName(tr("{name} · Ausdruck", name=self.caption()))
 
         #: Vervollständigt ``@name`` beim Tippen. Ohne sie muss der Kunde die
         #: Namen seiner Parameter auswendig wissen — und ein Tippfehler wird
@@ -651,6 +654,7 @@ class ValueField(QWidget):
             self._core = core
             self.spin.setValue(self._as_shown(core))
         self.spin.setAccessibleName(self.caption())
+        self.text.setAccessibleName(tr("{name} · Ausdruck", name=self.caption()))
         self.captionChanged.emit(self.caption())
 
     def _name_limits(self) -> None:
@@ -805,7 +809,7 @@ class ValueField(QWidget):
         elif self._refused_shown:
             self.hint.setText("")
             self.hint.setVisible(False)
-            # Zurück zum Satz der Zeile, den der Behälter trägt (``_explain``).
+            # Zurück zum Satz der Zeile, den der Behälter trägt (``form_fields.explain``).
             self.spin.setAccessibleDescription(self.accessibleDescription())
         if bool(said) != self._refused_shown:
             self._refused_shown = bool(said)
@@ -1358,45 +1362,6 @@ def sketch_extent(text: str, values: Mapping[str, float]) -> tuple[float, float]
     return (max(xs) - min(xs), max(ys) - min(ys))
 
 
-def _explain(editor: QWidget, caption: QWidget | None, sentence: str) -> None:
-    """Ein Satz an das Feld, an seine Beschriftung und an den Bildschirmleser.
-
-    Zwei Wege für eine Auskunft: Der Tooltip erscheint, wo die Maus steht, und
-    ``accessibleDescription`` liest ein Vorleser vor (Regel 18 — nicht nur eine
-    Kodierung). Statustipps stehen nur an Menüaktionen (RM-509).
-
-    ``caption`` darf ``None`` sein, weil ``QFormLayout.labelForField`` das
-    zurückgibt, sobald eine Zeile über beide Spalten geht (``addRow`` mit einem
-    Argument). Nachgemessen ist der Fall hier keiner: Alle 457 Zeilen des
-    Registers haben eine Beschriftung. Der Zweig steht für die erste Zeile, die
-    keine hat, und nicht für eine, die es schon gibt.
-
-    **Und an das Feld darin, das den Fokus bekommt** (FD-12): Ein Zahlenfeld
-    ist ein Behälter, fokussiert wird sein Drehfeld, im Flächenwähler der Haken
-    „Ganzer Körper“. Am Behälter allein las ein Bildschirmleser nichts. Ein
-    inneres Feld mit eigenem Satz (das Ausdrucksfeld nennt seine Grammatik,
-    ein abgelehntes Drehfeld seine Grenze) behält ihn; ein Feld ohne Namen
-    heißt wie sein Text oder wie die Zeile.
-    """
-    inherited = editor.accessibleDescription()
-    editor.setToolTip(sentence)
-    editor.setAccessibleDescription(sentence)
-    if caption is not None:
-        caption.setToolTip(sentence)
-    row = caption.text() if isinstance(caption, QLabel) else ""
-    # Die Arten, die auch der Prüfstand als Eingabefeld zählt
-    # (``function_capture._input_widgets``), ohne die Textzeile in einer Zahl.
-    for inner in editor.findChildren(QWidget):
-        focused = isinstance(inner, (QAbstractSpinBox, QLineEdit, QComboBox, QCheckBox))
-        if not focused or isinstance(inner.parentWidget(), (QAbstractSpinBox, QComboBox)):
-            continue
-        if inner.accessibleDescription() in ("", inherited):
-            inner.setAccessibleDescription(sentence)
-        if not inner.accessibleName():
-            own = inner.text() if isinstance(inner, QCheckBox) else ""
-            inner.setAccessibleName(own or row)
-
-
 def _why_inactive(field: str, wanted: str | bool) -> str:
     """Warum dieses Feld gerade nichts tut — als Satz, nicht als Wert.
 
@@ -1757,101 +1722,6 @@ class PointsField(QWidget):
 
     def _edited(self, *_args: object) -> None:
         self.changed.emit()
-
-
-class FeatureSetField(QWidget):
-    """Benannte Flächen wählen; eine leere Zwischenwahl erweitert niemals den Auftrag.
-
-    ``empty`` sagt, was eine leere Wahl bedeutet, und beschriftet den Haken
-    dafür: am Filament der ganze Körper (die Vorgabe), an den Öffnungen des
-    Aushöhlens keine Öffnung. ``None`` heißt, leer gibt es nicht — eine
-    Pflichtliste wie die Quellen eines Merkmalsmusters (P6.7) hat keinen
-    Haken, und gültig ist sie erst mit einem markierten Merkmal. Ein Haken
-    „Ganzer Körper" an einer Liste, deren Leere etwas anderes heißt, wäre ein
-    Versprechen, das die Operation nicht hält.
-    """
-
-    changed = Signal()
-    validityChanged = Signal()
-
-    def __init__(
-        self,
-        choices: Mapping[str, str],
-        selected: Sequence[str],
-        parent: QWidget | None = None,
-        *,
-        empty: str | None = "",
-        hint: str = "",
-    ) -> None:
-        super().__init__(parent)
-        self._last_value = tuple(dict.fromkeys(selected))
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(TIGHT)
-        self.whole = QCheckBox(empty or tr("Ganzer Körper"), self)
-        self.whole.setChecked(not selected and empty is not None)
-        self.whole.setVisible(empty is not None)
-        layout.addWidget(self.whole)
-        self.list = FeatureList(self)
-        self.list.setAccessibleName(tr("Flächen auswählen"))
-        for identifier in dict.fromkeys((*choices, *selected)):
-            item = QListWidgetItem(choices.get(identifier, identifier), self.list)
-            item.setData(Qt.ItemDataRole.UserRole, identifier)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(
-                Qt.CheckState.Checked if identifier in selected else Qt.CheckState.Unchecked
-            )
-        layout.addWidget(self.list)
-        self.hint = QLabel(hint or tr("Flächen markieren oder den ganzen Körper wählen."), self)
-        self.hint.setWordWrap(True)
-        set_level(self.hint, "caption")
-        layout.addWidget(self.hint)
-        self.list.setEnabled(not self.whole.isChecked())
-        self.setFocusProxy(self.list)
-        self.whole.toggled.connect(self._changed)
-        self.list.itemChanged.connect(self._changed)
-
-    def _selected(self) -> tuple[str, ...]:
-        return tuple(
-            str(self.list.item(row).data(Qt.ItemDataRole.UserRole))
-            for row in range(self.list.count())
-            if self.list.item(row).checkState() == Qt.CheckState.Checked
-        )
-
-    @property
-    def valid(self) -> bool:
-        """Keine markierte Fläche bedeutet nur mit ausdrücklichem Haken den ganzen Körper."""
-        return self.whole.isChecked() or bool(self._selected())
-
-    def value(self) -> list[str]:
-        """Während einer unvollständigen Wahl bleibt die letzte gültige Vorschau erhalten."""
-        return list(self._last_value)
-
-    def _changed(self, *_args: object) -> None:
-        self.list.setEnabled(not self.whole.isChecked())
-        self.validityChanged.emit()
-        if self.valid:
-            self._last_value = () if self.whole.isChecked() else self._selected()
-            self.changed.emit()
-
-    def add_feature(self, identifier: str, label: str) -> None:
-        """Ein Klick im Modell ergänzt die Auswahl statt die vorige Fläche zu ersetzen."""
-        with QSignalBlocker(self.list), QSignalBlocker(self.whole):
-            item = next(
-                (
-                    self.list.item(row)
-                    for row in range(self.list.count())
-                    if self.list.item(row).data(Qt.ItemDataRole.UserRole) == identifier
-                ),
-                None,
-            )
-            if item is None:
-                item = QListWidgetItem(label or identifier, self.list)
-                item.setData(Qt.ItemDataRole.UserRole, identifier)
-                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            self.whole.setChecked(False)
-            item.setCheckState(Qt.CheckState.Checked)
-        self._changed()
 
 
 def direction_fields(spec: OperationSpec) -> frozenset[str]:
@@ -2237,7 +2107,7 @@ class OperationDialog(QDialog):
                 # 457 Parametern in 86 Operationen war das die Erklärung, die
                 # es gab und die niemand fand. ``labelForField`` holt das Label,
                 # das ``addRow`` aus der Zeichenkette gebaut hat.
-                _explain(editor, target.labelForField(editor), str(entry.doc))
+                explain(editor, target.labelForField(editor), str(entry.doc))
             if isinstance(editor, RowCheckBox):
                 caption_toggles(target.labelForField(editor), editor)
             if isinstance(editor, ValueField) and editor.circle_toggle is not None:
@@ -2432,7 +2302,7 @@ class OperationDialog(QDialog):
             front.addRow(str(tr("Maße als Parameter anlegen")), naming)
             caption = front.labelForField(naming)
             caption_toggles(caption, naming)
-            _explain(
+            explain(
                 naming,
                 caption,
                 str(
@@ -2613,6 +2483,9 @@ class OperationDialog(QDialog):
         self._align_to_the_front()
         self._even_number_fields()
         self._refresh_advanced_summary()
+        # Jedes Feld trägt den Namen seiner Zeile, auch eines ohne Satz und eines,
+        # das selbst der Editor ist (FD-94, ``form_fields.name_rows``).
+        name_rows(front, advanced)
 
     def _ask_manual(self) -> None:
         """F1: die Stelle im Handbuch zu dieser Operation melden.
@@ -3562,7 +3435,7 @@ class OperationDialog(QDialog):
                     explanation = docs[entry.name]
                 else:
                     explanation = _why_inactive(titles[inactive[0]], inactive[1][0])
-                _explain(editor, label, explanation)
+                explain(editor, label, explanation)
             if self.spec.name == "apply_texture" and "angle" in self._editors:
                 # Ganzfläche dreht das Muster innerhalb ihrer festen Kontur;
                 # ein aufgewickelter Zylinder ignoriert diesen Winkel.
@@ -3890,7 +3763,7 @@ class OperationDialog(QDialog):
                         editor.setEnabled(True)
                         if label is not None:
                             label.setEnabled(True)
-                        _explain(editor, label, docs[name])
+                        explain(editor, label, docs[name])
                     continue
                 if name in axis_of and isinstance(editor, ValueField):
                     simple = simple_shape_of(text)
@@ -3954,7 +3827,7 @@ class OperationDialog(QDialog):
                     # steht dort 0,1, während die Zeichnung 0,06 misst — eine
                     # stille Ungenauigkeit ist schlimmer als eine genannte,
                     # weil der Kunde die Zahl für sein Maß hält.
-                    _explain(
+                    explain(
                         editor,
                         label,
                         (not darstellbar and clamped) or held_note() or evenly_note() or follows,
@@ -3967,7 +3840,7 @@ class OperationDialog(QDialog):
                 editor.setEnabled(False)
                 if label is not None:
                     label.setEnabled(False)
-                _explain(editor, label, reason)
+                explain(editor, label, reason)
                 # **Die Grundform verschwindet, solange gezeichnet ist** (RM-391).
                 # Gesperrt stand dort weiter „Rechteck“ neben einem Linienzug
                 # mit Schräge — eine Angabe, die nicht stimmt, ist schlimmer
@@ -4040,6 +3913,7 @@ class OperationDialog(QDialog):
                     self,
                     empty=None,
                     hint=tr("Mindestens ein Merkmal markieren."),
+                    name=str(entry.title),
                 )
             if entry.feature_kinds:
                 # Eine Liste bestimmter Arten, die leer bleiben darf — die
@@ -4051,8 +3925,9 @@ class OperationDialog(QDialog):
                     self,
                     empty=tr("Keine"),
                     hint=tr("Flächen markieren oder „Keine“ wählen."),
+                    name=str(entry.title),
                 )
-            return FeatureSetField(self._features, tuple(start or ()), self)
+            return FeatureSetField(self._features, tuple(start or ()), self, name=str(entry.title))
         if entry.kind == "edges":
             return EdgeSetField(self._edges, str(start or ""), self)
         if entry.kind == "points":
@@ -4514,7 +4389,7 @@ class OperationDialog(QDialog):
                 else:
                     form.addRow(str(entry.title), editor)
                 self._rows[entry.name] = form
-                _explain(editor, form.labelForField(editor), str(entry.doc or ""))
+                explain(editor, form.labelForField(editor), str(entry.doc or ""))
                 if isinstance(editor, RowCheckBox):
                     caption_toggles(form.labelForField(editor), editor)
                 if isinstance(editor, ValueField) and editor.circle_toggle is not None:
@@ -4553,6 +4428,7 @@ class OperationDialog(QDialog):
         self._align_to_the_front()
         self._even_number_fields()
         self._refresh_advanced_summary()
+        name_rows(self._front, self._advanced_form)
         self._resize_to_content("passive")
         self.schemaChanged.emit()
 

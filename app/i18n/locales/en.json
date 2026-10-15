@@ -8486,6 +8486,7 @@
   "{name} zurückgenommen.": "{name} undone.",
   "{name} {number}": "{name} {number}",
   "{name} {number} von {count}": "{name} {number} of {count}",
+  "{name} · Ausdruck": "{name} · expression",
   "{name} · Löcher": "{name} · Holes",
   "{name} · Stifte": "{name} · Pins",
   "{name} · Stifte und Löcher": "{name} · Pins and holes",

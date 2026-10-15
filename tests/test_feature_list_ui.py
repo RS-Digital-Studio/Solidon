@@ -75,7 +75,10 @@ def test_short_feature_lists_fit_the_actual_rows_in_both_dialogs(
             "Unter den Zeilen bleibt weniger als eine weitere Zeile leer."
         )
         assert editor.value() == list(choices)
-        assert editor.whole.isVisibleTo(dialog) == (operation == "hollow_object")
+        # Eine Pflichtliste hat keinen Haken für die leere Wahl, auch keinen
+        # verborgenen (FD-94).
+        assert (editor.whole is not None) == (operation == "hollow_object")
+        assert editor.whole is None or editor.whole.isVisibleTo(dialog)
     finally:
         dialog.close()
         dialog.deleteLater()

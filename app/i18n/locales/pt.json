@@ -8486,6 +8486,7 @@
   "{name} zurückgenommen.": "Anulado: {name}.",
   "{name} {number}": "{name} {number}",
   "{name} {number} von {count}": "{name} {number} de {count}",
+  "{name} · Ausdruck": "{name} · expressão",
   "{name} · Löcher": "{name} · Furos",
   "{name} · Stifte": "{name} · Pinos",
   "{name} · Stifte und Löcher": "{name} · Pinos e furos",

@@ -8486,6 +8486,7 @@
   "{name} zurückgenommen.": "{name} retirée.",
   "{name} {number}": "{name} {number}",
   "{name} {number} von {count}": "{name} {number} sur {count}",
+  "{name} · Ausdruck": "{name} · expression",
   "{name} · Löcher": "{name} · Trous",
   "{name} · Stifte": "{name} · Goupilles",
   "{name} · Stifte und Löcher": "{name} · Goupilles et trous",
