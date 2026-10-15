@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, Qt, Signal
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QToolButton, QWidget
+from PySide6.QtWidgets import QApplication, QMessageBox, QToolButton, QWidget
 
 from app.core.scene.history import OperationDraft
 from app.i18n import tr
@@ -64,52 +64,6 @@ def shown_window(qt_app: QApplication) -> Iterator[MainWindow]:
     window.close()
     window.deleteLater()
     qt_app.processEvents()
-
-
-@pytest.fixture
-def prepared_window(qt_app: QApplication) -> Iterator[MainWindow]:
-    """Ein Fenster mit einem Quader samt Bohrung, unter das Bett geschoben, im
-    Aussehen des Kunden — für den Wortschatz des Funktionsdurchgangs.
-
-    Die Attrappe des Renderers gibt der Ansicht eine Projektion; offscreen gibt
-    es sonst keine, und die Maßgruppe im Bild bliebe aus. Das Thema setzt
-    ``app.py`` vor dem ersten Fenster; es ändert Zeilenhöhen und damit, ob eine
-    Zeile ganz dasteht und ob der Kunde erst rollt (FD-157). Zurück gibt es
-    ``conftest.py``.
-    """
-    from app.ui.theme import apply_theme
-    from tests.render_fakes import RecordingRenderer
-    from tools.function_checks import SMALLEST_WINDOW
-
-    apply_theme(qt_app, UiSettings().theme)
-    window = MainWindow(Session(), UiSettings())
-    window.viewport.renderer = RecordingRenderer(size=(900, 600))
-    window.resize(*SMALLEST_WINDOW)
-    window.show()
-    window._show_start_screen(False)
-    assert window.session.apply(
-        "Quader mit Bohrung",
-        [
-            OperationDraft(op="create_box"),
-            OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 12.0}),
-            OperationDraft(
-                op="translate_object", inputs=("obj_1",), params={"dx": 0.0, "dy": 0.0, "dz": -15.0}
-            ),
-        ],
-    )
-    assert window.session.wait_for_idle(60_000)
-    window.report.show_result(window.session.last_result, window.session.project.document)
-    for _ in range(20):
-        qt_app.processEvents()
-    try:
-        yield window
-    finally:
-        for menu in [*window.findChildren(QMenu), *qt_app.topLevelWidgets()]:
-            if isinstance(menu, QMenu) and menu.isVisible():
-                menu.hide()
-        window.hide()
-        window.release()
-        window.viewport.renderer = None
 
 
 def with_a_body(window: MainWindow) -> str:
