@@ -110,7 +110,7 @@ dans `website/version.json`.
 - Dans la carte de cotes, la touche Tab passe des champs à la case des éléments similaires, puis à *Appliquer* et *Annuler*, et revient. La case est désormais au-dessus des boutons.
 - Après *Annuler* ou Échap dans la carte de cotes, le clavier revient dans la vue 3D, comme après *Appliquer*. Auparavant, il arrivait sur la carte *Objets*.
 - Dans la carte de cotes, *Appliquer* reste grisé tant qu'aucune valeur ni la case des éléments similaires ne change, et indique le premier champ. Avant, un clic dans un champ l'activait, sans effet.
-- Si la carte de cotes refuse une valeur, la raison apparaît une seule fois, juste sous le champ. Auparavant, la même phrase se répétait au-dessus des boutons.
+- Si la carte de cotes refuse une valeur, la raison apparaît une seule fois, juste sous le champ. Auparavant, la même phrase se répétait au-dessus des boutons et dans la barre d'état.
 - Si un message agrandit la carte de cotes, elle reste en place et ne se déplace que de ce qu'exigent le bord ou la poignée, avec un mouvement bref. Avant, elle sautait ailleurs.
 - Pour découper un cube afin d'essayer un ajustement, sa position se choisit désormais sous *Position du cube*. La ligne *Emplacement* au-dessus l'affiche.
 - Le dialogue derrière *Donner une épaisseur* dit dès sa première ligne qu'il donne une épaisseur à la surface.

@@ -109,7 +109,7 @@ scrive in `website/version.json`.
 - Nella scheda delle misure il tasto Tab va dai campi alla casella degli elementi uguali, poi ad *Applica* e *Annulla*, e torna indietro. La casella ora sta sopra i pulsanti.
 - Dopo *Annulla* o Esc nella scheda delle misure, la tastiera torna nella vista 3D, come dopo *Applica*. Prima finiva sulla scheda *Oggetti*.
 - Nella scheda delle misure *Applica* resta grigio finché non cambia un valore o la casella degli elementi uguali, e indica il primo campo. Prima bastava un clic in un campo, senza effetto.
-- Se la scheda delle misure rifiuta un valore, il motivo compare una sola volta, subito sotto il campo. Prima la stessa frase si ripeteva sopra i pulsanti.
+- Se la scheda delle misure rifiuta un valore, il motivo compare una sola volta, subito sotto il campo. Prima la stessa frase si ripeteva sopra i pulsanti e nella barra di stato.
 - Se un avviso fa crescere la scheda delle misure, resta al suo posto e si sposta solo quanto richiedono il bordo o la maniglia, con un breve movimento. Prima saltava altrove.
 - Per ritagliare un cubo e provare un accoppiamento, ora la posizione si sceglie in *Posizione del cubo*. La riga *Punto* sopra la mostra.
 - La finestra dietro *Dai spessore* dice nella prima riga che dà spessore alla superficie.

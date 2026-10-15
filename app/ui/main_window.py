@@ -383,6 +383,7 @@ from app.ui.loading import (
 )
 from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
+from app.ui.measure_card import stands_in
 from app.ui.message_dialog import name_button
 from app.ui.motion import switch
 from app.ui.op_dialog import DeferredSourcePicker, OperationDialog, simple_shape_of
@@ -21624,7 +21625,10 @@ class MainWindow(QMainWindow):
                 host.refuse_fields(refusal)
                 if interpret:
                     focus_target.setFocus()
-                    window.announce(refusal)
+                    # Steht der Satz schon unter dem Feld, sagt ihn die
+                    # Statuszeile nicht ein zweites Mal (FD-88).
+                    if not stands_in(window._quiet_placement.measure_group, refusal):
+                        window.announce(refusal)
                 return False
             host.refuse_fields(None)
             if interpret:
