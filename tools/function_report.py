@@ -408,6 +408,19 @@ class Finding:
         return tuple(found)
 
     @property
+    def rows(self) -> frozenset[str]:
+        """Die Zeilen aus ``Funktion``, getrennt wie die Prüfpunkte (FD-143).
+
+        Zeilenkennungen tragen weder Komma, Semikolon noch „und“; ein Fund, der
+        mehrere Zeilen nennt, gehört so jeder von ihnen.
+        """
+        raw = self.fields.get("Funktion", "")
+        parts = (
+            part.strip().strip("`").strip() for part in re.split(r"\s*(?:,|;|\bund\b)\s*", raw)
+        )
+        return frozenset(part for part in parts if part)
+
+    @property
     def severity(self) -> str:
         return self.fields.get("Schwere", "").rstrip(".")
 
@@ -858,8 +871,7 @@ def _finding_for(row: str, subject: int | str, findings: Mapping[str, Finding]) 
     matching = [
         finding
         for finding in sorted(findings.values(), key=lambda f: f.number)
-        if finding.fields.get("Funktion", "").strip().strip("`") == row
-        and subject in finding.subjects
+        if row in finding.rows and subject in finding.subjects
     ]
     return next((f for f in matching if f.stand.startswith("offen")), None) or next(
         iter(matching), None
@@ -1037,9 +1049,7 @@ def render_checklist(
         said = _row_verdict(cells, case is not None)
         tally["offen" if said.startswith("offen") else said] += 1
         numbers = {cell.text for cell in cells if cell.text.startswith("FD-")}
-        numbers |= {
-            f.key for f in findings.values() if f.fields.get("Funktion", "").strip("` ") == row_id
-        }
+        numbers |= {f.key for f in findings.values() if row_id in f.rows}
         shown = ", ".join(sorted(numbers, key=lambda key: int(key[3:])))
         table.append(
             "| "
