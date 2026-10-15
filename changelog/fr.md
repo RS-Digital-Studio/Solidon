@@ -74,6 +74,13 @@ dans `website/version.json`.
 - Le dialogue *Calibrer le matériau* indique « pas encore calibré » pour un matériau non mesuré, aussi en ligne de commande. Avant, on y lisait « valeurs de départ ».
 - Un refus dans un dialogue ne répète plus son titre en dessous. *Corriger la saisie* place le curseur dans le champ concerné.
 - La fenêtre *Détails* nomme le corps et l'étape et donne l'emplacement dans l'unité choisie. *Afficher les valeurs* montre le nom des champs et n'est pas plus haut que nécessaire.
+- Un lecteur d'écran nomme chaque champ de chaque dialogue de fonction, y compris les listes déroulantes, les cases à cocher et les listes de caractéristiques.
+- Un texte déjà rempli par un dialogue, comme un nom, est sélectionné à l'ouverture. La frappe le remplace.
+- Les grands nombres s'affichent aussi dans les champs par groupes de trois chiffres, par exemple 1 051 736 triangles. On les saisit avec ou sans séparateurs.
+- Les dialogues de fonction s'ouvrent à la hauteur de leur contenu. Dans la version 0.6.0, *Répéter la caractéristique* par exemple laissait une bande vide au-dessus des boutons.
+- Si un champ obligatoire comme le texte de *Inscription comme corps* est vide, le champ indique ce qu'il attend et le bouton patiente. La version 0.6.0 y affichait une erreur à l'ouverture.
+- Pour modifier une étape, on confirme avec *Appliquer*. Le bouton reste grisé tant que rien n'a changé et nomme le champ à modifier.
+- Le dialogue *Calibrer le matériau* affiche jeu, serrage, compensation des trous, patte d'éléphant et paroi dans l'unité choisie, pouces compris, et garde la troisième décimale.
 
 ### Imprimer et transmettre au slicer
 
@@ -95,6 +102,7 @@ dans `website/version.json`.
 - Dans la carte de cotes, *Appliquer* reste grisé tant qu'aucune valeur ni la case des éléments similaires ne change, et indique le premier champ. Avant, un clic dans un champ l'activait, sans effet.
 - Si la carte de cotes refuse une valeur, la raison apparaît une seule fois, juste sous le champ. Auparavant, la même phrase se répétait au-dessus des boutons.
 - Si un message agrandit la carte de cotes, elle reste en place et ne se déplace que de ce qu'exigent le bord ou la poignée, avec un mouvement bref. Avant, elle sautait ailleurs.
+- Perçage, rebouchage, trous oblongs et champs de trous nomment le réglage « Compenser les écarts d'impression », comme le groupe de cotes. Il ajoute la compensation des trous.
 
 ## 0.6.0
 

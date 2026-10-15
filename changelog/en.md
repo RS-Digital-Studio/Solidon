@@ -73,6 +73,13 @@ it into `website/version.json`.
 - The *Calibrate material* dialog calls an unmeasured material “not calibrated yet”, also on the command line. It used to say “starting values”.
 - A refusal in a dialog no longer repeats its title underneath. *Correct the input* puts the cursor into the field concerned.
 - The *Details* window names the body and the step and give the location in the chosen unit. *Show the values* shows the field names and is only as tall as needed.
+- A screen reader names every field of every function dialog, including drop-down lists, checkboxes and feature lists.
+- Text that a dialog fills in, such as a name, is selected when it opens. Typing replaces it.
+- Large counts appear in groups of three in input fields too, such as 1 051 736 triangles. You can type them with or without separators.
+- Function dialogs open as tall as their content. In version 0.6.0, *Repeat feature* for example left an empty strip above the buttons.
+- If a required field such as the text of *Lettering as a body* is empty, the field says what goes in and the button waits. Version 0.6.0 showed an error there on opening.
+- When you change a step, you confirm with *Apply*. The button stays grey until something has changed and names the field to change.
+- The *Calibrate material* dialog shows clearance, interference, hole compensation, elephant foot and wall in the chosen unit, inches included, and keeps the third decimal place.
 
 ### Printing and slicer handover
 
@@ -94,6 +101,7 @@ it into `website/version.json`.
 - In the measurement card, *Apply* stays grey until a value or the checkbox for matching features changes, and names the first field. Previously one click into a field enabled it, to no effect.
 - When the measurement card rejects a value, the reason appears once, directly below the field. Previously the same sentence was repeated above the buttons.
 - When a note makes the measurement card taller, it stays put and moves only as far as the view edge or handle requires, with a short movement. Previously it jumped elsewhere.
+- Drilling, filling, slots and hole fields call the adjustment “Compensate for printing deviations” as the dimension group does, and it adds the material's hole compensation.
 
 ## 0.6.0
 

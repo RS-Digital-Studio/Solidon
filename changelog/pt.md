@@ -73,6 +73,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O diálogo *Calibrar material* chama a um material por medir «ainda não calibrado», também na linha de comandos. Antes dizia «valores iniciais».
 - Uma recusa num diálogo já não repete o título por baixo. *Corrigir a entrada* põe o cursor no campo em causa.
 - A janela *Pormenores* nomeia o corpo e o passo e dá o ponto na unidade escolhida. *Mostrar os valores* mostra os nomes dos campos e só é tão alto quanto necessário.
+- Um leitor de ecrã nomeia cada campo de cada diálogo de função, incluindo listas pendentes, caixas de seleção e listas de características.
+- Um texto que o diálogo já preenche, como um nome, fica selecionado ao abrir. Escrever substitui-o.
+- Os números grandes aparecem também nos campos em grupos de três algarismos, por exemplo 1 051 736 triângulos. Escrevem-se com ou sem separadores.
+- Os diálogos de função abrem com a altura do seu conteúdo. Na versão 0.6.0, *Repetir característica*, por exemplo, deixava uma faixa vazia por cima dos botões.
+- Se um campo obrigatório como o texto de *Inscrição como corpo* estiver vazio, o campo diz o que lá vai e o botão espera. A versão 0.6.0 mostrava ali um erro ao abrir.
+- Quem altera um passo confirma com *Aplicar*. O botão fica cinzento até algo mudar e indica o campo a alterar.
+- O diálogo *Calibrar material* mostra folga, interferência, compensação de furos, pé de elefante e parede na unidade escolhida, também em polegadas, e mantém a 3.ª casa decimal.
 
 ### Imprimir e entregar ao slicer
 
@@ -94,6 +101,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No cartão de medidas, *Aplicar* fica cinzento até mudar um valor ou a caixa dos elementos iguais, e indica o primeiro campo. Antes bastava um clique num campo, sem efeito.
 - Se o cartão de medidas recusar um valor, o motivo aparece uma só vez, logo abaixo do campo. Antes a mesma frase repetia-se acima dos botões.
 - Se um aviso fizer crescer o cartão de medidas, fica no lugar e só se desloca o que o limite ou a pega exigirem, com um movimento curto. Antes saltava para outro sítio.
+- Furar, tapar, furos oblongos e campos de furos chamam ao ajuste «Compensar desvios de impressão», como o grupo de cotas, e acrescentam a compensação de furos.
 
 ## 0.6.0
 

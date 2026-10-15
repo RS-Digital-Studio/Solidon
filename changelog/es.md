@@ -74,6 +74,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El diálogo *Calibrar material* llama a un material sin medir «aún sin calibrar», también en la línea de comandos. Antes ponía «valores de partida».
 - Un rechazo en un diálogo ya no repite su título debajo. *Corregir la entrada* pone el cursor en el campo afectado.
 - La ventana *Detalles* nombra el cuerpo y el paso y da el punto en la unidad elegida. *Mostrar los valores* muestra los nombres de los campos y solo es tan alto como hace falta.
+- Un lector de pantalla nombra cada campo de cada diálogo de función, también listas desplegables, casillas y listas de características.
+- Un texto que el diálogo ya trae, como un nombre, aparece seleccionado al abrir. Al escribir se sustituye.
+- Las cantidades grandes aparecen también en los campos en grupos de tres cifras, por ejemplo 1 051 736 triángulos. Se escriben con o sin separadores.
+- Los diálogos de función se abren tan altos como su contenido. En la versión 0.6.0, *Repetir característica*, por ejemplo, dejaba una franja vacía sobre los botones.
+- Si un campo obligatorio como el texto de *Rótulo como cuerpo* está vacío, el campo dice qué va dentro y el botón espera. La versión 0.6.0 mostraba ahí un error al abrir.
+- Quien cambia un paso confirma con *Aplicar*. El botón sigue gris hasta que algo cambia y nombra el campo que hay que cambiar.
+- El diálogo *Calibrar material* muestra holgura, apriete, compensación de agujeros, pie de elefante y pared en la unidad elegida, también en pulgadas, y conserva el tercer decimal.
 
 ### Imprimir y entregar al slicer
 
@@ -95,6 +102,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la tarjeta de medidas, *Aplicar* sigue en gris hasta que cambia un valor o la casilla de características iguales, e indica el primer campo. Antes bastaba un clic en un campo, sin efecto.
 - Si la tarjeta de medidas rechaza un valor, el motivo aparece una sola vez, justo debajo del campo. Antes la misma frase se repetía encima de los botones.
 - Si un aviso hace crecer la tarjeta de medidas, se queda en su sitio y solo se desplaza lo que exigen el borde o el tirador, con un movimiento breve. Antes saltaba a otro lugar.
+- Al taladrar, tapar, en ranuras y en campos de agujeros, el ajuste se llama «Compensar desviaciones de impresión», como en el grupo de cotas, y suma la compensación de agujeros.
 
 ## 0.6.0
 

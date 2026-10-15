@@ -73,6 +73,13 @@ scrive in `website/version.json`.
 - La finestra *Calibra il materiale* chiama un materiale non misurato «non ancora calibrato», anche dalla riga di comando. Prima diceva «valori iniziali».
 - Un rifiuto in una finestra non ripete più il suo titolo sotto. *Correggi l'inserimento* porta il cursore nel campo interessato.
 - La finestra *Dettagli* nomina corpo e passaggio e dà il punto nell'unità scelta. *Mostra i valori* mostra i nomi dei campi ed è alto solo quanto serve.
+- Un lettore di schermo nomina ogni campo di ogni finestra di funzione, anche elenchi a discesa, caselle di spunta ed elenchi di caratteristiche.
+- Un testo che la finestra propone, come un nome, è selezionato all'apertura. Digitando lo si sostituisce.
+- I numeri grandi compaiono anche nei campi a gruppi di tre cifre, per esempio 1 051 736 triangoli. Si scrivono con o senza separatori.
+- Le finestre di funzione si aprono alte quanto il loro contenuto. Nella versione 0.6.0, per esempio *Ripeti caratteristica* lasciava una striscia vuota sopra i pulsanti.
+- Se un campo obbligatorio come il testo di *Scritta come corpo* è vuoto, il campo dice cosa va inserito e il pulsante attende. La versione 0.6.0 mostrava lì un errore all'apertura.
+- Chi modifica un passo conferma con *Applica*. Il pulsante resta grigio finché qualcosa non cambia e indica il campo da cambiare.
+- La finestra *Calibra il materiale* mostra gioco, interferenza, compensazione dei fori, piede d'elefante e parete nell'unità scelta, anche in pollici, e conserva la terza decimale.
 
 ### Stampare e passare allo slicer
 
@@ -94,6 +101,7 @@ scrive in `website/version.json`.
 - Nella scheda delle misure *Applica* resta grigio finché non cambia un valore o la casella degli elementi uguali, e indica il primo campo. Prima bastava un clic in un campo, senza effetto.
 - Se la scheda delle misure rifiuta un valore, il motivo compare una sola volta, subito sotto il campo. Prima la stessa frase si ripeteva sopra i pulsanti.
 - Se un avviso fa crescere la scheda delle misure, resta al suo posto e si sposta solo quanto richiedono il bordo o la maniglia, con un breve movimento. Prima saltava altrove.
+- Foratura, chiusura, asole e campi di fori chiamano la correzione «Compensare gli scostamenti di stampa», come il gruppo di quote, e aggiungono la compensazione dei fori.
 
 ## 0.6.0
 
