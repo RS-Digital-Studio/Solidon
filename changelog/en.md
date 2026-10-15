@@ -93,6 +93,13 @@ it into `website/version.json`.
 - The fields of the *Analysis* and *Split* bars, the description in *Generate model*, the *Type* choice and the “Include values” checkbox explain themselves in tooltips and to screen readers.
 - From a tab of the card on the right, the Tab key goes into the page in front and moves through it from top to bottom.
 - A project dimension without a unit stays a plain number in the history and the parameter bar, also in inches. Version 0.6.0 added “mm” to it in the history.
+- A screen reader names every field of every function dialog, including drop-down lists, checkboxes and feature lists.
+- Text that a dialog fills in, such as a name, is selected when it opens. Typing replaces it.
+- Large counts appear in groups of three in input fields too, such as 1 051 736 triangles. You can type them with or without separators.
+- Function dialogs open as tall as their content. In version 0.6.0, *Repeat feature* for example left an empty strip above the buttons.
+- If a required field such as the text of *Lettering as a body* is empty, the field says what goes in and the button waits. Version 0.6.0 showed an error there on opening.
+- When you change a step, you confirm with *Apply*. The button stays grey until something has changed and names the field to change.
+- The *Calibrate material* dialog shows clearance, interference, hole compensation, elephant foot and wall in the chosen unit, inches included, and keeps the third decimal place.
 
 ### Printing and slicer handover
 
@@ -110,15 +117,16 @@ it into `website/version.json`.
 - In the *Selection* tab, *Apply* sits directly below the open action, “Filament and printing” sits at the top with the colour of the assignment, and no empty space is left below the list.
 - A changed hole keeps its place in the object tree.
 - Actions that do not work on a feature read “Not possible here: …” with their reason.
+- When you cut out a cube to try a fit, you now choose its position under *Cube position*. The *Place* line above shows it.
+- The dialog behind *Add thickness* says in its first line that it gives the surface a thickness.
 - In the measurement card, the Tab key goes from the fields to the checkbox for matching features, then *Apply* and *Cancel*, and back. The checkbox now sits above the buttons.
 - After *Cancel* or Esc in the measurement card, the keyboard is back in the 3D view, as after *Apply*. Previously it landed on the *Objects* card.
 - In the measurement card, *Apply* stays grey until a value or the checkbox for matching features changes, and names the first field. Previously one click into a field enabled it, to no effect.
 - When the measurement card rejects a value, the reason appears once, directly below the field. Previously the same sentence was repeated above the buttons and in the status bar.
 - When a note makes the measurement card taller, it stays put and moves only as far as the view edge or handle requires, with a short movement. Previously it jumped elsewhere.
-- When you cut out a cube to try a fit, you now choose its position under *Cube position*. The *Place* line above shows it.
-- The dialog behind *Add thickness* says in its first line that it gives the surface a thickness.
 - The *Rename object* dialog starts with the current name in the field.
 - In the *Selection* tab, *Apply* stays grey until a value changes and names the first field. Rotating or duplicating with their preset values still works right away.
+- Drilling, filling, slots and hole fields call the adjustment “Compensate for printing deviations” as the dimension group does, and it adds the material's hole compensation.
 
 ## 0.6.0
 

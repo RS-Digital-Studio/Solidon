@@ -139,6 +139,31 @@ zählt mit: normalerweise zwei bis drei Eingaben, mit Einlauf höchstens vier.
 Klappen erhalten Werte und Bedingungen. Eine neue Auswahl schließt die
 Rückseite; eine ausdrückliche Feldübergabe öffnet sie vor dem Fokuswechsel.
 
+## Ändern, ausfüllen, zählen
+
+- **Wer einen Schritt ändert, übernimmt** (FD-99): `edit_operation` öffnet mit
+  `changing=True`; der Knopf heißt *Übernehmen* (`accept_text`) und ist grau,
+  bis Variante oder Werte vom Stand beim Öffnen abweichen oder der
+  Benennungshaken ein Maß benennt; nicht nach einer Geste (`given`) und nicht
+  am Schritt, der die Kette anhält (`wait_for_change=False`).
+  Der Satz nennt das Feld, über das der Kunde kam (`focus_field`), sonst das
+  erste offene (`first_change`). Ein Fokus oder dieselbe Zahl ist keine
+  Änderung, und die Eingabetaste wartet dann auf keine Vorschau.
+- **Ein leerer Pflichttext ist ein Hinweis, keine Absage** (FD-134): Im Feld
+  steht der erste Satz seiner `doc`, es rechnet keine Vorschau, der Knopf sagt
+  „Erst „Text“ ausfüllen, dann übernehmen.“ (`required_inputs.missing_input`).
+- **Ein vorgegebener Text ist beim ersten Fokus markiert** (`first_focus`,
+  FD-114); `focus_field` markiert ein Textfeld wie ein Zahlenfeld.
+- **Ganzzahlen ab vier Stellen stehen in Dreiergruppen** wie jeder Satz
+  (`grouped_spin`, `count_text`, FD-124); Felder mit Nachkomma nie.
+- **Gemessen wird in der endgültigen Breite** (FD-45): Vor Anfangs- und
+  Klappenmessung zieht der Dialog auf seine Breite, und jede Merkmalsliste setzt
+  ihre Höhe (`FeatureList.fit_now`) — sonst bliebe über den Knöpfen ein
+  Streifen, den das passive Nachmessen nie zurückgibt.
+- **Jede Zeile trägt ihren Namen** (FD-94): `name_rows` nach jedem Aufbau, das
+  Ausdrucksfeld heißt „{Zeile} · Ausdruck“; Wächter
+  `tests/test_operation_dialog_names.py` öffnet jede Operation.
+
 ## Die linken Karten zeigen nur, was gilt (RM-519)
 
 Warum: `konzepte/begruendungen/regel-oberflaeche.md`, „Die linken Karten“.

@@ -94,6 +94,13 @@ dans `website/version.json`.
 - Les champs des barres *Analyse* et *Diviser*, la description dans *Générer un modèle*, le choix *Type* et la case « Inclure les valeurs » s'expliquent dans l'infobulle et au lecteur d'écran.
 - Depuis un onglet de la carte de droite, la touche Tab entre dans la page affichée et la parcourt de haut en bas.
 - Une cote de projet sans unité reste un nombre dans l'historique et la barre des paramètres, même en pouces. La version 0.6.0 y ajoutait « mm » dans l'historique.
+- Un lecteur d'écran nomme chaque champ de chaque dialogue de fonction, y compris les listes déroulantes, les cases à cocher et les listes de caractéristiques.
+- Un texte déjà rempli par un dialogue, comme un nom, est sélectionné à l'ouverture. La frappe le remplace.
+- Les grands nombres s'affichent aussi dans les champs par groupes de trois chiffres, par exemple 1 051 736 triangles. On les saisit avec ou sans séparateurs.
+- Les dialogues de fonction s'ouvrent à la hauteur de leur contenu. Dans la version 0.6.0, *Répéter la caractéristique* par exemple laissait une bande vide au-dessus des boutons.
+- Si un champ obligatoire comme le texte de *Inscription comme corps* est vide, le champ indique ce qu'il attend et le bouton patiente. La version 0.6.0 y affichait une erreur à l'ouverture.
+- Pour modifier une étape, on confirme avec *Appliquer*. Le bouton reste grisé tant que rien n'a changé et nomme le champ à modifier.
+- Le dialogue *Calibrer le matériau* affiche jeu, serrage, compensation des trous, patte d'éléphant et paroi dans l'unité choisie, pouces compris, et garde la troisième décimale.
 
 ### Imprimer et transmettre au slicer
 
@@ -111,15 +118,16 @@ dans `website/version.json`.
 - Dans l'onglet *Sélection*, *Appliquer* se trouve juste sous l'action ouverte, « Filament et impression » est en haut avec la couleur de l'affectation, et il ne reste plus d'espace vide sous la liste.
 - Un perçage modifié garde sa place dans l'arborescence.
 - Les actions impossibles sur un élément s'affichent comme « Impossible ici : … » avec leur raison.
+- Pour découper un cube afin d'essayer un ajustement, sa position se choisit désormais sous *Position du cube*. La ligne *Emplacement* au-dessus l'affiche.
+- Le dialogue derrière *Donner une épaisseur* dit dès sa première ligne qu'il donne une épaisseur à la surface.
 - Dans la carte de cotes, la touche Tab passe des champs à la case des éléments similaires, puis à *Appliquer* et *Annuler*, et revient. La case est désormais au-dessus des boutons.
 - Après *Annuler* ou Échap dans la carte de cotes, le clavier revient dans la vue 3D, comme après *Appliquer*. Auparavant, il arrivait sur la carte *Objets*.
 - Dans la carte de cotes, *Appliquer* reste grisé tant qu'aucune valeur ni la case des éléments similaires ne change, et indique le premier champ. Avant, un clic dans un champ l'activait, sans effet.
 - Si la carte de cotes refuse une valeur, la raison apparaît une seule fois, juste sous le champ. Auparavant, la même phrase se répétait au-dessus des boutons et dans la barre d'état.
 - Si un message agrandit la carte de cotes, elle reste en place et ne se déplace que de ce qu'exigent le bord ou la poignée, avec un mouvement bref. Avant, elle sautait ailleurs.
-- Pour découper un cube afin d'essayer un ajustement, sa position se choisit désormais sous *Position du cube*. La ligne *Emplacement* au-dessus l'affiche.
-- Le dialogue derrière *Donner une épaisseur* dit dès sa première ligne qu'il donne une épaisseur à la surface.
 - Le dialogue *Renommer l'objet* s'ouvre avec le nom actuel dans le champ.
 - Dans l'onglet *Sélection*, *Appliquer* reste grisé tant qu'aucune valeur ne change, et indique le premier champ. Pivoter ou dupliquer avec leurs valeurs prévues reste immédiat.
+- Perçage, rebouchage, trous oblongs et champs de trous nomment le réglage « Compenser les écarts d'impression », comme le groupe de cotes. Il ajoute la compensation des trous.
 
 ## 0.6.0
 

@@ -1263,7 +1263,7 @@ class SketchRevolveParams(BaseParams):
         #
         # Der ``doc``-Satz bleibt vorerst, wie er ist: Er ist ein Katalogtext
         # in fünf Sprachen, und beim Vieleck steht ohnehin der Grund der
-        # Sperre an der Zeile statt seiner (``_explain`` in ``op_dialog.py``).
+        # Sperre an der Zeile statt seiner (``form_fields.explain`` im Operationsdialog).
         depends_on=("shape", ("rectangle", "slot")),
         placement="advanced",
     )

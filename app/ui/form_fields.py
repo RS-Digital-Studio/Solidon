@@ -115,9 +115,12 @@ def explain(field: QWidget, caption: QWidget | None, sentence: str) -> None:
     """Ein Satz an das Feld, an seine Beschriftung und an den Bildschirmleser.
 
     Ein inneres Feld mit eigenem Satz (eine Ablehnung, eine Grammatik) behält
-    ihn; ein Feld ohne Namen heißt danach wie die Zeile.
+    ihn; ein Feld ohne Namen heißt danach wie die Zeile. Wiederholbar: Der
+    Grund einer gesperrten Zeile ersetzt den Satz auch innen, wo der vorige
+    Aufruf ihn gesetzt hat.
     """
     inherited = field.accessibleDescription()
+    inherited_tip = field.toolTip()
     field.setToolTip(sentence)
     field.setAccessibleDescription(sentence)
     if caption is not None:
@@ -125,7 +128,7 @@ def explain(field: QWidget, caption: QWidget | None, sentence: str) -> None:
         caption.setAccessibleDescription(sentence)
     for widget in inputs_of(field):
         if widget is not field:
-            if not widget.toolTip():
+            if widget.toolTip() in ("", inherited_tip):
                 widget.setToolTip(sentence)
             if widget.accessibleDescription() in ("", inherited):
                 widget.setAccessibleDescription(sentence)

@@ -606,10 +606,13 @@ class DrillParams(BaseParams):
         ),
     )
     compensate: bool = param(
-        title=_("Materialtoleranz berücksichtigen"),
+        title=_("Druckabweichung ausgleichen"),
         default=True,
         placement="advanced",
-        doc=_("Vergrößert die Bohrung um den Wert aus dem Materialprofil."),
+        doc=_(
+            "Gibt dem Durchmesser die Lochkorrektur aus dem Materialprofil dazu, weil gedruckte "
+            "Bohrungen enger ausfallen. Aus: Die Bohrung erhält genau das eingegebene Maß."
+        ),
     )
 
 
@@ -733,7 +736,7 @@ def bore_shape(params: DrillParams, *, within: Mesh | None = None) -> BoreShape:
     deterministic=False,
     shortcut="Ctrl+B",
     doc=_(
-        "Bohrt ein rundes Loch oder ein Langloch — auf Wunsch um die Materialtoleranz vergrößert."
+        "Bohrt ein rundes Loch oder ein Langloch, auf Wunsch mit der Lochkorrektur des Materials."
     ),
 )
 def drill_hole(ctx: OpContext) -> OpResult:
@@ -10304,8 +10307,8 @@ class ResizeHoleParams(BaseParams):
         default=False,
         placement="advanced",
         doc=_(
-            "Vergrößert den Ziel-Durchmesser um die Druckkorrektur aus dem Materialprofil. "
-            "Aus: Die Bohrung erhält genau das eingegebene Maß."
+            "Gibt dem Durchmesser die Lochkorrektur aus dem Materialprofil dazu, weil gedruckte "
+            "Bohrungen enger ausfallen. Aus: Die Bohrung erhält genau das eingegebene Maß."
         ),
     )
     legacy_slot_tool: bool = _saved_slot_tool_marker()
@@ -11129,7 +11132,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
     # **Und die Toleranz wird auch beim Versetzen gemeldet.** `drill` erzeugt
     # den Befund nur bei `compensate=True`, und der Aufruf oben setzt `False`,
     # weil `cut` sie schon trägt — ohne diese Zeile verschwände die Auskunft
-    # „Die Bohrung wurde um die Materialtoleranz vergrößert" still, sobald das
+    # „Die Bohrung ist um die Lochkorrektur des Materials größer geschnitten.“ still, sobald das
     # Loch die Stelle wechselt (Fund des Reviews, 11.09.2026).
     moved_findings = (
         compensation_findings(params.diameter, cut, params.compensate) if redrilled else []
@@ -11360,12 +11363,12 @@ class SlotHoleParams(BaseParams):
         ),
     )
     compensate: bool = param(
-        title=_("Materialtoleranz berücksichtigen"),
+        title=_("Druckabweichung ausgleichen"),
         default=False,
         placement="advanced",
         doc=_(
-            "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. "
-            "Aus bleibt das gemessene Maß unverändert."
+            "Gibt der Breite die Lochkorrektur aus dem Materialprofil dazu, weil gedruckte "
+            "Langlöcher enger ausfallen. Aus: Die Breite bleibt, wie eingegeben oder gemessen."
         ),
     )
     # **Nur für Schritte aus Projekten bis Format 38** (Migration 38 → 39).
@@ -19942,7 +19945,7 @@ class PlugParams(BaseParams):
         ),
     )
     compensate: bool = param(
-        title=_("Materialtoleranz berücksichtigen"),
+        title=_("Druckabweichung ausgleichen"),
         default=True,
         placement="advanced",
         doc=_(

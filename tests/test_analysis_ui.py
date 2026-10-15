@@ -9,6 +9,7 @@ Bild. Ob die Farben auf dem richtigen Dreieck landen, entscheidet der Kern, und
 from __future__ import annotations
 
 import dataclasses
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
@@ -2240,7 +2241,16 @@ def test_the_menu_entry_opens_that_step(window: MainWindow) -> None:
     assert window.session.wait_for_idle(60_000), "die Vorschau rechnet nach einer Minute noch"
     for _ in range(40):
         QApplication.processEvents()
-    assert dialog.can_accept(), dialog.toolTip()
+    # Ein Schritt im Änderungsweg wartet auf eine Änderung (FD-99): erst die
+    # Länge ändern, dann rechnen lassen und übernehmen.
+    length = dialog._editors["length"]
+    length.set_value(float(length.value()) + 1.0)
+    deadline = time.monotonic() + 60
+    while not dialog.can_accept() and time.monotonic() < deadline:
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(60_000)
+        time.sleep(0.01)
+    assert dialog.can_accept(), dialog._accept_button.toolTip()
     dialog.accept()
     assert window.session.wait_for_idle(60_000)
     document = window.session.project.document

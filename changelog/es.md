@@ -94,6 +94,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los campos de las barras *Análisis* y *Dividir*, la descripción en *Generar modelo*, la elección *Tipo* y la casilla «Incluir valores» se explican en la ayuda emergente y al lector de pantalla.
 - Desde una pestaña de la tarjeta de la derecha, la tecla Tab entra en la página visible y la recorre de arriba abajo.
 - Una medida del proyecto sin unidad sigue siendo un número en el historial y en la barra de parámetros, también en pulgadas. La versión 0.6.0 le añadía «mm» en el historial.
+- Un lector de pantalla nombra cada campo de cada diálogo de función, también listas desplegables, casillas y listas de características.
+- Un texto que el diálogo ya trae, como un nombre, aparece seleccionado al abrir. Al escribir se sustituye.
+- Las cantidades grandes aparecen también en los campos en grupos de tres cifras, por ejemplo 1 051 736 triángulos. Se escriben con o sin separadores.
+- Los diálogos de función se abren tan altos como su contenido. En la versión 0.6.0, *Repetir característica*, por ejemplo, dejaba una franja vacía sobre los botones.
+- Si un campo obligatorio como el texto de *Rótulo como cuerpo* está vacío, el campo dice qué va dentro y el botón espera. La versión 0.6.0 mostraba ahí un error al abrir.
+- Quien cambia un paso confirma con *Aplicar*. El botón sigue gris hasta que algo cambia y nombra el campo que hay que cambiar.
+- El diálogo *Calibrar material* muestra holgura, apriete, compensación de agujeros, pie de elefante y pared en la unidad elegida, también en pulgadas, y conserva el tercer decimal.
 
 ### Imprimir y entregar al slicer
 
@@ -111,15 +118,16 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la pestaña *Selección*, *Aplicar* queda justo debajo de la acción abierta, «Filamento e impresión» está arriba con el color de la asignación, y bajo la lista no queda espacio vacío.
 - Un taladro modificado conserva su lugar en el árbol de objetos.
 - Las acciones que no funcionan en un elemento aparecen como «Aquí no es posible: …» con su motivo.
+- Al recortar un cubo para probar un ajuste, su posición se elige ahora en *Posición del cubo*. La línea *Punto* de arriba la muestra.
+- El diálogo tras *Dar grosor* dice en su primera línea que da grosor a la superficie.
 - En la tarjeta de medidas, el tabulador va de los campos a la casilla de características iguales, a *Aplicar* y *Cancelar*, y vuelve. La casilla está ahora encima de los botones.
 - Tras *Cancelar* o Esc en la tarjeta de medidas, el teclado vuelve a la vista 3D, como tras *Aplicar*. Antes acababa en la tarjeta *Objetos*.
 - En la tarjeta de medidas, *Aplicar* sigue en gris hasta que cambia un valor o la casilla de características iguales, e indica el primer campo. Antes bastaba un clic en un campo, sin efecto.
 - Si la tarjeta de medidas rechaza un valor, el motivo aparece una sola vez, justo debajo del campo. Antes la misma frase se repetía encima de los botones y en la barra de estado.
 - Si un aviso hace crecer la tarjeta de medidas, se queda en su sitio y solo se desplaza lo que exigen el borde o el tirador, con un movimiento breve. Antes saltaba a otro lugar.
-- Al recortar un cubo para probar un ajuste, su posición se elige ahora en *Posición del cubo*. La línea *Punto* de arriba la muestra.
-- El diálogo tras *Dar grosor* dice en su primera línea que da grosor a la superficie.
 - El diálogo *Renombrar objeto* empieza con el nombre actual en el campo.
 - En la pestaña *Selección*, *Aplicar* sigue en gris hasta que cambia un valor e indica el primer campo. Girar o duplicar con sus valores previstos sigue siendo inmediato.
+- Al taladrar, tapar, en ranuras y en campos de agujeros, el ajuste se llama «Compensar desviaciones de impresión», como en el grupo de cotas, y suma la compensación de agujeros.
 
 ## 0.6.0
 

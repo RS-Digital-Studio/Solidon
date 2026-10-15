@@ -23,9 +23,10 @@ from PySide6.QtWidgets import (
 
 from app.core.knowledge import calibration, profiles
 from app.core.types import Profile
-from app.i18n import format_decimal, tr
+from app.i18n import tr
 from app.ui.dialogs import align_to_the_front
-from app.ui.labels import NumberSpin, printer_title, wheel_needs_focus
+from app.ui.fine_length_spin import FineLengthSpin
+from app.ui.labels import LengthSpin, NumberSpin, length, printer_title, wheel_needs_focus
 from app.ui.leash import weak_slot
 from app.ui.panels import collapsible
 from app.ui.style import (
@@ -131,19 +132,30 @@ class CalibrationDialog(QDialog):
                 tr("So stark schrumpft ein Teil beim Abkühlen, in Prozent seiner Größe."),
             ),
         ):
-            editor = NumberSpin(self)
             # Die Schwindung ist ein Anteil, kein Maß: „0,004" trug deshalb
             # als Einziges keine Einheit und sagte niemandem etwas. Als
             # Prozentwert liest sie sich — 0,4 % ist eine Zahl, die man aus
             # einem Datenblatt kennt.
             percent = name == "shrinkage"
-            editor.setDecimals(2 if percent else 3)
-            editor.setRange(-100.0 if percent else -1.0, 500.0 if percent else 5.0)
-            editor.setSingleStep(0.1 if percent else 0.01)
-            editor.setSuffix(" %" if percent else " mm")
             value = float(getattr(current, name))
             self._original_values[name] = value
-            editor.setValue(value * 100.0 if percent else value)
+            editor: QDoubleSpinBox
+            if percent:
+                editor = NumberSpin(self)
+                editor.setDecimals(2)
+                editor.setRange(-100.0, 500.0)
+                editor.setSingleStep(0.1)
+                editor.setSuffix(tr(" %"))
+                editor.setValue(value * 100.0)
+            else:
+                # **Eine Länge spricht in der Anzeigeeinheit** (§19.3, FD-176),
+                # mit einer Stelle mehr als üblich: Die dritte Stelle eines
+                # Feinmaßes (0,075 mm) ist gemessen. Gespeichert wird in mm.
+                length_editor = FineLengthSpin(self)
+                length_editor.set_range_mm(-1.0, 5.0)
+                length_editor.set_step_mm(0.01)
+                length_editor.set_value_mm(value)
+                editor = length_editor
             # Der Satz an beiden Hälften der Zeile und am Bildschirmleser (V3).
             editor.setAccessibleName(title)
             editor.setToolTip(note)
@@ -176,10 +188,16 @@ class CalibrationDialog(QDialog):
             checkbox = QCheckBox(short, self)
             checkbox.setAccessibleName(title)
             checkbox.setEnabled(process is not None)
-            editor = NumberSpin(self)
-            editor.setDecimals(2)
-            editor.setRange(0.01, maximum)
-            editor.setSuffix(suffix)
+            if name == "minimum_wall":
+                # Die Wand ist eine Länge und folgt der Anzeigeeinheit (FD-176).
+                wall = LengthSpin(self)
+                wall.set_range_mm(0.01, maximum)
+                editor = wall
+            else:
+                editor = NumberSpin(self)
+                editor.setDecimals(2)
+                editor.setRange(0.01, maximum)
+                editor.setSuffix(suffix)
             # Der Haken heißt nach der Handlung, das Feld nach dem Wert — beide
             # „… übernehmen“ waren für den Vorleser eine Frage ohne Antwort.
             editor.setAccessibleName(short)
@@ -193,7 +211,10 @@ class CalibrationDialog(QDialog):
                 else 1.0
             )
             self._original_values[name] = float(value) if applies else default
-            editor.setValue(self._original_values[name])
+            if isinstance(editor, LengthSpin):
+                editor.set_value_mm(self._original_values[name])
+            else:
+                editor.setValue(self._original_values[name])
             editor.setEnabled(applies)
             checkbox.setChecked(applies)
             checkbox.toggled.connect(editor.setEnabled)
@@ -220,18 +241,19 @@ class CalibrationDialog(QDialog):
             printer = process.printer
             # Der Prozess des Verfahrens: Bei Resin gibt es keine Düse und
             # keine Bahn — dort sind es Schichthöhe und Bildpunkt (RM-071).
+            # Längen in der Anzeigeeinheit wie die Felder darüber (FD-176).
             conditions = (
                 tr("Schichthöhe")
-                + f" {format_decimal(printer.layer_height)} mm · "
+                + f" {length(printer.layer_height)} · "
                 + tr("Pixelgröße")
-                + f" {format_decimal(printer.pixel_size)} mm"
+                + f" {length(printer.pixel_size)}"
                 if printer.is_resin
                 else tr("Düse")
-                + f" {format_decimal(printer.nozzle_diameter)} mm · "
+                + f" {length(printer.nozzle_diameter)} · "
                 + tr("Schichthöhe")
-                + f" {format_decimal(printer.layer_height)} mm · "
+                + f" {length(printer.layer_height)} · "
                 + tr("Bahnbreite")
-                + f" {format_decimal(printer.extrusion_width)} mm"
+                + f" {length(printer.extrusion_width)}"
             )
             process_note.setText(
                 tr("Wand und Überhang gelten nur für diese Druckbedingungen:")
@@ -329,6 +351,8 @@ class CalibrationDialog(QDialog):
                 if name not in self._edited_fields
                 else editor.value() / 100.0
                 if name == "shrinkage"
+                else editor.value_mm()
+                if isinstance(editor, LengthSpin)
                 else editor.value()
                 for name, editor in self.editors.items()
                 if (

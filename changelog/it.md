@@ -93,6 +93,13 @@ scrive in `website/version.json`.
 - I campi delle barre *Analisi* e *Dividi*, la descrizione in *Genera modello*, la scelta *Tipo* e la casella «Includi i valori» si spiegano nel suggerimento e allo screen reader.
 - Da una linguetta del riquadro a destra, il tasto Tab entra nella pagina in primo piano e la percorre dall'alto in basso.
 - Una misura di progetto senza unità resta un numero nella cronologia e nella barra dei parametri, anche in pollici. La versione 0.6.0 aggiungeva «mm» nella cronologia.
+- Un lettore di schermo nomina ogni campo di ogni finestra di funzione, anche elenchi a discesa, caselle di spunta ed elenchi di caratteristiche.
+- Un testo che la finestra propone, come un nome, è selezionato all'apertura. Digitando lo si sostituisce.
+- I numeri grandi compaiono anche nei campi a gruppi di tre cifre, per esempio 1 051 736 triangoli. Si scrivono con o senza separatori.
+- Le finestre di funzione si aprono alte quanto il loro contenuto. Nella versione 0.6.0, per esempio *Ripeti caratteristica* lasciava una striscia vuota sopra i pulsanti.
+- Se un campo obbligatorio come il testo di *Scritta come corpo* è vuoto, il campo dice cosa va inserito e il pulsante attende. La versione 0.6.0 mostrava lì un errore all'apertura.
+- Chi modifica un passo conferma con *Applica*. Il pulsante resta grigio finché qualcosa non cambia e indica il campo da cambiare.
+- La finestra *Calibra il materiale* mostra gioco, interferenza, compensazione dei fori, piede d'elefante e parete nell'unità scelta, anche in pollici, e conserva la terza decimale.
 
 ### Stampare e passare allo slicer
 
@@ -110,15 +117,16 @@ scrive in `website/version.json`.
 - Nella scheda *Selezione*, *Applica* sta subito sotto l'azione aperta, «Filamento e stampa» sta in alto con il colore dell'assegnazione, e sotto l'elenco non resta spazio vuoto.
 - Un foro modificato mantiene il suo posto nell'albero degli oggetti.
 - Le azioni che su un elemento non funzionano compaiono come «Qui non è possibile: …» con il loro motivo.
+- Per ritagliare un cubo e provare un accoppiamento, ora la posizione si sceglie in *Posizione del cubo*. La riga *Punto* sopra la mostra.
+- La finestra dietro *Dai spessore* dice nella prima riga che dà spessore alla superficie.
 - Nella scheda delle misure il tasto Tab va dai campi alla casella degli elementi uguali, poi ad *Applica* e *Annulla*, e torna indietro. La casella ora sta sopra i pulsanti.
 - Dopo *Annulla* o Esc nella scheda delle misure, la tastiera torna nella vista 3D, come dopo *Applica*. Prima finiva sulla scheda *Oggetti*.
 - Nella scheda delle misure *Applica* resta grigio finché non cambia un valore o la casella degli elementi uguali, e indica il primo campo. Prima bastava un clic in un campo, senza effetto.
 - Se la scheda delle misure rifiuta un valore, il motivo compare una sola volta, subito sotto il campo. Prima la stessa frase si ripeteva sopra i pulsanti e nella barra di stato.
 - Se un avviso fa crescere la scheda delle misure, resta al suo posto e si sposta solo quanto richiedono il bordo o la maniglia, con un breve movimento. Prima saltava altrove.
-- Per ritagliare un cubo e provare un accoppiamento, ora la posizione si sceglie in *Posizione del cubo*. La riga *Punto* sopra la mostra.
-- La finestra dietro *Dai spessore* dice nella prima riga che dà spessore alla superficie.
 - La finestra *Rinomina oggetto* parte dal nome attuale nel campo.
 - Nella linguetta *Selezione*, *Applica* resta grigio finché non cambia un valore e indica il primo campo. Ruotare o duplicare con i valori predefiniti resta immediato.
+- Foratura, chiusura, asole e campi di fori chiamano la correzione «Compensare gli scostamenti di stampa», come il gruppo di quote, e aggiungono la compensazione dei fori.
 
 ## 0.6.0
 

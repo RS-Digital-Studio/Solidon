@@ -93,6 +93,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os campos das barras *Análise* e *Dividir*, a descrição em *Gerar modelo*, a escolha *Tipo* e a caixa «Incluir valores» explicam-se na dica e ao leitor de ecrã.
 - A partir de um separador do cartão da direita, a tecla Tab entra na página da frente e percorre-a de cima para baixo.
 - Uma medida do projeto sem unidade continua a ser um número no histórico e na barra de parâmetros, também em polegadas. A versão 0.6.0 acrescentava «mm» no histórico.
+- Um leitor de ecrã nomeia cada campo de cada diálogo de função, incluindo listas pendentes, caixas de seleção e listas de características.
+- Um texto que o diálogo já preenche, como um nome, fica selecionado ao abrir. Escrever substitui-o.
+- Os números grandes aparecem também nos campos em grupos de três algarismos, por exemplo 1 051 736 triângulos. Escrevem-se com ou sem separadores.
+- Os diálogos de função abrem com a altura do seu conteúdo. Na versão 0.6.0, *Repetir característica*, por exemplo, deixava uma faixa vazia por cima dos botões.
+- Se um campo obrigatório como o texto de *Inscrição como corpo* estiver vazio, o campo diz o que lá vai e o botão espera. A versão 0.6.0 mostrava ali um erro ao abrir.
+- Quem altera um passo confirma com *Aplicar*. O botão fica cinzento até algo mudar e indica o campo a alterar.
+- O diálogo *Calibrar material* mostra folga, interferência, compensação de furos, pé de elefante e parede na unidade escolhida, também em polegadas, e mantém a 3.ª casa decimal.
 
 ### Imprimir e entregar ao slicer
 
@@ -110,15 +117,16 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No separador *Seleção*, *Aplicar* fica logo abaixo da ação aberta, «Filamento e impressão» fica em cima com a cor da atribuição, e abaixo da lista não fica espaço vazio.
 - Um furo alterado mantém o seu lugar na árvore de objetos.
 - As ações que não funcionam num elemento aparecem como «Aqui não é possível: …» com o seu motivo.
+- Ao recortar um cubo para experimentar um ajuste, a posição escolhe-se agora em *Posição do cubo*. A linha *Ponto* acima mostra-a.
+- O diálogo por trás de *Dar espessura* diz na primeira linha que dá espessura à superfície.
 - No cartão de medidas, a tecla Tab vai dos campos à caixa dos elementos iguais, depois a *Aplicar* e *Cancelar*, e volta ao início. A caixa fica agora acima dos botões.
 - Depois de *Cancelar* ou Esc no cartão de medidas, o teclado volta à vista 3D, como depois de *Aplicar*. Antes ia parar ao cartão *Objetos*.
 - No cartão de medidas, *Aplicar* fica cinzento até mudar um valor ou a caixa dos elementos iguais, e indica o primeiro campo. Antes bastava um clique num campo, sem efeito.
 - Se o cartão de medidas recusar um valor, o motivo aparece uma só vez, logo abaixo do campo. Antes a mesma frase repetia-se acima dos botões e na barra de estado.
 - Se um aviso fizer crescer o cartão de medidas, fica no lugar e só se desloca o que o limite ou a pega exigirem, com um movimento curto. Antes saltava para outro sítio.
-- Ao recortar um cubo para experimentar um ajuste, a posição escolhe-se agora em *Posição do cubo*. A linha *Ponto* acima mostra-a.
-- O diálogo por trás de *Dar espessura* diz na primeira linha que dá espessura à superfície.
 - O diálogo *Mudar o nome do objeto* começa com o nome atual no campo.
 - No separador *Seleção*, *Aplicar* fica cinzento até mudar um valor e indica o primeiro campo. Rodar ou duplicar com os valores predefinidos continua imediato.
+- Furar, tapar, furos oblongos e campos de furos chamam ao ajuste «Compensar desvios de impressão», como o grupo de cotas, e acrescentam a compensação de furos.
 
 ## 0.6.0
 

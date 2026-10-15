@@ -118,6 +118,13 @@ Nutzen da und sonst nichts.
 - Die Felder der Leisten *Analyse* und *Teilen*, die Beschreibung in *Modell erzeugen*, die Wahl *Typ* und der Haken „Werte mitgeben“ sagen in der Kurzhilfe und dem Bildschirmleser, was sie bewirken.
 - Von einem Reiter der rechten Karte führt die Tabulatortaste in die Seite, die vorn steht, und geht sie von oben nach unten durch.
 - Ein Projektmaß ohne Einheit bleibt im Verlauf und in der Parameterleiste eine Zahl, auch bei Zoll. Version 0.6.0 schrieb im Verlauf „mm“ dazu.
+- Ein Bildschirmleser nennt in jedem Funktionsdialog jedes Feld beim Namen, auch Auswahllisten, Haken und Merkmalslisten.
+- Ein vorgegebener Text in einem Dialog, etwa ein Name, ist beim Öffnen markiert. Tippen ersetzt ihn.
+- Große Anzahlen stehen auch in Eingabefeldern in Dreiergruppen, etwa 1 051 736 Dreiecke. Getippt werden sie mit oder ohne Trennzeichen.
+- Funktionsdialoge öffnen so hoch wie ihr Inhalt. In Version 0.6.0 blieb etwa bei *Merkmal vervielfachen* ein leerer Streifen über den Knöpfen.
+- Ist ein Pflichtfeld wie der Text von *Schriftzug als Körper* leer, sagt das Feld, was hineingehört, und der Knopf wartet. Version 0.6.0 zeigte dort beim Öffnen einen Fehler.
+- Wer einen Schritt ändert, bestätigt mit *Übernehmen*. Der Knopf bleibt grau, bis sich etwas geändert hat, und nennt das Feld dafür.
+- Der Dialog *Material kalibrieren* zeigt Spiel, Übermaß, Lochkorrektur, Elefantenfuß und Wand in der gewählten Einheit, auch in Zoll, und behält die dritte Nachkommastelle.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -135,15 +142,16 @@ Nutzen da und sonst nichts.
 - Im Reiter *Auswahl* steht *Übernehmen* direkt unter der offenen Handlung, „Filament und Druck“ steht oben mit der Farbe der Zuweisung, und unter der Liste bleibt keine leere Fläche.
 - Eine geänderte Bohrung behält ihren Platz im Objektbaum.
 - Handlungen, die an einem Merkmal nicht gehen, stehen als „Hier nicht möglich: …“ mit ihrem Grund da.
+- Wer einen Würfel zum Ausprobieren einer Passung ausschneidet, wählt dessen Lage jetzt unter *Lage des Würfels*. Die Zeile *Stelle* darüber zeigt sie an.
+- Der Dialog hinter *Dicke geben* sagt in seiner ersten Zeile, dass er der Fläche eine Dicke gibt.
 - Die Tabulatortaste geht in der Maßkarte von den Feldern über den Haken für gleichartige Merkmale zu *Übernehmen* und *Abbrechen* und zurück. Der Haken steht jetzt über den Knöpfen.
 - Nach *Abbrechen* oder Esc in der Maßkarte steht die Tastatur wieder in der 3D-Ansicht, wie nach *Übernehmen*. Bisher landete sie auf der Karte *Objekte*.
 - In der Maßkarte bleibt *Übernehmen* grau, bis sich ein Wert oder der Haken für gleichartige Merkmale ändert, und nennt das erste Feld. Bisher genügte ein Klick ins Feld, ohne Wirkung.
 - Lehnt die Maßkarte einen Wert ab, steht der Grund einmal, direkt unter dem Feld. Bisher stand derselbe Satz noch einmal über den Knöpfen und in der Statusleiste.
 - Wird die Maßkarte durch einen Hinweis höher, bleibt sie stehen und rückt nur so weit, wie Bildrand oder Griff es verlangen, mit kurzer Bewegung. Bisher sprang sie an eine andere Stelle.
-- Wer einen Würfel zum Ausprobieren einer Passung ausschneidet, wählt dessen Lage jetzt unter *Lage des Würfels*. Die Zeile *Stelle* darüber zeigt sie an.
-- Der Dialog hinter *Dicke geben* sagt in seiner ersten Zeile, dass er der Fläche eine Dicke gibt.
 - Der Dialog *Objekt umbenennen* beginnt mit dem jetzigen Namen im Feld.
 - Im Reiter *Auswahl* bleibt *Übernehmen* grau, bis sich ein Wert ändert, und nennt das erste Feld. Drehen oder Verdoppeln mit ihrer Vorgabe gehen weiter sofort.
+- Beim Bohren, Verschließen, Langloch und Lochfeld heißt der Ausgleich „Druckabweichung ausgleichen“ wie in der Maßgruppe und gibt die Lochkorrektur des Materials zu.
 
 ## 0.6.0
 

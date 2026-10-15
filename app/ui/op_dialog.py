@@ -20,10 +20,9 @@ import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Final
 
-from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractSpinBox,
     QCheckBox,
     QComboBox,
     QCompleter,
@@ -66,7 +65,11 @@ from app.ui.change_lock import change_refusal
 from app.ui.dialog_footer import DialogFooter
 from app.ui.dialogs import ErrorNotice, align_to_the_front
 from app.ui.feature_list import FeatureList
+from app.ui.feature_set_field import FeatureSetField
 from app.ui.first_change import first_change_sentence
+from app.ui.first_focus import select_on_first_focus
+from app.ui.form_fields import explain, name_rows
+from app.ui.grouped_spin import GroupedSpin
 from app.ui.labels import (
     BoundedSpin,
     LengthSpin,
@@ -87,6 +90,7 @@ from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.organizer_dialog import OrganizerLayoutField
 from app.ui.outline_dialog import ContourField
 from app.ui.panels import collapsible
+from app.ui.required_inputs import CHOSEN_SOURCES, is_required_text, missing_input
 from app.ui.seal_dialog import SealPathField
 from app.ui.style import (
     NORMAL,
@@ -236,7 +240,7 @@ def lead_sentence(spec: OperationSpec) -> str:
 _ENDS_IN_A_VERB: Final = re.compile(r"\s[a-zäöüß]+(?:en|ern|eln)$")
 
 
-def accept_text(spec: OperationSpec) -> str:
+def accept_text(spec: OperationSpec, *, changing: bool = False) -> str:
     """Was der Hauptknopf eines Operationsdialogs sagt (RM-507).
 
     Der Knopf benennt die Handlung: „Bohrung setzen“ statt „OK“ — was gleich
@@ -246,15 +250,17 @@ def accept_text(spec: OperationSpec) -> str:
     (Robert, 25.08.2026). Trägt ein Bausteintitel selbst ein Verb, ist er der
     Knopf: *Deckel erzeugen* setzte bis RM-507 „ein“. Entschieden wird an der
     deutschen Quelle, damit jede Sprache denselben Knopf zeigt.
+
+    **Wer einen Schritt ändert, übernimmt** (``changing``, FD-99): Der Klick
+    legt kein neues Teil an und setzt nichts ein, er schreibt die geänderten
+    Werte in den bestehenden Schritt — wie *Übernehmen* an Maßgruppe und
+    Merkmalfenster.
     """
+    if changing:
+        return str(tr("Übernehmen"))
     if spec.category == "parts" and not _ENDS_IN_A_VERB.search(source_text(spec.title)):
         return str(tr("Einsetzen"))
     return str(spec.title)
-
-
-#: Feldarten, deren Wert eine Projektquelle nennt, die erst gewählt werden muss
-#: (:meth:`OperationDialog.source_missing`).
-_CHOSEN_SOURCES: Final = ("image", "source")
 
 
 def placement_hint() -> str:
@@ -395,9 +401,11 @@ class ValueField(QWidget):
         Platz gäbe es keinen Wert, der „habe ich nicht gesagt" bedeutet, und
         eine Bestätigung im Dialog schöbe jedes Loch in den Ursprung."""
 
-        self.spin = BoundedSpin(self)
+        # Eine Anzahl steht ab vier Stellen in Dreiergruppen wie in jedem Satz
+        # (FD-124, ``grouped_spin``); eine Zahl mit Nachkomma bleibt, wie sie ist.
+        self.spin = GroupedSpin(self) if entry.kind == "int" else BoundedSpin(self)
         # Fokussiert wird das Drehfeld, nicht der Behälter: Es trägt den Namen
-        # der Zeile (FD-12), den Satz gibt ``_explain`` dazu.
+        # der Zeile (FD-12), den Satz gibt ``form_fields.explain`` dazu.
         self.spin.setAccessibleName(self.caption())
         self.spin.setDecimals(0 if entry.kind == "int" else _decimals_for(entry, self._shown))
         self.spin.setMinimum(
@@ -476,6 +484,9 @@ class ValueField(QWidget):
         self.text.setToolTip(self._grammar_help())
         self.text.installEventFilter(self)
         self.text.setAccessibleDescription(self._grammar_help())
+        # Zahl und Ausdruck sind zwei Felder derselben Zeile (FD-94): Der
+        # Ausdruck nennt die Zeile und sagt, dass er gerechnet wird.
+        self.text.setAccessibleName(tr("{name} · Ausdruck", name=self.caption()))
 
         #: Vervollständigt ``@name`` beim Tippen. Ohne sie muss der Kunde die
         #: Namen seiner Parameter auswendig wissen — und ein Tippfehler wird
@@ -652,6 +663,7 @@ class ValueField(QWidget):
             self._core = core
             self.spin.setValue(self._as_shown(core))
         self.spin.setAccessibleName(self.caption())
+        self.text.setAccessibleName(tr("{name} · Ausdruck", name=self.caption()))
         self.captionChanged.emit(self.caption())
 
     def _name_limits(self) -> None:
@@ -806,7 +818,7 @@ class ValueField(QWidget):
         elif self._refused_shown:
             self.hint.setText("")
             self.hint.setVisible(False)
-            # Zurück zum Satz der Zeile, den der Behälter trägt (``_explain``).
+            # Zurück zum Satz der Zeile, den der Behälter trägt (``form_fields.explain``).
             self.spin.setAccessibleDescription(self.accessibleDescription())
         if bool(said) != self._refused_shown:
             self._refused_shown = bool(said)
@@ -1359,45 +1371,6 @@ def sketch_extent(text: str, values: Mapping[str, float]) -> tuple[float, float]
     return (max(xs) - min(xs), max(ys) - min(ys))
 
 
-def _explain(editor: QWidget, caption: QWidget | None, sentence: str) -> None:
-    """Ein Satz an das Feld, an seine Beschriftung und an den Bildschirmleser.
-
-    Zwei Wege für eine Auskunft: Der Tooltip erscheint, wo die Maus steht, und
-    ``accessibleDescription`` liest ein Vorleser vor (Regel 18 — nicht nur eine
-    Kodierung). Statustipps stehen nur an Menüaktionen (RM-509).
-
-    ``caption`` darf ``None`` sein, weil ``QFormLayout.labelForField`` das
-    zurückgibt, sobald eine Zeile über beide Spalten geht (``addRow`` mit einem
-    Argument). Nachgemessen ist der Fall hier keiner: Alle 457 Zeilen des
-    Registers haben eine Beschriftung. Der Zweig steht für die erste Zeile, die
-    keine hat, und nicht für eine, die es schon gibt.
-
-    **Und an das Feld darin, das den Fokus bekommt** (FD-12): Ein Zahlenfeld
-    ist ein Behälter, fokussiert wird sein Drehfeld, im Flächenwähler der Haken
-    „Ganzer Körper“. Am Behälter allein las ein Bildschirmleser nichts. Ein
-    inneres Feld mit eigenem Satz (das Ausdrucksfeld nennt seine Grammatik,
-    ein abgelehntes Drehfeld seine Grenze) behält ihn; ein Feld ohne Namen
-    heißt wie sein Text oder wie die Zeile.
-    """
-    inherited = editor.accessibleDescription()
-    editor.setToolTip(sentence)
-    editor.setAccessibleDescription(sentence)
-    if caption is not None:
-        caption.setToolTip(sentence)
-    row = caption.text() if isinstance(caption, QLabel) else ""
-    # Die Arten, die auch der Prüfstand als Eingabefeld zählt
-    # (``function_capture._input_widgets``), ohne die Textzeile in einer Zahl.
-    for inner in editor.findChildren(QWidget):
-        focused = isinstance(inner, (QAbstractSpinBox, QLineEdit, QComboBox, QCheckBox))
-        if not focused or isinstance(inner.parentWidget(), (QAbstractSpinBox, QComboBox)):
-            continue
-        if inner.accessibleDescription() in ("", inherited):
-            inner.setAccessibleDescription(sentence)
-        if not inner.accessibleName():
-            own = inner.text() if isinstance(inner, QCheckBox) else ""
-            inner.setAccessibleName(own or row)
-
-
 def _why_inactive(field: str, wanted: str | bool) -> str:
     """Warum dieses Feld gerade nichts tut — als Satz, nicht als Wert.
 
@@ -1760,101 +1733,6 @@ class PointsField(QWidget):
         self.changed.emit()
 
 
-class FeatureSetField(QWidget):
-    """Benannte Flächen wählen; eine leere Zwischenwahl erweitert niemals den Auftrag.
-
-    ``empty`` sagt, was eine leere Wahl bedeutet, und beschriftet den Haken
-    dafür: am Filament der ganze Körper (die Vorgabe), an den Öffnungen des
-    Aushöhlens keine Öffnung. ``None`` heißt, leer gibt es nicht — eine
-    Pflichtliste wie die Quellen eines Merkmalsmusters (P6.7) hat keinen
-    Haken, und gültig ist sie erst mit einem markierten Merkmal. Ein Haken
-    „Ganzer Körper" an einer Liste, deren Leere etwas anderes heißt, wäre ein
-    Versprechen, das die Operation nicht hält.
-    """
-
-    changed = Signal()
-    validityChanged = Signal()
-
-    def __init__(
-        self,
-        choices: Mapping[str, str],
-        selected: Sequence[str],
-        parent: QWidget | None = None,
-        *,
-        empty: str | None = "",
-        hint: str = "",
-    ) -> None:
-        super().__init__(parent)
-        self._last_value = tuple(dict.fromkeys(selected))
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(TIGHT)
-        self.whole = QCheckBox(empty or tr("Ganzer Körper"), self)
-        self.whole.setChecked(not selected and empty is not None)
-        self.whole.setVisible(empty is not None)
-        layout.addWidget(self.whole)
-        self.list = FeatureList(self)
-        self.list.setAccessibleName(tr("Flächen auswählen"))
-        for identifier in dict.fromkeys((*choices, *selected)):
-            item = QListWidgetItem(choices.get(identifier, identifier), self.list)
-            item.setData(Qt.ItemDataRole.UserRole, identifier)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(
-                Qt.CheckState.Checked if identifier in selected else Qt.CheckState.Unchecked
-            )
-        layout.addWidget(self.list)
-        self.hint = QLabel(hint or tr("Flächen markieren oder den ganzen Körper wählen."), self)
-        self.hint.setWordWrap(True)
-        set_level(self.hint, "caption")
-        layout.addWidget(self.hint)
-        self.list.setEnabled(not self.whole.isChecked())
-        self.setFocusProxy(self.list)
-        self.whole.toggled.connect(self._changed)
-        self.list.itemChanged.connect(self._changed)
-
-    def _selected(self) -> tuple[str, ...]:
-        return tuple(
-            str(self.list.item(row).data(Qt.ItemDataRole.UserRole))
-            for row in range(self.list.count())
-            if self.list.item(row).checkState() == Qt.CheckState.Checked
-        )
-
-    @property
-    def valid(self) -> bool:
-        """Keine markierte Fläche bedeutet nur mit ausdrücklichem Haken den ganzen Körper."""
-        return self.whole.isChecked() or bool(self._selected())
-
-    def value(self) -> list[str]:
-        """Während einer unvollständigen Wahl bleibt die letzte gültige Vorschau erhalten."""
-        return list(self._last_value)
-
-    def _changed(self, *_args: object) -> None:
-        self.list.setEnabled(not self.whole.isChecked())
-        self.validityChanged.emit()
-        if self.valid:
-            self._last_value = () if self.whole.isChecked() else self._selected()
-            self.changed.emit()
-
-    def add_feature(self, identifier: str, label: str) -> None:
-        """Ein Klick im Modell ergänzt die Auswahl statt die vorige Fläche zu ersetzen."""
-        with QSignalBlocker(self.list), QSignalBlocker(self.whole):
-            item = next(
-                (
-                    self.list.item(row)
-                    for row in range(self.list.count())
-                    if self.list.item(row).data(Qt.ItemDataRole.UserRole) == identifier
-                ),
-                None,
-            )
-            if item is None:
-                item = QListWidgetItem(label or identifier, self.list)
-                item.setData(Qt.ItemDataRole.UserRole, identifier)
-                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            self.whole.setChecked(False)
-            item.setCheckState(Qt.CheckState.Checked)
-        self._changed()
-
-
 def direction_fields(spec: OperationSpec) -> frozenset[str]:
     """Die Felder, die die Richtung des Werkzeugs tragen: Normale und Achse.
 
@@ -2046,6 +1924,8 @@ class OperationDialog(QDialog):
         centre_objects: Sequence[SceneObject] = (),
         promote_values: bool = True,
         front_fields: Sequence[str] = (),
+        changing: bool = False,
+        wait_for_change: bool = True,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -2065,6 +1945,15 @@ class OperationDialog(QDialog):
         gespeicherte Werte und Ausdrücke sind keine neue Vorbelegung.
         ``front_fields`` holt diese Felder trotzdem nach vorn — die Maße eines
         aufgezogenen Quaders oder Zylinders (RM-559, E11), die man ändern will.
+
+        ``changing``: Der Dialog ändert einen bestehenden Schritt (§15.4,
+        ``MainWindow.edit_operation``). Der Knopf heißt dann *Übernehmen*
+        (:func:`accept_text`) und ist grau, bis sich etwas geändert hat; sein
+        Satz nennt das Feld, das man ändern kann (FD-99, ``first_change``).
+        ``wait_for_change=False``: Der Knopf wartet nicht — die Werte tragen
+        schon eine Änderung (eine Geste, eine Zeichnung aus dem Raum,
+        ``edit_operation(given=…)``), oder der Schritt hält die Kette an; dann
+        sagt erst die Vorschau, was gilt, mit ihrem Weg (*Gewindeschritt öffnen*).
 
         ``extra_label`` beschriftet es. Leer für einen Haken: Der trägt
         seinen Text selbst, und eine Beschriftung daneben stünde zweimal
@@ -2093,10 +1982,13 @@ class OperationDialog(QDialog):
         self._editors: dict[str, QWidget] = {}
         self._feature_focus = ""
         self._first_focus_given = False
+        self._changing = changing
         self._opened_with: tuple[str, dict[str, Any]] | None = None
-        """Variante und Werte, mit denen der Dialog beim heutigen Stand aufging."""
+        """Im Änderungsweg: Variante und Werte beim Öffnen."""
         self._waits_for_change = False
         """Ob *Übernehmen* auf die erste Änderung wartet (:meth:`_follow_source_pending`)."""
+        self._asked_field = ""
+        """Das Feld, in das :meth:`focus_field` geführt hat — der Satz nennt es zuerst."""
         self.source_objects = tuple(source_objects)
         self._centre_objects = tuple(centre_objects)
         self._centre_row: QWidget | None = None
@@ -2242,7 +2134,7 @@ class OperationDialog(QDialog):
                 # 457 Parametern in 86 Operationen war das die Erklärung, die
                 # es gab und die niemand fand. ``labelForField`` holt das Label,
                 # das ``addRow`` aus der Zeichenkette gebaut hat.
-                _explain(editor, target.labelForField(editor), str(entry.doc))
+                explain(editor, target.labelForField(editor), str(entry.doc))
             if isinstance(editor, RowCheckBox):
                 caption_toggles(target.labelForField(editor), editor)
             if isinstance(editor, ValueField) and editor.circle_toggle is not None:
@@ -2437,7 +2329,7 @@ class OperationDialog(QDialog):
             front.addRow(str(tr("Maße als Parameter anlegen")), naming)
             caption = front.labelForField(naming)
             caption_toggles(caption, naming)
-            _explain(
+            explain(
                 naming,
                 caption,
                 str(
@@ -2556,7 +2448,7 @@ class OperationDialog(QDialog):
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self._accept_button = ok
         if ok is not None:
-            ok.setText(accept_text(spec))
+            ok.setText(accept_text(spec, changing=changing))
             make_primary(ok)
         self._source_fields = tuple(
             editor for editor in self._editors.values() if isinstance(editor, ImageSourceField)
@@ -2595,13 +2487,15 @@ class OperationDialog(QDialog):
         # sie zur Eingabe macht. Und ein Pflicht-Ziel: Der Knopf gibt frei,
         # sobald es gewählt ist, nicht erst mit dem nächsten Vorschaubild.
         if (
-            self.spec.name == "apply_texture"
+            changing
+            or self.spec.name == "apply_texture"
             or self._seeks_a_place()
             or any(
                 (entry.kind == "material" and entry.required)
                 or (entry.targets_feature and entry.required)
                 or (entry.kind == "sketch" and (entry.required or entry.depends_on is not None))
-                or (entry.kind in _CHOSEN_SOURCES and entry.required)
+                or (entry.kind in CHOSEN_SOURCES and entry.required)
+                or is_required_text(entry)
                 for entry in self.spec.params.spec()
             )
         ):
@@ -2618,6 +2512,15 @@ class OperationDialog(QDialog):
         self._align_to_the_front()
         self._even_number_fields()
         self._refresh_advanced_summary()
+        # Jedes Feld trägt den Namen seiner Zeile, auch eines ohne Satz und eines,
+        # das selbst der Editor ist (FD-94, ``form_fields.name_rows``).
+        name_rows(front, advanced)
+        if changing and wait_for_change:
+            # Was beim Öffnen dastand, ist der Schritt, wie er ist; erst eine
+            # Abweichung davon ist etwas zum Übernehmen (FD-99). Ein Fokus oder
+            # dieselbe Zahl noch einmal getippt ändert nichts.
+            self._opened_with = (self.spec.name, self.values())
+            self._follow_source_pending()
 
     def _ask_manual(self) -> None:
         """F1: die Stelle im Handbuch zu dieser Operation melden.
@@ -2694,20 +2597,40 @@ class OperationDialog(QDialog):
         # Knopf, statt drei Schritte später im Prüfbericht zu enden
         # (:meth:`block_apply`, gerufen aus ``MainWindow._preview_explained``).
         blocked = self._attachment_problem or self._blocked_reason
-        # **Beim heutigen Stand wartet der Knopf auf die erste Änderung** (RA-13,
-        # dieselbe Regel wie FD-31 und FD-99): Ein Umbenennen auf den Namen, der
-        # schon gilt, legte einen leeren Schritt an. Grau, und der Satz nennt das
-        # erste offene Feld (``first_change``). Wer den Stand vorgibt, setzt
-        # ``_opened_with`` (``MainWindow.run_operation``).
-        unchanged = self._opened_with is not None and self._opened_with == (
-            self.spec.name,
-            self.values(),
-        )
-        first = first_change_sentence(self._editors.values(), self) if unchanged else ""
-        self._waits_for_change = bool(first)
         # **Ansehen ja, Übernehmen nein** (FD-5): Ohne Freischaltung geht ein
         # Schritt aus Verlauf oder Baum zum Lesen auf; der Knopf trägt den Grund.
         refusal = change_refusal()
+        # **Im Änderungsweg wartet der Knopf auf die erste Änderung** (FD-99, mit
+        # FD-31 eine Regel für alle Flächen): grau, und der Satz nennt das Feld,
+        # in das der Kunde gekommen ist, sonst das erste offene. Ohne offenes Feld
+        # gibt es keinen Weg zu nennen, und der Knopf bleibt, wie er war.
+        # Ein gesetzter Haken *Maße als Parameter anlegen* ändert den Schritt,
+        # solange vorn ein Millimetermaß als Zahl steht — auch wenn er schon beim
+        # Öffnen stand (Vorgabe aus den Einstellungen).
+        unchanged = (
+            self._opened_with is not None
+            and self._opened_with == (self.spec.name, self.values())
+            and not (
+                self.names_dimensions()
+                and any(
+                    isinstance(editor, ValueField)
+                    and editor._entry.unit == "mm"
+                    and not editor.toggle.isChecked()
+                    and not editor.isHidden()
+                    and self._rows.get(name) is self._front
+                    for name, editor in self._editors.items()
+                )
+            )
+        )
+        asked = self._editors.get(self._asked_field)
+        first = (
+            first_change_sentence(
+                [*([asked] if asked is not None else []), *self._editors.values()], self
+            )
+            if unchanged
+            else ""
+        )
+        self._waits_for_change = bool(first)
         reason = refusal or (
             tr("Datei wird gelesen …")
             if source_pending
@@ -2932,29 +2855,18 @@ class OperationDialog(QDialog):
         return ""
 
     def source_missing(self) -> str:
-        """Ein Pflichtfeld für Bild oder Datei ohne Wahl — und der Knopf, der es füllt (RM-775).
+        """Eine Pflichtangabe ohne Wert — Bild, Datei oder Text — als Satz, sonst leer.
 
         Kundenprotokoll zu 0.5.3: „op.displace_image.ValidationError: Diese
         Quelle gibt es im Projekt nicht.“ Das Bild war noch gar nicht gewählt:
         Die Vorschau lief beim Öffnen von *Relief auflegen* mit leerer Quelle,
-        und der Kern meldete eine Kennung, die es nicht gibt. Solange der Satz
-        hier steht, rechnet keine Vorschau, und *Übernehmen* nennt den Knopf.
+        und der Kern meldete eine Kennung, die es nicht gibt (RM-775). Ebenso
+        ein leerer Pflichttext: *Schriftzug als Körper* zeigte beim Öffnen eine
+        Absage (FD-134). Solange der Satz hier steht, rechnet keine Vorschau,
+        und *Übernehmen* nennt den Knopf oder das Feld
+        (:func:`app.ui.required_inputs.missing_input`).
         """
-        schema = self.spec.params.spec()
-        wanted = [
-            entry
-            for entry in schema
-            if entry.kind in _CHOSEN_SOURCES and entry.required and not entry.internal
-        ]
-        if not wanted:
-            return ""
-        values = self.values()
-        for entry in wanted:
-            if inactive_dependency(entry, schema, values) is not None or values.get(entry.name):
-                continue
-            choose = tr("Bild wählen …") if entry.kind == "image" else tr("Datei wählen …")
-            return tr("{name}: {value}", name=entry.title, value=choose)
-        return ""
+        return missing_input(self.spec, self.values)
 
     def _seeks_a_place(self) -> bool:
         """Ob dieser Dialog einen Baustein einsetzt — nur dort gibt es eine Stelle zu fragen."""
@@ -3582,7 +3494,7 @@ class OperationDialog(QDialog):
                     explanation = docs[entry.name]
                 else:
                     explanation = _why_inactive(titles[inactive[0]], inactive[1][0])
-                _explain(editor, label, explanation)
+                explain(editor, label, explanation)
             if self.spec.name == "apply_texture" and "angle" in self._editors:
                 # Ganzfläche dreht das Muster innerhalb ihrer festen Kontur;
                 # ein aufgewickelter Zylinder ignoriert diesen Winkel.
@@ -3910,7 +3822,7 @@ class OperationDialog(QDialog):
                         editor.setEnabled(True)
                         if label is not None:
                             label.setEnabled(True)
-                        _explain(editor, label, docs[name])
+                        explain(editor, label, docs[name])
                     continue
                 if name in axis_of and isinstance(editor, ValueField):
                     simple = simple_shape_of(text)
@@ -3974,7 +3886,7 @@ class OperationDialog(QDialog):
                     # steht dort 0,1, während die Zeichnung 0,06 misst — eine
                     # stille Ungenauigkeit ist schlimmer als eine genannte,
                     # weil der Kunde die Zahl für sein Maß hält.
-                    _explain(
+                    explain(
                         editor,
                         label,
                         (not darstellbar and clamped) or held_note() or evenly_note() or follows,
@@ -3987,7 +3899,7 @@ class OperationDialog(QDialog):
                 editor.setEnabled(False)
                 if label is not None:
                     label.setEnabled(False)
-                _explain(editor, label, reason)
+                explain(editor, label, reason)
                 # **Die Grundform verschwindet, solange gezeichnet ist** (RM-391).
                 # Gesperrt stand dort weiter „Rechteck“ neben einem Linienzug
                 # mit Schräge — eine Angabe, die nicht stimmt, ist schlimmer
@@ -4060,6 +3972,7 @@ class OperationDialog(QDialog):
                     self,
                     empty=None,
                     hint=tr("Mindestens ein Merkmal markieren."),
+                    name=str(entry.title),
                 )
             if entry.feature_kinds:
                 # Eine Liste bestimmter Arten, die leer bleiben darf — die
@@ -4071,8 +3984,9 @@ class OperationDialog(QDialog):
                     self,
                     empty=tr("Keine"),
                     hint=tr("Flächen markieren oder „Keine“ wählen."),
+                    name=str(entry.title),
                 )
-            return FeatureSetField(self._features, tuple(start or ()), self)
+            return FeatureSetField(self._features, tuple(start or ()), self, name=str(entry.title))
         if entry.kind == "edges":
             return EdgeSetField(self._edges, str(start or ""), self)
         if entry.kind == "points":
@@ -4241,6 +4155,14 @@ class OperationDialog(QDialog):
         line = QLineEdit(self)
         if start:
             line.setText(str(start))
+        if is_required_text(entry):
+            # Ein leerer Pflichttext ist ein Hinweis im Feld, kein Fehler
+            # (FD-134): der erste Satz seiner Beschreibung, etwa „Was
+            # daraufstehen soll.“ Den Knopf hält ``source_missing``.
+            line.setPlaceholderText(first_sentence(str(entry.doc or entry.title)))
+        # Ein vorgegebener Text (der Name beim Umbenennen) ist beim ersten
+        # Fokus markiert: Tippen ersetzt ihn, Ende ergänzt ihn (FD-114).
+        select_on_first_focus(line)
         return line
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
@@ -4368,7 +4290,14 @@ class OperationDialog(QDialog):
         if inner is not None:
             inner.setFocus(Qt.FocusReason.OtherFocusReason)
             inner.selectAll()
+        elif isinstance(editor, QLineEdit):
+            editor.selectAll()
         self._scroll.ensureWidgetVisible(editor)
+        if self._opened_with is not None:
+            # Wer über ein Feld kommt (*Eingabe korrigieren*), liest es im Satz —
+            # gefragt, nachdem die Klappe es gezeigt hat.
+            self._asked_field = name
+            self._follow_source_pending()
         return True
 
     def take_point(self, point: tuple[float, float, float]) -> bool:
@@ -4534,7 +4463,7 @@ class OperationDialog(QDialog):
                 else:
                     form.addRow(str(entry.title), editor)
                 self._rows[entry.name] = form
-                _explain(editor, form.labelForField(editor), str(entry.doc or ""))
+                explain(editor, form.labelForField(editor), str(entry.doc or ""))
                 if isinstance(editor, RowCheckBox):
                     caption_toggles(form.labelForField(editor), editor)
                 if isinstance(editor, ValueField) and editor.circle_toggle is not None:
@@ -4556,7 +4485,7 @@ class OperationDialog(QDialog):
         for widget in retired:
             widget.deleteLater()
         self.setWindowTitle(str(spec.title))
-        self._accept_button.setText(accept_text(spec))
+        self._accept_button.setText(accept_text(spec, changing=self._changing))
         if self._description is not None:
             self._description.setText(lead_sentence(spec))
             self._description.setVisible(bool(spec.doc))
@@ -4573,6 +4502,7 @@ class OperationDialog(QDialog):
         self._align_to_the_front()
         self._even_number_fields()
         self._refresh_advanced_summary()
+        name_rows(self._front, self._advanced_form)
         self._resize_to_content("passive")
         self.schemaChanged.emit()
 
@@ -4723,6 +4653,23 @@ class OperationDialog(QDialog):
             expanded_width(self._scroll, self._advanced_form),
             self._footer.natural_width + 2 * WIDE,
         )
+        if intent != "passive" and content is not None and content_layout is not None:
+            # **Erst in der Breite legen, dann messen** (FD-45): Eine Merkmalsliste
+            # setzt ihre Höhe einen Umlauf später, und in der endgültigen Breite
+            # verliert sie die Querleiste; ein Formular mit umbrochenem Satz meldet
+            # seine Mindesthöhe erst richtig, wenn es einmal in seiner Breite liegt.
+            # Davor gemessen blieb über den Knöpfen ein Streifen leer, den das
+            # passive Nachmessen nie zurückgibt.
+            if intent == "initial":
+                self._height.prepare_width_for_measurement(
+                    self, max(self.width(), self.sizeHint().width(), natural_width)
+                )
+                layout.activate()
+            for listing in content.findChildren(FeatureList):
+                listing.fit_now()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
+            content_layout.invalidate()
+            content_layout.activate()
         self._height.fit(
             self,
             self._scroll,
