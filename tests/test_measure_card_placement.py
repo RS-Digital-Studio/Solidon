@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QFormLayout, QLabel, QWidget
 from app.i18n.catalog import available_languages
 from app.ui.labels import LengthSpin
 from app.ui.measure_card_drag import MeasureCardDrag
+from app.ui.overlay import SNAP_TO_EDGE
 from app.ui.panels import FIELD_PROPERTY
 from app.ui.style import NORMAL, ROOMY, SPACE
 from tests.test_feature_front_contract import customer_theme as customer_theme
@@ -177,8 +178,18 @@ def test_chosen_place_survives_fold_value_and_missing_surface(
     assert origin.font().pointSizeF() < diameter.font().pointSizeF()
     assert group.layout().verticalSpacing() == NORMAL
 
+    # Erst wenn die Seitenkarten stehen, steht auch der freie Raum der Karte.
+    wait_until(qt_app, lambda: not window.overlay._moves and window.overlay._pending is None)
+    settle_measure_layout(qt_app)
     before = flow._measure_box.pos()
-    destination = QPoint(window.viewport.width() // 2, 90)
+    # Links in den freien Raum, nicht in die Mitte der Ansicht: Wie breit Karte
+    # und Seitenkarten sind, hängt an der Schrift. Offscreen ist die Karte 537
+    # Punkte breit, und bei x = 960 rastete sie am rechten Rand ein (FD-84).
+    # Rechts bleibt Platz für die aufgeklappte Karte, die auf Französisch fast
+    # tausend Punkte breit wird; zwei Fangweiten vom Rand rastet nichts ein.
+    room = flow._measure_drag._room
+    destination = QPoint(room.left() + 2 * SNAP_TO_EDGE, 90)
+    assert room.contains(QRect(destination, flow._measure_box.size()))
     _move_card(flow, destination)
     settle_measure_layout(qt_app)
     chosen = flow._measure_box.pos()
@@ -291,14 +302,20 @@ def test_manually_placed_card_is_an_obstacle_also_in_the_emergency_path(
         layout.addRow(title)
         if crowded:
             # Ein breiter, hoher Inhalt rollt nach den vorhandenen Größenregeln.
-            # Fünf gleich breite Felder passen oberhalb in eine volle Zeile;
-            # die Nähe-Suche zerteilt diese freie Zeile dagegen ungünstig.
+            # Fünf gleich breite Felder füllen die freie Zeile unter der Karte
+            # genau; die Nähe-Suche zerteilt diese Zeile dagegen ungünstig. Die
+            # Feldbreite folgt der breitesten Beschriftung und die Ansicht ihr:
+            # Offscreen sind die Kantenmaße mit Stylesheet breiter als 370
+            # Punkte, und fünf passten bei 1920 nicht mehr in eine Zeile (FD-84).
+            fields = (*flow._reference_boxes, *flow._centre_measures)
+            wide = max(370, *(field.sizeHint().width() for field in fields))
+            viewport.resize(max(1920, 5 * wide + 4 * SPACE + 2 * ROOMY), 1080)
             title.setMinimumSize(viewport.width(), 30)
             contents = QWidget(group)
             contents.setMinimumHeight(2000)
             layout.addRow(contents)
-            for field in (*flow._reference_boxes, *flow._centre_measures):
-                field.setMinimumWidth(370)
+            for field in fields:
+                field.setMinimumWidth(wide)
         flow.set_measure_fields(
             group, editors=(), interpret=lambda: True, refresh=lambda _values: None
         )
