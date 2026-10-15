@@ -2010,7 +2010,12 @@ def test_the_register_says_what_a_body_must_bring() -> None:
     from app.core.registry.registry import BODY_REQUIREMENTS
 
     declared = {spec.name: spec.requires_body for spec in REGISTRY.all() if spec.requires_body}
-    assert declared == {"thicken": "open", "split_bodies": "parts", "lattice_fill": "cavity"}
+    assert declared == {
+        "thicken": "open",
+        "split_bodies": "parts",
+        "lattice_fill": "cavity",
+        "slots_from_texture": "colour",
+    }
     assert set(declared.values()) <= set(BODY_REQUIREMENTS)
 
 
