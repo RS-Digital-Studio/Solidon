@@ -43,9 +43,9 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
    ein Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/`` —, auch
    über einen Helfer, den die Testdatei direkt importiert, oder ihr Ordner
    über seinen Pfad (``Path(__file__).parent / "data"``). Ein Kommentar oder
-   Docstring nennt nichts. Eine Datendatei unter ``app/`` zählt dazu wie eine
-   Änderung an dem Modul, das sie liest: ``materials.toml`` wählt, was
-   ``knowledge.profiles`` mittelbar importiert.
+   Docstring nennt nichts. Eine Datendatei unter ``app/``, ``tests/data/`` oder
+   ``website/`` zählt dazu wie eine Änderung an dem Modul, das sie liest:
+   ``materials.toml`` wählt, was ``knowledge.profiles`` mittelbar importiert.
 
 Gewählt werden nur Testdateien: Aus einem Helfer sammelt pytest nichts, er
 steht für die Testdateien, die ihn importieren.
@@ -118,6 +118,9 @@ _PROJECT_NAME = re.compile(r"[\w.-]+\.p3d\b")
 _PROJECT_OP = re.compile(r"\"op\"\s*:\s*\"(\w+)\"")
 #: Wo Projektdateien liegen: Beispiele, Korpus, Website.
 _PROJECT_FOLDERS = ("app", "tests", "website")
+
+#: Wo Datendateien liegen, deren Leser eine Änderung an ihnen erbt.
+_DATA_FOLDERS = ("app/", "tests/data/", "website/")
 
 #: Die Register der Operationen und der Bausteine, und ihre Methoden, die jeden Eintrag
 #: liefern; ``get`` und ``has`` fragen nach einem Namen.
@@ -620,8 +623,8 @@ def _loaders(
 
 
 def _data_readers(graph: ImportGraph, file: PurePosixPath) -> list[str]:
-    """Die Module, die eine Datendatei unter ``app/`` lesen; eine Änderung an der Datei ist eine
-    Änderung an ihnen (Entscheidung Koordinator).
+    """Die Module, die eine Datendatei unter ``app/``, ``tests/data/`` oder ``website/`` lesen;
+    eine Änderung an der Datei ist eine Änderung an ihnen (Entscheidung Koordinator).
 
     Gelesen wird über einen Pfad, der sich auf die Datei auflöst
     (``_DATA_DIR / "printers.toml"``), über einen offenen Namen im Ordner, wenn das Modul die
@@ -864,7 +867,7 @@ def affected(
     changed_modules: set[str] = set()
     deleted_modules: set[str] = set()
     named_tools: list[str] = []
-    #: Die Module, die eine geänderte Datendatei unter ``app/`` lesen, je mit der Datei.
+    #: Die Module, die eine geänderte Datendatei lesen (:data:`_DATA_FOLDERS`), je mit der Datei.
     data_readers: dict[str, str] = {}
     #: Jede geänderte Datei, neu oder gelöscht — für die, die ihren Ordner lesen.
     paths: list[PurePosixPath] = []
@@ -907,10 +910,10 @@ def affected(
                 _note_readers(graph, reasons, _named_readers(graph, graph.root / relative))
         else:
             _note_readers(graph, reasons, _named_readers(graph, graph.root / relative))
-            if relative.startswith("app/"):
+            if relative.startswith(_DATA_FOLDERS):
                 for reader in _data_readers(graph, PurePosixPath(relative)):
                     data_readers.setdefault(reader, PurePosixPath(relative).name)
-    # Eine Datendatei unter ``app/`` ändert, was ihr Leser tut: Sie zählt wie eine Änderung an
+    # Eine Datendatei ändert, was ihr Leser tut: Sie zählt wie eine Änderung an
     # ihm, mit seinen mittelbaren Importeuren (``materials.toml`` → ``knowledge.profiles``).
     for reader, file_name in sorted(data_readers.items()):
         where = graph.modules[reader].relative_to(graph.root).as_posix()

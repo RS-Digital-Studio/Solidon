@@ -714,6 +714,42 @@ def test_an_operation_reached_through_a_created_step_or_a_project_file_selects_i
     assert "tests/test_empty.py" not in _names(files, tree)
 
 
+def test_a_data_file_under_tests_or_website_counts_as_a_change_to_its_reader(tree: Path) -> None:
+    """``tests/data/function_scenes.toml`` liest ``tools/function_scenes.py``, und
+    ``test_function_export_preparation`` erreicht es über ``tools/function_bench.py``;
+    ``website/site.js`` liest ``tools/make_changelog.py`` für ``test_changelog_website``
+    (Entscheidung Koordinator: dieselbe Regel wie unter ``app/``)."""
+    _write(
+        tree,
+        "tools/scenes.py",
+        "from pathlib import Path\n"
+        "SCENES = Path(__file__).resolve().parents[1] / 'tests' / 'data' / 'scenes.toml'\n"
+        "def load():\n    return SCENES.read_text()\n",
+    )
+    _write(tree, "tools/bench.py", "from tools import scenes\n")
+    _write(
+        tree,
+        "tools/changelog.py",
+        "from pathlib import Path\n"
+        "SITE = Path(__file__).resolve().parents[1] / 'website'\n"
+        "def script():\n    return (SITE / 'site.js').read_text()\n",
+    )
+    _write(tree, "tests/test_bench.py", "from tools import bench\n")
+    _write(tree, "tests/test_changelog_pages.py", "from tools import changelog\n")
+    _write(tree, "tests/data/scenes.toml", "[x]\n")
+    _write(tree, "website/site.js", "x = 1;\n")
+    graph = ImportGraph(tree)
+
+    _files, reasons = affected([tree / "tests" / "data" / "scenes.toml"], graph)
+    assert reasons[tree / "tests" / "test_bench.py"] == (
+        "hängt an tools/scenes.py, das scenes.toml liest"
+    )
+    _files, reasons = affected([tree / "website" / "site.js"], graph)
+    assert reasons[tree / "tests" / "test_changelog_pages.py"] == (
+        "hängt an tools/changelog.py, das site.js liest"
+    )
+
+
 def test_an_application_module_reading_its_own_tree_lends_that_reading(tree: Path) -> None:
     """CS-32: ``app/i18n/extract.py`` liest die Quellen unter ``app/`` nach ``tr()``-Schlüsseln;
     ``tools/registry_dump.py`` ruft es, und ``test_registry_dump`` fehlte bei einem neuen Text
@@ -798,7 +834,8 @@ def test_the_real_operation_and_data_changes_reach_what_runs_them(
     ``knowledge.profiles``. Die letzten zehn Paare der Messung: ``load_step`` über
     ``import_plan`` (``test_paint``), ``pipe_clamp`` als ``insert_pipe_clamp``
     (``test_platform_identity``), ``sculpt_strokes`` in ``weg4-stein-formen.p3d``
-    (``test_orphans``)."""
+    (``test_orphans``); die letzten vier Lesungen: ``function_scenes.toml`` über
+    ``tools.function_scenes``, ``icon.svg`` über ``tools.make_changelog``."""
     root = real_graph.root
     for module, tests in (
         (
@@ -809,6 +846,8 @@ def test_the_real_operation_and_data_changes_reach_what_runs_them(
         ("app/core/knowledge/parts/mounting.py", ("test_platform_identity.py",)),
         ("app/core/geom/sculpt.py", ("test_orphans.py",)),
         ("app/core/knowledge/data/materials.toml", ("test_bore_mouth_resize.py", "test_cli.py")),
+        ("tests/data/function_scenes.toml", ("test_function_export_preparation.py",)),
+        ("website/icon.svg", ("test_changelog_website.py",)),
     ):
         files, _reasons = affected([root / module], real_graph)
         for test in tests:
