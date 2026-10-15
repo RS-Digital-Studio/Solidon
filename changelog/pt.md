@@ -80,6 +80,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
 - Nos furos, vista e *Seleção* mostram a mesma alteração. Dimensão, profundidade e entrada associada ficam à frente; compensação de impressão e ajustes finos, em «Mais valores».
 - Os campos do furo e a caixa para alterar elementos iguais em conjunto explicam o seu efeito. «Compensar desvios de impressão» esclarece a correção do perfil do material.
+- No cartão de medidas da vista, a tecla Tab passa dos campos para *Mais valores* e para a caixa dos elementos iguais, depois para *Aplicar* e *Cancelar*, e volta ao primeiro campo. A caixa fica agora acima dos botões.
 
 ## 0.6.0
 

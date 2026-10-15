@@ -14,7 +14,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace
 from itertools import pairwise, product
-from typing import Any, Final, Protocol, cast, override, runtime_checkable
+from typing import Any, Final, Protocol, cast, runtime_checkable
 
 import numpy as np
 from PySide6.QtCore import (
@@ -31,7 +31,7 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QFocusEvent, QKeyEvent, QPolygonF, QResizeEvent
+from PySide6.QtGui import QColor, QFocusEvent, QKeyEvent, QPolygonF
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QApplication,
@@ -70,9 +70,10 @@ from app.ui.change_lock import change_refusal, hold_inputs
 from app.ui.icons import icon
 from app.ui.labels import LengthSpin, feature_name, length, wheel_needs_focus
 from app.ui.leash import stop_watching_the_dying
+from app.ui.measure_card import MeasureCard
 from app.ui.measure_card_drag import MeasureCardDrag
 from app.ui.measure_field_places import distance_reserve, emergency_places, rows_height
-from app.ui.overlay import MEASURE_CARD, _round_corners
+from app.ui.overlay import MEASURE_CARD
 from app.ui.palette import DIFF_PALETTES
 from app.ui.render.api import Item, PointerEvent, Renderer, SurfaceStyle
 from app.ui.style import NORMAL, ROOMY, SPACE
@@ -517,20 +518,6 @@ def _choice_widths(group: QWidget) -> list[tuple[QComboBox, int]]:
         )
         widths.append((combo, needed.width()))
     return widths
-
-
-class _MeasureCard(QFrame):
-    """Die Karte der Maßgruppe über der Ansicht — mit runden Ecken wie die Karten am Rand.
-
-    Das Stilblatt rundet den Rahmen (``overlay.card_stylesheet``); die Maske
-    stellt die Zwickel daneben frei, sonst stünden dort schwarze Ecken über
-    dem Bild (:func:`overlay._round_corners`).
-    """
-
-    @override
-    def resizeEvent(self, event: QResizeEvent) -> None:
-        super().resizeEvent(event)
-        _round_corners(self)
 
 
 def _release_measure_group(group: QWidget, release: Callable[[QWidget], bool] | None) -> None:
@@ -1901,6 +1888,9 @@ class PlacementFlow(QObject):
         self._measure_refresh = refresh
         self.dialog.requires_displayed_preview = True
         self._measure_scroll.setWidget(group)
+        # Die Felder kommen nach den Knöpfen in die Karte; ihre Kette folgt dem
+        # Layout, nicht der Entstehung (FD-86).
+        self._measure_box.settle_tab_order()
         self._watch(group)
         self._measure_targets.append(group)
         for field in editors:
@@ -2737,7 +2727,7 @@ class PlacementFlow(QObject):
         self._accept = QPushButton(self._bar)
         layout.addWidget(self._accept)
         self._bar.hide()
-        self._measure_box = _MeasureCard(self.viewport)
+        self._measure_box = MeasureCard(self.viewport)
         self._measure_box.setObjectName(MEASURE_CARD)
         self._measure_box.setAutoFillBackground(True)
         measure_layout = QVBoxLayout(self._measure_box)
@@ -2748,6 +2738,16 @@ class PlacementFlow(QObject):
         self._measure_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._measure_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         measure_layout.addWidget(self._measure_scroll)
+        # **Der Sammelhaken steht vor den Knöpfen** (FD-86): Er sagt, was
+        # *Übernehmen* trifft, und wird vor ihm gelesen — wie im Merkmalfenster
+        # (``FeaturePanel._settle_tab_order``). Darunter stand er hinter
+        # *Abbrechen*, und die Tabulatortaste hätte das Auge verlassen.
+        self._measure_scope_box = QWidget(self._measure_box)
+        self._measure_scope_layout = QVBoxLayout(self._measure_scope_box)
+        self._measure_scope_layout.setContentsMargins(0, 0, 0, 0)
+        self._measure_scope_layout.setSpacing(NORMAL)
+        self._measure_scope_box.hide()
+        measure_layout.addWidget(self._measure_scope_box)
         self._measure_note = QLabel(self._measure_box)
         self._measure_note.setWordWrap(True)
         measure_layout.addWidget(self._measure_note)
@@ -2766,12 +2766,6 @@ class PlacementFlow(QObject):
         self._measure_cancel.setIcon(icon("cancel", self._measure_cancel))
         measure_actions.addWidget(self._measure_cancel)
         measure_layout.addLayout(measure_actions)
-        self._measure_scope_box = QWidget(self._measure_box)
-        self._measure_scope_layout = QVBoxLayout(self._measure_scope_box)
-        self._measure_scope_layout.setContentsMargins(0, 0, 0, 0)
-        self._measure_scope_layout.setSpacing(NORMAL)
-        self._measure_scope_box.hide()
-        measure_layout.addWidget(self._measure_scope_box)
         self._measure_box.hide()
         # **Erst die Halter, dann die Felder darin.** Was als Kind der Ansicht
         # entsteht und dort poliert wird, bekommt ein eigenes natives Fenster

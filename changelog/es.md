@@ -81,6 +81,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro o un recipiente solo sale adelante moviendo las esquinas una cantidad mínima, la abertura queda libre. En la versión 0.6.0 podía quedar encima una piel finísima.
 - En agujeros, vista y *Selección* muestran el mismo cambio. Medida, profundidad y entrada vinculada están delante; compensación de impresión y ajustes finos, en «Más valores».
 - Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
+- En la tarjeta de medidas de la vista, el tabulador va de los campos a *Más valores* y a la casilla de características iguales, luego a *Aplicar* y *Cancelar*, y vuelve al primer campo. La casilla está ahora encima de los botones.
 
 ## 0.6.0
 

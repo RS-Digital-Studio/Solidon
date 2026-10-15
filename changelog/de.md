@@ -105,6 +105,7 @@ Nutzen da und sonst nichts.
 - Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
 - Bei Bohrungen zeigen Bild und *Auswahl* dieselbe Änderung. Zielmaß, Tiefe und mitgehender Einlauf stehen vorn; Druckkorrektur und Feinwerte unter „Weitere Werte“.
 - Bohrungsfelder und der Haken zum gemeinsamen Ändern gleichartiger Merkmale erklären ihre Wirkung. „Druckabweichung ausgleichen“ beschreibt die Korrektur aus dem Materialprofil verständlicher.
+- In der Maßkarte im Bild geht die Tabulatortaste von den Feldern über *Weitere Werte* und den Haken für gleichartige Merkmale zu *Übernehmen* und *Abbrechen* und danach zurück zum ersten Feld. Der Haken steht jetzt über den Knöpfen.
 
 ## 0.6.0
 
