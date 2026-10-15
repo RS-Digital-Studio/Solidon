@@ -128,11 +128,20 @@ RECORDER_DEEP = (
 
 
 def _cut(
-    methods: tuple[str, ...] = (), own: tuple[str, ...] = (), parent: tuple[str, ...] = ()
+    methods: tuple[str, ...] = (),
+    own: tuple[str, ...] = (),
+    parent: tuple[str, ...] = (),
+    host: tuple[str, ...] = (),
 ) -> str:
-    """Der Zuschnitt der Attrappe mit weiteren Methoden, eigenen und ererbten Membern."""
+    """Der Zuschnitt der Attrappe mit weiteren Methoden, eigenen, geteilten und ererbten
+    Membern."""
     cut = fx.COMPONENT_CUT
-    for key, extra in (("methods", methods), ("own_attributes", own), ("parent_members", parent)):
+    for key, extra in (
+        ("methods", methods),
+        ("own_attributes", own),
+        ("parent_members", parent),
+        ("host_members", host),
+    ):
         if not extra:
             continue
         start = cut.index(f"{key} = [")
@@ -191,6 +200,111 @@ def _logging_base(files: dict[str, str], anchor: str) -> dict[str, str]:
 
 def _mixin_base(files: dict[str, str]) -> dict[str, str]:
     return fx.edit(files, BOARD, HOST_CLASS, MIXIN + "class Board(QObject, Mixin):\n")
+
+
+#: RM-M16: der Sender über eine bleibende Methode des Wirts. Ein Slot wandert, die Methode,
+#: die ``sender()`` liest, bleibt; je Fall der alte Baum, der Zuschnitt und der Baum, den die
+#: Ersetzungsliste allein ergibt.
+ON_CHANGED = "    def _on_changed(self) -> None:\n"
+PROTOCOL_END = "    def statusBar(self) -> object: ...\n"
+SIGNAL = "    changed = Signal()\n"
+
+
+def _sender_case(
+    moved: str,
+    moved_naive: str,
+    staying: str,
+    host: tuple[str, ...],
+    *,
+    methods: tuple[str, ...] = ("on_signal",),
+    init: str = "",
+    class_level: str = "",
+    base: tuple[str, str] | None = None,
+) -> tuple[dict[str, str], str, dict[str, str]]:
+    """``moved`` wandert (im Wirt mit ``self.x``, in der Komponente ``moved_naive``),
+    ``staying`` bleibt; ``init`` setzt Zustand im ``__init__`` des Wirts, ``class_level`` steht
+    im Klassenrumpf, ``base`` ist eine eigene Basis (Klassentext, Basisname)."""
+    protocol = "".join(f"\n    def {name}(self) -> object: ...\n" for name in host)
+    old = _insert_method(fx.COMPONENT_OLD, BOARD, moved + "\n" + staying)
+    old = fx.edit(old, BOARD, COUNT, COUNT + "        self.seen_sender = None\n" + init)
+    naive = _insert_method(EXPECTED, AREA, moved_naive)
+    naive = fx.edit(naive, BOARD, ON_CHANGED, staying + "\n" + ON_CHANGED)
+    naive = fx.edit(
+        naive, BOARD, AREA_COUNT, AREA_COUNT + "        self.area.seen_sender = None\n" + init
+    )
+    for files in (old, naive):
+        files.update(fx.edit(files, AREA, PROTOCOL_END, PROTOCOL_END + protocol))
+        if class_level:
+            files.update(fx.edit(files, BOARD, SIGNAL, SIGNAL + class_level))
+        if base is not None:
+            text, name = base
+            files.update(
+                fx.edit(files, BOARD, HOST_CLASS, text + f"class Board(QObject, {name}):\n")
+            )
+    return old, _cut(methods, ("seen_sender",), host=host), naive
+
+
+WHO = "    def _who(self) -> object:\n        return self.sender()\n"
+ASKING = "class Asking:\n    def who(self) -> object:\n        return self.sender()\n\n\n"
+SENDER_CASES = {
+    # Sonde k1 aus Review 2: Der Slot ruft eine bleibende Methode, die sender() liest.
+    "sender-über-bleibende-methode": _sender_case(
+        "    def on_signal(self) -> None:\n        self.seen_sender = self._who()\n",
+        "    def on_signal(self) -> None:\n        self.seen_sender = self._host._who()\n",
+        WHO,
+        ("_who",),
+    ),
+    # Ebenfalls aus k1: ein Klassenattribut _src = QObject.sender.
+    "sender-über-klassenattribut": _sender_case(
+        "    def on_signal(self) -> None:\n        self.seen_sender = self._src()\n",
+        "    def on_signal(self) -> None:\n        self.seen_sender = self._host._src()\n",
+        "",
+        ("_src",),
+        class_level="    _src = QObject.sender\n",
+    ),
+    # Eigene Gegenproben: ein Verweis auf eine gebundene Methode, zwei Stufen über eine
+    # verschobene Methode, getattr mit festem Namen, eine Methode einer eigenen Basis.
+    "sender-über-gebundene-methode": _sender_case(
+        "    def on_signal(self) -> None:\n        self.seen_sender = self._done()\n",
+        "    def on_signal(self) -> None:\n        self.seen_sender = self._host._done()\n",
+        WHO,
+        ("_done",),
+        init="        self._done = self._who\n",
+    ),
+    "sender-zwei-stufen": _sender_case(
+        "    def on_signal(self) -> None:\n        self.seen_sender = self.relay()\n\n"
+        "    def relay(self) -> object:\n        return self._who()\n",
+        "    def on_signal(self) -> None:\n        self.seen_sender = self.relay()\n\n"
+        "    def relay(self) -> object:\n        return self._host._who()\n",
+        WHO,
+        ("_who",),
+        methods=("on_signal", "relay"),
+    ),
+    "sender-über-getattr": _sender_case(
+        '    def on_signal(self) -> None:\n        self.seen_sender = getattr(self, "_who")()\n',
+        "    def on_signal(self) -> None:\n"
+        '        self.seen_sender = getattr(self._host, "_who")()\n',
+        WHO,
+        ("_who",),
+    ),
+    "sender-aus-eigener-basis": _sender_case(
+        "    def on_signal(self) -> None:\n        self.seen_sender = self.who()\n",
+        "    def on_signal(self) -> None:\n        self.seen_sender = self._host.who()\n",
+        "",
+        ("who",),
+        base=(ASKING, "Asking"),
+    ),
+}
+SENDER_WHERE = {
+    "sender-über-bleibende-methode": "Board.on_signal erreicht über on_signal → _who self.sender()",
+    "sender-über-klassenattribut": "Board.on_signal erreicht über on_signal → _src QObject.sender",
+    "sender-über-gebundene-methode": (
+        "Board.on_signal erreicht über on_signal → _done → _who self.sender()"
+    ),
+    "sender-zwei-stufen": "Board.on_signal erreicht über on_signal → relay → _who self.sender()",
+    "sender-über-getattr": "Board.on_signal erreicht über on_signal → _who self.sender()",
+    "sender-aus-eigener-basis": "Board.on_signal erreicht über on_signal → who self.sender()",
+}
 
 
 MIXIN_KEEP = (
@@ -329,6 +443,10 @@ def _cases() -> list[tuple[str, dict[str, str], str, dict[str, str], str, str]]:
             "",
             "tests/test_recorder.py:10: Deeper erbt von Board und definiert bump",
         ),
+        *(
+            (label, old, cut, naive, "sender", SENDER_WHERE[label])
+            for label, (old, cut, naive) in SENDER_CASES.items()
+        ),
     ]
 
 
@@ -427,6 +545,23 @@ def test_that_tree_behaves_differently_at_runtime(
     after = _probe(tmp_path, fx.write_tree(tmp_path / "naive", naive), mode)
     assert before in (True, 1), (label, before)
     assert after != before, (label, before, after)
+
+
+def test_a_slot_that_reaches_no_sender_of_the_host_still_moves(tmp_path: Path) -> None:
+    """Die Kontrolle zu RM-M16: Liest die bleibende Methode den Sender eines anderen Objekts
+    (``self.session.sender()``), oder wandert die Methode, die ``sender()`` erreicht, gar nicht,
+    schreibt das Werkzeug."""
+    other, cut, _naive = _sender_case(
+        "    def on_signal(self) -> None:\n        self.seen_sender = self._other()\n",
+        "    def on_signal(self) -> None:\n        self.seen_sender = self._host._other()\n",
+        "    def _other(self) -> object:\n        return self.session.sender()\n",
+        ("_other",),
+    )
+    _root, result = _run(tmp_path / "anderes-objekt", other, cut)
+    assert result.status == "written", result.problems
+    old = SENDER_CASES["sender-über-bleibende-methode"][0]
+    _root, result = _run(tmp_path / "slot-bleibt", old, fx.COMPONENT_CUT)
+    assert result.status == "written", result.problems
 
 
 #: Eigene Gegenproben zu RM-M17: (Name, Werkzeug, Erklärung, Ausgang, Meldung).

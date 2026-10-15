@@ -229,36 +229,139 @@ class Shape:
         self._overrides()
 
     def _receivers(self) -> None:
-        """``self.sender()`` in einem verschobenen Rumpf (``tools/move_qt.py``)."""
-        scopes = FileScopes(self.host_source)
-        for moved in self.methods.values():
-            for method in moved.defs:
-                me = self_name(method)
-                if me is None:
-                    continue
-                for node in ast.walk(method):
-                    first: ast.expr | None = None
-                    member = ""
-                    if isinstance(node, ast.Attribute) and node.attr in RECEIVER_MEMBERS:
-                        first, member = node.value, node.attr
-                    elif isinstance(node, ast.Call) and named_call(node) in NAMED_CALLS:
-                        second = node.args[1]
-                        assert isinstance(second, ast.Constant)
-                        if second.value in RECEIVER_MEMBERS:
-                            first, member = node.args[0], str(second.value)
-                    if not (
-                        isinstance(first, ast.Name)
-                        and first.id == me
-                        and refers_to(scopes.of(method), method, first, me)
+        """Was nur der Empfänger eines Signals weiß (``sender()``, ``tools/move_qt.py``): Eine
+        verschobene Methode, die es liest — oder über Methoden des Wirts (auch bleibende, auch
+        aus eigenen Basen, über ``getattr`` mit festem Namen oder einen Verweis auf eine
+        gebundene Methode) eine erreicht, die es liest —, sähe danach die Komponente oder
+        niemand als Empfänger (Review 2, RM-M16: ``_profiles_found`` → ``_take_profiles``)."""
+        graph = self._member_graph()
+        for name, moved in self.methods.items():
+            reads = graph[name].direct
+            for line, form, own in reads:
+                why = (
+                    "gilt dem Empfänger eines Signals — nach dem Schnitt wäre das die Komponente "
+                    "oder niemand"
+                    if own
+                    else "liest den Empfänger eines Signals — nach dem Schnitt wäre das die "
+                    "Komponente oder niemand"
+                )
+                self.problems.append(
+                    f"{self.cut.source}:{line}: {form} in {self.cut.host}.{name} {why}; vorher "
+                    "den Sender als Argument übergeben (connect mit functools.partial oder "
+                    "lambda) oder die Methode im Wirt lassen"
+                )
+            if reads:
+                continue
+            chain = _reach(graph, name)
+            if chain is None:
+                continue
+            _line, form, _own = graph[chain[-1]].direct[0]
+            self.problems.append(
+                f"{self.cut.source}:{moved.defs[0].lineno}: {self.cut.host}.{name} erreicht über "
+                f"{' → '.join(chain)} {form} — ist {name} Slot eines Signals, wäre danach die "
+                f"Komponente der Empfänger und {form} am Wirt still ein anderer; vorher den "
+                "Sender als Argument übergeben (connect mit functools.partial oder lambda) oder "
+                f"{name} im Wirt lassen"
+            )
+
+    def _member_graph(self) -> dict[str, _Member]:
+        """Je Member des Wirts (Methode, Klassenattribut, ``self.x = <gebundene Methode>``) und
+        seiner eigenen Basen, was es vom Empfänger liest und welche Member es über ``self``
+        oder den Klassenbezug anspricht. Der Wirt geht seinen Basen vor."""
+        assert self.host_class is not None
+        graph: dict[str, _Member] = {}
+        classes: list[tuple[str, Source, ast.ClassDef]] = [
+            (self.cut.source, self.host_source, self.host_class)
+        ]
+        for path, node in inherited(self.index, self.cut.source, self.host_class).own:
+            source = self.receivers.source_of(path)
+            # Die Klasse aus der Quelle selbst: Lage und Eltern hängen an ihrem Baum.
+            same = (
+                next(
+                    (
+                        c
+                        for c in ast.walk(source.tree)
+                        if isinstance(c, ast.ClassDef)
+                        and (c.name, c.lineno) == (node.name, node.lineno)
+                    ),
+                    None,
+                )
+                if source is not None
+                else None
+            )
+            if source is not None and same is not None:
+                classes.append((path, source, same))
+        for path, source, cls in classes:
+            scopes = FileScopes(source)
+            found: dict[str, _Member] = {}
+            for stmt in cls.body:
+                if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    member = found.setdefault(stmt.name, _Member())
+                    member.add(self._member_reads(path, scopes.of(stmt), stmt, stmt))
+                    for target, value in _self_assignments(stmt):
+                        alias = found.setdefault(target, _Member())
+                        alias.add(self._member_reads(path, scopes.of(stmt), stmt, value))
+                for name in _class_level_names(stmt):
+                    member = found.setdefault(name, _Member())
+                    member.add(self._member_reads(path, None, None, stmt))
+            for name, member in found.items():
+                graph.setdefault(name, member)
+        return graph
+
+    def _member_reads(
+        self, path: str, scopes: Scopes | None, method: Method | None, root: ast.AST
+    ) -> _Member:
+        """Was ``root`` (ein Rumpf oder Ausdruck in ``method``, auf Klassenebene ohne Methode)
+        vom Empfänger eines Signals liest und welche Member es anspricht."""
+        me = self_name(method) if method is not None else None
+
+        def mine(node: ast.AST) -> bool:
+            return (
+                me is not None
+                and scopes is not None
+                and method is not None
+                and isinstance(node, ast.Name)
+                and node.id == me
+                and refers_to(scopes, method, node, me)
+            )
+
+        found = _Member()
+        for node in ast.walk(root):
+            if isinstance(node, ast.Attribute):
+                base = node.value
+                if node.attr in RECEIVER_MEMBERS:
+                    if mine(base):
+                        found.direct.append((node.lineno, f"{me}.{node.attr}()", True))
+                    elif _is_super_or_type(base) or (
+                        isinstance(base, (ast.Name, ast.Attribute))
+                        and _class_object(self.index.resolve(path, base))
                     ):
-                        continue
-                    self.problems.append(
-                        f"{self.cut.source}:{first.lineno}: {me}.{member}() in "
-                        f"{self.cut.host}.{moved.name} gilt dem Empfänger eines Signals — nach "
-                        "dem Schnitt wäre das die Komponente oder niemand; vorher den Sender als "
-                        "Argument übergeben (connect mit functools.partial oder lambda) oder die "
-                        "Methode im Wirt lassen"
-                    )
+                        text = f"{ast.unparse(base)}.{node.attr}"
+                        found.direct.append((node.lineno, text, False))
+                if mine(base) or (
+                    isinstance(base, (ast.Name, ast.Attribute))
+                    and not mine(_root_name(base))
+                    and self.is_host_class(self.index.resolve(path, base))
+                ):
+                    found.refs.add(node.attr)
+            elif isinstance(node, ast.Call) and named_call(node) in NAMED_CALLS:
+                second = node.args[1]
+                assert isinstance(second, ast.Constant)
+                if mine(node.args[0]):
+                    found.refs.add(str(second.value))
+                    if second.value in RECEIVER_MEMBERS:
+                        text = f"getattr({me}, {second.value!r})"
+                        found.direct.append((node.lineno, text, True))
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in NAMED_CALLS
+                and len(node.args) >= 2
+                and mine(node.args[0])
+            ):
+                text = f"{node.func.id}({me}, …) mit offenem Namen"
+                found.direct.append((node.lineno, text, False))
+        return found
 
     def _overrides(self) -> None:
         """Eine verschobene Methode, die eine Methode einer Basis von Wirt oder Komponente
@@ -1404,6 +1507,78 @@ def lifetime(shape: Shape) -> list[str]:
 
 
 # ------------------------------------------------------------------------------ Hilfen
+
+
+@dataclass
+class _Member:
+    """Ein Member im Graphen von :meth:`Shape._member_graph`: was es vom Empfänger eines Signals
+    liest (Zeile, Form, ob über ``self``) und welche Member es anspricht."""
+
+    direct: list[tuple[int, str, bool]] = field(default_factory=list)
+    refs: set[str] = field(default_factory=set)
+
+    def add(self, other: _Member) -> None:
+        self.direct.extend(other.direct)
+        self.refs |= other.refs
+
+
+def _reach(graph: dict[str, _Member], start: str) -> list[str] | None:
+    """Der kürzeste Weg von ``start`` über angesprochene Member zu einem, das den Empfänger
+    liest — ``None``, wenn es keinen gibt."""
+    seen = {start}
+    queue: list[list[str]] = [[start]]
+    while queue:
+        path = queue.pop(0)
+        for name in sorted(graph[path[-1]].refs):
+            if name in seen or name not in graph:
+                continue
+            seen.add(name)
+            if graph[name].direct:
+                return [*path, name]
+            queue.append([*path, name])
+    return None
+
+
+def _root_name(node: ast.expr) -> ast.expr:
+    """Der Anfang einer Attributkette (``self`` in ``self.a.b``)."""
+    while isinstance(node, ast.Attribute):
+        node = node.value
+    return node
+
+
+def _is_super_or_type(node: ast.expr) -> bool:
+    """``super()`` oder ``type(x)`` als Empfänger: die Klasse des Exemplars selbst."""
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in ("super", "type")
+    )
+
+
+def _class_object(values: frozenset[Val]) -> bool:
+    """Ob ein Ausdruck laut Auflöser eine Klasse ist (``QObject.sender`` ungebunden)."""
+    return bool(values) and all(v.kind in ("ext", "class") for v in values)
+
+
+def _self_assignments(method: Method) -> Iterator[tuple[str, ast.expr]]:
+    """``self.x = <wert>`` in einer Methode: ein Verweis, über den später gerufen werden kann
+    (``self._done = self._take``)."""
+    me = self_name(method)
+    for node in ast.walk(method):
+        if isinstance(node, ast.Assign):
+            targets: list[ast.expr] = node.targets
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets = [node.target]
+        else:
+            continue
+        for target in targets:
+            if (
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == me
+                and node.value is not None
+            ):
+                yield target.attr, node.value
 
 
 def _class(source: Source, name: str) -> ast.ClassDef | None:
