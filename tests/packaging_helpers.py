@@ -1,13 +1,22 @@
-"""Gemeinsame Orte und Helfer der Pakettests, ohne eigene Tests.
+"""Orte und Helfer der Pakettests, ohne eigene Tests.
 
-``tests/test_packaging.py`` und ``tests/test_packaging_platform.py`` lesen
-dieselben Repositorypfade, Läufer und Helfer. Sie stehen hier einmal unter
+Beide Pakettests, ``tests/test_packaging.py`` und
+``tests/test_packaging_platform.py``, lesen ``ROOT``, ``SPEC``, ``WORKFLOW``,
+``workflow_shell`` und ``start_report``. Diese stehen hier einmal unter
 öffentlichen Namen, denn eine Testdatei importiert nichts Privates aus einer
 anderen (``tests/test_toolchain.py``), und eine Kopie liefe beim nächsten
 Wechsel auseinander. Jede Testdatei bindet die Pfade mit ``from … import`` an
 ihr eigenes Modul: Ein Test, der dort ``WORKFLOW`` umbiegt
 (``monkeypatch.setattr(sys.modules[__name__], …)``), trifft genau die
 Prüfungen seiner Datei.
+
+``as_tested`` und ``stays_in_linux_bundle`` samt ``_EXCLUDED_MODULES`` braucht
+nur ``tests/test_packaging.py``. Sie stehen trotzdem hier, weil jene Datei über
+2 000 Zeilen hat und die Sperrklinke (``tests/data/size_ratchet.toml``,
+Codestruktur Regel 6) dort keine neue Definition annimmt; solange die Datei
+gelistet ist, gehören sie nicht zurück. ``LINUX_RUNNER`` und
+``LINUX_PACKAGE_RUNNER`` stehen bei ``as_tested``, das sie vergleicht, und der
+Pakettest liest sie von hier.
 """
 
 from __future__ import annotations
