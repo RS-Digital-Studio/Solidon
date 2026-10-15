@@ -67,6 +67,157 @@ jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.
 
 ## Prüfen und messen — keines davon ist ein Testlauf
 
+### Funktionsdurchgang: Ablauf, Messung und Urteil
+
+Der einzige Einstieg am Fenster ist `file_acceptance.py`; `function_bench`
+stellt den Fall zusammen, `function_machine`/`function_walk` führen ihn,
+`function_setup`/`function_start` bereiten ihn vor, `function_protocol` schreibt
+das Protokoll und `function_language` prüft die Sprache. `function_gestures`
+fährt Zeigen und Ziehen, `function_switch` den Projektwechsel. Die Schritte
+gehen über echte Eingabeereignisse und `guide_targets.next_click`; die
+Ereignisschleife läuft dabei weiter. `until_step` wartet auf eine Bedingung,
+`still_step` auf Stillstand vor dem Messen; `settle_ms` bestimmt die zusätzliche
+Beruhigungszeit. Bleibt eine Fläche unruhig, werden ihre Größen ausdrücklich
+ungemessen protokolliert, auch eine leere Rollleistenliste ist dann kein Beleg.
+
+`function_surface` bestimmt die Fläche der Zeile, ihren Zustand und Wartehinweis,
+Sperrgründe (`grey_reason`) sowie Befunde (`shown_findings`, `require_findings`)
+und Absagen (`fault_messages`). Ein fremdes modales Frage- oder Fehlerfenster
+wird nicht als die Fläche der Zeile vermessen. `op_in_view` liest
+`FeaturePanel.measure_op`: Gleichnamige Maßfelder allein beweisen nicht, dass
+die richtige Handlung im Bild steht. `function_scenes.row_scenes` liefert die
+Startszenen eines Falls einschließlich Fehlfall; zugesagte Befunde müssen vor
+der Handlung angekommen sein. Fehlfallszene und Hauptszene dürfen keine
+widersprüchlichen Vorbedingungen einführen.
+
+`function_capture.error_proposal` erhebt das Fehlerangebot. Die Herkunft
+entscheidet, welche modalen Fragen zulässig sind (`ALLOWED_CALLERS/CLASSES`,
+`ASK_CALLERS/HOSTS`), auch bei `ctx.ask`; eine passende Zeichenkette reicht
+nicht. `names_a_way_out(reason, menus, buttons, *, phrases=(), fields=())` und
+`way_out(window, reason, widget=None)` prüfen Auswege. `surface_field_titles`
+nimmt nur offene Felder auf derselben Fläche, nicht die einer anderen Karte
+oder des gesamten Hauptfensters. Ein graues Feld ist kein Ausweg.
+
+Lizenzläufe tragen `state` mit `angeboten`, `grau` oder `fehlt`; `reason`
+stammt aus `grey_reason`, zuerst aus der Kurzhilfe, dann aus der zugänglichen
+Beschreibung. Die Startauswahl und bei angebotenem Ziel der vollständige
+Handlungsweg müssen erfolgreich durchgelaufen sein. Scheitert ein Schritt,
+steht der Grund unter
+`unmeasured.licence_runs.<zustand>`; ein beobachtetes Angebot, vorhandener Name,
+Nullwert oder beschädigter Eintrag ist keine erfolgreiche Lizenzmessung.
+`judge_licence` verwendet für sein Urteil und den Vergleich nur gültige
+Messwerte, einschließlich booleschem `writes`, bekanntem Zustand und Textgrund.
+
+`function_guard.BENCH_MODULES` umfasst auch `function_surface`,
+`function_gestures`, `function_switch` und `function_revision`; `WindowFlow` in `file_acceptance`
+wird eigens geprüft. `FORBIDDEN_CALLS` verbietet Umwege über Wertsetzer,
+Signal-/Aktionsaufrufe, Kernzugriffe, Ereignismethoden und private fremde Namen,
+auch als importierte Namen oder über `getattr`, `invokeMethod` und Variablen.
+Sitzungs- und Methodenaliase werden in ihrer lexikalischen Bindung verfolgt:
+äußere Namen bleiben innen sichtbar, Parameter und Neubelegungen verdecken sie.
+Schon das Abgreifen einer gebundenen `session.apply` ist ein Umweg. Eigene
+dynamische Phasen und reines Lesen bleiben zulässig. Die Grenze des Wächters
+bleibt die Namensanalyse; sie beweist keine Laufzeittypen.
+
+`function_scan.message_builders(sources)` erhebt Meldungsbauer samt transitiven
+Unterklassen und festen oder weitergereichten Zielen. `raw_window_names` nimmt
+diese erhobene Menge an, statt eine zweite Klassenliste zu führen.
+`function_checks` hält Schema und Schwellen, `function_points` und
+`function_judges` urteilen; `function_samples` liefert Gegenproben,
+`function_report` Funde, Abhakliste und die Übereinstimmung der Urteile.
+
+#### Messflächen und nachträgliche Änderung
+
+`function_walk` hält die Fläche vor einer wirksamen Befundhandlung fest und
+führt anschließend den echten Klick aus. Öffnet dieser ein Fenster, bleibt
+der Vorzustand als `surfaces/*-vorher.json` erhalten; der Hauptfall misst das
+geöffnete Fenster. `function_report` und `function_summary` reichen beide
+Flächen getrennt durch; `file_acceptance` zählt sie als Funktionsflächen.
+Ihre Texte und Feldzahlen werden nicht zu einer künstlichen Fläche vereinigt.
+`function_surface.open_dialog` erfasst auch eigene sichtbare nichtmodale
+Fenster; mehrere passende Fenster sind keine Erlaubnis zu raten.
+
+`function_bench.surface_signature` hält die lebende Qt-Hülle im
+Vergleichstupel. Kurzlebige Python-Hüllen eines C++-erzeugten Dateidialogs
+sind keine neuen Flächen; ihre Python-Identitätszahl trägt den Vergleich
+nicht. Tatsächliche Geometrie- oder Flächenwechsel starten die bestehende
+Ruhezeit erneut, ohne deren Zeitbudget zu ändern.
+
+`function_surface.surface_parts` bindet die eigene offene Merkmalszeile und
+ihren sichtbaren gemeinsamen Abschluss zusammen. Eine fremde Zeile oder ein
+verdeckter Abschluss zählt nicht mit. Eine vollständige eigene Maßgruppe
+belegt ihre Handlung über `FeaturePanel.measure_op`; bloß gleichnamige
+Felder genügen nicht. Gemessen und beruhigt wird dieselbe Teilmenge.
+Ein Klapppfeil erhält seinen Namen nur durch die tatsächlich sichtbare
+zugehörige Beschriftung, nicht durch irgendeinen Text daneben.
+
+`function_capture` liest Texte nach dem Textformat ihres Trägers: Rich Text
+über `QTextDocument`, Kürzelmarken (`&`) nur an Trägern, die sie haben, und
+`&&` bleibt ein Zeichen (FD-76). Für nativen Kontrast liest es die wirklichen
+Fensterpixel.
+Ein leeres Bild oder fehlende Bildpunkte bleiben ungemessen; eine gute Palette
+ersetzt sie nicht. Fehlerbild und Fehlerangebot gehören zum selben offenen
+Zustand, vor Escape. Sperr- und Grenzfälle erhalten nur aus ausdrücklich
+erhobenen Auswegen ein positives Urteil, nicht aus einem allgemeinen
+Meldungskennzeichen. `field_values` liest markierte `ValueField`-Träger über
+deren öffentlichen Wert und Auswahlfelder über ihre tatsächlichen Daten.
+
+Beim Hauptknopf liest die Schriftmessung die aktuelle zustandsabhängige
+Qt-Beschriftung. Nur eindeutig voll gedeckte Textpixel belegen eine Farbe;
+Symbolpixel zählen nicht mit. Fehlende oder mehrdeutige Schriftpixel bleiben
+ungemessen. Der Hintergrund stammt weiterhin aus dem wirklichen Fensterbild.
+`fonts.primary` hält die öffentliche Hauptknopfrolle fest; `family` und
+`base_family` nennen die tatsächlich aufgelösten Schriftfamilien. Das Schema
+prüft vorhandene Rollen als bool und Familien als str. Die halbfette
+Grundschrift ist nur mit belegter Hauptknopfrolle und passender Anwendungsfamilie
+erlaubt; fremde Größe oder Familie bleiben Befunde. Alte Protokolle ohne die
+optionalen Schlüssel bleiben lesbar und erhalten keine erfundene Primärrolle.
+
+`function_revision.RevisionPhase` trägt die abgeschlossene Verlaufsphase von
+`FunctionFlow`; die Rückrichtung bleibt ein Typimport. Beide Bedienwege,
+Kontextmenü und Doppelklick, erfassen `revise.typed_values` und
+`revise.params_after`. Prüfpunkt 12 verlangt eine wirkliche Eingabe am
+richtigen Feld, den neuen Wert nach der Auswertung und gleich lange Historie.
+Alte Protokolle ohne diese Felder bleiben lesbar, aber ohne diesen Nachweis.
+`preview_steps` nimmt die auslösenden Schritte mit: Ausgangsstand vor Öffnen
+oder Eingabe, danach die sofortige oder spätere Vorschau desselben Auftrags.
+Ein künstliches Warten ersetzt keinen Auftragsbezug.
+
+`function_language` räumt eigene offene Fenster mit wirklichen Escape-
+Ereignissen über den Automaten, bevor es das nächste Sprachprojekt lädt.
+Der begrenzte Rückweg verwendet `MOST_UNSTICKS`; ein verbleibendes Fenster
+meldet `bench.surface_cleanup_failed` und hält den Wechsel an. Direkter
+Dialogabschluss und nachträgliches Herausfiltern sind kein Bediennachweis.
+`function_machine` erhält Bereitschaftsfehler, Timeout und Fund und plant
+den begrenzten normalen Abbau weiter, auch aus verschachtelten modalen
+Handlungen. Ein Prozessausgang allein ersetzt kein Urteil über den Fall.
+
+`file_acceptance.run` beendet bei Timeout oder Ausnahme seine ganze gestartete
+Prozessgruppe über `terminate_process_tree`, damit hinter dem Launcher kein
+Interpreter weiterläuft.
+
+`function_walk.QtPorts.press` stellt Radereignisse über `QTest.wheelEvent` am Fenster
+zu. Qt übernimmt Kindannahme und Elternweiterleitung; eine Annahme beendet
+die Weiterleitung, auch bei verschachtelten Rollbereichen. Richtungen,
+Modifier und lokale/globale Koordinaten bleiben Teil der Eingabe.
+Die API ist ab [Qt 6.8](https://doc.qt.io/qt-6/qtest.html#wheelEvent) verfügbar
+und Voraussetzung des internen Prüfwerkzeugs. Die gepinnte Prüfumgebung
+steht in `constraints.txt`. Fehlt die API, nennt der Fehler
+`tools/check_env.py` mit `--install` und `constraints.txt` als Rückweg.
+Das allgemeine Anwendungsminimum bleibt davon unberührt.
+`function_guard.ALLOWED_CALLS` erlaubt dafür genau `QTest.wheelEvent` als
+öffentliche Zustellschnittstelle; die API-Vorbedingung wird statisch geprüft.
+Die allgemeine Ereignissperre gilt weiter: direkte Widget-Handler,
+Handleraliase und dynamische `getattr`-Umwege bleiben unzulässig.
+
+Vor einem Export für die ganze Szene stellt der Prüfstand eine leere Auswahl
+über den Kundenweg her; `function_surface.require_full_export_scope` liest
+den tatsächlichen Exportumfang öffentlich zurück. Gleiche Objektkennungen
+nach einem Projektwechsel belegen keine absichtlich ausgewählte Teilmenge.
+Eine erwartete Rückfrage zum Netzkörper
+setzt voraus, dass dieser Körper im Exportumfang liegt.
+
+
 *HEAD-Fassung, früher unter „Die Familien“.*
 
 Die CI benutzt `run_suite_isolated.py --release --ci-group contracts|windowed|rendering`;
@@ -167,6 +318,25 @@ mitrechnet, findet ein Leck, das keines ist. Es teilt Messprofil,
 Arbeitssatzmessung und Abbaureihenfolge mit `window_bench.py`, statt sie zu
 wiederholen. Ohne Bildschirm und wgpu-Adapter misst es nichts und sagt es.
 
+`file_acceptance.py`, die Einzeldateiabnahme, geht je Fall in einem Prozess
+mit eigenem Profil durch das echte Fenster: Import, Erkennung samt Gruppen,
+Maßänderung (sagt die Vorschau ab, ein kleinerer Wert, dann das nächste
+Merkmal), Vorschau, Übernehmen, Undo, Redo; je Schritt Bild und Netzabdruck,
+am Drillholder jede Bohrung. Der Bestand kommt aus dem Audit-Manifest oder
+einem Ordner. Dieselbe Hülle fährt die Fälle des Funktionsdurchgangs
+(`inventory --functions` mit `--package`, `--rows`, `--variants`, `--phases`;
+`run --screen`; `menubar`; `report`), die Schritte dazu kommen aus
+`function_bench.py` und `function_capture.py`.
+
+`function_list.py` stellt die Liste des Funktionsdurchgangs ohne Fenster auf, je
+Zeile Paket, Startszene und Weg: `--paket`, `--format md|json`, `--menueleiste
+<menubar.json>`, `--check` (Ausgang 1 bei Befund) und `--szenen --out <ordner>
+[--schwer]`, das die Startszenen nur außerhalb des Baums ablegt.
+`function_scan.py` liest den Quelltext unter `app/ui`, `function_scenes.py` liest,
+baut und prüft den Szenenkatalog `tests/data/function_scenes.toml`. Beide
+importieren kein anderes `function_*`-Modul; so bleibt die Liste ohne Kreis mit den
+Urteilsmodulen, die aus ihr importieren.
+
 ## Erzeugen
 
 *HEAD-Fassung, früher unter „Die Familien“.*
@@ -227,6 +397,20 @@ Bildschirmfoto der Seite, hält der Lauf an: Auch ein PDF ohne Bilder ist
 Bytes.
 
 ## Bauen, signieren, ausliefern
+
+Die Stückliste stammt aus PyInstallers Analyse und dem fertigen Paket, nicht
+aus `pip freeze`. Die Lizenzbeilage verwendet genau diese SBOM;
+`--release-check` prüft fail-closed.
+
+Die festen Laufzeitausdrücke von `make_sbom.py` und `make_licence_notices.py`
+stehen in `RUNTIME_LICENCES`. Der Freigabewächter liest sie zusammen mit den
+nativen Haupt-, Linux- und Radtabellen und dem AppImage-Kern.
+
+`check_glibc_floor.py` prüft die Linux-Grenze am gebauten Baum: Es liest jede
+ELF-Datei wie der Lader über Programmköpfe und `DT_VERNEED`, verlangt höchstens
+`OLDEST_GLIBC` und keine `HOST_LIBRARIES` (`libstdc++`, `libgcc_s`). Es nutzt nur
+die Standardbibliothek und läuft im Paketjob, in `linux-flatpak` und in der
+Linux-Releaseakte. Die einzuhaltende Regel steht in `auslieferung.md`.
 
 *Früher unter „Die Familien“.*
 

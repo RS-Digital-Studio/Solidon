@@ -114,8 +114,8 @@ großen Dateien entfallen, ebenfalls ohne Merges:
 | `app/ui/viewport.py` | 164 |
 | `app/core/perceive/features.py` | 145 |
 
-Jeder zehnte Commit ändert `main_window.py`. Bei drei Maschinen und mehreren
-Sitzungen je Welle ändern fast alle Zweige dieselben sechs Dateien.
+Jeder zehnte Commit ändert `main_window.py`. Bei mehreren Sitzungen je Welle
+ändern fast alle Zweige dieselben sechs Dateien.
 
 **Karten am Anschlag.** Die Grenze je Karte ist 25 KB (25 600 Byte,
 `tests/test_directory_docs.py`):
@@ -476,7 +476,7 @@ die Globals von `M` lesen, und Module in `app/` und `tools/`, die ihn als `M.N`,
 über `getattr` oder per spätem Import holen. Diese Menge ist vor und nach einem
 Schritt gleich. Eine Kopfkopie `from M import N` eines gepatchten Namens und
 jedes `raising=False` auf `app.*` sind rot, nicht nur gemeldet; Schritt 0
-behebt die heutigen vorher (25 `raising=False`, die Kopfkopien aus CS-11).
+behebt die heutigen vorher (12 `raising=False` auf `app.*`, die Kopfkopien aus CS-11).
 Aliasse löst er je Funktion auf, nicht je Datei — derselbe Name meint in einer
 Testdatei mal ein Modul, mal ein Fenster. Lesen nach einem Schnitt mehrere
 Module denselben gepatchten Namen, wird nicht der Patch vervielfacht: Der
@@ -604,7 +604,7 @@ beginnt Schritt 1.
 
 | Schritt | Datei | warum an dieser Stelle |
 |---|---|---|
-| 0 | W1 bis W6, Verschiebewerkzeug; vorher behoben: CS-2, CS-9, CS-10, CS-11, CS-12 und die 25 `raising=False` | ohne sie ist jeder spätere Schritt Handarbeit mit stillen Fehlern, und rote Wächter fänden zuerst den Bestand |
+| 0 | W1 bis W6, Verschiebewerkzeug; vorher behoben: CS-2, CS-9, CS-10, CS-11, CS-12 und die 12 `raising=False` auf `app.*` | ohne sie ist jeder spätere Schritt Handarbeit mit stillen Fehlern, und rote Wächter fänden zuerst den Bestand |
 | 1 | `geom/prepare_ops.py` | zweitgrößter Brennpunkt (267 Commits), Kern ohne Qt, klare Op-Blöcke, 32 private Testimporte; Probe für Bootstrap-Liste und W3 |
 | 2 | `ui/panels.py` | 24 Klassen, schon getrennt, keine Komponente nötig; Probe für ein UI-Paket |
 | 3 | `perceive/features.py` | höchste Kopplung, deshalb erst mit erprobtem Werkzeug |
@@ -745,7 +745,7 @@ Sperrklinke kürzer als heute.
   erst nach dem Attributgraphen bekannt.
 - **Rund 25 neue Karten** wollen gepflegt werden. `test_directory_docs`
   verlangt sie und prüft ihre Verweise; die Elternkarten werden dafür kürzer.
-- **Alte Pfade außerhalb des Repositorys** (Erinnerungen auf drei Maschinen,
+- **Alte Pfade außerhalb des Repositorys** (Erinnerungen je Maschine,
   Konzepte im Archiv) veralten. Wo ein Paket den Modulnamen übernimmt, bleibt
   der Name richtig; nur `….py`-Pfade werden falsch.
 - **Eigene Bausteine der Kunden** importieren aus `knowledge.parts` und
@@ -774,9 +774,12 @@ Sperrklinke kürzer als heute.
 3. **Einfach, an der Wurzel, kein Workaround** für jeden Schritt und jeden Fix
    (3.1, Regel 9). Daraus folgte die Entscheidung für Komponenten statt Mixins
    (3.3).
-4. **Vorrang bis zum 25.11.:** Die Kundenpakete des Funktionsdurchgangs
+4. **Vorrang der Kundenpakete:** Die Kundenpakete des Funktionsdurchgangs
    (`konzept-funktionsdurchgang`, D0, D1, D9, D8, D3, D4) gehen vor die
    Schritte 4b bis 5 dieses Programms (Komponenten von `MainWindow`); Schritt 0
-   bis 3 können daneben laufen.
+   bis 3 können daneben laufen. Ohne Datum: Beide Programme laufen in vier
+   Phasen direkt hintereinander, jede sauber bis zu Ende, kein Schritt wird für
+   einen Termin gekürzt (Robert, 12.10.; vorher galt der Vorrang bis zum
+   25.11.).
 
 Ohne Rückfrage festgelegt: Schritt 0 kommt zuerst und landet vor Schritt 1.

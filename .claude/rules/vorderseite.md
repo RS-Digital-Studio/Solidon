@@ -2,7 +2,9 @@
 description: "Die Vorderseite eines Dialogs und bedingte Felder — zwei bis drei Werte und ein Satz, vorbelegte Werte, die Stelle als Lesezeile, benannte Null, fx, Vorgaben am Körper, Maße als Parameter, Felder, die mit ihrer Bedingung kommen und gehen"
 paths:
   - "app/ui/op_dialog.py"
+  - "app/ui/counterpart_dialog.py"
   - "app/ui/panels.py"
+  - "app/ui/feature_editing.py"
   - "app/ui/dialogs.py"
   - "app/core/registry/params.py"
 ---
@@ -123,11 +125,19 @@ bis zur sichtbaren Wahl, ohne diese selbst zu ändern, und wird nach jeder
   Aufklappmenü oder ein Auswahlwert an einem Haken trifft nie zu.
 
 Maßgruppen im Bild übernehmen dieselben `depends_on`-Bedingungen wie die rechte
-Spalte, einschließlich Auswahlwerten und Ketten. Der Adapter `_saved_fields`
-reicht sie aus dem Parameterschema weiter. Titel, Eingabe und Ablehnung
+Spalte, einschließlich Auswahlwerten und Ketten. Schemaadapter wie `_saved_fields`
+reichen Bedingungen, `doc` und `placement` weiter; Vorgaben, Grenzen und
+Ausdruckseigentümer bleiben erhalten. Titel, Eingabe und Ablehnung
 verschwinden gemeinsam; verborgene Werte bleiben erhalten und sperren die
 Übernahme nicht. Stille Wertaktualisierung und wiederverwendete Gruppen
 berechnen die Sichtbarkeit erneut (`FeaturePanel._follow_measure_conditions`).
+
+Bohrungsmaßgruppe und rechte Zeile teilen `feature_editing.advanced_fields`:
+Zielmaß und gemessene Tiefe vorn, Umfang und Druckkorrektur hinter „Weitere
+Werte“. Ein belegter mitgehender Einlauf bleibt vorn. Der eigene Sammelhaken
+zählt mit: normalerweise zwei bis drei Eingaben, mit Einlauf höchstens vier.
+Klappen erhalten Werte und Bedingungen. Eine neue Auswahl schließt die
+Rückseite; eine ausdrückliche Feldübergabe öffnet sie vor dem Fokuswechsel.
 
 ## Die linken Karten zeigen nur, was gilt (RM-519)
 

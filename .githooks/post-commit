@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Nach jedem Commit sofort pushen.
 #
-# Warum: An diesem Projekt wird auf drei Maschinen gearbeitet (zwei Rechner, ein
-# Laptop). Ein Commit, der liegen bleibt, ist auf den anderen zweien nicht da —
-# und man merkt es erst, wenn man dort sitzt und weiterarbeiten will. Am
-# 22.08.2026 lagen dreizehn Commits eines ganzen Arbeitstages ungepusht.
+# Warum: Die Gegenstelle ist die Sicherung des Arbeitsstands, und auf main
+# startet erst der Push die CI. Ein Commit, der liegen bleibt, ist bei einem
+# Plattenschaden weg und wird von keiner Prüfung gesehen. Am 22.08.2026 lagen
+# dreizehn Commits eines ganzen Arbeitstages ungepusht.
 #
 # Was dieser Hook **nicht** tut: Er holt nichts, er rebasiert nichts und er
 # räumt nichts auf. Ist die Gegenstelle weitergewandert, scheitert der Push und

@@ -20,12 +20,19 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Manejo y sistema
 
+- Las tarjetas de medidas se mueven y crecen al abrir campos. Títulos y cotas de la base más claros, barras y tiradores discretos y una cuadrícula visible en tema claro facilitan la vista del modelo.
+- Se ha corregido un posible cierre inesperado al cambiar de característica o proyecto.
+- La explicación de «Colocar sobre la placa» ahora también sirve para cuerpos situados debajo de la placa.
+- Las listas de acciones sobre características usan íntegramente el idioma elegido.
 - En el Mac, Solidon ya puede cargar el controlador de 3Dconnexion (3DxWare) para el ratón 3D. Desde la versión 0.4.1 hasta la 0.6.0, macOS no lo permitía.
 - En el Mac, el paquete de instalación coloca ahora Solidon siempre en *Aplicaciones*. Si Solidon no estaba allí, antes el paquete actualizaba una copia en otro lugar.
 - Tras actualizar en el Mac, iniciar Solidon desde *Aplicaciones*. Eliminar las copias antiguas de la app fuera de esa carpeta y volver a añadirla al Dock si hace falta.
 - En Linux, el AppImage arranca ahora también en Ubuntu 22.04, Linux Mint 21 y Debian 12. Con la versión 0.6.0, allí solo funcionaba el Flatpak.
 - En Linux, Solidon lee ahora el ratón 3D a través del acceso que concede la regla udev del manual, también en el Flatpak. Hasta la versión 0.6.0, la regla no bastaba para ello.
 - La búsqueda encuentra *Unir*, *Sustraer* e *Intersección* también como «booleano», y *Sustraer* también como «diferencia».
+- La búsqueda encuentra la función también para una pregunta como «¿Cómo pongo la pieza en la cama de impresión?» y conoce palabras de slicers y CAD como «variable».
+- También la búsqueda en el manual encuentra la página adecuada para una pregunta con sus propias palabras.
+- Quien escribe «agujero» o «taladro» en la búsqueda obtiene *Hacer un taladro* en un cuerpo y *Cambiar taladro*, antes *Cambiar orificio*, en un taladro seleccionado, en todos los idiomas.
 - Con un cuerpo seleccionado y un segundo en la escena, la pestaña *Selección* indica cómo añadir el segundo para *Unir*, *Sustraer* e *Intersección*.
 - El campo de búsqueda de la pestaña *Selección* está ahora siempre, también sin selección, y encuentra cada función y cada comando con su atajo.
 - La paleta de comandos desaparece, porque el campo de búsqueda encuentra lo mismo. *Buscar función* y Ctrl+Mayús+P ponen el cursor en él.
@@ -36,8 +43,31 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Aunque nada se solape, *Comprobar solapamientos* da ahora una respuesta.
 - Si a una función le falta un segundo cuerpo en la escena, el motivo indica *Duplicar objeto* como camino.
 - La lista de atajos de teclado nombra *Modelar*, *Esqueleto* y *Dibujar* una sola vez.
+- Desaparece el botón *Calcular de forma más aproximada*: Solidon sigue solo con el cálculo completo. En la versión 0.6.0 aparecía también donde no cambiaba nada.
+- Los mensajes de error, los detalles y los avisos aparecen ahora con el estilo de Solidon, con las acciones como botones. Ctrl+C copia la selección y, si no hay ninguna, el mensaje entero.
+- El color de una bobina se elige con el selector de color propio, junto al botón, con colores de estantería con nombre y el valor exacto. El diálogo de color del sistema desaparece.
+- Una cota del dibujo cambia ahora en un campo en el mismo lugar. Las direcciones y qué filamento sustituir se preguntan con el estilo de Solidon.
+- Tras activar o desactivar, la confirmación aparece en el propio diálogo, sin una ventana que haya que cerrar.
+- El diálogo *Calibrar material* muestra delante solo la holgura, el apriete y la compensación de agujeros. Pata de elefante, contracción, pared y voladizo están en *Más ajustes*.
+- Los números quedan alineados a la derecha en todos los campos, cifra bajo cifra.
+- Un lector de pantalla lee el nombre y la explicación de cada campo numérico de un diálogo.
+- Tras una acción en el *Informe de comprobación*, el informe sigue delante y Ctrl+Z la deshace al momento. Hasta ahora saltaba al frente la pestaña *Selección*.
+- Los avisos de cama y adhesión usan la unidad elegida. Al cambiar mm/pulgadas se conservan aviso seleccionado, detalles abiertos, pestaña y estado desplegado de los cuerpos.
+- Ctrl+Z y Ctrl+Y funcionan también con el cursor en un campo vacío, por ejemplo en el campo de búsqueda. Si escribió algo allí, primero se deshace lo escrito.
+- Sin activación, las acciones que cambian algo en el *Informe de comprobación*, *Selección*, los menús contextuales y el filamento salen en gris con el motivo. Antes el rechazo llegaba tras el clic.
+- Sin activación, también *Crear parámetro …*, *Mover*, *Dividir*, las teclas del historial y las medidas en la vista salen en gris. Cada motivo indica el camino, como *Ayuda → Desbloquear Solidon …*.
+- Si una acción del *Informe de comprobación* espera al cálculo en curso, dice que después vuelve a estar disponible, también a los lectores de pantalla.
+- En una escena vacía, las herramientas en gris como *Sección* y *Medir* indican el motivo: necesitan un cuerpo. Hasta ahora la sugerencia solo mostraba su nombre.
+- Si falta espacio en la vista, los campos de medida siguen visibles y dejan libre el tirador para mover. Hasta ahora un campo podía quedar bajo el borde de la vista o tapar las flechas del tirador.
+- Los mensajes de la barra de estado ya no ponen dos puntos detrás de una frase completa.
+- Con un solo cuerpo, el árbol de objetos es tan alto como su contenido, y lo mismo el historial con un paso. En la versión 0.6.0 quedaba espacio vacío debajo.
+- El paso más reciente sigue visible en el historial cuando nuevos cuerpos hacen crecer el árbol de objetos. En la versión 0.6.0 quedaba bajo el borde del panel.
 - La captura de pantalla de un comentario muestra ahora también el modelo en Windows. Con algunas tarjetas gráficas aparecía antes una imagen antigua, como la pantalla de carga.
 - En macOS un diálogo abierto, por ejemplo al crear un tornillo desde el catálogo de bloques, queda sobre la ventana principal. Antes, un clic en la ventana lo dejaba detrás.
+- Las listas de características y diálogos breves ocupan menos. Tras cambiar la letra siguen legibles y accesibles la explicación y corrección del plano no válido, la introducción y los botones.
+- La tarjeta de selección sigue contenido y letra, conservando texto y columnas. Las pestañas separadas mantienen su tamaño. Si se ofrece editar una característica, «Aplicar» es la acción principal.
+- Los elementos correspondientes piden par y tamaño y explican ambas mitades. Forma y ajuste están en «Más ajustes». La altura inicial del diálogo se adapta al contenido.
+- Tras rechazarse una vista previa, los textos de la siguiente siguen siendo totalmente legibles.
 
 ### Imprimir y entregar al slicer
 
@@ -47,8 +77,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Un cuerpo exacto conserva ahora sus características tras *Aplicar texto*, *Incrustar texto* y *Rebajar contraforma*. En la versión 0.6.0 después ya no se podía hacer clic en ninguna cara.
 - Un cuerpo con rosca del catálogo de bloques vuelve a poder moverse, girarse, reflejarse, escalarse y colocarse sobre la placa. En la versión 0.6.0 la cadena se detenía con un error del programa.
-- En la pestaña *Selección*, un diámetro bajo el límite en *Cambiar orificio* remite ahora a *Quitar característica*, que quita el orificio entero, con su avellanado si se desea.
+- Si el diámetro es inferior al límite, el aviso indica *Quitar característica*, con avellanado si se desea. Al editar cotas en la vista, indica primero *Cancelar*.
 - La reconstrucción (*Reconstruir modelo*) ya no aconseja otros límites cuando ningún valor permitido bastaría, y muestra las propuestas iguales una sola vez.
+- Si un taladro o un recipiente solo sale adelante moviendo las esquinas una cantidad mínima, la abertura queda libre. En la versión 0.6.0 podía quedar encima una piel finísima.
+- En agujeros, vista y *Selección* muestran el mismo cambio. Medida, profundidad y entrada vinculada están delante; compensación de impresión y ajustes finos, en «Más valores».
+- Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
 
 ## 0.6.0
 

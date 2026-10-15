@@ -80,6 +80,7 @@ from app.core.registry import (
 from app.core.registry.search import first_choice, ranked
 from app.core.registry.surfaces import first_sentence, menu_rank
 from app.i18n import sort_key, tr
+from app.ui.change_lock import change_refusal
 from app.ui.icons import icon, icon_name_for
 from app.ui.labels import adding_key
 from app.ui.leash import stop_watching_the_dying, weak_slot
@@ -844,6 +845,9 @@ class SelectionOperationsPanel(QWidget):
         quick.setVerticalSpacing(TIGHT)
         quick.setColumnStretch(0, 1)
         quick.setColumnStretch(1, 1)
+        from app.ui.card_width import prefer_pairs
+
+        prefer_pairs(quick, quick=True)
         self._quick = quick
         for name in all_quick_names():
             spec = by_name.get(name)
@@ -957,6 +961,7 @@ class SelectionOperationsPanel(QWidget):
             box_layout.setContentsMargins(0, TIGHT, 0, 0)
             box_layout.setHorizontalSpacing(TIGHT)
             box_layout.setVerticalSpacing(0)
+            prefer_pairs(box_layout)
             self._grids[title] = box_layout
             buttons: list[QToolButton] = []
             for spec in sorted(grouped[title], key=lambda entry: sort_key(entry.title)):
@@ -1127,7 +1132,10 @@ class SelectionOperationsPanel(QWidget):
             return False
         if key == Qt.Key.Key_Escape:
             if self.search.text():
-                self.search.clear()
+                # ``setText`` und nicht ``clear``: Ein geleertes Feld hat nichts
+                # mehr zurückzunehmen, und Strg+Z gilt wieder dem Verlauf
+                # (``shortcut_schemes.nothing_to_take_back``, FD-4).
+                self.search.setText("")
             else:
                 self.searchLeft.emit()
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -1163,7 +1171,7 @@ class SelectionOperationsPanel(QWidget):
         if not isinstance(name, str):
             return
         if item.flags() & Qt.ItemFlag.ItemIsEnabled:
-            self.search.clear()
+            self.search.setText("")
             self.searchLeft.emit()
         self.searchChosen.emit(name)
 
@@ -1417,7 +1425,18 @@ class SelectionOperationsPanel(QWidget):
             (inner - self._quick.horizontalSpacing()) // 2 if self._quick_columns == 2 else inner
         )
         room = self.scroller.viewport().width()
-        columns = tuple(self.columns_of(title) for title in self._groups)
+        spans = {}
+        for name in self._quick_shown:
+            index = self._quick.indexOf(self._quick_buttons[name])
+            # Beim Umhängen kann ein Größenereignis schon eintreffen, während
+            # ein Knopf noch außerhalb des Rasters steht. Diesen Zwischenstand
+            # weder umbrechen noch als erledigte Messung merken.
+            if index < 0:
+                return
+            position = self._quick.getItemPosition(index)
+            assert isinstance(position, tuple)
+            spans[name] = position[3]
+        columns = tuple(spans.values()) + tuple(self.columns_of(title) for title in self._groups)
         # **Nur, wenn sich eine Breite oder die Hauptaktionen geändert haben.**
         # Jeder Merkmalklick änderte die Höhe der Karte darüber, und jede
         # Höhenänderung lief hierher: gut hundert Knöpfe, jeder zweimal neu
@@ -1430,7 +1449,8 @@ class SelectionOperationsPanel(QWidget):
             return
         self._wrapped_for = key
         for name in self._quick_shown:
-            self._wrap_label(self._quick_buttons[name], share)
+            button = self._quick_buttons[name]
+            self._wrap_label(button, inner if spans[name] == self._quick_columns else share)
         for title, (_section, _toggle, buttons) in self._groups.items():
             grid = self._grids.get(title)
             spacing = grid.horizontalSpacing() if grid is not None else 0
@@ -1440,14 +1460,9 @@ class SelectionOperationsPanel(QWidget):
 
     def _natural_width(self, button: QToolButton) -> int:
         """Wie breit der Knopf mit seinem ungebrochenen Titel sein will."""
-        title = str(button.property("operationTitle") or button.text())
-        shown = button.text()
-        if shown == title:
-            return button.sizeHint().width()
-        button.setText(title)
-        width = button.sizeHint().width()
-        button.setText(shown)
-        return width
+        from app.ui.card_width import button_width
+
+        return button_width(button)
 
     def _arrange_groups(self) -> None:
         """Die Zeilen jeder Gruppe zu zweit, wo jeder Titel in die halbe Breite passt.
@@ -1733,7 +1748,9 @@ class SelectionOperationsPanel(QWidget):
             self._nothing.setVisible(True)
             self._manual.setVisible(True)
             return
-        self._nothing.setVisible(False)
+        refusal = change_refusal()
+        self._nothing.setText(refusal)
+        self._nothing.setVisible(bool(refusal))
         self._manual.setVisible(False)
         if loosened:
             # Nicht wählbar und ohne Namen: Die Vorauswahl übergeht sie, und
@@ -1768,7 +1785,8 @@ class SelectionOperationsPanel(QWidget):
         if not entry.available and entry.reason:
             # **Gesperrt sagt die zweite Zeile nur den Grund** (Regel 18): Das
             # Grau allein wäre die halbe Antwort.
-            detail = str(entry.reason).strip()
+            reason = str(entry.reason).strip()
+            detail = "" if reason == change_refusal() else reason
         if detail:
             label = f"{label}\n{detail}"
         item = QListWidgetItem(label)
@@ -1958,7 +1976,11 @@ class SelectionOperationsPanel(QWidget):
         self._manual.setVisible(False)
         self.scroller.setVisible(found > 0)
         if found > 0:
-            self._nothing.setVisible(False)
+            # Was gesperrt offen bleibt (Lesendes), steht in der Liste; der Satz
+            # der Freischaltung steht trotzdem darüber (FD-32).
+            refusal = change_refusal()
+            self._nothing.setText(refusal)
+            self._nothing.setVisible(bool(refusal))
             return
         # **Gesperrt nennt den Grund, an jeder Stufe** (Review RM-735, F9): Am
         # Körper mit abgelaufener Lizenz stand „steht oben bei den Maßen“, und
@@ -1974,6 +1996,10 @@ class SelectionOperationsPanel(QWidget):
             text = next((reason for reason in reasons if reason), "")
         else:
             text = tr("Was sich hier tun lässt, steht oben bei den Maßen.")
+        # **Ohne Freischaltung steht hier immer ihr Satz** — er gilt für den
+        # ganzen Reiter, und das Merkmalfenster zeigt ihn deshalb nicht noch
+        # einmal (FD-32); auch oben bei den Maßen geht dann nichts.
+        text = change_refusal() or text
         self._nothing.setText(text)
         self._nothing.setVisible(bool(text))
 

@@ -36,10 +36,8 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QMenu,
-    QMessageBox,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
@@ -49,8 +47,10 @@ from PySide6.QtWidgets import (
 from app.core import discover, install, tools
 from app.core.log import get_logger
 from app.i18n import tr
+from app.ui.input_dialog import ask_text
 from app.ui.labels import UNEXPECTED_CRASH
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
+from app.ui.message_dialog import MessageDialog
 from app.ui.style import NORMAL, TIGHT, WIDE, DialogScrollArea, make_primary
 
 if TYPE_CHECKING:
@@ -237,6 +237,7 @@ class _Row(QWidget):
 
         head = QHBoxLayout()
         head.setContentsMargins(0, 0, 0, 0)
+        head.setSpacing(TIGHT)
         head.addWidget(self.state)
         head.addWidget(title, stretch=1)
         head.addWidget(self.action)
@@ -384,9 +385,9 @@ class _Row(QWidget):
         else:
             self._choose_file()
 
-    def _address_question(self, problem: str = "") -> str:
-        """Die Frage über dem Feld — mit einem Beispiel, und im zweiten Anlauf
-        mit dem Grund.
+    def _address_question(self) -> str:
+        """Die Frage über dem Feld — mit einem Beispiel. Der Grund nach einem
+        Fehlgriff steht unter dem Feld (:func:`address_problem`).
 
         **Bis zum 24.08.2026 stand hier ein Satz und sonst nichts:** „Adresse,
         unter der es erreichbar ist." Wer noch nie eine Dienstadresse
@@ -417,34 +418,30 @@ class _Row(QWidget):
                 "Programm beim Start selbst nennt.\n"
                 "Leer lassen heißt: wieder die Vorgabe benutzen."
             ).format(example=example)
-        return f"{problem}\n\n{sentence}" if problem else sentence
+        return sentence
 
     def _choose_address(self) -> None:
         """Fragt, bis die Antwort eine Adresse ist — oder der Nutzer abbricht.
 
-        Eine Schleife und kein zweiter Dialog: Der Grund steht über demselben
-        Feld, die getippte Eingabe bleibt stehen, und wer abbricht, bricht ab.
-        Ein Fehlerfenster dazwischen wäre ein Klick mehr für dieselbe Auskunft.
+        Derselbe Dialog bleibt offen: Der Grund steht unter dem Feld, die
+        getippte Eingabe bleibt stehen, und wer abbricht, bricht ab. Ein
+        Fehlerfenster dazwischen wäre ein Klick mehr für dieselbe Auskunft.
         """
         if self.tool is None:
             return
-        problem = ""
-        entered = self.tool.remote_address() or self.tool.url
-        while True:
-            entered, accepted = QInputDialog.getText(
-                self,
-                str(self.tool.title),
-                self._address_question(problem),
-                text=entered,
-            )
-            if not accepted:
-                return
-            trouble = discover.unusable_address(entered)
-            if trouble is None:
-                tools.set_address(self.tool.id, entered.strip())
-                self.locationChanged.emit()
-                return
-            problem = str(trouble)
+        entered = ask_text(
+            self,
+            title=str(self.tool.title),
+            sentence=self._address_question(),
+            target="message:service_address",
+            accept=tr("Übernehmen"),
+            text=self.tool.remote_address() or self.tool.url,
+            check=address_problem,
+        )
+        if entered is None:
+            return
+        tools.set_address(self.tool.id, entered.strip())
+        self.locationChanged.emit()
 
     def _choose_file(self) -> None:
         assert self.tool is not None
@@ -469,6 +466,16 @@ class _Row(QWidget):
 
 #: Wo ein Knopf seinen eigenen Satz ablegt, solange er einen Wartegrund trägt.
 _OWN_TIP = "solidon_own_tip"
+
+
+def address_problem(entered: str) -> str:
+    """Warum ``entered`` keine Dienstadresse ist — oder ein leerer Satz.
+
+    Die Prüfung des Kerns (``discover.unusable_address``); leer bleibt gültig,
+    das heißt: wieder die Vorgabe.
+    """
+    trouble = discover.unusable_address(entered)
+    return "" if trouble is None else str(trouble)
 
 
 def _explain_while_busy(button: QPushButton, busy: str) -> None:
@@ -775,11 +782,19 @@ class InstallDialog(QDialog):
         if requirement.follow_up == "comfyui":
             from app.ui.comfy_dialog import ComfySetupDialog
 
-            ComfySetupDialog(self).exec()
+            dialog = ComfySetupDialog(self)
+            try:
+                dialog.exec()
+            finally:
+                dialog.deleteLater()
         elif requirement.follow_up == "chat":
             from app.ui.dialogs import KeyDialog
 
-            KeyDialog(parent=self, settings=self._settings).exec()
+            key = KeyDialog(parent=self, settings=self._settings)
+            try:
+                key.exec()
+            finally:
+                key.deleteLater()
         else:
             return
         self.refresh()
@@ -1066,17 +1081,25 @@ class InstallDialog(QDialog):
 
     def _show_details(self) -> None:
         """Das Protokoll, für den der es weitergeben will (§33.2)."""
-        box = QMessageBox(self)
-        box.setWindowTitle(tr("Einzelheiten"))
         # Beim Start eines Dienstes hat keine Paketverwaltung etwas gemeldet —
-        # dort stehen Aufruf und Adresse.
-        box.setText(
-            tr("Womit Solidon den Dienst zu starten versucht hat:")
+        # dort stehen Aufruf und Adresse. Im Hausstil, das Protokoll lesbar und
+        # kopierbar darunter (FD-21).
+        box = MessageDialog(
+            self,
+            title=tr("Einzelheiten"),
+            headline=tr("Womit Solidon den Dienst zu starten versucht hat:")
             if self._running_action == "start"
-            else tr("Was die Paketverwaltung gemeldet hat:")
+            else tr("Was die Paketverwaltung gemeldet hat:"),
+            details=self._details,
+            target="message:install_details",
         )
-        box.setDetailedText(self._details)
-        box.exec()
+        copy = box.add_action(tr("Kopieren"), "message.button:install_details.copy", closes=False)
+        copy.clicked.connect(weak_slot(box, MessageDialog.copy_text))
+        box.add_exit(tr("Schließen"), "message.button:install_details.close")
+        try:
+            box.exec()
+        finally:
+            box.deleteLater()
 
     def _finished(self, result: object) -> None:
         assert isinstance(result, install.InstallResult)

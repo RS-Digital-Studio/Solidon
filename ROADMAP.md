@@ -24,12 +24,12 @@ stehen mit Nachweis im Archiv.
 Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
 Auflagen werden daneben rechtzeitig bearbeitet. Die nächste Version ist **0.6.1**.
-**Als Nächstes:** der Funktionsdurchgang durch die Oberfläche ([RM-736](#rm-736), zuerst
-der Prüfstand [RM-737](#rm-737)) und das Programm Codestruktur ([RM-722](#rm-722),
-Konzepte in `konzepte/`); 0.6.1 mit auffindbaren Booleschen Operationen und ohne
-Befehlspalette steht auf main ([RM-734](#rm-734), [RM-735](#rm-735), der Release
-entscheidet Robert). Bis zum 25.11. gehen die Kundenpakete des
-Funktionsdurchgangs vor die Komponenten von `MainWindow`. Mit 0.6.0 beim Kunden abzunehmen:
+**Als Nächstes:** Phase 2 des Programms zu Ende — die offenen Funde des Prüfstands
+[RM-737](#rm-737) (D0 steht auf main) und Codestruktur Schritt 0 ([RM-722](#rm-722)) über
+`welle5`; danach wird 0.6.1 erstellt und veröffentlicht ([RM-734](#rm-734),
+[RM-735](#rm-735), Auftrag Robert 13.10.). Beide Programme laufen in vier Phasen ohne Datum hintereinander
+(Robert, 12.10.); die Kundenpakete des Funktionsdurchgangs kommen darin vor die Komponenten
+von `MainWindow`. Mit 0.6.0 beim Kunden abzunehmen:
 der Start auf echten Intel-Macs (RM-104) und Cura unter Linux (RM-521); offen bleibt die
 Antwort an den Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis 15.10. (RM-092),
 Verkaufskandidat bis 25.11., Demo bis 30.11., Start am 01.12.2026 um 10:00 Uhr (RM-061).
@@ -54,7 +54,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Macs mit macOS 26: Hardened Runtime ohne `allow-unsigned-executable-memory` lässt schon das `import ctypes` in PyInstallers Bootstrap in Apples libffi kreisen (Quelltext, fremde Berichte); Signierschritt korrigiert, wörtlich samt Rücklesung ad hoc am Runner gefahren (Lauf 37530339300), Developer-ID-Signatur, Notarisierung, Installer und macOS-Releaseakte beider Architekturen im Handstart grün (Lauf 37530876754); eine Gegenprobe von Hand (Nachtrag, ohne Skript) am Intel-Mac des Kunden spricht für die Ursache (08.10.: ohne die Berechtigung hing es, mit ihr startete es). 0.6.0 trägt die Korrektur, die Forensik aller 382 Mach-O fand nichts, was den Start verhindert (12.10.); offen der Doppelklick des Kunden auf 0.6.0, vorher alle Kopien derselben Kennung suchen (lag keine in *Programme*, kann das Paket eine andere aktualisiert haben, RM-800). Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Der Arbeiter stirbt nach dem Overlay-Ziehtest, die Overlay-Datei allein ist grün; nächster Schritt: die Testfolge des abgestürzten Arbeiters nachstellen und halbieren |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
-| [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
+| [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen der Arbeitsplatz |
 | [RM-682 — Die mitgelieferten Schriften fehlen in Lizenzbeilage, Über-Dialog und SBOM](#rm-682) | Plattformen, Pakete und Grafik | Nachprüfung RM-471 09.10.: für DejaVu formal Regression gegenüber v0.5.1; Schriftsippen als eigene Komponenten aus einer Quelle |
 | [RM-694 — Am echten Fenster endeten zwei Läufe mit dem Spiderman ohne Python-Spur](#rm-694) | Plattformen, Pakete und Grafik | Unter Volllast auf dem i9 gesehen, alter und neuer Stand; auf ruhiger Maschine mit nativem Abbild nachstellen, bevor eine Ursache zugeordnet wird |
 | [RM-770 — Weitere x86_64-Räder tragen denselben Fehler, in C-Bibliotheken](#rm-770) | Plattformen, Pakete und Grafik | Pillow `libavif` liegt im Intel-Paket, FFmpeg aus PySide6_Addons nicht (Forensik 12.10.); ohne C++-Ausnahmen ohne Wirkung, offen die Meldung an Pillow |
@@ -182,25 +182,27 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-733 — `PlacementFlow` greift über `Any` und Zeichenketten aufs Fenster](#rm-733) | Bedienung und Darstellung | Fensterseite als Vertrag typisieren wie bei `DrawFlow`, vor Schritt 4 des Programms |
 | [RM-734 — Wer „boolesch“ tippt, findet die Booleschen Operationen nicht](#rm-734) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-735 — Zwei Suchen: Befehlspalette und Suchfeld der Karte](#rm-735) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
-| [RM-736 — Funktionsdurchgang: jede Funktion einmal über die Oberfläche benutzt, geprüft und abgehakt](#rm-736) | Bedienung und Darstellung | Konzept abgelegt; D0 (RM-737) zuerst, dann die Kundenpakete D1, D9, D8, D3, D4 bis zum 25.11. |
-| [RM-737 — Funktionsdurchgang D0: Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter](#rm-737) | Bedienung und Darstellung | Zuschnitt in Teilpakete, dann Prüfstand auf `tools/file_acceptance.py`, Wortschatz in `guides`, Funktionsliste, Szenenkatalog, Profile, Listen für Stufe B |
+| [RM-736 — Funktionsdurchgang: jede Funktion einmal über die Oberfläche benutzt, geprüft und abgehakt](#rm-736) | Bedienung und Darstellung | Konzept abgelegt; D0 (RM-737) zuerst, dann die Kundenpakete D1, D9, D8, D3, D4 (Phase 3), die übrigen in Phase 4 |
+| [RM-737 — Funktionsdurchgang D0: Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter](#rm-737) | Bedienung und Darstellung | D0 steht auf main; die offenen Funde der Funddatei über `welle5` beheben, Schlusslauf am echten Fenster, Nachurteilsrunde (≥ 90 % je Prüfpunkt gepoolt), dann abhaken — vor 0.6.1 |
 | [RM-738 — Funktionsdurchgang D1: Datei und Projekt](#rm-738) | Bedienung und Darstellung | wartet auf D0; danach neue Schätzung an Robert |
-| [RM-739 — Funktionsdurchgang D2: Erzeugen](#rm-739) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
+| [RM-739 — Funktionsdurchgang D2: Erzeugen](#rm-739) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-740 — Funktionsdurchgang D3: Verbinden und Abziehen, Transformation, Formgebung](#rm-740) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8 |
-| [RM-741 — Funktionsdurchgang D4: Merkmale](#rm-741) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8 |
-| [RM-742 — Funktionsdurchgang D5: Netz und Reparatur](#rm-742) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
-| [RM-743 — Funktionsdurchgang D6: Formen und Skelett](#rm-743) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
-| [RM-744 — Funktionsdurchgang D7: Zeichnen und Skizze](#rm-744) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
+| [RM-741 — Funktionsdurchgang D4: Merkmale](#rm-741) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8; dazu aus D0 FD-7 und FD-16 |
+| [RM-742 — Funktionsdurchgang D5: Netz und Reparatur](#rm-742) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
+| [RM-743 — Funktionsdurchgang D6: Formen und Skelett](#rm-743) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
+| [RM-744 — Funktionsdurchgang D7: Zeichnen und Skizze](#rm-744) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-745 — Funktionsdurchgang D8: Druckvorbereitung](#rm-745) | Bedienung und Darstellung | wartet auf D0; Folge D1, D9, D8 |
 | [RM-746 — Funktionsdurchgang D9: Druckeinstellungen, Übergabe an den Slicer, Filamentlager](#rm-746) | Bedienung und Darstellung | wartet auf D0; Folge D1, D9, D8 |
-| [RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes](#rm-747) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
-| [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; nach dem Start am 01.12. |
-| [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; nach dem Start am 01.12. |
+| [RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes](#rm-747) | Bedienung und Darstellung | wartet auf D0; Phase 4; dazu aus D0 FD-8, FD-9, FD-11 und FD-19 |
+| [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4; dazu aus D0 FD-20 |
+| [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; Phase 4 |
+| [RM-790 — Ein nativer Abbruch nach Rückgängig bei gezeigter Maßgruppe, einmal gesehen](#rm-790) | Bedienung und Darstellung | 150 Zyklen unter Last ohne Wiederholung; beim nächsten Auftreten Stapel sichern und zuordnen |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
 | [RM-772 — Die gemeinsame Spur der lokalen KI kennt ein wartendes ComfyUI nicht](#rm-772) | KI und Generatoren | `local_ai_slot` auch für ein ComfyUI mit geladenem Modell, das gerade nicht rechnet |
+| [RM-791 — Der Agent bekommt eine Frage samt ihren Fragewörtern](#rm-791) | KI und Generatoren | Agenten-Suite vorher und nachher mit `asked` vor `rank_operations`; übernehmen nur ohne Verschlechterung |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Umgesetzt (07.10.): die offenen Helfer und zwölf Kopien der Fenster-Fixtures an einem Ort, 4508 = 4508 gesammelte Fälle; offen die Abnahme im nächsten Release-Tor (Robert, 06.10.) |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
@@ -214,7 +216,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft](#rm-755) | Tests und Entwicklungswerkzeuge | Gefunden in SK: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` einzeln 1 von 2 rot; Ursache klären wie bei der Formsitzung (Zeitgeber beim Zustellen) |
 | [RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot](#rm-779) | Tests und Entwicklungswerkzeuge | Den Vorgänger finden, der Zustand hinterlässt, und ihn aufräumen |
 | [RM-719 — Ein Fenstertest wackelt mit vier Arbeitern](#rm-719) | Tests und Entwicklungswerkzeuge | Ursache des Wettlaufs finden |
-| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | RM-723 und RM-726 bis RM-729 und die 25 `raising=False` beheben, dann W1 bis W6 und `tools/move_names.py` |
+| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | Pakete R, W13, P1, P2, Plattform fertig und geprüft, M und Q in der Fixrunde; Integration über `welle5`, dann der erzeugte Schnitt K, Unterlagen, Tor — vor 0.6.1 |
 | [RM-723 — Quelltextprüfungen lesen `app/ui/` flach und übersehen `render/`](#rm-723) | Tests und Entwicklungswerkzeuge | Je Stelle rekursiv lesen oder den Geltungsbereich mit Grund nennen |
 | [RM-724 — Späte Importe in `tools/` prüft niemand](#rm-724) | Tests und Entwicklungswerkzeuge | Statische Importprüfung (W5) vorziehen, `_feature_item` öffentlich machen |
 | [RM-725 — `affected_tests` erkennt `glob(` nicht als Baumleser](#rm-725) | Tests und Entwicklungswerkzeuge | `glob` in `_TREE_READERS` aufnehmen, mit Test |
@@ -981,10 +983,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   stimmt) nennt CPython runtime 3.14.8, OpenSSL 3.5.9 und libffi 3.4.4; die mitgelieferte
   `python314.dll` trägt Datei- und Produktversion 3.14.8. Die Releaseakte-Prüfung liest
   dieselbe Stückliste.
-  **Offen:** die drei Arbeitsplätze. Deren Installation
+  **Offen:** der Arbeitsplatz. Dessen Installation
   ersetzt `python314.dll` unter jeder laufenden Umgebung und geht nur, wenn keine Sitzung rechnet.
   **Abnahme:** Taglauf oder Vollstart mit allen Paketen grün, die Releaseakte nennt 3.14.8;
-  `check_env` meldet auf jedem Arbeitsplatz 3.14.8.
+  `check_env` meldet am Arbeitsplatz 3.14.8.
 
 <a id="rm-682"></a>
 
@@ -1043,7 +1045,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Paket, Regel in `auslieferung.md`); nach dem Bau prüft `--check` das Bündel. Offengelegt in
   `THIRD-PARTY-NOTICES.md` und in der Stückliste (`pedigree`). Belegt auf dem Intel-Runner: ohne
   Korrektur fünf Abstürze, mit ihr grün (Lauf 38083944884).
-  **Offen:** Antwort auf die Meldung [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67). Jeder Versionswechsel
+  **Stand der Meldung:** [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67)
+  ist angenommen; der Bau ändert sich im nächsten Build, voraussichtlich mit OCCT 8.1.0
+  (Antwort des Projekts am 15.10.2026). Bis dahin bleibt die Korrektur. Jeder Versionswechsel
   von OCP hält `test_the_pinned_wheel_is_the_checked_one` an; dann das neue Rad mit
   `python tools/fix_unwind_info.py --scan <Rad>` zählen.
   **Abnahme:** Ein OCP-Rad zeigt im Scan keinen falschen Eintrag mehr. Dann entfallen Werkzeug,
@@ -5784,7 +5788,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   RM-749); Funde als `FD-<n>` in `.claude/.state/funktionsdurchgang-2026-10/funde.md`, je
   Paket eine Abhakliste daneben (Konzept §7). Entscheidungen Robert (Konzept §13): je Fund läuft
   die eine reproduzierende Fenstertestdatei lokal; die Kundenpakete D0, D1, D9, D8, D3 und D4
-  gehen bis zum 25.11. vor die Komponenten von `MainWindow` aus der Codestruktur (RM-722).
+  gehen vor die Komponenten von `MainWindow` aus der Codestruktur (RM-722); alle Phasen laufen
+  ohne Datum hintereinander (Robert, 12.10.).
   Parallel höchstens zwei Pakete. Stufe C (von Hand am laufenden Fenster) braucht Roberts
   Bildschirm und Freigabe.
   **Nächster Schritt:** D0 (RM-737).
@@ -5832,7 +5837,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
     „Fenster lokal nur beim Release“ (Codestruktur 7.2, Funktionsdurchgang §13.1) und der
     Verweis darauf in `.claude/rules/tests.md`; RM-722 zieht danach nur noch `/liefern` nach.
 
-  Geschätzt acht bis zwölf Arbeitstage.
+  **Stand:** Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Urteile, Profile und Wächter
+  stehen auf main. Der finale Lauf am echten Fenster (48 Fälle auf `2ec37b23b`) ist von zwei
+  Prüfern geurteilt; Urteile und erzeugte Abhaklisten D4, D8, D10 sind versioniert, die Funde
+  mit Stand und Nachweis in `.claude/.state/funktionsdurchgang-2026-10/funde.md`.
+  **Nächster Schritt:** die offenen Funde über `welle5` beheben (Phase 2, auch die leichten),
+  Schlusslauf der betroffenen Zeilen am echten Fenster über `tools/native_runs.py`, Nachurteilsrunde
+  mit zwei Prüfern nach den geschärften Kriterien, dann abhaken; alles vor 0.6.1.
   **Abnahme:** Wächter grün über dem Bestand; je Prüfpunkt eine Gegenprobe ohne Fenster, die
   rot wird; je eine Zeile der drei Arten der Funktionsliste (Operation, Fensterbefehl,
   Bedienfläche) am echten Fenster über Stufe A gefahren; Listen zu V1 und I3, Vergleichsbilder
@@ -5851,8 +5862,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-739 — Funktionsdurchgang D2: Erzeugen.**
   Grundkörper, Bausteinkatalog (eine Zeile mit einem Lauf über alle Kacheln), Organizer, Text,
-  Bild, KI, Varianten, Nachbauen (Kategorien `primitive`, `parts`, `variants`). Nach dem Start
-  am 01.12. (Programmplan, Konzept §9). Weg 3 und KI nur mit lokal laufendem Generator und
+  Bild, KI, Varianten, Nachbauen (Kategorien `primitive`, `parts`, `variants`). In Phase 4
+  (Programmplan, Konzept §9). Weg 3 und KI nur mit lokal laufendem Generator und
   Modell.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
@@ -5860,7 +5871,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-740 — Funktionsdurchgang D3: Verbinden und Abziehen, Transformation, Formgebung.**
   Kategorien `boolean`, `transform`, `shaping` und `surface`, damit auch Verrunden, Fase und
-  Fläche versetzen (Konzept §6). Kundenpaket bis zum 25.11., nach D1, D9 und D8.
+  Fläche versetzen (Konzept §6). Kundenpaket in Phase 3, nach D1, D9 und D8.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-741"></a>
@@ -5868,41 +5879,42 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-741 — Funktionsdurchgang D4: Merkmale.**
   Bohrung, Langloch, Senkung, Gewinde, Muster, erkannte Merkmale ändern und entfernen, örtliche
   Erkennung (Kategorie `holes` und die Zeilen des Merkmalfensters ihrer Operationen).
-  Kundenpaket bis zum 25.11., mit D3 nach D1, D9 und D8.
+  Kundenpaket in Phase 3, mit D3 nach D1, D9 und D8. Dazu aus D0 FD-7 („Materialtoleranz“ ist
+  ein Fachwort) und FD-16 (zwei Hauptknöpfe in der Auswahlkarte bei gewähltem Merkmal).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-742"></a>
 
 - [ ] **RM-742 — Funktionsdurchgang D5: Netz und Reparatur.**
-  Kategorien `repair` und `mesh` außer den Operationen mit Gestenparameter (D6). Nach dem Start
-  am 01.12. (Programmplan, Konzept §9).
+  Kategorien `repair` und `mesh` außer den Operationen mit Gestenparameter (D6). In Phase 4
+  (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-743"></a>
 
 - [ ] **RM-743 — Funktionsdurchgang D6: Formen und Skelett.**
   Weg 4 mit eigenen Leisten, eigenem Rückgängig und eigenen Gesten (Operationen mit den
-  Parametern `strokes` und `armature`). Nach dem Start am 01.12. (Programmplan, Konzept §9).
+  Parametern `strokes` und `armature`). In Phase 4 (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-744"></a>
 
 - [ ] **RM-744 — Funktionsdurchgang D7: Zeichnen und Skizze.**
-  Kategorie `sketch`. Nach dem Start am 01.12. (Programmplan, Konzept §9).
+  Kategorie `sketch`. In Phase 4 (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-745"></a>
 
 - [ ] **RM-745 — Funktionsdurchgang D8: Druckvorbereitung.**
   Ausrichten, Teilen, Anordnen, Stützen, Dichtung samt Dichtweg, Prüfbericht samt seinen
-  Handlungen (Kategorien `scene` und `prepare`). Kundenpaket bis zum 25.11., in der Folge D1,
+  Handlungen (Kategorien `scene` und `prepare`). Kundenpaket in Phase 3, in der Folge D1,
   D9, D8 (Programmplan, Konzept §9); höchstens zwei Pakete zugleich.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-746"></a>
 
 - [ ] **RM-746 — Funktionsdurchgang D9: Druckeinstellungen, Übergabe an den Slicer, Filamentlager.**
-  Weg 1 bis zum Slicer. Kundenpaket bis zum 25.11., in der Folge D1, D9, D8 (Programmplan,
+  Weg 1 bis zum Slicer. Kundenpaket in Phase 3, in der Folge D1, D9, D8 (Programmplan,
   Konzept §9); höchstens zwei Pakete zugleich.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
@@ -5910,16 +5922,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes.**
   Filament und Farbe, Beschriftung, Passungen, Parameter, Zahlen binden, Gegenstücke, Als
-  Baustein speichern (Kategorien `colour`, `label`, `fits`, `parameters`). Nach dem Start am
-  01.12. (Programmplan, Konzept §9).
+  Baustein speichern (Kategorien `colour`, `label`, `fits`, `parameters`). In Phase 4
+  (Programmplan, Konzept §9). Dazu aus D0 FD-8 (Kalibrierstand „Startwert“), FD-9
+  (Beschreibung von *Schriftzug anlegen*), FD-11 (Felder von *Parameter anlegen*) und FD-19
+  (*Filament und Druck* liegt zugeklappt am Ende der Auswahlkarte).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-748"></a>
 
 - [ ] **RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung.**
   Kamera, Griffe, Objektbaum, Auswahl, Verlauf und Vorher/Nachher, Karten verschieben, Suche.
-  Nach dem Start am 01.12., nach den Komponenten der Klassen, die es berührt: `MainWindow` und
-  für Kamera und Griffe `Viewport` (Programmplan, Konzept §9).
+  In Phase 4, nach den Komponenten der Klassen, die es berührt: `MainWindow` und
+  für Kamera und Griffe `Viewport` (Programmplan, Konzept §9). Dazu aus D0 FD-20
+  (die Maßspalte im Objektbaum schneidet krumme Maße ab).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-749"></a>
@@ -5927,9 +5942,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-749 — Funktionsdurchgang D12: Rahmen.**
   Einstellungen, Ersteinrichtung, Aktivierung, Update, Handbuch, Tour, Chat, Kürzel,
   Rückmeldung und Fehlerbericht, KI- und Druckhinweis, Einladungen, Statusleiste,
-  Über-Dialog. Nach dem Start am 01.12., nach den Komponenten von `MainWindow`, die es berührt
+  Über-Dialog. In Phase 4, nach den Komponenten von `MainWindow`, die es berührt
   (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
+
+<a id="rm-790"></a>
+
+- [ ] **RM-790 — Ein nativer Abbruch nach Rückgängig bei gezeigter Maßgruppe, einmal gesehen.**
+  Im Fensterlauf des Prüfstands (D0-P2, 12.10.2026) endete ein Fall nach Strg+Z bei gezeigter
+  Maßgruppe mit 0xC0000005; der Stapel stand in `op_dialog.py` am `QCompleter` in
+  `ValueField.__init__`. Nachgestellt unter Last in 150 Zyklen über 30 Prozesse mit
+  `faulthandler`: kein Abbruch, die Quote liegt mit 95 % unter 2 % je Zyklus. Das `stapel.log`
+  des einen Falls lag im Temp-Ordner von pytest und ist weg.
+  **Nächster Schritt:** Der Prüfstand legt Stapel und Qt-Meldungen jedes Falls jetzt im
+  Fallordner ab; beim nächsten Auftreten dort sichern, zuordnen und beheben.
+  **Abnahme:** Ursache belegt und behoben, mit einem Test, der vorher abbrach; oder 1 000 Zyklen
+  ohne Abbruch, dann ins Archiv.
 
 ## KI und Generatoren
 
@@ -6166,6 +6194,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   oder den Kunden fragen.
   **Abnahme:** Sprachmodell und Bilderzeugung nacheinander auf einer Karte mit 8 GB, ohne
   Speicherfehler und ohne Wartezeit über dem Laden eines Modells.
+
+<a id="rm-791"></a>
+
+- [ ] **RM-791 — Der Agent bekommt eine Frage samt ihren Fragewörtern.**
+  Die Suche kürzt seit FD-18 eine Frage um die Wörter, mit denen sie fragt (`asked`), der
+  Agent nicht: `rank_operations` bekommt „Wie kann ich …?“ ungekürzt. Über die 54 deutschen
+  Kundenwendungen weicht die erste angebotene Operation dabei einmal ab („exakt“); gemessen
+  im Paket Suche (D0, `fix-suche-kundenwoerter`), ohne Änderung.
+  **Nächster Schritt:** Agenten-Suite vorher und nachher mit `asked` vor `rank_operations`
+  (kostet Geld, `agentenschicht.md`), beide Ergebnisse festhalten.
+  **Abnahme:** übernommen, wenn die Quote nicht fällt, sonst mit beiden Messungen verworfen und
+  ins Archiv.
 
 ## Tests und Entwicklungswerkzeuge
 
@@ -6520,7 +6560,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert.**
   Erster Schritt des Programms aus dem [Konzept
   Codestruktur](konzepte/konzept-codestruktur-2026-10.md) (4.1); das Programm beginnt nach der
-  Veröffentlichung von 0.6.0 (Entscheidung Robert, 11.10.2026, Konzept 7). W1 Sperrklinke für
+  Veröffentlichung von 0.6.0 (Entscheidung Robert, 11.10.2026, Konzept 7), Schritt 0 direkt nach
+  D0, alle Phasen ohne Datum hintereinander (Robert, 12.10.). W1 Sperrklinke für
   Dateigrößen (die Zahl der Definitionen einer gelisteten Datei steigt nie), W2 Patch-Ziele, W3
   Registerabzug, W4 rekursive Quelltextprüfungen, W5 statisch auflösbare Importe in `app/`,
   `tools/` und `tests/`, W6 Namenslisten lösen auf; dazu das Verschiebewerkzeug
@@ -6528,7 +6569,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Oberflächenschritten“ (Konzept 7, Punkt 2) kommt mit D0 (RM-737) in den gemeinsamen Satz in
   `AGENTS.md`; Schritt 0 zieht nur noch `/liefern` nach.
   **Nächster Schritt:** CS-2, CS-9, CS-10, CS-11 und CS-12 (RM-723, RM-726 bis RM-729) und die
-  25 `raising=False` auf `app.*` beheben, dann W1 bis W6 und das Werkzeug mit Test an einer
+  12 `raising=False` auf `app.*` beheben, dann W1 bis W6 und das Werkzeug mit Test an einer
   Paket-Attrappe.
   **Abnahme:** alle sechs Wächter grün über dem Bestand, je Wächter eine Gegenprobe rot; das
   Werkzeug verschiebt an der Attrappe mit Beweis; Review. Erst danach Schritt 1

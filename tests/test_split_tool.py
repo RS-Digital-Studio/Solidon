@@ -22,6 +22,7 @@ from app.ui.split_bar import POINTS_NEEDED, SplitBar, state_text
 from tests.render_fakes import RecordingRenderer
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
+from tests.ui_helpers import with_a_body
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -561,9 +562,16 @@ def test_every_tool_has_a_shortcut(window: MainWindow) -> None:
 
 
 def test_the_shortcut_stands_in_the_tooltip(window: MainWindow) -> None:
-    """Ein Kürzel, das nirgends steht, lernt niemand."""
+    """Ein Kürzel, das nirgends steht, lernt niemand.
+
+    An einem freigegebenen Werkzeug, also mit einem Körper: Auf der leeren Szene
+    trägt der graue Knopf seinen Grund und nicht das Kürzel (FD-156, ``bbff466e0``);
+    bis dahin hielt dieser Fall genau den Fehler fest, den FD-156 behob.
+    """
+    with_a_body(window)
     button = window.tools._buttons["split"]
 
+    assert button.isEnabled(), "Voraussetzung: mit Körper ist das Werkzeug frei"
     assert "Alt+" in button.toolTip()
     assert str(window.tools.tools()["split"].title) in button.toolTip()
 
@@ -606,13 +614,13 @@ def test_no_shortcut_of_the_window_is_handed_out_twice(window: MainWindow) -> No
     titles: dict[str, set[str]] = {}
     actions: dict[str, dict[int, str]] = {}
     for key, (title, sequence, _fn) in window.window_commands().items():
-        # Was aus der Menüleiste gelesen wurde (``menu.…``), trägt das Kürzel
+        # Was aus der Menüleiste gelesen wurde (``menubar.…``), trägt das Kürzel
         # **derselben** Aktion, die die Schleife darunter ohnehin prüft — nur
         # unter dem Titel mit Weg davor („Ansicht > Darstellung: Massiv" gegen
         # „Massiv"). Beides zu zählen fände sechzehn Konflikte, wo keiner ist:
         # zwei Namen, eine Taste, eine Aktion. Ein echter Konflikt hätte zwei
         # Aktionen, und die stehen beide in der Schleife darunter.
-        if key.startswith("menu."):
+        if key.startswith("menubar."):
             continue
         if sequence:
             titles.setdefault(QKeySequence(sequence).toString(), set()).add(title)

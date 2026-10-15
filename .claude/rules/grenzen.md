@@ -9,6 +9,7 @@ paths:
   - "app/ui/shortcut_schemes.py"
   - "app/ui/catalog.py"
   - "app/ui/selection_operations.py"
+  - "app/ui/card_width.py"
 ---
 
 # Regeln für die Grenzen der Oberfläche
@@ -33,9 +34,8 @@ Die Zahlen hält `tests/test_interface_limits.py`, die Breitengrenze
 | Breite des Skizzenbereichs, der Werkzeug- und der Bedingungszeile | je ≤ 900 Bildpunkte |
 | Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben im Dialog ihres Partners, erreichbar über Suche und Verlauf |
 
-Wer eine Zahl erhöhen will, tut es mit Absicht und begründet es im Commit. Der
-achte Platz der Werkzeugzeile ist keine Einladung: Eine Funktion, die eine
-Leiste will, verdrängt eine andere oder ist keine wert (`MAX_TOOLS`).
+Wer eine Zahl erhöhen will, tut es mit Absicht und begründet es im Commit; der
+achte Platz der Werkzeugzeile ist keine Einladung (`MAX_TOOLS`).
 
 **Gefaltet wird je Kategorie und nur so weit, bis der Rest passt:**
 `folded_categories` (`registry/surfaces.py`, auch für `menu_path`) nimmt die
@@ -50,10 +50,9 @@ gefalteten, getrennt durch einen nackten Trennstrich.
   `in_the_menu_bar`, und `_build_menus` legt dafür kein Menü an. Die Aktionen
   entstehen trotzdem am Fenster (Kürzel und Suche über `_op_actions`,
   Kürzelübersicht „Handlungen rechts“); **nackte Tasten bleiben an Objektbaum,
-  Ansicht und Reiter *Auswahl*** (`_scope_shortcut`), sonst läge Entf über *Schritt löschen*, und
-  zwei Aktionen auf einer Taste führt Qt beide nicht aus. Text- und Zahlenfelder
-  behalten Entf. Sperren Halt oder Lizenz das Entfernen, sagt die Taste den
-  Grund (`_DeleteRefusal`, Titel aus `_removal_entry`, still beim Messen in der Ansicht) — ein
+  Ansicht und Reiter *Auswahl*** (`_scope_shortcut`), nicht über *Schritt
+  löschen*. Text- und Zahlenfelder behalten Entf. Sperren Halt oder Lizenz das
+  Entfernen, sagt die Taste den Grund (`_DeleteRefusal`, Titel aus `_removal_entry`, still beim Messen in der Ansicht) — ein
   gesperrtes Kürzel schweigt sonst.
 - **In der Leiste bleibt, was keine Auswahl braucht:** *Datei*, *Bearbeiten*,
   *Erzeugen* samt *Bausteine* (Katalog, Gegenstücke, Deckel ohne Kachel),
@@ -73,8 +72,7 @@ gefalteten, getrennt durch einen nackten Trennstrich.
 - **Der Katalog führt aus seiner Sperre hinaus:** Bei genau einem Körper gilt
   ein Baustein ihm, auch ohne Auswahl, wie die Suche (`MainWindow._lone_body`); in der leeren
   Szene stehen unter dem Satz die Wege, die er nennt (`PartCatalog.offer_ways`:
-  *Quader anlegen*, *Modell einfügen …*). Ein modaler Katalog, der „wählen Sie
-  im Objektbaum“ sagt, ist eine Sackgasse (RM-356).
+  *Quader anlegen*, *Modell einfügen …*; RM-356).
 - **Das Kontextmenü an Körper und Merkmal trägt keine Liste der Operationen**
   (Entscheidung Robert), nur *Diesen Schritt ändern*, *Auf dieser Fläche
   zeichnen*, die Sichtbarkeit, *Entfernen* (heißt, was Entf tut) und bei
@@ -207,9 +205,8 @@ Eintrag, sondern die Variantengruppe ihres Erzeugers
 **Die Mesh/B-Rep-Zwillinge** (Quader, Zylinder, Bohrung, Aushöhlen) haben
 **einen** Eintrag; `menu_twins()` sagt, welcher ihn trägt, auch für den
 Menüort des Agenten (§2.6). Der Zwilling heißt **genau** wie sein Partner
-(`create_brep_box` „Quader anlegen“, `drill_brep_hole` „Bohrung setzen“):
-Der Kunde sucht das Substantiv, die Suche ordnet nach Titel, und ein Wort
-davor läse sich wie eine Qualitätsstufe. Wo der versteckte steht, sagt
+(`create_brep_box` „Quader anlegen“, `drill_brep_hole` „Bohrung setzen“).
+Wo der versteckte steht, sagt
 `TWIN_WAYS` („über das Kontextmenü des Verlaufsschritts“ bzw. „im selben Dialog
 — der Körper entscheidet“); im Menü steht er nicht (`hidden_from_the_menu`), und weggelassen
 wird er nur, wenn sein Partner angeboten wird. **Was die beiden trennt, ist der
@@ -243,9 +240,8 @@ Körper.
 **Zwei Zeilen mit demselben Text sind eine Frage ohne Antwort:** Menüleiste und
 Auswahlfenster legen `MENU_TWINS` gleich zusammen; `surfaces.context_menu()`
 bleibt die **Rohmenge** (`tests/test_acceptance_p0.py`). Gezählt wird am
-gebauten Menü („kein Kontextmenü zeigt zwei Zeilen mit demselben Text“) —
-ein Test, der `operations_for_feature` als Sollmenge nimmt, schrumpft mit einem
-Filter darin still mit.
+gebauten Menü („kein Kontextmenü zeigt zwei Zeilen mit demselben Text“), nie
+gegen `operations_for_feature` als Sollmenge.
 
 ## Der Satz kommt vor den Dialog
 
@@ -307,11 +303,8 @@ Baustein.
 
 ## Ein Zeichen darf allein stehen, als geeinigtes Bild oder an fester Stelle
 
-Die Skizzenwerkzeuge leben vom ersten Fall, die obere Werkzeugleiste vom zweiten
-(sieben Knöpfe an fester Stelle, wenige an der Zahl, der Tooltip nennt Namen,
-Kürzel und Zweck). Die Werkzeugzeile unter dem Viewport bleibt beschriftet: Ihre
-Umschalter wechseln mit dem Zustand, und für „Schnitt“ und „Explosion“ gibt
-es kein Bild.
+Skizzenwerkzeuge sind geeinigte Bilder, die obere Werkzeugleiste hat feste
+Stellen; die Werkzeugzeile unter dem Viewport bleibt beschriftet.
 
 - **Wo das Wort vom Knopf verschwindet, steht es an drei Stellen weiter:**
   `QAction`, Tooltip, `statusTip` — den Satz holt `_button_tip` aus dem
@@ -326,8 +319,7 @@ es kein Bild.
   geht dem Wort an *Filamente* vor: Im Wunschmaß zählt sein Zeichen.
 - **Keiner der sieben Umschalter verschwindet:** `ToolStrip.set_tool_usable`
   graut ihn mit Grund (Explosion: „Dafür braucht es zwei Körper in der
-  Szene.“), und `_update_actions` fragt ihn **nach** der Freigabe aller — eine
-  Zeile, die sich beim Laden einer Datei umbaut, wirkt unzuverlässig.
+  Szene.“), und `_update_actions` fragt ihn **nach** der Freigabe aller.
 - **Wer eine Beschriftung ausblendet, zieht Handbuch (`app/core/manual.py`) und
   Tour (`app/core/tour.py`) mit** — die Tour zuerst, ihre `done=`-Schritte
   rücken sonst nicht weiter.
@@ -337,12 +329,10 @@ es kein Bild.
 *Bohrung setzen* Strg+B, *Drehen* Strg+R, *Aushöhlen* Strg+H; Kürzel stehen im
 Register, eine Übersetzung ändert sie nicht. Ist der Buchstabe belegt, kommt
 Umschalt dazu (*Vereinigen* Strg+Umschalt+V, *Abziehen* Strg+Umschalt+A); ist
-auch das belegt, **bleibt die Operation ohne Kürzel** — *Skalieren*: S und
-Umschalt+S gehören dem Speichern, und ein erfundener Buchstabe wäre schlechter
-als keiner. Wer eine Taste vergibt, prüft vorher am gebauten Fenster gegen die
-Kürzel, die nicht aus dem Register kommen (Ansichten, Werkzeugzeile,
-Dateibefehle, Navigation): Eine doppelt belegte Taste führt keine der beiden
-Aktionen aus („Ambiguous shortcut overload“). `tests/test_ui.py`
+auch das belegt, **bleibt die Operation ohne Kürzel** (*Skalieren*). Wer eine
+Taste vergibt, prüft vorher am gebauten Fenster gegen die Kürzel, die nicht aus
+dem Register kommen (Ansichten, Werkzeugzeile, Dateibefehle, Navigation):
+`tests/test_ui.py`
 (`test_no_two_shortcuts_in_the_window_collide`) hält das,
 `tests/test_registry_consistency.py` sieht nur das Register.
 
@@ -352,6 +342,10 @@ Aktionen aus („Ambiguous shortcut overload“). `tests/test_ui.py`
 Qts Strg+Umschalt+Z die Taste Strg+Y, die Tour und Texte nennen. Wer eine
 dieser Handlungen bindet oder eine Taste dafür abfängt, fragt dort; beim
 Messen nimmt die Ansicht die Rücktaste vor dem Kürzel an (letztes Maß).
+
+**Strg+Z und Strg+Y gehen an einem Feld vorbei ans Fenster, wenn es nichts
+zurückzunehmen hat** (`nothing_to_take_back`, §19.2). Wer ein Feld per Code
+leert, nimmt `setText("")`: `clear()` ist selbst rücknehmbar und behielte die Taste.
 
 **Eine Liste, die über `itemActivated` öffnet, trägt `return_opens`:** Am Mac
 bearbeitet Qt mit Return den Eintrag, statt ihn zu öffnen; der Filter meldet
@@ -378,8 +372,17 @@ stehen je Sprache im Katalog (`registry.search.CUSTOMER_WORDS`, Kontext
 „Suchwörter“): Ein Titeltreffer mitten im Wort zählt nach ihnen, ein
 Kundenwort vor einem Titelwort, nie vor einem ganzen Titel, die Wörter
 einer Anfrage stehen in **einer** Wendung, und die ungenauen Stufen
-(`LOOSE_RANK`) werten wie der Agent (`rank_entries`). Rangfolge und
-Vorauswahl: `registry.search.ranked`, `first_choice`.
+(`LOOSE_RANK`) werten wie der Agent (`rank_entries`); dort wiegt eine gesagte
+Wendung wie ihre Wörter im Titel (`_said_weight`). Bei gleicher bester Güte
+geht nach Lage, Freigabe und ganzem Titel die genau gesagte Wendung vor einer,
+die das Wort nur enthält; ab `LOOSE_RANK` ist die Vorauswahl der erste Treffer
+(`ranked`, `first_choice`). `menubar.*` ist kein Suchtext (`searched_name`).
+
+**Eine Frage sucht ohne die Wörter, mit denen sie fragt** (`asked`,
+`query_parts`): `QUESTION_WORDS` fallen am Anfang, `REQUEST_WORDS` überall, je
+Sprache ein Katalogtext — das Register fragt nie. Keine Kundenwendung und kein
+Titel eröffnet eine Frage, keine trägt ein Bittwort
+(`test_no_question_word_is_a_word_of_a_customer_or_a_title`).
 
 **Die Kundenwörter gehören der Suche, nicht dem Agenten:** Er wertet nur
 `SYNONYMS` (`rank_operations`, `customer_words=False`); ihm eines zu geben
@@ -389,10 +392,7 @@ kurzen Stamm kein anderes Wort
 (`test_every_customer_word_belongs_to_a_row_of_the_search` hält die Schlüssel
 am Register und an den Fensterbefehlen).
 
-**Dieselben Kundenwörter führen durch das Handbuch** (`core/manual_search.py`):
-Es faltet mit `fold`, wägt mit `strength` und liest die Kundenwörter über
-`customer_phrases` und `says`; nennt eine Suche genau die Wendung einer
-Operation, sucht es zusätzlich deren Titel als Wortfolge. Ein neues Kundenwort
-ändert also auch, wo das Handbuch aufschlägt (`tests/test_manual_search.py`
-misst die Quote, Konzept Handbuch §11). Eine eigene Wortliste des Handbuchs wäre ein Zwilling dieser
-Tabelle (`zwillinge.md`).
+**Dieselben Kundenwörter führen durch das Handbuch** (`core/manual_search.py`,
+Fragen gekürzt über `asked`): Ein neues Kundenwort ändert auch, wo es
+aufschlägt (`tests/test_manual_search.py`, Konzept Handbuch §11); eine eigene
+Wortliste dort wäre ein Zwilling (`zwillinge.md`).

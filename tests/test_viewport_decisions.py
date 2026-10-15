@@ -979,7 +979,7 @@ def test_the_bed_is_drawn_in_the_colours_of_the_theme(
     viewport.show_build_volume(profile)
 
     assert renderer.drawn, "die Platte wurde nie gezeichnet"
-    assert renderer.colour_of("bed_0") == viewport._bed_colour, (
+    assert renderer.colour_of("bed_0") == THEMES["light"]["bed_grid"], (
         "das Raster nahm die Farbe des Themas nicht an"
     )
     assert renderer.colour_of("bed_surface_0") == viewport._bed_surface, (
@@ -7919,7 +7919,7 @@ DEVICE_PIXELS_PER_MM = 4.0
 def _scaled_sketch_view(ratio: float) -> tuple[Any, float]:
     """Eine Zeichenansicht auf einem Bildschirm mit diesem Geräteverhältnis.
 
-    Der Zeiger kommt in Gerätepixeln herein und ``_display_of`` antwortet in
+    Der Zeiger kommt in Gerätepixeln herein und ``display_of`` antwortet in
     Gerätepixeln — beides stellt diese Ansicht nach, indem der Maßstab mit dem
     Verhältnis mitwächst. Zurück kommen die Ansicht und ihr Maßstab.
     """
@@ -7936,7 +7936,7 @@ def _scaled_sketch_view(ratio: float) -> tuple[Any, float]:
     viewport.pixels_per_mm = lambda _frame: per_mm  # type: ignore[method-assign]
     # Das Rechteck liegt in der XY-Ebene; im Bild wird x nach rechts und die
     # Normale (z) nach oben.
-    viewport._display_of = lambda point: (  # type: ignore[method-assign]
+    viewport.display_of = lambda point: (  # type: ignore[method-assign]
         float(point[0]) * per_mm,
         float(point[2]) * per_mm,
     )

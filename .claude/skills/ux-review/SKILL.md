@@ -64,6 +64,31 @@ Kürzel, Agent. Eine neue Beschriftung repariert keine falsche Zustandsfolge.
   Aktivierung, Verlassen von Menüs und Dialogen, Rückkehr zum Ausgangspunkt.
   Aus sichtbaren Beschriftungen folgt keine Bildschirmleser-Abnahme.
 
+## Kriterien des Funktionsdurchgangs
+
+Die eine Quelle für Einfachheit (E) und Verständlichkeit (V) im
+Funktionsdurchgang (`konzepte/konzept-funktionsdurchgang-2026-10.md` §4); Stufe
+A misst der Prüfstand, B urteilt am Bild, C von Hand. Die Zahlen hält
+`tools/function_checks.py`, ein Test hält beide gleich. Maßstab ist der
+Slicer-Kunde, Startzustand die passende Auswahl, das Beispielziel steht vorab
+in der Zeilenspezifikation.
+
+| Kennung | Zählgröße | Schwelle | Stufe | Messung |
+|---|---|---|---|---|
+| E1 | Klicks bis zum Ergebnis mit den Vorgaben | ≤ 3; am Merkmal ≤ 2 nach der Auswahl | A zählt, B urteilt | `steps` |
+| E2 | Pflichteingaben bis zum Beispielziel | ≤ 1 bei 90 % der Funktionen; sonst ist die Vorgabe der Fund | A | `steps[].typed`, Anteil je Paket |
+| E3 | Entscheidungen, die Vorwissen verlangen | ≤ 1 | A zählt, B wertet | `steps[].decision` |
+| E4 | Blickwechsel zwischen Ansicht, rechter Karte, Dialog, Statusleiste, linker Karte | ≤ 2; kein Dialog verdeckt die bearbeitete Stelle | A | `steps[].zone`, `spot` |
+| E5 | Felder vorn, Wörter über dem ersten Feld | ≤ 3 Felder (höchstens 4); ≤ 25 Wörter, übersetzt ≤ 35 | A | `fields`, `texts` |
+| E6 | Nachfragen außerhalb der Ausnahmen von Regel 19 | 0 | A | `modals` |
+| E7 | Sackgassen: grau ohne Grund, leere Karte ohne Satz, Meldung ohne Handlung | 0 | A | `matrix`, `empty_states`, `messages` |
+| V1 | Wörter der Negativliste im sichtbaren Text | 0 | A | `texts` gegen `tests/data/customer_vocabulary.json` |
+| V2 | Satzlängen | die Grenzen aus `test_text_length` | A | `texts` |
+| V3 | Felder mit eigenem Satz (Kurzhilfe und zugängliche Beschreibung) | 100 %; höchstens die Hälfte der Wörter mit dem Titel geteilt | A | `fields` |
+| V4 | Vorhersage aus Titel, erstem Satz und Vorschau vor dem Übernehmen | Abweichung vom Ergebnis ist ein Fund | B | Urteil mit `prediction` |
+| V5 | Meldungen: was nicht ging, warum, was jetzt | Handlung löst das Problem; Sperrgrund ohne Knopf nennt Menüweg, ganze Wörter eines offenen Knopfs, selbst erklärenden Auswegsatz oder offenen Feldtitel derselben Fläche | A misst, B urteilt | `messages[].actions` |
+| V6 | Kurzhilfen, die man bis zum Ziel öffnen muss | ≤ 1; nie das Handbuch | A misst, B zählt | `windows` (Handbuchfenster) |
+
 ## Vorschlag, Entscheidung, Abnahme
 
 Der kürzeste verständliche Ablauf, der den belegten Produktvertrag erhält. Bei

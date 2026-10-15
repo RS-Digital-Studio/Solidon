@@ -490,23 +490,38 @@ def test_no_customer_text_names_a_window_the_application_does_not_have() -> None
 
 # --- Konstrukteurswörter (RM-088) -------------------------------------------
 
+#: Die Wortliste des Kunden (V1 des Funktionsdurchgangs): Die Wächter hier und
+#: der Prüfstand lesen dieselbe Datei, damit es keine zweite Liste gibt.
+WORTLISTE = Path(__file__).resolve().parent / "data" / "customer_vocabulary.json"
+
+
+def bewachte_muster(waechter: str) -> list[str]:
+    """Die Suchmuster der Wörter, die ``waechter`` hält, in der Reihenfolge der Liste.
+
+    Leer wäre jeder Wächter darüber grün, ohne etwas zu prüfen — deshalb hält
+    die Funktion selbst an.
+    """
+    eintraege = json.loads(WORTLISTE.read_text(encoding="utf-8"))["negative"]
+    muster = [eintrag["pattern"] for eintrag in eintraege if eintrag["guarded"] == waechter]
+    assert len(muster) >= 5, f"nur {len(muster)} Wörter für {waechter} — dann prüft das nichts"
+    return muster
+
+
 #: Wörter, die ein Konstrukteur kennt und ein Slicer-Nutzer nicht. Maßstab ist
 #: der Slicer (Cura, PrusaSlicer, Orca): „Brim“, „Stützen“, „Infill“, „Netz“
 #: stehen dort, „Normale“, „Facette“ oder „verschweißen“ nicht. Kuratiert wie
 #: ``ABGELEGT`` oben — „verschweißt“ bleibt erlaubt, denn eine Stütze, die am
-#: Teil verschweißt, beschreibt den Druck und nicht das Netz.
+#: Teil verschweißt, beschreibt den Druck und nicht das Netz. Die Wörter stehen
+#: in :data:`WORTLISTE` (``guarded = "konstrukteurswort"``).
 KONSTRUKTEURSWORT = re.compile(
-    r"(?<![A-Za-zÄÖÜäöüß])(Flächennormalen?|Normalen\w*|Normale\b(?! Wandstärke)"
-    r"|[Mm]anifold|B-Rep|Tessell\w*|Facette\w*|Vertex|Vertices|Voxel\w*"
-    r"|[Ww]asserdicht\w*|[Bb]oolesch\w*|[Dd]eterministisch\w*|[Ee]ntartet\w*"
-    r"|[Dd]ezimier\w*|[Uu]ngeschweißt\w*|[Vv]erschweißen|Freiheitsgrad\w*)"
+    r"(?<![A-Za-zÄÖÜäöüß])(" + "|".join(bewachte_muster("konstrukteurswort")) + ")"
 )
 
 #: Dieselbe Frage an der englischen Übersetzung — dort stehen die Wörter auch
 #: dann, wenn die deutsche Quelle sie meidet („Eckpunkt“ wurde „vertex“).
+#: Aus :data:`WORTLISTE` (``guarded = "designer_word"``).
 DESIGNER_WORD = re.compile(
-    r"\b(normals?|manifold|tessellat\w*|facets?|vertex|vertices|voxels?|watertight|welding|welded"
-    r"|decimat\w*|degrees? of freedom)\b",
+    r"\b(" + "|".join(bewachte_muster("designer_word")) + r")\b",
     re.IGNORECASE,
 )
 
@@ -694,10 +709,8 @@ def test_the_sketch_figure_says_the_word_of_the_status_line(language: str) -> No
 #: Wörter aus der Datenhaltung, die ein Kunde nicht sucht (Durchsicht 0.5.2,
 #: D13). Einige sind heute Feldnamen („Startwert“, „Materialtoleranz
 #: berücksichtigen“) — der Bestand ist eingefroren, ein neues Vorkommen nicht.
-FACHWORT = re.compile(
-    r"Mindestbahnbreite|im Rahmen des Rasters|Maßherkunft|Bereichstest|Startwert\w*"
-    r"|Materialtoleranz|exakte[nr]? Körper|Rezept\w*"
-)
+#: Aus :data:`WORTLISTE` (``guarded = "fachwort"``).
+FACHWORT = re.compile("|".join(bewachte_muster("fachwort")))
 
 #: Satzmuster, die nach Sprachmodell klingen (D14): das Semikolon und die
 #: Formel „Nur …:“ / „Nicht …:“ am Anfang.
@@ -711,19 +724,20 @@ SATZMUSTER: dict[str, re.Pattern[str]] = {
 #: Überarbeitung; sie zu erhöhen ist eine Entscheidung, kein Nachtrag. Mit
 #: Review P2 N5 stieg sie einmal, weil der Wächter seitdem jeden Katalogtext
 #: liest und nicht nur die nach Aufrufort eingeordneten.
-MUSTER_BESTAND: dict[str, int] = {"Fachwort": 119, "Semikolon": 329, "Nur-Formel": 11}
+MUSTER_BESTAND: dict[str, int] = {"Fachwort": 119, "Semikolon": 326, "Nur-Formel": 11}
 
 MUSTER_DATEI = Path(__file__).resolve().parent / "data" / "text_patterns.json"
 
 #: Je Sprache, wie viele Übersetzungen ein Semikolon tragen, das ihre deutsche
 #: Quelle nicht hat. Die Zahl darf nur sinken (Review P2 N5).
-UEBERSETZT_BESTAND: dict[str, int] = {"en": 86, "es": 185, "fr": 93, "it": 57, "pt": 109}
+UEBERSETZT_BESTAND: dict[str, int] = {"en": 86, "es": 184, "fr": 93, "it": 57, "pt": 109}
 
 UEBERSETZT_DATEI = Path(__file__).resolve().parent / "data" / "translated_semicolons.json"
 
 
 def suchwoerter() -> frozenset[str]:
-    """Die Katalogschlüssel der Kundenwörter (``registry.search.CUSTOMER_WORDS``).
+    """Die Katalogschlüssel der Kundenwörter (``registry.search.CUSTOMER_WORDS``)
+    und der Fragewörter der Suche (``QUESTION_WORDS``, ``REQUEST_WORDS``).
 
     **Eine Wortliste, kein Kundentext:** Der Kunde liest sie nie, er tippt sie,
     und die Suche trennt ihre Wendungen am Semikolon. Ein Fachwort darin ist
@@ -731,11 +745,11 @@ def suchwoerter() -> frozenset[str]:
     nichts. Bis dahin standen diese Listen im eingefrorenen Bestand der
     Musterwächter, mit jedem neuen Kundenwort ein Eintrag mehr.
     """
-    from app.core.registry.search import CUSTOMER_WORDS
+    from app.core.registry.search import CUSTOMER_WORDS, QUESTION_WORDS, REQUEST_WORDS
 
     return frozenset(
         f"{text.context}\x04{text.msgid}" if text.context else text.msgid
-        for text in CUSTOMER_WORDS.values()
+        for text in (*CUSTOMER_WORDS.values(), QUESTION_WORDS, REQUEST_WORDS)
     )
 
 

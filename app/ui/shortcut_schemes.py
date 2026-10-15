@@ -24,8 +24,10 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractSlider,
     QAbstractSpinBox,
+    QComboBox,
     QLineEdit,
     QPlainTextEdit,
+    QTextEdit,
 )
 
 from app.i18n import TranslatableText, _
@@ -166,6 +168,35 @@ def belongs_to_the_focus(key: int, widget: object) -> bool:
     )
 
 
+def nothing_to_take_back(event: QKeyEvent, widget: object) -> bool:
+    """Ob Strg+Z oder Strg+Y an diesem Feld vorbei an das Fenster gehen.
+
+    Ein Textfeld beansprucht Rückgängig und Wiederholen über
+    ``ShortcutOverride`` immer, auch leer und ohne eine einzige Eingabe — Qt
+    fragt dabei nicht, ob es etwas zurückzunehmen gibt. Landete der Fokus nach
+    einer Handlung in einem solchen Feld, nahm Strg+Z nichts zurück, während
+    §19.2 Rückgängig überall verspricht (FD-4: das Suchfeld der Auswahl nach
+    *Auf das Bett setzen*). Hat das Feld selbst etwas zurückzunehmen, bleibt die
+    Taste bei ihm: Wer tippt, nimmt sein Tippen zurück.
+
+    Als reine Funktion wie :func:`belongs_to_the_focus`; Zahlenfelder und
+    beschreibbare Auswahlfelder antworten über ihr Textfeld.
+    """
+    undo = event.matches(QKeySequence.StandardKey.Undo)
+    if not undo and not event.matches(QKeySequence.StandardKey.Redo):
+        return False
+    if isinstance(widget, QAbstractSpinBox):
+        widget = widget.findChild(QLineEdit)
+    elif isinstance(widget, QComboBox):
+        widget = widget.lineEdit()
+    if isinstance(widget, QLineEdit) and not widget.isReadOnly():
+        return not (widget.isUndoAvailable() if undo else widget.isRedoAvailable())
+    if isinstance(widget, (QPlainTextEdit, QTextEdit)) and not widget.isReadOnly():
+        document = widget.document()
+        return not (document.isUndoAvailable() if undo else document.isRedoAvailable())
+    return False
+
+
 class NavigationKeys(QObject):
     """Der Filter, der die vier Tasten dem Fokus überlässt.
 
@@ -202,6 +233,15 @@ class NavigationKeys(QObject):
             and belongs_to_the_focus(event.key(), watched)
         ):
             event.accept()
+            return True
+        if (
+            event.type() == QEvent.Type.ShortcutOverride
+            and isinstance(event, QKeyEvent)
+            and nothing_to_take_back(event, watched)
+        ):
+            # Nicht angenommen und nicht zugestellt: Das Feld sieht die Frage
+            # nicht, und Qt löst danach das Kürzel des Fensters aus.
+            event.ignore()
             return True
         handled: bool = super().eventFilter(watched, event)
         return handled

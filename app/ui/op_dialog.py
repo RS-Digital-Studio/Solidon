@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Final
 from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
     QCheckBox,
     QComboBox,
     QCompleter,
@@ -45,7 +46,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import expressions, manual
+from app.core import expressions, guides, manual
 from app.core.errors import AppError
 from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
 from app.core.registry import OperationSpec, inactive_dependency
@@ -61,7 +62,10 @@ from app.core.units import (
     to_mm,
 )
 from app.i18n import source_text, tr
+from app.ui.change_lock import change_refusal
+from app.ui.dialog_footer import DialogFooter
 from app.ui.dialogs import ErrorNotice, align_to_the_front
+from app.ui.feature_list import FeatureList
 from app.ui.labels import (
     BoundedSpin,
     LengthSpin,
@@ -91,6 +95,7 @@ from app.ui.style import (
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
+    WrappedNote,
     expanded_width,
     make_primary,
     set_level,
@@ -108,12 +113,25 @@ _SEAL_PATH_COMPANIONS = frozenset({"support_feature", "opening_signature", "coun
 #: Entscheidung Robert, RM-513: vier als harte Grenze, neun von zehn
 #: Operationen mit höchstens drei).
 #:
-#: Dieselbe Zahl wie ``MAX_FRONT_PARAMS`` in ``tests/test_interface_limits.py``,
-#: und der Test hält beide zusammen (Muster ``OPEN_UP_TO``): Wer hier fünf
-#: erlaubt, während die Prüfung vier verlangt, hat zwei Grenzen für dieselbe
-#: Frage — und die Oberfläche wächst an der Stelle mit, die niemand misst.
+#: ``tests/test_interface_limits.py`` und der Funktionsdurchgang
+#: (``tools/function_checks.py``, E5) prüfen gegen genau diese Zahl — eine
+#: Grenze, eine Quelle.
 #: Der Dialog hält sie auch beim Vorholen entschiedener Werte (``_promoted_fields``).
 MAX_FRONT_FIELDS: Final = 4
+
+#: Welcher Anteil der Operationen vorn höchstens drei Felder zugleich zeigt
+#: (RM-513). Hier und nicht im Test, weil der Funktionsdurchgang dieselbe
+#: Schwelle misst (``tools/function_checks.py``, Kriterium E5).
+USUAL_FRONT_SHARE: Final = 0.9
+
+#: Wie viele Wörter über dem ersten Feld eines Operationsdialogs stehen dürfen
+#: (RM-513): Platzierungssatz, Einleitungssatz und die Überschrift der Grenze.
+#: Deutsch ist die Quelle; die übrigen Sprachen laufen bis rund ein Viertel
+#: länger, gemessen an Französisch und Portugiesisch. Geprüft von
+#: ``tests/test_interface_limits.py`` über den Bestand und vom
+#: Funktionsdurchgang am offenen Dialog (E5).
+MAX_LEAD_WORDS: Final = 25
+MAX_LEAD_WORDS_TRANSLATED: Final = 35
 
 #: Wie viele Feldnamen die zugeklappten „Weitere Einstellungen“ nennen.
 ADVANCED_NAMES_SHOWN: Final = 3
@@ -377,6 +395,9 @@ class ValueField(QWidget):
         eine Bestätigung im Dialog schöbe jedes Loch in den Ursprung."""
 
         self.spin = BoundedSpin(self)
+        # Fokussiert wird das Drehfeld, nicht der Behälter: Es trägt den Namen
+        # der Zeile (FD-12), den Satz gibt ``_explain`` dazu.
+        self.spin.setAccessibleName(self.caption())
         self.spin.setDecimals(0 if entry.kind == "int" else _decimals_for(entry, self._shown))
         self.spin.setMinimum(
             self._as_shown(entry.minimum) if entry.minimum is not None else -1_000_000.0
@@ -629,6 +650,7 @@ class ValueField(QWidget):
             self._name_limits()
             self._core = core
             self.spin.setValue(self._as_shown(core))
+        self.spin.setAccessibleName(self.caption())
         self.captionChanged.emit(self.caption())
 
     def _name_limits(self) -> None:
@@ -783,7 +805,8 @@ class ValueField(QWidget):
         elif self._refused_shown:
             self.hint.setText("")
             self.hint.setVisible(False)
-            self.spin.setAccessibleDescription("")
+            # Zurück zum Satz der Zeile, den der Behälter trägt (``_explain``).
+            self.spin.setAccessibleDescription(self.accessibleDescription())
         if bool(said) != self._refused_shown:
             self._refused_shown = bool(said)
             # Der Dialog fragt den Knopf neu (``_follow_source_pending``).
@@ -1226,6 +1249,7 @@ class ImageSourceField(QWidget):
         self._button_text = self.button.text()
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
         layout.addWidget(self.combo, 1)
         layout.addWidget(self.button)
         self.combo.currentIndexChanged.connect(self.changed)
@@ -1346,11 +1370,31 @@ def _explain(editor: QWidget, caption: QWidget | None, sentence: str) -> None:
     Argument). Nachgemessen ist der Fall hier keiner: Alle 457 Zeilen des
     Registers haben eine Beschriftung. Der Zweig steht für die erste Zeile, die
     keine hat, und nicht für eine, die es schon gibt.
+
+    **Und an das Feld darin, das den Fokus bekommt** (FD-12): Ein Zahlenfeld
+    ist ein Behälter, fokussiert wird sein Drehfeld, im Flächenwähler der Haken
+    „Ganzer Körper“. Am Behälter allein las ein Bildschirmleser nichts. Ein
+    inneres Feld mit eigenem Satz (das Ausdrucksfeld nennt seine Grammatik,
+    ein abgelehntes Drehfeld seine Grenze) behält ihn; ein Feld ohne Namen
+    heißt wie sein Text oder wie die Zeile.
     """
+    inherited = editor.accessibleDescription()
     editor.setToolTip(sentence)
     editor.setAccessibleDescription(sentence)
     if caption is not None:
         caption.setToolTip(sentence)
+    row = caption.text() if isinstance(caption, QLabel) else ""
+    # Die Arten, die auch der Prüfstand als Eingabefeld zählt
+    # (``function_capture._input_widgets``), ohne die Textzeile in einer Zahl.
+    for inner in editor.findChildren(QWidget):
+        focused = isinstance(inner, (QAbstractSpinBox, QLineEdit, QComboBox, QCheckBox))
+        if not focused or isinstance(inner.parentWidget(), (QAbstractSpinBox, QComboBox)):
+            continue
+        if inner.accessibleDescription() in ("", inherited):
+            inner.setAccessibleDescription(sentence)
+        if not inner.accessibleName():
+            own = inner.text() if isinstance(inner, QCheckBox) else ""
+            inner.setAccessibleName(own or row)
 
 
 def _why_inactive(field: str, wanted: str | bool) -> str:
@@ -1417,7 +1461,7 @@ class ArmatureField(QWidget):
 
         grid = QGridLayout(self)
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(TIGHT)
+        grid.setSpacing(TIGHT)
         for column, axis in enumerate(POSE_AXES):
             # Die Achse steht einmal über der Spalte statt dreimal je Zeile.
             # Den Namen trägt jedes Feld trotzdem: eine Spaltenüberschrift
@@ -1443,6 +1487,7 @@ class ArmatureField(QWidget):
                 )
                 field = ValueField(spec, angles[column], parameter_values, self)
                 field.setAccessibleName(f"{bone} {axis}")
+                field.spin.setAccessibleName(f"{bone} {axis}")
                 field.changed.connect(self.changed)
                 grid.addWidget(field, row, column + 1)
                 fields.append(field)
@@ -1747,10 +1792,8 @@ class FeatureSetField(QWidget):
         self.whole.setChecked(not selected and empty is not None)
         self.whole.setVisible(empty is not None)
         layout.addWidget(self.whole)
-        self.list = QListWidget(self)
+        self.list = FeatureList(self)
         self.list.setAccessibleName(tr("Flächen auswählen"))
-        self.list.setMinimumHeight(96)
-        self.list.setMaximumHeight(210)
         for identifier in dict.fromkeys((*choices, *selected)):
             item = QListWidgetItem(choices.get(identifier, identifier), self.list)
             item.setData(Qt.ItemDataRole.UserRole, identifier)
@@ -2130,6 +2173,7 @@ class OperationDialog(QDialog):
         # gleich breit macht.
         for form in (front, advanced):
             form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+            form.setSpacing(NORMAL)
         advanced.setContentsMargins(0, 0, 0, 0)
         self._front = front
         self._advanced_form = advanced
@@ -2143,6 +2187,8 @@ class OperationDialog(QDialog):
             if isinstance(editor, SealPathField):
                 editor.set_selection(given)
             self._editors[entry.name] = editor
+            # Das Ziel im Wortschatz (``field:<parameter>``, RM-737).
+            editor.setProperty(guides.TARGET_PROPERTY, f"field:{entry.name}")
             self._watch(editor)
             if entry.kind in ("feature", "features") or entry.targets_feature:
                 editor.installEventFilter(self)
@@ -2207,7 +2253,12 @@ class OperationDialog(QDialog):
         contents = QWidget(self._scroll)
         layout = QVBoxLayout(contents)
         layout.setContentsMargins(0, 0, 0, 0)
+        # Das Raster statt Qts Vorgabe von 6 (G2, FD-15), wie die Formulare.
+        layout.setSpacing(NORMAL)
         self._scroll.setWidget(contents)
+        self._scroll.contentSizeChanged.connect(
+            weak_slot(self, OperationDialog._queue_refit, "passive")
+        )
         outer.addWidget(self._scroll, 1)
         # **Wer im Bild zielen muss, erfährt es im Dialog — als erste Zeile**
         # (Befund Robert, 18.09.2026: „keine Info dass es über den Viewport
@@ -2229,8 +2280,8 @@ class OperationDialog(QDialog):
 
         self._description: QLabel | None = None
         if spec.doc:
-            description = QLabel(lead_sentence(spec), self)
-            description.setWordWrap(True)
+            description = WrappedNote(self)
+            description.setText(lead_sentence(spec))
             # So hoch wie sein Text, nicht so hoch wie der übrige Platz.
             #
             # Ohne das teilt das senkrechte Layout die freie Höhe unter seinen
@@ -2302,6 +2353,7 @@ class OperationDialog(QDialog):
         self.to_the_bed.clicked.connect(weak_slot(self, OperationDialog._to_the_bed))
         bed_row = QHBoxLayout()
         bed_row.setContentsMargins(0, 0, 0, 0)
+        bed_row.setSpacing(TIGHT)
         bed_row.addWidget(self.to_the_bed)
         bed_row.addStretch(1)
         layout.addLayout(bed_row)
@@ -2422,6 +2474,7 @@ class OperationDialog(QDialog):
         )
         hidden_expression_row = QHBoxLayout()
         hidden_expression_row.setContentsMargins(0, 0, 0, 0)
+        hidden_expression_row.setSpacing(TIGHT)
         hidden_expression_row.addWidget(self._hidden_expression_notice, 1)
         hidden_expression_row.addWidget(self._hidden_expression_open)
         layout.addLayout(hidden_expression_row)
@@ -2486,9 +2539,10 @@ class OperationDialog(QDialog):
 
         # Überschuss erst nach allen Feldern, nicht vor der aufklappbaren Tiefe.
         layout.addStretch(1)
-        buttons = QDialogButtonBox(
+        buttons = DialogFooter(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        self._footer = buttons
         button_layout = buttons.layout()
         assert button_layout is not None
         button_layout.setSpacing(SPACE)
@@ -2524,6 +2578,7 @@ class OperationDialog(QDialog):
         self._refit.setSingleShot(True)
         self._refit_intent: ContentFitIntent = "passive"
         self._refit.timeout.connect(self._run_queued_refit)
+        buttons.geometryChanged.connect(weak_slot(self, OperationDialog._queue_refit, "passive"))
         self._couple_dependent_fields()
         self._couple_surface_binding()
         self._install_rotation_centre(given)
@@ -2634,7 +2689,10 @@ class OperationDialog(QDialog):
         # Knopf, statt drei Schritte später im Prüfbericht zu enden
         # (:meth:`block_apply`, gerufen aus ``MainWindow._preview_explained``).
         blocked = self._attachment_problem or self._blocked_reason
-        reason = (
+        # **Ansehen ja, Übernehmen nein** (FD-5): Ohne Freischaltung geht ein
+        # Schritt aus Verlauf oder Baum zum Lesen auf; der Knopf trägt den Grund.
+        refusal = change_refusal()
+        reason = refusal or (
             tr("Datei wird gelesen …")
             if source_pending
             else (
@@ -2669,6 +2727,7 @@ class OperationDialog(QDialog):
             or no_texture_face
             or no_place
             or blocked is not None
+            or bool(refusal)
         )
         button.setEnabled(not pending and not incomplete)
         button.setToolTip(reason)
@@ -2750,7 +2809,7 @@ class OperationDialog(QDialog):
 
     def can_accept(self) -> bool:
         """Alle Eingaben und die Freigabe derselben Vorschau erneut prüfen."""
-        if self._attachment_problem is not None:
+        if self._attachment_problem is not None or change_refusal():
             return False
         for editor in (*self.findChildren(QSpinBox), *self.findChildren(QDoubleSpinBox)):
             editor.interpretText()
@@ -3105,6 +3164,7 @@ class OperationDialog(QDialog):
             return
         self._refusal.set_error(problem, handlers)
         self._refusal.setVisible(bool(self._refusal.text()))
+        self._queue_refit("passive")
 
     def take_value(self, name: str, value: Any) -> bool:
         """Einen Wert in ein Zahlenfeld schreiben, als hätte der Kunde ihn getippt.
@@ -3278,6 +3338,7 @@ class OperationDialog(QDialog):
         row = QWidget(self)
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
         mode = QComboBox(row)
         target = QComboBox(row)
         self._centre_row, self.centre_mode, self.centre_target = row, mode, target
@@ -4432,6 +4493,7 @@ class OperationDialog(QDialog):
                 if isinstance(editor, SealPathField):
                     editor.set_selection(given)
                 self._editors[entry.name] = editor
+                editor.setProperty(guides.TARGET_PROPERTY, f"field:{entry.name}")
                 self._watch(editor)
                 if entry.kind in ("feature", "features") or entry.targets_feature:
                     editor.installEventFilter(self)
@@ -4630,18 +4692,25 @@ class OperationDialog(QDialog):
         if layout is None:
             return
         content = self._scroll.widget()
+        if isinstance(self._description, WrappedNote):
+            self._description.claim_height()
         content_layout = content.layout() if content is not None else None
         if content_layout is not None:
             content_layout.activate()
         self._scroll.updateGeometry()
         layout.activate()
-        natural_width = expanded_width(self._scroll, self._advanced_form)
+        natural_width = max(
+            expanded_width(self._scroll, self._advanced_form),
+            self._footer.natural_width + 2 * WIDE,
+        )
         self._height.fit(
             self,
             self._scroll,
             grow_width=intent == "initial",
             intent=intent,
-            natural_width=natural_width if intent == "initial" else 0,
+            natural_width=(
+                natural_width if intent == "initial" else self._footer.natural_width + 2 * WIDE
+            ),
         )
 
     def _fill_filament_fields(

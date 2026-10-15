@@ -1828,11 +1828,12 @@ def test_an_unexpected_generator_error_offers_a_working_report_action(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, kind: str
 ) -> None:
     """Beide Dialoge reichen den Programmfehler an die wirklich geklickte Berichtshandlung."""
-    from PySide6.QtWidgets import QMessageBox, QWidget
+    from PySide6.QtWidgets import QWidget
 
     from app.core.backends import comfy_setup
     from app.core.errors import REPORT_ERROR, InternalError
     from app.ui.comfy_dialog import ComfySetupDialog
+    from app.ui.message_dialog import MessageDialog
 
     reported: list[object] = []
 
@@ -1840,11 +1841,11 @@ def test_an_unexpected_generator_error_offers_a_working_report_action(
         def error_handlers(self):
             return {REPORT_ERROR.id: reported.append}
 
-    def choose_report(box: QMessageBox) -> int:
+    def choose_report(box: MessageDialog) -> int:
         next(button for button in box.buttons() if button.text() == str(REPORT_ERROR.label)).click()
         return 0
 
-    monkeypatch.setattr(QMessageBox, "exec", choose_report)
+    monkeypatch.setattr(MessageDialog, "exec", choose_report)
     monkeypatch.setattr(comfy_setup, "find_comfyui", lambda: Path("comfy"))
     host = Host()
     dialog = (

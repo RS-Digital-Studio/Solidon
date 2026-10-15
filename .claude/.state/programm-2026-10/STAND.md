@@ -3,7 +3,7 @@
 Eine Sitzung, die übernimmt, liest zuerst diese Datei und dann das Konzept der
 laufenden Phase. Neueste Zeile oben unter „Verlauf“.
 
-## Auftrag Robert (11. und 12.10.2026), verbindlich
+## Auftrag Robert (11. bis 13.10.2026), verbindlich
 
 Drei Konzepte in fester Reihenfolge, jedes bis zu seiner Abnahme (Abschnitt
 „Abnahme“ im Konzept). Was dort als Entscheidung Robert steht, gilt.
@@ -28,7 +28,14 @@ und RM-737 bis RM-749 (Pakete D0 bis D12) ins Register. Dann D0 (Prüfstand).
 Dann Codestruktur Schritt 0 mit den Funden, die es vorher behebt (CS-2, CS-9,
 CS-10, CS-11, CS-12, die `raising=False`).
 
-**Die vier Phasen laufen ohne Datum direkt hintereinander, jede sauber bis zu
+**Zwischenrelease nach Phase 2** (Robert, 13.10.2026): Nach vollständig
+abgeschlossenem D0 und Codestruktur Schritt 0 wird **Version 0.6.1 erstellt,
+geprüft und veröffentlicht**. Die Veröffentlichung ist ausdrücklich beauftragt;
+Version, Tag und Upload werden erst nach diesen beiden Abschlüssen und den
+Releaseprüfungen aus `/erzeugen` ausgeführt. Danach folgen Phase 3 und 4
+weiterhin vollständig und gründlich.
+
+**Die vier Phasen laufen ohne Datum in ihrer festen Reihenfolge, jede sauber bis zu
 Ende** (Robert, 12.10.2026): Keine Phase wartet auf einen Termin, kein Schritt
 wird für einen Termin gekürzt. Der Verkaufsstart in RM-061 ist ein
 Geschäftstermin und keine Bedingung dieses Programms.
@@ -65,8 +72,198 @@ Schätzung, und vor Stufe C (braucht Roberts Bildschirm und Freigabe). Fragen nu
 Veröffentlichung, Rechten, schwer Umkehrbarem oder einer Alternative größer als
 das Konzept.
 
+**Gestaltung eigenständig prüfen** (Robert, 13.10.2026): Die Oberfläche
+selbstständig auf zeitgemäße Gestaltung prüfen, über die reine Funktion
+hinaus. Maßgeblich sind tatsächlich gelesene Originalbilder im hellen und
+dunklen Thema: Platzbedarf, verbleibende Modellfläche, Schrift und visuelle
+Hierarchie gehören gleichermaßen dazu. Das Raster im hellen Thema ist
+ausdrücklich mitzuprüfen. Bestätigte Funde stehen in der Funddatei;
+ein neues Bild wird nach einer Korrektur erneut tatsächlich gelesen.
+
 ## Verlauf
 
+- 15.10.2026, D0 vor der Landung: Robert verlangt Phase 2 vollständig, nichts
+  offen — auch die leichten Funde werden vor 0.6.1 behoben; gearbeitet wird
+  nur noch auf einem Rechner. Auf `welle4` neu: Statusnachzug von 28 Funden am
+  finalen Lauf, FD-84 (Maßfelder im Bild), FD-143 (mehrzeilige Funde in der
+  Abhakliste), FD-154 (kein Prozessende unter laufendem Arbeiter), FD-156/157
+  (Fenstertests nach drei Fixen, grauer Werkzeuggrund), Urteile relativ zum
+  gesiegelten Lauf, Fixe beider Reviews, neu erzeugte Abhaklisten; native
+  DE-Maßkartenfolge 62/62 und FD-154 am echten Fenster grün, 032 EN wartet auf
+  FD-159. Funddatei bis FD-167. Die Übereinstimmung ≥ 90 % gilt je Prüfpunkt
+  gepoolt über eine Urteilsrunde (Entscheidung Koordinator, FD-145). Parallel
+  laufen die Fixpakete F2b, F5, F7, F8, F10 und FD-167 sowie CS0 (R, W13, P1,
+  P2, Plattform integrierbar; M und Q in der Fixrunde). **Als Nächstes:**
+  Schlussreview-Fixe, Nachprüfung, gepinntes Tor, D0 nach main und CI; dann
+  `welle5` mit CS0 und allen Fixpaketen, Schlusslauf am echten Fenster,
+  Nachurteilsrunde, Tor, main; danach Release 0.6.1.
+
+- 13.10.2026, Maßkarten und sichtbare Schlussfixe: `welle4`/origin steht auf
+  `9dc38e79f253a92efde6df55e1dec3c79d64a9f6`. FD69–75 sind normal integriert,
+  jeweils ohne manuelle Merge-Auflösung und mit grünen normalen Hooks.
+  Maßkarten in DE/EN/ES/FR/IT/PT regulär je 62/62 Bedingungen bestanden:
+  zwölf gehaltene Kartenzüge, 18 echte Feldhilfen und vollständiger
+  Abbrechen-/Einzel-/Sammel-/Undo-Weg. Alle 192 Originalbilder unabhängig
+  einzeln gelesen, 51 eigene Prozessidentitäten beendet. Die dabei sichtbare
+  abgeschnittene Statuszeile ist unter FD75 kausal behoben: Original/Fix je
+  zwei native Aufbauten, vier gelesene Bilder; der korrigierte Client stimmt
+  durchgehend mit Win32/QWindow/PNG überein. Alle eigenen Prozesse beendet.
+  Griffmaße und XYZ/S verwenden lesbare Felder; L steht neben freien
+  Knöpfen. Endgültige 19-Bilder-Folge Hell/Dunkel regulär grün, alle Bilder
+  gelesen, Quellen unverändert. Keine allgemeine Überlappungsfreiheit oder
+  zusätzliche native DPR2-Abnahme behauptet. Bettzahlen und helles Raster
+  sind nativ belegt. Karten/Regeln und sechs Changelogs werden gemeinsam
+  nachgezogen; Funddatei enthält jetzt FD1–75 mit Belegen und Grenzen.
+  Als Nächstes: drei frische V4-Vorhersagen vor dem Klick, endgültiger
+  48-Fall-Lauf mit den sieben alten Absturzfällen zuerst, unabhängige neue
+  Bildurteile, Schlussunterlagen und gepinntes Tor samt Merge-Durchsicht.
+  D0 ist noch nicht abgenommen und noch nicht auf main. Danach Codestruktur
+  Schritt 0, ausdrücklich beauftragter Release 0.6.1 und Phasen 3/4.
+
+- 13.10.2026, sichtbare Oberflächenkorrekturen: `welle4`/origin steht auf
+  `ce1e95113d5d49d982570dc2d0a626b576d7af42`. FD67-Größenfix, FD68-Raster,
+  ruhigere Werkzeugleisten, Maßkarten-Drag-Helfer und sein Flow-Anschluss
+  sind normal integriert; ohne manuelle Merge-Auflösung. Raster
+  im echten Fenster vorher/nachher jeweils Hell/Dunkel/Hell bestanden,
+  Bilder selbst gelesen. Der Helfer hält freie Nutzerorte auch bei
+  Größen- und Ursprungswechsel des verfügbaren Platzes; 34 enge Fälle,
+  Statik und seine Review-Fixe grün. Der Flow-Anschluss besteht alle 16 Fälle
+  einschließlich sechs Sprachkarten, Abbrechen/Neuauswahl und Platzmangel;
+  Statik grün, DG-M1/2/3 in der bestehenden Durchsicht geschlossen.
+  Neu bestätigt sind FD69 (zu blasse Bettmaßzahlen) und FD70 (Griff- und
+  Vorschauflächen verdecken die gewählte Öffnung); beide werden auf dem
+  eigenen Viewportzweig gezielt korrigiert. FD70 hat 15 enge Fälle und Statik
+  grün, FD69 acht Bettfälle grün und eine Durchsicht ohne Fund. Native Maßkartengesten,
+  Griff-/Zahlen-Sichtvergleich, voller 48-Fall-Lauf, endgültige Urteile,
+  Kartennachtrag und gepinntes Entwicklungstor bleiben offen. Automatisch
+  ermittelte breite Auswahlen sind bis zum gemeinsamen Tor ausdrücklich
+  ausstehend; kein D0-Gesamtgrün und noch keine Landung auf main.
+  Danach weiterhin Codestruktur Schritt 0, Release 0.6.1, Phasen 3 und 4.
+- 13.10.2026, 19:43, Releaseauftrag ergänzt: Nach D0 und Codestruktur
+  Schritt 0 wird 0.6.1 erstellt, vollständig geprüft und veröffentlicht;
+  danach laufen Phase 3 und 4 weiter. Welle4/origin steht auf
+  ece8988f2bdc60436a7bc327ee1b77e8e794a4b7; die gemeinsamen Unterlagen sind
+  gesichert. FD61 hat den echten mm/in/mm-Weg in allen sechs Sprachen
+  bestanden, zwölf Einstellungswechsel und 18 gelesene Bildschirmbilder.
+  Die Maßgruppenprobe hat FD-67 gefunden: Die aufgeklappte Rückseite wächst
+  nicht mit, Felder liegen unter der Knopfzeile trotz genügend freiem Platz.
+  Robert verlangt zusätzlich, die schwebende Maßgruppe am Titel und freien
+  Flächen verschieben zu können; Eingaben und Aktionsknöpfe bleiben bedienbar.
+  Die gewählte Position bleibt bei Auf-/Zuklappen und Feldänderung erhalten.
+  Enger Vorwärtsfix mit Reproduktion wird auf dem eigenen Maßgruppenzweig
+  gebaut; alle nativen Prozesse beendet. Danach Maßgruppenfolge, ganzer
+  48-Fall-Lauf, endgültige Urteile/Unterlagen, gepinntes Tor und main/CI.
+  Keine D0-Abnahme, kein Versionssprung, Tag oder Upload vorweggenommen.
+- 13.10.2026, 19:08, Schlussfixes von D0 integriert: `welle4` auf
+  `a100dd99f9d960b5164c12231459c788221207c3`. FD60, FD61, FD7/16/63/64 und FD66
+  sind zusammengeführt; FD62/65 war bereits enthalten. Der gemeinsame
+  Anschluss mit 126 Fällen ist vollständig grün und an denselben Baum
+  gebunden. FD60 hat zusätzlich 14.717 Kernfälle und Original001 am echten
+  Fenster bestanden; FD61 222 enge Fälle, das Maßgruppenpaket 44 enge und
+  2.861 Kernfälle. FD66 hat 54 Gegenfälle, 142 bestehende Größenfälle und
+  FR/IT am echten Fenster grün; der einzige Fehler im breiten 14.777er-Lauf
+  lag in einem alten Scroll-Testdouble und ist eng behoben. Historische
+  rote Läufe und Originalurteile bleiben erhalten. Die Karten, Regeln und
+  sechs Changelogs werden jetzt gesammelt angeschlossen. Noch offen sind
+  native FD61-/Maßgruppenfolgen in sechs Sprachen, der ganze 48-Fall-Lauf
+  mit den sieben früheren Absturzfällen zuerst, gepinntes Endtor und der
+  Schlussanschluss der Merge-Durchsicht. D0 ist noch nicht auf main.
+  Danach Codestruktur Schritt 0 vollständig nach plan-cs0.md; R und W13
+  sind vorbereitet. Alle Kriterien bleiben gleichrangig, einschließlich
+  notwendiger Dialog-/Panelgröße und Modellfläche. Website-Upload nur nach
+  Roberts Freigabe. Aktuelle Prozess- und Übergabebelege: KOORDINATION.md.
+- 13.10.2026, nach Roberts „mach noch weiter soweit du kommst“ wiederaufgenommen:
+  Phase 2 bleibt im D0-Abschluss. `welle4`/origin steht auf `f08927d636`;
+  main bleibt `6fbe6154f`. Die Korrektur der tatsächlichen Knopffarbe und
+  Primärschrift (FD62/65) ist konfliktfrei integriert, vollständiger Baum
+  identisch zur geprüften Lieferung: 1.831 Anschlüsse bestanden, 2 übersprungen,
+  41 abgewählt, zusätzlich 13 + 31 enge Fälle und ein Aufnahmeanschluss grün.
+  Die neuen Funde FD60–66 stehen jetzt in der Funddatei. FD61 hat 192 enge
+  und 1.627 kopflose Fälle bestanden; sein Review-Fix ist lesend bestätigt,
+  bestehende Qt-Anschlüsse und der echte Einheitenwechsel bleiben offen.
+  Das Maßgruppenpaket FD7/16/63/64 hat 43 enge Fälle und Statik bestanden;
+  der einzelne Theme-Fixture-Fund ist korrigiert, sein neuer Gegenfall und
+  die weiteren Anschlüsse fehlen noch. FD66 besitzt einen konkreten nativen
+  Vorherbeleg für unnötige Anfangshöhe, aber noch keinen grünen Fixnachweis.
+  **FD60 sperrt weiter:** Im nativen Absturz ist jetzt ein `QWidgetItem` als
+  falscher Nicht-QObject-Wrapper nachgewiesen; Entstehung und Korrektur sind
+  noch offen. Keine Hardwareursache aus einem Absturzstapel abgeleitet.
+  B2 ist mit 848 angenommenen Urteilen versiegelt; der anschließende Vergleich
+  über 1.189 Urteile hat 18 Unterschiede, die auf der ursprünglichen Basis
+  eingeordnet werden. Die alte 48-Fall-Probe bleibt rot und unverändert.
+  Nach den laufenden Fixen: gemeinsame native Nachweise, Karten,
+  gepinntes Endtor, Merge-Durchsicht, main/CI, dann Codestruktur Schritt 0.
+  R und W13 bleiben vorbereitet; keine neue CS0-Umsetzung vor D0/main.
+  Aktuelle Ressourcenfreigaben, Einzelberichte und Sicherungen stehen am
+  Ende von `KOORDINATION.md`. Die folgende Pause ist ein historischer Stand,
+  keine aktuelle Halteanweisung. Website-Upload weiterhin nur nach Freigabe.
+- 13.10.2026, Übergabe auf Roberts Wunsch wegen des nahen Nutzungslimits:
+  Keine neue Arbeit, Prüfrunde oder Landung begonnen; alle Agenten angehalten
+  und eigene Sonden beendet. Produkt-/Prüfstandsbasis ist `6d063ef064` auf
+  `welle4`, weiterhin nicht auf main. Der frische Fensterlauf ist rot:
+  48 Fälle, 41 Prozesse Exit 0, sieben native Abstürze; drei getrennte V4-Proben
+  sind erfolgreich. FD60 ist reproduziert, seine Ursache bleibt offen.
+  FD61 und FD62/65 sind als ungetestete Änderungen vorbereitet; FD7/16/63/64
+  ist zusätzlich unvollständig. Die eigenen Worktrees samt vollständigen
+  Patches, neuen Quellen, Ausgangsmodulen und nächsten Befehlen sind gesichert.
+  Primärurteile D4/D8/D10 sind versiegelt; die unabhängige B2-Auswertung und
+  der Prüfervergleich bleiben offen. FD66 ist ein noch nicht diagnostizierter
+  Größenfund. **Wiedereinstieg:** zuerst den letzten Abschnitt „ÜBERGABE an
+  die nächste Sitzung“ in `output/konsolidierung-2026-10-12/KOORDINATION.md`
+  und `WEITER-CODEX-CLAUDE.md` dort lesen; Sicherungsarchiv und Hashmanifest
+  liegen im selben Ordner. Keine vorbereitete Testdatei gilt als geprüft.
+  Nach Wiederaufnahme D0 fertigstellen, gepinntes Tor/Merge-Durchsicht/main/CI,
+  anschließend Codestruktur Schritt 0 vollständig gemäß `plan-cs0.md`.
+  Website-Upload wartet weiter auf Roberts Freigabe.
+- 13.10.2026, 14:23, Phase 2 weiterhin D0: Alle Korrekturen bis FD59 sind
+  auf `welle4` integriert, zuletzt Kartenbreite/Schriftwechsel als
+  `e68ca22cb`. Dialoge und Karten richten ihre notwendigen Maße nach Inhalt,
+  aktueller Schrift und den gewählten Größen; die Prüfung umfasst weiterhin
+  alle Kriterien gleichrangig. Die gesammelten Karten, Regeln und sechs
+  Changelogs sind nachgezogen. Paketnachweise und gezielte gemeinsame
+  Anschlüsse sind grün; der erste gemeinsame Kartenlauf ohne geladene
+  DejaVu-Schriften bleibt als roter Umgebungsnachweis erhalten. **Als
+  Nächstes:** frischer vollständiger Fensterlauf auf MSI MAG271CQR mit
+  isolierten Profilen, neue V4-Vorhersagen und unabhängige Bildurteile,
+  danach gepinntes Endtor, Abschluss der Merge-Durchsicht und main/CI.
+  Die Plattformwelle `6fbe6154f` ist enthalten; deren CI startete wegen der
+  von GitHub gemeldeten Zahlungs-/Ausgabenbegrenzung keinen Test. D0 ist noch
+  nicht abgenommen. Danach Codestruktur Schritt 0 vollständig gemäß
+  `plan-cs0.md`; R und W13 sind bereit, M vorbesprochen. Website-Upload
+  bleibt bis zu Roberts Freigabe ausstehend.
+- 13.10.2026, 10:50, Phase 2 weiterhin D0: Die alten Fixpakete und die
+  Plattformwelle von main sind in `welle4`; letzter integrierter Fix ist
+  FD-36 (`f80741556`, Entfernen-Hinweis mit zuerst erreichbarem Abbrechen).
+  Karten sind nachgezogen. Der zweite native Probelauf auf `dca24076f`
+  lieferte echte Funde und drei native Prüfstandsabbrüche; er ist rot und
+  unverändert gesichert. Stufe-B-Urteile und unabhängige Zweitprobe sind
+  versiegelt, acht Unterschiede haben eine präzisierte gemeinsame
+  Kriterienauslegung ausgelöst. Robert verlangt ausdrücklich alle Kriterien,
+  auch notwendige Breite/Höhe, Leerraum und verbleibende Modellfläche.
+  Die neuen Fixeinheiten FD-35 bis FD-52 werden auf eigenen Zweigen gebaut
+  und geprüft; aktuelle Spitzen, Zuständigkeiten und Nachweise stehen in
+  `KOORDINATION.md` und den dort verlinkten Berichten. Keine bestandene
+  Gesamtmessung oder Endtor-Abnahme behauptet. **Als Nächstes:** neue
+  Fixrunden und erforderliche Nachprüfungen abschließen, integrieren,
+  frischer vollständiger Probelauf samt V4 und unabhängigen Bildurteilen,
+  gesammelter Kartennachtrag, gepinntes Tor und Merge-Durchsicht, main/CI.
+  Codestruktur R (`ceb161a9f`) und W13 (`367142bee`) sind auf ihren Zweigen
+  fertig; Integration und die übrigen Pakete von Schritt 0 folgen nach D0
+  auf main gemäß `plan-cs0.md`. Website-Upload wartet weiter auf Robert.
+- 13.10.2026, 03:50, Phase 2, D0 läuft, Codestruktur Schritt 0 daneben: Die
+  Durchsicht über `welle4` vor main ist durch (vier Teile, Berichte in
+  `output/konsolidierung-2026-10-12/review-welle4-{a,b,c,d}.md`): ein schwerer
+  Fund im Prüfstand (Prüfpunkt 18 galt ohne Messung als erfüllt), mittlere in
+  Oberfläche, Kern, Prüfstand und Unterlagen. Sechs Fixagenten beheben sie auf
+  eigenen Zweigen (`fix/sperre-vollstaendig`, `fix/zeile-bohrung`,
+  `fix/review-oberflaeche`, `fix/review-kern`, `fix/pruefstand-urteile`,
+  `fix/pruefstand-flaeche`); die Unterlagenfunde sind auf `welle4`. origin/main
+  `a47ff34fc` ist hereingeholt. Die Website nennt in sechs Sprachen 1920 × 1080
+  bei 100 % (Upload wartet auf Robert). Fehlermeldungen mit Handlung sind eine
+  Z2-Ausnahme. Neben D0 laufen die Pakete R und W13 aus Schritt 0 (nur neue
+  Dateien; Konzept Funktionsdurchgang §13 Nr. 2). **Als Nächstes:** Fixe
+  integrieren, je eine Nachprüfung, zweiter Probelauf, Karten und Regeln in
+  einem Durchgang, Tor, main; dann die übrigen Pakete von Schritt 0.
 - 13.10.2026, 00:52, Phase 2, D0 läuft: RM-788 und RM-789 sind vorgezogen auf
   main (`0742a8c50`). Der hängende Slicertest war ein Windows-Fenster „Nicht
   unterstützte 16 Bit-Anwendung“ beim Start einer Datei, die kein Programm ist,
@@ -97,7 +294,15 @@ das Konzept.
   W's Nachtrag integrieren, Probelauf am Fenster, Tor, Durchsicht der
   Merge-Auflösungen, D0 nach main; danach Codestruktur Schritt 0 (RM-722),
   RM-787, RM-788.
-- 12.10.2026, 08:40, Phase 2, Schritt 1: Funktionsdurchgang abgelegt
+- 12.10.2026, 08:37, Phase 2, D0 begonnen: Zuschnitt in fünf Teilpakete
+  (W Wortschatz, L Liste und Szenen, P Prüfstand, U Urteile, S Unterlagen) in
+  `.claude/.state/funktionsdurchgang-2026-10/plan-d0.md`; Integrationszweig
+  `welle4` (Worktree `F:\sl-welle4`), Teilpakete auf `d0/wortschatz`,
+  `d0/liste`, `d0/urteile`, `d0/pruefstand` (Worktrees `F:\sl-d0w`, `-d0l`,
+  `-d0u`, `-d0p`); S macht der Koordinator. Lizenz „gekauft“ im Prüfstand über
+  die Nahtstelle der Suite, ohne private Schlüssel. Stand je Paket in
+  `F:\3D Druck\output\konsolidierung-2026-10-12\paket-d0-<kürzel>.md`.
+- 12.10.2026, 08:37, Phase 2, Schritt 1 auf main (`31dd59af1`): Funktionsdurchgang abgelegt
   (Konzept und Prüfberichte unter `konzepte/`, RM-736 bis RM-749 im Register,
   Programmplan als Beleg der Termine in Konzept §9; Paketzuordnung nach §6
   ohne Ausnahme außer D6 — Verrunden, Fase, Fläche versetzen prüft D3).

@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from app.core import expressions
+from app.core import expressions, guides
 from app.core.errors import AppError, ValidationError
 from app.core.geom.mesh import as_mesh_data, ray_hit_distances
 from app.core.geom.transform import snap_to_marks
@@ -66,9 +66,12 @@ from app.core.sketch.profile import strictly_crossing
 from app.core.types import Feature, SceneObject, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import TranslatableText, tr
+from app.ui.change_lock import change_refusal, hold_inputs
 from app.ui.icons import icon
 from app.ui.labels import LengthSpin, feature_name, length, wheel_needs_focus
 from app.ui.leash import stop_watching_the_dying
+from app.ui.measure_card_drag import MeasureCardDrag
+from app.ui.measure_field_places import distance_reserve, emergency_places, rows_height
 from app.ui.overlay import MEASURE_CARD, _round_corners
 from app.ui.palette import DIFF_PALETTES
 from app.ui.render.api import Item, PointerEvent, Renderer, SurfaceStyle
@@ -348,9 +351,11 @@ class QuietHost(QObject):
         """Der gesetzte Sperrgrund, ohne eine neue Vorschauprüfung auszulösen.
 
         Eine Ablehnung in den Feldern geht vor: Sie nennt, was der Kunde
-        ändern muss, die Vorschau nur, was sie gerade nicht zeigen kann.
+        ändern muss, die Vorschau nur, was sie gerade nicht zeigen kann. Davor
+        steht die Freischaltung (FD-28): Ohne sie nannte der Knopf den Satz,
+        mit dem die Vorschau am Kern scheiterte, und der hatte keinen Weg.
         """
-        return self._field_refusal or self._blocked_reason
+        return change_refusal() or self._field_refusal or self._blocked_reason
 
     def can_accept(self) -> bool:
         """Ob der Träger die aktuellen Werte übernehmen darf."""
@@ -1607,6 +1612,10 @@ class PlacementFlow(QObject):
         #: Wo jedes Maßfeld beim letzten Aufbau stand — der Platz bleibt, solange
         #: er frei ist und das Maß nicht weit gewandert ist (``STICKY_FIELDS``).
         self._field_slots: dict[QWidget, QRect] = {}
+        #: Wie hoch die Zeilen der Maßfelder beim letzten Aufbau waren
+        #: (``measure_field_places.rows_height``) — so viel hält die Maßkarte
+        #: unter sich frei.
+        self._field_rows = 0
         self._surface_busy = False
         self._tool_busy = False
         self._tool_again = False
@@ -1727,6 +1736,7 @@ class PlacementFlow(QObject):
         #: zur Werkzeugachse gehört der Stufe, nicht dem Kunden.
         self._camera_before: tuple[Any, Any, Any, float | None] | None = None
         self._measure_group: QWidget | None = None
+        self._measure_hint = QSize()
         self._measure_scope: QWidget | None = None
         self._measure_interpret: Callable[[], bool] | None = None
         self._measure_refresh: Callable[[Mapping[str, Any]], None] | None = None
@@ -1870,9 +1880,12 @@ class PlacementFlow(QObject):
                 self._field_targets.remove(target)
         self._measure_targets = []
         previous = self._measure_scroll.takeWidget()
+        if previous is not group:
+            self._measure_drag.reset()
         if previous is not None and previous is not group:
             _release_measure_group(previous, self._measure_release)
         self._measure_group = group
+        self._measure_hint = QSize()
         self._measure_release = release
         previous_scope = self._measure_scope
         if previous_scope is not None and previous_scope is not scope:
@@ -1945,6 +1958,25 @@ class PlacementFlow(QObject):
         if pulled:
             reason = None
             begun = True
+        # **Ohne Freischaltung nimmt die Maßgruppe nichts an** (FD-28): Bis
+        # hierher war nur *Übernehmen* grau, die Felder nahmen Zahlen an, die
+        # nie übernommen wurden. Eingang und Knopf tragen den Satz aus
+        # ``change_lock``, auch vor einem Langlochzug, und er nennt den Weg zur
+        # Freischaltung. Ein Operationsdialog bleibt zum Ansehen bedienbar und
+        # sperrt sein *Übernehmen* selbst (FD-5); die Maße im Bild, die er von
+        # einer Maßgruppe übernimmt, gibt :meth:`_wire_floating` frei.
+        refusal = change_refusal() if isinstance(host, QuietHost) else ""
+        if refusal:
+            reason = refusal
+        if isinstance(host, QuietHost):
+            for root in (
+                self._measure_scroll,
+                self._measure_scope_box,
+                *self._measures,
+                *self._centre_measures,
+                self._depth_measure,
+            ):
+                hold_inputs(root, refusal)
         # **Ein Werkzeug, das gerade neu gebaut wird, sperrt nicht** (Durchsicht
         # 0.5.1, Kunde Weg b): Nach jeder getippten Zahl baut der Fluss das
         # Werkzeug neu, der Knopf war so lange grau, und ein Klick gleich nach
@@ -1971,12 +2003,30 @@ class PlacementFlow(QObject):
             and (not isinstance(host, QuietHost) or not host.committing)
         )
         self._measure_accept.setEnabled(allowed)
+        said = reason or ""
+        # ``begun`` zuerst: Erst ein stiller Träger hat eine Gruppe.
+        if not begun and not allowed and not said and (group := self._measure_group) is not None:
+            # **Vor der ersten Eingabe sagt der Knopf den Weg** (FD-31): Er war
+            # grau ohne Grund. Genannt wird das erste Feld der Gruppe, wie der
+            # Kunde es liest; sein Name endet nach dem Gedankenstrich.
+            first = next(
+                (
+                    target.accessibleName().rsplit(" — ", 1)[-1]
+                    for target in self._measure_targets
+                    if isinstance(target, QAbstractSpinBox | QComboBox)
+                    and group.isAncestorOf(target)
+                    and target.accessibleName()
+                ),
+                "",
+            )
+            if first:
+                said = tr("Erst „{field}“ ändern, dann übernehmen.", field=first)
         for setter in (
             self._measure_accept.setToolTip,
             self._measure_accept.setStatusTip,
             self._measure_accept.setAccessibleDescription,
         ):
-            setter(reason or "")
+            setter(said)
         information = (
             tr(
                 "Die ursprünglichen Maße bleiben bearbeitbar. "
@@ -1999,8 +2049,10 @@ class PlacementFlow(QObject):
         self._measure_note.setText(
             "\n".join(filter(None, (reason, distance, self._reference_message, information)))
         )
+        # Die Sperre steht auch ungefragt da: Grau allein wäre eine Farbe ohne
+        # Wort (Regel 18), und begonnen wird gesperrt nie.
         self._measure_note.setVisible(
-            (bool(reason) and begun)
+            (bool(reason) and (begun or bool(refusal)))
             or bool(distance)
             or bool(self._reference_message)
             or bool(information)
@@ -2058,9 +2110,10 @@ class PlacementFlow(QObject):
         if self._measure_scope is not None:
             self._measure_scope.setMaximumWidth(content_width)
             chrome += self._measure_scope.sizeHint().height() + NORMAL
-        # Eine weitere Zeile bleibt für die vorhandenen Kantenabstände frei.
-        distances = self._measures[0].sizeHint().height() + SPACE
-        available = room.height() - chrome - distances
+        # Unter der Karte bleiben so viele Zeilen frei, wie die Maßfelder
+        # brauchen (``measure_field_places``, FD-84).
+        reserve = distance_reserve(self._measures[0].sizeHint().height(), self._field_rows)
+        available = room.height() - chrome - reserve
         # **Was passt, rollt nicht** (Fensterabnahme 04.10.2026). Die Höhe gilt
         # der vollen Breite; ein Rollbalken nimmt Breite weg, die umbrechenden
         # Beschriftungen werden höher, und Qt hält den Balken dann für nötig —
@@ -2078,6 +2131,7 @@ class PlacementFlow(QObject):
         # den ``sizeHint`` des Rollbereichs, der die gekürzte Auswahl meint.
         self._measure_box.setMinimumWidth(max(width, 1))
         self._measure_box.adjustSize()
+        self._measure_hint = group.sizeHint()
         # **Gezeigt wird erst an ihrem Platz** (Durchsicht 0.5.1). Die Karte
         # ist ein eigenes Fenster über der Grafikfläche; hier eingeblendet,
         # stand sie von Bohrung zu Bohrung zuerst dort, wo die vorige Bohrung
@@ -2118,8 +2172,16 @@ class PlacementFlow(QObject):
         return self._surface is None and self._seat_waits == self._serial
 
     def _begin_edit(self) -> None:
-        """Eine Nutzergeste beginnt den stillen Entwurf, nie seine bloße Anzeige."""
-        if not self._disposed and self.active and isinstance(self.dialog, QuietHost):
+        """Eine Nutzergeste beginnt den stillen Entwurf, nie seine bloße Anzeige.
+
+        Gesperrt beginnt keine (FD-28): Der Entwurf könnte nie übernommen werden.
+        """
+        if (
+            not self._disposed
+            and self.active
+            and isinstance(self.dialog, QuietHost)
+            and not change_refusal()
+        ):
             self.dialog.begin_edit()
 
     def _grip_belongs_to_another_flow(self) -> bool:
@@ -2691,6 +2753,9 @@ class PlacementFlow(QObject):
         measure_actions.addStretch()
         self._measure_accept = QPushButton(tr("Übernehmen"), self._measure_box)
         self._measure_accept.setObjectName("placement_measure_accept")
+        # Ein Name im Wortschatz (``measure.apply``): Der Funktionsdurchgang klickt
+        # ihn, wo die Handlung im Bild steht (D0, N2).
+        self._measure_accept.setProperty(guides.TARGET_PROPERTY, "measure.apply")
         self._measure_accept.setIcon(icon("done", self._measure_accept))
         measure_actions.addWidget(self._measure_accept)
         self._measure_cancel = QPushButton(tr("Abbrechen"), self._measure_box)
@@ -2762,6 +2827,9 @@ class PlacementFlow(QObject):
             box_layout.setSpacing(SPACE)
             box_layout.addWidget(reference_field)
             reference_field.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            # *Bezug ändern* steht im Kontextmenü dieses Maßes; das Maß ist
+            # die Stelle, an der der Kunde es öffnet (``measure.reference``).
+            reference_field.setProperty(guides.TARGET_PROPERTY, "measure.reference")
             box.hide()
         # **Die Tabulatortaste geht denselben Weg wie das Auge** (`oberflaeche.md`):
         # erst die zwei Kantenmaße, dann die Mitten.
@@ -2778,6 +2846,16 @@ class PlacementFlow(QObject):
         Jede Verbindung zu diesem Fluss steht in :attr:`_links`.
         """
         link = self._links.append
+        measure_drag = self._measure_box.findChild(MeasureCardDrag)
+        if measure_drag is None:
+            measure_drag = MeasureCardDrag(self._measure_box)
+        self._measure_drag = measure_drag
+        measure_drag.reset()
+        link(measure_drag.positionChanged.connect(self.redraw))
+        # Von einer gesperrten Maßgruppe übernommen, beginnen die Maße frei; ein
+        # stiller Fluss sperrt sie beim ersten Zeichnen wieder (FD-28).
+        for field in (*self._measures, self._depth_measure, *self._centre_measures):
+            hold_inputs(field, "")
         self._title.setText(str(self.spec_of().title))
         self._note.setText(tr("Auf eine Oberfläche zeigen."))
         self._tool_legend.clear()
@@ -4233,9 +4311,14 @@ class PlacementFlow(QObject):
             menu.addSeparator()
         menu.addSection(tr("Bezug ändern"))
         pick = menu.addAction(tr("Im Modell wählen"))
+        pick.setObjectName("measure.reference.pick")
         pick.setData(_PICK_IN_MODEL)
         for label, data in entries:
-            menu.addAction(label).setData(data)
+            entry = menu.addAction(label)
+            entry.setData(data)
+            # Der Bezug als Ziel im Wortschatz (``menu:measure.reference.<bezug>``).
+            reference = data[0] if isinstance(data, tuple) else data
+            entry.setObjectName(f"measure.reference.{guides.name_part(str(reference))}")
         menu.triggered.connect(
             lambda action, slot=index: self._reference_selected(slot, action.data())
         )
@@ -5245,6 +5328,15 @@ class PlacementFlow(QObject):
         if self.active:
             if self.viewport.slot_drag_waits() and self._measure_group is None:
                 return False
+            if watched is self._measure_group and event.type() == QEvent.Type.LayoutRequest:
+                group = self._measure_group
+                if group is not None and (hint := group.sizeHint()) != self._measure_hint:
+                    # Klappen und Bedingungen ändern den Platzbedarf. Erst nach
+                    # Qt anordnen; unsere eigenen Breitenwechsel zählen nicht
+                    # erneut. Der Rückruf hält keine alte Gruppe am Leben.
+                    self._measure_hint = hint
+                    QTimer.singleShot(0, self, self.redraw)
+                return False
             if watched in self._overlay_zones and event.type() in (
                 QEvent.Type.Move,
                 QEvent.Type.Resize,
@@ -5471,6 +5563,8 @@ class PlacementFlow(QObject):
             measure_room.setBottom(self._bar.geometry().top() - NORMAL - 1)
         self._refresh_measure_actions()
         self._size_measure_fields(measure_room)
+        self._measure_drag.update_room(measure_room)
+        user_rect = self._measure_drag.placed_rect() if self._measure_group is not None else None
         surface = self._surface
         renderer = self.viewport.renderer
         valid = (
@@ -5533,10 +5627,16 @@ class PlacementFlow(QObject):
             # Eine wartende Karte bleibt, wo sie ist: auch ``raise_`` malt über
             # der Grafikfläche das ganze Fenster sofort (:attr:`_seat_waits`).
             if self._measure_group is not None and not self._seat_is_coming():
-                self._measure_box.move(
-                    max(measure_room.left(), measure_room.right() - self._measure_box.width() + 1),
-                    measure_room.top(),
-                )
+                if user_rect is not None:
+                    self._measure_box.move(user_rect.topLeft())
+                else:
+                    self._measure_box.move(
+                        max(
+                            measure_room.left(),
+                            measure_room.right() - self._measure_box.width() + 1,
+                        ),
+                        measure_room.top(),
+                    )
                 self._measure_box.show()
                 self._measure_box.raise_()
             self.viewport.grip_placement(None)
@@ -5574,14 +5674,19 @@ class PlacementFlow(QObject):
         # zieht die Maus die Tiefe; nicht am vorhandenen Merkmal, dort steht
         # der Griff der Auswahl; und nicht, wo die Werte ohnehin im
         # Merkmalfenster stehen. Frisch angehängt bei jedem Zeichnen, weil der
-        # Körper eben neu gesetzt wurde.
+        # Körper eben neu gesetzt wurde. Ohne Freischaltung trägt die
+        # Maßgruppe keinen Griff: Ihr Entwurf ließe sich nie übernehmen (FD-28).
         gripped = (
             tool_valid
             and self._frozen
             and not self._deepening
             and self._tool is not None
             and (
-                (self._measure_group is not None and self.spec_of().name != "slot_hole")
+                (
+                    self._measure_group is not None
+                    and self.spec_of().name != "slot_hole"
+                    and not change_refusal()
+                )
                 or (not self._seated_at_feature and not self.dialog.values_stand_elsewhere)
             )
         )
@@ -5669,7 +5774,7 @@ class PlacementFlow(QObject):
             anchor = (start + end) / 2
             pending.append((widget, anchor, anchor))
 
-        if self._measure_group is not None:
+        if self._measure_group is not None and user_rect is None:
             place(self._measure_box, screen(surface.point), screen(surface.point))
 
         if self._deepening and valid:
@@ -5791,6 +5896,26 @@ class PlacementFlow(QObject):
             self._centre.setToolTip(tr("Rechtsklick: Bezug ändern."))
             self._centre.show()
             place(self._reference_boxes[2], screen(centre.point), screen(centre.point))
+        # **Die Karte lässt so viele Zeilen frei, wie die Maße brauchen.** Erst
+        # hier stehen Zahl und Größe der Felder dieses Aufbaus fest; passen sie
+        # nicht in eine Zeile des Raums, wird die Karte niedriger und rollt
+        # (FD-84). Nur wenn sich die Höhe ändert — sonst bleibt es bei dem einen
+        # Größenweg am Anfang von ``redraw``. Ohne Maßkarte gibt es nichts
+        # freizuhalten; die nächste Karte rechnet ihre Zeilen hier selbst nach.
+        if self._measure_group is not None:
+            line = self._measures[0].sizeHint().height()
+            reserve = distance_reserve(line, self._field_rows)
+            self._field_rows = rows_height(
+                [
+                    widget.size()
+                    for widget, _wanted, _anchor in pending
+                    if widget is not self._measure_box
+                ],
+                measure_room.width(),
+            )
+            if distance_reserve(line, self._field_rows) != reserve:
+                self._size_measure_fields(measure_room)
+                user_rect = self._measure_drag.placed_rect()
         # Der Platz für die Maßfelder ist der Raum **über** der Leiste, seit
         # sie unten mittig steht. Vorher lag sie oben und der Raum darunter;
         # wer nur die Leiste verschiebt und diese Rechnung stehen lässt, drückt
@@ -5837,6 +5962,11 @@ class PlacementFlow(QObject):
             1,
         ).adjusted(-reach, -reach, reach, reach)
         occupied: list[QRect] = [blocked]
+        #: Setzpunkt und Griff: Ihre Rechtecke tragen :data:`ROOMY` Abstand,
+        #: den die Notanordnung zuerst aufgibt (``emergency_rows``).
+        marked: list[QRect] = [blocked]
+        if user_rect is not None:
+            occupied.append(user_rect)
         # **Der Bewegungsgriff bleibt frei.** Er hängt am selben Merkmal und
         # greift weiter als das Werkzeug; ein Feld darüber nimmt die
         # Zeigerereignisse an, und dann sind Pfeile und Ringe sichtbar und tot
@@ -5854,14 +5984,14 @@ class PlacementFlow(QObject):
             )
             # Dieselbe Spanne nimmt die Maßfläche aus ihren Linien heraus.
             self._canvas.clearing = (middle, float(around))
-            occupied.append(
-                QRect(
-                    max(bounds.left() - around, min(round(middle.x()), bounds.right() + around)),
-                    max(bounds.top() - around, min(round(middle.y()), bounds.bottom() + around)),
-                    1,
-                    1,
-                ).adjusted(-around, -around, around, around)
-            )
+            grip = QRect(
+                max(bounds.left() - around, min(round(middle.x()), bounds.right() + around)),
+                max(bounds.top() - around, min(round(middle.y()), bounds.bottom() + around)),
+                1,
+                1,
+            ).adjusted(-around, -around, around, around)
+            occupied.append(grip)
+            marked.append(grip)
         # **Der Körper bleibt frei, solange man ihn ganz sieht.** Jedes Feld
         # wollte in die Mitte seiner Maßlinie, und die läuft über die Platte:
         # Drei Beschriftungen standen auf dem Teil, zwei davon aufeinander
@@ -5880,10 +6010,14 @@ class PlacementFlow(QObject):
             occupied.append(body)
         # Das Vorschauband oben deckt sonst zwei Felder zu.
         banner = getattr(self.viewport, "banner", None)
+        banners: list[QRect] = []
         if isinstance(banner, QWidget) and banner.isVisibleTo(self.viewport):
-            occupied.append(banner.geometry())
+            banners.append(banner.geometry())
+            occupied.append(banners[0])
         obstacles = list(occupied)
         ink: list[tuple[QPointF, QPointF]] = list(self._canvas.lines)
+        if user_rect is not None:
+            ink.append((QPointF(user_rect.center()), screen(surface.point)))
 
         def find_places(
             targets: Sequence[tuple[QWidget, QPointF, QPointF]],
@@ -5999,36 +6133,40 @@ class PlacementFlow(QObject):
             return found
 
         def emergency_rows() -> dict[QWidget, QRect]:
-            """Fünf Felder passen im unterstützten Desktopbereich in wenige
-            Zeilen. Diese feste Anordnung löst einen ungünstigen früheren
-            Platz, statt ein weiteres Feld am unteren Rand zu stapeln."""
-            rows: dict[QWidget, QRect] = {}
-            x, y, row_height = bounds.left(), bounds.top(), 0
-            for pending_widget, _wanted, _anchor in pending:
-                if x > bounds.left() and x + pending_widget.width() > bounds.right() + 1:
-                    x, y, row_height = bounds.left(), y + row_height + SPACE, 0
-                slot = QRect(x, y, pending_widget.width(), pending_widget.height())
-                # **Auch die Notlage weicht dem Setzpunkt aus — solange danach
-                # noch Platz ist.** Sonst gälte die Zusage „man sieht, wohin
-                # man setzt" genau dort nicht, wo es eng wird. Die Grenze ist
-                # keine Feinheit: Bei starkem Zoom füllt die Vorschau das ganze
-                # Bild, und ein Ausweichen darunter schöbe die Felder aus der
-                # Ansicht heraus (gemessen an
-                # ``test_dimension_fields_do_not_overlap_at_zoomed_view_edges``:
-                # y = 20009 bei 600 px Höhe). Dann ist Überdecken das kleinere
-                # Übel — ein Feld außerhalb des Bildes ist keines.
-                below = blocked.bottom() + SPACE + 1
-                if slot.intersects(blocked) and (
-                    below + pending_widget.height() - 1 <= bounds.bottom()
-                ):
-                    x, y, row_height = bounds.left(), below, 0
-                    slot = QRect(x, y, pending_widget.width(), pending_widget.height())
-                rows[pending_widget] = slot
-                x += pending_widget.width() + SPACE
-                row_height = max(row_height, pending_widget.height())
-            return rows
+            """Die Felder in Zeilen von links oben, wenn die Nähe-Suche an
+            keinem Platz mehr fand (``measure_field_places``). Diese feste
+            Anordnung löst einen ungünstigen früheren Platz, statt ein weiteres
+            Feld am unteren Rand zu stapeln."""
+            # **Auch die Notlage hält frei, was frei bleiben muss — solange im
+            # Bild noch Platz ist.** Die vom Kunden gelegte Karte zuerst; Setzpunkt,
+            # Bewegungsgriff und Vorschauband erst mit ihrem Abstand, dann ohne
+            # ihn, und erst zuletzt gar nicht. Sonst gälte die Zusage „man
+            # sieht, wohin man setzt" genau dort nicht, wo es eng wird, und ein
+            # Feld über dem Griff nähme Pfeilen und Ringen die Zeigerereignisse
+            # (FD-84: die Mittenbeschriftung stand über dem Griff, obwohl unter
+            # ihm eine Zeile frei war). Bei starkem Zoom füllt die Vorschau das
+            # ganze Bild; dann ist Überdecken das kleinere Übel — ein Feld
+            # außerhalb des Bildes ist keines (gemessen an
+            # ``test_dimension_fields_do_not_overlap_at_zoomed_view_edges``:
+            # y = 20009 bei 600 px Höhe). Die Notreihen ließen bis FD-84 das
+            # letzte Feld auch unter den Bildrand umbrechen.
+            bare = [rect.adjusted(ROOMY, ROOMY, -ROOMY, -ROOMY) for rect in marked]
+            places = emergency_places(
+                [widget.size() for widget, _wanted, _anchor in pending],
+                bounds,
+                [user_rect] if user_rect is not None else [],
+                ([*marked, *banners], [*bare, *banners], []),
+            )
+            return {
+                widget: rect
+                for (widget, _wanted, _anchor), rect in zip(pending, places, strict=True)
+            }
 
         fresh = find_places(pending, occupied, ink)
+        if fresh is None and user_rect is not None:
+            # In der Notlage dürfen Maße über dem Körper stehen, aber nicht
+            # unter der vom Kunden verschobenen Karte verschwinden.
+            fresh = find_places(pending, [user_rect], ())
         if fresh is None:
             positions = emergency_rows()
         else:
@@ -6065,6 +6203,10 @@ class PlacementFlow(QObject):
                     if _crossings(merged, pending) <= _crossings(fresh, pending):
                         positions = merged
         self._field_slots = dict(positions)
+        if user_rect is not None:
+            anchor = screen(surface.point)
+            pending.append((self._measure_box, anchor, anchor))
+            positions[self._measure_box] = user_rect
         for widget, _wanted, anchor in pending:
             rect = positions[widget]
             widget.move(rect.topLeft())

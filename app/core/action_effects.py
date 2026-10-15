@@ -130,7 +130,7 @@ SIDE_EFFECTS: Final[Mapping[str, TranslatableText]] = {
     # Druckziel
     "choose_printer": _PRINT_TARGET,
     # Lage
-    "place_on_bed": _("Senkt den Körper bis auf das Bett; seitlich bleibt er, wo er ist."),
+    "place_on_bed": _("Setzt den Körper auf das Bett. Seitlich bleibt er, wo er ist."),
     "arrange_on_bed": _(
         "Verschiebt und verteilt alle Körper der Szene, auch die, die schon gut lagen."
     ),
@@ -173,7 +173,6 @@ SIDE_EFFECTS: Final[Mapping[str, TranslatableText]] = {
         "Macht aus dem Netz einen Körper mit Flächen und Kanten; was keine erkannte Form "
         "hat, bleibt aus ebenen Dreiecken."
     ),
-    "use_voxel_stage": _("Rechnet auf einem Raster; Maße und Kanten werden gerundet."),
     "recount_and_retry": _STEP_CHANGES,
     # Schritte
     "resize_the_widening": _("Ändert die Senkung im selben Verhältnis wie die Bohrung."),

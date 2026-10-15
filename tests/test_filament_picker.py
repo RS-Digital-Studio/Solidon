@@ -48,12 +48,11 @@ def _next_tab(widget):
     return following
 
 
-def test_extra_colours_keep_existing_buttons_and_the_form_tab_order(qt_app, monkeypatch) -> None:
-    """Eine weitere Farbe entfernt weder den bisherigen Fokusanker noch den Weg durchs Formular."""
-    from PySide6.QtGui import QColor
-    from PySide6.QtWidgets import QColorDialog
+def test_extra_colours_keep_existing_buttons_and_the_form_tab_order(qt_app) -> None:
+    """Eine weitere Farbe entfernt weder den bisherigen Fokusanker noch den Weg durchs Formular.
 
-    monkeypatch.setattr(QColorDialog, "getColor", lambda *_args: QColor())
+    Der Farbwähler, den *Weitere Farbe* öffnet, steht am Knopf und hält nichts an (FD-22).
+    """
     dialog = NewFilamentDialog(name="Silk", colour="#ff0000 #00ff00")
     try:
         original = tuple(dialog.colour_buttons)
@@ -1644,8 +1643,7 @@ def test_full_body_offers_named_replacement_and_cancel_keeps_selection(
     qt_app: QApplication, tmp_path, monkeypatch
 ) -> None:
     """Die achte Belegung sperrt den Kunden nicht aus und ersetzt nichts ungefragt."""
-    from PySide6.QtWidgets import QInputDialog
-
+    from app.ui import filament_picker
     from app.ui.filament_picker import _ID_ROLE
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
@@ -1656,17 +1654,19 @@ def test_full_body_offers_named_replacement_and_cancel_keeps_selection(
     row = field.findData(entry.identifier, _ID_ROLE)
     seen = []
     field.spoolChosen.connect(seen.append)
-    monkeypatch.setattr(QInputDialog, "getItem", lambda *_args: ("", False))
+    monkeypatch.setattr(filament_picker, "ask_choice", lambda *_args, **_kwargs: None)
     field._chosen(row)
     assert not seen
     assert field.currentData() == 3
 
-    def choose(_parent, _title, explanation, labels, _current, _editable):
-        assert "Strg+Z" in explanation
-        assert "bisherigen Flächen" in explanation
-        return labels[5], True
+    def choose(_parent, *, question, choices, target, icons, **_rest):
+        assert "Strg+Z" in question
+        assert "bisherigen Flächen" in question
+        assert target == "message:filament_slot"
+        assert len(icons) == len(choices), "jede Zeile mit ihrem Farbpunkt"
+        return 5
 
-    monkeypatch.setattr(QInputDialog, "getItem", choose)
+    monkeypatch.setattr(filament_picker, "ask_choice", choose)
     field.setCurrentIndex(row)
     field._chosen(row)
     assert field.currentData() == 5
@@ -1679,7 +1679,9 @@ def test_full_body_offers_named_replacement_and_cancel_keeps_selection(
     )
     body_row = body_field.findData(entry.identifier, _ID_ROLE)
     monkeypatch.setattr(
-        QInputDialog, "getItem", lambda *_args: pytest.fail("keine Tauschfrage für ganzen Körper")
+        filament_picker,
+        "ask_choice",
+        lambda *_args, **_kwargs: pytest.fail("keine Tauschfrage für ganzen Körper"),
     )
     body_field.setCurrentIndex(body_row)
     body_field._chosen(body_row)

@@ -20,11 +20,11 @@ Messwerte, Anlässe und die Begründung der Renderer-Wahl stehen in
 |---|---|
 | `api.py` | Der Vertrag: `Renderer`, `Item`, `LabelsItem`, die Stile (`SurfaceStyle`, `CellColours`, `LabelStyle`, `AxesMarkerStyle`), `CameraPose`, `PointerEvent`, `Pick`; Farben als Hexwert (`rgb`, `hex_of`). `add_lines`/`add_surface` nehmen eine `capacity`, dann tauscht `Item.update_points` nur Zahlen in den Puffern (die Maßtinte). Was Viewport, Skizzeneditor, Griffe und Werkzeuge vom Bild wissen, wissen sie von hier |
 | `factory.py` | Die eine Baustelle: `make_renderer()` baut den Renderer mit Qt-Widget oder ohne Fenster (Agentenbilder, Tests). `available()` fragt **vorher** den wgpu-Adapter, denn ein Renderer ohne Adapter stirbt mit dem Prozess; `probe()` stellt die Frage einmal je Prozess beim Start im Arbeiter, `available()` wartet mit Frist (`ADAPTER_TIMEOUT_SECONDS`). Viewport, `snapshots.py` und der Fensterprüfstand gehen hindurch; keine Einstellung in der Oberfläche |
-| `gfx_renderer.py` | pygfx über wgpu: Netze mit Flächenfarben, Körperkanten als Drahtgitter-Mesh über derselben Geometrie (`depth_compare="<="`, keine Kantenliste auf der CPU), Linien mit NaN-Brüchen, Punkte, Text im Bildraum mit Feld; Picking aus dem Bildpuffer; `weighted_blend`, `force_opaque` über `solid`, `LIGHT_KIT`, das Achsenkreuz als zweites Teilbild. Qt-Einbettung über `rendercanvas.qt.QRenderWidget` (`present_method="screen"`), ohne Fenster über `rendercanvas.offscreen`. pygfx' Ereignissystem ist aus (`enable_events=False`); abgeräumte Überlagerungen warten je Bauart auf ihre Wiederkehr (`_recycle`, `_reused`, `RECYCLE_PER_KIND`) |
+| `gfx_renderer.py` | pygfx über wgpu: Netze mit Flächenfarben, Körperkanten als Drahtgitter-Mesh über derselben Geometrie (`depth_compare="<="`, keine Kantenliste auf der CPU), Linien mit NaN-Brüchen, Punkte, Text im Bildraum mit Feld; Picking aus dem Bildpuffer; Raum-/Vordergrundtransparenz, `force_opaque`, `LIGHT_KIT`, das Achsenkreuz als zweites Teilbild. Qt-Einbettung über `rendercanvas.qt.QRenderWidget` (`present_method="screen"`), ohne Fenster über `rendercanvas.offscreen`. pygfx' Ereignissystem ist aus (`enable_events=False`); abgeräumte Überlagerungen warten je Bauart auf ihre Wiederkehr (`_recycle`, `_reused`, `RECYCLE_PER_KIND`) |
 | `gfx_occlusion.py` | Umgebungsverdeckung in zwei `EffectPass`-Durchgängen: acht Richtungen in vier Abständen, im Zug vier in zwei (`apply(light=True)`, über `set_interacting`); nur der Faktor geht auf die Farbe — Farbkanten, Alpha, Tiefe und Picks bleiben |
 | `gfx_lines.py` | Linienmaterialien gegen koplanare Rasterlücken: die Rastertiefe um einen Bildpunkt im Kameraraum versetzt, Verdeckung und Weltkoordinaten bleiben |
 | `gfx_surfaces.py` | `SurfaceStyle.coplanar_overlay`: ein Achtel Gerätebildpunkt Tiefenversatz; Beleuchtung, Verdeckung und Pickkoordinaten bleiben |
-| `shapes.py` | die kleinen Netze der Ansicht (Scheibe, Zylinder, Kegel, Pfeil, Würfel, Fläche, Raster, Ringlinie): Viewport, Griffe und Achsenkreuz zeichnen dieselben Körper, `tests/test_render_shapes.py` misst sie ohne Fenster |
+| `shapes.py` | die kleinen Netze der Ansicht (Scheibe, Zylinder, Kegel, Pfeil, Würfel, Fläche, Raster, Ringlinie): Viewport, Griffe und Achsenkreuz zeichnen dieselben Körper; `grid_line_levels` teilt bestehende Rasterlinien ohne Doppelung in Nebenlinien und jede fünfte Hauptlinie. `tests/test_render_shapes.py` misst die Formen ohne Fenster |
 | `gizmo.py` | Der Bewegungsgriff (§18.11): drei Pfeile, drei Ringe, Hover über `pick_item`. `handle(event)` sagt mit `True`, dass die Geste ihm gehört; `interact_callback` darf die Matrix berichtigen (der Magnet auf 45°); gezogen wird erst jenseits von `navigator.CLICK_SLACK` (`dragging`), ein Klick ohne Weg bewegt nichts. `Gizmo(rotation=False)` baut nur die Pfeile. `display_ray` liefert den gemeinsamen Sichtstrahl für Bewegungsgriff, Langlochgriff und Auswahl im Viewport. Der Skalierwürfel liegt in `app/ui/scale_widget.py` und ist genauso gebaut |
 | `navigator.py` | Die Kameraführung: `_NAVIGATION` (welche Taste in welchem Schema was tut), `turntable_camera`, `is_click`, und der `Navigator` übersetzt `PointerEvent`s in Drehen, Kippen, Schieben, Radzoom, Körperzug und Malen (`NavigatorCallbacks`); `tests/test_navigator.py` misst ihn mit einem Renderer-Doppel |
 | `edges.py` | Kanten ohne Renderer: `feature_edges`, `outline_edges` (nach Ort gezählt, damit auch eine Suppe ihren Umriss hat) für Maßlinien und Konturen am dezimierten Netz; `nearest_polyline` misst gegen die **Strecken**, bei gleichem Abstand entscheidet die Tiefe (`SAME_DISTANCE`) — so pickt der Viewport einzelne B-Rep-Kanten |
@@ -102,13 +102,23 @@ Messwerte, Anlässe und die Begründung der Renderer-Wahl stehen in
 * **Ein Item hält seinen tatsächlichen Zustand**: Rückseiten und Kanten folgen
   der Deckkraft des Körpers; Beschriftungen behalten Paare, Felder und Punkte
   und verschieben sie bei neuen Ankern, ausgeschiedene Paare ruhen verborgen
-  (`IDLE_LABEL_LIMIT`). Überlagerungen zeichnen in fester Folge: Linien und
+  (`IDLE_LABEL_LIMIT`). Leere Texte behalten ihre Paare und Listenplätze;
+  `GfxLabels.build` setzt nach Matching/`_wake` nur die Feldsichtbarkeit aus
+  `bool(text)`. `set_visible` schaltet die Wurzel, nicht die einzelnen Felder.
+  Überlagerungen zeichnen in fester Folge: Linien und
   Punkte, Beschriftungsfelder, Schrift.
 * **Umgebungsverdeckung bleibt eine Darstellung** — nur deckende Netze, vor
   der Kantenglättung (`ppaa`), ohne Bildkopie zur CPU; ihre Texturen gehören
   pygfx.
-* **Durchscheinendes mischt sich reihenfolgeunabhängig** (`weighted_blend`);
+* **Raumtransparenz bleibt reihenfolgeunabhängig** (`weighted_blend`);
   `set_draw_order` legt keine eigene Reihenfolge darüber (`ansicht.md`).
+  Teiltransparente Vordergrundflächen (`keep_in_front`) nutzen `blend`;
+  spätere Teilpässe legen so keine Raumgewichte über bereits gezeichnete Griffe.
+  Ihre Vorder-/Rückseiten und Kanten haben `depth_test=False` und
+  `OVERLAY_QUEUE`; Raumkanten behalten Tiefentest und automatische Queue.
+  Die bestehende `_alpha_mode` berücksichtigt `in_front` bei Erstellung und
+  `set_opacity` nach wirksamer Deckkraft: unter 1 einschließlich 0 nach
+  Raum/Vordergrund, bei 1 `auto`; `force_opaque` bleibt `solid`.
 
 ## Prüfen und messen
 

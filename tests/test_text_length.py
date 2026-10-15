@@ -66,7 +66,7 @@ FROZEN_COUNTS: dict[str, int] = {
     "announcement": 1,
     "error_detail": 36,
     "op_doc": 39,
-    "param_doc": 55,
+    "param_doc": 53,
     "tooltip": 2,
 }
 

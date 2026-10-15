@@ -62,7 +62,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidgetItem,
@@ -83,7 +82,17 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
-from app.core import activation, bootstrap, discover, examples, feedback, manual, tools, updates
+from app.core import (
+    activation,
+    bootstrap,
+    discover,
+    examples,
+    feedback,
+    guides,
+    manual,
+    tools,
+    updates,
+)
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
 from app.core.agent.remote import ORIGIN_MODEL as REMOTE_ORIGIN
@@ -268,7 +277,7 @@ from app.core.types import (
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
 from app.i18n import TranslatableText, _, format_decimal, tr
-from app.ui import app_events, first_run
+from app.ui import app_events, change_lock, first_run
 from app.ui import settings as settings_module
 from app.ui.ai_disclosure import (
     DisclosureResult,
@@ -276,13 +285,14 @@ from app.ui.ai_disclosure import (
     target_for_backend,
 )
 from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
+from app.ui.calibration_dialog import CalibrationDialog
 from app.ui.catalog import PartCatalog
+from app.ui.change_lock import change_refusal
 from app.ui.chat import ChatPanel
 from app.ui.dialogs import (
     AboutDialog,
     ActivationDialog,
     AskDialog,
-    CalibrationDialog,
     DonationDialog,
     KeyDialog,
     ParameterDialog,
@@ -305,12 +315,25 @@ from app.ui.draw_tool import DRAW_KEY, JOIN_OP, POCKET_OP, DrawSurface, face_sur
 from app.ui.draw_tool import EXTRUDE_OP as PULL_OP
 from app.ui.explode_bar import ExplodeBar
 from app.ui.facts import PrintFacts
-from app.ui.filament_picker import CatalogueWrites, FilamentPopup, colours_of, spool_slot
+from app.ui.filament_picker import (
+    CatalogueWrites,
+    FilamentPopup,
+    colours_of,
+    slot_colours,
+    spool_slot,
+    swatch,
+)
 from app.ui.filament_usage import UsageNotice
 from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
-from app.ui.guide_targets import MissingTargetError, widget_for
+from app.ui.guide_targets import (
+    MissingTargetError,
+    menu_entries,
+    menubar_entries,
+    widget_for,
+)
 from app.ui.header import ALL_PLATES, HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
+from app.ui.input_dialog import ask_choice, ask_text
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import (
     MENU_GROUPS,
@@ -354,6 +377,7 @@ from app.ui.loading import (
 )
 from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
+from app.ui.message_dialog import name_button
 from app.ui.motion import switch
 from app.ui.op_dialog import DeferredSourcePicker, OperationDialog, simple_shape_of
 from app.ui.overlay import (
@@ -469,6 +493,11 @@ RECENT_WAIT_S = 0.05
 
 #: Wie oft danach nachgesehen wird, ob die Prüfung zurück ist.
 RECENT_POLL_MS = 100
+
+#: Wie groß das Hauptfenster beim ersten Öffnen ist, in Logikpunkten (Breite,
+#: Höhe). Eine Quelle für den Aufbau und den Funktionsdurchgang, der die
+#: Textpassung an dieser Größe misst.
+START_SIZE: Final = (1280, 820)
 
 #: Wie lange nach dem letzten Verschieben einer Seitenkarte die Einstellungen
 #: geschrieben werden — lang genug für eine gehaltene Pfeiltaste, kurz genug,
@@ -3180,7 +3209,7 @@ class MainWindow(QMainWindow):
         session.follow_print_settings(self.effective_print_settings)
         self.setAcceptDrops(True)
         self.setWindowTitle(APP_NAME)
-        self.resize(1280, 820)
+        self.resize(*START_SIZE)
         # Ein Klick ins Fenster lässt seine Dialoge nicht dahinter verschwinden
         # (:class:`_DialogsStayAbove`, macOS).
         app_events.listen(
@@ -3452,6 +3481,8 @@ class MainWindow(QMainWindow):
 
         Gefüllt von ``_menu_commands``, gelesen von ``_extra_availability`` —
         die Suche graut damit aus, was das Menü ausgraut."""
+        self._lock_shown: str | None = None
+        """Mit welchem Sperrgrund Griffe und Maßgruppe zuletzt gestellt wurden (FD-28)."""
         self._display_actions: list[QAction] = []
         """Die Einträge unter *Ansicht → Darstellung*.
 
@@ -3552,7 +3583,7 @@ class MainWindow(QMainWindow):
             self.tools.set_shortcut(key, f"Alt+{index}")
             self._window_shortcut(
                 QKeySequence(f"Alt+{index}"),
-                weak_slot(self, lambda view, name: view.tools.toggle(name), key),
+                weak_slot(self, lambda view, name: view.tools.press(name), key),
                 self._tool_command_title(key),
             )
 
@@ -3889,11 +3920,13 @@ class MainWindow(QMainWindow):
         # Werkzeug beim Schließen zurückgenommen wird, steht hier und nicht in
         # den Leisten — verdrahtet wird sowieso an dieser Stelle.
         self.tools = ToolStrip(self)
+        self.tools.setObjectName("mainToolStrip")
         tools_window_ref = weakref.ref(self)
         self.tools.activation_allowed = lambda key: (
             (window := tools_window_ref()) is not None
             and (key != "split" or window._quiet_command_allowed())
         )
+        self.tools.refused.connect(self.announce)
         self.tools.add(
             "section",
             tr("Schnitt"),
@@ -5045,13 +5078,13 @@ class MainWindow(QMainWindow):
         dort keiner etwas tut, sind keine Auskunft, sondern Kulisse (§2.6).
         Datei und Hilfe bleiben — Öffnen, Beenden, Handbuch und Freischalten
         sind genau dort sinnvoll."""
-        file_menu = self._menu(tr("Datei"))
+        file_menu = self._menu(_("Datei"))
         # Festgehalten, nicht weil das Menü sie bräuchte, sondern weil die
         # Werkzeugleiste ihren Satz und ihr Kürzel übernimmt: derselbe Knopf
         # soll nicht zwei Erklärungen haben, die auseinanderdriften.
         self.new_action = self._add_action(
             file_menu,
-            tr("Neu"),
+            _("Neu"),
             QKeySequence.StandardKey.New,
             self.action_new,
             tr("Zum Startbildschirm: leeres Projekt, ein Beispiel, oder zuletzt Geöffnetes."),
@@ -5059,7 +5092,7 @@ class MainWindow(QMainWindow):
         )
         self.open_action = self._add_action(
             file_menu,
-            tr("Öffnen …"),
+            _("Öffnen …"),
             QKeySequence.StandardKey.Open,
             self.action_open,
             tr("Ein gespeichertes Projekt öffnen (.p3d)."),
@@ -5067,7 +5100,7 @@ class MainWindow(QMainWindow):
         )
         self.save_action = self._add_action(
             file_menu,
-            tr("Speichern"),
+            _("Speichern"),
             QKeySequence.StandardKey.Save,
             self.action_save,
             tr("Projekt mit Geometrie, Verlauf und Parametern in eine Datei schreiben."),
@@ -5075,7 +5108,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             file_menu,
-            tr("Speichern unter …"),
+            _("Speichern unter …"),
             QKeySequence.StandardKey.SaveAs,
             self.action_save_as,
             tr("Das Projekt unter einem anderen Namen ablegen."),
@@ -5084,7 +5117,7 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         self.import_action = self._add_action(
             file_menu,
-            tr("Modell einfügen …"),
+            _("Modell einfügen …"),
             "Ctrl+I",
             self.action_import,
             tr(
@@ -5095,7 +5128,7 @@ class MainWindow(QMainWindow):
         )
         self.import_url_action = self._add_action(
             file_menu,
-            tr("Modell aus dem Netz …"),
+            _("Modell aus dem Netz …"),
             None,
             self.action_import_url,
             tr(
@@ -5105,7 +5138,7 @@ class MainWindow(QMainWindow):
         )
         self.generate_action = self._add_action(
             file_menu,
-            tr("Modell erzeugen …"),
+            _("Modell erzeugen …"),
             "Ctrl+G",
             self.action_generate,
             tr("Aus Text oder Bild ein 3D-Modell erzeugen lassen — braucht ein laufendes ComfyUI."),
@@ -5118,7 +5151,7 @@ class MainWindow(QMainWindow):
         # Kürzel gehört ihr, nicht dem Menü.
         self._catalog_action = self._add_action(
             file_menu,
-            tr("Bausteinkatalog …"),
+            _("Bausteinkatalog …"),
             "Ctrl+K",
             self.action_catalog,
             tr("Alle Bausteine durchsehen: Mutternfalle, Rastnase, Scharnier und die anderen."),
@@ -5126,7 +5159,7 @@ class MainWindow(QMainWindow):
         )
         self.export_action = self._add_action(
             file_menu,
-            tr("Exportieren …"),
+            _("Exportieren …"),
             "Ctrl+E",
             self.action_export,
             tr(
@@ -5140,7 +5173,7 @@ class MainWindow(QMainWindow):
         # und der Kopfknopf *Druckeinstellungen …* — drei Namen für einen Weg.
         self._add_action(
             file_menu,
-            tr("An den Slicer übergeben …"),
+            _("An den Slicer übergeben …"),
             "Ctrl+P",
             self.action_print_settings,
             tr("Schichten, Temperaturen, Farbe und Stützen einstellen — und slicen lassen."),
@@ -5148,7 +5181,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             file_menu,
-            tr("G-Code gegenprüfen …"),
+            _("G-Code gegenprüfen …"),
             None,
             self.action_check_gcode,
             tr("Eine Datei aus dem Slicer lesen und ihre Zahlen neben die eigenen stellen."),
@@ -5162,21 +5195,21 @@ class MainWindow(QMainWindow):
         # Anwendungsmenü. Ein falsches Kürzel ist schlechter als keines.
         self._quit_action = self._add_action(
             file_menu,
-            tr("Beenden"),
+            _("Beenden"),
             None,
             self.close,
             tr("Solidon schließen. Ungesichertes wird vorher erfragt."),
             symbol="quit",
         )
 
-        edit_menu = self._menu(tr("Bearbeiten"))
+        edit_menu = self._menu(_("Bearbeiten"))
         self._workspace_menus.append(edit_menu)
         # Rückgängig und Wiederholen zuerst: sie sind die häufigsten Einträge
         # des Menüs und stehen in jeder Anwendung oben. Vorher lagen sie unter
         # den Spezialfunktionen, hinter „Chat einrichten".
         self.undo_action = self._add_action(
             edit_menu,
-            tr("Rückgängig"),
+            _("Rückgängig"),
             QKeySequence.StandardKey.Undo,
             self.action_undo,
             tr("Den letzten Schritt zurücknehmen — auch einen Vorschlag des Chats, ganz."),
@@ -5184,7 +5217,7 @@ class MainWindow(QMainWindow):
         )
         self.redo_action = self._add_action(
             edit_menu,
-            tr("Wiederholen"),
+            _("Wiederholen"),
             QKeySequence.StandardKey.Redo,
             self.action_redo,
             tr("Einen zurückgenommenen Schritt wieder anwenden."),
@@ -5202,21 +5235,21 @@ class MainWindow(QMainWindow):
         # als Text, und der war falsch.
         self.search_action = self._add_action(
             None,
-            tr("Funktion suchen"),
+            _("Funktion suchen"),
             "Ctrl+Shift+P",
             self.action_function_search,
             tr("Jede Funktion über ihren Namen finden, mit Ort und Kürzel."),
         )
         self._add_action(
             edit_menu,
-            tr("Parameter anlegen …"),
+            _("Parameter anlegen …"),
             None,
             self.action_add_parameter,
             tr("Ein Maß benennen, auf das Operationen und Skizzen mit @name verweisen können."),
         )
         self._add_action(
             edit_menu,
-            tr("Material kalibrieren …"),
+            _("Material kalibrieren …"),
             None,
             self.action_calibrate,
             tr(
@@ -5226,7 +5259,7 @@ class MainWindow(QMainWindow):
         )
         self.variants_action = self._add_action(
             edit_menu,
-            tr("Varianten erzeugen …"),
+            _("Varianten erzeugen …"),
             None,
             self.action_variants,
             tr(
@@ -5236,21 +5269,21 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             edit_menu,
-            tr("Einstellungen …"),
+            _("Einstellungen …"),
             "Ctrl+,",
             self.action_settings,
             tr("Sprache, Anzeigeeinheit, Thema, Navigation und die Vorgaben für neue Projekte."),
         )
         self._add_action(
             edit_menu,
-            tr("Filamentlager …"),
+            _("Filamentlager …"),
             None,
             self.action_inventory,
             tr("Spulen, Restmengen und Verbrauch verwalten."),
         )
         self._add_action(
             edit_menu,
-            tr("Chat einrichten …"),
+            _("Chat einrichten …"),
             None,
             self.action_llm_key,
             tr(
@@ -5305,7 +5338,7 @@ class MainWindow(QMainWindow):
                             continue
                         self._op_actions[spec.name] = self._operation_action(None, spec)
                 continue
-            group = self._menu(str(title))
+            group = self._menu(title)
             groups[str(title)] = group
             self._workspace_menus.append(group)
             # **Je Kategorie, nicht je Gruppe** (§2.6). Vorher entschied
@@ -5386,6 +5419,7 @@ class MainWindow(QMainWindow):
                     # das Untermenü, und sein C++-Objekt wird eingesammelt,
                     # während die Leiste es noch zeigt.
                     target = QMenu(str(section.title), self)
+                    target.setObjectName(guides.menubar_name_of(section.title))
                     target.setToolTipsVisible(True)
                     group.addMenu(target)
                     self._menus.append(target)
@@ -5401,7 +5435,7 @@ class MainWindow(QMainWindow):
                     target.addAction(self._catalog_action)
                     self.counterpart_action = self._add_action(
                         target,
-                        tr("Gegenstücke setzen …"),
+                        _("Gegenstücke setzen …"),
                         None,
                         self.action_counterpart,
                         tr(
@@ -5454,7 +5488,7 @@ class MainWindow(QMainWindow):
         # Freigabe gehen über dieselbe Aktion am Fenster.
         self.auto_split_action = self._add_action(
             None,
-            tr("Automatisch teilen …"),
+            _("Automatisch teilen …"),
             None,
             self.action_auto_split,
             tr(
@@ -5477,12 +5511,12 @@ class MainWindow(QMainWindow):
         for section in menu_tree(skip=own):
             if section.category in grouped:
                 continue
-            menu = self._menu(str(section.title))
+            menu = self._menu(section.title)
             self._workspace_menus.append(menu)
             for spec in section.entries:
                 self._op_actions[spec.name] = self._operation_action(menu, spec)
 
-        view_menu = self._menu(tr("Ansicht"))
+        view_menu = self._menu(_("Ansicht"))
         # Festgehalten, weil das Merkmalsfenster seinen Ein-/Ausschalter
         # später dort einhängt — es entsteht erst mit dem Zentrum.
         self._view_menu = view_menu
@@ -5499,7 +5533,7 @@ class MainWindow(QMainWindow):
         self._display_actions.append(
             self._add_action(
                 view_menu,
-                tr("Einpassen"),
+                _("Einpassen"),
                 "Home",
                 self.viewport.reset_camera,
                 tr("Rückt die Kamera auf den gewählten Körper — ohne Auswahl auf die ganze Szene."),
@@ -5508,7 +5542,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             view_menu,
-            tr("Rechten Bereich zeigen"),
+            _("Rechten Bereich zeigen"),
             "F9",
             self.action_toggle_right,
             # Links stehen Objekte, Parameter und Verlauf — die rechte Spalte
@@ -5519,7 +5553,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             view_menu,
-            tr("Karten an ihren Platz"),
+            _("Karten an ihren Platz"),
             None,
             self.action_reset_cards,
             tr("Legt verschobene Karten zurück an den Rand, an dem sie anfangs lagen."),
@@ -5529,7 +5563,7 @@ class MainWindow(QMainWindow):
         # gelistet, und der Zustand bleibt über den Neustart.
         self._bed_action = self._add_action(
             view_menu,
-            tr("Druckplatte zeigen"),
+            _("Druckplatte zeigen"),
             "Ctrl+Shift+D",
             self.action_toggle_bed,
             tr("Bett, Bauraum und Maßstab ein- oder ausblenden — das Teil bleibt."),
@@ -5541,7 +5575,7 @@ class MainWindow(QMainWindow):
         # Sechs Blöcke ohne Überschrift waren dreiundzwanzig Zeilen, durch
         # Trennstriche gegliedert — eine Liste, die man absucht (Konzept P15
         # §5). Was zusammengehört, bekommt jetzt seinen Namen und seine Ebene.
-        display_menu = self._submenu(view_menu, tr("Darstellung"))
+        display_menu = self._submenu(view_menu, _("Darstellung"))
         # **Die drei Gruppen tragen Häkchen, und ihre Wahl wird gemerkt.**
         # Vorher waren es zwölf Einträge ohne Zustand: Man sah nicht, welcher
         # gilt, und beim nächsten Start galt wieder die Vorgabe. Wer
@@ -5550,22 +5584,22 @@ class MainWindow(QMainWindow):
         self._mode_group = QActionGroup(self)
         self._mode_group.setExclusive(True)
         for mode, label, shortcut, hint in (
-            ("solid", tr("Massiv"), "1", tr("Die Oberfläche, wie sie gedruckt wird.")),
+            ("solid", _("Massiv"), "1", tr("Die Oberfläche, wie sie gedruckt wird.")),
             (
                 "solid_edges",
-                tr("Massiv mit Kanten"),
+                _("Massiv mit Kanten"),
                 "2",
                 tr("Dazu die Dreieckskanten — zeigt, wie fein das Netz ist."),
             ),
             (
                 "wireframe",
-                tr("Drahtgitter"),
+                _("Drahtgitter"),
                 "3",
                 tr("Nur die Kanten. Lässt durch das Teil hindurchsehen."),
             ),
             (
                 "transparent",
-                tr("Transparent"),
+                _("Transparent"),
                 "4",
                 tr("Durchscheinend — für Hohlräume und Teile, die ineinandergreifen."),
             ),
@@ -5588,12 +5622,12 @@ class MainWindow(QMainWindow):
         for shading, label, hint in (
             (
                 "flat",
-                tr("Flache Schattierung"),
+                _("Flache Schattierung"),
                 tr("Jedes Dreieck für sich — die wahre Form, jede Kante sichtbar."),
             ),
             (
                 "smooth",
-                tr("Weiche Schattierung"),
+                _("Weiche Schattierung"),
                 tr("Über die Kanten hinweg gemittelt. Schöner, aber beschönigend."),
             ),
         ):
@@ -5615,13 +5649,13 @@ class MainWindow(QMainWindow):
         for projection, label, shortcut, hint in (
             (
                 "perspective",
-                tr("Perspektivisch"),
+                _("Perspektivisch"),
                 "5",
                 tr("Wie das Auge sieht: Fernes wird kleiner."),
             ),
             (
                 "orthographic",
-                tr("Orthografisch"),
+                _("Orthografisch"),
                 "6",
                 tr("Ohne Fluchtpunkt — gleich lange Kanten sehen gleich lang aus. Zum Messen."),
             ),
@@ -5639,16 +5673,16 @@ class MainWindow(QMainWindow):
             self._projection_group.addAction(action)
             self._display_actions.append(action)
 
-        camera_menu = self._submenu(view_menu, tr("Kamera"))
+        camera_menu = self._submenu(view_menu, _("Kamera"))
         standpoint = tr("Kamera auf diesen Standpunkt setzen.")
         for name, label, shortcut in (
-            ("iso", tr("Isometrisch"), "Ctrl+0"),
-            ("front", tr("Vorne"), "Ctrl+1"),
-            ("back", tr("Hinten"), "Ctrl+2"),
-            ("left", tr("Links"), "Ctrl+3"),
-            ("right", tr("Rechts"), "Ctrl+4"),
-            ("top", tr("Oben"), "Ctrl+5"),
-            ("bottom", tr("Unten"), "Ctrl+6"),
+            ("iso", _("Isometrisch"), "Ctrl+0"),
+            ("front", _("Vorne"), "Ctrl+1"),
+            ("back", _("Hinten"), "Ctrl+2"),
+            ("left", _("Links"), "Ctrl+3"),
+            ("right", _("Rechts"), "Ctrl+4"),
+            ("top", _("Oben"), "Ctrl+5"),
+            ("bottom", _("Unten"), "Ctrl+6"),
         ):
             self._add_action(
                 camera_menu,
@@ -5661,7 +5695,7 @@ class MainWindow(QMainWindow):
         # Vier Navigationsschemata und zwei Themen, und keines sagte, welches
         # gerade gilt. Wer die Vorgabe einmal umgestellt hat, konnte danach nur
         # ausprobieren, worauf sie steht.
-        theme_menu = self._submenu(view_menu, tr("Thema"))
+        theme_menu = self._submenu(view_menu, _("Thema"))
         self._theme_group = QActionGroup(self)
         self._theme_group.setExclusive(True)
         for theme, hint in (
@@ -5670,7 +5704,7 @@ class MainWindow(QMainWindow):
         ):
             action = self._add_action(
                 theme_menu,
-                str(THEMES[theme]),
+                THEMES[theme],
                 None,
                 weak_slot(self, lambda view, key: view.action_theme(key), theme),
                 hint,
@@ -5680,7 +5714,7 @@ class MainWindow(QMainWindow):
             action.setData(theme)
             self._theme_group.addAction(action)
 
-        navigation_menu = self._submenu(view_menu, tr("Navigation"))
+        navigation_menu = self._submenu(view_menu, _("Navigation"))
         self._navigation_group = QActionGroup(self)
         self._navigation_group.setExclusive(True)
         # **Die Mitgliedschaft kommt aus dem Katalog, nicht aus einer Liste
@@ -5710,7 +5744,7 @@ class MainWindow(QMainWindow):
             hint = hints.get(scheme, "")
             action = self._add_action(
                 navigation_menu,
-                str(NAVIGATION[scheme]),
+                NAVIGATION[scheme],
                 None,
                 weak_slot(self, lambda view, key: view.action_navigation(key), scheme),
                 hint,
@@ -5720,10 +5754,10 @@ class MainWindow(QMainWindow):
             action.setData(scheme)
             self._navigation_group.addAction(action)
 
-        help_menu = self._menu(tr("Hilfe"))
+        help_menu = self._menu(_("Hilfe"))
         self._add_action(
             help_menu,
-            tr("Handbuch …"),
+            _("Handbuch …"),
             QKeySequence.StandardKey.HelpContents,
             self.action_manual,
             tr("Anleitungen in Bildern, vom ersten Schritt bis zum Nachschlagen jeder Operation."),
@@ -5731,7 +5765,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             help_menu,
-            tr("Beispiele"),
+            _("Beispiele"),
             None,
             self.action_examples,
             tr("Die Beispielprojekte mit ihren Touren — sie stehen auf dem Startbildschirm."),
@@ -5739,28 +5773,28 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         self._add_action(
             help_menu,
-            tr("Zusätzliche Programme …"),
+            _("Zusätzliche Programme …"),
             None,
             self.action_install_extras,
             tr("Was Solidon außerdem benutzen kann, wo es liegt und wie es dazukommt."),
         )
         self._add_action(
             help_menu,
-            tr("Tastenkürzel …"),
+            _("Tastenkürzel …"),
             "?",
             self.action_shortcuts,
             tr("Alle belegten Tasten, erzeugt aus dem Register — nie veraltet."),
         )
         self._add_action(
             help_menu,
-            tr("Erste Schritte …"),
+            _("Erste Schritte …"),
             None,
             self.action_first_run,
             tr("Sprache, Drucker, Filamente und die externen Programme noch einmal einstellen."),
         )
         self._add_action(
             help_menu,
-            tr("Rückmeldung senden …"),
+            _("Rückmeldung senden …"),
             None,
             self.action_feedback,
             tr("Vorschlag, Fehler oder Frage an den Support — auf Wunsch mit Bild und Sitzung."),
@@ -5768,7 +5802,7 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         self._add_action(
             help_menu,
-            tr("Nach einer neuen Version sehen"),
+            _("Nach einer neuen Version sehen"),
             None,
             self.action_check_updates,
             tr(
@@ -5781,7 +5815,7 @@ class MainWindow(QMainWindow):
         # im Paket — dieser Eintrag fragt nichts nach draußen.
         self._add_action(
             help_menu,
-            tr("Neuerungen …"),
+            _("Neuerungen …"),
             None,
             self.action_changes,
             tr("Was sich in dieser und den vorigen Versionen geändert hat."),
@@ -5789,14 +5823,14 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         self._add_action(
             help_menu,
-            tr("Solidon freischalten …"),
+            _("Solidon freischalten …"),
             None,
             self.action_activate,
             tr("Testzeitraum, Lizenzschlüssel eintragen, und was nach Ablauf offen bleibt."),
         )
         self._add_action(
             help_menu,
-            tr("{app} unterstützen …").format(app=APP_NAME),
+            _("{app} unterstützen …", app=APP_NAME),
             None,
             self.action_donate,
             tr("Wofür das Geld ist und wie Sie freiwillig helfen können."),
@@ -5804,7 +5838,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             help_menu,
-            tr("Über Solidon"),
+            _("Über Solidon"),
             None,
             self.action_about,
             tr("Version, Rechteinhaber und die verwendeten Fremdbibliotheken."),
@@ -5812,6 +5846,7 @@ class MainWindow(QMainWindow):
         )
 
         toolbar = QToolBar(tr("Werkzeuge"), self)
+        toolbar.setObjectName("mainTools")
         self.toolbar = toolbar
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
@@ -5843,7 +5878,7 @@ class MainWindow(QMainWindow):
         # Vier der sieben haben ein Menüpendant; von ihm kommen Satz und
         # Kürzel (``source``). Die drei anderen gibt es nur hier und tragen
         # ihren Satz selbst.
-        for symbol, label, slot, source, own_hint in (
+        for symbol, caption, slot, source, own_hint in (
             ("new", tr("Neues Projekt"), self.action_new, self.new_action, ""),
             ("open", tr("Öffnen"), self.action_open, self.open_action, ""),
             ("save", tr("Speichern"), self.action_save, self.save_action, ""),
@@ -5884,7 +5919,7 @@ class MainWindow(QMainWindow):
         ):
             if symbol in ("import", "sculpt"):
                 toolbar.addSeparator()
-            action = QAction(icon(symbol, toolbar), label, self)
+            action = QAction(icon(symbol, toolbar), caption, self)
             if symbol == "category.sketch":
                 # Gedrückt, solange das Aufziehen offen ist (G10).
                 action.setCheckable(True)
@@ -5900,7 +5935,7 @@ class MainWindow(QMainWindow):
             # die Statusleiste (§2 C). Der ``statusTip`` ist zugleich das,
             # woraus ``_lock_hint`` den eigenen Hinweis wiederherstellt — ohne
             # ihn bliebe der Knopf nach dem Freischalten stumm.
-            tip = self._button_tip(label, source or action, own_hint)
+            tip = self._button_tip(caption, source or action, own_hint)
             action.setToolTip(tip)
             action.setStatusTip(tip)
             action.setProperty("wordless", False)
@@ -5951,19 +5986,27 @@ class MainWindow(QMainWindow):
         self.header.filamentsRequested.connect(self._toggle_filament_list)
         toolbar.addWidget(self.header)
 
-    def _menu(self, title: str) -> QMenu:
-        """Ein Menü der Leiste — festgehalten, damit es nicht eingesammelt wird."""
-        menu = self.menuBar().addMenu(title)
+    def _menu(self, title: TranslatableText | str) -> QMenu:
+        """Ein Menü der Leiste — festgehalten, damit es nicht eingesammelt wird.
+
+        Sein ``objectName`` kommt aus der unübersetzten Quelle
+        (:func:`guides.menubar_name`): gleich in jeder Sprache und unabhängig
+        davon, wo das Menü in der Leiste steht.
+        """
+        menu = self.menuBar().addMenu(str(title))
+        menu.setObjectName(guides.menubar_name_of(title))
         menu.setToolTipsVisible(True)
         self._menus.append(menu)
         return menu
 
-    def _submenu(self, parent: QMenu, title: str) -> QMenu:
+    def _submenu(self, parent: QMenu, title: TranslatableText) -> QMenu:
         """Eine Zwischenebene. Elternteil ist das Fenster, nicht das Menü —
         sonst hält nichts auf der Python-Seite das Untermenü fest, und sein
         C++-Objekt wird eingesammelt, während die Leiste es noch zeigt.
+        Der ``objectName`` wie bei :meth:`_menu`.
         """
-        submenu = QMenu(title, self)
+        submenu = QMenu(str(title), self)
+        submenu.setObjectName(guides.menubar_name_of(title))
         submenu.setToolTipsVisible(True)
         parent.addMenu(submenu)
         self._menus.append(submenu)
@@ -5993,6 +6036,7 @@ class MainWindow(QMainWindow):
             # Elternteil ist das Fenster, nicht das Menü — siehe die
             # Begründung eine Ebene höher.
             submenu = QMenu(str(GROUPS[group]), self)
+            submenu.setObjectName(guides.menubar_name_of(GROUPS[group]))
             submenu.setToolTipsVisible(True)
             menu.addMenu(submenu)
             self._menus.append(submenu)
@@ -6011,6 +6055,9 @@ class MainWindow(QMainWindow):
         Aktionen auf einer Taste führt Qt beide nicht aus.
         """
         action = QAction(icon(icon_name_for(spec), self), str(spec.title), self)
+        # Benannt wie jede Zeile der Leiste, aus der Quelle ihres Titels; ein
+        # eigener Baustein trägt seinen Titel als schlichten Text.
+        action.setObjectName(guides.menubar_name_of(spec.title))
         key = shortcut_for(spec.name, spec.shortcut, self.settings.shortcut_scheme)
         if key:
             action.setShortcut(QKeySequence(key))
@@ -6134,7 +6181,7 @@ class MainWindow(QMainWindow):
             key = shortcut_for(first.name, first.shortcut, self.settings.shortcut_scheme)
             action = self._add_action(
                 place,
-                str(group.title),
+                group.title,
                 key or None,
                 weak_slot(self, MainWindow.launch_operation, first),
                 str(group.doc),
@@ -6150,7 +6197,7 @@ class MainWindow(QMainWindow):
     def _add_action(
         self,
         menu: Any,
-        label: str,
+        label: TranslatableText,
         shortcut: Any,
         slot: Any,
         hint: str = "",
@@ -6168,8 +6215,14 @@ class MainWindow(QMainWindow):
         Drei gab es davon, alle drei in Menüs, deren übrige Zeilen eines
         tragen: *Zeichnen …*, *Automatisch teilen* und
         *Bausteinkatalog* standen als Lücke in einer Symbolspalte.
+
+        Die Beschriftung kommt unübersetzt: Aus ihrer Quelle entsteht der
+        ``objectName`` (:func:`guides.menubar_name`), über den Suche,
+        Wortschatz und Funktionsliste die Zeile finden — in jeder Sprache
+        derselbe, gleich wo sie im Menü steht.
         """
-        action = QAction(label, self)
+        action = QAction(str(label), self)
+        action.setObjectName(guides.menubar_name_of(label))
         if symbol:
             action.setIcon(icon(symbol, self))
         if shortcut is not None:
@@ -6240,8 +6293,14 @@ class MainWindow(QMainWindow):
         gesturing = drawing or self.sculpting() or self.setting_armature()
         # §2 C: nach Ablauf des Testlaufs graut die schreibende Seite aus —
         # vor dem Klick, mit Grund im Hinweistext. Die Hürde selbst liegt im
-        # Kern; das hier ist die Freundlichkeit davor.
-        locked = not activation.state().unlocked
+        # Kern; das hier ist die Freundlichkeit davor — aus der einen Quelle,
+        # die auch Bericht, Merkmalfenster und Kontextmenüs fragen (FD-5).
+        refusal = change_refusal()
+        locked = bool(refusal)
+        # Nach dem Freischalten gibt frei, was nur die Sperre grau hielt; die
+        # eigenen Bedingungen darunter setzen es danach neu (FD-26).
+        for action in change_lock.reopen_commands(self):
+            self._lock_hint(action, False)
         # **Und solange die Kette hält, kommt kein neuer Schritt dazu** (§15.3):
         # Er stünde hinter dem angehaltenen und würde nie gerechnet. Der Grund
         # steht an jedem Eintrag, und die Handlungen des Halts stehen im
@@ -6253,6 +6312,15 @@ class MainWindow(QMainWindow):
         # entwerten; außerdem trägt der Skizzeneditor selbst Entf. Deshalb gilt
         # hier dieselbe Sperre wie für alle anderen schreibenden Aktionen.
         self.history_panel.remove_action.setEnabled(not locked and not gesturing)
+        # Die Tasten des Verlaufs ändern ihn wie sein Kontextmenü: Einfg,
+        # Alt+Pfeil und Leertaste gesperrt grau mit Grund (Durchsicht welle4 M1).
+        history = self.history_panel
+        change_lock.hold_history_preview(history)
+        keys = (history.insert_action, history.up_action, history.down_action)
+        for action in (*keys, history.toggle_action):
+            action.setEnabled(not locked)
+        for action in (history.remove_action, *keys, history.toggle_action):
+            self._lock_hint(action, locked)
         self.feature_panel.limit_fit(self._manual_fit_reason())
         # **Und das Merkmalfenster hört denselben Grund.** Es war die eine
         # Bedienstelle, an der der Halt nicht ankam: Felder und beide Knöpfe
@@ -6262,7 +6330,7 @@ class MainWindow(QMainWindow):
         # hätte abraten können (Regel 19). Zurückgenommen wird sie von
         # selbst: Nach einem Strg+Z rechnet die Kette wieder, `_update_actions`
         # läuft mit dem neuen Ergebnis, und der Grund ist leer.
-        self.feature_panel.set_locked(halted or "")
+        self.feature_panel.set_locked(refusal or halted or "")
 
         # **Gegenstücke brauchen zwei markierte Stellen an zwei Teilen** (E1).
         # Der Grund steht am Eintrag, statt hinterher als Dialog zu kommen: Ein
@@ -6324,6 +6392,8 @@ class MainWindow(QMainWindow):
         # weil das jeden Knopf wieder freigibt.
         if objects > 0 and not gesturing:
             self.tools.set_tool_usable("explode", objects > 1, str(_NEEDS_TWO_BODIES))
+        # *Bewegen* und *Teilen* legen Schritte an: gesperrt grau mit Grund (FD-26).
+        change_lock.close_tools(self.tools)
 
         # Rückgängig und Wiederholen bleiben nach Ablauf offen (§2 C): wer
         # nichts mehr ändern kann, darf trotzdem zurück und wieder vor.
@@ -6519,13 +6589,28 @@ class MainWindow(QMainWindow):
             and not on_an_edge
             and (not chosen_features or bool(chosen_faces))
         )
-        self.quick_filament.setEnabled(not locked and not gesturing and halted is None)
+        # Ohne Freischaltung sperren Wähler und Entfernen sich selbst, mit Grund;
+        # das Lager bleibt zum Ansehen offen (FD-5, Durchsicht welle4 L5).
+        self.quick_filament.setEnabled(not gesturing and halted is None)
         # **Und ohne jede Auswahl schweigt das Merkmalfenster.** Die Karte
         # darunter sagt denselben Zustand samt dem Weg zu den Bausteinen; der
         # Satz hier wäre der dritte über dieselbe Sache (gemessen am gebauten
         # Fenster, 18.09.2026). Mit gewähltem Körper bleibt er — dort trägt die
         # Karte Handlungen, und er sagt, wie man an die Maße kommt.
         self.feature_panel.say_nothing_is_chosen(bool(selected_ids or chosen_features))
+        # **Jeder Fensterbefehl, der ändert, fragt dieselbe Quelle** (FD-26):
+        # *Parameter anlegen …* stand ohne Freischaltung offen, weil keine
+        # Zeile hier ihn kannte. Grau wird, was ``change_lock`` nicht als
+        # lesend führt; dazu die Parameterleiste.
+        for action in change_lock.close_commands(self):
+            self._lock_hint(action, True)
+        change_lock.hold_inputs(self.parameters, refusal)
+        if refusal != self._lock_shown:
+            # Griffe im Bild und die Maßgruppe folgen dem Wechsel (FD-28).
+            self._lock_shown = refusal
+            self.viewport.refresh_gizmo()
+            if self._quiet_placement is not None:
+                self._quiet_placement.redraw()
         self._hide_dead_menus()
 
     def _hide_dead_menus(self) -> None:
@@ -6630,7 +6715,7 @@ class MainWindow(QMainWindow):
                 # Nur die obersten: Untermenüs stehen auch in _menus, und
                 # ein Untermenü auszublenden verschöbe die Zeile darüber.
                 continue
-            entries = list(_menu_entries(menu))
+            entries = [action for _name, _path, action in menu_entries(menu)]
             # Ein Menü ohne Einträge bleibt stehen: Es ist keines, in dem
             # nichts geht, sondern eines, das noch gefüllt wird.
             handle.setVisible(not entries or any(entry.isEnabled() for entry in entries))
@@ -6694,8 +6779,12 @@ class MainWindow(QMainWindow):
 
         Die Reihenfolge ist die, in der ein Nutzer sie beheben würde: erst
         den Halt lösen, dann etwas in die Szene, dann etwas auswählen, dann
-        die richtige Bauart.
+        die richtige Bauart. Davor steht die Freischaltung: Ohne sie löst auch
+        der Halt nichts (FD-5, ``change_lock``).
         """
+        refusal = change_refusal()
+        if refusal:
+            return refusal
         halted = self._halt_reason()
         if halted is not None:
             return halted
@@ -7048,8 +7137,13 @@ class MainWindow(QMainWindow):
         return places
 
     def _history_change_allowed(self) -> bool:
-        """Vor einem Umbau: die bestehende Frage nach dem Zurückgenommenen (§15.4)."""
-        if not self._quiet_command_allowed():
+        """Vor einem Umbau: die bestehende Frage nach dem Zurückgenommenen (§15.4).
+
+        Davor die Freischaltung: Leertaste, Alt+Pfeil, Einfg und Ablegen endeten
+        sonst im Meldungsfenster oder öffneten die Einfügemarke; der Grund steht
+        in der Statuszeile (Durchsicht welle4 M1).
+        """
+        if change_lock.refused(self.announce) or not self._quiet_command_allowed():
             return False
         discardable = self.session.history.discardable
         return not discardable or confirm_discard(discardable, self._discarded_names(), self)
@@ -7387,7 +7481,7 @@ class MainWindow(QMainWindow):
         if locked:
             if stored is None:
                 action.setProperty("tip_before_lock", action.statusTip())
-            explanation = licence_lock_line()
+            explanation = change_refusal() or licence_lock_line()
             reason = self._with_name(action, explanation)
             action.setStatusTip(reason)
             action.setToolTip(reason)
@@ -8104,7 +8198,7 @@ class MainWindow(QMainWindow):
 
     def action_import(self) -> None:
         """Eine oder mehrere Modelldateien in einem Auftrag einfügen."""
-        if self._drawing_refuses():
+        if self._drawing_refuses() or change_lock.refused(self.announce):
             return
         names, _filter = QFileDialog.getOpenFileNames(
             self,
@@ -8118,8 +8212,13 @@ class MainWindow(QMainWindow):
             self.import_paths([Path(name) for name in names])
 
     def _gesture_allows_import(self) -> bool:
-        """Import und Ablegen warten auf den Abschluss des sichtbaren Gesteneditors."""
-        if self._drawing_refuses():
+        """Import und Ablegen warten auf den Abschluss des sichtbaren Gesteneditors.
+
+        Und ohne Freischaltung kommt nichts herein: Ein abgelegtes Modell oder
+        *Modell aus dem Netz* endete sonst nach Dateiwahl oder Download im
+        Meldungsfenster (FD-26).
+        """
+        if self._drawing_refuses() or change_lock.refused(self.announce):
             return False
         if (
             self.sculpting()
@@ -8177,6 +8276,8 @@ class MainWindow(QMainWindow):
         einer Modellseite kommt, hat die Adresse gerade kopiert. Steht dort
         etwas anderes, bleibt das Feld leer statt Unsinn anzubieten.
         """
+        if change_lock.refused(self.announce):
+            return
         clipboard = QApplication.clipboard()
         pasted = clipboard.text().strip() if clipboard is not None else ""
         try:
@@ -8184,13 +8285,15 @@ class MainWindow(QMainWindow):
         except AppError as error:
             suggestion = pasted if error.values.get("constraint") == "web_page" else ""
 
-        url, accepted = QInputDialog.getText(
+        url = ask_text(
             self,
-            tr("Modell aus dem Netz"),
-            tr("Adresse der Modelldatei oder Modellseite:"),
+            title=tr("Modell aus dem Netz"),
+            sentence=tr("Adresse der Modelldatei oder Modellseite:"),
+            target="message:model_address",
+            accept=tr("Herunterladen"),
             text=suggestion,
         )
-        if accepted and url.strip():
+        if url is not None and url.strip():
             self.download_model(url.strip())
 
     def download_model(self, url: str) -> None:
@@ -9095,6 +9198,9 @@ class MainWindow(QMainWindow):
         """
         from app.core.scene.history import named_steps
 
+        # Gesperrt keine Löschfrage für eine Handlung, die nicht geht (M1).
+        if change_lock.refused(self.announce):
+            return
         chosen = tuple(dict.fromkeys(int(op_id) for op_id in op_ids))
         removing = self.session.removal_closure(chosen)
         if not removing:
@@ -9158,8 +9264,11 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.NoButton,
             self,
         )
+        box.setProperty(guides.TARGET_PROPERTY, "message:remove_steps")
         remove = box.addButton(tr("Löschen"), QMessageBox.ButtonRole.DestructiveRole)
         cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+        name_button(remove, "message.button:remove_steps.remove")
+        name_button(cancel, "message.button:remove_steps.cancel")
         # Rot, und Enter löscht nicht: Die Nachfrage steht nur hier, weil das
         # Löschen abhängige Schritte und den Redo-Zweig mitnimmt. Abbrechen
         # bleibt ein Ausgang ohne Akzent — Escape nimmt ihn (RM-512).
@@ -9168,8 +9277,12 @@ class MainWindow(QMainWindow):
         box.setEscapeButton(cancel)
         # Fokus auf Abbrechen, sonst löschte die Leertaste (``confirm_discard``).
         cancel.setFocus()
-        box.exec()
-        if box.clickedButton() is not remove:
+        try:
+            box.exec()
+            chosen_remove = box.clickedButton() is remove
+        finally:
+            box.deleteLater()
+        if not chosen_remove:
             return
         self.session.remove_operations(chosen)
 
@@ -9328,15 +9441,23 @@ class MainWindow(QMainWindow):
         if self._drawing_refuses():
             return
         dialog = VariantsDialog(self.session, self)
-        dialog.exec()
-        if dialog.findings:
-            self.report.add_findings(list(dialog.findings))
-        if dialog.written:
-            self._announce_written(dialog.written)
+        try:
+            dialog.exec()
+            findings, written = list(dialog.findings), dialog.written
+        finally:
+            dialog.deleteLater()
+        if findings:
+            self.report.add_findings(findings)
+        if written:
+            self._announce_written(written)
 
     def action_install_extras(self) -> None:
         """§36: was fehlt, wofür es da ist, und ein Knopf, der es holt."""
-        InstallDialog(self, settings=self.settings).exec()
+        dialog = InstallDialog(self, settings=self.settings)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
 
     def _offer_slicer_setup(self, dialog: PrintSettingsDialog) -> None:
         """Aus den Druckeinstellungen in die Liste der zusätzlichen Programme.
@@ -9400,7 +9521,11 @@ class MainWindow(QMainWindow):
         """Die Knoten und das Modell einrichten, und danach neu nachsehen."""
         from app.ui.comfy_dialog import ComfySetupDialog
 
-        ComfySetupDialog(self).exec()
+        setup = ComfySetupDialog(self)
+        try:
+            setup.exec()
+        finally:
+            setup.deleteLater()
         dialog.recheck()
 
     def _offer_generator_setup(self, dialog: GenerateDialog) -> None:
@@ -9423,7 +9548,11 @@ class MainWindow(QMainWindow):
         """
         from app.ui.shortcuts_window import ShortcutsWindow
 
-        ShortcutsWindow(self.menuBar(), self).exec()
+        dialog = ShortcutsWindow(self.menuBar(), self)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
 
     def action_manual(self, page: str = "", spot: str = "") -> None:
         """Das Handbuch — ein Fenster, kein Dialog.
@@ -9493,9 +9622,11 @@ class MainWindow(QMainWindow):
 
     def action_about(self) -> None:
         dialog = AboutDialog(self)
-        dialog.exec()
-        wanted = dialog.support_wanted
-        dialog.deleteLater()
+        try:
+            dialog.exec()
+            wanted = dialog.support_wanted
+        finally:
+            dialog.deleteLater()
         # Nacheinander und nicht übereinander: zwei modale Fenster gestapelt
         # heißen zweimal Schließen, bis man wieder am Modell ist.
         if wanted:
@@ -9511,9 +9642,11 @@ class MainWindow(QMainWindow):
         Dialogs.
         """
         dialog = DonationDialog(self)
-        dialog.exec()
-        wanted = dialog.feedback_wanted
-        dialog.deleteLater()
+        try:
+            dialog.exec()
+            wanted = dialog.feedback_wanted
+        finally:
+            dialog.deleteLater()
         if wanted:
             self.action_feedback()
 
@@ -9735,20 +9868,23 @@ class MainWindow(QMainWindow):
                         )
                         for slot in body.material_slots
                     ]
-                    chosen, accepted = QInputDialog.getItem(
+                    chosen = ask_choice(
                         self,
-                        tr("Filament ersetzen"),
-                        tr(
-                            "Alle acht Filamente sind belegt. Welches soll auch auf seinen "
-                            "bisherigen Flächen ersetzt werden? Strg+Z nimmt die Zuweisung zurück."
+                        title=tr("Filament ersetzen"),
+                        question=tr(
+                            "Alle acht Filamente sind belegt. Welches soll auch auf "
+                            "seinen bisherigen Flächen ersetzt werden? "
+                            "Strg+Z nimmt die Zuweisung zurück."
                         ),
-                        choices,
-                        0,
-                        False,
+                        choices=choices,
+                        target="message:inventory_spool",
+                        icons=[
+                            swatch(slot_colours(slot.index, slot)) for slot in body.material_slots
+                        ],
                     )
-                    if not accepted:
+                    if chosen is None:
                         return
-                    slot_index = body.material_slots[choices.index(chosen)].index
+                    slot_index = body.material_slots[chosen].index
             params = {
                 "slot": slot_index,
                 "name": entry.name,
@@ -9818,27 +9954,29 @@ class MainWindow(QMainWindow):
         # kommt, und der Knopf daneben führt dorthin, wo es gewählt wird.
         dialog.filamentsRequested.connect(lambda: self._show_filaments(dialog))
         dialog.usage_notice.changed.connect(self._refresh_inventory)
-        dialog.exec()
-        for request in dialog.usage_notice.requests.values():
-            self.usage_notice.offer(request, auto_book=False)
+        try:
+            dialog.exec()
+            for request in dialog.usage_notice.requests.values():
+                self.usage_notice.offer(request, auto_book=False)
 
-        # Die Einstellungen gehören zum Projekt, die Stufe und die Slicer-Wahl
-        # zur Anwendung (§29). Getrennt gespeichert, weil ein Projekt auf einem
-        # anderen Rechner geöffnet wird, wo ein anderer Slicer liegt.
-        #
-        # **Nur, wenn der Dialog etwas bewirkt hat.** Vorher schrieb schon das
-        # bloße Öffnen die aufgelösten Werte ins Dokument; wer nachsah, welche
-        # Temperatur vorgeschlagen würde, trug sie danach in jeder exportierten
-        # 3MF mit sich. ``has_changes`` misst am Anfangszustand und nicht an
-        # einer Liste von Knöpfen.
-        if dialog.has_changes():
-            self.session.set_print_settings(dialog.settings)
-        self.settings.print_quality = dialog.settings.quality
-        self._store_settings()
-        # Ohne das blieb jede Öffnung samt Profilliste am Fenster hängen —
-        # bei der Orca-Familie einige tausend Einträge je Aufruf.
-        scene_action = dialog.take_scene_action()
-        dialog.deleteLater()
+            # Die Einstellungen gehören zum Projekt, die Stufe und die Slicer-Wahl
+            # zur Anwendung (§29). Getrennt gespeichert, weil ein Projekt auf einem
+            # anderen Rechner geöffnet wird, wo ein anderer Slicer liegt.
+            #
+            # **Nur, wenn der Dialog etwas bewirkt hat.** Vorher schrieb schon das
+            # bloße Öffnen die aufgelösten Werte ins Dokument; wer nachsah, welche
+            # Temperatur vorgeschlagen würde, trug sie danach in jeder exportierten
+            # 3MF mit sich. ``has_changes`` misst am Anfangszustand und nicht an
+            # einer Liste von Knöpfen.
+            if dialog.has_changes():
+                self.session.set_print_settings(dialog.settings)
+            self.settings.print_quality = dialog.settings.quality
+            self._store_settings()
+            scene_action = dialog.take_scene_action()
+        finally:
+            # Ohne das blieb jede Öffnung samt Profilliste am Fenster hängen —
+            # bei der Orca-Familie einige tausend Einträge je Aufruf.
+            dialog.deleteLater()
         if scene_action is not None:
             action_id, error = scene_action
             handler = self.error_handlers().get(action_id)
@@ -10861,7 +10999,9 @@ class MainWindow(QMainWindow):
         catalog.set_can_save(*self._recipe_readiness())
         catalog.set_can_insert(*self._insert_readiness())
         result = self.session.last_result
-        if result is None or not result.scene.objects:
+        if (result is None or not result.scene.objects) and not change_refusal():
+            # Gesperrt führen beide Wege in eine Sperre; der Satz nennt dann
+            # die Freischaltung (:meth:`_insert_readiness`).
             # **Der Satz über der Sperre nennt zwei Wege, also stehen zwei
             # Knöpfe darunter** (RM-356): In der leeren Szene sagte er
             # „legen Sie einen Grundkörper an“, und der modale Katalog bot
@@ -10943,6 +11083,11 @@ class MainWindow(QMainWindow):
         Fall ist ein eigener Satz: Auf der Startseite gibt es keinen
         Objektbaum, auf den der Standardsatz zeigen könnte.
         """
+        refusal = change_refusal()
+        if refusal:
+            # Der Katalog bleibt zum Ansehen offen; Einsetzen legt einen
+            # Schritt an und graut gesperrt mit Grund (FD-26).
+            return False, refusal
         result = self.session.last_result
         if result is None or not result.scene.objects:
             return False, tr(
@@ -11835,12 +11980,16 @@ class MainWindow(QMainWindow):
                     if not asked or size is not None or not choices:
                         show_error(error, self)
                         return
-                    picked, accepted = QInputDialog.getItem(
-                        self, tr("Gegenstück zum Gewinde"), str(error.detail), choices, 0, False
+                    picked = ask_choice(
+                        self,
+                        title=tr("Gegenstück zum Gewinde"),
+                        question=str(error.detail),
+                        choices=choices,
+                        target="message:thread_counterpart",
                     )
-                    if not accepted:
+                    if picked is None:
                         return
-                    size = str(picked)
+                    size = choices[picked]
             for finding in applied.findings:
                 self.announce(str(finding.message))
             return
@@ -11960,10 +12109,14 @@ class MainWindow(QMainWindow):
         """§28.3: gemessene Werte ins Materialprofil, und alles folgt."""
         material = self.session.project.document.material or self.session.profile.material.id
         dialog = CalibrationDialog(material, self, process=self.session.profile)
-        if dialog.exec() != CalibrationDialog.DialogCode.Accepted:
-            return
         try:
-            calibrated = calibration.apply(dialog.measured(), process=dialog.process)
+            if dialog.exec() != CalibrationDialog.DialogCode.Accepted:
+                return
+            measured, process = dialog.measured(), dialog.process
+        finally:
+            dialog.deleteLater()
+        try:
+            calibrated = calibration.apply(measured, process=process)
         except AppError as error:
             show_error(error, self)
             return
@@ -11989,7 +12142,11 @@ class MainWindow(QMainWindow):
         Fall; was der Dialog verändert hat, weiß er selbst nicht besser als
         eine neue Prüfung.
         """
-        KeyDialog(parent=self, settings=self.settings).exec()
+        dialog = KeyDialog(parent=self, settings=self.settings)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
         self.session.set_agent_backend(None)
         self._refresh_chat_availability(probe_local=True)
 
@@ -12275,10 +12432,19 @@ class MainWindow(QMainWindow):
         """
         set_length_unit(unit)  # type: ignore[arg-type]
         self.measurements.set_unit(unit)  # type: ignore[arg-type]
-        self.object_tree.set_unit(unit)  # type: ignore[arg-type]
-        self._on_selection(self.object_tree.selected(), refresh_analysis=False)
+        # Die Auswahl wird nur neu beschriftet. Der gelesene Reiter bleibt
+        # deshalb wie beim Wiederherstellen einer Auswahl nach der Rechnung.
+        with self.feature_dock.held():
+            self.object_tree.set_unit(unit)  # type: ignore[arg-type]
+            self._on_selection(self.object_tree.selected(), refresh_analysis=False)
         self._refresh_map_units()
         self._update_header()
+        # Auch alte und nachträglich ergänzte Befunde lesen ihre Werte neu.
+        # Der öffentliche Nachschubweg erhält Filter und Befundauswahl; die
+        # bereits geöffneten Einzelheiten bleiben ebenfalls offen.
+        details_open = self.report.finding_details_toggle.isChecked()
+        self.report.add_findings([])
+        self.report.finding_details_toggle.setChecked(details_open)
         # Die Merkmalsbeschriftungen in der Überlagerung schreiben Längen ohne
         # eigene Einheit; sie brauchen nur den Anstoß, es neu zu tun.
         self.viewport.refresh_labels()
@@ -12396,9 +12562,8 @@ class MainWindow(QMainWindow):
         by_title = {title: key for key, (title, _shortcut, _slot) in known.items()}
         ops = set(self._op_actions.values())
         found: dict[str, Any] = {}
-        overridden = 0
         self._command_actions.clear()
-        for path, action in _menu_lines(self.menuBar()):
+        for name, menus, action in menubar_entries(self):
             if action in ops:
                 continue
             if action.text() in known_titles:
@@ -12413,14 +12578,17 @@ class MainWindow(QMainWindow):
                 actual = action.shortcut().toString()
                 if actual and actual != shortcut:
                     found[known_key] = (title, actual, slot)
-                    overridden += 1
                 continue
             if action is self._quit_action:
                 continue
             # Der Weg steht im Titel: „Vorne" allein sagt in einer Liste aus
             # hundert Zeilen nichts, „Kamera: Vorne" schon.
+            path = " > ".join(menus)
             title = tr("{name}: {value}", name=path, value=action.text()) if path else action.text()
-            key = f"menu.{len(found) - overridden}"
+            # **Die Kennung ist der Name der Zeile, nicht ihre Lage** (RM-737):
+            # Hier stand ``menu.<n>`` nach der Reihenfolge, und eine neue Zeile
+            # weiter oben gab jeder folgenden eine andere Kennung.
+            key = name
             found[key] = (
                 title,
                 action.shortcut().toString(),
@@ -12450,11 +12618,19 @@ class MainWindow(QMainWindow):
 
         Dieselbe Auskunft wie ``_operation_availability`` für die Operationen,
         aus derselben Quelle: der Action, die auch das Menü ausgraut. Was von
-        Hand in ``window_commands`` steht und keine Action hat — Speichern,
-        das Handbuch, „Einpassen" — kann immer.
+        Hand in ``window_commands`` steht und keine Action hat, fragt seine
+        Quelle; ``window_commands`` läuft davor und ordnet die Actions zu.
         """
         action = self._command_actions.get(key)
-        if action is None or action.isEnabled():
+        if action is None:
+            # **Ohne Action fragt der Befehl seine Quelle** (FD-26): ein
+            # Werkzeug den Umschalter, alles andere ``change_lock`` — *Zahlen an
+            # Maße binden* stand gesperrt sonst als einziger Weg offen.
+            if key.startswith("tool."):
+                return self.tools.usable(key.removeprefix("tool."))
+            refusal = change_lock.command_refusal(key)
+            return not refusal, refusal
+        if action.isEnabled():
             return True, ""
         hint = action.toolTip().strip()
         if hint and hint != action.text().replace("&", "").strip():
@@ -16217,14 +16393,14 @@ class MainWindow(QMainWindow):
         # Schreib- und Gestensperre einhalten. Das betrifft insbesondere
         # Bausteine in der Suche und Varianten im Auswahlpanel; bislang
         # prüfte der Ersatzweg darunter nur Körperzahl und Bauart.
-        locked = not activation.state().unlocked if locked is None else locked
+        locked = bool(change_refusal()) if locked is None else locked
         gesturing = (
             self._sketch_panel is not None or self.sculpting() or self.setting_armature()
             if gesturing is None
             else gesturing
         )
         if locked:
-            return False, licence_lock_line()
+            return False, change_refusal() or licence_lock_line()
         if gesturing:
             return False, tr("Solange gezeichnet oder geformt wird, gilt die Taste dem Werkzeug.")
 
@@ -16276,6 +16452,9 @@ class MainWindow(QMainWindow):
         die Robert am abgeschnittenen Text gemeldet hat, nur senkrecht
         (Robert: „auch auf die größen achten war viel abgeschnitten").
         """
+        from app.ui.feature_editing import FeatureEditPriority
+
+        FeatureEditPriority(self.feature_panel, self.selection_operations.catalog_button)
         inside = QWidget(self)
         stacked = QVBoxLayout(inside)
         stacked.setContentsMargins(0, 0, 0, 0)
@@ -16997,6 +17176,9 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         for spec, (title, sentence), key in entries:
             action = menu.addAction(f"{title}\t{key}" if key else title)
+            # Der Name der Operation als ``objectName``: So nennt der Wortschatz
+            # die Zeile im offenen Menü (``menu:delete_object``, RM-737).
+            action.setObjectName(spec.name)
             locked = self._reason_locked(spec, kinds, objects, len(chosen))
             action.setEnabled(locked is None)
             action.setToolTip(locked or sentence)
@@ -17099,7 +17281,7 @@ class MainWindow(QMainWindow):
             # Filter der Anwendung und käme davor. Mit dem Fokus im Baum oder
             # im Reiter kommt die Taste dort nie an; dann sagt sie den Grund.
             return False
-        if self._halt_reason() is None and activation.state().unlocked:
+        if self._halt_reason() is None and not change_refusal():
             return False
         # Der Titel des Kontextmenüs: An einem Bausteinmerkmal ist Entf
         # *Baustein entfernen*, nicht der Zwilling der Operation.
@@ -19438,6 +19620,7 @@ class MainWindow(QMainWindow):
         if hit is not None and entry is not None and entry.kind == "mesh" and not self.session.busy:
             menu = menu or QMenu(self)
             local = menu.addAction(str(REGISTRY.get("detect_region").title))
+            local.setObjectName("detect_region")
             local.triggered.connect(partial(self.local_features().begin, hit))
         if menu is None:
             return
@@ -19469,11 +19652,15 @@ class MainWindow(QMainWindow):
             return None
         menu = QMenu(self)
         menu.setToolTipsVisible(True)
+        refusal = change_refusal()
         for action in edge_actions(" ".join(keys)):
             if action.op is None:
                 continue
             entry = menu.addAction(str(action.title))
-            entry.setToolTip(str(REGISTRY.get(action.op).doc))
+            entry.setObjectName(guides.action_key(action))
+            # Gesperrt grau mit Grund, wie das Merkmalfenster daneben (FD-5).
+            entry.setEnabled(not refusal)
+            entry.setToolTip(refusal or str(REGISTRY.get(action.op).doc))
             # **Der Dialog und nicht die Ausführung.** Das Panel daneben hat
             # das Feld für den Radius schon im Bild; ein Menüeintrag hat keins,
             # und eine Verrundung mit stillschweigender Vorgabe wäre ein
@@ -20314,8 +20501,9 @@ class MainWindow(QMainWindow):
 
     def _manual_fit_reason(self) -> str:
         """Der sichtbare und erneut geprüfte Schreibzustand der Passungszeile."""
-        if not activation.state().unlocked:
-            return licence_lock_line()
+        refusal = change_refusal()
+        if refusal:
+            return refusal
         if self._sketch_panel is not None or self.sculpting() or self.setting_armature():
             return tr("Zuerst das aktive Werkzeug beenden.")
         result = self.session.last_result
@@ -21293,10 +21481,9 @@ class MainWindow(QMainWindow):
         members = tuple(member.target for member in group.members) if group is not None else ()
         every = QCheckBox(fields) if len(members) > 1 else None
         if every is not None:
-            every.setText(tr("Auf alle {count} gleichartigen anwenden").format(count=len(members)))
-            every.setAccessibleDescription(
-                tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück.")
-            )
+            from app.ui.feature_editing import configure_scope
+
+            configure_scope(every, len(members))
         window_ref = weakref.ref(self)
         scope_ref = weakref.ref(every) if every is not None else None
         editor_refs = {name: weakref.ref(editor) for name, editor in editors.items()}
@@ -22534,7 +22721,7 @@ class MainWindow(QMainWindow):
                 profiles.printer(printer or document.printer)
                 profiles.material(material or document.material)
             except AppError as error:
-                return f"{error.title} {error.detail or ''}".strip()
+                return str(error)  # Titel und Detail als Satzfolge (``errors.title_and_detail``)
             changed = self.session.change_scene_profile(
                 printer or document.printer,
                 material or document.material,
@@ -25638,7 +25825,11 @@ class MainWindow(QMainWindow):
         # es auf den Bauraum ein statt auf das Teil.
         self._seen_objects = bool(result.scene.objects)
         self._sketch_body_missing(result)
-        self.object_tree.show_scene(result, self.session.project.document)
+        # **Die wiederhergestellte Auswahl ist keine neue** (FD-4): Sie holte
+        # nach einer Befundhandlung den Reiter *Auswahl* über den Bericht, und
+        # der Fokus fiel dort in ein Feld.
+        with self.feature_dock.held():
+            self.object_tree.show_scene(result, self.session.project.document)
         self._show_project_filaments(result, self.effective_print_settings())
         plates = [entry.plate for entry in picture.scene.objects.values()]
         # Der Plattenwähler sitzt in der Kopfzeile und nicht mehr in der
@@ -27340,10 +27531,10 @@ class MainWindow(QMainWindow):
         war der fehlende Draht. Was hier nicht steht, wird auch nicht
         angeboten; ein Knopf, der nichts tut, ist schlimmer als keiner.
 
-        Nicht dabei und bewusst: ``use_voxel_stage`` (die Stufe ist kein
-        Parameter, den ein Dialog setzen könnte), ``choose`` (der Kern fragt
-        dafür über ``ctx.ask``, bevor er wirft) und ``choose_printer`` — das
-        kommt mit dem Einstellungsdialog.
+        Nicht dabei und bewusst: ``choose`` (der Kern fragt dafür über
+        ``ctx.ask``, bevor er wirft) und ``choose_printer`` — das kommt mit dem
+        Einstellungsdialog. *Gröber rechnen* gibt es nicht mehr (FD-6): Die
+        Auswertung rechnet eine gekürzte Kette selbst zu Ende.
         """
         return {
             "report_error": lambda error: self.report_error(error),
@@ -27510,12 +27701,6 @@ class MainWindow(QMainWindow):
             # bleibt der Weg, den es vor dem Update in der Anwendung als
             # einzigen gab (§37.2).
             "open_download_page": lambda _error: open_website(),
-            # **Der Rat, der die ganze Zeit ins Leere zeigte.** Im Fenster läuft
-            # die kurze Rückfallkette (§31); *Voxelstufe erzwingen* ist deshalb
-            # der richtige nächste Schritt und war doch nur ein Satz. Angeboten
-            # wird er nur, wenn die Voxelstufe noch nicht dran war — das
-            # entscheidet ``BooleanFailedError`` an seinen versuchten Stufen.
-            "use_voxel_stage": lambda _error: self.session.recompute_fully(),
             # **Nur wo es etwas zu wiederholen gibt.** Nach einem gescheiterten
             # Schreiben sind das die zwei Antworten, die wirklich helfen: die
             # Datei freigeben und *erneut* schreiben, oder einen *anderen Ort*
@@ -27570,7 +27755,11 @@ class MainWindow(QMainWindow):
         Aktionen nachzuziehen — mit einem eingetragenen Schlüssel steht wieder
         offen, was der abgelaufene Testlauf zugemacht hat.
         """
-        ActivationDialog(self).exec()
+        dialog = ActivationDialog(self)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
         self._update_actions()
         self._refresh_chat_availability()
         self._trial_status_line()
@@ -28161,7 +28350,11 @@ class MainWindow(QMainWindow):
         )
         if wanted is None:
             return
-        StepValuesDialog(wanted, self).exec()
+        dialog = StepValuesDialog(wanted, self)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
 
     def _correct_after_error(self, error: AppError) -> None:
         """Den Schritt wieder öffnen, dessen Werte nicht gingen (§2.7, §2.1).
@@ -28468,11 +28661,21 @@ class MainWindow(QMainWindow):
         self.measurements.show_object(name, bounds.size, volume_of(meshes))
 
     def action_add_parameter(self) -> None:
-        """§13: ein Hauptmaß benennen — auch ohne den Agenten (§2.3)."""
-        dialog = ParameterDialog(self.session.project.document.parameters, self)
-        if dialog.exec() != ParameterDialog.DialogCode.Accepted:
+        """§13: ein Hauptmaß benennen — auch ohne den Agenten (§2.3).
+
+        Gesperrt sagt der Weg an der grauen Zeile vorbei den Grund, statt den
+        Dialog zu öffnen, dessen *Anlegen* abgelehnt würde (FD-26).
+        """
+        if change_lock.refused(self.announce):
             return
-        self.session.add_parameter(dialog.parameter())
+        dialog = ParameterDialog(self.session.project.document.parameters, self)
+        try:
+            if dialog.exec() != ParameterDialog.DialogCode.Accepted:
+                return
+            parameter = dialog.parameter()
+        finally:
+            dialog.deleteLater()
+        self.session.add_parameter(parameter)
 
     def action_bind_parameters(self) -> None:
         """Feste Zahlen an Projektmaße binden (Dateiaudit §4): wählen, dann eine Transaktion.
@@ -28484,6 +28687,8 @@ class MainWindow(QMainWindow):
         from app.core.scene.parameter_binding import binding_spots, bound_params
         from app.ui.binding_dialog import BindingDialog
 
+        if change_lock.refused(self.announce):
+            return
         document = self.session.project.document
         result = self.session.last_result
         spots = result.binding_spots if result is not None else ()
@@ -28516,12 +28721,16 @@ class MainWindow(QMainWindow):
         """
         parameters = self.session.project.document.parameters
         existing = parameters.get(name)
-        if existing is None:
+        if existing is None or change_lock.refused(self.announce):
             return
         dialog = ParameterDialog(parameters, self, existing=existing)
-        if dialog.exec() != ParameterDialog.DialogCode.Accepted:
-            return
-        self.session.edit_parameter(name, dialog.parameter())
+        try:
+            if dialog.exec() != ParameterDialog.DialogCode.Accepted:
+                return
+            parameter = dialog.parameter()
+        finally:
+            dialog.deleteLater()
+        self.session.edit_parameter(name, parameter)
 
     def _refresh_parameters(self) -> None:
         """Verwendungsdaten gelten nur dem fertig ausgewerteten aktuellen Dokument."""
@@ -28735,19 +28944,22 @@ class MainWindow(QMainWindow):
                 dialog.restore_custom_printer_draft(printer_draft)
             dialog.importRequested.connect(lambda: import_requested.append(True))
             dialog.inventoryRequested.connect(lambda: inventory_requested.append(True))
-            answer = dialog.exec()
-            if answer != first_run.LANGUAGE_CHANGED:
-                break
-            printer_draft = dialog.custom_printer_draft()
-            discovered_printers = dialog.discovered_printers
-            printer_selection = dialog.printer_selection
-            printer_query = dialog.printer_query
-            # Weggeräumt, nicht abgewartet: ``release`` wartete auf die
-            # Programmsuche des alten Dialogs, und der Sprachwechsel stand
-            # so lange still. Den Arbeiter hält die Halteleine.
-            dialog.deleteLater()
+            try:
+                answer = dialog.exec()
+                if answer == first_run.FirstRunDialog.DialogCode.Accepted:
+                    dialog.apply_to(self.settings)
+                if answer != first_run.LANGUAGE_CHANGED:
+                    break
+                printer_draft = dialog.custom_printer_draft()
+                discovered_printers = dialog.discovered_printers
+                printer_selection = dialog.printer_selection
+                printer_query = dialog.printer_query
+            finally:
+                # Weggeräumt, nicht abgewartet: ``release`` wartete auf die
+                # Programmsuche des alten Dialogs, und der Sprachwechsel stand
+                # so lange still. Den Arbeiter hält die Halteleine.
+                dialog.deleteLater()
         if answer == first_run.FirstRunDialog.DialogCode.Accepted:
-            dialog.apply_to(self.settings)
             self._adopt_defaults()
         else:
             # Überspringen zählt als erledigt: beim nächsten Mal wieder zu fragen
@@ -28893,6 +29105,8 @@ class MainWindow(QMainWindow):
         zweiter Weg wäre ihr Ende, wie bequem er auch wäre.
         """
         dialog = self._support_dialog(KIND_SURVEY)
+        # Nicht modal: Freigegeben wird, sobald der Bogen zu ist.
+        dialog.finished.connect(dialog.deleteLater)
         self._survey_dialog = dialog
         dialog.show()
         dialog.raise_()
@@ -28908,6 +29122,7 @@ class MainWindow(QMainWindow):
         """
         dialog = UpdateDialog(release, self)
         dialog.installRequested.connect(self._install_update)
+        dialog.finished.connect(dialog.deleteLater)
         # Festhalten: Ein nicht modaler Dialog ohne Referenz ist einer, den der
         # Aufräumer einsammelt, sobald diese Methode zurückkehrt.
         self._update_dialog = dialog
@@ -28954,7 +29169,11 @@ class MainWindow(QMainWindow):
         """
         from app.ui.changes_dialog import ChangesDialog
 
-        ChangesDialog(self).exec()
+        dialog = ChangesDialog(self)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
 
     def action_check_updates(self) -> None:
         """Von Hand nach einer neuen Version sehen (Demo-Konzept §2 G).
@@ -28980,8 +29199,11 @@ class MainWindow(QMainWindow):
         nichts unbesehen, und der abgelegte Ordner steht als Weg daneben.
         """
         dialog = self._support_dialog(kind)
-        dialog.exec()
-        self._remember_contact(dialog)
+        try:
+            dialog.exec()
+            self._remember_contact(dialog)
+        finally:
+            dialog.deleteLater()
 
     def report_error(self, error: BaseException, summary: str = "") -> None:
         """§33.1: ein Programmfehler bekommt ein Berichtsangebot, keinen
@@ -29024,9 +29246,10 @@ class MainWindow(QMainWindow):
         self._crash_dialog = dialog
         try:
             dialog.exec()
+            self._remember_contact(dialog)
         finally:
             self._crash_dialog = None
-        self._remember_contact(dialog)
+            dialog.deleteLater()
 
     def _support_dialog(self, kind: str, detail: str = "") -> SupportDialog:
         """Der Rückmeldungsdialog mit allem, was dieses Fenster beisteuern kann."""
@@ -29338,6 +29561,7 @@ class MainWindow(QMainWindow):
         zwischen den beiden Fällen ist der Text, nicht der Aufbau.
         """
         box = QMessageBox(self)
+        box.setProperty(guides.TARGET_PROPERTY, "message:recovery")
         box.setWindowTitle(tr("Wiederherstellung"))
         box.setText(question)
         lines = [tr("Sicherung: {backup}").format(backup=self._when(candidate))]
@@ -29350,12 +29574,17 @@ class MainWindow(QMainWindow):
         lines.append(tr("Wird die Sicherung nicht geöffnet, wird sie verworfen."))
         box.setInformativeText("\n".join(lines))
         restore = box.addButton(tr("Sicherung öffnen"), QMessageBox.ButtonRole.AcceptRole)
-        box.addButton(decline, QMessageBox.ButtonRole.RejectRole)
+        refuse = box.addButton(decline, QMessageBox.ButtonRole.RejectRole)
+        name_button(restore, "message.button:recovery.restore")
+        name_button(refuse, "message.button:recovery.decline")
         # Akzent und halbfette Schrift, nicht nur der Default (Regel 18).
         make_primary(restore)
         box.setDefaultButton(restore)
-        box.exec()
-        return box.clickedButton() is restore
+        try:
+            box.exec()
+            return box.clickedButton() is restore
+        finally:
+            box.deleteLater()
 
     def _offer_recovery(self, path: Path) -> None:
         """Eine Sicherung anbieten, die neuer ist als die Datei (§38).
@@ -29860,40 +30089,6 @@ class MainWindow(QMainWindow):
             )
         )
         return False
-
-
-def _menu_entries(menu: Any) -> Iterator[Any]:
-    """Jede anklickbare Zeile eines Menüs, Untermenüs eingeschlossen.
-
-    Getrennt von :func:`_menu_lines`, weil das den **Weg** liefert und dies die
-    **Handlung**: Wer wissen will, ob in einem Menü irgendetwas geht, braucht
-    die Actions selbst und nicht ihre Beschriftungen.
-    """
-    for action in menu.actions():
-        if action.isSeparator():
-            continue
-        sub = action.menu()
-        if sub is not None:
-            yield from _menu_entries(sub)
-            continue
-        yield action
-
-
-def _menu_lines(menu: Any, path: str = "") -> Iterator[tuple[str, Any]]:
-    """Jede Zeile der Menüleiste mit ihrem Weg — Untermenüs eingeschlossen.
-
-    Trennstriche fallen weg, ein Untermenü liefert seine Kinder statt sich
-    selbst. Der Weg ist das, was in einer Liste aus hundert Zeilen den
-    Unterschied macht: „Vorne" sagt nichts, „Kamera: Vorne" schon.
-    """
-    for action in menu.actions():
-        if action.isSeparator():
-            continue
-        sub = action.menu()
-        if sub is not None:
-            yield from _menu_lines(sub, f"{path} > {action.text()}" if path else action.text())
-            continue
-        yield path, action
 
 
 def _image_path(event: QDragEnterEvent | QDropEvent) -> Path | None:

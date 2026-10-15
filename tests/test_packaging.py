@@ -2643,7 +2643,12 @@ def test_the_window_trial_always_writes_its_outcome_and_ends_with_the_start(
     done = subprocess.run(
         [shell, "-c", stand_ins + script],
         cwd=tmp_path,
-        env={**os.environ, "GITHUB_STEP_SUMMARY": str(summary), "UID": "501"},
+        env=dict(
+            os.environ,
+            PATH=os.pathsep.join((str(Path(shell).parent), os.environ.get("PATH", ""))),
+            GITHUB_STEP_SUMMARY=str(summary),
+            UID="501",
+        ),
         capture_output=True,
         text=True,
         encoding="utf-8",

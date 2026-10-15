@@ -38,7 +38,7 @@ from app.ui.filament_picker import swatch
 from app.ui.labels import colour_name, length
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.outline_dialog import ContourField
-from app.ui.style import ROOMY, SPACE, WIDE, make_primary, no_primary, set_level
+from app.ui.style import NORMAL, ROOMY, SPACE, TIGHT, WIDE, make_primary, no_primary, set_level
 from app.ui.theme import Theme, current_theme
 
 #: Wie groß die Vorschau gezeichnet wird, in Pixeln (die längere Seite).
@@ -230,7 +230,9 @@ class StepBodiesDialog(QDialog):
         note.setWordWrap(True)
         layout.addWidget(note)
         middle = QHBoxLayout()
+        middle.setSpacing(TIGHT)
         left = QVBoxLayout()
+        left.setSpacing(NORMAL)
         title = QLabel(tr("Körper"), self)
         set_level(title, "section")
         left.addWidget(title)
@@ -244,6 +246,7 @@ class StepBodiesDialog(QDialog):
         self.bodies.currentRowChanged.connect(self._current_changed)
         left.addWidget(self.bodies, 1)
         buttons_row = QHBoxLayout()
+        buttons_row.setSpacing(TIGHT)
         self.select_all = QPushButton(tr("Alle"), self)
         self.select_none = QPushButton(tr("Keine"), self)
         self.select_all.clicked.connect(self._all)
@@ -257,6 +260,7 @@ class StepBodiesDialog(QDialog):
         left.addWidget(self.summary)
         middle.addLayout(left, 1)
         right = QVBoxLayout()
+        right.setSpacing(NORMAL)
         placed_title = QLabel(tr("Lage in der Baugruppe"), self)
         set_level(placed_title, "section")
         right.addWidget(placed_title)

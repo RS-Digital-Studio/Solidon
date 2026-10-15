@@ -2042,6 +2042,11 @@ _METHOD_NAMES: Final[dict[str, TranslatableText]] = {
 
 def value_text(key: str, value: object) -> str:
     """Der Wert mit seiner Einheit, in der Einheit der Anzeige (§19.3)."""
+    if key == "reason" and isinstance(value, str) and value == "points_are_on_one_line":
+        return tr(
+            "Die drei Punkte liegen auf einer Geraden oder aufeinander — "
+            "sie spannen keine Ebene auf. Einen davon seitlich versetzen."
+        )
     if key == "part_name":
         # Nutzernamen bleiben wörtlich, auch wenn sie wie Zahlen oder Auswahlwerte aussehen.
         return str(value)
@@ -2057,6 +2062,15 @@ def value_text(key: str, value: object) -> str:
         return ", ".join(
             str(_METHOD_NAMES[entry]) if entry in _METHOD_NAMES else str(entry) for entry in value
         )
+    # Lage- und Abstandsbefunde tragen diese Längen auch im alten Cache als
+    # mm-Text. Erst hier umrechnen, damit derselbe Befund einem Einheitenwechsel
+    # folgt und seine gespeicherten Werte für die Entdoppelung gleich bleiben.
+    # Ein nackter numerischer ``gap`` ist dagegen eine Slicer-Einstellung;
+    # Freitext ohne die eindeutige gespeicherte Form wird nicht geraten.
+    if key in ("excess", "gap", "needed") and isinstance(value, str):
+        measured = re.fullmatch(r"([+-]?\d+(?:\.\d+)?) mm", value)
+        if measured is not None:
+            return length(float(measured[1]))
     # Diese bestehenden Befundschlüssel tragen keine Einheiten-Endung.
     # Längen folgen trotzdem der Anzeigeeinheit; Materialkennwerte behalten
     # die Einheit des Filamentprofils und der Festigkeitsrechnung.

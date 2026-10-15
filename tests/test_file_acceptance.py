@@ -503,6 +503,14 @@ def test_a_case_runs_in_its_own_process_from_inventory_to_report(tmp_path: Path)
     assert (
         (out / "summary.md").read_text(encoding="utf-8").startswith("# Native Einzeldateiabnahme")
     )
+    # Review D0-P M7: Der feste Rahmen der Abnahme steht im Profil des Falls —
+    # Neues Projekt nimmt Drucker und Material daraus (centauri-carbon-2/petg).
+    from tools.file_acceptance import MATERIAL, PRINTER
+
+    (profile,) = (out / "cases" / "001" / "profile").rglob("settings.json")
+    written = json.loads(profile.read_text(encoding="utf-8"))
+    assert (written["printer"], written["material"]) == (PRINTER, MATERIAL)
+    assert written["first_run_done"] is True
 
 
 def test_the_output_folder_stays_outside_the_repository(tmp_path: Path) -> None:
@@ -510,3 +518,122 @@ def test_the_output_folder_stays_outside_the_repository(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         outside_the_repository(ROOT / "tmp" / "abnahme")
     assert outside_the_repository(tmp_path) == tmp_path.resolve()
+
+
+#: Ein Kindprozess, der seine Absturzdateien anlegt und dann abbricht — an
+#: einem ``qFatal`` in Qt oder an einem Speicherfehler.
+_ABORTS = """
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from tools.file_acceptance import crash_records
+crash_records(Path(sys.argv[2]))
+if sys.argv[3] == "qt":
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication, QLineEdit
+    application = QApplication([])
+    QTest.keyClicks(QLineEdit(), "\u00f6")
+else:
+    import faulthandler
+    faulthandler._sigsegv()
+"""
+
+
+@pytest.mark.windowed
+@pytest.mark.parametrize("how", ["qt", "speicher"])
+def test_a_case_that_aborts_names_why_in_its_folder(tmp_path: Path, how: str) -> None:
+    """Probelauf, Befund A: Ein nativer Abbruch hinterließ ein leeres ``stderr.log``.
+
+    Ein ``qFatal`` (hier das ASSERT, an dem Fall 1 starb) steht jetzt in
+    ``qt.log``, ein Speicherfehler mit Stapel in ``stapel.log``; ``crash_note``
+    liest daraus, was ``process.json`` und die Übersicht nennen.
+    """
+    import os
+    import subprocess
+    import sys
+
+    from tools.file_acceptance import crash_note
+
+    script = tmp_path / "abbruch.py"
+    script.write_text(_ABORTS, encoding="utf-8")
+    folder = tmp_path / "fall"
+    folder.mkdir()
+    finished = subprocess.run(
+        [sys.executable, str(script), str(ROOT), str(folder), how],
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONUTF8": "1"},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+        check=False,
+    )
+    assert finished.returncode != 0
+    note = crash_note(folder)
+    if how == "qt":
+        assert note.startswith("QtFatalMsg") and "qasciikey" in note, note
+    else:
+        assert "Windows fatal exception" in note or "Fatal Python error" in note, note
+        assert "abbruch.py" in note, note
+
+
+def test_the_overview_names_why_a_case_aborted(tmp_path: Path) -> None:
+    """Der Grund eines Abbruchs steht in ``process.json`` und in den Fehlern der Übersicht."""
+    from tools.file_acceptance import function_summary
+
+    folder = tmp_path / "001"
+    folder.mkdir()
+    case = Case(1, "resize_hole [basis]", "scenes/x.p3d", "", kind="function", row="resize_hole")
+    note = "QtFatalMsg ASSERT: false in qasciikey.cpp"
+    row = function_summary(case, folder, {"exit_code": 3221226505, "crash": note})
+    assert note in row["errors"]
+    assert function_summary(case, folder, {"exit_code": 0, "crash": ""})["errors"] == []
+
+
+def test_a_crash_is_named_by_its_stack_not_by_an_earlier_critical_message(tmp_path: Path) -> None:
+    """Durchsicht welle4 C-L11: ``crash_note`` nennt die Meldung, an der der Fall starb.
+
+    Ein ``QtCriticalMsg`` ist eine Warnung, kein Abbruch — vorher stand die
+    letzte davon als Grund, obwohl ``stapel.log`` den Absturz mit Stapel trug.
+    Ein ``qFatal`` bleibt der Grund vor dem Stapel; ohne beides nennt die
+    kritische Meldung wenigstens, was zuletzt kam.
+    """
+    from tools.file_acceptance import QT_LOG, STACK_LOG, crash_note
+
+    critical = "QtCriticalMsg QWindowsWindow::setGeometry: Unable to set geometry"
+    stack = 'Windows fatal exception: access violation\n\nCurrent thread:\n  File "x.py", line 1'
+    (tmp_path / QT_LOG).write_text(f"QtWarningMsg schon da\n{critical}\n", encoding="utf-8")
+    (tmp_path / STACK_LOG).write_text(f"Stapel alle 30 s\n{stack}\n", encoding="utf-8")
+    assert crash_note(tmp_path).startswith("Windows fatal exception"), crash_note(tmp_path)
+    fatal = "QtFatalMsg ASSERT: false in qasciikey.cpp"
+    (tmp_path / QT_LOG).write_text(f"{critical}\n{fatal}\n", encoding="utf-8")
+    assert crash_note(tmp_path) == fatal
+    (tmp_path / QT_LOG).write_text(f"{critical}\n", encoding="utf-8")
+    (tmp_path / STACK_LOG).unlink()
+    assert crash_note(tmp_path) == critical
+
+
+def test_the_scene_of_the_fault_case_brings_its_preconditions_to_the_case() -> None:
+    """Durchsicht welle4 C-L4: Der Fehlfall läuft im selben Fall wie der Hauptweg.
+
+    Was seine eigene Startszene verlangt (hier: OpenCASCADE fehlt), muss vor dem
+    Start des Falls stehen; vorher galten nur die Vorbedingungen der Startszene
+    der Zeile. ``function_scenes.row_scenes`` nennt beide Szenen — dieselbe
+    Quelle für Vorbedingungen, eigene Bausteine und die gespeicherten Szenen.
+    """
+    from tools.file_acceptance import function_cases
+    from tools.function_scenes import row_scenes
+
+    row = {
+        "id": "finding.action:install",
+        "kind": "bedienflaeche",
+        "source": "befundhandlung",
+        "package": "D12",
+        "start_scene": "leer",
+        "spec": {"fault_case": {"start_scene": "ohne_opencascade.exakt"}},
+    }
+    assert row_scenes(row) == ("leer", "ohne_opencascade.exakt")
+    assert row_scenes({**row, "spec": {"fault_case": {"start_scene": "leer"}}}) == ("leer",)
+    cases = function_cases([row])
+    assert cases and all(
+        case.variant["preconditions"] == {"opencascade": "fehlt"} for case in cases
+    ), [case.variant for case in cases]

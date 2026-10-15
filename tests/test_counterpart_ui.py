@@ -14,41 +14,14 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from app.core.scene.history import OperationDraft
+from app.i18n import tr
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from tests.ui_helpers import top_face as _top_face
+from tests.ui_helpers import two_plates as _two_plates
 
 THREADS = Path(__file__).parent / "data" / "threads"
-
-
-def _two_plates(window: MainWindow) -> tuple[str, str]:
-    """Zwei Platten nebeneinander, gerechnet — die Ausgangslage."""
-    window.session.start_new("centauri-carbon-2", "petg")
-    window.session.history.apply(
-        "Zwei Platten",
-        [
-            OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 10.0}),
-            OperationDraft(
-                op="create_box",
-                params={"width": 40.0, "depth": 30.0, "height": 10.0, "x": 60.0},
-            ),
-        ],
-    )
-    window.session.evaluate_now()
-    result = window.session.last_result
-    assert result is not None
-    return tuple(result.scene.objects)[:2]  # type: ignore[return-value]
-
-
-def _top_face(window: MainWindow, object_id: str) -> str:
-    """Die Kennung der Oberseite — die Stelle, an die ein Gegenstück kommt."""
-    result = window.session.last_result
-    assert result is not None
-    entry = result.scene.objects[object_id]
-    for name, feature in entry.features.items():
-        if feature.kind == "face" and name.startswith("face_top"):
-            return name
-    raise AssertionError(f"{object_id} hat keine Oberseite — dann prüft der Test nichts")
 
 
 def test_the_entry_stays_locked_until_two_places_are_marked(qt_app: QApplication) -> None:
@@ -365,9 +338,8 @@ def test_a_thread_matching_two_series_asks_and_takes_the_answer(
     Größen nicht trennt, steht über ``_told_apart`` nach: Ein erzeugtes Ø 4 × 0,7
     wäre sonst genau M4.
     """
-    from PySide6.QtWidgets import QInputDialog
-
     from app.core import counterpart
+    from app.ui import main_window
 
     window = MainWindow(Session(), UiSettings())
     try:
@@ -400,12 +372,13 @@ def test_a_thread_matching_two_series_asks_and_takes_the_answer(
         monkeypatch.setattr(counterpart, "_told_apart", lambda _f, _d, _p, sizes: tuple(sizes))
         asked: list[list[str]] = []
 
-        def answer(*args: object) -> tuple[str, bool]:
-            choices = list(args[3])  # type: ignore[call-overload]
-            asked.append(choices)
-            return "#8-36 UNF", True
+        def answer(_parent: object, *, choices: list[str], target: str, **_rest: object) -> int:
+            # Die Rückfrage nach Regel 21 mit ihrem Kennzeichen (FD-22).
+            assert target == "message:thread_counterpart"
+            asked.append(list(choices))
+            return list(choices).index("#8-36 UNF")
 
-        monkeypatch.setattr(QInputDialog, "getItem", answer)
+        monkeypatch.setattr(main_window, "ask_choice", answer)
         window.object_tree.select_features(((first, thread), (second, _top_face(window, second))))
         QApplication.processEvents()
         window.action_counterpart()
@@ -770,7 +743,19 @@ def test_a_printed_inner_thread_offers_only_the_pin_in_the_card(qt_app: QApplica
         window.object_tree.select_object(second)
         window.object_tree.select_feature(second, thread_of(second))
         QApplication.processEvents()
-        assert panel.isHidden(), "am Außengewinde gibt es keinen Stift, und die Karte bleibt zu"
+        # **Die Karte steht immer, mit dem Suchfeld** (RM-735, Entscheidung
+        # Robert 11.10.2026); am Außengewinde bietet sie nur nichts an.
+        assert not panel.isHidden(), "die Karte steht, das Suchfeld sucht über alles"
+        assert not panel.search.isHidden()
+        assert not {name for name in panel._buttons if panel._fits_the_level(name)}, (
+            "am Außengewinde gibt es keinen Stift"
+        )
+        assert panel._buttons["pin_for_bore"].isHidden()
+        assert panel.catalog_button.isHidden(), "kein Katalog an einem Bausteinmerkmal"
+        assert not panel._nothing.isHidden(), "die leere Karte sagt, wo die Handlungen stehen"
+        assert panel._nothing.text() == str(
+            tr("Was sich hier tun lässt, steht oben bei den Maßen.")
+        )
     finally:
         release = getattr(type(window), "release", None)
         if release is not None:

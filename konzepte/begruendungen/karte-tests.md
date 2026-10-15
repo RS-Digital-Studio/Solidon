@@ -25,10 +25,108 @@ und von zwei Fassungen desselben Satzes veraltet immer eine (RM-098).
 
 ## Was wo geprüft wird
 
+### Dialog-, Karten- und Vorschaugrößen
+
+| Vertrag | Zuständige Testdatei |
+|---|---|
+| Dialoginhalt, Klappen und Aktionsleisten erreichbar, Fenster im Bildschirm; Einstellungen mit eigenem Bedienablauf | `test_dialog_layout.py`, `test_dialog_layout_regressions.py`; Einstellungen in `test_ui_settings.py` |
+| Merkmalmenge leer/ein/sechs/viele, Modell- und Textwechsel, Schrift und Stil, Querleiste, dynamische Ergänzung im offenen Dialog, letzte hohe Zeile mit Tastatur erreichbar | `test_feature_list_ui.py` |
+| Erklärung der ungültigen Drei-Punkte-Ebene in jeder Sprache, spätes Fehlerangebot bei automatischer/manueller Größe, wirklicher Anwendungsschriftwechsel | `test_operation_refusal_layout_ui.py` |
+| Kurzer natürlicher Anfangsbedarf, langer Inhalt mit Rollweg, gewählte Außenhöhe bei wachsender Aktionsleiste oberhalb des physischen Mindestmaßes | `test_short_dialog_ui.py` |
+| Vollständige Einleitung und Knöpfe in sechs Sprachen, echter Schriftwechsel, senkrechte/waagrechte Knopfleiste, Einzelknopfumbruch und zugänglicher Originalname, Return/Escape samt fokussiertem Abbrechen, physische Mindesthöhe bei erhaltener Nutzerbreite | `test_operation_font_layout_ui.py` |
+| Sichtbare Auswahlseite, echte Schrift, Zeilenhöhe und Handlungsspalten, natürlicher XYZ-Bedarf nach schmalem Start, Feldbreite/-höhe bei Schriftwechsel hin und zurück, gleichbleibender Querbedarf bei vorübergehendem senkrechtem Überlauf, ganzzeiliger Knopfumbruch auch beim Rasterwechsel, abgelöster Reiter samt gespeicherter Größe | `test_card_content_width.py` |
+| Schema-Vorderseite aller Paare und Sprachen, Klappe/Werte/Tabfolge, Paarhilfe, Rollen ohne Fokus, fokussierte Radbedienung, Abbruch und Dokumenterhalt, eigene Fenstergröße | `test_counterpart_front.py` |
+| Natürlicher Anfang und Wiederzuklappen mit gleichem Inhalt, echte Inhaltsschrift, Paarwechsel, manuelle Maße, passives Wachstum sowie dauernde/benötigte/vorläufige Rollleisten | `test_counterpart_initial_height_ui.py` |
+| Maßgruppe und rechte Zeile teilen Vorderseite und Hilfe; Sammelhakenbudget, Einlauf, Ausdruck/Ablehnung, Radius, Fokus/Wiederverwendung, Hauptaktionspriorität, Einzel-/Sammelübernahme mit Undo, registrierter Befehl/Suche und örtliche Erkennung; konsistente Themenfixture | `test_feature_front_contract.py` |
+| Layoutitem-Hüllen vor verzögertem Widgetabbau entwerten, verschachtelte Layouts und externe Hosts; Nachbarn und zurückgegebene Maßfelder erhalten | `test_feature_layout_lifetime.py` |
+| Echte Lage-/Abstandsbefunde und warme Daten bei mm/in/mm, sechs Sprachen, Auswahl/Einzelheiten/Nachschub, rohe Gruppenidentität samt vorigem Stand, gelesener Reiter und offene/geschlossene Körperknoten; Slicerwerte und Freitext als Gegenfälle | `test_finding_display_units.py` |
+| Nach Absage wieder sichtbare Vorschaulegende, kurze und lange Texte in sechs Sprachen und zwei tatsächlichen Anwendungsschriften | `test_preview_banner_layout.py` |
+| Maßgruppe nach Auf-/Zuklappen neu bemessen, ohne Layoutschleife; vorgemerkte Antwort bei Gruppentausch und Abschluss | `test_measure_group_layout.py` |
+| Maßkarte an Titel/freiem Grund ziehen; Felder, Knöpfe und Klappen bedienbar; Nutzerort bei Größenwechsel, Grenzen, Abbruch und Rückrufabbau; am gemeinsamen Verteiler (`app_events`) nur während des Zugs angemeldet, QWindow-Maustransport durchgelassen, damit Qt beim Release seinen impliziten Druckempfänger löst; Bewegungszeiger am Druckempfänger, dessen eigener oder geerbter Zeiger auf jedem Ausgang zurück (Escape, Verbergen, Reset, Abbau, Fokus- und Fensterverlust, erster Bewegungsfehler); ein fremder Override bleibt unberührt, auch im Fehlerweg; Verlust des Druckempfängers (gelöscht, umgehängt) und Abbau des Helfers beenden die Anmeldung | `test_measure_card_drag_ui.py` |
+| Echter Maßfluss: Nutzerort bei Klappen, Werten und fehlender Fläche; Gruppenwechsel/Abbruch, Seiten-/Bodenkarten und freie Maßfelder auch im Rückfall | `test_measure_card_placement.py` |
+| Bettrasterfarbe und Hauptlinien getrennt von Bauraum/Zeichnung; unveränderte Linienpositionen/Tiefe, Themenwechsel und Sichtbarkeit; Bettmaßzahlen aus der Textrolle, Bauraumfarbe unverändert | `test_bed_grid_visibility.py` |
+| Nur direkte gewöhnliche Werkzeugknöpfe in Ruhe ohne Rahmenfarbe; Geometrie und Hover/Fokus/Wahl sowie fremde Eingaben und Hauptaktion erhalten | `test_toolbar_rest_style.py` |
+| Ruhende Knöpfe durchscheinend, geschlossene Hilfsflächen verborgen; bestehendes Neuzeichnen wertet Vorschlag/held/waiting aus (held-Fall ruft es selbst auf); bewegter Zug/Feldentwurf und wartender Entwurf sichtbar, Abbruch/Wiederaufbau ohne Entwurf verborgen; Hover, Halten, Leave/Release und direkter Lochdruck bei gleichen Bounds/Geometrie/Picks; Griffbuchstaben/Maße: Text/Fensterpaar, Anker, Schrift und Pickauftrag bei Themenwechsel, Update/Neuaufbau; L-Felder außerhalb projizierter Knopfhüllen bei Aufbau, Kamera/Zoom, DPR und Maßänderung; vollständige endliche Anker ohne Projektion/Nahplatz, kein Update bei gleichen Punkten/Texten und kein Rücksetzen der Gizmo-Zugmatrix durch den Kameratimer | `test_feature_grip_readability.py` |
+| Raum-/Vordergrundmischung bei Erstellung und set_opacity für Vorder-/Rückseite/Kanten, wirksame Deckkraft 0/1/teiltransparent und force_opaque, Tiefentest/Queue; leere Beschriftungsfelder bei Textwechsel, Sichtbarkeit, _wake und adopt/build mit erhaltenen Nachbarpaaren/Listenplätzen; Materialzustände ohne Qt/GPU | `test_front_overlay_alpha.py` |
+
+Diese Dateien prüfen die jeweiligen Zusagen; ihre Nennung ist kein Bericht
+über einen bestandenen Lauf oder eine native Darstellung. Die Schriftfälle
+binden Anwendungsschrift und Stylesheet zusammen und lesen die wirksamen
+Schriften der Inhaltswidgets, statt nur den Dialogcontainer umzustellen.
+
+### Messvertrag des Funktionsdurchgangs
+
+| Vertrag | Zuständige Testdatei |
+|---|---|
+| Vorfläche vor Befundklick, Fehlerbild vor Escape, gemessene Auswege und unveränderter Treffertest | `test_function_surface_timing.py` |
+| Eigene Maßgruppe/Merkmalszeile, zugehörige sichtbare Klappbeschriftung, richtiger übernommener Schritt | `test_function_feature_measurement.py` |
+| Wirkliche native Bildquelle, lokale Pixelkoordinaten und Skalierung, fehlende Pixel bleiben ungemessen | `test_function_capture_native_image.py` |
+| Zustandsfarbe echter Hauptknöpfe, absichtlich falsche Farben, Symbolausschluss und fehlende Bild-/Schriftpixel | `test_function_contrast_roles.py` |
+| Tatsächliche Hauptknopfrolle mit halbfetter Grundschrift, fremde Größen/Familien, strikte optionale Messwerttypen und lesbare Altprotokolle | `test_function_primary_fonts.py` |
+| Offene eigene Fenster per Escape vor dem nächsten Sprachprojekt abbauen | `test_function_language_cleanup.py` |
+| Sofortige/spätere Vorschau desselben Auftrags, getrennte Vor-/Dialogfläche bis zum Bericht, fehlende Pixel ohne Palettenersatz, echte neue Revisionseingabe, eigener nichtmodaler Generator | `test_function_review_connections.py` |
+| Markierter Wertträger statt unmarkiertem inneren Zahlenfeld | `test_function_revision_fields.py` |
+| Bereitschaftsfehler, Fund und Timeout erreichen den begrenzten modalen Abbau | `test_function_machine_cleanup.py` |
+| Ganze Prozessgruppe des Dateiprüfstands: normaler und nicht erfolgreicher Ausgang, Timeout und Ausnahme in echten Windows-Prozessketten | `test_file_acceptance_process_tree.py` |
+| Szenenexport löst vorherige Auswahl über den Kundenweg; nur unbelegte Teilmenge wird abgewiesen | `test_function_export_preparation.py` |
+| Stabile lebende Qt-Hülle am C++-Dateidialog; echte Geometrie- und Flächenwechsel starten die Ruhezeit neu | `test_function_surface_identity.py` |
+| Qt-Fensterdispatcher: ignorierendes Kind, Annahme und verschachtelte Rollbereiche, Richtungen/Modifier/Koordinaten, klarer Rückweg bei fehlender API | `test_function_wheel_dispatch.py` |
+| Zweiphasige Knopfbereitschaft: öffentliche Zeigerfahrt vor frischer Ziel-/Rechteck-/Freigabe-/Trefferprüfung; Tooltip weicht durch Bewegung, bleibende Überdeckung bleibt Fund; Zieltausch/Verschieben/Verbergen/Sperren/Abbau und letzter Direktklick-Guard; Fensterplatzierung: Wiederholung am maximierten Zielschirm ohne neue Clientgeometrie, Ziel-/Größenwechsel normalisiert vor Geometrie/Resize; echte Qt-Client-/Fensterhüllengröße und bestehende Mindestgröße | `test_function_bench_window.py`, `test_function_setup.py` |
+
+Schema, Urteil und Gegenbeispiele bleiben bei `function_checks`,
+`function_points`/`function_judges` und `function_samples`; die zugehörigen
+Inventar-/Urteilstests stehen im folgenden Überblick.
+
+Die Schriftfälle laden wirkliche gebündelte Schriftdateien und prüfen den
+aufgelösten Familiennamen sowie unterschiedliche Glyphenbreiten. Leere
+Offscreen-Familien werden nicht durch eine erfundene Ersatzfamilie geheilt.
+
+### Weitere Zuordnungen
+
+Der Funktionsdurchgang verteilt seine Zusicherungen: `test_function_list.py`
+prüft das Inventar und die Ziele, `test_function_report.py` die Berichte,
+`test_function_alarms.py` die Urteile und Gegenproben,
+`test_function_captures_window.py` die Erhebung am Fenster.
+`test_function_guard.py` und `test_function_guard_aliases.py` halten die
+erlaubten Eingabewege einschließlich lexikalischer Aliase;
+`test_function_licence_measurement.py` fährt Lizenzmessungen mit `Walk`,
+`StepMachine` und den Attrappen aus `bench_fakes.py`, ohne ein Qt-Fenster.
+`test_process.py` hält externe Starts ohne Systemfehlerdialog, auch mit einer
+defekten ausführbaren Datei. `test_in_view_arming.py` hält dieselbe Handlung
+an Knopf und Maßgruppe; `test_sketch_editor_measure_field.py` wertet den
+Beispielausdruck des Maßfelds in jeder Sprache aus. `test_dialog_lifetime.py`
+prüft Dialogfreigaben über Klassen, Fabriken, Attribute, Hilfsaufrufe und
+zeitversetzte Einstiege; `test_widget_lifetime.py` behält sein eigenes Gebiet.
+
+`test_boolean_stage3.py` bindet den Jitter der dritten Stufe an die Zugabe,
+axial und schräg; `test_boolean_empty_result.py` prüft leere Ergebnisse und
+Meldungen für die drei Verknüpfungen an beiden Kernen.
+`test_evaluation_container_chain.py` prüft die vollständige Kette beim
+Behälter und ihre Qualitätswahl. Sperr- und Fokusfälle liegen in
+`test_change_lock.py`, `test_licence_lock_offers.py` und
+`test_finding_action_focus.py`: wechselnde Gründe, Freigabe ohne Neuauswahl,
+lesender Rückweg aus der Verlaufsvorschau und Fokus im Prüfbericht.
+
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| Rechnet der Hilfsprozess des Netzkerns bitgleich, endet er beim Abbrechen und mit dem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte und nachgestellte Hilfsprozesse, die Fälle einzeln in `konzepte/begruendungen/karte-tests.md` |
+| Nimmt jeder unterstützte Slicer, echt installiert, Solidons Platte an und gibt eine gemessene Druckdatei zurück? Kommen Stützabstand oben und unten und die untere Trennschicht unter Gitter und Baum an, wie Solidons Tabellen sagen? Fragt ein Test die Maschine nur über `installed_slicer`? | `test_real_slicers.py` (`slicer`-Marker, beim Push nach main auf Linux und macOS; die Kontaktmessung dort auch synthetisch) · `test_slicer_selection.py` — Auswahl für die Läufer und Wächter |
+
 Die Tabelle der HEAD-Fassung trägt zu jeder Datei ausführlich, woran sie
 prüft; die Karte nennt nur noch Frage und Datei.
 
 *Früher unter „`tests/` — die Suite“.*
+
+`test_closure_ops.py` prüft *Verschluss ändern* an einem Rohr mit L-Wegen, einem
+Plattendeckel als STL und einer Bausteinaufnahme.
+
+`test_input_dialog.py` hält ohne Fenster, dass im Kundenweg kein `QInputDialog`
+und kein `QColorDialog` mehr steht, dass `inform` nur ein Scheitern meldet und
+dass die Funktionsliste die acht Eingabestellen aus FD-22 unter ihrem alten
+Kennzeichen führt; am Fenster Hausstil, Tastatur, Farbwähler und Wertfeld am
+Ort und die Quittungen der Freischaltung (FD-24).
 
 `test_kernel_process_lifecycle.py` prüft am Windows-Jobobjekt, mit gehaltenen
 Griffen und über eine echte OS-Abfrage, dass ein rechnender Helfer mit seinem
@@ -180,8 +278,31 @@ von weiterhin zwei unabhängigen Bauten für den Determinismusvergleich.
 | Kommt ein Backslash in einem Pfad als Backslash an statt als Steuerzeichen? | `test_source_escapes.py` — jedes Oktal-Escape außer `\0` und jedes rohe Steuerzeichen in einer nicht rohen Zeichenkette unter `app/`, `tests/`, `tools/`, `website/`, `packaging/`; Hex-Escapes sind die gewollte Form |
 | Bleiben Musteränderung und -entfernung auf STL-gerundeten Zylinderfacetten dicht und frei von Selbstschnitten? | `test_pattern_features.py` — binärer STL-Rundlauf in beiden Güten, getrennte Importfelder und deren unabhängige Bearbeitung, Schnittprüfung, Wiedererkennung, Winkelnaht, Abbruch und Attributerhalt; `test_platform_identity.py` prüft die Ausrichtung aufrecht und gekippt gegen Plattformrauschen. *Aus der Karte verschoben, als die Suche (RM-735) ihre Zeile bekam.* |
 | Findet die Suche, was der Kunde tippt? | `test_search.py` — drei Runden, Güte, Vorauswahl und Kundenwörter in jeder Sprache, ohne Fenster; das Suchfeld der Karte mit Trefferliste, Tasten und Hinweiszeile in `test_selection_operations.py` |
+| Verträgt jeder Fall den JUnit-Bericht der CI, und hinterlässt er die Anwendung, wie er sie fand? | `test_suite_isolation.py` — kein Fall fordert `record_property` oder `record_xml_attribute` an (im `xunit2`-Bericht von `run_suite_isolated.py` ein Setup-Fehler), mit Gegenprobe; Befunddaten legt `record_trace` aus `conftest.py` als Berichtsabschnitt ab. Ein Fallpaar stellt Thema, Stil und Schrift um und prüft im Nachfolger Stil, Palette, Stylesheet, Schrift, Themenmerker und Thema gegen den Stand davor (Rückgabe: `_the_application_look_stays_with_its_test`) |
 
 ## Helfer
+
+`qt_roots.py` hält die ohne Elternteil gebauten Qt-Wurzeln eines Tests.
+Einbindung: `from tests import qt_roots`, danach `roots = qt_roots.roots`.
+Die Fixture schließt sie, merkt `deleteLater` vor und stellt `DeferredDelete`
+zu, solange die Python-Hüllen noch gehalten werden; kein Querimport aus
+`conftest`, keine zusätzliche globale Fixture.
+
+`evaluation_helpers.py` teilt `window_evaluation` und
+`short_chain_finds_nothing` zwischen `test_evaluation.py` und
+`test_evaluation_container_chain.py`. Der erste Helfer wertet wie Fenster,
+Verlaufsumbau und Agent in Entwurfsqualität mit voller Kette bei ergebnisloser
+kurzer Kette aus; Vorschauen bleiben davon getrennt. Der zweite erzwingt die
+Absage der kurzen und auf Wunsch auch der vollen Kette und meldet die
+aufgerufenen Stufen. Das gemeinsame Wissen liegt unter öffentlichen Namen,
+nicht in einem privaten Querimport zwischen Testdateien.
+
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| `helpers.py` | Gemeinsame, nicht fenstergebundene Helfer unter öffentlichen Namen (`exact_kernel`, `FakeMesh`, `FakeCodec`, `make_object`, `ridged_shaft`, `the_torus`, `CountingToken`, `stop_after`, `two_cubes`, `NavigationLog`, `SOURCE`, `rectangle`, `blind_cylinder`, `bore_seed`, `STUD_CENTRES`, `cube` für 3MF und `cube_surface` für Renderer …) und die Fixture `project`; keine privaten Querimporte aus `test_*.py` und nie aus `conftest` |
+| `ui_helpers.py` | Qt-gebundene gemeinsame Helfer der Fenstertests: die Fixtures `window` und `session`, je Test frisch, eingebunden mit `from tests.ui_helpers import window as window`; dazu `shown_window`, `with_a_body`, `wait_until`, `wait_for_export` und Platzierungsfälle — jeder mit Zweck in `karte-tests.md`, „Helfer“ |
 
 *HEAD-Fassung, früher unter „`conftest.py` tut vier Dinge, die leicht zu übersehen sind“.*
 
@@ -216,6 +337,35 @@ werden mit `from … import name as name` eingebunden; eine Datei, die eine
 vorbereitete Sitzung braucht, überschreibt nur `session`. Aus `conftest`
 importiert kein Test: pytest lädt es als Plugin, und ein zweiter Import führte
 es noch einmal aus.
+
+Die übrigen Helfer in `ui_helpers.py`: `shown_window` für ein gezeigtes Fenster
+ohne Startbildschirm, `with_a_body` für die ausgewählte Korpusfigur,
+`on_the_bore_wall` für einen Klick auf eine Bohrungswand, `wait_until` für
+zugestellte Qt-Ereignisse, `wait_for_export` und `wait_for_print_findings` für
+Arbeiter, die `wait_for_idle` nicht sieht, sowie `PlacementItem`,
+`PlacementViewport`, `placement_layout` und `scene_with_a_hole_and_a_fillet`
+für Platzierungsfälle. Für Maßkarten: `send_mouse_event` (Mausereignis mit
+festem Bildschirmbezug), `begin_card_drag`/`end_card_drag`,
+`settle_measure_layout` (Layoutaufträge zustellen) und
+`measure_more_heading`.
+
+`release_signing.py` hält ein eigenes Schlüsselpaar der Suite für unterschriebene
+Versionsdateien (`signed`, auch mit fremdem Schlüssel); die echten Schlüssel
+(`REAL_PUBLIC_KEYS`) samt Abdruck des ersten und Besitzproben (`KEY_PROOFS`)
+prüfen `test_the_published_version_file_is_signed` und
+`test_the_shipped_release_keys_are_proven`.
+
+`bundled_fonts.py` ist die eine Stelle für die gebündelte Prüfschrift: `bundled_font`
+lädt DejaVu Sans (auf Wunsch weitere Dateien), setzt sie als Anwendungsschrift,
+prüft Familie und echte Metrik und entfernt die Dateien danach wieder; Schrift
+und Thema gibt `conftest.py` zurück.
+
+`guide_window.py` gehört allein `test_guide_targets.py`: die Fixture
+`prepared_window` für den Wortschatz des Funktionsdurchgangs (Quader mit
+Bohrung unter dem Bett, im Kundenthema) und `settle`, das nach festen Runden
+wartet, bis keine Seitenkarte mehr gleitet (`at_rest`) — gelesen wird die Lage,
+die der Kunde nach dem Gleiten sieht, nicht eine Zwischenlage, die an der
+Rechnerlast hängt (FD-157).
 
 ## Stolperfallen
 

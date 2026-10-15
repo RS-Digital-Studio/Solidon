@@ -37,7 +37,6 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractSpinBox,
     QCheckBox,
-    QColorDialog,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -48,7 +47,6 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QProgressBar,
     QPushButton,
     QSizePolicy,
@@ -61,7 +59,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import activation, discover, tools
+from app.core import activation, discover, guides, tools
 from app.core.build_area import size_excess
 from app.core.errors import (
     SCALE_TO_FIT,
@@ -167,8 +165,10 @@ from app.ui.labels import (
 )
 from app.ui.labels import slicer_title as _slicer_title
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
+from app.ui.message_dialog import MessageDialog
 from app.ui.palette import ROLES
 from app.ui.panels import align_forms, collapsible, even_fields
+from app.ui.place_popup import choose_colour
 from app.ui.print_contract import handoff_receipt
 from app.ui.print_disclosure import share_label
 from app.ui.session import Session
@@ -506,10 +506,13 @@ class _ColourButton(QPushButton):
         self.setStyleSheet(f"background-color: {self._value}; color: {readable};")
 
     def _choose(self) -> None:
-        chosen = QColorDialog.getColor(QColor(self._value), self, tr("Filamentfarbe"))
-        if chosen.isValid():
-            self.set_value(chosen.name())
-            self.changed.emit(self._value)
+        """Der Farbwähler am Knopf (FD-22): Die gewählte Farbe steht, dann meldet der Knopf sie."""
+        popup = choose_colour(
+            self, self._value, title=tr("Filamentfarbe"), target="message:print_colour"
+        )
+        # In dieser Reihenfolge: erst der Wert, dann die Meldung mit ihm.
+        popup.chosen.connect(self.set_value)
+        popup.chosen.connect(self.changed)
 
 
 def swatch_size(reference: QWidget) -> int:
@@ -719,6 +722,7 @@ class FilamentOverrideDialog(QDialog):
         self.setMinimumWidth(620)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
 
         heading = QWidget(self)
         heading_layout = QHBoxLayout(heading)
@@ -800,6 +804,7 @@ class FilamentOverrideDialog(QDialog):
             body = QWidget(section)
             form = QFormLayout(body)
             form.setContentsMargins(WIDE + TIGHT, 0, 0, NORMAL)
+            form.setSpacing(NORMAL)
             # Was die Spule nicht übersteuert, zeigt den Projektwert (RM-707).
             source = handover.override_section(existing, group, getattr(settings, group))
             for field in (
@@ -3092,6 +3097,7 @@ class PrintSettingsDialog(QDialog):
         contents = QWidget(self._scroll)
         layout = QVBoxLayout(contents)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(NORMAL)
         self._scroll.setWidget(contents)
         outer.addWidget(self._scroll, 1)
         # **Vor** dem Slicer-Abschnitt: Dessen Filamentzeilen fragen die
@@ -3493,10 +3499,12 @@ class PrintSettingsDialog(QDialog):
         # begannen ihre Felder bei 68 Punkten und die des Wichtigsten
         # darunter bei 170.
         head = QFormLayout()
+        head.setSpacing(NORMAL)
         self._head = head
         head.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         slicer_field = QHBoxLayout()
         slicer_field.setContentsMargins(0, 0, 0, 0)
+        slicer_field.setSpacing(TIGHT)
         slicer_field.addWidget(self.slicer_choice, 1)
         slicer_field.addWidget(self.slicer_file)
         # Ohne Slicer bleibt nur der Knopf, und ohne diesen Abschluss zog er sich
@@ -3515,6 +3523,7 @@ class PrintSettingsDialog(QDialog):
         self._adopt_field = QWidget(self)
         adopt_row = QHBoxLayout(self._adopt_field)
         adopt_row.setContentsMargins(0, 0, 0, 0)
+        adopt_row.setSpacing(TIGHT)
         self._offer_wanted = ""
         """Der Drucker, den der Slicer zuletzt anbot — für den Rückweg von Harz."""
         self.adopt_printer = QPushButton("", self._adopt_field)
@@ -4270,6 +4279,7 @@ class PrintSettingsDialog(QDialog):
         inner = QWidget(self)
         form = QFormLayout(inner)
         form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(NORMAL)
         for field in FIELDS:
             if field.front:
                 self._add_row(form, field)
@@ -4290,6 +4300,7 @@ class PrintSettingsDialog(QDialog):
         """
         row = QFormLayout()
         row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(NORMAL)
         self.search = QLineEdit(self)
         self.search.setClearButtonEnabled(True)
         self.search.setPlaceholderText(tr("Einstellung suchen …"))
@@ -4680,6 +4691,7 @@ class PrintSettingsDialog(QDialog):
         self.search_row = self._build_search()
         nozzles = QHBoxLayout()
         nozzles.setContentsMargins(0, 0, 0, 0)
+        nozzles.setSpacing(TIGHT)
         nozzles.addWidget(self.nozzle_count_control)
         nozzles.addStretch(1)
         self.search_row.insertRow(0, self.nozzle_count_label, nozzles)
@@ -4687,6 +4699,7 @@ class PrintSettingsDialog(QDialog):
         for group in GROUPS:
             page = QWidget(self.tabs)
             form = QFormLayout(page)
+            form.setSpacing(NORMAL)
             self._tab_forms[group] = form
             for field in FIELDS:
                 if field.group == group and not field.front:
@@ -4711,6 +4724,7 @@ class PrintSettingsDialog(QDialog):
         more = QWidget(self)
         more_layout = QVBoxLayout(more)
         more_layout.setContentsMargins(0, 0, 0, 0)
+        more_layout.setSpacing(NORMAL)
         more_layout.addLayout(self.search_row)
         more_layout.addWidget(self.tabs)
         box = collapsible(
@@ -4863,9 +4877,11 @@ class PrintSettingsDialog(QDialog):
         holder = QWidget(self)
         outer = QVBoxLayout(holder)
         outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(NORMAL)
         self.slicer_inner = QWidget(self)
         form = QFormLayout(self.slicer_inner)
         form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(NORMAL)
 
         self.machine_choice = PrinterComboBox(self.slicer_inner)
         self.machine_choice.setEnabled(False)
@@ -4923,6 +4939,7 @@ class PrintSettingsDialog(QDialog):
         filament_row = QWidget(self.slicer_inner)
         filament_side = QHBoxLayout(filament_row)
         filament_side.setContentsMargins(0, 0, 0, 0)
+        filament_side.setSpacing(TIGHT)
         filament_side.addWidget(self.filament_shown, 1)
         filament_side.addWidget(self.adopt_filament)
 
@@ -5122,12 +5139,21 @@ class PrintSettingsDialog(QDialog):
         mehrzeiliger Text hingehört.
         """
         written = str(error.values.get("output", "") or "")
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Icon.Information)
-        box.setWindowTitle(tr("Ausgabe des Slicers"))
-        box.setText(str(error.title))
-        box.setDetailedText(written or tr("Der Slicer hat nichts geschrieben."))
-        box.exec()
+        # Im Hausstil, das Protokoll lesbar und kopierbar darunter (FD-21).
+        box = MessageDialog(
+            self,
+            title=tr("Ausgabe des Slicers"),
+            headline=str(error.title),
+            details=written or tr("Der Slicer hat nichts geschrieben."),
+            target="message:slicer_output",
+        )
+        copy = box.add_action(tr("Kopieren"), "message.button:slicer_output.copy", closes=False)
+        copy.clicked.connect(weak_slot(box, MessageDialog.copy_text))
+        box.add_exit(tr("Schließen"), "message.button:slicer_output.close")
+        try:
+            box.exec()
+        finally:
+            box.deleteLater()
 
     def _show_slicer_box(self, wanted: bool) -> None:
         """Den Kasten *Profile des Slicers* zeigen oder verbergen — nie an Harz.
@@ -6352,6 +6378,7 @@ class PrintSettingsDialog(QDialog):
         self.plate_row = QWidget(self)
         line = QHBoxLayout(self.plate_row)
         line.setContentsMargins(0, 0, 0, 0)
+        line.setSpacing(TIGHT)
         self.plate_label = QLabel(tr("Platte"), self)
         self.plate_choice = QComboBox(self.plate_row)
         self.plate_label.setBuddy(self.plate_choice)
@@ -6686,6 +6713,7 @@ class PrintSettingsDialog(QDialog):
         holder = QWidget(self)
         inner = QVBoxLayout(holder)
         inner.setContentsMargins(0, 0, 0, 0)
+        inner.setSpacing(NORMAL)
 
         self.advice_view = QTreeWidget(holder)
         self.advice_view.setColumnCount(2)
@@ -6716,6 +6744,7 @@ class PrintSettingsDialog(QDialog):
         self._advice_offers = QWidget(holder)
         self._advice_offer_row = QVBoxLayout(self._advice_offers)
         self._advice_offer_row.setContentsMargins(0, 0, 0, 0)
+        self._advice_offer_row.setSpacing(NORMAL)
         inner.addWidget(self._advice_offers)
         self.advice_progress = QProgressBar(holder)
         self.advice_progress.setRange(0, 0)
@@ -6768,6 +6797,7 @@ class PrintSettingsDialog(QDialog):
         holder = QWidget(self)
         row = QVBoxLayout(holder)
         row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(NORMAL)
         # **Ein Teil, das in keiner Lage auf das Bett passt, steht oben** — mit
         # den Knöpfen des Prüfberichts, bevor jemand *Slicen* drückt (KUNDE-09:
         # der Laptop-Ständer rechnete Minuten und endete mit einer Zahl).
@@ -6779,6 +6809,7 @@ class PrintSettingsDialog(QDialog):
         self._oversize_actions = QWidget(holder)
         self._oversize_row = QHBoxLayout(self._oversize_actions)
         self._oversize_row.setContentsMargins(0, 0, 0, 0)
+        self._oversize_row.setSpacing(TIGHT)
         self._oversize_actions.hide()
         row.addWidget(self._oversize_actions)
         self._oversize_key = None
@@ -7588,6 +7619,9 @@ class PrintSettingsDialog(QDialog):
             field, self, weak_slot(self, PrintSettingsDialog._editor_changed, field.path)
         )
         self._editors[field.path] = editor
+        # Das Ziel im Wortschatz (``print:<pfad>``, RM-737): eine Eigenschaft,
+        # denn der ``objectName`` gehört dem Stylesheet.
+        editor.setProperty(guides.TARGET_PROPERTY, f"print:{field.path}")
         # **Der Satz gehört an beide Hälften der Zeile.** Ein Tooltip nur am
         # Eingabefeld findet, wer schon dort steht; wer die Zeile liest, zeigt
         # auf ihre Beschriftung. Die Beschreibung kommt dazu, weil ein

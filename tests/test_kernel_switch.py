@@ -520,3 +520,57 @@ def test_a_step_below_an_exact_only_step_refuses_the_way_back_to_the_mesh() -> N
     history.undo()
     changed = history.change_kernel(box_step, "create_box", {})
     assert changed.op == "create_box"
+
+
+def _kernel_not_loaded(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Der Kern ungeladen und ohne Antwort; zurück kommt der Zähler der Suchen."""
+    import sys
+
+    monkeypatch.delitem(sys.modules, "OCP.BRepPrimAPI", raising=False)
+    monkeypatch.setattr(registry_module, "_KERNEL_PROBED", None)
+    monkeypatch.setattr(registry_module, "_KERNEL_INSTALLED", None, raising=False)
+    looked: list[int] = []
+    real = registry_module._kernel_is_installed
+
+    def counted() -> bool:
+        looked.append(1)
+        return real()
+
+    monkeypatch.setattr(registry_module, "_kernel_is_installed", counted)
+    return looked
+
+
+def test_the_kernel_is_looked_up_once_per_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    """FD-33: Das Fenster fragt bei jeder Aktualisierung, und ``find_spec`` lief jedes Mal.
+
+    Die Antwort bleibt dieselbe wie die der Suche; gesucht wird einmal, und
+    ``forget_kernel_answers`` lässt die nächste Frage neu suchen.
+    """
+    import importlib.util
+
+    looked = _kernel_not_loaded(monkeypatch)
+    expected = importlib.util.find_spec("OCP") is not None
+    answers = {registry_module.exact_kernel_present() for _ in range(50)}
+    assert answers == {expected}, "die gemerkte Antwort ist die der Suche"
+    assert len(looked) == 1, f"{len(looked)} Suchen für 50 Fragen"
+    registry_module.forget_kernel_answers()
+    assert registry_module.exact_kernel_present() is expected
+    assert len(looked) == 2, "nach dem Vergessen wird neu gesucht"
+
+
+def test_a_kernel_loaded_later_counts_over_the_remembered_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Kommt der Kern während des Laufs dazu (*Zusätzliche Programme*), gilt er sofort.
+
+    Die Installation lädt ihn zur Prüfung (``install.present``); die geladene
+    Bibliothek geht jeder gemerkten Antwort vor.
+    """
+    import sys
+    import types
+
+    _kernel_not_loaded(monkeypatch)
+    monkeypatch.setattr(registry_module, "_KERNEL_INSTALLED", False)
+    assert registry_module.exact_kernel_present() is False
+    monkeypatch.setitem(sys.modules, "OCP.BRepPrimAPI", types.ModuleType("OCP.BRepPrimAPI"))
+    assert registry_module.exact_kernel_present() is True

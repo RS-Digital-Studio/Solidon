@@ -488,6 +488,9 @@ def test_the_window_announces_the_variants(
         def exec(self) -> int:
             return 1
 
+        def deleteLater(self) -> None:  # noqa: N802 - Qt-Name
+            """Das Fenster gibt den Dialog nach ``exec`` frei."""
+
     monkeypatch.setattr(module, "VariantsDialog", Finished)
     window = MainWindow(Session(), UiSettings())
     added: list[object] = []

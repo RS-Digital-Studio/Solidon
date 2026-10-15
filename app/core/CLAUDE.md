@@ -141,8 +141,10 @@ gemeinsame Bediengliederung;
 Hersteller-/Produktkennung) · `manual_search.py` (die Suche im Handbuch:
 Rangfolge nach Titel, Kurzfassung, Stichwort und Text, Fundstelle je Seite;
 Faltung, Trefferstärke und Kundenwörter aus `registry/search.py`) ·
-`guides.py` (Bildanleitungen: Schritte, Sätze und die Namen der Ziele, auf
-die ein Bild zeigt, dazu die Operationen, die eine Anleitung lehrt, und die
+`guides.py` (Bildanleitungen: Schritte, Sätze und Zielnamen; der gemeinsame
+Wortschatz mit Muster je Art, `TARGET_KINDS` einschließlich `view.edge`,
+`is_target`, `menubar_name`, `dialog_name`, `action_key`/`action_target`;
+dazu die gelehrten Operationen und die
 Erklärseiten, an deren Ende `manual.pages` auf sie verweist; die Zuordnung zum
 Handbuchteil steht nur in `manual.OUTLINE`;
 aufgenommen beim Release in der echten Oberfläche,

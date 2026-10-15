@@ -10,6 +10,32 @@
 
 ## Der Weg durch die Schicht
 
+Modelldownloads binden Fortschritt/Ergebnis an Arbeiteridentität und
+Projektgeneration. Nachfolger brechen Vorgänger ab; Projektwechsel,
+Fensterende und Abbruch verwerfen Antworten. Vor dem Einlesen Gesteneditoren
+erneut prüfen. Modellseiten bleiben als Zwischenablage-Vorbelegung erhalten
+und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
+
+- **Mehrfachimport** — `import_models_async` liest alle Quellen mit
+  `_BatchReadWorker`, erhält ihre Koordinaten und übernimmt genau eine
+  Transaktion. Einheiten ohne Metadaten werden einmal für die Auswahl erfragt;
+  Lese-/Geometriefehler entfernen den ganzen Auftrag samt Quellen.
+
+- **Historische Ansicht** — `history_preview_async` rekonstruiert den
+  Transaktionsstand per Undo auf einer Kopie, mit dessen Profil. Regler und
+  Differenz ändern das Dokument nicht; Projekt-/Transaktionsstempel und die
+  Vorschaugeneration verwerfen verspätete Antworten. „Hier weiterarbeiten“
+  setzt erst nach bewusstem Klick die vorhandene Einfügemarke. Bildwechsel
+  und Rückweg erhalten die Kamera. Bearbeiten verlangt „Aktueller Stand“;
+  offene Gesten-/Maßentwürfe verweigern schon den Vergleich ohne Schließen-Signal.
+
+- **Import** — `import_model_async` → `_ReadWorker`, Plan im Arbeiter →
+  `pictureChanged` (das Modell vor seiner Erkennung), `importConfirmed`,
+  `importRejected`, `importFailed`; STEP-Baugruppen über
+  `stepImportRequested`, Konturen über `outlineImportRequested`.
+  `_SourceReadWorker` liest Quellen als Bytes; `_source_read` schreibt
+  sie im Hauptthread per `Session.embed_model_payload`/`import_image_payload`.
+
 *Früher unter „Kopf der Karte“.*
 
 Beim Laden zeigt die Sitzung das Modell vor seiner Erkennung
@@ -67,6 +93,12 @@ Vorschaukörper weg, Band „Vorschau abgebrochen — …", Dialog offen.
 ## Module
 
 ### Rahmen und Einstieg
+
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export samt `_warm_the_slicer`, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
 
 *Früher unter „Die Karte › Rahmen und Einstieg“, HEAD-Fassung.*
 
@@ -276,6 +308,12 @@ benötigt keine globalen Warnfilter und fängt keine Warnung eines anderen Threa
   Sprachwechsel beendet dieses Eigentum nicht.
 
 ### Ansicht
+
+`Viewport._refresh_preview_banner` stellt die endgültige Sichtbarkeit der
+Legende vor `PreviewBanner.show_preview` und dessen Platzierung her. Nach
+einer Absage zählt wieder sichtbarer Inhalt so zur nächsten Breiten- und
+Höhenmessung. Der gemeinsame Grundsatz „erst vorbereiten, dann zeigen“ bleibt
+in `ansicht.md`; das Band erhält keinen eigenen zweiten Größenvertrag.
 
 *Früher unter „Die Karte › Ansicht“, HEAD-Fassung.*
 
@@ -541,6 +579,12 @@ Eine unveränderte Auswahl startet keine neue Animation.
   und Ortsmarke neu, ohne eine Rechnung oder abgebrochene Anfrage zu starten.
 
 ### Platzierung und Griffe
+
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| `placement_flow.py` | Flächenplatzierung (§18.5): `_settle` setzt, `_begin_depth` steuert Tiefe, Escape ruft `step_back`. `PlacementHost` verbindet Dialog/`QuietHost`, `Session.placement_async` Fläche/Werkzeug, `_Dimensions` die Maße. Mündung zuerst, `0`=Durchgang. Alt-`measured_frame`: `operationen.md`. |
 
 *Früher unter „Kopf der Karte“.*
 
@@ -1014,6 +1058,57 @@ verschobene Felder ihren Maßpfeilen zugeordnet.
 
 ### Panels und Leisten
 
+`card_width.selection_card_width(zone, reference)` misst den eingebetteten,
+aktuell sichtbaren Auswahlreiter. Andere Reiter liefern keinen eigenen
+Breitenvorschlag. Der vorhandene Host begrenzt ihn an harten Minima und
+verfügbarer Fläche. `prefer_pairs` kennzeichnet Handlungsraster;
+`prefer_row` und `row_width` beschreiben die natürliche waagrechte
+Koordinatenzeile unabhängig von ihrer momentanen Faltung. Der bestehende
+`_CoordinateRow._fit_fields` zieht Feldbreite und -höhe aus der aktuellen
+öffentlichen Größenmessung (`sizeHint`) nach; auch beim Rückwechsel zu
+kleinerer Schrift bleibt keine frühere Höhe hängen. `button_width`
+misst Knopftitel ohne vorübergehendes Ändern des Texts und wird auch von
+`selection_operations._natural_width` verwendet. Zeilenvergleich und
+Paaranordnung erhalten die bisherige Inhaltsbreite. Mögliche senkrechte
+Rollbalken zählen mit `PM_ScrollBarExtent` aus dem aktuellen Stil zum
+natürlichen Querbedarf, unabhängig von ihrer momentanen Sichtbarkeit. So
+ändert eine Höhenanimation nicht ihr eigenes Breitenziel. Bei großen Texten
+kann dieser Bedarf über die frühere Fensterquote hinausgehen; die harte
+Grenze ist die verfügbare logische Hostfläche. Eine zusätzliche Mindesthöhe
+entsteht nicht. Die anderen Reiter behalten ihre vorhandene Breitenvorgabe
+(400, 25 % des Fensters, höchstens 540); sie ist kein Auswahlkartenminimum.
+Der Knopfumbruch liest den tatsächlichen Spaltenumfang mit `getItemPosition`
+aus demselben Raster. Ein Knopf über alle Spalten nutzt die gesamte
+Innenbreite; die erste Zeile allein beschreibt seinen Platz nicht.
+Beim Umhängen noch fehlende Rastereinträge werden weder vermessen noch als
+erledigt im Umbruchschlüssel gespeichert. Erst gültige Spaltenumfänge zählen
+zu diesem Schlüssel. Der zugeteilte Platz wird so ohne künstliche Zusatzhöhe
+oder zusätzlichen Rollweg genutzt; der natürliche Kartenbedarf bleibt gleich.
+Bei Schrift-, Inhalts- oder Reiterwechsel wird der Bedarf neu bestimmt.
+Ein abgelöster Reiter und seine gespeicherte Fenstergröße gehören nicht zu
+dieser Messung; `DetachableTabs.currentWidget` allein beweist keine Einbettung.
+Die verbindliche Größenregel steht in `fenster.md`.
+
+`FeaturePanel.measure_op` nennt die Handlung der aktiven Maßgruppe und wird
+in `set_measuring` gesetzt. `request_in_view` schärft dieselbe Handlung über
+den Knopfweg; eine schon scharfe Handlung mit eigenem Bildweg hat Vorrang.
+Gleich benannte Felder sind kein Ersatz für diese Handlungskennung.
+
+`change_lock.hold_history_preview` führt den Vorschauknopf bei Zielwechsel
+und neuer Freischaltung nach. `None` bezeichnet den lesenden Rückweg zum
+letzten Stand; vor dem schreibenden Rückweg wird die Sperre erneut geprüft.
+`say_refusal` trennt den zuletzt selbst gesetzten Grund vom ursprünglichen
+Text des Widgets, damit neue Sperrgründe und externe Textänderungen erhalten
+bleiben. Suchtreffer zeigen den allgemeinen Lizenzgrund nur unter dem
+Suchfeld; Kurzhilfe und zugängliche Beschreibung behalten ihn je Treffer.
+Andere Treffergründe bleiben sichtbar und lesende Treffer ausführbar.
+
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| `selection_operations.py` | Auswahlhandlungen im Reiter Auswahl, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper; mehrere markierte Merkmalszeilen: `QUICK_SEVERAL_FEATURES`; `add_window_action`; Suchfeld mit Trefferliste (`set_search_sources`, `_HitList`) |
+
 *Früher unter „Die Karte › Panels und Leisten“, HEAD-Fassung.*
 
 `panels.py` (die drei Panels links, Prüfbericht rechts, §2.5) ·
@@ -1030,8 +1125,13 @@ Loch — bestätigt wird im Merkmalfenster) ·
 
 *Früher unter „Kopf der Karte“.*
 
-Nachlaufende Befunde erhalten die gewählte Zeile des Prüfberichts über die
-gemeinsame Befundidentität, auch wenn neue Fehler die Reihenfolge ändern.
+Nachlaufende Befunde erhalten die gewählte Zeile des Prüfberichts auch bei
+geänderter Reihenfolge. `_IDENTITY_ROLE` zählt rohe Mitglieder einschließlich
+Mehrfachvorkommen, unabhängig von ihren übersetzten Sammeltexten. Auswahl und
+Kennzeichnung des vorigen Stands lesen denselben Schlüssel. Einheitenwechsel
+beschriften über `report.add_findings([])` neu, erhalten offene Einzelheiten
+und halten den gelesenen Reiter mit `feature_dock.held()`; `ObjectTree.set_unit`
+stellt offene und geschlossene Körperknoten nach dem Beschriften wieder her.
 Nur wenn die bisherige Zeile entfällt oder ausgefiltert wird, gilt die
 bestehende Vorauswahl einer angebotenen Handlung. Prüfungen lesen die
 aktuellen Handlungsknöpfe aus dem Layout; ausgebaute Qt-Kinder können bis
@@ -1316,13 +1416,51 @@ ungebrochene Titel steht als `operationTitle` am Knopf, weil `text()` sich
 
 ### Dialoge
 
+`FeatureSetField` verwendet `feature_list.FeatureList`. Die Liste nimmt für
+kurzen Inhalt die tatsächlichen Zeilen samt Rahmen und sichtbarer Querleiste
+aus `overlay.rows_height`. `FEATURE_ROWS_SHOWN` begrenzt die sichtbare Höhe
+an Zeilen der aktuellen Schrift, nicht die Zahl auswählbarer Merkmale.
+Einfügen, Entfernen, Modellrücksetzung, Text-, Schrift- und Stilwechsel
+werden nach dem Innenlayout zusammengefasst gemessen. Lange Listen rollen
+pixelweise, damit auch eine spätere, höhere Zeile bis zum letzten Textteil
+erreichbar bleibt.
+
+`OperationDialog.show_refusal` meldet den hinzugekommenen Fehlerhinweis
+über `_queue_refit("passive")`; `contentSizeChanged` verbindet verzögerte
+Innenlayoutänderungen mit demselben Größenweg. Die manuelle Fenstergröße und
+die außerhalb des Rollbereichs liegenden Aktionsknöpfe folgen `ContentHeight`
+(`fenster.md`). `DialogScrollArea.minimumSizeHint` reserviert für kurzen
+Inhalt dessen natürlichen Anfangsbedarf. Nach abgeschlossener Anfangsmessung
+übernimmt der aktive Größenvertrag; unverwaltete Rollbereiche behalten ihre
+inhaltsbezogene Untergrenze. Für `points_are_on_one_line`
+verwendet `labels.py` den vorhandenen übersetzten Erklärungssatz; andere
+Fehlergründe bleiben bei ihrer bisherigen Darstellung.
+
+`dialog_footer.DialogFooter` erhält die Qt-Knopfrollen und Tastaturwege.
+`natural_width` meldet die vollständige waagrechte Knopfleiste an
+`ContentHeight`. Bei manueller Breite wird die Leiste nötigenfalls senkrecht;
+ein einzelner überlanger Knopf bricht seinen vollständigen Text um, behält
+aber seinen zugänglichen Originalnamen. Genügend Platz stellt die waagrechte
+Zeile wieder her. Die Einleitung nutzt `WrappedNote`. Als physische
+Höhenuntergrenze zählen die vollständigen äußeren Knöpfe, eine Zeile der
+aktuellen Inhaltsschrift und gegebenenfalls die Querleiste. Nur unter dieser
+Grenze muss eine manuelle Höhe wachsen; darüber gibt der innere Rollbereich
+Platz an die Knopfleiste ab und erhält die gewählte Außenhöhe.
+
+`MessageDialog(..., announce=None)` lässt den Aufrufer eine Ansage anfordern.
+Fehler und Warnung senden neben dem Alert eine dringliche Ansage, `inform`
+eine höfliche; eine Eingabe kündigt sich nicht als Meldung an. Eine neue
+Quittung entfernt zuerst die alte Beschreibung am nächsten Knopf; fehlt ein
+solcher Knopf, spricht `QAccessibleAnnouncementEvent`. Die Lebensdauerregel
+steht in `fenster.md`; der Quellenwächter ist `test_dialog_lifetime.py`.
+
 *Früher unter „Die Karte › Dialoge“, HEAD-Fassung.*
 
 | Datei | Besonderheit |
 |---|---|
-| `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen. `block_apply(reason)` sperrt *Übernehmen* von außen mit Grund — für das Band, dessen Grund eine Handlung trägt. `offer_naming=True` hängt vorn den Haken *Maße als Parameter anlegen* an, `names_dimensions()` liest ihn; die Parameter legt das Fenster an (`_named_dimensions`, §13). Die Stückzahl (`produces_from`) ist ein `CountField`: fx wie jedes Zahlenfeld, zur ganzen Zahl aufgelöst, bevor sie den Stapel erreicht (die Kennungen vergibt er vorher). `aim_again` führt nach Escape aus der Platzierung zurück in Stufe 1 (RM-205) |
+| `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen. `block_apply(reason)` sperrt *Übernehmen* von außen mit Grund — für das Band, dessen Grund eine Handlung trägt. `offer_naming=True` hängt vorn den Haken *Maße als Parameter anlegen* an, `names_dimensions()` liest ihn; die Parameter legt das Fenster an (`_named_dimensions`, §13). Die Stückzahl (`produces_from`) ist ein `CountField`: fx wie jedes Zahlenfeld, zur ganzen Zahl aufgelöst, bevor sie den Stapel erreicht (die Kennungen vergibt er vorher). `aim_again` führt nach Escape aus der Platzierung zurück in Stufe 1 (RM-205). Die Lesezeile *Stelle* bauen `place_fields` und `place_text` |
 | `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung über PayPal oder GoFundMe (`DonationDialog`: Satz von Robert, drei Punkte „wofür" mit Symbol, zwei gleichwertige Anbieterknöpfe ohne Akzent, die Grenze als eine `caption`-Zeile, *Ohne Geld helfen* mit Link-Kopie und `feedback_wanted` für den vorhandenen Rückmeldedialog; `AboutDialog.support_wanted` für den Verweis). Eine Adresse im Browser öffnet `open_link`: ohne Browser liegt sie danach in der Zwischenablage und steht im Satz — `QDesktopServices.openUrl` direkt ruft niemand, der den Rückgabewert nicht liest |
-| `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29). An einem Resin-Drucker zeigt er nur, was gilt (`_reduce_for_resin`, `_fit_to_technology` nach einem Druckerwechsel): Drucker, Material, Platten, Programm und *Im Slicer öffnen* als Hauptknopf — Stufe, Wände, Füllung, Vorschläge, Düse, Slicen und Druckdatei sind verborgen, `settings_for_export` gibt keine Werte mit. Ein Programm ohne Familie (`other`) sperrt Slicen mit Grund und lässt Öffnen frei. Den Drucker, auf den Cura eingestellt ist, bietet er nur für eine aktive Maschine an und übernimmt ihn erst nach Klick. Seine Fehlerhandlungen öffnen die Druckerwahl. Vor *Slicen* und *Im Slicer öffnen* fragt `dialogs.confirm_handover`, wenn der Prüfbericht Fehler der gewählten Platten trägt (`_may_hand_over`) |
+| `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29). An einem Resin-Drucker zeigt er nur, was gilt (`_reduce_for_resin`, `_fit_to_technology` nach einem Druckerwechsel): Drucker, Material, Platten, Programm und *Im Slicer öffnen* als Hauptknopf — Stufe, Wände, Füllung, Vorschläge, Düse, Slicen und Druckdatei sind verborgen, `settings_for_export` gibt keine Werte mit. Ein Programm ohne Familie (`other`) sperrt Slicen mit Grund und lässt Öffnen frei. Den Drucker, auf den Cura eingestellt ist, bietet er nur für eine aktive Maschine an und übernimmt ihn erst nach Klick. Seine Fehlerhandlungen öffnen die Druckerwahl. Vor *Slicen* und *Im Slicer öffnen* fragt `dialogs.confirm_handover`, wenn der Prüfbericht Fehler der gewählten Platten trägt (`_may_hand_over`). Die Erhebung aus `first_run` läuft über `_PrinterSurvey`, `printers_on_offer` und `SlicerPrinters`; die Düsenvariante folgt Profilidentität, Modell und Hersteller |
 | `print_disclosure.py` | Der Hinweis davor: dass diese Werte Erfahrungswerte sind und mit einer 3MF mitreisen — und die Wahl, ob sie das sollen (§29) |
 | weitere | `settings_dialog` · `generate_dialog` (Weg 3) · `recipe_dialog` · `variants_dialog` · `comfy_dialog` · `install_dialog` · `support_dialog` · `update_dialog` · `changes_dialog` |
 
@@ -1535,6 +1673,18 @@ Die reine Auswahl verwendet `mark_preview(..., changes=False)`: Der Hinweis
 bleibt sichtbar, Änderungslegende und Vorhervergleich erscheinen erst beim Bearbeiten.
 
 ### Prüfbericht, Export und Druck
+
+- **Druckbewertung**: `print_contract` formatiert streng gelesene Profilgrundlagen
+  und tatsächliche `CheckState`-Nachweise. Leere Befunde belegen keinen Abschluss.
+  Session/`PrintFindingsFlow` verwerfen alte Aufträge; Materialslots liest der
+  Auswertungsarbeiter. `PrintTarget` hält übersetzbare Texte für Sprachwechsel
+  ohne Netzscan. Der Prüfumfang scrollt höhenbegrenzt, nennt sichtbare Körpernamen
+  und wiederholt offene Prüfungen nicht.
+- **Befundkarte**: `finding_meta` als eine Zeile; Nebenfolge `effect_worth_showing`.
+- **Änderung und Übergabe** (Band: `oberflaeche.md`): Belege aus
+  dem eingefrorenen Auftrag, Dateien und Slicerstarts getrennt, Gegenprobe
+  `export.readback` im Arbeiter. Gleiche Importbefunde einer Transaktion werden
+  gebündelt; Originalwerte und Körper bleiben zugänglich.
 
 *Früher unter „Die Karte › Prüfbericht“, HEAD-Fassung.*
 
@@ -1896,6 +2046,19 @@ gemeinsam sind, sagt `Pair.shared` im Kern. Ein Paarwechsel tauscht sie
 vollständig — was stehenbliebe, verspräche eine Wirkung, die die andere Hälfte
 nicht kennt.
 
+`ParamSpec.placement` trennt die gemeinsamen Maße in Vorder- und Rückseite;
+Form und Passungsdetails stehen beim Passstift hinter der vorhandenen Klappe.
+Diese nennt die Titel des aktuellen Schemas, erhält Werte beim Schließen und
+entfällt ohne Rückseitenfelder. Die Erklärung des Paars stammt einmal aus
+`Pair.doc`: sichtbarer Satz, Kurzhilfe und zugängliche Beschreibung der
+Paarauswahl wechseln gemeinsam. Die kurzen Erklärungen behalten die Zuordnung
+beider Hälften, gemeinsame Maße und die jeweilige Passungsbedeutung.
+`wheel_needs_focus` schützt Paarwahl und sämtliche gemeinsamen Zahlen- und
+Auswahlfelder beim Rollen; ein fokussiertes Feld bleibt mit dem Rad bedienbar.
+`expanded_width`, `ContentHeight` und `DialogScrollArea` teilen den vorhandenen
+Größenvertrag. Die Aktionsleiste bleibt außerhalb des Inhaltsrollbereichs;
+Klappen, Paar- und Schriftwechsel folgen demselben Größenweg wie andere Dialoge.
+
 **Ist eine der zwei Stellen ein Gewinde, bleibt der Dialog zu** (P2.6,
 Entscheidung 15): Das Gegenstück ist das gegengleiche Gewinde am anderen
 Teil, im Maß des vorhandenen — ein Dialog wäre eine Frage ohne
@@ -2145,6 +2308,32 @@ Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.
 
 ### Hilfe und Bedienung
 
+`guide_targets` teilt `widget_under`, `zone_of`, `search_hits`,
+`menubar_entries`, `point_for` und `next_click` zwischen Tour, Bildanleitungen
+und Prüfstand. `area_for` deckt die Zielfläche einschließlich verschachtelter
+Rollbereiche auf; `next_click` geht den tatsächlichen Kundenweg ohne solches
+Aufdecken. Es rollt mit Radereignissen am tatsächlichen Rollbereich, bis ein
+Feld, das hineinpasst, mit beiden Kanten frei steht; ein kurzer Restschritt
+trägt `Click.wheel_angle`, und am Anschlag kommt `MissingTargetError` statt
+eines halb abgeschnittenen Ziels (FD-77). Vor dem Messen legt `_settle_cards`
+die Kartenhöhe fest.
+`view.edge:<körper>` wird nach der Körperauswahl über `edge_point_for`
+aufgelöst: Eine vom echten Pick bestätigte bearbeitbare Kante kommt aus
+`geom.edges.edges_in_kernel`/`points_in_kernel`. Sie wird nicht als Merkmal
+nachgebaut; eine Kantenoperation hat das Ziel `edge:<op>`.
+
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError` |
+
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac; `native_key`: die Taste in der Schreibweise der Plattform; `nothing_to_take_back`: Strg+Z/Y ans Fenster, wenn das Feld nichts zurückzunehmen hat |
+
 *Früher unter „§29 — was die Datei mitnimmt › Hilfe und Bedienung“, HEAD-Fassung.*
 
 `manual_window.py` · `tour.py` · `shortcuts_window.py` ·
@@ -2252,8 +2441,8 @@ gemischt) — Regel 19 gilt auch dort.
 
 `FeaturePanel.show_feature` und `show_edge` halten die Zeilen des vorigen
 Merkmals zurück (`_keep_rows_for_reuse`) und vergeben sie an Handlungen
-derselben Signatur (`_row_signature`: Operation, Feldnamen, -arten und
-Auswahlwerte; nie bei Schritt, `elsewhere` oder Ausdrucksfeld). Eine Zeile ist
+derselben Signatur (`_row_signature`: Operation, Feldnamen, -arten, Auswahlwerte und
+Vorderseitenzuordnung; nie bei Schritt, `elsewhere` oder Ausdrucksfeld). Eine Zeile ist
 ein `_ActionRow`; ihre Wege (`_run_row`, `_take_row`, `_row_in_view`,
 `_row_values`) lesen Schlüssel, Operation und Felder beim Aufruf aus der Zeile,
 nicht beim Bau. Werte, Grenzen und Herkunft schreibt
@@ -2304,9 +2493,15 @@ gleichartigen Handlung: Werte über `configure_feature_field`, Texte über
 dazu Tippmerker zurück. Was der Empfänger hineingehängt hatte (der Haken
 *Auf alle anwenden*), geht mit der Rückgabe. Ein Test vergleicht eine
 zurückgegebene Gruppe mit einer frisch gebauten Zustand für Zustand
-(`test_feature_panel.py`, `_measure_group_state`).
+(`test_feature_panel.py`, `_measure_group_state`). Nach `_lay_out_now` gemäß
+`ansicht.md` bündelt `PlacementFlow.flush_frame` die fertigen Maßbilder.
 
 ## Stolperfallen
+
+Für Qt-Baumzeilen über `topLevelItem` und `child` gehen. Ein im Prüfstand
+verwendeter `QTreeWidgetItemIterator` führte beim nachfolgenden nativen Abbau
+zum Fehler; das sagt nichts über die Sichtbarkeit der gezählten Zeilen.
+Die Gegenprobe liegt in `tests/test_bench_findings.py`.
 
 *Früher unter „Was an `session.py` überrascht“.*
 
@@ -2640,10 +2835,30 @@ Dialog und kein stiller zweiter Buchungsversuch.
 
 ## Gebundene Platzierung
 
-`surface_object_for_worker` übergibt Netzen die geteilte Arbeitskopie unter
-`on_the_copy`. Mehrere Netzkopien werden nach ihrer Identität sortiert und
-jeweils genau einmal gesperrt, damit zwei Arbeiter dieselben Kopien nie in
-verschiedener Reihenfolge anfordern.
+Vor Arbeiterstart: `surface_object_for_worker` liefert Netzen die geteilte
+Arbeitskopie unter `on_the_copy`, exakten Körpern eigene Kopien mit gleicher
+Dreiecksfolge/nativer Flächenzuordnung.
+
+`PlacementFlow` übernimmt Lage, Flächenbezug und Kantenabstände gemeinsam aus
+`scene.placement.bound_surface_values`. `placement_fields` trennt Lagefelder von
+gleichnamigen Bausteinmaßen. `bind_surface` öffnet am historischen Eingang mit
+vorbereiteter Fläche, gewählten Kanten und Trägerkennung wieder; Ausdrücke bleiben
+erhalten. Neue Weltkoordinaten lösen den Bezug ausdrücklich. Abbruch, Neuwahl und
+Projektwechsel sperren verspätete Antworten.
+
+Ein Grundkörper an einer ausgewählten Fläche bietet vorn Ansatzpunkt und
+Verbinden. Flächenvorbereitung läuft über `Session.placement_async`; bis zur
+Antwort bleibt Übernehmen unabhängig von einer älteren Vorschau gesperrt.
+Erzeugen und Vereinigung stehen in derselben `_PreviewOrder` und Transaktion.
+`ContainerWizardParams`/`plan_container`: benannte Maße, optionale Einlage und
+Passung als Vorschauauftrag. `plan_container_edit` liefert historisch
+`ContainerEdit.values` und `document_change` gemeinsam für Vorschau/Übernahme.
+`promote_values=False` hält historische Schemaplätze; Ausdrücke holen keine
+Rückseitenfelder nach vorn.
+
+Mehrere Netzkopien werden nach ihrer Identität sortiert und jeweils genau
+einmal gesperrt, damit zwei Arbeiter dieselben Kopien nie in verschiedener
+Reihenfolge anfordern.
 
 Der Mündungsumriss der Flächenplatzierung (`placement_flow.py`) trifft die
 Ebene längs der Werkzeugachse, nicht senkrecht zur Fläche; bei fast

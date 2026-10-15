@@ -58,6 +58,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QFrame,
+    QListView,
     QMenu,
     QScrollArea,
     QSizePolicy,
@@ -872,8 +873,17 @@ def rows_height(view: QAbstractItemView) -> int:
         als eine Null. Deshalb der größere der beiden Werte.
         """
         total = 0
+        listing = view if isinstance(view, QListView) else None
         for row in range(model.rowCount(parent)):
             index = model.index(row, 0, parent)
+            # Eine versteckte Zeile steht nicht da und braucht keinen Platz: Der
+            # Verlauf versteckt die Teilschritte eines eingeklappten
+            # Sammelschritts, und mit ihrer Wunschhöhe gezählt meldete die linke
+            # Karte zwei Zeilen zu viel (Fund D0-P).
+            if (tree is not None and tree.isRowHidden(row, parent)) or (
+                listing is not None and listing.isRowHidden(row)
+            ):
+                continue
             if tree is not None:
                 total += tree.rowHeight(index)
                 if tree.isExpanded(index):
@@ -924,9 +934,10 @@ class CurrentPageTabs(DetachableTabs):
     Fenster bei Full HD rund 530 Punkte Karte für 225 Punkte Inhalt.
 
     Gerechnet wird der Rahmen (Reiterleiste, Rand) als Unterschied zwischen
-    Qts Wunsch für das Ganze und dem für den Stapel, und dazu die vordere
-    Seite. Die Breitenhöhe meldet es immer, weil die Karte darüber ihre Höhe
-    aus ihr liest; eine Seite ohne eigene nimmt ihre Wunschhöhe.
+    Qts Wunsch für das Ganze und der höchsten Wunschhöhe der sichtbaren Seiten
+    (:meth:`_chrome_height`), und dazu die vordere Seite. Die Breitenhöhe
+    meldet es immer, weil die Karte darüber ihre Höhe aus ihr liest; eine Seite
+    ohne eigene nimmt ihre Wunschhöhe.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -940,7 +951,24 @@ class CurrentPageTabs(DetachableTabs):
         return self.findChild(QStackedWidget, "qt_tabwidget_stackedwidget")
 
     def _chrome_height(self, whole: QSize, stack: QStackedWidget) -> int:
-        return max(whole.height() - stack.sizeHint().height(), 0)
+        """Reiterleiste und Rand: Qts Wunsch ohne die Seite, aus der er ihn rechnete.
+
+        ``QTabWidget.sizeHint`` nimmt die höchste Wunschhöhe der sichtbaren
+        Reiter. ``stack.sizeHint()`` taugt nicht als Gegenstück: Hat die vordere
+        Seite eine Breitenhöhe, meldet der Stapel die höchste Breitenhöhe, und
+        eine Seite ohne fehlt darin. Der Rollbereich der Auswahl, der jede
+        Funktion wünscht, stand so als Rahmen im Prüfbericht — leer in voller
+        Spaltenhöhe, und nachkommende Befunde ließen die Karte nicht wachsen.
+        """
+        tallest = max(
+            (
+                page.sizeHint().height()
+                for index in range(stack.count())
+                if self.isTabVisible(index) and (page := stack.widget(index)) is not None
+            ),
+            default=0,
+        )
+        return max(whole.height() - tallest, 0)
 
     def sizeHint(self) -> QSize:  # noqa: N802 - Qt-Name
         whole = super().sizeHint()
@@ -1170,6 +1198,14 @@ def natural_height(zone: QWidget, width: int | None = None) -> int:
         wanted += current_height - tallest
     for view in living(zone, QAbstractItemView):
         if not view.isVisibleTo(zone):
+            continue
+        # Der Spaltenkopf eines Baums ist selbst eine ``QAbstractItemView``,
+        # gehört aber zur Höhe seines Baums: ``rows_height`` zählt ihn dort
+        # schon mit. Hier noch einmal gerechnet, zog er seine Wunschhöhe ein
+        # zweites Mal ab, die Karte stand 9 Punkte zu niedrig, und der
+        # aufgeklappte Objektbaum ragte über seinen Abschnitt — auch in der
+        # Startgröße (Fund D0-P).
+        if isinstance(view.parentWidget(), QAbstractItemView):
             continue
         # Eine gesetzte Mindesthöhe ist eine Aussage über den Zweck und nicht
         # über den Inhalt: der Gesprächsverlauf des Chats ist ein
@@ -1466,12 +1502,14 @@ class OverlayHost(QWidget):
         jedes Bild.
         """
         running = self._moves.get(id(zone))
-        if running is not None and running.endValue() == target:
+        if moving and running is not None and running.endValue() == target:
             # Schon auf dem Weg genau dorthin. Sie abzubrechen und neu zu
             # starten hieße, bei jedem eingehenden ``LayoutRequest`` wieder
             # von vorn zu beginnen — die Karte käme nie an, und weil sie
             # unterwegs ist, stimmt ihre Geometrie auch nie mit dem Ziel
-            # überein, was den nächsten Neustart auslöst.
+            # überein, was den nächsten Neustart auslöst. **Ein Setzen ohne
+            # Bewegung** (Fenstergröße, ``reflow``) springt dagegen ans Ziel:
+            # Wer danach misst, liest sonst eine Zone unterwegs.
             return
         running = self._moves.pop(id(zone), None)
         if running is not None:
@@ -1849,9 +1887,14 @@ class OverlayHost(QWidget):
         die Zone selbst — höchstens bis an den Fensterrand. Ansicht und Zonen
         lesen dieselbe Zahl (:meth:`_tell_the_view_about_the_zones`).
         """
+        from app.ui.card_width import selection_card_width
+
         card = card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE)
         if self.right is None:
             return card
+        measured = selection_card_width(self.right, card)
+        if measured is not None:
+            card = min(measured, width - 2 * EDGE)
         least = self.right.minimumSizeHint().width()
         return max(card, min(least, width - 2 * EDGE))
 

@@ -1416,7 +1416,10 @@ def test_the_jitter_stage_draws_the_same_on_every_machine() -> None:
 
     raw = np.random.PCG64(seed + index).random_raw(corners.size)
     unit = (raw >> np.uint64(11)).astype(np.float64) * 2.0**-53
-    reach = max(body.bounds.diagonal, 1.0) * chain.JITTER_AMPLITUDE * math.sqrt(3.0)
+    reach = min(
+        max(body.bounds.diagonal, 1.0) * chain.JITTER_AMPLITUDE * math.sqrt(3.0),
+        chain.JITTER_REACH_LIMIT,
+    )
     expected = corners + (unit.reshape(corners.shape) * 2.0 - 1.0) * reach
     assert np.array_equal(moved, expected)
 
@@ -1922,13 +1925,47 @@ def test_an_empty_result_in_draft_quality_points_at_the_stages_left() -> None:
     assert "Maß und Lage" not in detail, (
         f"er behauptet weiter eine Ursache, die nicht feststeht: {detail!r}"
     )
-    assert any(action.id == "use_voxel_stage" for action in caught.value.suggestions), (
-        "der Weg zur vollständigen Kette fehlt — genau die Handlung, die hier hilft"
-    )
-    # Und der Titel kommt aus derselben Entscheidung wie die Handlung: Die
-    # Ausnahme wählt ihn danach, ob die Voxelstufe dran war. Zwei Stellen für
-    # dieselbe Frage liefen auseinander, sobald jemand eine davon ändert.
+    # Die volle Kette rechnet die Auswertung selbst (``evaluate._FullChain``):
+    # Der Halt sagt, dass die Güte gekürzt hat, und braucht keinen Knopf dafür.
+    assert caught.value.cut_short, "die Auswertung weiß nicht, dass sie nachrechnen kann"
+    # Und der Titel kommt aus der Ausnahme selbst: Sie wählt ihn danach, ob die
+    # Voxelstufe dran war. Zwei Stellen für dieselbe Frage liefen auseinander.
     assert "schnellen Rechnung" in str(caught.value.title), str(caught.value.title)
+
+
+@pytest.mark.parametrize(
+    ("stages", "quality"),
+    [(("direct",), "fine"), (("direct",), "draft"), (("direct", "welded"), "draft")],
+)
+def test_fixed_stages_offer_no_coarser_calculation(
+    monkeypatch: pytest.MonkeyPatch, stages: tuple[str, ...], quality: str
+) -> None:
+    """FD-6: Wo der Aufruf die Stufen festlegt, rechnet ihn auch die volle Güte nicht
+    anders — *Gröber rechnen* änderte dort nichts. Kein Fehler und kein Befund daraus
+    bietet es an, und ein leeres Ergebnis ist eine Aussage über die Maße statt eines
+    Verweises auf eine vollständige Rechnung, die es nicht gibt."""
+    from app.core.geom import boolean as boolean_module
+    from app.core.scene.evaluate import _finding_from
+    from app.core.types import Operation
+
+    plate = MeshData.of(trimesh.creation.box(extents=(80.0, 50.0, 8.0)))
+    tool = MeshData.of(trimesh.creation.box(extents=(300.0, 300.0, 300.0)))
+
+    def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("Kern gibt auf")
+
+    with pytest.raises(BooleanFailedError) as emptied:
+        boolean("difference", [plate, tool], stages=stages, quality=quality)  # type: ignore[arg-type]
+    monkeypatch.setattr(boolean_module, "_run_stage", broken)
+    with pytest.raises(BooleanFailedError) as failed:
+        boolean("union", [plate, tool], stages=stages, quality=quality)  # type: ignore[arg-type]
+
+    for error in (emptied.value, failed.value):
+        assert not error.cut_short
+        finding = _finding_from(error, Operation(id=3, op="drill_hole"))
+        offered = {action.id for action in (*error.suggestions, *finding.suggestions)}
+        assert "use_voxel_stage" not in offered, offered
+    assert "vollständige" not in str(emptied.value.detail), str(emptied.value.detail)
 
 
 def test_the_voxel_stage_refuses_a_grid_it_cannot_afford(caplog: pytest.LogCaptureFixture) -> None:

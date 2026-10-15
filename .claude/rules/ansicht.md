@@ -5,6 +5,7 @@ paths:
   - "app/ui/render/**/*.py"
   - "app/ui/qt_platform.py"
   - "app/ui/placement_flow.py"
+  - "app/ui/measure_card_drag.py"
   - "app/ui/overlay.py"
   - "app/ui/cursors.py"
   - "app/ui/analysis_bar.py"
@@ -149,10 +150,8 @@ Kamerawechsel neue Punkte. Sie sind nicht pickbar. Ein einzelnes QWidget
 von einem Bildpunkt am oberen Arm trägt Tastaturfokus und zugänglichen Namen;
 beim Beenden kehrt sein Fokus in die Ansicht zurück.
 
-Eine große Fachkarte darf bei Platzmangel den Rand des Körpers überdecken.
-Dieser Ausweg gilt nur für diese Karte: Setzpunkt und Bewegungsgriff bleiben
-frei, die kurzen Maßfelder behalten ihre Plätze außerhalb des Körpers.
-Ein Platzmangel der Fachkarte schiebt nicht sämtliche Maße in eine Notreihe.
+Wo Fachkarte und Maßfelder bei Platzmangel stehen: `griffe.md`, „Maße und
+Platzierung am Merkmal“.
 
 **Messen ist orthografisch, und zwar von selbst** (§18.1 — perspektivisch zielt
 der Nutzer falsch): `MainWindow._on_measure_mode` schaltet beim Betreten um und
@@ -363,9 +362,10 @@ der Fehler nicht auf.
   Maßgruppe (`MainWindow._place_from_feature_panel`), Layouts gelegt
   (`_lay_out_now`, `LAYOUT_HOPS`); eine Karte ohne fertigen Platz bleibt samt
   `raise_` verborgen (`PlacementFlow._seat_waits`).
-* **Ein `QScrollArea` fragt seinen Inhalt nur einmal** — wechselnder Inhalt
-  braucht einen Rollbereich, der neu fragt und Umbauten meldet
-  (`selection_operations._ListScroller`).
+* **`QScrollArea` nach Umbauten neu messen** (`selection_operations._ListScroller`).
+  Maßgruppen melden `LayoutRequest` im vorhandenen Filter; geänderten
+  `sizeHint` nach Qt über `redraw` einpassen, eigene Layoutantworten nicht
+  erneut bestellen.
 * **Gemessen an `Paint`-Ereignissen, nicht an Bildschirmfotos** — eine Aufnahme
   verschiebt die Folge, die sie aufnehmen soll.
 

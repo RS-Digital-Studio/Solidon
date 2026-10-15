@@ -352,3 +352,36 @@ def test_pin_for_bore_makes_a_loose_pin_in_any_bore(kind: str, pla: Profile) -> 
     with pytest.raises(ValidationError) as problem:
         run("pin_for_bore", source, pla, at_feature="nothing")
     assert problem.value.constraint == "not_a_hole"
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_collar_trimmed_to_nothing_is_left_out_on_both_kernels(
+    kind: str, pla: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bleibt vom Kragen nach dem Beschnitt nichts, entsteht der Deckel ohne ihn.
+
+    Der exakte Weg ließ einen leeren Kragen aus (``lid.exact_build``); der
+    Netzweg hatte dieselbe Zeile, erreichte sie aber nie: Seine Schnittmenge
+    lief ohne ``allow_empty``, und die Rückfallkette meldete das leere
+    Ergebnis als Absage (Durchsicht über fix/review-kern, Beobachtung). Der
+    Kragenraum liegt hier weit neben dem Glas und lässt keinem Kragen etwas.
+    """
+    from app.core.geom import lid_hinge
+
+    def nowhere(footprint: object, hinge: object) -> shapes.Form:
+        return shapes.moved(shapes.box(5.0, 5.0, 5.0), (500.0, 0.0, 0.0))
+
+    monkeypatch.setattr(lid_hinge, "collar_keep", nowhere)
+    result = run(
+        "create_lid",
+        _glass(kind, "square"),
+        pla,
+        hinge="barrel",
+        opening_angle=0.0,
+        collar=12.0,
+        thickness=3.0,
+    )
+
+    shown = as_mesh_data(result.outputs[1].mesh)
+    assert shown.is_watertight
+    assert float(shown.bounds.minimum[2]) >= HEIGHT - 1e-6, "kein Kragen ragt unter den Rand"

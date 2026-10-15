@@ -16,7 +16,7 @@ import shutil
 import sys
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -837,27 +837,75 @@ def _the_language_starts_at_the_source() -> Iterator[None]:
     set_key_platform("")
 
 
-#: **Was hier absichtlich NICHT zurückgesetzt wird: das Stylesheet.**
+#: **Das Aussehen der Anwendung wird zurückgegeben, nicht auf ein Ziel gesetzt.**
 #:
-#: ``apply_theme`` legt es über die *Anwendung*, und ``app.py`` tut das beim
-#: Start — der Kunde sieht die Oberfläche also nie ohne. Eine Fixture, die es
-#: nach jedem Test abräumt, stellte einen Zustand her, den es im Betrieb nicht
-#: gibt: Ein Test, der Abstände oder Innenmaße misst, bekäme Zahlen, die
-#: niemand je sieht.
-#:
-#: **Womit dieser Hinweis am 30.08.2026 begründet war, trug allerdings nicht.**
-#: Hier stand, die Parameterkarte messe ohne Stylesheet 258 und mit 270 gegen
-#: eine Zone von 260, ein Rücksetzen hätte also einen Kundenfehler zugedeckt.
-#: Beide Zahlen stammten aus einem Offscreen-Lauf, und dort hat Qt gar keine
-#: Schrift — am echten Bildschirm sind es 166 mit Stylesheet wie ohne. Der
-#: Hinweis bleibt, weil das Stylesheet Abstände wirklich verändert; die
-#: Kartenbreite ist nur kein Beleg dafür.
-#:
-#: Wer eine Rücksetzung baut, prüft deshalb zuerst: Setzt sie auf das zurück,
-#: was der Kunde hat, oder auf ein nacktes Nichts? Ein Thema, ein Stylesheet,
-#: ein geladenes Register gehören zur Betriebslage. Wer eine Breite oder ein
-#: Layout misst, stellt sie **her** (``apply_theme`` im Test), statt sie
-#: wegzuräumen.
+#: ``apply_theme`` legt Stil, Palette und Stylesheet über die *Anwendung*, und
+#: ``app.py`` tut das beim Start — der Kunde sieht die Oberfläche nie ohne. Eine
+#: Fixture, die es nach jedem Test auf „kein Thema“ abräumte, stellte einen
+#: Zustand her, den es im Betrieb nicht gibt. Die Fixture darunter tut das
+#: nicht: Sie gibt nur zurück, was der Test vorfand. Die Suite startet ohne
+#: Thema, und jeder Qt-Fall findet dieselbe Lage wie als erster seines
+#: Prozesses — die er in der Auswahl ohnehin haben kann. Wer eine Breite, eine
+#: Farbe oder ein Layout misst, stellt die Betriebslage weiter selbst **her**
+#: (``apply_theme`` im Test); nur hängt sein Ergebnis nicht mehr am Vorgänger.
+
+
+@pytest.fixture(autouse=True)
+def _the_application_look_stays_with_its_test() -> Iterator[None]:
+    """Stil, Palette, Stylesheet, Schrift und Thema gehen zurück, wie der Test sie fand.
+
+    Eine Fixture mit ``autouse``, die das dunkle Thema setzte und stehen ließ,
+    nahm jeden folgenden Fall im selben Prozess mit: Der Wortschatzfall von
+    ``test_guide_targets.py`` war allein grün und nach
+    ``test_measure_card_placement.py`` zeitweise rot. Dieselbe Sorte Zustand
+    wie Sprache und Einheit darüber, nur an der ``QApplication``. Geprüft in
+    ``test_suite_isolation.py``. Ohne Qt-Anwendung gibt es nichts zu halten.
+    """
+    widgets = sys.modules.get("PySide6.QtWidgets")
+    application = widgets.QApplication.instance() if widgets is not None else None
+    # ``instance()`` liefert auch eine reine ``QCoreApplication``; die hat kein
+    # Aussehen.
+    if widgets is None or not isinstance(application, widgets.QApplication):
+        yield
+        return
+    before = _application_look(application)
+    yield
+    if _application_look(application) == before:
+        return
+    from app.ui import theme
+
+    style, palette, sheet, font, marker, active = before
+    # Das Stylesheet zuerst: Solange eines gilt, meldet ``style()`` den
+    # Stylesheet-Stil ohne Namen, und der Vergleich darunter griffe ins Leere.
+    if application.styleSheet() != sheet:
+        application.setStyleSheet(sheet)
+    if application.style().name() != style:
+        assert application.setStyle(style) is not None, f"Stil {style!r} nicht herstellbar"
+    if application.palette() != palette:
+        application.setPalette(palette)
+    if application.font() != font:
+        application.setFont(font)
+    application.setProperty(theme._THEME_PROPERTY, marker)
+    theme._ACTIVE = active
+    assert _application_look(application) == before, "Aussehen nicht zurückgegeben"
+
+
+def _application_look(application: object) -> tuple[object, ...]:
+    """Was ``apply_theme``, ``apply_style`` und ``setFont`` an der Anwendung ändern."""
+    from PySide6.QtGui import QFont, QPalette
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui import theme
+
+    assert isinstance(application, QApplication)
+    return (
+        application.style().name(),
+        QPalette(application.palette()),
+        application.styleSheet(),
+        QFont(application.font()),
+        application.property(theme._THEME_PROPERTY),
+        theme.current_theme(),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -995,6 +1043,108 @@ def _user_profiles_stay_with_their_test() -> Iterator[None]:
         if after.get(path) != content:
             path.write_bytes(content)
     profiles.reload()
+
+
+@pytest.fixture(autouse=True)
+def _user_parts_stay_with_their_test() -> Iterator[None]:
+    """Ein eigener Baustein, den ein Test ablegt, gilt nur in diesem Test (§24.5).
+
+    Dieselbe Begründung wie bei den Profilen darüber, mit einer Folge mehr:
+    Jede Datei unter ``<Nutzerdaten>/parts/`` hängt ``results_cache_dir`` ein
+    Kürzel an (``paths._own_parts_stamp``), auch im gebauten Paket, und
+    ``bootstrap.load_user_parts`` meldet sie als Operation an.
+    ``test_own_parts_lie_in_the_user_folder_before_the_application_starts``
+    legte so ein Rezept ab, und im parallelen Lauf war
+    ``test_a_built_package_needs_no_source_stamp`` rot, sobald derselbe Arbeiter
+    vorher jenen Test fuhr. Der Ordner fehlt beim Start jedes Prozesses; was ein
+    Test anlegt, geht mit ihm. Bestimmt wird er vor dem Test, aus demselben Grund
+    wie bei den Profilen.
+
+    **Mit Abdruck, ohne zu schweigen** (Durchsicht welle4, L5): Ein Ordner, der
+    vorher fehlte, geht ganz; einer, der schon lag, kehrt Datei für Datei zum
+    Stand vor dem Test zurück. Misslingt das Räumen, wird der Abbau rot — ein
+    verschlucktes ``rmtree`` ließe den Baustein dem nächsten Test.
+    """
+    from app.core.paths import user_parts_dir
+
+    folder = user_parts_dir()
+    existed = folder.is_dir()
+    before = _tree_files(folder)
+    yield
+    if not existed:
+        if folder.exists():
+            shutil.rmtree(folder)
+    elif _tree_files(folder) != before:
+        _put_back(folder, before)
+    assert _tree_files(folder) == before and folder.is_dir() == existed, (
+        f"eigene Bausteine blieben nach dem Test liegen: {folder}"
+    )
+
+
+def _tree_files(folder: Path) -> dict[Path, bytes]:
+    """Der Abdruck eines Ordners: jede Datei darunter mit ihrem Inhalt."""
+    if not folder.is_dir():
+        return {}
+    return {path: path.read_bytes() for path in folder.rglob("*") if path.is_file()}
+
+
+def _put_back(folder: Path, before: dict[Path, bytes]) -> None:
+    """Stellt die Dateien unter ``folder`` her, wie ``before`` sie abdruckte.
+
+    Neue Dateien und Ordner gehen, geänderte und gelöschte kommen zurück. Ein
+    Fehler dabei geht durch: Er ist ein Leck, kein Grund zum Weitermachen.
+    """
+    for path in _tree_files(folder).keys() - before.keys():
+        path.unlink()
+    for path, content in before.items():
+        if not path.is_file() or path.read_bytes() != content:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+    kept = {parent for path in before for parent in path.parents}
+    for directory in sorted(folder.rglob("*"), key=lambda entry: len(entry.parts), reverse=True):
+        if directory.is_dir() and directory not in kept:
+            directory.rmdir()
+
+
+def _settings_files(folder: Path) -> dict[Path, bytes]:
+    """Die Einstellungen im Nutzerordner, samt Zwischendatei des atomaren Schreibens."""
+    if not folder.is_dir():
+        return {}
+    return {
+        path: path.read_bytes()
+        for path in folder.iterdir()
+        if path.is_file() and path.name.lstrip(".").startswith("settings")
+    }
+
+
+@pytest.fixture(autouse=True)
+def _user_settings_stay_with_their_test() -> Iterator[None]:
+    """Was ein Test in ``settings.json`` schreibt, gilt nur in diesem Test.
+
+    Dieselbe Begründung wie bei Profilen und Bausteinen darüber: Der
+    Nutzerordner ist einer je Lauf. ``function_setup.write_profile`` legt mit
+    Absicht ein Profil ab — Sprache, Thema, Drucker, Ersteinrichtung erledigt,
+    Updateprüfung aus, Zuletzt-Liste —, und drei Tests in
+    ``test_function_setup.py`` ließen es dem nächsten Test desselben Arbeiters
+    (Durchsicht welle4, M2). Wer danach ``load_settings`` ruft, startete in
+    Englisch mit Harzdrucker. Bestimmt wird der Ordner vor dem Test, aus
+    demselben Grund wie bei den Profilen; nach dem Zurückstellen muss der
+    Abdruck wieder der von vorher sein.
+    """
+    from app.ui.settings import settings_path
+
+    folder = settings_path().parent
+    before = _settings_files(folder)
+    yield
+    after = _settings_files(folder)
+    if after == before:
+        return
+    for path in after.keys() - before.keys():
+        path.unlink()
+    for path, content in before.items():
+        if after.get(path) != content:
+            path.write_bytes(content)
+    assert _settings_files(folder) == before, f"Einstellungen blieben nach dem Test: {folder}"
 
 
 #: Die Warte-Methoden je Widget-Klasse, einmal ermittelt.
@@ -1211,6 +1361,27 @@ def qt_app() -> object:
     # Hauptfaden ab (RM-021), sonst verklemmt sich ein Arbeiter mit ihm.
     collect_in_main_thread(application)
     return application
+
+
+@pytest.fixture
+def record_trace(request: pytest.FixtureRequest) -> Callable[[str, object], None]:
+    """Befunddaten eines Falls an seinen Bericht — ``record_property`` ohne JUnit.
+
+    ``record_property`` schreibt nur in den JUnit-Bericht, und der ist in jedem
+    Lauf ``xunit2``: ``tools/run_suite_isolated.py`` und ``build.yml`` setzen
+    ``--junitxml`` ohne Familie, und pytest lehnt die Fixture dort mit einer
+    Warnung ab — unter ``filterwarnings = error`` ein Setup-Fehler. Die
+    Fensterauswahl ohne JUnit blieb grün, der Release-Job ``windows`` wäre an
+    jedem solchen Fall rot gewesen (RD-9). Hier wird jeder Wert ein eigener
+    Abschnitt des Berichts: Ein roter Fall zeigt ihn als „Captured trace
+    <name> call“, ein grüner mit ``-rP``. ``test_suite_isolation.py`` hält,
+    dass kein Test ``record_property`` anfordert.
+    """
+
+    def record(name: str, value: object) -> None:
+        request.node.add_report_section("call", f"trace {name}", str(value))
+
+    return record
 
 
 @pytest.fixture

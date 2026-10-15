@@ -17,8 +17,8 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
 ## Entwicklung und Release
 
 - **Je Schritt die betroffenen Tests, vor jedem Merge oder Commit auf main das Entwicklungstor,
-  Fenster, Renderer und Leistung lokal ausschließlich beim Release** — auch nicht als gezielte
-  Teilmenge (`CLAUDE.md`, `/pruefen`). Ein grüner Entwicklungslauf ist kein
+  Fenster, Renderer und Leistung lokal ausschließlich beim Release** — außer den zwei
+  Ausnahmen in `AGENTS.md` („Arbeitsweise“). Ein grüner Entwicklungslauf ist kein
   Release-Nachweis.
 - **Der Push nach main fährt alle Prüfungen, ein Zweig keine** (Entscheidung
   Robert; CI-09): Kern und Renderer auf allen vier Paketplattformen, dazu die
@@ -85,7 +85,9 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
 `tests/conftest.py` hält die Maschine aus dem Ergebnis: Offscreen-Qt,
 Nutzerverzeichnisse im Temp-Ordner (§38), kein gefundenes Fremdprogramm, kein
 erreichbares Modell (`_the_network_stays_out_of_it` leert die Liste der
-Backends). Wer diese Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
+Backends). Einstellungen, Profile und eigene Bausteine kehren nach jedem
+Test zum vorherigen Dateiabbild zurück; Abbaufehler bleiben rot. Wer diese
+Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
 
 - **Kein Test öffnet eine echte Netzwerkverbindung.** Erreichbarkeit prüft man
   wie `test_backends.py` an einer selbst gebauten Instanz gegen einen sicher
@@ -115,7 +117,8 @@ Backends). Wer diese Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
 Wer eine Rücksetzung baut, prüft ihren Zielzustand: Sie stellt her, was der
 **Kunde** hat. Quellsprache und Millimeter sind der Auslieferungszustand;
 Thema, Stylesheet und geladenes Register gehören zur Betriebslage und werden
-nicht weggeräumt.
+nicht weggeräumt; `conftest.py` gibt das Aussehen nach jedem Qt-Fall nur so
+zurück, wie er es fand.
 
 - **Wer eine Breite, ein Layout oder eine Metrik misst, stellt die
   Betriebslage her** (`apply_theme` im Test), statt sie wegzuräumen — und
@@ -127,7 +130,7 @@ nicht weggeräumt.
   niemand. Die Fensterverträge der Linux-CI laufen offscreen mit DejaVu Sans;
   lokal nachgestellt mit `QT_QPA_FONTDIR` auf einen eigenen Ordner nur mit den
   `DejaVu*.ttf` aus `app/core/geom/data/fonts` (auf den ganzen Ordner nimmt
-  Qt Comfortaa).
+  Qt Comfortaa), in der Fixture über `tests/bundled_fonts.py`.
 - **Was am Anzeigen hängt, prüft nur ein gezeigter Dialog** (`show()`,
   `activateWindow()`): Ungezeigt gibt es keinen Erstfokus, und ein Test bleibt
   grün, während der erste Bildklick am Fenster ins falsche Feld geht (RM-416,
@@ -152,11 +155,9 @@ richtigem Verhältnis halten einen Test jahrelang grün. Der Griff (für Farben;
 bei Schriftmetrik hilft er nicht):
 
 ```text
-before = QApplication.instance().styleSheet()
 apply_theme(QApplication.instance(), "dark")
 apply_style(QApplication.instance(), "dark")
 ...                                    # messen
-QApplication.instance().setStyleSheet(before)   # ins finally
 ```
 
 ## Marker
@@ -257,9 +258,8 @@ machen ihn nicht rückwirkend grün.
 ## Ein roter Leistungstest ist erst dann eine Regression, wenn er es zweimal ist
 
 `tests/.performance.json` hält die Werte hinter der 25-%-Schwelle und steht
-**absichtlich** in `.gitignore`: Sie sind maschinenabhängig (§31), drei
-Maschinen teilen das Projekt. Sie nach einem begründeten Verfahrenswechsel
-zurückzusetzen ist richtig.
+**absichtlich** in `.gitignore`: Sie sind maschinenabhängig (§31). Sie nach
+einem begründeten Verfahrenswechsel zurückzusetzen ist richtig.
 
 - **Denselben Stand ein zweites Mal fahren**, nicht den Vorgängerstand, bevor
   eine Regression gemeldet wird: Schwankt die *Menge* der roten Tests, ist es
@@ -335,11 +335,9 @@ in der `.venv` oder `constraints.txt` — es gehört nicht zum Produkt.
 
 ### Wie viele Läufe trägt eine Aussage?
 
-Das hängt an der Basisrate ohne jede Änderung (1/10 in Ruhe bis 5/5 unter
-Fremdlast): Bei 1/10 ist „0 von 10“ kein Beleg, sondern kein Widerspruch —
-sagen, was die Zahl trägt; bei 5/5 ist nichts messbar. **Die Messlatte steht
-vor der Messung.** Eine Rate sagt, dass etwas anders ist, nie was: **Zeigt der
-Verdacht auf eine benennbare Stelle, ist Lesen billiger als Zählen.**
+Basisrate ohne Änderung erheben; **die Messlatte steht vor der Messung**.
+Eine Rate belegt keine Ursache: **Benennbaren Verdacht zuerst lesen.**
+Die Beispiele und ihre Aussagegrenzen stehen in `regel-tests.md`.
 
 ## Was habe ich gerade gemessen?
 

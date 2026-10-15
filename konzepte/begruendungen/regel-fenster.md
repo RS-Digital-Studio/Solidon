@@ -10,6 +10,18 @@ gegliedert nach den Abschnitten, in denen die Regeln damals standen.
 
 ## Fenster
 
+- Einladungen stehen über der Ansicht, nie unter Karten: `survey.ViewNotice`
+  für `SurveyNotice` nach 15 aktiven Minuten und `SupportNotice` nach dem
+  dritten erfolgreichen Export/Slicerstart einer Version; nichtmodal,
+  ohne Fokus beim Erscheinen, bis zum Klick sichtbar.
+  `spot` sucht die oberste freie Stelle gegen `keep_clear_of` (Zonen,
+  Ansichtsleiste, Vorschau-/Ziehwertband), zuerst zwischen, sonst unter der
+  kürzeren Karte. Neue Overlays dort anmelden. Nur Unterstützung weicht der
+  Rückfrage aus, nie gegenseitig. Nicht über Startseite/modalem Dialog zeigen
+  (Druckdialog nach `exec`), sonst beim nächsten Ergebnis. Erst Zeigen zählt
+  als gesehen; `_announce_written`/`handedOver` zählen nur erfolgreiche Datei,
+  Slicen oder Öffnen, nie Versuch, Abbruch, Fehler oder Rückfrage.
+
 **Eine Einladung steht über der Ansicht, nie unter einer Karte** (Entscheidung
 Robert, 23.09.2026, für die Zeile zur Unterstützung). Zwei gibt es: die
 Rückfrage nach 15 aktiven Minuten (`SurveyNotice`) und die Zeile zur
@@ -103,6 +115,11 @@ Aus der Durchsicht zu RM-538 (`output/review/punkte-0.5.3-2026-10-06/`):
 
 ## Rückfragen
 
+*Aus `fenster.md` verschoben (Ladelast von `main_window.py`, 12.10.2026):*
+Die Titel der Löschnachfrage kommen aus `history.step_titles`, derselben
+Quelle wie die Zeilen und der Löschtitel; ein gelöschter Schritt trägt keine
+Nummer mehr.
+
 *Aus `fenster.md` verschoben (Ladelast von `main_window.py`, 09.10.2026):*
 
 **Die lange Merkmalserkennung ist kein abgebrochener Import und keine
@@ -180,6 +197,8 @@ Erleichterung:
   das fertige Teil, nicht der Zwischenstand vor der Einfügemarke.
 
 ## Hinter einen Halt kommt kein Schritt
+
+Die gemeinsame sichtbare Freischaltungszeile unter dem Suchfeld entstand aus FD-32. Einzelne graue Elemente behalten ihren Grund für Kurzhilfe und Hilfsmittel; sichtbare Duplikate des allgemeinen Lizenzsatzes entfallen auch in Suchtreffern.
 
 **Hinter einen Halt kommt kein Schritt** (§15.3). Hält die Kette an einem
 Schritt an, zeigt das Bild den letzten vollständig gerechneten Zustand — und
@@ -779,6 +798,17 @@ Atemzug gelöscht wird"), `SketchEditor.take_constraint_list` die falsch
 aufgelösten Tastenkürzel („`plane:xy` statt `plane:xz`"), und
 `ReportPanel._show_offers` tat es trotzdem. Ein Kommentar an zwei Stellen ist keine Regel.
 
+**Ein Dialog gibt sich nach `exec` frei.** `exec` hält ihn nur bis zum Schließen;
+danach hängt er verborgen am Elternteil, samt allem, was er hält. Nach drei Aufrufen
+von *Offline aktivieren …* hingen drei Dialoge am Freischaltdialog, und über
+vierzig Stellen unter `app/ui` taten es ebenso (Durchsicht welle4, A-L1 und
+Nachprüfung). Die
+Bauart steht in `ask_text`: lesen, was der Dialog liefert, im `try`, freigeben im
+`finally`. Ein Dialog, der offen bleibt (`open`, `show`), gibt sich über
+`finished.connect(x.deleteLater)`, `WA_DeleteOnClose` oder den Rückruf frei, an den
+sein Ende geht. `tests/test_dialog_lifetime.py` liest jede Dialogklasse samt
+Fabriken, Hilfen und Unterklassen und zählt, was er geprüft hat.
+
 ## Die automatische Sicherung
 
 Sie ist für den **Absturz** da (§38) und nie dafür, eine Entscheidung des
@@ -832,6 +862,14 @@ bleibt, und ohne den Anker zog die passive Nachmessung einen Umlauf später den
 Dialog nach oben (`ContentHeight._keeps_anchor`).
 
 ## Wie die Karten ihre Höhe teilen
+
+`OverlayHost._chrome_height` bestimmt Reiterleiste und Rand aus der gesamten
+Wunschhöhe abzüglich der höchsten Wunschhöhe einer sichtbaren Seite.
+`stack.sizeHint()` kann stattdessen eine Breitenhöhe liefern und Seiten ohne
+solche Angabe übergehen. Dann wird Inhalt fälschlich zum Rahmen: Eine leere
+Berichtskarte beansprucht die Spalte und wächst bei neuen Befunden nicht mehr.
+Der Gegenbeleg liegt in `test_overlay.py`. Zusätzliche Verlaufselemente samt
+ihrem Abstand gehören sowohl in `rows_height` als auch in `wanted_height`.
 
 `OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`.
 Drei Zusagen, und alle drei sind schon gebrochen worden:
@@ -981,11 +1019,13 @@ Vier Zusagen, alle vier tragend:
   samt Anhängen und Gesamtgröße, bevor gesendet wird.
 * **Das Bildschirmfoto entsteht vor dem Dialog.** Eine Sekunde später zeigt es
   den Dialog statt dessen, was darunter schiefging — `window_shot(self)` steht
-  deshalb im Fenster und nicht im Dialog. Das sichtbare Fenster wird über
-  `screen().grabWindow(winId())` aus vorhandenen Bildpunkten aufgenommen,
-  ohne das möglicherweise defekte Modell erneut zu rendern. Nur wenn diese
-  Aufnahme leer bleibt, folgt `grab()` mit den Viewport-Bildern. Aufgenommen
-  wird ausschließlich das Solidon-Fenster, nie der gesamte Bildschirm.
+  deshalb im Fenster und nicht im Dialog. Das sichtbare Fenster wird aus
+  vorhandenen Bildpunkten aufgenommen, ohne das möglicherweise defekte Modell
+  erneut zu rendern: unter Windows über `PrintWindow` mit vollem Inhalt, weil
+  `screen().grabWindow(winId())` nur GDI liest und bei D3D12 alte Bilder statt
+  der Ansicht zeigt; sonst über `grabWindow`. Nur wenn diese Aufnahme leer
+  bleibt, folgt `grab()` mit den Viewport-Bildern. Aufgenommen wird
+  ausschließlich das Solidon-Fenster, nie der gesamte Bildschirm.
 * **Der abgelegte Ordner ist ein Weg, kein Notausgang.** *Bericht ablegen*
   steht dauerhaft in der Knopfleiste (§37.2); *Selbst per E-Mail senden*
   erscheint erst, wenn ein Versand scheiterte — ein zweiter Weg neben einem

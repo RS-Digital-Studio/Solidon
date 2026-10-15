@@ -177,9 +177,10 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
     from app.core.registry import REGISTRY
     from app.core.types import Parameter, ParamSpec
     from app.ui.analysis_bar import AnalysisBar, LayerBar
+    from app.ui.calibration_dialog import CalibrationDialog
     from app.ui.catalog import PartCatalog
     from app.ui.chat import ChatPanel
-    from app.ui.dialogs import AskDialog, CalibrationDialog, KeyDialog, ParameterDialog
+    from app.ui.dialogs import AskDialog, KeyDialog, ParameterDialog
     from app.ui.explode_bar import ExplodeBar
     from app.ui.filament_picker import NewFilamentDialog
     from app.ui.first_run import FirstRunDialog, ToolRow

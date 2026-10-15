@@ -892,6 +892,32 @@ Historischer Messstand vor dem geordneten Qt-Abbau:
 Dass die mittlere Zeile sich nicht bewegt, ist der Grund, warum drei Klassen
 zwei Monate lang als „hält, aber erklärbar" in einer Ausnahmeliste standen.
 
+### Kein Arbeiter läuft über das Prozessende
+
+**Ein Halten schützt am Prozessende nicht.** PySide meldet beim Import von
+`QtCore` einen `atexit`-Haken an (`destroyQCoreApplication`), der jedes
+Python-eigene QObject zerstört, gleich ob `leash._alive` es noch hält. Für
+einen laufenden `QThread` ist das `qFatal("QThread: Destroyed while thread ''
+is still running")`, unter Windows 0xC0000409; der leere Name ist der nie
+gesetzte `objectName` der Arbeiter. `Shiboken.invalidate` hilft nicht.
+
+Gefunden an Fallprozessen der Abnahme (FD-154, RD-10): `shutdown_window` gab
+`MainWindow.release` 2 s für alles; unter Last rechnete ein Arbeiter des Falls
+länger, `closeEvent` lehnte ab, und der Prozess endete nach `shutdown_complete`
+im qFatal. Nachgestellt deterministisch mit einem 3-s-Arbeiter am echten
+Fenster (offscreen): Original 0xC0000409 nach 2,04 s, mit dem Haken Exit 0 nach
+3,0 s. Die Kundenwege Beenden, Dialog schließen, Projektwechsel und
+`application.quit()` warteten schon vorher, weil `closeEvent` erst nach dem
+letzten Arbeiter annimmt und Qt 6 auch `quit()` über `closeEvent` führt.
+
+**Warum ein harter Ausgang nach der Frist.** Weiter zu warten hielte ein
+Programm ohne Fenster unbegrenzt auf; Qts Abbau führte in den Absturz. Nach
+`EXIT_WAIT_MS` endet der Prozess deshalb mit `os._exit(STRAGGLER_EXIT_CODE)`
+und einer Zeile, die den Arbeiter nennt — nicht null, weil ein Arbeiter, der
+seinen Abbruch nicht befolgt, ein Befund ist. Ein `atexit`-Haken läuft vor
+PySides, auch wenn er vor der `QCoreApplication` angemeldet wird (LIFO).
+`tests/test_leash.py` hält beide Ausgänge in einem Unterprozess fest.
+
 ### Ein Rückruf an ein eigenes Kind hält schwach
 
 **Die allgemeine Form, und sie ist häufiger als ihre bekannten Fälle:** Ein

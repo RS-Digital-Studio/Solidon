@@ -3755,6 +3755,7 @@ def _preview_matrix(
             _depth_measure=Widget(),
             _deepening=deepening,
             _measure_group=None,
+            _measure_drag=SimpleNamespace(update_room=lambda _room: None, placed_rect=lambda: None),
             _distance_valid=True,
             _show_bar=lambda: None,
             _refresh_measure_actions=lambda: None,
@@ -3792,6 +3793,9 @@ def _preview_matrix(
         flow._depth_measure = Widget()
         flow._deepening = deepening
         flow._measure_group = None
+        flow._measure_drag = SimpleNamespace(
+            update_room=lambda _room: None, placed_rect=lambda: None
+        )
         flow._distance_valid = True
         flow._show_bar = lambda: None
         flow._refresh_measure_actions = lambda: None

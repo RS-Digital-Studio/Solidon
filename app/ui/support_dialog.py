@@ -590,6 +590,7 @@ class SupportDialog(QDialog):
         self.contact.setPlaceholderText(tr("Nur nötig, wenn Sie eine Antwort möchten"))
 
         form = QFormLayout()
+        form.setSpacing(NORMAL)
         kind_row = QLabel(tr("Art"), self)
         form.addRow(kind_row, self.kind)
         if self.survey is not None:

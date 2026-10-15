@@ -10300,12 +10300,12 @@ class ResizeHoleParams(BaseParams):
         ),
     )
     compensate: bool = param(
-        title=_("Materialtoleranz berücksichtigen"),
+        title=_("Druckabweichung ausgleichen"),
         default=False,
         placement="advanced",
         doc=_(
-            "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. "
-            "Aus bleibt das gemessene Maß unverändert."
+            "Vergrößert den Ziel-Durchmesser um die Druckkorrektur aus dem Materialprofil. "
+            "Aus: Die Bohrung erhält genau das eingegebene Maß."
         ),
     )
     legacy_slot_tool: bool = _saved_slot_tool_marker()
