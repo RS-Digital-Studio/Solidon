@@ -69,6 +69,7 @@ scrive in `website/version.json`.
 - La scheda di selezione segue contenuto e carattere, mantenendo testo e colonne. Le schede separate mantengono le dimensioni. Se è proposta una modifica, «Applica» è l’azione principale.
 - Le controparti chiedono coppia e dimensioni e spiegano entrambe le metà. Forma e accoppiamento sono in «Altre impostazioni». L’altezza iniziale del dialogo segue il contenuto.
 - Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
+- La legenda *Aggiunto* e *Rimosso* compare nella barra dell'anteprima solo quando l'anteprima aggiunge o toglie materiale. Per questo *Rinomina oggetto* non la mostra.
 - Per parametri, accoppiamenti, stampante, materiale e annulla, la chat indica il punto della finestra in cui fare lo stesso da sé.
 - Il rapporto di verifica nomina i corpi di un accoppiamento invece di mostrare un identificativo interno.
 - L'inglese e il portoghese distinguono ora la sporgenza di un gancio, o di un corpo sotto il piatto, dallo sbalzo in stampa.

@@ -70,6 +70,7 @@ dans `website/version.json`.
 - La carte de sélection suit contenu et police, gardant textes et colonnes. Les onglets détachés gardent leur taille. Si une modification est proposée, « Appliquer » est l’action principale.
 - Les contreparties demandent paire et taille et expliquent les deux moitiés. Forme et ajustement sont dans « Autres réglages ». La hauteur initiale du dialogue suit le contenu.
 - Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
+- La légende *Ajouté* et *Retiré* n'apparaît dans le bandeau d'aperçu que si l'aperçu ajoute ou retire de la matière. *Renommer l'objet* ne l'affiche donc pas.
 - Pour les paramètres, les ajustements, l'imprimante, le matériau et l'annulation, le chat indique l'endroit de la fenêtre où faire de même soi-même.
 - Le rapport de contrôle nomme les corps d'un ajustement au lieu d'afficher un identifiant interne.
 - L'anglais et le portugais distinguent désormais le dépassement d'un crochet, ou d'un corps sous le plateau, du surplomb à l'impression.

@@ -13722,6 +13722,9 @@ class Viewport(QWidget):
             self._difference_key = None
             self._difference_display_cache.clear()
         self._difference = difference
+        if self._preview_note:
+            # Ob die Legende steht, hängt an der Differenz (FD-116).
+            self._refresh_preview_banner()
         # Die Differenz besitzt die Modellfarben, solange sie sichtbar ist.
         # Auswahl und Hover bleiben in Baum, Text und Zeiger erhalten, färben
         # aber nicht über „hinzugefügt/entfernt" hinweg.
@@ -13813,8 +13816,16 @@ class Viewport(QWidget):
                     filter(None, (note, tr("Der Ansichtsschnitt ist stellenweise offen.")))
                 )
         if note:
+            # **Die Legende erklärt Farben, die im Bild stehen** (FD-116): erst
+            # mit einer Differenz, und nur wenn sie Volumen oder Körper hinzufügt
+            # oder wegnimmt. *Objekt umbenennen* und *Material setzen* zeigten
+            # „Hinzugefügt · Entfernt“ über einer Vorschau ohne beides. Eine
+            # Differenz, die nicht sagt, ob sie etwas ändert, gilt wie bisher
+            # als Änderung (wie ``entries`` und ``findings`` im Fenster).
             self.banner.legend.setVisible(
                 self._preview_changes
+                and self._difference is not None
+                and bool(getattr(self._difference, "changed", True))
                 and not self._difference_pending
                 and not self._difference_failed
             )
