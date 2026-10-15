@@ -77,6 +77,7 @@ dans `website/version.json`.
 - Si *Diviser automatiquement* ne trouve aucune coupe, la ligne d'état en donne la raison. Jusqu'ici, elle annonçait alors que la pièce tenait déjà sur le plateau.
 - La brève confirmation après une action s'affiche à côté des cartes, pas dessus, par exemple à côté du rapport. L'étape suivante l'efface avec la ligne d'état, même un ancien « Annulé ».
 - Sur un constat d'un modèle généré, *Générer de nouveau* ouvre le générateur avec sa description et la graine suivante.
+- Quand la carte d'analyse refuse un modèle trop grand, les nombres de triangles s'affichent par groupes de trois, par exemple 2 103 472.
 
 ### Imprimer et transmettre au slicer
 

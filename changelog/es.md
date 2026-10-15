@@ -77,6 +77,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si *Dividir automáticamente* no encuentra un corte, la línea de estado indica el motivo. Hasta ahora decía entonces que la pieza ya cabía en la placa.
 - La breve confirmación tras una acción aparece junto a las tarjetas, no encima, por ejemplo junto al informe. El siguiente paso la retira con la línea de estado, también un «Deshecho» antiguo.
 - En un aviso de un modelo generado, *Volver a generar* abre el generador con su descripción y la siguiente semilla.
+- Cuando el mapa de análisis rechaza un modelo demasiado grande, el número de triángulos aparece en grupos de tres, como 2 103 472.
 
 ### Imprimir y entregar al slicer
 

@@ -101,6 +101,7 @@ Nutzen da und sonst nichts.
 - Findet *Automatisch teilen* keinen Schnitt, sagt die Statuszeile den Grund. Bisher meldete sie dann, das Teil passe bereits auf das Bett.
 - Die kurze Quittung nach einer Handlung steht neben den Karten statt darüber, etwa neben dem Prüfbericht. Der nächste Schritt nimmt sie samt Statuszeile mit, auch ein altes „Zurückgenommen“.
 - Am Befund eines erzeugten Modells öffnet *Neu erzeugen* den Generator mit dessen Beschreibung und dem nächsten Startwert.
+- Lehnt die Analysekarte ein zu großes Modell ab, stehen die Dreieckszahlen in Dreiergruppen, etwa 2 103 472.
 
 ### Drucken und Übergabe an den Slicer
 

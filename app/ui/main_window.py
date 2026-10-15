@@ -18097,7 +18097,7 @@ class MainWindow(QMainWindow):
                 tr(
                     "Für eine Analysekarte ist dieses Modell zu groß: "
                     "{count} Dreiecke, möglich sind {limit}."
-                ).format(count=triangles, limit=limit)
+                ).format(count=count_text(triangles), limit=count_text(limit))
                 + " "
                 + tr("Wählen Sie einen anderen Körper oder schließen Sie die Karte."),
                 tr("Keine Karte"),
@@ -18108,7 +18108,7 @@ class MainWindow(QMainWindow):
             tr(
                 "Für eine Analysekarte ist dieses Modell zu groß: "
                 "{count} Dreiecke, möglich sind {limit}."
-            ).format(count=triangles, limit=limit),
+            ).format(count=count_text(triangles), limit=count_text(limit)),
             tr("Dreiecke verringern"),
             weak_slot(self, MainWindow._decimate_for_a_map, limit),
         )

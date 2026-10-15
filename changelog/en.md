@@ -76,6 +76,7 @@ it into `website/version.json`.
 - If *Split automatically* finds no cut, the status line says why. Until now it then reported that the part already fits on the bed.
 - The short confirmation after an action stands beside the cards instead of over them, for example beside the report. The next step clears it and the status line, including an old “Undone”.
 - On a finding of a generated model, *Generate again* opens the generator with its description and the next seed.
+- When the analysis map refuses a model as too large, the triangle counts are shown in groups of three, such as 2 103 472.
 
 ### Printing and slicer handover
 

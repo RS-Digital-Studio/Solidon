@@ -76,6 +76,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se *Dividir automaticamente* não encontrar um corte, a linha de estado diz porquê. Até agora dizia então que a peça já cabia na mesa.
 - A breve confirmação após uma ação aparece ao lado dos cartões, não por cima, por exemplo ao lado do relatório. O passo seguinte retira-a com a linha de estado, também um «Anulado» antigo.
 - Numa observação de um modelo gerado, *Gerar de novo* abre o gerador com a sua descrição e a semente seguinte.
+- Quando o mapa de análise recusa um modelo demasiado grande, o número de triângulos aparece em grupos de três, como 2 103 472.
 
 ### Imprimir e entregar ao slicer
 
