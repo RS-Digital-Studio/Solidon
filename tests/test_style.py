@@ -930,7 +930,7 @@ def test_a_primary_button_carries_the_font_it_is_drawn_with(qt_app: QApplication
     )
 
 
-def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: object) -> None:
+def test_every_default_button_of_the_surface_goes_through_make_primary() -> None:
     """``setDefault(True)`` allein genügt nicht mehr, und das darf niemand
     wieder vergessen.
 
@@ -944,7 +944,8 @@ def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: o
     von selbst. ``test_no_window_wears_an_accent_it_never_asked_for`` weiter
     unten misst deshalb am **angezeigten** Fenster. Die beiden gehören
     zusammen gelesen; getrennt ist jeder von beiden blind für das, was der
-    andere sieht.
+    andere sieht. Gelesen wird nur Quelltext; der Fall braucht keine Anwendung
+    und läuft im Kernlauf.
     """
     # Die Grundmenge ist der ganze Baum unter app/ui. Die Datei mit
     # ``make_primary`` ist die eine Stelle, an der der Aufruf stehen darf —

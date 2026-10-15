@@ -448,7 +448,7 @@ def test_wait_all_also_waits_for_a_worker_that_has_not_finished(qt_app: QApplica
         worker.wait(2000)
 
 
-def test_no_worker_is_started_past_the_leash(qt_app: QApplication) -> None:
+def test_no_worker_is_started_past_the_leash() -> None:
     """Was an der Leine vorbei startet, sieht ``wait_for_all`` nicht — und
     damit verspricht jede Zusicherung darüber mehr, als sie halten kann.
 
@@ -467,7 +467,8 @@ def test_no_worker_is_started_past_the_leash(qt_app: QApplication) -> None:
 
     Geprüft wird am Quelltext und nicht am Verhalten, weil das Verhalten es
     nicht zeigt: Ein Arbeiter an der Leine vorbei läuft völlig normal, bis das
-    Fenster unter ihm weggeräumt wird.
+    Fenster unter ihm weggeräumt wird. Deshalb braucht der Fall auch keine
+    Anwendung und läuft im Kernlauf.
     """
     import re
 
