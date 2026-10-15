@@ -25,6 +25,7 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from app.core.knowledge import filaments
+from app.i18n import tr
 from app.ui import filament_inventory
 from tests.ui_helpers import wait_until
 
@@ -33,7 +34,8 @@ def test_the_spool_import_reaches_the_binding_the_first_run_forbids(
     qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Der Knopf im leeren Regal ruft die Bindung des Verbots genau einmal, im
-    Arbeiter und mit seinem Abbruchsignal, und die Antwort kommt im Regal an."""
+    Arbeiter und mit seinem Abbruchsignal, und die Antwort kommt im Regal an —
+    die der leeren Suche (die Suite isoliert die Slicer), nicht die eines Absturzes."""
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
     real = filament_inventory.configured_spools
     threads: list[int] = []
@@ -55,7 +57,11 @@ def test_the_spool_import_reaches_the_binding_the_first_run_forbids(
         configured.assert_called_once()
         assert set(configured.call_args.kwargs) == {"cancelled"}
         assert threads[0] != threading.get_ident(), "die Suche lief im Oberflächen-Thread"
-        assert view.message.text(), "die Antwort der Suche steht im Regal"
+        assert view.message.text() == tr(
+            "Kein Slicer-Profil gefunden. Unter Bearbeiten → Einstellungen einen Slicer "
+            "einrichten oder eine Spule von Hand anlegen."
+        ), "die Antwort der leeren Suche steht im Regal"
+        assert not view.retry_button.isVisibleTo(view), "die Suche endete im Fehlerweg"
     finally:
         assert view.wait_for_workers(5_000)
         view.close()
