@@ -14,6 +14,7 @@ from __future__ import annotations
 import copy
 from collections.abc import Callable
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 from tests.bench_fakes import FakeClick, FakePorts, FakeTimer, FakeWidget, run_machine
@@ -1328,6 +1329,9 @@ def test_the_fault_case_asks_for_the_lock_reason_at_its_own_targets(monkeypatch:
     flow.picture = lambda label: None
     flow.session = SimpleNamespace(last_result=None)
     flow.window = None
+    # Ohne graues Ziel nimmt der Fehlfall kein Bild des Sperrgrunds auf (FD-149).
+    flow.widget = lambda name: None
+    flow.folder = flow.out = Path("cases")
 
     def run_steps(label: str, steps: list[Any]) -> bool:
         for step in steps:
