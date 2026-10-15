@@ -25,6 +25,7 @@ verglichen wurde; ``Proof.counts`` sind die Grundmengen, die nie leer sein dürf
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import os
 import subprocess
@@ -34,6 +35,7 @@ from collections import Counter
 from pathlib import Path
 
 from tools.code_index import Index, PatchSite
+from tools.move_compare import module_of_expression
 from tools.move_cut import Cut
 from tools.move_proof_component import ComponentProof
 from tools.move_proof_copies import CopiesProof
@@ -76,6 +78,7 @@ def prove(
         return proof
     check_patch_sites(proof, trees, mapping)
     check_unresolved(proof, trees, mapping)
+    check_queries(proof, trees, mapping)
     check_readers(proof, trees, mapping)
     if registry:
         check_registry(proof, trees)
@@ -117,6 +120,69 @@ def check_unresolved(proof: Proof, trees: Trees, mapping: Mapping) -> None:
     after = Counter((u.path, u.kind, u.module, u.name) for u in trees.new_index.unresolved())
     for path, kind, module, name in sorted((after - before).elements()):
         proof.error(f"{path}: {kind}-Bezug {module}.{name} löst sich nachher nicht auf (W5)")
+
+
+#: Abfragen, die bei einem fehlenden Namen still antworten: ``hasattr`` mit ``False``,
+#: ``getattr`` mit seiner Vorgabe.
+QUERIES = frozenset({"builtins.hasattr", "builtins.getattr"})
+
+
+def check_queries(proof: Proof, trees: Trees, mapping: Mapping) -> None:
+    """Keine Abfrage ``hasattr(M, "N")`` oder ``getattr(M, "N", vorgabe)`` fragt nachher ins
+    Leere, die vorher (abgebildet) etwas fand. Der Auflöser zählt eine solche Stelle nur
+    (``absent``), sie ist weder Bezug noch unauflösbar — der Beweis sucht sie deshalb selbst,
+    über ``resolve`` und ``exists`` aus R, in jeder Datei beider Bäume."""
+    every = _queries(trees, "new")
+    proof.counts["queries"] = sum(len(sites) for sites in every.values())
+    before = {
+        key: sites
+        for key, sites in _queries(trees, "old").items()
+        if not trees.old_index.exists(*key)
+    }
+    after = {key: sites for key, sites in every.items() if not trees.new_index.exists(*key)}
+    expected = Counter(
+        mapping.ref(module, name) for (module, name), sites in before.items() for _ in sites
+    )
+    for key, sites in sorted(after.items()):
+        if len(sites) <= expected[key]:
+            continue
+        for site in sites:
+            proof.error(
+                f"{site}: fragt {key[0]} nach {key[1]}, das es nachher nicht gibt (hasattr, "
+                "getattr mit Vorgabe: die Antwort wäre still eine andere) — die Stelle auf das "
+                "Modul umschreiben, das den Namen danach trägt"
+            )
+
+
+def _queries(trees: Trees, side: str) -> dict[tuple[str, str], list[str]]:
+    """Je ``(M, N)`` die Stellen ``hasattr(M, "N")`` und ``getattr(M, "N", vorgabe)`` eines
+    Baums, deren erstes Argument laut R genau ein Modul ist; der Name auch gefaltet."""
+    index = trees.old_index if side == "old" else trees.new_index
+    files = trees.old_files if side == "old" else trees.new_files
+    found: dict[tuple[str, str], list[str]] = {}
+    for path, data in files.items():
+        if not path.endswith(".py") or (b"hasattr(" not in data and b"getattr(" not in data):
+            continue
+        source = trees.old(path) if side == "old" else trees.new(path)
+        for node in ast.walk(source.tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            if node.func.id not in ("hasattr", "getattr") or node.keywords:
+                continue
+            if len(node.args) != (2 if node.func.id == "hasattr" else 3):
+                continue
+            kinds = index.resolve(path, node.func)
+            if not kinds or not all(v.kind == "ext" and v.ref in QUERIES for v in kinds):
+                continue
+            module = module_of_expression(index, path, node.args[0])
+            if module is None:
+                continue
+            names = index.resolve(path, node.args[1])
+            if not names or not all(v.kind == "const" and isinstance(v.data, str) for v in names):
+                continue
+            for value in names:
+                found.setdefault((module, str(value.data)), []).append(f"{path}:{node.lineno}")
+    return found
 
 
 def check_readers(proof: Proof, trees: Trees, mapping: Mapping) -> None:

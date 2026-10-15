@@ -458,6 +458,30 @@ def test_the_copies_mutant_list_is_not_empty() -> None:
     assert len(_mutants()) >= 10
 
 
+@pytest.mark.parametrize(
+    ("label", "call"),
+    [
+        ("hasattr", 'hasattr(consumer, "operation")'),
+        ("getattr-mit-vorgabe", 'getattr(consumer, "operation", None)'),
+    ],
+)
+def test_a_forgotten_query_on_a_copy_is_red(tmp_path: Path, label: str, call: str) -> None:
+    """RM-M4: Eine unveränderte Abfrage nach der Kopie antwortete nachher still; der Beweis
+    findet sie selbst (der Auflöser zählt sie nur)."""
+    text = (
+        '"""Fragt den Halter nach der Kopie."""\n\nfrom app.core import consumer\n\n\n'
+        f"def test_has():\n    assert {call}\n"
+    )
+    old = fx.write_tree(tmp_path / "old", fx.COPIES_OLD | {"tests/test_probe.py": text})
+    new = fx.write_tree(tmp_path / "new", EXPECTED | {"tests/test_probe.py": text})
+    cut_file = tmp_path / "cut.toml"
+    cut_file.write_text(fx.COPIES_CUT, encoding="utf-8")
+    proof = move_proof.prove(move_cut.load(cut_file), old, new)
+    assert not proof.ok, f"{label}: Beweis grün\n{proof.text()}"
+    where = "tests/test_probe.py:7: fragt app.core.consumer nach operation"
+    assert any(where in error for error in proof.errors), (label, proof.errors)
+
+
 # ------------------------------------------------------------------------------ abgewiesen
 
 

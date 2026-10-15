@@ -205,6 +205,36 @@ def test_the_mutant_list_is_not_empty() -> None:
     assert len(_mutants()) >= 15
 
 
+def _query(call: str) -> str:
+    return (
+        '"""Fragt die alte Quelle nach einem verschobenen Namen."""\n\n'
+        "from app.core import legacy\n\n\n"
+        f"def ask() -> object:\n    return {call}\n"
+    )
+
+
+@pytest.mark.parametrize(
+    ("label", "path", "call"),
+    [
+        ("hasattr-in-tests", "tests/test_probe.py", 'hasattr(legacy, "bump")'),
+        ("hasattr-in-app", "app/core/probe.py", 'hasattr(legacy, "bump")'),
+        ("getattr-mit-vorgabe-in-tests", "tests/test_probe.py", 'getattr(legacy, "bump", None)'),
+        ("getattr-mit-vorgabe-in-app", "app/core/probe.py", 'getattr(legacy, "bump", None)'),
+    ],
+)
+def test_a_forgotten_query_that_answers_silently_is_red(
+    tmp_path: Path, label: str, path: str, call: str
+) -> None:
+    """RM-M4: ``hasattr`` und ``getattr`` mit Vorgabe antworten nach dem Schnitt still
+    ``False`` bzw. mit der Vorgabe; der Auflöser zählt sie nur. Der Beweis sucht sie selbst —
+    auch in einer unveränderten Datei, unabhängig von der Lesermenge."""
+    text = _query(call)
+    proof = _prove(tmp_path, EXPECTED | {path: text}, old_files=fx.MODULE_OLD | {path: text})
+    assert not proof.ok, f"{label}: Beweis grün\n{proof.text()}"
+    where = f"{path}:7: fragt app.core.legacy nach bump, das es nachher nicht gibt"
+    assert any(where in error for error in proof.errors), (label, proof.errors)
+
+
 def test_a_cut_that_separates_a_global_writer_from_its_variable_is_red(tmp_path: Path) -> None:
     """Steht ``bump`` (``global COUNT``) in einem anderen Ziel als ``COUNT``, ist auch ein von
     Hand gebauter Kandidat rot: Der Schreiber legte im neuen Modul eine zweite Variable an."""
