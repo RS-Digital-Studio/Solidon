@@ -289,14 +289,17 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "tabs.bar": ("D11", "leer"),
     "tabs.return": ("D11", "leer"),
     # Chat, KI-Hinweis und Freischalten: D12.
-    "chat.starter": ("D12", "leer"),
-    "chat.send": ("D12", "leer"),
+    "request.example": ("D12", "leer"),
+    "request.send": ("D12", "leer"),
     "disclosure.privacy": ("D12", "leer"),
     "activation.offline": ("D12", "leer"),
     "disclosure.continue": ("D12", "leer"),
     # Beschreibung und *Erzeugen* gehören zu *Modell erzeugen*: D2.
     "generate.prompt": ("D2", "leer"),
     "generate.start": ("D2", "leer"),
+    # *Koordinaten …* und *Neue Ebene …* im Skizzeneditor: D7.
+    "sketch.coordinates": ("D7", "leer"),
+    "sketch.new_plane": ("D7", "leer"),
 }
 
 #: Wortschatznamen mit Art, die Zeilen tragen: Präfix → Paket und Anforderung.

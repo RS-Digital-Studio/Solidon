@@ -18,6 +18,14 @@ import pytest
 
 from tools import function_list, function_surface
 
+#: Der Weg in den Skizzeneditor der Dichtung aus dem Bausteinkatalog (Zeilen D7).
+SEAL_EDITOR: tuple[str, ...] = (
+    "menu:menubar.bausteinkatalog",
+    "part:seal_gasket",
+    "dialog.accept",
+    "field:path_sketch",
+)
+
 #: Zeile → (Startszene, Weg der Zeile samt Spezifikation, ohne das Ziel). Der Weg
 #: ist der Kundenweg zur Fläche, gemessen offscreen (Bericht, Abschnitt FD-101).
 REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
@@ -279,20 +287,20 @@ REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
     # Über Nähte: die Sicherung neben dem zuletzt geöffneten Projekt, ein lokales
     # Sprachmodell vor dem KI-Hinweis, ein Kaufcode, der auf die Freischaltung wartet.
     "meldung:_ask_recovery": ("startbildschirm", ("start.recent:1",)),
-    "chat.starter": ("leer", ("chat",)),
-    "chat.send": ("leer", ("chat", "chat.starter")),
-    "dialog:ai_disclosure_dialog": ("leer", ("chat", "chat.starter", "chat.send")),
-    "disclosure.privacy": ("leer", ("chat", "chat.starter", "chat.send")),
+    "request.example": ("leer", ("chat",)),
+    "request.send": ("leer", ("chat", "request.example")),
+    "dialog:ai_disclosure_dialog": ("leer", ("chat", "request.example", "request.send")),
+    "disclosure.privacy": ("leer", ("chat", "request.example", "request.send")),
     "dialog:local_privacy_dialog": (
         "leer",
-        ("chat", "chat.starter", "chat.send", "disclosure.privacy"),
+        ("chat", "request.example", "request.send", "disclosure.privacy"),
     ),
     "activation.offline": ("leer", ("menu:menubar.solidon_freischalten",)),
     "dialog:offline_activation_dialog": (
         "leer",
         ("menu:menubar.solidon_freischalten", "activation.offline"),
     ),
-    "disclosure.continue": ("leer", ("chat", "chat.starter", "chat.send")),
+    "disclosure.continue": ("leer", ("chat", "request.example", "request.send")),
     # Ein Generator, der sofort antwortet; die Beschreibung tippt der Weg.
     "generate.prompt": ("leer", ("menu:menubar.modell_erzeugen",)),
     "generate.start": ("leer", ("menu:menubar.modell_erzeugen", "generate.prompt")),
@@ -306,16 +314,31 @@ REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
             "menu:menubar.beenden",
         ),
     ),
-}
-
-#: Zeilen, die der Sprachfall noch nicht erreicht, je mit dem Grund (FD-175). Der
-#: Wächter unten hält die Liste genau: Eine Zeile, die einen Weg bekommt, muss hier
-#: heraus, und keine neue Zeile ohne Weg kommt still dazu.
-STILL_WITHOUT: dict[str, str] = {
-    "dialog:expression_dialog": "Skizzenwortschatz",
-    "dialog:point_dialog": "Skizzenwortschatz",
-    "dialog:new_plane_dialog": "Skizzenwortschatz",
-    "meldung:change_constraint_value": "Skizzenwortschatz",
+    # Der Skizzeneditor der Dichtung: ein Kreis um den festen Mittelpunkt mit Maß.
+    "sketch.coordinates": ("quader.exakt", (*SEAL_EDITOR, "sketch.point:2")),
+    "dialog:point_dialog": (
+        "quader.exakt",
+        (*SEAL_EDITOR, "sketch.point:2", "sketch.coordinates"),
+    ),
+    "meldung:change_constraint_value": (
+        "quader.exakt",
+        (*SEAL_EDITOR, "sketch.point:1", "sketch.constraint:distance"),
+    ),
+    "dialog:expression_dialog": (
+        "quader.exakt",
+        (
+            *SEAL_EDITOR,
+            "sketch:line",
+            "sketch.at:5_5",
+            "sketch.at:10_10",
+            "sketch:select",
+            "sketch.point:2",
+            "sketch.point:3",
+            "sketch.constrain:distance",
+        ),
+    ),
+    "sketch.new_plane": ("quader.exakt", SEAL_EDITOR),
+    "dialog:new_plane_dialog": ("quader.exakt", (*SEAL_EDITOR, "sketch.new_plane")),
 }
 
 
@@ -353,16 +376,14 @@ def test_no_row_of_any_package_is_without_a_way(rows: dict[str, dict[str, Any]])
 
     Vorher hielt der Wächter nur die Liste aus FD-101 (D4, D8, D10); 37 Zeilen in D9
     und D12 und 22 in D1, D2, D7 und D11 hatten keinen Weg, und ihr Sprachfall maß
-    sie nie. Was noch fehlt, steht mit Grund in :data:`STILL_WITHOUT` — genau das.
+    sie nie. Eine neue Zeile ohne Weg macht diesen Test rot, bis sie einen hat.
     """
     without = {
         row_id: reason
         for row_id, row in rows.items()
         if (reason := function_surface.without_way(row))
     }
-    assert sorted(set(without) - set(STILL_WITHOUT)) == [], without
-    assert sorted(set(STILL_WITHOUT) - set(without)) == [], "hat jetzt einen Weg"
-    assert not set(REACHED) & set(STILL_WITHOUT)
+    assert without == {}
 
 
 def test_an_operation_over_the_whole_scene_is_walked_without_a_selection(

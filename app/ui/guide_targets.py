@@ -51,7 +51,16 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import guides
-from app.ui.guide_finders import MARKED, PLACE_CLICKS, bind_button, first_parameter_label
+from app.ui.guide_finders import (
+    MARKED,
+    MARKED_KINDS,
+    PLACE_CLICKS,
+    PLACE_KINDS,
+    active_sketch_panel,
+    bind_button,
+    first_parameter_label,
+    place_click,
+)
 from app.ui.guide_wheel import takes_wheel
 from app.ui.labels import RowCheckBox
 from app.ui.overlay import MARGIN, free_span
@@ -79,7 +88,9 @@ def _drop_area(window: MainWindow) -> QWidget:
 
 #: Der Wrapper des modalen Dialogs bleibt gehalten: Gab Python ihn frei, verfielen die
 #: Wrapper seiner Kinder, und der Hauptknopf des Speicherdialogs war tot (FD-175).
+#: Ebenso das Fenster, in dem die Probe zuletzt traf (:func:`widget_under`).
 _HELD: list[QWidget] = []
+_PROBED: list[QWidget] = []
 
 
 def _open_dialog(window: MainWindow) -> QWidget:
@@ -184,10 +195,8 @@ def _draw_button(window: MainWindow) -> QWidget:
 
 
 def _sketch_panel(window: MainWindow, name: str) -> Any:
-    panel = window._sketch_panel
-    if panel is None:
-        raise MissingTargetError(f"{name}: der Zeichenmodus ist nicht offen")
-    return panel
+    """Das Panel des offenen Skizzeneditors, sonst das des Zeichenmodus."""
+    return active_sketch_panel(window, name)
 
 
 def _sketch_done(window: MainWindow) -> QWidget:
@@ -466,7 +475,7 @@ def widget_for(window: MainWindow, name: str) -> QWidget:
             return button
     if kind == "message.button":
         return _message_button(window, name, rest)
-    if kind in _MARKED_KINDS:
+    if kind in MARKED_KINDS:
         return _marked(name)(window)
     if kind == "handle" and rest in _BARS:
         return _bar(window, rest)
@@ -490,8 +499,8 @@ def area_for(window: MainWindow, name: str) -> QRect:
     """
     if name == "history.last":
         return _last_row(window.history_panel.list, name)
-    if name in PLACE_CLICKS:
-        return PLACE_CLICKS[name](window, name).rect
+    if (place := place_click(name)) is not None:
+        return place(window, name).rect
     if name == "viewport":
         return _open_view(window)
     kind, separator, rest = name.partition(":")
@@ -896,22 +905,7 @@ def _open_menu_entry_named(object_name: str, name: str) -> QRect:
 
 
 # --- Die neuen Arten (RM-737) --------------------------------------------------
-
-#: Arten, deren Widget sein Ziel als Kennzeichen trägt (``guides.TARGET_PROPERTY``).
-_MARKED_KINDS: Final = frozenset(
-    {
-        "field",
-        "feature",
-        "edge",
-        "feature.field",
-        "measure.field",
-        "finding.action",
-        "print",
-        "setting",
-        "message",
-        "setting.section",
-    }
-)
+# Die Arten mit Kennzeichen am Widget stehen in ``guide_finders.MARKED_KINDS``.
 
 #: Arten, deren Ziel eine Zeile in einer Liste oder einem Baum ist.
 _ROW_KINDS: Final = frozenset({"tree.row", "history.row", "finding", "start.recent"})
@@ -947,38 +941,33 @@ _GRIPS: Final[dict[str, str]] = {
 _GRIP_ORIGINS: Final = frozenset({"feature.grip", "part.grip"})
 
 #: Was diese Datei an Arten auflöst — ``tests/test_guides.py`` hält es gegen
-#: ``guides.TARGET_KINDS``.
-RESOLVED_KINDS: Final[frozenset[str]] = frozenset(
-    {
-        "command",
-        "operation",
-        "field",
-        "part",
-        "tool",
-        "transform",
-        "section",
-        "sketch",
-        "history",
-        "feature",
-        "edge",
-        "feature.field",
-        "measure.field",
-        "menu",
-        "finding",
-        "finding.action",
-        "print",
-        "setting",
-        "handle",
-        "tree.row",
-        "history.row",
-        "view",
-        "view.edge",
-        "dialog",
-        "start.recent",
-        "message",
-        "message.button",
-        "setting.section",
-    }
+#: ``guides.TARGET_KINDS``. Dazu die Arten mit Kennzeichen am Widget und die Orte
+#: aus ``guide_finders``.
+RESOLVED_KINDS: Final[frozenset[str]] = (
+    frozenset(
+        {
+            "command",
+            "operation",
+            "part",
+            "tool",
+            "transform",
+            "section",
+            "sketch",
+            "history",
+            "menu",
+            "finding",
+            "handle",
+            "tree.row",
+            "history.row",
+            "view",
+            "view.edge",
+            "dialog",
+            "start.recent",
+            "message.button",
+        }
+    )
+    | MARKED_KINDS
+    | frozenset(PLACE_KINDS)
 )
 
 #: Wie viele Dreiecke :func:`point_for` probiert, bevor es aufgibt.
@@ -1447,7 +1436,8 @@ def widget_under(point: QPoint) -> QWidget | None:
 
     Zuerst ein offenes Menü und ein modaler Dialog, dann ``QApplication.widgetAt``;
     findet das nichts (ohne Fenstersystem), das oberste Fenster, das die Stelle
-    enthält, und darin ``childAt``.
+    enthält, und darin ``childAt``. Das Fenster eines Treffers bleibt gehalten: Mit
+    seinem Wrapper fiele der des Treffers (FD-175, aufgeklappte Liste).
     """
     tops: list[QWidget | None] = [
         QApplication.activePopupWidget(),
@@ -1455,6 +1445,7 @@ def widget_under(point: QPoint) -> QWidget | None:
     ]
     for top in tops:
         if top is not None and top.isVisible() and top.rect().contains(top.mapFromGlobal(point)):
+            _PROBED[:] = [top]
             return top.childAt(top.mapFromGlobal(point)) or top
     found = QApplication.widgetAt(point)
     if found is not None:
@@ -1465,6 +1456,7 @@ def widget_under(point: QPoint) -> QWidget | None:
     for top in windows:
         local = top.mapFromGlobal(point)
         if top.rect().contains(local):
+            _PROBED[:] = [top]
             return top.childAt(local) or top
     return None
 
@@ -1575,8 +1567,8 @@ def next_click(window: MainWindow, name: str) -> Click:
     """
     if not guides.is_target(name):
         raise MissingTargetError(f"{name}: kein Name aus dem Wortschatz der Anleitungen")
-    if name in PLACE_CLICKS:
-        return PLACE_CLICKS[name](window, name)
+    if (place := place_click(name)) is not None:
+        return place(window, name)
     if name == "history.last":
         listing = window.history_panel.list
         last = next(

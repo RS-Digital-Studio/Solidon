@@ -479,6 +479,9 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
     # „Zuletzt geöffnet“ steht auf dem Startbildschirm: eigener Fall darunter.
     # Die rohen Meldungsfenster und ihre Knöpfe gehen modal auf: eigene Fälle darunter.
     seen.update({"view", "view.edge", "start.recent", "message", "message.button"})
+    # Punkte, Stellen und Bedingungen stehen im offenen Skizzeneditor, der modal
+    # aufgeht: ``test_guide_sketch_places.py``.
+    seen.update({"sketch.point", "sketch.at", "sketch.constraint", "sketch.constrain"})
     assert seen >= NEW_KINDS, sorted(NEW_KINDS - seen)
 
 

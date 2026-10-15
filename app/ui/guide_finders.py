@@ -1,8 +1,10 @@
-"""Finder fester Namen des Wortschatzes, die ``guide_targets`` nicht mehr fasst (FD-101).
+"""Finder fester Namen und Arten des Wortschatzes, die ``guide_targets`` nicht mehr fasst.
 
 ``guide_targets`` steht an der Größengrenze der Codestruktur (Regel 6, 2 000
-Zeilen); seine Tabelle ``_FINDERS`` und ``next_click`` verweisen für diese
-Namen hierher.
+Zeilen); seine Tabelle ``_FINDERS``, ``widget_for``, ``area_for`` und
+``next_click`` verweisen für diese Namen hierher (FD-101, FD-175): Kennzeichen
+am Widget (:data:`MARKED`, :data:`MARKED_KINDS`) und Orte ohne eigenes Widget,
+die ihren Weg selbst kennen (:func:`place_click`).
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ if TYPE_CHECKING:
 
     from app.ui.guide_targets import Click
     from app.ui.main_window import MainWindow
+    from app.ui.sketch_editor import SketchPanel
 
 #: Die erste Spule aus dem Lager in einem Filamentfeld — ein Ort, kein Widget.
 SPOOL: Final = "filament.spool"
@@ -47,15 +50,37 @@ MARKED: Final = frozenset(
         "usage.review",
         "tabs.bar",
         "tabs.return",
-        "chat.starter",
-        "chat.send",
+        "request.example",
+        "request.send",
         "disclosure.privacy",
         "activation.offline",
         "generate.prompt",
         "generate.start",
         "disclosure.continue",
+        "sketch.coordinates",
     }
 )
+
+#: Arten, deren Widget sein Ziel als Kennzeichen trägt (``guides.TARGET_PROPERTY``);
+#: ``guide_targets.widget_for`` sucht sie über ``marked_widgets``.
+MARKED_KINDS: Final = frozenset(
+    {
+        "field",
+        "feature",
+        "edge",
+        "feature.field",
+        "measure.field",
+        "finding.action",
+        "print",
+        "setting",
+        "message",
+        "setting.section",
+        "sketch.constrain",
+    }
+)
+
+#: *Neue Ebene …* im Ebenenfeld des Skizzeneditors — ein Eintrag der Liste, ein Ort.
+NEW_PLANE: Final = "sketch.new_plane"
 
 
 def first_parameter_label(window: MainWindow) -> QWidget:
@@ -172,8 +197,146 @@ def project_filament_click(window: MainWindow, name: str) -> Click:
     raise MissingTargetError(f"{name}: kein Körper der Szene trägt ein Filament")
 
 
+def active_sketch_panel(window: MainWindow, name: str) -> SketchPanel:
+    """Das Panel des offenen Skizzeneditors, sonst das des Zeichenmodus."""
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.guide_targets import MissingTargetError
+    from app.ui.sketch_editor import SketchEditorDialog
+
+    modal = QApplication.activeModalWidget()
+    if isinstance(modal, SketchEditorDialog):
+        return modal.panel
+    panel: SketchPanel | None = window._sketch_panel
+    if panel is None:
+        raise MissingTargetError(f"{name}: kein Skizzeneditor und kein Zeichenmodus offen")
+    return panel
+
+
+def _number(name: str) -> int:
+    """Die Zahl hinter ``art:`` als Index ab null (``sketch.point:1`` ist der erste)."""
+    return int(name.partition(":")[2]) - 1
+
+
+def sketch_point_click(window: MainWindow, name: str) -> Click:
+    """``sketch.point:N``: der N-te Punkt der Skizze, wo er gezeichnet steht.
+
+    Gezählt über die Punkte aller Elemente (``SketchCanvas.points``); ein Klick
+    wählt ihn, mit Strg kommt er zur Auswahl dazu.
+    """
+    from app.ui.guide_targets import MissingTargetError
+
+    canvas = active_sketch_panel(window, name).canvas
+    points = canvas.points()
+    index = _number(name)
+    if not 0 <= index < len(points):
+        raise MissingTargetError(f"{name}: die Skizze hat {len(points)} Punkte")
+    return _plane_click(window, name, points[index])
+
+
+def sketch_at_click(window: MainWindow, name: str) -> Click:
+    """``sketch.at:X_Y``: die Stelle X, Y mm der Zeichenebene, an der ein Werkzeug klickt."""
+    across, _sep, up = name.partition(":")[2].partition("_")
+    return _plane_click(window, name, (float(across), float(up)))
+
+
+def _plane_click(window: MainWindow, name: str, point: tuple[float, float]) -> Click:
+    """Ein Klick auf einen Punkt der Zeichenebene, wo er gezeichnet steht.
+
+    Im Skizzeneditor auf der Zeichenfläche; im Zeichenmodus des Fensters
+    zeichnet die Ansicht, und der Punkt liegt dort, wo seine Ebene ihn in den
+    Raum stellt (``planes.to_world``). Ohne Bild hat er dort keinen Ort.
+    """
+    from PySide6.QtCore import QRect, Qt
+
+    from app.core.sketch.planes import frame_for_plane, to_world
+    from app.ui.guide_targets import Click, MissingTargetError, point_of_world
+
+    canvas = active_sketch_panel(window, name).canvas
+    if canvas.isVisible():
+        centre = canvas.mapToGlobal(canvas._to_screen(*point).toPoint())
+    else:
+        plane = canvas.sketch.plane
+        frame = canvas.plane_frame(plane) or frame_for_plane(plane)
+        spot = None if frame is None else point_of_world(window, to_world(frame, point))
+        if spot is None:
+            raise MissingTargetError(f"{name}: die Stelle hat in der Ansicht gerade keinen Ort")
+        centre = spot
+    area = QRect(centre.x() - 3, centre.y() - 3, 7, 7)
+    return Click(area, Qt.MouseButton.LeftButton, "ziel", name)
+
+
+def sketch_constraint_click(window: MainWindow, name: str) -> Click:
+    """``sketch.constraint:<art>``: die erste Zeile der Bedingungsliste mit dieser Art.
+
+    Die Liste zeigt, was an der Auswahl hängt (RM-519); ein Doppelklick auf eine
+    Bedingung mit Wert fragt nach dem neuen Maß.
+    """
+    from PySide6.QtCore import QRect, Qt
+
+    from app.ui.guide_targets import Click, MissingTargetError
+
+    panel = active_sketch_panel(window, name)
+    listing = panel.constraint_list
+    kind = name.partition(":")[2]
+    constraints = panel.canvas.sketch.constraints
+    item = next(
+        (
+            listing.item(row)
+            for row in range(listing.count())
+            if any(
+                0 <= index < len(constraints) and constraints[index].kind == kind
+                for index in panel.constraint_indices(row)
+            )
+        ),
+        None,
+    )
+    if item is None or not listing.isVisible():
+        raise MissingTargetError(f"{name}: die Bedingungsliste zeigt keine Bedingung dieser Art")
+    place = listing.visualItemRect(item)
+    if place.isEmpty():
+        raise MissingTargetError(f"{name}: die Zeile der Bedingung hat gerade keinen Ort")
+    area = QRect(listing.viewport().mapToGlobal(place.topLeft()), place.size())
+    return Click(area, Qt.MouseButton.LeftButton, "ziel", name)
+
+
+def new_plane_click(window: MainWindow, name: str) -> Click:
+    """``sketch.new_plane``: erst das Ebenenfeld aufklappen, dann *Neue Ebene …*."""
+    from PySide6.QtCore import QPoint, QRect, Qt
+
+    from app.ui.guide_targets import Click, MissingTargetError
+    from app.ui.sketch_editor import NEW_PLANE as NEW_PLANE_DATA
+
+    field = active_sketch_panel(window, name).plane_choice
+    row = field.findData(NEW_PLANE_DATA)
+    if row < 0 or not field.isVisible():
+        raise MissingTargetError(f"{name}: das Ebenenfeld bietet keine neue Ebene an")
+    view = field.view()
+    if not view.isVisible():
+        area = QRect(field.mapToGlobal(QPoint(0, 0)), field.size())
+        return Click(area, Qt.MouseButton.LeftButton, "aufklappen", name)
+    place = view.visualRect(field.model().index(row, field.modelColumn()))
+    if place.isEmpty():
+        raise MissingTargetError(f"{name}: der Eintrag hat gerade keinen Ort")
+    area = QRect(view.viewport().mapToGlobal(place.topLeft()), place.size())
+    return Click(area, Qt.MouseButton.LeftButton, "ziel", name)
+
+
 #: Was nur einen Ort hat und seinen Weg selbst kennt: Name → nächster Klick.
 PLACE_CLICKS: Final[dict[str, Callable[[MainWindow, str], Click]]] = {
     SPOOL: spool_click,
     PROJECT_FILAMENT: project_filament_click,
+    NEW_PLANE: new_plane_click,
 }
+
+#: Dasselbe für Arten: ``art:name`` → nächster Klick.
+PLACE_KINDS: Final[dict[str, Callable[[MainWindow, str], Click]]] = {
+    "sketch.point": sketch_point_click,
+    "sketch.at": sketch_at_click,
+    "sketch.constraint": sketch_constraint_click,
+}
+
+
+def place_click(name: str) -> Callable[[MainWindow, str], Click] | None:
+    """Wer den Weg zu einem Ort ohne eigenes Widget kennt — ``None`` für alles andere."""
+    return PLACE_CLICKS.get(name) or PLACE_KINDS.get(name.partition(":")[0])

@@ -205,7 +205,7 @@ class ChatPanel(QWidget):
         self.input.setFixedHeight(self.input.fontMetrics().lineSpacing() * 3 + 12)
         self.input.installEventFilter(self)
         self.send = QPushButton(tr("Senden"), self)
-        self.send.setProperty(guides.TARGET_PROPERTY, "chat.send")
+        self.send.setProperty(guides.TARGET_PROPERTY, "request.send")
         self.send.clicked.connect(self._send)
 
         entry_row = QHBoxLayout()
@@ -240,9 +240,9 @@ class ChatPanel(QWidget):
             button.installEventFilter(self)
             self.starter_buttons.append(button)
             starters_layout.addWidget(button)
-        # Das erste Beispiel trägt seinen Namen im Wortschatz (``chat.starter``).
+        # Das erste Beispiel trägt seinen Namen im Wortschatz (``request.example``).
         if self.starter_buttons:
-            self.starter_buttons[0].setProperty(guides.TARGET_PROPERTY, "chat.starter")
+            self.starter_buttons[0].setProperty(guides.TARGET_PROPERTY, "request.example")
 
         self.summary = QLabel("", self)
         self.summary.setWordWrap(True)

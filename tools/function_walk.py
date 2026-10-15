@@ -752,6 +752,22 @@ class QtPorts:
         if name == guide_finders.PROJECT_FILAMENT and window.filament_popup.isVisible():
             # Die Zeile steht in der Liste unter *Filamente* der Kopfzeile (FD-175).
             return window.filaments.list
+        if (
+            kind in ("sketch.point", "sketch.at", "sketch.constraint")
+            or name == guide_finders.NEW_PLANE
+        ):
+            # Punkt, Stelle, Bedingung und neue Ebene im Skizzeneditor (FD-175).
+            try:
+                panel = guide_finders.active_sketch_panel(window, name)
+            except LookupError:
+                return None
+            if kind in ("sketch.point", "sketch.at"):
+                # Im Zeichenmodus des Fensters zeichnet die Ansicht, nicht die Fläche.
+                return panel.canvas if panel.canvas.isVisible() else window.viewport
+            if kind == "sketch.constraint":
+                return panel.constraint_list
+            view = panel.plane_choice.view()
+            return view if view.isVisible() else None
         return None
 
     def centre(self, rect: Any) -> Any:

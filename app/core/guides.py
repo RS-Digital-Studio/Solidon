@@ -149,8 +149,8 @@ TARGETS: Final[frozenset[str]] = frozenset(
         "tabs.return",
         # Im Chat das erste Beispiel und *Senden*; im KI-Hinweis *Solidon-Datenschutz
         # lokal öffnen*; *Offline aktivieren …* beim Freischalten
-        "chat.starter",
-        "chat.send",
+        "request.example",
+        "request.send",
         "disclosure.privacy",
         "activation.offline",
         # Die Beschreibung und *Erzeugen* in *Modell erzeugen*, *KI-Anfrage
@@ -158,6 +158,10 @@ TARGETS: Final[frozenset[str]] = frozenset(
         "generate.prompt",
         "generate.start",
         "disclosure.continue",
+        # Im Skizzeneditor *Koordinaten …* am gewählten Punkt und *Neue Ebene …* im
+        # Ebenenfeld — ein Eintrag seiner Liste, ein Ort
+        "sketch.coordinates",
+        "sketch.new_plane",
     }
 )
 
@@ -178,6 +182,13 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #: * ``section:shaping`` — ein Abschnitt im Auswahlfenster über eine Kategorie
 #:   des Registers; im Bild seine Überschrift, die ihn auf- und zuklappt;
 #: * ``sketch:rectangle`` — ein Werkzeug des Zeichenmodus;
+#: * ``sketch.point:1`` — ein Punkt der Skizze, wo er gezeichnet steht, gezählt
+#:   ab 1 über die Punkte aller Elemente;
+#: * ``sketch.at:20_10`` — eine Stelle der Zeichenebene in Millimetern
+#:   (waagerecht, senkrecht), dort klickt ein Zeichenwerkzeug;
+#: * ``sketch.constraint:distance`` — die erste Zeile der Bedingungsliste mit
+#:   einer Bedingung dieser Art; die Liste zeigt, was an der Auswahl hängt;
+#: * ``sketch.constrain:distance`` — der Knopf einer Bedingung über ihre Art;
 #: * ``history:edit`` — ein Eintrag im Kontextmenü des Verlaufs (``edit``,
 #:   ``insert``, ``switch``, ``delete``), solange das Menü offen ist; derselbe
 #:   Eintrag wie ``menu:history.edit``, als Name der Anleitungen geblieben;
@@ -250,6 +261,10 @@ TARGET_KINDS: Final[tuple[str, ...]] = (
     "message",
     "message.button",
     "setting.section",
+    "sketch.point",
+    "sketch.at",
+    "sketch.constraint",
+    "sketch.constrain",
 )
 
 #: Das erste Glied jedes Namens einer Zeile der Menüleiste (:func:`menubar_name`).
@@ -282,6 +297,10 @@ _PATTERNS: Final[dict[str, re.Pattern[str]]] = {
     "dialog": re.compile(r"[a-z][a-z0-9_]*"),
     "message": re.compile(_WORD),
     "message.button": re.compile(rf"{_WORD}\.{_DOTTED}"),
+    "sketch.point": re.compile(r"[1-9][0-9]*"),
+    "sketch.at": re.compile(r"[0-9]+_[0-9]+"),
+    "sketch.constraint": re.compile(_WORD),
+    "sketch.constrain": re.compile(_WORD),
 }
 
 #: Die Umlaute in einem Namen aus der deutschen Quelle.

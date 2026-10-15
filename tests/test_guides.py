@@ -821,6 +821,9 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "activation.offline",
         "generate.prompt",
         "generate.start",
+        # Der Skizzeneditor ist am frischen Fenster nicht offen
+        "sketch.coordinates",
+        "sketch.new_plane",
         *printing,
     }
     window = MainWindow(Session(), UiSettings())

@@ -12,3 +12,77 @@ route = [
   { target = "dialog.accept" },
   { target = "field:path_sketch" },
 ]
+
+# Die Fenster im Skizzeneditor derselben Dichtung. Ihr Dichtweg ist ein Kreis um den
+# festen Mittelpunkt (Punkt 1) mit dem Randpunkt 2 und dem Maß 20 mm. Der Randpunkt
+# gewählt, dann *Koordinaten …*. Am Mittelpunkt hängt das Maß, ein Doppelklick auf
+# seine Zeile fragt nach dem neuen. Für *Abstand* zwischen zwei Punkten ohne Maß
+# kommt eine Linie dazu (Punkte 3 und 4), gezogen mit zwei Klicks. Aus dem Verlauf
+# öffnet ein Skizzenfeld den Zeichenmodus im Raum, offscreen ohne Bild (FD-175).
+[row."sketch.coordinates"]
+start_scene = "quader.exakt"
+route = [
+  { target = "menu:menubar.bausteinkatalog" },
+  { target = "part:seal_gasket" },
+  { target = "dialog.accept" },
+  { target = "field:path_sketch" },
+  { target = "sketch.point:2" },
+]
+
+[row."dialog:point_dialog"]
+start_scene = "quader.exakt"
+route = [
+  { target = "menu:menubar.bausteinkatalog" },
+  { target = "part:seal_gasket" },
+  { target = "dialog.accept" },
+  { target = "field:path_sketch" },
+  { target = "sketch.point:2" },
+  { target = "sketch.coordinates" },
+]
+
+[row."meldung:change_constraint_value"]
+start_scene = "quader.exakt"
+route = [
+  { target = "menu:menubar.bausteinkatalog" },
+  { target = "part:seal_gasket" },
+  { target = "dialog.accept" },
+  { target = "field:path_sketch" },
+  { target = "sketch.point:1" },
+  { target = "sketch.constraint:distance", button = "double" },
+]
+
+[row."dialog:expression_dialog"]
+start_scene = "quader.exakt"
+route = [
+  { target = "menu:menubar.bausteinkatalog" },
+  { target = "part:seal_gasket" },
+  { target = "dialog.accept" },
+  { target = "field:path_sketch" },
+  { target = "sketch:line" },
+  { target = "sketch.at:5_5" },
+  { target = "sketch.at:10_10" },
+  { target = "sketch:select" },
+  { target = "sketch.point:2" },
+  { target = "sketch.point:3", modifier = "ctrl" },
+  { target = "sketch.constrain:distance" },
+]
+
+# *Neue Ebene …* steht im Ebenenfeld des Skizzeneditors (FD-175).
+[row."sketch.new_plane"]
+start_scene = "quader.exakt"
+route = [
+  { target = "menu:menubar.bausteinkatalog" },
+  { target = "part:seal_gasket" },
+  { target = "dialog.accept" },
+  { target = "field:path_sketch" },
+]
+
+[row."dialog:new_plane_dialog"]
+start_scene = "quader.exakt"
+route = [
+  { target = "menu:menubar.bausteinkatalog" },
+  { target = "part:seal_gasket" },
+  { target = "dialog.accept" },
+  { target = "field:path_sketch" },
+  { target = "sketch.new_plane" },
+]

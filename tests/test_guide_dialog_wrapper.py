@@ -54,3 +54,52 @@ def test_the_save_button_of_a_qt_file_dialog_stays_alive(qt_app: Any, tmp_path: 
         parent.deleteLater()
         qt_app.processEvents()  # type: ignore[attr-defined]
     assert seen and not [entry for entry in seen if entry.startswith("tot")], seen
+
+
+def test_the_probe_in_an_open_list_stays_alive(qt_app: Any) -> None:
+    """Die Probe in einer aufgeklappten Liste trifft ein lebendes Widget (FD-175).
+
+    *Neue Ebene …* im Ebenenfeld des Skizzeneditors: Nach dem Aufklappen fand
+    ``widget_under`` die Zeile in der Liste, und schon die Mausbewegung darauf brach
+    mit „Internal C++ object already deleted“ ab. Der Wrapper des aufgeklappten
+    Fensters fiel beim Verlassen der Probe, und mit ihm der Wrapper des Treffers.
+    """
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QVBoxLayout
+
+    from app.ui import guide_targets
+
+    dialog = QDialog()
+    field = QComboBox(dialog)
+    field.addItems(["Oben", "Vorn", "Neue Ebene …"])
+    QVBoxLayout(dialog).addWidget(field)
+    seen: list[str] = []
+
+    def look() -> None:
+        try:
+            field.showPopup()
+            QApplication.processEvents()
+            for _round in range(3):
+                popup = QApplication.activePopupWidget()
+                if popup is None:
+                    seen.append("keine Liste")
+                    return
+                point = popup.mapToGlobal(popup.rect().center())
+                del popup
+                gc.collect()
+                hit = guide_targets.widget_under(point)
+                gc.collect()
+                seen.append(type(hit.mapFromGlobal(point)).__name__ if hit else "nichts")
+                del hit
+                gc.collect()
+        except RuntimeError as error:
+            seen.append(f"tot: {error}")
+        finally:
+            field.hidePopup()
+            dialog.reject()
+
+    QTimer.singleShot(200, look)
+    dialog.exec()
+    dialog.deleteLater()
+    qt_app.processEvents()
+    assert seen == ["QPoint"] * 3, seen

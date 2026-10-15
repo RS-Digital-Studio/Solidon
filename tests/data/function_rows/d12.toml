@@ -162,28 +162,28 @@ route = [
 # Der KI-Hinweis vor dem ersten Zug im Chat: ein lokales Sprachmodell (Naht
 # ``chatmodell``), das erste Beispiel, *Senden*. Im Hinweis führt
 # *Solidon-Datenschutz lokal öffnen* zur Erklärung ohne Netz (FD-175).
-[row."chat.starter"]
+[row."request.example"]
 preconditions = { chatmodell = "lokal" }
 route = [{ target = "chat" }]
 
-[row."chat.send"]
+[row."request.send"]
 preconditions = { chatmodell = "lokal" }
-route = [{ target = "chat" }, { target = "chat.starter" }]
+route = [{ target = "chat" }, { target = "request.example" }]
 
 [row."dialog:ai_disclosure_dialog"]
 preconditions = { chatmodell = "lokal" }
-route = [{ target = "chat" }, { target = "chat.starter" }, { target = "chat.send" }]
+route = [{ target = "chat" }, { target = "request.example" }, { target = "request.send" }]
 
 [row."disclosure.privacy"]
 preconditions = { chatmodell = "lokal" }
-route = [{ target = "chat" }, { target = "chat.starter" }, { target = "chat.send" }]
+route = [{ target = "chat" }, { target = "request.example" }, { target = "request.send" }]
 
 [row."dialog:local_privacy_dialog"]
 preconditions = { chatmodell = "lokal" }
 route = [
   { target = "chat" },
-  { target = "chat.starter" },
-  { target = "chat.send" },
+  { target = "request.example" },
+  { target = "request.send" },
   { target = "disclosure.privacy" },
 ]
 
@@ -205,4 +205,4 @@ route = [
 # geht an das lokale Modell der Naht und scheitert dort (FD-175).
 [row."disclosure.continue"]
 preconditions = { chatmodell = "lokal" }
-route = [{ target = "chat" }, { target = "chat.starter" }, { target = "chat.send" }]
+route = [{ target = "chat" }, { target = "request.example" }, { target = "request.send" }]
