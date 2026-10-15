@@ -62,8 +62,23 @@ code_store.load(Path(sys.argv[2]))
 """
 
 
+#: Zur Attrappe ein Alias von ``hasattr``, den ein anderes Modul bezieht: Den meldet der Wächter
+#: CS-34, und ein gelesener Index muss ihn kennen wie ein gebauter (RR2-2).
+ALIASED = {
+    "app/ask.py": "has = hasattr\n",
+    "tests/test_ask.py": """
+        from app import mod
+        from app.ask import has
+
+
+        def test_ask():
+            assert has(mod, "CONST")
+    """,
+}
+
+
 def _tree(root: Path) -> Path:
-    for path, source in FAKE.items():
+    for path, source in (FAKE | ALIASED).items():
         target = root / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(textwrap.dedent(source).lstrip("\n"), encoding="utf-8")
@@ -101,6 +116,7 @@ def _answers(index: Index) -> dict[str, object]:
         "modules": sorted(index.modules),
         "packages": sorted(index.packages),
         "module_exists": {module: index.module_exists(module) for module, _name in keys},
+        "aliases": index.query_aliases(),
     }
 
 
@@ -140,6 +156,7 @@ def test_stored_answers_equal_a_freshly_built_index_cold_and_warm(
     expected = _answers(fresh)
     # Die Grundmenge von W5 ohne Auszüge: dieselbe Zahl wie über jede Datei gezählt.
     assert expected["imports"] == sum(len(facts.imports) for facts in fresh.files.values())
+    assert expected["aliases"] == (("app.ask", "has", "app/ask.py", 1),)
     builds = _count_builds(monkeypatch)
     loads = _count_loads(monkeypatch)
     cold = code_store.load(root)

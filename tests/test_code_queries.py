@@ -13,7 +13,10 @@ nicht als Abfrage; im Baum gibt es keinen, und ein Wächter hält das fest (CS-3
 
 from __future__ import annotations
 
-from tests.code_index_helpers import build_index
+from pathlib import Path
+
+from tests.code_index_helpers import build_index, stored_index
+from tools import code_store
 from tools.code_index import Index, shared
 
 PATCH = """
@@ -123,10 +126,12 @@ def test_no_module_draws_an_alias_of_getattr_or_hasattr_from_another_one() -> No
     )
 
 
-def test_an_alias_drawn_from_another_module_is_found() -> None:
+def test_an_alias_drawn_from_another_module_is_found(tmp_path: Path) -> None:
     """Gegenprobe zum Wächter: über ``from … import`` und über das Modul als Attribut; ein
-    Alias, den nur seine eigene Datei ruft, und einer, den niemand bezieht, sind kein Fund."""
-    index = build_index(
+    Alias, den nur seine eigene Datei ruft, und einer, den niemand bezieht, sind kein Fund.
+    Über denselben Weg wie der Wächter: gebaut, gespeichert und gelesen (RR2-2)."""
+    index = stored_index(
+        tmp_path,
         {
             "tests/query_alias.py": "has = hasattr\nlook = getattr\nunused = hasattr\n"
             "mine = hasattr\n\n\n"
@@ -143,7 +148,9 @@ def test_an_alias_drawn_from_another_module_is_found() -> None:
             "def probe(module):\n    return ask(module, 'target')\n",
         }
     )
-    assert index.query_aliases() == (
+    expected = (
         ("tests.query_alias", "has", "tests/query_alias.py", 1),
         ("tests.query_alias", "look", "tests/query_alias.py", 2),
     )
+    assert index.query_aliases() == expected
+    assert code_store.load(tmp_path).query_aliases() == expected, "warm gelesen"
