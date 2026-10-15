@@ -258,9 +258,8 @@ machen ihn nicht rückwirkend grün.
 ## Ein roter Leistungstest ist erst dann eine Regression, wenn er es zweimal ist
 
 `tests/.performance.json` hält die Werte hinter der 25-%-Schwelle und steht
-**absichtlich** in `.gitignore`: Sie sind maschinenabhängig (§31), drei
-Maschinen teilen das Projekt. Sie nach einem begründeten Verfahrenswechsel
-zurückzusetzen ist richtig.
+**absichtlich** in `.gitignore`: Sie sind maschinenabhängig (§31). Sie nach
+einem begründeten Verfahrenswechsel zurückzusetzen ist richtig.
 
 - **Denselben Stand ein zweites Mal fahren**, nicht den Vorgängerstand, bevor
   eine Regression gemeldet wird: Schwankt die *Menge* der roten Tests, ist es

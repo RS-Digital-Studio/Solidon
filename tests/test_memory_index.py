@@ -175,8 +175,8 @@ def test_a_section_that_appears_twice_is_refused(tmp_path: Path) -> None:
 
     ``lines.index`` nähme still den ersten, und ``check_only_one_line_appeared``
     fängt das nicht: Eine Zeile im falschen Abschnitt ist auch „genau eine
-    dazu". Ein doppelter Titel ist bei drei Maschinen ein realistisches
-    Merge-Artefakt.
+    dazu". Ein doppelter Titel ist bei parallel schreibenden Sitzungen ein
+    realistisches Artefakt.
     """
     doppelt = BEISPIEL + ("\n## Diese Maschine\n\n- [Vierter](vierter.md) — nochmal.\n")
     datei = _index(tmp_path, doppelt)

@@ -390,10 +390,10 @@ hat.
 
 `tests/.performance.json` hält die Bestwerte, gegen die die 25-%-Schwelle
 misst. Die Datei ist **absichtlich** ignoriert (`.gitignore`), und der Grund
-steht bisher nur dort: Die Werte sind maschinenabhängig (Bauplan §31). An
-diesem Projekt arbeiten drei Maschinen; die Bestwerte des schnellsten Rechners
-würden den Laptop dauerhaft rot färben, ohne dass eine Zeile langsamer
-geworden wäre (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
+steht bisher nur dort: Die Werte sind maschinenabhängig (Bauplan §31). Die
+Bestwerte eines schnelleren Rechners würden einen langsameren dauerhaft rot
+färben, ohne dass eine Zeile langsamer geworden wäre (Vorfall aus der Zeit
+mit drei Arbeitsplätzen: ROADMAP-ARCHIV.md, 04.09.2026).
 
 **Daraus folgt für jeden roten Leistungstest:**
 
