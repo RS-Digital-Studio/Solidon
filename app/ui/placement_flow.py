@@ -44,7 +44,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QPushButton,
-    QScrollArea,
     QStyle,
     QStyleOptionComboBox,
     QVBoxLayout,
@@ -84,6 +83,7 @@ from app.ui.motion import glide
 from app.ui.overlay import MEASURE_CARD
 from app.ui.palette import DIFF_PALETTES
 from app.ui.render.api import Item, PointerEvent, Renderer, SurfaceStyle
+from app.ui.scroll_areas import PassingScrollArea
 from app.ui.style import NORMAL, ROOMY, SPACE
 
 #: Wie nah der Zeiger einer Marke kommen muss, damit sie ihn hält — in
@@ -2777,7 +2777,7 @@ class PlacementFlow(QObject):
         measure_layout = QVBoxLayout(self._measure_box)
         measure_layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         measure_layout.setSpacing(NORMAL)
-        self._measure_scroll = QScrollArea(self._measure_box)
+        self._measure_scroll = PassingScrollArea(self._measure_box)
         self._measure_scroll.setWidgetResizable(True)
         self._measure_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._measure_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)

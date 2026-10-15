@@ -32,9 +32,7 @@ HOME = UI / "scroll_areas.py"
 #: Dateien eines anderen Fixpakets, deren Wechsel dort ansteht. Der Eintrag
 #: fällt, sobald die Datei keinen nackten Rollbereich mehr baut — der Test
 #: verlangt es.
-PENDING = {
-    "placement_flow.py": "Maßgruppe im Bild, Paket F1 (Bericht fix-f4-claude.md, FD-139)",
-}
+PENDING: dict[str, str] = {}
 
 
 def _bare_scroll_areas(path: Path) -> list[str]:
