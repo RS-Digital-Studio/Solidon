@@ -199,6 +199,7 @@ from app.ui.labels import (
     choice_label,
     choice_note,
     compact_length,
+    display_unit,
     explain_choices,
     feature_label,
     feature_measure,
@@ -232,6 +233,16 @@ from app.ui.overlay import (
     tell_the_zone,
 )
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
+from app.ui.parameter_length import (
+    ParameterLengthSpin,
+    derived_text,
+    in_field,
+    is_length,
+    set_range_mm,
+    set_value_mm,
+    text_mm,
+    value_mm,
+)
 from app.ui.report_rows import WrappedRowDelegate
 from app.ui.scroll_areas import PassingScrollArea, ReadingScrollArea
 from app.ui.shortcut_schemes import delete_keys, return_opens
@@ -3661,7 +3672,9 @@ class _CompactParameterUnitBox(QComboBox):
         # Keine Einheit ist absichtlich leer. Im geöffneten Menü steht weiter
         # der übersetzte Satz „ohne Einheit“; ein erfundenes Symbol in der
         # geschlossenen Anzeige wäre dagegen ein weiterer Oberflächentext.
-        return str(self.currentData() or "")
+        code = str(self.currentData() or "")
+        # Eine Länge steht in der Anzeigeeinheit, wie ihr Feld (FD-125).
+        return display_unit() if code == "mm" else code
 
     def paintEvent(self, _event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         option = QStyleOptionComboBox()
@@ -3741,6 +3754,8 @@ class ParameterPanel(QWidget):
         # letzten Zeile. ``WrappedNote`` misst neu und meldet ``grown``.
         self._empty = WrappedNote(self)
         self._empty.setText(_empty_parameters_text())
+        # Bis zur ersten echten Breite gilt die Schätzung an der Grundbreite.
+        fit_wrapped(self._empty)
         self._empty.grown.connect(self._fit)
         self._form.addRow(self._empty)
         self._editors: dict[str, QDoubleSpinBox] = {}
@@ -4027,16 +4042,20 @@ class ParameterPanel(QWidget):
         breit wird; die Kette hält dann an. Das Feld zeigt die 5000 und nimmt
         die Korrektur an, und hier steht, warum die Zahl nicht geht (RM-447).
         """
-        low, high = self._limits.get(name, (editor.minimum(), editor.maximum()))
-        value = editor.value()
+        low, high = self._limits.get(name, (value_mm(editor), value_mm(editor)))
+        value = value_mm(editor)
+        # Verglichen und geschrieben in der Schreibweise des Feldes (FD-125).
         slack = 0.5 * 10.0 ** -editor.decimals()
-        if low - slack <= value <= high + slack:
+        lowest, highest = in_field(editor, low) - slack, in_field(editor, high) + slack
+        if lowest <= in_field(editor, value) <= highest:
             return ""
         above = value > high
+        if isinstance(editor, LengthSpin) and unit == "mm":
+            unit = display_unit()
         suffix = f" {unit}" if unit else ""
         return limit_sentence(
-            editor.textFromValue(value) + suffix,
-            editor.textFromValue(high if above else low) + suffix,
+            text_mm(editor, value) + suffix,
+            text_mm(editor, high if above else low) + suffix,
             above=above,
         )
 
@@ -4053,11 +4072,14 @@ class ParameterPanel(QWidget):
         self._limits[name] = (low, high)
         stored = document.parameters[name].value
         shown_low, shown_high = min(low, stored), max(high, stored)
-        if editor.minimum() != shown_low or editor.maximum() != shown_high:
+        # In Millimetern gesetzt, gezeigt in der Anzeigeeinheit (FD-125).
+        if editor.minimum() != in_field(editor, shown_low) or editor.maximum() != in_field(
+            editor, shown_high
+        ):
             with QSignalBlocker(editor):
-                editor.setRange(shown_low, shown_high)
+                set_range_mm(editor, shown_low, shown_high)
         if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
-            editor.name_limits(low, high)
+            editor.name_limits(in_field(editor, low), in_field(editor, high))
 
     def _show_refusal(self, name: str) -> None:
         """Nennt unter dem Feld die Grenze, an der die getippte Zahl scheitert.
@@ -4070,6 +4092,8 @@ class ParameterPanel(QWidget):
         editor = self._editors.get(name)
         unit = self._unit_editors.get(name)
         unit_text = str(unit.currentData() or "") if unit is not None else ""
+        if isinstance(editor, LengthSpin) and unit_text == "mm":
+            unit_text = display_unit()
         said = (
             editor.refusal(unit_text)
             if isinstance(editor, (BoundedSpin, BoundedLengthSpin))
@@ -4422,7 +4446,9 @@ class ParameterPanel(QWidget):
                 label = self._derived[name]
                 value = values.get(name)
                 label.setText(
-                    localised(f"{value:.2f}") if value is not None else tr("Ausdruck prüfen")
+                    derived_text(value, parameter.unit)
+                    if value is not None
+                    else tr("Ausdruck prüfen")
                 )
                 note = parameter.expression
                 if problem is not None:
@@ -4433,11 +4459,11 @@ class ParameterPanel(QWidget):
             else:
                 editor = self._editors[name]
                 self._set_limits(editor, document, name)
-                if not is_close(editor.value(), parameter.value):
+                if not is_close(value_mm(editor), parameter.value):
                     # Ohne Signal: Der Wert kommt aus dem Dokument und ist keine
                     # neue Eingabe. Eine abgelehnte Zahl darunter gilt nicht mehr.
                     with QSignalBlocker(editor):
-                        editor.setValue(parameter.value)
+                        set_value_mm(editor, parameter.value)
                     editor.setMinimumWidth(least_number_width(editor))
                     self._place_slider(name, parameter.value)
                     if self._refused_name == name and self._refusal is not None:
@@ -4474,6 +4500,7 @@ class ParameterPanel(QWidget):
         if not document.parameters:
             self._empty = WrappedNote(self)
             self._empty.setText(_empty_parameters_text())
+            fit_wrapped(self._empty)
             self._empty.grown.connect(self._fit)
             self._form.addRow(self._empty)
             self._fit()
@@ -4492,7 +4519,10 @@ class ParameterPanel(QWidget):
                 # besitzt sie.
                 value = values.get(name)
                 label = QLabel(
-                    localised(f"{value:.2f}") if value is not None else tr("Ausdruck prüfen"), self
+                    derived_text(value, parameter.unit)
+                    if value is not None
+                    else tr("Ausdruck prüfen"),
+                    self,
                 )
                 note = parameter.expression
                 if problem is not None:
@@ -4513,11 +4543,14 @@ class ParameterPanel(QWidget):
             # **Abgelehnt, nicht gekürzt** (:class:`BoundedSpin`): Mit
             # Obergrenze 100 wurde aus getipptem „150“ still 15 — die Null
             # verfiel, die Eingabetaste übernahm den Rest (Durchsicht 0.5.1).
-            editor = BoundedSpin(self)
+            # **Eine Länge in der Anzeigeeinheit** (FD-125): wie *Parameter
+            # anlegen …*; gespeichert wird weiter in Millimetern.
+            editor = ParameterLengthSpin(self) if is_length(parameter.unit) else BoundedSpin(self)
             wheel_needs_focus(editor)
-            editor.setDecimals(2)
+            if not isinstance(editor, LengthSpin):
+                editor.setDecimals(2)
             self._set_limits(editor, document, name)
-            editor.setValue(parameter.value)
+            set_value_mm(editor, parameter.value)
             editor.setKeyboardTracking(False)
             # Der Wertebereich bestimmt sonst die Mindestbreite der Spinbox:
             # ±100 000 verlangt 156 Pixel, obwohl die aktuelle Zahl kurz ist.
@@ -4532,9 +4565,14 @@ class ParameterPanel(QWidget):
             # braucht. Auf dem Bildschirm stand „2,4" statt „2,40", und Qt
             # schneidet dabei stumm.
             editor.setMinimumWidth(least_number_width(editor))
-            editor.valueChanged.connect(
-                lambda value, key=name: self._queue_parameter_edit(key, value)
-            )
+            if isinstance(editor, LengthSpin):
+                editor.valueChangedMm.connect(
+                    lambda value, key=name: self._queue_parameter_edit(key, value)
+                )
+            else:
+                editor.valueChanged.connect(
+                    lambda value, key=name: self._queue_parameter_edit(key, value)
+                )
             editor.valueRefused.connect(lambda _number, key=name: self._show_refusal(key))
             editor.lineEdit().textEdited.connect(lambda _text, key=name: self._show_refusal(key))
             self._editors[name] = editor
@@ -4582,7 +4620,10 @@ class ParameterPanel(QWidget):
         low, high = self._slider_range(name)
         value = low + (high - low) * position / SLIDER_STEPS
         editor = self._editors.get(name)
-        return round(value, editor.decimals() if editor is not None else 2)
+        # In Millimetern auf zwei Stellen, wie das Dokument sie führt (FD-125).
+        if editor is None or isinstance(editor, LengthSpin):
+            return round(value, 2)
+        return round(value, editor.decimals())
 
     def _slider_range(self, name: str) -> tuple[float, float]:
         document = self._document
@@ -4606,7 +4647,7 @@ class ParameterPanel(QWidget):
         editor = self._editors.get(name)
         if editor is not None:
             with QSignalBlocker(editor):
-                editor.setValue(self._slider_value(name, position))
+                set_value_mm(editor, self._slider_value(name, position))
 
     def _slider_released(self, name: str) -> None:
         slider = self._sliders.get(name)
@@ -4622,7 +4663,7 @@ class ParameterPanel(QWidget):
         editor = self._editors.get(name)
         if editor is not None:
             with QSignalBlocker(editor):
-                editor.setValue(value)
+                set_value_mm(editor, value)
         self._queue_parameter_edit(name, value)
 
 
