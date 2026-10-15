@@ -90,6 +90,7 @@ it into `website/version.json`.
 - A refusal in a dialog no longer repeats its title underneath. *Correct the input* puts the cursor into the field concerned.
 - The *Details* window names the body and the step and give the location in the chosen unit. *Show the values* shows the field names and is only as tall as needed.
 - The fields of the *Analysis* and *Split* bars, the description in *Generate model*, the *Type* choice and the “Include values” checkbox explain themselves in tooltips and to screen readers.
+- From a tab of the card on the right, the Tab key goes into the page in front and moves through it from top to bottom.
 
 ### Printing and slicer handover
 

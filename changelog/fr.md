@@ -91,6 +91,7 @@ dans `website/version.json`.
 - Un refus dans un dialogue ne répète plus son titre en dessous. *Corriger la saisie* place le curseur dans le champ concerné.
 - La fenêtre *Détails* nomme le corps et l'étape et donne l'emplacement dans l'unité choisie. *Afficher les valeurs* montre le nom des champs et n'est pas plus haut que nécessaire.
 - Les champs des barres *Analyse* et *Diviser*, la description dans *Générer un modèle*, le choix *Type* et la case « Inclure les valeurs » s'expliquent dans l'infobulle et au lecteur d'écran.
+- Depuis un onglet de la carte de droite, la touche Tab entre dans la page affichée et la parcourt de haut en bas.
 
 ### Imprimer et transmettre au slicer
 

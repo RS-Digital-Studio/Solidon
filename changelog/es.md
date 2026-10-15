@@ -91,6 +91,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un rechazo en un diálogo ya no repite su título debajo. *Corregir la entrada* pone el cursor en el campo afectado.
 - La ventana *Detalles* nombra el cuerpo y el paso y da el punto en la unidad elegida. *Mostrar los valores* muestra los nombres de los campos y solo es tan alto como hace falta.
 - Los campos de las barras *Análisis* y *Dividir*, la descripción en *Generar modelo*, la elección *Tipo* y la casilla «Incluir valores» se explican en la ayuda emergente y al lector de pantalla.
+- Desde una pestaña de la tarjeta de la derecha, la tecla Tab entra en la página visible y la recorre de arriba abajo.
 
 ### Imprimir y entregar al slicer
 
