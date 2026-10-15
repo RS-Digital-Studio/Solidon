@@ -152,46 +152,124 @@ _FAREWELL_TOUCHES = frozenset(
 )
 
 
-def _iterated_live(node: ast.expr) -> str | None:
-    """Der Merker, über den ``node`` unmittelbar läuft — ``None`` bei einem Schnappschuss."""
-    if (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr in {"items", "values", "keys"}
-    ):
-        node = node.func.value
-    if isinstance(node, ast.Name) and node.id in _FAREWELL_TOUCHES:
+def _base(node: ast.expr) -> ast.expr:
+    """Was eine Schleife wirklich durchläuft: ``x.items()`` ist ``x``, ``x.get(k)`` und
+    ``x.setdefault(k, …)`` sind ``x[k]``."""
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        if node.func.attr in {"items", "values", "keys"}:
+            return node.func.value
+        if node.func.attr in {"get", "setdefault"}:
+            return ast.Subscript(value=node.func.value, slice=ast.Constant(None), ctx=ast.Load())
+    return node
+
+
+def _touches(node: ast.expr, derived: set[str]) -> str | None:
+    """Der Merker hinter ``node``: einer der sechs, eine Ablage darin (``_X[k]``,
+    ``_X.get(k)``) oder ein Name, der in derselben Funktion daraus gebunden wurde."""
+    node = _base(node)
+    while isinstance(node, ast.Subscript):
+        node = _base(node.value)
+    if isinstance(node, ast.Name) and (node.id in _FAREWELL_TOUCHES or node.id in derived):
         return node.id
     return None
 
 
+def _own_nodes(scope: ast.AST) -> list[ast.AST]:
+    """Die Knoten einer Funktion oder des Moduls, ohne die darin definierten Funktionen."""
+    found: list[ast.AST] = []
+    pending = list(ast.iter_child_nodes(scope))
+    while pending:
+        node = pending.pop()
+        found.append(node)
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+            pending.extend(ast.iter_child_nodes(node))
+    return found
+
+
+def _live_loops(tree: ast.AST) -> list[str]:
+    """Jede Schleife, die unmittelbar über einen Merker oder eine Ansicht davon läuft.
+
+    Abgeleitet heißt: gebunden aus ``_X[k]``, ``_X.get(k)``, ``_X.setdefault(k, …)``
+    oder als Wert einer Schleife über ``_X.items()``/``_X.values()`` — auch über
+    einen Schnappschuss, denn der Schnappschuss kopiert nur die äußere Ebene.
+    Gelesen wird je Funktion; ``tuple(...)`` liest in C und ist kein Prüfpunkt.
+    """
+    found: list[str] = []
+    scopes = [
+        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    ]
+    for scope in [tree, *scopes]:
+        derived: set[str] = set()
+        nodes = _own_nodes(scope)
+        loops = [n for n in nodes if isinstance(n, ast.For | ast.AsyncFor | ast.comprehension)]
+        # Bis nichts mehr dazukommt: eine Ansicht kann aus einer Ansicht stammen.
+        while True:
+            before = len(derived)
+            for node in nodes:
+                if isinstance(node, ast.Assign) and _touches(node.value, derived):
+                    derived |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+            for loop in loops:
+                inner = loop.iter
+                if isinstance(inner, ast.Call) and getattr(inner.func, "id", "") in {
+                    "tuple",
+                    "list",
+                    "sorted",
+                }:
+                    inner = inner.args[0] if inner.args else inner
+                kind = getattr(getattr(inner, "func", None), "attr", "")
+                if _touches(inner, derived) and kind in {"items", "values"}:
+                    target = loop.target
+                    if kind == "items" and isinstance(target, ast.Tuple) and len(target.elts) == 2:
+                        target = target.elts[1]
+                    derived |= {n.id for n in ast.walk(target) if isinstance(n, ast.Name)}
+            if len(derived) == before:
+                break
+        found += [
+            f"Zeile {loop.iter.lineno}: {name}"
+            for loop in loops
+            if (name := _touches(loop.iter, derived)) is not None
+        ]
+    return sorted(set(found))
+
+
 def test_no_loop_runs_over_a_memory_a_farewell_changes() -> None:
-    """Wer über einen dieser Merker läuft, läuft über einen Schnappschuss.
+    """Wer über einen dieser Merker oder eine Ablage darin läuft, läuft über einen
+    Schnappschuss.
 
     Der Abschied kann an jedem Prüfpunkt der Schleife mitten hinein laufen;
     ``tuple(...)`` liest den Merker in C, ohne einen solchen Punkt. Der
-    Wächter hält die Bauart von FD-167 im ganzen Modul fest.
+    Wächter hält die Bauart von FD-167 im ganzen Modul fest — auch für die
+    inneren Ablagen, aus denen ``_release_geometric`` und ``_drop_answers``
+    nehmen (Review 2, RF-19).
     """
     source = ROOT / "app" / "core" / "perceive" / "features.py"
     tree = ast.parse(source.read_text(encoding="utf-8"))
-    loops = [
-        node.iter
-        for node in ast.walk(tree)
-        if isinstance(node, ast.For | ast.AsyncFor | ast.comprehension)
-    ]
-    assert loops, "der Wächter sieht Schleifen"
-    live = [
-        f"Zeile {node.lineno}: {name}"
-        for node in loops
-        if (name := _iterated_live(node)) is not None
-    ]
+    assert any(isinstance(node, ast.For) for node in ast.walk(tree)), "der Wächter sieht Schleifen"
+    live = _live_loops(tree)
     assert not live, live
 
 
 def test_the_guard_sees_a_live_loop() -> None:
-    """Gegenprobe: dieselbe Lesung findet die Schleife der ersten Fassung."""
-    first = ast.parse("for memory in _MEMORIES.values():\n    pass\n").body[0]
-    fixed = ast.parse("for memory in tuple(_MEMORIES.values()):\n    pass\n").body[0]
-    assert isinstance(first, ast.For) and isinstance(fixed, ast.For)
-    assert _iterated_live(first.iter) == "_MEMORIES"
-    assert _iterated_live(fixed.iter) is None
+    """Gegenprobe: dieselbe Lesung findet die Schleife der ersten Fassung, die innere
+    Schleife über eine Ablage und eine Ablage hinter einem lokalen Namen — und keine
+    über einen Schnappschuss."""
+    live = (
+        "for memory in _MEMORIES.values():\n    pass\n",
+        "for name, held in tuple(_BY_GEOMETRY.items()):\n"
+        "    {key: value for key, value in held.items()}\n",
+        "for key in _BY_GEOMETRY[name]:\n    pass\n",
+        "for key in _SUPPORT_CACHE.get(name, ()):\n    pass\n",
+        "def f(name):\n    held = _BY_GEOMETRY.setdefault(name, {})\n"
+        "    for key in held:\n        pass\n",
+    )
+    calm = (
+        "for memory in tuple(_MEMORIES.values()):\n    pass\n",
+        "for name, held in tuple(_BY_GEOMETRY.items()):\n"
+        "    {key: value for key, value in tuple(held.items())}\n",
+        "for key in tuple(_BY_GEOMETRY.get(name, ())):\n    pass\n",
+        "for name in other.items():\n    pass\n",
+    )
+    for source in live:
+        assert _live_loops(ast.parse(source)), source
+    for source in calm:
+        assert _live_loops(ast.parse(source)) == [], source
