@@ -29,9 +29,11 @@ from typing import Final
 
 import pytest
 
+from tests.code_index_helpers import build_index
 from tests.packaging_helpers import ROOT, SPEC, WORKFLOW, start_report, workflow_shell
 from tests.shell_helpers import bash_executable, posix_shell
 from tests.workflow_helpers import job_block, step_block
+from tools import code_index
 
 
 def test_the_spec_packs_the_hid_module_the_spacemouse_reader_chooses() -> None:
@@ -242,22 +244,48 @@ def test_the_posix_shell_is_found_beside_git_when_the_search_path_lacks_it(
 #: Die Shells, die allein ``tests/shell_helpers.py`` sucht.
 SHELLS: Final = frozenset({"bash", "sh"})
 
+#: Je Schreibweise einer Suche ein gepflanzter Aufruf und was der Wächter darin finden muss;
+#: ``shell`` ist in der gepflanzten Datei an ``"sh"`` gebunden.
+LOOKUPS: Final = [
+    ('shutil.which("sh")', ["sh"]),
+    ('which("bash")', ["bash"]),
+    ('shutil.which("sh.exe")', ["sh"]),
+    ('shutil.which("Bash.EXE")', ["bash"]),
+    ("shutil.which(shell)", ["sh"]),
+    ('shutil.which(cmd="sh")', ["sh"]),
+    ('shutil.which("git")', []),
+]
 
-def _shell_lookups(source: str) -> list[str]:
-    """Jeder Aufruf ``which("bash")`` oder ``which("sh")``, auch als ``shutil.which``.
+
+def _shell_lookups(index: code_index.Index, path: str, source: str) -> list[str]:
+    """Jede Suche nach ``bash`` oder ``sh`` über ``which``, auch als ``shutil.which``.
 
     Gelesen werden Aufrufe, nicht Text: Ein Docstring, der die Suche beschreibt,
-    ist keine Suche.
+    ist keine Suche. Was gesucht wird, faltet der Auflöser — das erste Argument
+    oder ``cmd=``, als Text oder als Name —, und ``sh.exe`` sucht dieselbe Shell
+    wie ``sh`` (RCS-1).
     """
-    return sorted(
-        node.args[0].value
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Call)
-        and "which" in (getattr(node.func, "attr", None), getattr(node.func, "id", None))
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and node.args[0].value in SHELLS
-    )
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if not (
+            isinstance(node, ast.Call)
+            and "which" in (getattr(node.func, "attr", None), getattr(node.func, "id", None))
+        ):
+            continue
+        named = [keyword.value for keyword in node.keywords if keyword.arg == "cmd"]
+        for argument in [*node.args[:1], *named]:
+            values = {value.data for value in index.resolve(path, argument)}
+            names = {value.lower().removesuffix(".exe") for value in values if type(value) is str}
+            found.extend(names & SHELLS)
+    return sorted(found)
+
+
+@pytest.mark.parametrize(("call", "expected"), LOOKUPS)
+def test_the_shell_guard_finds_every_way_of_looking(call: str, expected: list[str]) -> None:
+    """Gegenprobe zum Wächter: je Schreibweise eine gepflanzte Suche, über denselben Leser."""
+    planted = "tests/test_planted.py"
+    source = f'import shutil\n\n\ndef find():\n    shell = "sh"\n    return {call}\n'
+    assert _shell_lookups(build_index({planted: source}), planted, source) == expected
 
 
 def test_only_the_shell_helpers_look_for_bash_or_sh() -> None:
@@ -269,15 +297,18 @@ def test_only_the_shell_helpers_look_for_bash_or_sh() -> None:
     und mit WSL vorn liefe das Tor-Skript in einem Linux. ``test_packaging.py``
     suchte die ``sh`` mit einem halben Rückfall, nur unter ``ProgramFiles``.
     """
-    planted = 'import shutil\nshutil.which("sh")\nwhich("bash")\nshutil.which("git")\n'
-    assert _shell_lookups(planted) == ["bash", "sh"], "der Leser findet keine Suche"
+    index = code_index.shared()
     files = sorted((ROOT / "tests").glob("*.py"))
     assert len(files) > 100, f"nur {len(files)} Dateien unter tests — falscher Pfad?"
     asking = {
         path.name: found
         for path in files
         if path.name != "shell_helpers.py"
-        and (found := _shell_lookups(path.read_text(encoding="utf-8")))
+        and (
+            found := _shell_lookups(
+                index, path.relative_to(ROOT).as_posix(), path.read_text(encoding="utf-8")
+            )
+        )
     }
     assert asking == {}
 
