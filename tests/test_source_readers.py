@@ -794,6 +794,12 @@ _PROBES: tuple[tuple[str, str, str, str], ...] = (
         "app/core/activation/zz_probe_pkg/zz_probe_switch.py",
         "from os import environ\n\nFLAG = environ.get('SOLIDON_PROBE')\n",
     ),
+    (
+        "test_print_disclosure",
+        "test_both_notices_ask_the_same_source_what_a_utc_timestamp_is",
+        "app/ui/render/zz_probe_utc.py",
+        'def stamp(value):\n    return value.endswith("Z")\n',
+    ),
 )
 
 

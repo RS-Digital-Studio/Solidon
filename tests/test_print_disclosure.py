@@ -15,7 +15,6 @@ from PySide6.QtWidgets import QApplication, QLabel
 
 import app.ui.ai_disclosure as ai_disclosure_module
 import app.ui.print_disclosure as print_disclosure_module
-import app.ui.settings
 from app.ui.print_disclosure import (
     PRINT_DISCLOSURE_VERSION,
     PrintDisclosureDialog,
@@ -28,6 +27,7 @@ from app.ui.print_disclosure import (
     share_label,
 )
 from app.ui.settings import UiSettings, is_utc_timestamp
+from tests import source_tree
 
 
 @pytest.fixture(autouse=True)
@@ -107,13 +107,19 @@ def test_both_notices_ask_the_same_source_what_a_utc_timestamp_is() -> None:
     eigener Prüfung verhält sich am Tag seiner Entstehung richtig, und der
     Test wäre grün. Auffallen soll die **Bauart**.
     """
-    ui = Path(app.ui.settings.__file__).parent
-    dateien = sorted(path for path in ui.rglob("*.py") if path.name != "settings.py")
+    # Ausgenommen ist nur die Datei, die die eine Antwort trägt, gefunden an der
+    # Definition statt am Namen ``settings.py``. Sie muss in der Grundmenge
+    # liegen, sonst nimmt die Ausnahme nichts mehr aus; die Zahl bleibt nur
+    # Beleg der Grundmenge (CS-12).
+    dateien = source_tree.python_files("app/ui")
+    quelle = source_tree.definition_file("is_utc_timestamp", "app/ui")
+    assert quelle in dateien, f"{source_tree.relative(quelle)} fehlt in der Grundmenge"
     assert len(dateien) > 30, f"nur {len(dateien)} Dateien gefunden — sucht der Test noch etwas?"
 
     stellen = [
-        f"{path.name}:{nummer}"
+        f"{source_tree.relative(path)}:{nummer}"
         for path in dateien
+        if path != quelle
         for nummer, zeile in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
         if ("utcoffset" in zeile or 'endswith("Z")' in zeile)
         and not zeile.lstrip().startswith(("#", "*", '"""'))
