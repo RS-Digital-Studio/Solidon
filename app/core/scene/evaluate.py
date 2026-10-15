@@ -128,6 +128,7 @@ from app.core.registry import REGISTRY, OperationSpec, Registry, needed_inputs, 
 from app.core.registry.params import reads_scene
 from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
+from app.core.scene.choice_ways import fitted_to_step
 from app.core.scene.edge_binding import NO_BINDING, EdgeBinding, EdgeTarget, bind_edges
 from app.core.scene.fits import active_fits
 from app.core.scene.fits import check as check_fits
@@ -1635,14 +1636,17 @@ def _evaluate(
         lone = operation.outputs[0] if len(operation.outputs) == 1 else None
         converted_sources = {entry.values["input_object"] for entry in conversions}
         current_findings = [
-            dataclasses.replace(
-                entry,
-                op_id=entry.op_id if entry.op_id is not None else operation.id,
-                object_id=(
-                    entry.object_id
-                    if entry.object_id is not None
-                    else (lone if lone is not None else _by_name(entry, produced_by_name))
+            fitted_to_step(
+                dataclasses.replace(
+                    entry,
+                    op_id=entry.op_id if entry.op_id is not None else operation.id,
+                    object_id=(
+                        entry.object_id
+                        if entry.object_id is not None
+                        else (lone if lone is not None else _by_name(entry, produced_by_name))
+                    ),
                 ),
+                operation.op,
             )
             for entry in result.findings
             # Der direkte Op-Aufruf erhält weiter seinen Befund. Im Stapel
@@ -7410,14 +7414,18 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
         if detail is not None:
             values["detail"] = str(detail)
         message = error.title if error.title is not None else type(error).__name__
-    return Finding(
-        code=f"op.{operation.op}.{type(error).__name__}",
-        severity="error",
-        message=message,
-        object_id=object_id,
-        op_id=operation.id,
-        values=values,
-        location=error.values.get("location"),
-        outline=error.values.get("outline", ()),
-        suggestions=tuple(error.suggestions),
+    # Eine Auswahlhandlung meint ein Feld **dieses** Schritts (RB-1, RB-2).
+    return fitted_to_step(
+        Finding(
+            code=f"op.{operation.op}.{type(error).__name__}",
+            severity="error",
+            message=message,
+            object_id=object_id,
+            op_id=operation.id,
+            values=values,
+            location=error.values.get("location"),
+            outline=error.values.get("outline", ()),
+            suggestions=tuple(error.suggestions),
+        ),
+        operation.op,
     )

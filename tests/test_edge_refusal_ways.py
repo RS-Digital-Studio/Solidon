@@ -13,7 +13,7 @@ from collections.abc import Callable
 
 import pytest
 
-from app.core.errors import CANCEL, CHANGE_EDGES, CHANGE_SELECTION, GeometryError
+from app.core.errors import CANCEL, CHANGE_EDGES, CHANGE_FEATURE, CHANGE_SELECTION, GeometryError
 from app.core.geom.edges import too_large_for_the_faces, wanted
 
 
@@ -56,18 +56,21 @@ def test_other_edges_opens_the_step_where_the_edges_are_chosen() -> None:
     assert str(CHANGE_EDGES.label) == "Andere Kanten wählen"
 
 
-def test_a_rounding_without_an_edge_beneath_offers_other_edges() -> None:
-    """„Diese Rundung grenzt nicht an zwei ebene Flächen“ (FD-178): Eine
-    Eckrundung ohne Achse führt zu den Kanten, nicht zu anderen Objekten."""
+def test_a_rounding_without_an_edge_beneath_offers_another_feature() -> None:
+    """„Diese Rundung grenzt nicht an zwei ebene Flächen“ (FD-178, RB-1).
+
+    Die Absage kommt nur aus *Merkmal entfernen* und *Merkmal ändern*, und
+    deren Dialog hat kein Kantenfeld, sondern das Merkmal.
+    """
     from app.core.geom.prepare_ops import _refuse_a_corner
     from app.core.types import Feature
 
     corner = Feature(id="fillet_1", kind="fillet", provenance="detected", params={})
     error = _refusal(lambda: _refuse_a_corner(corner))
-    assert error.suggestions == (CHANGE_EDGES, CANCEL)
+    assert error.suggestions == (CHANGE_FEATURE, CANCEL)
 
 
-def test_every_refusal_of_a_rounding_offers_other_edges() -> None:
+def test_every_refusal_of_a_rounding_offers_another_feature() -> None:
     """Jede Stelle, die ``NOT_BETWEEN_TWO_PLANES`` sagt, in beiden Kernen."""
     import re
     from pathlib import Path
@@ -80,4 +83,4 @@ def test_every_refusal_of_a_rounding_offers_other_edges() -> None:
         for match in re.finditer(r"detail=NOT_BETWEEN_TWO_PLANES,\s*suggestions=\(([^)]*)\)", text)
     }
     assert len(found) >= 4, found
-    assert all(ways.split(",")[0].strip() == "CHANGE_EDGES" for ways in found.values()), found
+    assert all(ways.split(",")[0].strip() == "CHANGE_FEATURE" for ways in found.values()), found

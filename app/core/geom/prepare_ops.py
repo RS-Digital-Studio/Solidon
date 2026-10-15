@@ -22,7 +22,6 @@ from app.core.deferred import trimesh
 from app.core.errors import (
     BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
     CANCEL,
-    CHANGE_EDGES,
     CHANGE_FACES,
     CHANGE_FEATURE,
     CHANGE_SELECTION,
@@ -24081,7 +24080,7 @@ def _refuse_a_corner(feature: Feature) -> None:
     if "axis" not in feature.params:
         from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
 
-        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_EDGES, CANCEL))
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_FEATURE, CANCEL))
 
 
 def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float | None) -> OpResult:

@@ -119,8 +119,9 @@ Nutzen da und sonst nichts.
 - Bleiben neben einem druckbaren Teil nur Splitter, nennt *In Einzelteile aufteilen* sie und bietet *Splitter behalten* an. Bisher hieß es, der Körper bestehe aus einem Stück.
 - Ist der Radius einer Rundung oder die Breite einer Fase für die Kanten zu groß, bietet die Meldung *Andere Kanten wählen* an.
 - Passt eine gewählte Fläche nicht zu *Formschräge anstellen* oder *Fläche versetzen*, bietet die Meldung *Andere Flächen wählen* an.
-- Dasselbe gilt für *Aushöhlen*, *Dichtnut mit Dichtung* und *Textur aufbringen*. Lässt sich eine Rundung nicht auf eine Kante zurückführen, bietet die Meldung *Andere Kanten wählen* an.
+- Dasselbe gilt für *Aushöhlen*, *Dichtnut mit Dichtung* und *Textur aufbringen*. Lässt sich eine Rundung nicht auf eine Kante zurückführen, bietet die Meldung *Anderes Merkmal wählen* an.
 - Passt ein gewähltes Merkmal nicht, etwa eine Bohrung, ein Gewinde, eine Kammer oder ein Verschluss, bietet die Meldung *Anderes Merkmal wählen* an.
+- Die Knöpfe *Andere Kanten wählen*, *Andere Flächen wählen* und *Anderes Merkmal wählen* öffnen den Schritt mit dem Cursor im passenden Feld, auch hinter *Weitere Einstellungen*.
 
 ## 0.6.0
 

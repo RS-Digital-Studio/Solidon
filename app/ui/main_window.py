@@ -225,6 +225,7 @@ from app.core.scene import (
 )
 from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
+from app.core.scene.choice_ways import for_the_choice
 from app.core.scene.evaluate import size_set_by
 from app.core.scene.history import change_for, repair_is_available, step_titles
 from app.core.scene.parameter_usage import bounds_refusal
@@ -27592,7 +27593,8 @@ class MainWindow(QMainWindow):
             # Derselbe Weg an einem Befund, der sagt, was ein Schritt getan hat
             # (RM-374): *Größe ändern* öffnet ``fit_to_size`` mit dem Cursor im
             # Maß — der Wert ist danach ein gewöhnlicher Parameter.
-            "change_step": self._correct_after_error,
+            # Und an einer Auswahlabsage das Feld, das sie nennt (RB-2, ``choice_ways``).
+            "change_step": lambda error: self._correct_after_error(for_the_choice(error)),
             # **Eine unlesbare Zeichenebene** (``sketch.planes._unreadable``):
             # Der Schritt geht mit dem Cursor im Ebenenfeld auf, das der Kern
             # nennt — dort wird die andere Ebene gewählt. Bis zum 22.09.2026

@@ -35,6 +35,8 @@ Hier statt in der Karte, weil sie an ihrem Budget steht.
 | Bietet eine Kanten- oder Rundungsabsage *Andere Kanten wählen* statt *Andere Objekte wählen*? | `test_edge_refusal_ways.py` |
 | Bietet eine Flächenabsage (Formschräge, Fläche versetzen, Aushöhlen, Dichtnut, Muster bis zum Rand) *Andere Flächen wählen* statt *Andere Objekte wählen*, in beiden Kernen? | `test_face_refusal_ways.py` |
 | Bietet eine Absage an einem gewählten Merkmal (Bohrung, Gewinde, Kammer, Verschluss, Ring, Merkmalsoperationen) *Anderes Merkmal wählen* statt *Andere Objekte wählen*? | `test_feature_refusal_ways.py` |
+| Richtet sich eine Auswahlhandlung nach dem Schritt, der die Absage auslöst, mit einem Feld aus seinem Schema, im ganzen Register; gehen Halt und Ausgabebefund beide durch die Anpassung? | `test_choice_ways.py` |
+| Öffnet *Anderes Merkmal/Andere Kanten/Andere Flächen wählen* den Schritt mit dem Feld sichtbar und im Fokus, *Eingabe korrigieren* daneben den Wert? (Fenster) | `test_choice_ways_ui.py` |
 | Nennt *In Einzelteile aufteilen* Splitter und bietet *Splitter behalten* an? | `test_split_splinters.py` |
 | Nennen die Zusatzwerkzeuge des Agenten ihren Fensterort, und steht er in der gebauten Menüleiste? | `test_agent_tool_places.py` |
 
