@@ -27,6 +27,10 @@
 #   insert_before die Einfügemarke der Sitzung vor diesem Schritt (sichtbare Nummer)
 #   cause         was der Prüfstand vor der Zeile auslöst: {kind = "export", format}
 #                 oder {kind = "auto_split", object}
+#   built         Quellkennung → Generator (``tools/function_meshes.py``): die Datei
+#                 entsteht beim Bau, zu groß für tests/data
+#   recognition   "declined": die Frage vor der langen Vollerkennung ist im
+#                 Ladeschritt abgelehnt gespeichert (§21.1)
 #   promises      objects, kinds (Merkmalsarten), body (closed, open, parts, cavity),
 #                 findings (Befundkennungen), actions (Handlung → Befund, an dem der
 #                 Bericht sie anbietet), stops, triangles_over, seconds_over
@@ -1100,18 +1104,21 @@ op = "remesh_mesh"
 inputs = ["obj_1"]
 params = { edge = 2.0 }
 
+# *Alle Merkmale erkennen* holt nach, was beim Laden ausgelassen wurde: Die Wahl
+# steht am Ladeschritt (history.recognition_reopenable). Ein Quader, der erst
+# nach dem Laden über die Grenze wuchs, trug keine, und die Zusage stimmte nicht
+# (FD-101). Das Netz entsteht beim Bau der Szene (function_meshes), zu groß für
+# tests/data.
 [scene.ueber_erkennungsgrenze]
-summary = "Derselbe Quader auf 0,7 mm Kantenlänge verfeinert: über FEATURE_LIMIT_TRIANGLES (§21.1)."
+summary = "Eine geladene Platte mit 1,54 Millionen Dreiecken, über FEATURE_LIMIT_TRIANGLES; die Vollerkennung beim Laden abgelehnt (§21.1)."
 kernel = "netz"
 heavy = true
+built = { src_1 = "dichte_platte" }
+recognition = "declined"
 promises = { objects = 1, triangles_over = 1500000, findings = ["perceive.too_large"], actions = { recognize_fully = "perceive.too_large", recognize_local = "perceive.too_large", decimate_mesh = "perceive.too_large" } }
 [[scene.ueber_erkennungsgrenze.ops]]
-op = "create_box"
-params = { width = 200.0, depth = 200.0, height = 100.0 }
-[[scene.ueber_erkennungsgrenze.ops]]
-op = "remesh_mesh"
-inputs = ["obj_1"]
-params = { edge = 0.7 }
+op = "load"
+params = { source = "src_1", unit = "mm" }
 
 [scene.langsam_2s]
 summary = "Zwei Kugeln Ø 40 mm, auf 0,22 mm verfeinert, voneinander abgezogen: rechnet über 2 s."

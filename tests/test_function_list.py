@@ -758,11 +758,12 @@ def test_there_are_light_scenes_on_both_kernels() -> None:
 @pytest.mark.parametrize("key", [key for key, scene in _scenes().items() if scene.heavy])
 def test_a_heavy_scene_is_a_valid_stack(key: str) -> None:
     """Schwere Szenen rechnet nur der Werkzeuglauf; hier nimmt ``History.apply`` jeden
-    Schritt an, und die Zusage nennt Dreiecke oder Sekunden."""
+    Schritt an, und die Zusage nennt Dreiecke oder Sekunden. Ein Schritt genügt: Die
+    Platte über der Erkennungsgrenze wird geladen, nicht erst verfeinert (FD-101)."""
     scenes = _scenes()
     project = fscenes.build_scene(key, scenes)
     _sources, steps = fscenes.recipe(key, scenes)
-    assert len(project.document.ops) == len(steps) >= 2
+    assert len(project.document.ops) == len(steps) >= 1
     assert {"triangles_over", "seconds_over"} & set(scenes[key].promises)
 
 

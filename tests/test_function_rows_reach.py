@@ -54,6 +54,7 @@ REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
         ("finding:op.create_brep_box.BRepUnavailable",),
     ),
     "finding.action:keep_saved_parts": ("baustein_geaendert.netz", ("finding:parts.own_changed",)),
+    "finding.action:recognize_fully": ("ueber_erkennungsgrenze", ("finding:perceive.too_large",)),
     "command:edit.auto_split": ("zu_gross.netz", ("tree.row:obj_1",)),
     "dialog:seal_path_dialog": (
         "merkmal.face.exakt",

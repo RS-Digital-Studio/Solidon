@@ -143,6 +143,16 @@ class Scene:
     """Die Einfügemarke der Sitzung vor diesem Schritt (sichtbare Nummer), sonst 0."""
     cause: Mapping[str, str] = field(default_factory=dict)
     """Was vor der Zeile ausgelöst wird (:data:`CAUSE_KEYS`)."""
+    built: Mapping[str, str] = field(default_factory=dict)
+    """Quellkennung → Generator aus ``function_meshes.GENERATORS``: Die Datei entsteht
+    beim Bau der Szene, zu groß für ``tests/data``."""
+    recognition: str = ""
+    """``declined``: Die Frage nach der vollständigen Merkmalserkennung (§21.1) ist im
+    Ladeschritt abgelehnt gespeichert, wie nach einem Import, der sofort lud."""
+
+
+#: Die Antworten einer Szene auf die Frage vor der langen Vollerkennung.
+RECOGNITION_ANSWERS: Final[tuple[str, ...]] = ("", "declined")
 
 
 SCENE_KEYS: Final[frozenset[str]] = frozenset(
@@ -167,6 +177,8 @@ SCENE_KEYS: Final[frozenset[str]] = frozenset(
         "preconditions",
         "insert_before",
         "cause",
+        "built",
+        "recognition",
     }
 )
 PARAMETER_KEYS: Final[frozenset[str]] = frozenset({"value", "unit", "title"})
@@ -221,6 +233,8 @@ def load_scenes(path: Path = SCENES) -> dict[str, Scene]:
             preconditions=dict(entry.get("preconditions", {})),
             insert_before=int(entry.get("insert_before", 0)),
             cause=dict(entry.get("cause", {})),
+            built=dict(entry.get("built", {})),
+            recognition=str(entry.get("recognition", "")),
         )
     if problems:
         raise FunctionListError(problems)
@@ -299,6 +313,7 @@ def validate_scenes(scenes: Mapping[str, Scene]) -> list[str]:
         for name, relative in sources.items():
             if not (DATA / relative).is_file():
                 issues.append(f"Szene {key}: Quelle {name} → {relative} fehlt in tests/data")
+        issues += [f"Szene {key}: {issue}" for issue in _built_problems(scene, sources, steps)]
         parameters = parameters_of(key, scenes)
         for name, values in parameters.items():
             if set(values) - PARAMETER_KEYS or not isinstance(values.get("value"), int | float):
@@ -332,6 +347,27 @@ def validate_scenes(scenes: Mapping[str, Scene]) -> list[str]:
             if code not in scene.promises.get("findings", ()):
                 issues.append(f"Szene {key}: Handlung {action} an {code}, der nicht zugesagt ist")
         issues += [f"Szene {key}: {issue}" for issue in _setting_problems(scene, sources, steps)]
+    return issues
+
+
+def _built_problems(
+    scene: Scene, sources: Mapping[str, str], steps: Sequence[SceneStep]
+) -> list[str]:
+    """Erzeugte Quellen und die gespeicherte Erkennungsantwort (``built``, ``recognition``)."""
+    from tools.function_meshes import GENERATORS
+
+    issues = [
+        f"Quelle {name}: Generator {generator!r} gibt es nicht"
+        for name, generator in scene.built.items()
+        if generator not in GENERATORS
+    ]
+    issues += [
+        f"Quelle {name} steht in sources und built" for name in set(scene.built) & set(sources)
+    ]
+    if scene.recognition not in RECOGNITION_ANSWERS:
+        issues.append(f"Erkennungsantwort {scene.recognition!r} unbekannt")
+    elif scene.recognition and not any(step.op == "load" for step in steps):
+        issues.append("Erkennungsantwort ohne Ladeschritt, an dem sie stehen könnte")
     return issues
 
 
@@ -395,11 +431,14 @@ def build_scene(key: str, scenes: Mapping[str, Scene] | None = None) -> Project:
 
     Jeder Schritt ist eine Transaktion über ``History.apply`` — derselbe Weg wie
     ``tools/make_examples.py``; ``apply`` prüft Kennungen und Parameternamen,
-    Wertebereiche prüft :func:`validate_scenes`. Gerechnet wird hier nicht.
+    Wertebereiche prüft :func:`validate_scenes`. Gerechnet wird hier nur für eine
+    gespeicherte Erkennungsantwort (``recognition``): Ihr Netzabdruck entsteht
+    erst beim Laden.
     """
     from app.core.scene import History, OperationDraft
     from app.core.scene.project import load, new_project
     from app.core.types import Parameter, Source, Suppression
+    from tools.function_meshes import GENERATORS
 
     catalogue = scenes if scenes is not None else load_scenes()
     scene = catalogue[key]
@@ -424,6 +463,12 @@ def build_scene(key: str, scenes: Mapping[str, Scene] | None = None) -> Project:
             sha256="",
         )
         project.sources[name] = (DATA / relative).read_bytes()
+    for name, generator in scene.built.items():
+        payload, suffix = GENERATORS[generator]()
+        project.document.sources[name] = Source(
+            id=name, kind="import", path=f"sources/{generator}{suffix}", sha256=""
+        )
+        project.sources[name] = payload
     for name, values in parameters_of(key, catalogue).items():
         project.document.parameters[name] = Parameter(
             name=name,
@@ -448,7 +493,46 @@ def build_scene(key: str, scenes: Mapping[str, Scene] | None = None) -> Project:
         for entry in document.ops
     ]
     document.protected = {name: tuple(found) for name, found in scene.protected.items()}
+    if scene.recognition:
+        _store_recognition_answers(project, allowed=False)
     return project
+
+
+def _store_recognition_answers(project: Project, *, allowed: bool) -> None:
+    """Die Antwort auf die Frage vor der langen Vollerkennung, in ihren Ladeschritten.
+
+    So wie die Anwendung sie festhält, wenn der Kunde beim Import wählt
+    (``evaluate.on_recognition_answer`` → ``Operation.matches``): mit dem
+    Netzabdruck, den erst das Laden ergibt. Ohne sie fragte das Fenster beim
+    Öffnen der Szene, und *Alle Merkmale erkennen* fände keine Wahl, die sich
+    nachholen ließe (``history.recognition_reopenable``).
+    """
+    from app.core.knowledge import profiles
+    from app.core.scene import evaluate
+    from app.core.scene.project import ProjectSources
+
+    document = project.document
+    answers: list[tuple[int, str, Mapping[str, Any]]] = []
+
+    def answer(question: str, choices: Sequence[str]) -> str:
+        return choices[1] if allowed else choices[0]
+
+    evaluate(
+        document,
+        profiles.scene_profile(document.printer, document.material),
+        sources=ProjectSources(project),
+        ask=answer,
+        on_recognition_answer=lambda op_id, key, record: answers.append((op_id, key, record)),
+    )
+    stored: dict[int, dict[str, Any]] = {}
+    for op_id, key, record in answers:
+        stored.setdefault(op_id, {})[key] = dict(record)
+    document.ops = [
+        replace(entry, matches={**entry.matches, **stored[entry.id]})
+        if entry.id in stored
+        else entry
+        for entry in document.ops
+    ]
 
 
 def _carried_printer(like: str) -> dict[str, Any]:
