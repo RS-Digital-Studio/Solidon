@@ -2021,3 +2021,15 @@ Auskunft.
 - Vorschlag: Die nativen Läufer (Fallbrücke, Maßkartenfolge, Bindung und Siegel) nach `tools/` übernehmen, mit Siegelprüfung vor dem Start, als Schritt in `/erzeugen` (Konzept §8, §10); die Cursorlesung am Fenster des Druckempfängers.
 - Wirkung beim Kunden: Kein Produktfehler; der Wiederholungslauf beim Release wäre auf keinem frischen Stand reproduzierbar.
 - Stand: offen RM-737
+
+### FD-167 Ein Körperabschied mitten in einer Schleife über die Erkennungsmerker bricht sie ab
+
+- Art: Stabilität
+- Schwere: mittel
+- Funktion: keine Zeile: Erkennungsarbeiter der Merkmalserkennung
+- Prüfpunkt: 6
+- Beleg: `tests/test_features.py::test_a_face_keeps_its_area_unrounded` einmal mit `RuntimeError: dictionary changed size during iteration` an `features.py:1305` (`output/konsolidierung-2026-10-12/fix-f10-claude.md`, neuer Punkt 1); ohne Eingriff nachgestellt (`fd167-claude.md`): je Runde ein toter Körper mit Merker im Zyklus, gehaltene Listen, dann `forget_cache` — am Original 2 von 8 000 Runden rot, zweimal bei denselben Runden; Zwilling in `answered_ahead` (`OrderedDict mutated during iteration`) und in `app_events.listening`.
+- Ursache: `_forget_body` läuft als `weakref.finalize` aus der Speicherbereinigung an jedem Prüfpunkt einer Schleife, auch unter dem wiedereintrittsfähigen `_MEMORY_LOCK`, und nimmt aus `_MEMORIES` und `_BY_GEOMETRY`; zwei Schleifen liefen unmittelbar über diese Merker, `app_events.listening` über die Arten, aus denen der Rückruf eines sterbenden Zuhörers nimmt.
+- Vorschlag: Die Schleifen über Schnappschüsse (`tuple(...)`), Wächter über jede Schleife an den sechs Merkern, Regel in `kern.md`.
+- Wirkung beim Kunden: Bei Modellen ab 50 000 Dreiecken konnte ein Erkennungsarbeiter seinen Teil verlieren oder enden; der Hauptprozess rechnete ihn selbst, mit demselben Ergebnis, nur langsamer.
+- Stand: behoben `ff0a27705`; neue Fälle am Original rot, am Fix grün; druckgleich an 12 Beispielprojekten und 6 Modellen; in welle4 `5abf5f5b0`.
