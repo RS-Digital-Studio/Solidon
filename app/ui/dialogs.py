@@ -137,6 +137,7 @@ from app.ui.style import (
     set_level,
     set_role,
 )
+from app.ui.wrapped_caption import keep_whole_lines
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
 #: schlechter lesbar als ein Wort. Der Name ist englisch wie jeder andere in
@@ -221,6 +222,10 @@ def align_to_the_front(
         word = max(widest, widget.minimumSizeHint().width())
         widget.setMinimumWidth(word)
         widget.setMaximumWidth(word)
+        # Und die Höhe trägt jede Zeile des Umbruchs (FD-183): Das Formular nahm
+        # sie aus der Wunschgröße, die Qt für eine breitere Zeile rechnet.
+        if isinstance(widget, QLabel):
+            keep_whole_lines(widget)
 
 
 class AskDialog(QDialog):
