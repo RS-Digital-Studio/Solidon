@@ -14,8 +14,10 @@ Grundmengen mit den Zahlen aus dem Plan.
 Die Bekanntfälle am echten Baum gelten, **solange ihre Fixes fehlen** (Plan
 2.2): Wer einen behebt, streicht seinen Fall hier im selben Commit; die
 Meldung des Tests nennt dann das Paket und die Regel von W2, die ihn ab da
-hält. Trägt diese Regel noch ``xfail``, wird der Fall umgekehrt statt
-gestrichen und hält den behobenen Stand, bis sie scharf ist (CS-9a).
+hält. Trägt diese Regel noch ``xfail`` und hält den behobenen Stand sonst kein
+Test ohne Fenster, wird der Fall umgekehrt statt gestrichen, bis sie scharf ist
+(CS-9a); hält ihn ein solcher Test, wird gestrichen (CS-9b,
+``test_spatial_matching.py``).
 """
 
 from __future__ import annotations
