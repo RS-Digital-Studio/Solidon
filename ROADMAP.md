@@ -24,11 +24,10 @@ stehen mit Nachweis im Archiv.
 Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
 Auflagen werden daneben rechtzeitig bearbeitet. Die nächste Version ist **0.6.1**.
-**Als Nächstes:** der Funktionsdurchgang durch die Oberfläche ([RM-736](#rm-736), zuerst
-der Prüfstand [RM-737](#rm-737)) und das Programm Codestruktur ([RM-722](#rm-722),
-Konzepte in `konzepte/`); 0.6.1 mit auffindbaren Booleschen Operationen und ohne
-Befehlspalette steht auf main ([RM-734](#rm-734), [RM-735](#rm-735), der Release
-entscheidet Robert). Beide Programme laufen in vier Phasen ohne Datum hintereinander
+**Als Nächstes:** Phase 2 des Programms zu Ende — die offenen Funde des Prüfstands
+[RM-737](#rm-737) (D0 steht auf main) und Codestruktur Schritt 0 ([RM-722](#rm-722)) über
+`welle5`; danach wird 0.6.1 erstellt und veröffentlicht ([RM-734](#rm-734),
+[RM-735](#rm-735), Auftrag Robert 13.10.). Beide Programme laufen in vier Phasen ohne Datum hintereinander
 (Robert, 12.10.); die Kundenpakete des Funktionsdurchgangs kommen darin vor die Komponenten
 von `MainWindow`. Mit 0.6.0 beim Kunden abzunehmen:
 der Start auf echten Intel-Macs (RM-104) und Cura unter Linux (RM-521); offen bleibt die
@@ -184,7 +183,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-734 — Wer „boolesch“ tippt, findet die Booleschen Operationen nicht](#rm-734) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-735 — Zwei Suchen: Befehlspalette und Suchfeld der Karte](#rm-735) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-736 — Funktionsdurchgang: jede Funktion einmal über die Oberfläche benutzt, geprüft und abgehakt](#rm-736) | Bedienung und Darstellung | Konzept abgelegt; D0 (RM-737) zuerst, dann die Kundenpakete D1, D9, D8, D3, D4 (Phase 3), die übrigen in Phase 4 |
-| [RM-737 — Funktionsdurchgang D0: Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter](#rm-737) | Bedienung und Darstellung | auf `welle4`: FD-26 bis FD-30 und die Funde der Durchsicht beheben, zweiter Probelauf und Stufe B, Urteile und Abhaklisten versionieren, Tor, main |
+| [RM-737 — Funktionsdurchgang D0: Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter](#rm-737) | Bedienung und Darstellung | D0 steht auf main; die offenen Funde der Funddatei über `welle5` beheben, Schlusslauf am echten Fenster, Nachurteilsrunde (≥ 90 % je Prüfpunkt gepoolt), dann abhaken — vor 0.6.1 |
 | [RM-738 — Funktionsdurchgang D1: Datei und Projekt](#rm-738) | Bedienung und Darstellung | wartet auf D0; danach neue Schätzung an Robert |
 | [RM-739 — Funktionsdurchgang D2: Erzeugen](#rm-739) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-740 — Funktionsdurchgang D3: Verbinden und Abziehen, Transformation, Formgebung](#rm-740) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8 |
@@ -217,7 +216,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft](#rm-755) | Tests und Entwicklungswerkzeuge | Gefunden in SK: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` einzeln 1 von 2 rot; Ursache klären wie bei der Formsitzung (Zeitgeber beim Zustellen) |
 | [RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot](#rm-779) | Tests und Entwicklungswerkzeuge | Den Vorgänger finden, der Zustand hinterlässt, und ihn aufräumen |
 | [RM-719 — Ein Fenstertest wackelt mit vier Arbeitern](#rm-719) | Tests und Entwicklungswerkzeuge | Ursache des Wettlaufs finden |
-| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | RM-723 und RM-726 bis RM-729 und die 12 `raising=False` auf `app.*` beheben, dann W1 bis W6 und `tools/move_names.py` |
+| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | Pakete R, W13, P1, P2, Plattform fertig und geprüft, M und Q in der Fixrunde; Integration über `welle5`, dann der erzeugte Schnitt K, Unterlagen, Tor — vor 0.6.1 |
 | [RM-723 — Quelltextprüfungen lesen `app/ui/` flach und übersehen `render/`](#rm-723) | Tests und Entwicklungswerkzeuge | Je Stelle rekursiv lesen oder den Geltungsbereich mit Grund nennen |
 | [RM-724 — Späte Importe in `tools/` prüft niemand](#rm-724) | Tests und Entwicklungswerkzeuge | Statische Importprüfung (W5) vorziehen, `_feature_item` öffentlich machen |
 | [RM-725 — `affected_tests` erkennt `glob(` nicht als Baumleser](#rm-725) | Tests und Entwicklungswerkzeuge | `glob` in `_TREE_READERS` aufnehmen, mit Test |
@@ -1046,7 +1045,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Paket, Regel in `auslieferung.md`); nach dem Bau prüft `--check` das Bündel. Offengelegt in
   `THIRD-PARTY-NOTICES.md` und in der Stückliste (`pedigree`). Belegt auf dem Intel-Runner: ohne
   Korrektur fünf Abstürze, mit ihr grün (Lauf 38083944884).
-  **Offen:** Antwort auf die Meldung [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67). Jeder Versionswechsel
+  **Stand der Meldung:** [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67)
+  ist angenommen; der Bau ändert sich im nächsten Build, voraussichtlich mit OCCT 8.1.0
+  (Antwort des Projekts am 15.10.2026). Bis dahin bleibt die Korrektur. Jeder Versionswechsel
   von OCP hält `test_the_pinned_wheel_is_the_checked_one` an; dann das neue Rad mit
   `python tools/fix_unwind_info.py --scan <Rad>` zählen.
   **Abnahme:** Ein OCP-Rad zeigt im Scan keinen falschen Eintrag mehr. Dann entfallen Werkzeug,
@@ -5837,12 +5838,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
     Verweis darauf in `.claude/rules/tests.md`; RM-722 zieht danach nur noch `/liefern` nach.
 
   **Stand:** Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Urteile, Profile und Wächter
-  liegen auf dem Integrationszweig `welle4`; der erste Probelauf am echten Fenster ist
-  ausgewertet, die Funde stehen mit ihrem Stand in
-  `.claude/.state/funktionsdurchgang-2026-10/funde.md`.
-  **Nächster Schritt:** FD-26 bis FD-30 und die Funde der Durchsicht über `welle4` beheben,
-  zweiter Probelauf und Stufe B, Urteile und Abhaklisten versionieren, Tor, Merge nach main.
-  Geschätzt acht bis zwölf Arbeitstage.
+  stehen auf main. Der finale Lauf am echten Fenster (48 Fälle auf `2ec37b23b`) ist von zwei
+  Prüfern geurteilt; Urteile und erzeugte Abhaklisten D4, D8, D10 sind versioniert, die Funde
+  mit Stand und Nachweis in `.claude/.state/funktionsdurchgang-2026-10/funde.md`.
+  **Nächster Schritt:** die offenen Funde über `welle5` beheben (Phase 2, auch die leichten),
+  Schlusslauf der betroffenen Zeilen am echten Fenster über `tools/native_runs.py`, Nachurteilsrunde
+  mit zwei Prüfern nach den geschärften Kriterien, dann abhaken; alles vor 0.6.1.
   **Abnahme:** Wächter grün über dem Bestand; je Prüfpunkt eine Gegenprobe ohne Fenster, die
   rot wird; je eine Zeile der drei Arten der Funktionsliste (Operation, Fensterbefehl,
   Bedienfläche) am echten Fenster über Stufe A gefahren; Listen zu V1 und I3, Vergleichsbilder

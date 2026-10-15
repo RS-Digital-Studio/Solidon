@@ -215,6 +215,13 @@ langsam; `test_every_remembered_question_is_either_shared_or_bound` verlangt
 ihn. Eine Antwort, die ein Körper ist, steht zusätzlich in
 `DERIVED_BODY_ANSWERS`.
 
+**Über einen Merker, aus dem ein Abschied nimmt, läuft eine Schleife nur als
+Schnappschuss** (`tuple(...)`): Ein `weakref.finalize` oder ein Rückruf eines
+schwachen Verweises läuft aus der Speicherbereinigung heraus an jedem
+Prüfpunkt einer Schleife, auch unter dem eigenen wiedereintrittsfähigen
+Schloss — sonst `dictionary changed size during iteration` (FD-167,
+`tests/test_memory_farewell.py`).
+
 ## Eine örtliche Frage ist dieselbe Frage wie die am ganzen Körper
 
 `local.detect_known` fragt an Ausschnitten (`features.face_radii_at`,
