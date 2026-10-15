@@ -117,14 +117,17 @@ class GesturePhases:
         if result is None or not any(entry.features for entry in result.scene.objects.values()):
             unmeasured(self.data, "hover_labels", "die Startszene trägt kein Merkmal")
             return
-        view = self.window.viewport
-        if getattr(view, "renderer", None) is None:
-            unmeasured(self.data, "hover_labels", "kein Renderer — die Ansicht sucht nichts")
-            return
         kinds: dict[str, list[str]] = {}
         for key, entry in result.scene.objects.items():
             for name, feature in entry.features.items():
                 kinds.setdefault(feature.kind, []).append(f"view:{key}.{name}")
+        # Was die Erkennung an der Szene liefert, neben dem, was überfahren
+        # wurde: Erst so ist „jede Art“ prüfbar (FD-152).
+        self.data["recognized_kinds"] = sorted(kinds)
+        view = self.window.viewport
+        if getattr(view, "renderer", None) is None:
+            unmeasured(self.data, "hover_labels", "kein Renderer — die Ansicht sucht nichts")
+            return
         labels: list[dict[str, Any]] = []
         missed: list[str] = []
         for kind, targets in kinds.items():

@@ -462,6 +462,8 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         "liste", _keys("surface", "window_size", "front", "vertical", "horizontal")
     ),
     "hover_labels": ProtocolField("liste", _keys("kind", "label")),
+    # I1: die Merkmalsarten, die die Erkennung an der Szene liefert (FD-152).
+    "recognized_kinds": ProtocolField("texte"),
     "empty_states": ProtocolField("liste", _keys("surface", "sentence", "button", "intended")),
     "licence_runs": ProtocolField("tabelle", frozenset(LICENCE_STATES)),
     "halt": ProtocolField("tabelle", _keys("text", "step")),
@@ -925,7 +927,7 @@ CRITERIA: Final[dict[str, Criterion]] = {
             "ja an jeder erkannten Art",
             (),
             "AB",
-            ("hover_labels",),
+            ("hover_labels", "recognized_kinds"),
             design=True,
             promised=True,
         ),

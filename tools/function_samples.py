@@ -376,6 +376,7 @@ def sample_protocol() -> dict[str, Any]:
             },
         ],
         "hover_labels": [{"kind": "hole", "label": "Bohrung Ø 5 mm"}],
+        "recognized_kinds": ["hole"],
         "empty_states": [
             {
                 "surface": "Verlauf",
@@ -939,6 +940,22 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         change=_set("hover_labels.0.label", ""),
         verdict=_verdict(criterion="I1", design_judgement=True),
         reason=GOOD_OVER_FINDING,
+    ),
+    # --- „Jede Art“ ist die Liste der Erkennung (FD-152): eine erkannte Art, die
+    # nicht überfahren wurde, ist nicht gemessen.
+    BrokenSample(
+        "I1",
+        "erkannte Art nicht überfahren",
+        change=_set("recognized_kinds", ["hole", "slot"]),
+        expect="nicht_gelaufen",
+    ),
+    BrokenSample(
+        "I1",
+        "ohne Liste der erkannten Arten, Urteil gut",
+        kind="verdict",
+        change=_drop("recognized_kinds"),
+        verdict=_verdict(criterion="I1", design_judgement=True),
+        reason=UNMEASURED_VERDICT,
     ),
     BrokenSample(
         "I2",

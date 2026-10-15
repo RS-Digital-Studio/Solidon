@@ -1228,8 +1228,24 @@ def _i1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     # gemessen, kein Fund (Probelauf F-28) — der Vermerk sagt, welche.
     missed = (_map(protocol, "unmeasured") or {}).get("hover_labels")
     notes = [f"nicht gemessen: {missed}"] if missed else []
-    return _result(
-        "I1", issues, f"{len(labels)} Arten", {"kinds": len(labels)}, judged=True, notes=notes
+    # „Jede Art“ heißt jede, die die Erkennung an der Szene liefert (FD-152): Ohne
+    # diese Liste ist nicht prüfbar, ob alle überfahren wurden, und eine
+    # erkannte Art ohne Überfahren ist nicht gemessen — nie „gut“.
+    recognized = _list(protocol, "recognized_kinds")
+    hovered = {str(entry.get("kind")) for entry in labels}
+    absent = (
+        ["recognized_kinds"]
+        if recognized is None
+        else [f"hover_labels ({kind})" for kind in sorted(set(map(str, recognized)) - hovered)]
+    )
+    return _settled(
+        "I1",
+        issues,
+        absent,
+        f"{len(labels)} von {len(recognized or ())} Arten",
+        {"kinds": len(labels), "recognized": len(recognized or ())},
+        judged=True,
+        notes=notes,
     )
 
 

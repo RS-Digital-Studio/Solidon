@@ -241,3 +241,52 @@ def test_an_empty_chain_is_not_measured() -> None:
         protocol["tab_chain"], protocol["names"] = [], []
 
     assert _judged(change).points[10].verdict == "nicht_gelaufen"
+
+
+# --- FD-152: I1 „jede Art“ gegen die Arten, die die Erkennung liefert ----------------
+
+
+def test_the_bench_records_the_kinds_recognition_delivers() -> None:
+    """Lauf 002: ``hover_labels`` hatte einen Eintrag, welche Arten es gab, stand nirgends.
+
+    Der Prüfstand schreibt die Arten der Szene, bevor er überfährt — auch ohne
+    Renderer, wo er nichts überfahren kann.
+    """
+    from types import SimpleNamespace
+
+    from tools import function_bench
+
+    objects = {
+        "obj_1": SimpleNamespace(
+            features={
+                "face_1": SimpleNamespace(kind="face"),
+                "hole_1": SimpleNamespace(kind="hole"),
+            }
+        )
+    }
+    flow = object.__new__(function_bench.FunctionFlow)
+    flow.session = SimpleNamespace(
+        last_result=SimpleNamespace(scene=SimpleNamespace(objects=objects))
+    )
+    flow.window = SimpleNamespace(viewport=SimpleNamespace(renderer=None))
+    flow.data = {"unmeasured": {}}
+    flow.phase_hover()
+    assert flow.data["recognized_kinds"] == ["face", "hole"]
+    assert "Renderer" in flow.data["unmeasured"]["hover_labels"]
+
+
+@pytest.mark.parametrize(
+    ("recognized", "verdict"),
+    [(None, "nicht_gelaufen"), (["hole", "slot"], "nicht_gelaufen"), (["hole"], "stufe_b")],
+    ids=["ohne_liste", "art_nicht_ueberfahren", "jede_art"],
+)
+def test_every_recognized_kind_must_be_hovered(recognized: list[str] | None, verdict: str) -> None:
+    """Gemessen ist I1 erst, wenn jede erkannte Art überfahren wurde; das Urteil bleibt B."""
+
+    def change(protocol: dict[str, Any]) -> None:
+        if recognized is None:
+            protocol.pop("recognized_kinds")
+        else:
+            protocol["recognized_kinds"] = recognized
+
+    assert _judged(change).criteria["I1"].verdict == verdict
