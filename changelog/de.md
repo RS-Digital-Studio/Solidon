@@ -109,6 +109,7 @@ Nutzen da und sonst nichts.
 - Nach *Abbrechen* oder Esc in der Maßkarte steht die Tastatur wieder in der 3D-Ansicht, wie nach *Übernehmen*. Bisher landete sie auf der Karte *Objekte*.
 - *Übernehmen* in der Maßkarte bleibt grau, bis sich ein Wert oder der Haken für gleichartige Merkmale ändert, und nennt das Feld, mit dem es losgeht. Bisher war es schon nach einem Klick ins Feld frei und tat nichts.
 - Lehnt die Maßkarte einen Wert ab, steht der Grund einmal, direkt unter dem Feld. Bisher stand derselbe Satz noch einmal über den Knöpfen.
+- Wird die Maßkarte höher, etwa durch einen Hinweis unter einem Feld, bleibt sie an ihrem Platz und rückt nur so weit, wie Bildrand oder Griff es verlangen, mit einer kurzen Bewegung. Bisher sprang sie an eine andere Stelle des Bildes.
 
 ## 0.6.0
 

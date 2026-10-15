@@ -84,6 +84,7 @@ scrive in `website/version.json`.
 - Dopo *Annulla* o Esc nella scheda delle misure, la tastiera torna nella vista 3D, come dopo *Applica*. Prima finiva sulla scheda *Oggetti*.
 - *Applica* nella scheda delle misure resta grigio finché non cambia un valore o la casella degli elementi uguali, e indica il campo da cui partire. Prima si attivava già con un clic in un campo e non faceva nulla.
 - Se la scheda delle misure rifiuta un valore, il motivo compare una sola volta, subito sotto il campo. Prima la stessa frase si ripeteva sopra i pulsanti.
+- Se la scheda delle misure cresce, per esempio per un avviso sotto un campo, resta al suo posto e si sposta solo quanto richiedono il bordo della vista o la maniglia, con un breve movimento. Prima saltava in un altro punto della vista.
 
 ## 0.6.0
 

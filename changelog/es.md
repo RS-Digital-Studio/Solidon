@@ -85,6 +85,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras *Cancelar* o Esc en la tarjeta de medidas, el teclado vuelve a la vista 3D, como tras *Aplicar*. Antes acababa en la tarjeta *Objetos*.
 - *Aplicar* en la tarjeta de medidas sigue en gris hasta que cambia un valor o la casilla de características iguales, e indica el campo por el que empezar. Antes se activaba con solo hacer clic en un campo y no hacía nada.
 - Si la tarjeta de medidas rechaza un valor, el motivo aparece una sola vez, justo debajo del campo. Antes la misma frase se repetía encima de los botones.
+- Si la tarjeta de medidas crece, por ejemplo por un aviso bajo un campo, se queda en su sitio y solo se desplaza lo que exigen el borde de la vista o el tirador, con un movimiento breve. Antes saltaba a otro lugar de la vista.
 
 ## 0.6.0
 

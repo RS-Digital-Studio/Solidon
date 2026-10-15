@@ -84,6 +84,7 @@ it into `website/version.json`.
 - After *Cancel* or Esc in the measurement card, the keyboard is back in the 3D view, as after *Apply*. Previously it landed on the *Objects* card.
 - *Apply* in the measurement card stays grey until a value or the checkbox for matching features changes, and names the field to start with. Previously it was enabled as soon as you clicked into a field, and did nothing.
 - When the measurement card rejects a value, the reason appears once, directly below the field. Previously the same sentence was repeated above the buttons.
+- When the measurement card grows, for example because of a note below a field, it stays where it is and moves only as far as the edge of the view or the handle requires, with a short movement. Previously it jumped to another part of the view.
 
 ## 0.6.0
 

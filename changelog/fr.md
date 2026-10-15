@@ -85,6 +85,7 @@ dans `website/version.json`.
 - Après *Annuler* ou Échap dans la carte de cotes, le clavier revient dans la vue 3D, comme après *Appliquer*. Auparavant, il arrivait sur la carte *Objets*.
 - *Appliquer* dans la carte de cotes reste grisé tant qu'aucune valeur ni la case des éléments similaires n'a changé, et indique le champ par lequel commencer. Auparavant, il s'activait dès un clic dans un champ et ne faisait rien.
 - Si la carte de cotes refuse une valeur, la raison apparaît une seule fois, juste sous le champ. Auparavant, la même phrase se répétait au-dessus des boutons.
+- Quand la carte de cotes s'agrandit, par exemple à cause d'un message sous un champ, elle reste à sa place et ne se déplace que de ce qu'exigent le bord de la vue ou la poignée, avec un mouvement bref. Auparavant, elle sautait ailleurs dans la vue.
 
 ## 0.6.0
 

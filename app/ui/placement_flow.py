@@ -74,7 +74,13 @@ from app.ui.labels import LengthSpin, feature_name, length, wheel_needs_focus
 from app.ui.leash import stop_watching_the_dying
 from app.ui.measure_card import MeasureCard, stands_in
 from app.ui.measure_card_drag import MeasureCardDrag
-from app.ui.measure_field_places import distance_reserve, emergency_places, rows_height
+from app.ui.measure_field_places import (
+    distance_reserve,
+    emergency_places,
+    grown_place,
+    rows_height,
+)
+from app.ui.motion import glide
 from app.ui.overlay import MEASURE_CARD
 from app.ui.palette import DIFF_PALETTES
 from app.ui.render.api import Item, PointerEvent, Renderer, SurfaceStyle
@@ -839,14 +845,17 @@ def _places_that_still_serve(
 ) -> dict[QWidget, QRect]:
     """Die Plätze des letzten Aufbaus, die ein Feld behalten darf — je Feld.
 
-    Dasselbe Feld in derselben Größe, im Bild, keinem Hindernis und keinem
-    anderen **behaltenen** Feld zu nahe, nicht weiter von seinem Maß entfernt
-    als der neue Platz plus :data:`STICKY_FIELDS` Feldhöhen — und nicht über
-    einer fremden Maßlinie, wenn der neue Platz frei davon wäre. Entschieden wird je
-    Feld: Bis zum 22.09.2026 verwarf ein einziger getroffener Platz alle, und
-    dann tauschte das Entwirren (Review: +1,2 mm am Setzpunkt, zwei Felder
-    391 und 409 Punkte gesprungen). Die Felder, die nicht bleiben dürfen,
-    sucht der Aufbau um die behaltenen herum neu.
+    Dasselbe Feld, im Bild, keinem Hindernis und keinem anderen **behaltenen**
+    Feld zu nahe, nicht weiter von seinem Maß entfernt als der neue Platz plus
+    :data:`STICKY_FIELDS` Feldhöhen — und nicht über einer fremden Maßlinie,
+    wenn der neue Platz frei davon wäre. Entschieden wird je Feld: Bis zum
+    22.09.2026 verwarf ein einziger getroffener Platz alle, und dann tauschte
+    das Entwirren (Review: +1,2 mm am Setzpunkt, zwei Felder 391 und 409
+    Punkte gesprungen). Die Felder, die nicht bleiben dürfen, sucht der Aufbau
+    um die behaltenen herum neu. **Ein gewachsenes Feld behält seinen Platz
+    auch**, gerückt nur so weit, wie Raum und Hindernisse es verlangen
+    (:func:`grown_place`): Die Maßkarte, die mit einer Ablehnung höher wurde,
+    sprang bis dahin an den oberen Rand (FD-87).
     """
     wanted = {widget: want for widget, want, _anchor in pending}
     anchors = {widget: anchor for widget, _want, anchor in pending}
@@ -854,8 +863,13 @@ def _places_that_still_serve(
     for widget, _want, _anchor in pending:
         rect = previous.get(widget)
         new = fresh.get(widget)
-        if rect is None or new is None or rect.size() != new.size():
+        if rect is None or new is None:
             continue
+        if rect.size() != new.size():
+            grown = grown_place(rect, new.size(), bounds, [*obstacles, *kept.values()])
+            if grown is None:
+                continue
+            rect = grown
         if not _fits(widget, rect, kept, bounds, obstacles):
             continue
         leeway = (QPointF(new.center()) - wanted[widget]).manhattanLength() + (
@@ -5590,6 +5604,9 @@ class PlacementFlow(QObject):
         if self._bar.isVisibleTo(self.viewport):
             measure_room.setBottom(self._bar.geometry().top() - NORMAL - 1)
         self._refresh_measure_actions()
+        # Wie groß die Karte im Bild stand: Wächst sie, gleitet sie an ihren
+        # neuen Platz, statt zu springen (FD-87).
+        shown_card = self._measure_box.size() if self._measure_box.isVisible() else None
         self._size_measure_fields(measure_room)
         self._measure_drag.update_room(measure_room)
         user_rect = self._measure_drag.placed_rect() if self._measure_group is not None else None
@@ -5655,15 +5672,21 @@ class PlacementFlow(QObject):
             # Eine wartende Karte bleibt, wo sie ist: auch ``raise_`` malt über
             # der Grafikfläche das ganze Fenster sofort (:attr:`_seat_waits`).
             if self._measure_group is not None and not self._seat_is_coming():
+                # Über ``glide``: Eine laufende Gleitbewegung zu einem anderen
+                # Ziel endet hier, sonst setzte sie die Karte gleich zurück.
                 if user_rect is not None:
-                    self._measure_box.move(user_rect.topLeft())
+                    glide(self._measure_box, user_rect.topLeft(), smooth=False)
                 else:
-                    self._measure_box.move(
-                        max(
-                            measure_room.left(),
-                            measure_room.right() - self._measure_box.width() + 1,
+                    glide(
+                        self._measure_box,
+                        QPoint(
+                            max(
+                                measure_room.left(),
+                                measure_room.right() - self._measure_box.width() + 1,
+                            ),
+                            measure_room.top(),
                         ),
-                        measure_room.top(),
+                        smooth=False,
                     )
                 self._measure_box.show()
                 self._measure_box.raise_()
@@ -6237,7 +6260,18 @@ class PlacementFlow(QObject):
             positions[self._measure_box] = user_rect
         for widget, _wanted, anchor in pending:
             rect = positions[widget]
-            widget.move(rect.topLeft())
+            if widget is self._measure_box:
+                # **Eine gewachsene Karte gleitet** (FD-87): Sie bleibt, wo sie
+                # stand, und rückt nur so weit, wie der Platz verlangt
+                # (``measure_field_places.grown_place``) — mit dem Übergang
+                # aus ``motion``, nicht als Sprung.
+                glide(
+                    widget,
+                    rect.topLeft(),
+                    smooth=shown_card is not None and shown_card != rect.size(),
+                )
+            else:
+                widget.move(rect.topLeft())
             widget.show()
             widget.raise_()
             middle = QPointF(rect.center())
