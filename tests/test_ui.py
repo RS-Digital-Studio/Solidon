@@ -5761,11 +5761,15 @@ def test_the_apply_button_stays_in_sight_however_low_the_window_is(window: MainW
     ]
     assert not draussen, f"unter dem Rand: {draussen} (Fenster {dock.height()} hoch)"
 
-    # **Die strukturelle Hälfte derselben Zusage.** Was im Rollinhalt liegt,
-    # kann hinausgerollt werden — gleich wie es in dieser Höhe gerade steht.
-    inhalt = roller.widget()
-    assert inhalt is not None and not inhalt.isAncestorOf(panel.footer()), (
-        "die Knopfzeile rollt mit"
+    # **Die strukturelle Hälfte derselben Zusage** (FD-136): Die Knopfzeile
+    # steht im Rollinhalt direkt unter der offenen Handlung, nicht am
+    # Kartenende; im Bild hält sie ``feature_footer.keep_in_sight``, und das
+    # hat die erste Hälfte eben an einem Fenster gemessen, das zum Rollen zwingt.
+    knopfzeile = panel._footer
+    scharf = next(row.box for row in panel._shown_rows.values() if row.key == panel._armed)
+    assert knopfzeile.parentWidget() is panel, "die Knopfzeile steht im Merkmalfenster"
+    assert panel._rows.indexOf(knopfzeile) == panel._rows.indexOf(scharf) + 1, (
+        "die Knopfzeile steht unter der offenen Handlung"
     )
 
 

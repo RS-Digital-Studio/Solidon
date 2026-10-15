@@ -2663,11 +2663,13 @@ sichtbar lassen.
 
 *Früher unter „Die Karte › Ansicht“.*
 
-**Die Knopfzeile wohnt beim Träger, nicht im Rollinhalt** (`FeaturePanel.footer`,
-13.09.2026). `MainWindow._build_feature_dock` hängt sie unter den Rollbereich;
-wer das Panel allein baut, findet sie unten in seinem Layout. Wegen dieses
-Umzugs beantwortet `isVisibleTo(panel)` an ihren Knöpfen nicht mehr, was sie
-soll — gefragt wird `isHidden()` (`_apply_stands`).
+**Die Knopfzeile steht unter der offenen Handlung, im Rollinhalt** (FD-136).
+Unter dem Rollbereich (13.09.2026) stand sie am Kartenende, das Feld ganz
+oben; jetzt hängt `feature_footer.place_below` sie unter die scharfe Handlung,
+und `keep_in_sight` holt sie nach jedem Wechsel ins Sichtfeld. Ob ihre Knöpfe
+gerade stehen, fragt `isHidden()` (`_apply_stands`), nicht `isVisibleTo`: Das
+hängt an der Elternkette und sagt an einem offscreen nie gezeigten Fenster
+„nein“.
 
 *Früher unter „§29 — was die Datei mitnimmt › Hilfe und Bedienung“.*
 

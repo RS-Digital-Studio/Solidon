@@ -16438,21 +16438,16 @@ class MainWindow(QMainWindow):
         scroller = SelectionScroller(self)
         scroller.setWidget(inside)
 
-        # **Die Knopfzeile rollt nicht mit.** Gemessen am gebauten Fenster bei
-        # 1600 auf 1000 Punkten mit gewählter Bohrung (13.09.2026): Sichtfeld
-        # 877 Punkte, Inhalt 1579 — *Im Bild einstellen* lag bei y = 1015,
-        # *Übernehmen* bei y = 1062, also unter dem Rand. Wer eine Zahl tippte,
-        # musste erst rollen, um seinen Schritt abzuschließen. Sie steht
-        # deshalb **unter** dem Rollbereich, nicht darin; dieselbe Regel, die
-        # `fenster.md` für die Karten schon kennt („Was unter der Liste
-        # steht, gehört in beide Rechnungen … sonst schiebt man den einzigen
-        # Weg hinaus, den die Karte anbietet").
+        # **Die Knopfzeile steht unter der offenen Handlung** (FD-136), im
+        # Rollinhalt des Merkmalfensters (``feature_footer``): Unter dem
+        # Rollbereich stand *Übernehmen* am Kartenende, das Feld oben. Dass sie
+        # nicht aus dem Bild rollt (13.09.2026, *Übernehmen* bei y = 1062 unter
+        # dem Rand), hält ``feature_footer.keep_in_sight`` bei jedem Wechsel.
         column = _SelectionPage(self.right, self.report, self, tour=self.tour)
         stack = QVBoxLayout(column)
         stack.setContentsMargins(0, 0, 0, 0)
         stack.setSpacing(0)
         stack.addWidget(scroller, 1)
-        stack.addWidget(self.feature_panel.footer())
 
         # „Auswahl", nicht „Merkmal": Der Reiter steht auch an einem gewählten
         # Körper, seit er dessen Handlungen trägt. Er ist der erste der Karte,

@@ -3838,11 +3838,11 @@ def test_the_one_button_stands_below_every_handling(qt_app: QApplication) -> Non
     plaetze = {rows.itemAt(index).widget(): index for index in range(rows.count())}
     zeilen = [plaetze[row] for row in panel._built if row in plaetze]
     assert zeilen, "ohne Zeilen prüft dieser Test nichts"
-    assert plaetze[panel.footer()] > min(zeilen), "die Knopfzeile steht über den Handlungen"
+    assert plaetze[panel._footer] > min(zeilen), "die Knopfzeile steht über den Handlungen"
     scharf = next(row.box for row in panel._shown_rows.values() if row.key == panel._armed)
-    assert plaetze[panel.footer()] == plaetze[scharf] + 1, "direkt unter der offenen Handlung"
+    assert plaetze[panel._footer] == plaetze[scharf] + 1, "direkt unter der offenen Handlung"
 
-    unten = panel.footer().layout()
+    unten = panel._footer.layout()
     assert unten is not None
     ordnung = {unten.itemAt(index).widget(): index for index in range(unten.count())}
     assert ordnung[panel._every] == ordnung[panel._apply] - 1, (

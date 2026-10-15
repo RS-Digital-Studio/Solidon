@@ -9398,14 +9398,9 @@ class FeaturePanel(QWidget):
         # daneben, damit die Bedeutung nicht allein an der Farbe hängt
         # (Regel 18).
         #
-        # **Und sie steht nicht im Rollinhalt** (13.09.2026). Gemessen am
-        # gebauten Fenster bei 1600 auf 1000 Punkten an einer gewählten Bohrung: Das
-        # Sichtfeld des Rollbereichs war 877 Punkte hoch, sein Inhalt 1579 —
-        # *Im Bild einstellen* lag bei y = 1015, *Übernehmen* bei y = 1062,
-        # beide unter dem Rand. Wer im obersten Block eine Zahl tippte, sah
-        # keinen Knopf, der sie übernimmt. Die Zeile liegt deshalb in einem
-        # eigenen Widget, das der Träger **unter** den Rollbereich hängen kann
-        # (:meth:`footer`); wo niemand sie nimmt, bleibt sie unten im Panel.
+        # **Sie steht direkt unter der offenen Handlung** (FD-136) und wandert
+        # mit ihr (``feature_footer.place_below``); dass sie dabei nicht aus
+        # dem Bild rollt, hält ``feature_footer.keep_in_sight``.
         self._footer = QWidget(self)
         below = QVBoxLayout(self._footer)
         below.setContentsMargins(0, 0, 0, 0)
@@ -11487,58 +11482,33 @@ class FeaturePanel(QWidget):
     def _apply_stands(self) -> bool:
         """Ob der Knopf unten gerade etwas anzubieten hat.
 
-        **Nicht ``isVisibleTo(self)``**, seit die Knopfzeile beim Träger
-        wohnen darf (:meth:`footer`): Die Frage läuft dann die Elternkette bis
-        zum Fenster hinauf, und ein offscreen nie gezeigtes Fenster
-        beantwortet sie mit „nein" — der Abbrechen-Knopf blieb weg und die
-        Eingabetaste stumm. ``isHidden`` fragt genau das, was hier gemeint
-        ist: ob jemand ihn ausdrücklich weggenommen hat.
+        **Nicht ``isVisibleTo``:** Diese Frage hängt an der Elternkette, und
+        ein offscreen nie gezeigtes Fenster beantwortet sie mit „nein" — der
+        Abbrechen-Knopf blieb weg und die Eingabetaste stumm. ``isHidden``
+        fragt genau das, was hier gemeint ist: ob jemand ihn ausdrücklich
+        weggenommen hat.
         """
         return not self._apply.isHidden()
 
-    def footer(self) -> QWidget:
-        """Die Knopfzeile — der Teil, der nicht mitrollen darf.
-
-        Titel, *Im Bild einstellen*, der Haken, *Übernehmen* und *Abbrechen*
-        in einem eigenen Widget. Wer das Panel in einen Rollbereich stellt,
-        nimmt sie sich hier und hängt sie **unter** ihn; dann steht sie bei
-        jeder Fensterhöhe da (:meth:`MainWindow._build_feature_dock`). Wer sie
-        nicht nimmt, findet sie unten im Panel, wo sie immer stand.
-
-        Wer sie nimmt, bekommt sie mit den Seitenrändern des Panels: Unter dem
-        Rollbereich steht sie außerhalb von dessen Polster, und ohne eigenen
-        Rand klebte ihr Titel an der Kartenkante.
-        """
-        layout = self._footer.layout()
-        if layout is not None:
-            layout.setContentsMargins(NORMAL, 0, NORMAL, TIGHT)
-        return self._footer
-
     def _settle_apply(self) -> None:
-        """Schiebt die Knopfzeile ans Ende, nachdem alle Zeilen stehen.
+        """Hängt die Knopfzeile unter die offene Handlung, nachdem alle Zeilen stehen.
 
         Sie wird beim Aufbau des Panels **einmal** angelegt und liegt damit vor
         den Zeilen, die ``show_feature`` und die anderen später einfügen —
         sichtbar stand sie dann ganz oben, über der Überschrift der Auswahl
         (Robert, 10.09.2026: „ich hab doch gesagt der button soll unten sein
-        nicht ganz oben"). Sie am Ende umzuhängen ist billiger als jede
+        nicht ganz oben"). Sie danach umzuhängen ist billiger als jede
         Einfügestelle um eins zu verschieben und dabei eine zu vergessen.
-
-        **Und nur, solange sie dem Panel gehört.** Hat der Träger sie unter
-        den Rollbereich gehängt (:meth:`footer`), steht sie dort richtig; sie
-        zurückzuholen brächte sie genau in den Rollinhalt, aus dem sie heraus
-        soll.
         """
-        if self._footer.parentWidget() is self:
-            # Unter der offenen Handlung, sonst am Ende (FD-136, :meth:`_arm`).
-            place_below(
-                self._rows,
-                self._footer,
-                next(
-                    (row.box for row in self._shown_rows.values() if row.key == self._armed),
-                    None,
-                ),
-            )
+        # Unter der offenen Handlung, sonst am Ende (FD-136, :meth:`_arm`).
+        place_below(
+            self._rows,
+            self._footer,
+            next(
+                (row.box for row in self._shown_rows.values() if row.key == self._armed),
+                None,
+            ),
+        )
         self._settle_tab_order()
         # Wiederverwendete Zeilen bringen ihren alten Zustand mit; offen ist
         # danach genau die scharfe (RM-510), und jede nennt ihre Werte.
@@ -11692,11 +11662,11 @@ class FeaturePanel(QWidget):
         self._open_only(key)
         self._armed_title.setText(entry.title)
         # Beim Messen trägt die Maßgruppe im Bild Titel und Übernehmen.
-        # **Die Knopfzeile steht unter dieser Handlung** (FD-136), solange sie
-        # dem Panel gehört: Das Feld oben und *Übernehmen* am Kartenende
-        # trennte sonst die ganze Karte. Dort braucht sie keinen eigenen
-        # Titel — die Kopfzeile der Handlung steht direkt darüber.
-        under = self._footer.parentWidget() is self and place_below(
+        # **Die Knopfzeile steht unter dieser Handlung** (FD-136): Das Feld
+        # oben und *Übernehmen* am Kartenende trennte sonst die ganze Karte.
+        # Dort braucht sie keinen eigenen Titel — die Kopfzeile der Handlung
+        # steht direkt darüber.
+        under = place_below(
             self._rows,
             self._footer,
             next((row.box for row in self._shown_rows.values() if row.key == key), None),
@@ -12294,7 +12264,7 @@ class FeaturePanel(QWidget):
         tippt und Enter drückt, meint den Schritt; gemessen am gebauten
         Fenster blieb der Verlauf bei 1 Schritt, und erst der Klick auf
         *Übernehmen* schrieb ihn — bei einem Knopf, der an dieser
-        Fensterhöhe gar nicht zu sehen war (:meth:`footer`).
+        Fensterhöhe gar nicht zu sehen war.
         """
         from app.ui.leash import stop_watching_the_dying
 
