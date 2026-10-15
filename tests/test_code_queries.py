@@ -146,7 +146,7 @@ def test_an_alias_drawn_from_another_module_is_found(tmp_path: Path) -> None:
             "    assert aliases.look(mod, 'target', None)\n",
             "app/own.py": "from builtins import hasattr as ask\n\n\n"
             "def probe(module):\n    return ask(module, 'target')\n",
-        }
+        },
     )
     expected = (
         ("tests.query_alias", "has", "tests/query_alias.py", 1),
