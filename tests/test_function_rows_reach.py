@@ -276,17 +276,42 @@ REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
     "tabs.bar": ("leer", ()),
     "dialog:panel_window": ("leer", ("tabs.bar", "menu:tabs.detach")),
     "tabs.return": ("leer", ("tabs.bar", "menu:tabs.detach")),
+    # Über Nähte: die Sicherung neben dem zuletzt geöffneten Projekt, ein lokales
+    # Sprachmodell vor dem KI-Hinweis, ein Kaufcode, der auf die Freischaltung wartet.
+    "meldung:_ask_recovery": ("startbildschirm", ("start.recent:1",)),
+    "chat.starter": ("leer", ("chat",)),
+    "chat.send": ("leer", ("chat", "chat.starter")),
+    "dialog:ai_disclosure_dialog": ("leer", ("chat", "chat.starter", "chat.send")),
+    "disclosure.privacy": ("leer", ("chat", "chat.starter", "chat.send")),
+    "dialog:local_privacy_dialog": (
+        "leer",
+        ("chat", "chat.starter", "chat.send", "disclosure.privacy"),
+    ),
+    "activation.offline": ("leer", ("menu:menubar.solidon_freischalten",)),
+    "dialog:offline_activation_dialog": (
+        "leer",
+        ("menu:menubar.solidon_freischalten", "activation.offline"),
+    ),
+    "disclosure.continue": ("leer", ("chat", "chat.starter", "chat.send")),
+    # Ein Generator, der sofort antwortet; die Beschreibung tippt der Weg.
+    "generate.prompt": ("leer", ("menu:menubar.modell_erzeugen",)),
+    "generate.start": ("leer", ("menu:menubar.modell_erzeugen", "generate.prompt")),
+    "meldung:confirm_generation_loss": (
+        "leer",
+        (
+            "menu:menubar.modell_erzeugen",
+            "generate.prompt",
+            "generate.start",
+            "disclosure.continue",
+            "menu:menubar.beenden",
+        ),
+    ),
 }
 
 #: Zeilen, die der Sprachfall noch nicht erreicht, je mit dem Grund (FD-175). Der
 #: Wächter unten hält die Liste genau: Eine Zeile, die einen Weg bekommt, muss hier
 #: heraus, und keine neue Zeile ohne Weg kommt still dazu.
 STILL_WITHOUT: dict[str, str] = {
-    "dialog:ai_disclosure_dialog": "Chat-Starter ohne Wortschatznamen",
-    "dialog:local_privacy_dialog": "Verweis im KI-Hinweis ohne Wortschatznamen",
-    "dialog:offline_activation_dialog": "Zustand „nicht aktiviert“ im Sprachfall",
-    "meldung:_ask_recovery": "Sicherung neben dem zuletzt geöffneten Projekt",
-    "meldung:confirm_generation_loss": "laufende Erzeugung",
     "dialog:expression_dialog": "Skizzenwortschatz",
     "dialog:point_dialog": "Skizzenwortschatz",
     "dialog:new_plane_dialog": "Skizzenwortschatz",

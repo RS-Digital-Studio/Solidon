@@ -126,3 +126,49 @@ def test_the_slicer_crashes_without_starting(monkeypatch: pytest.MonkeyPatch) ->
     completed = handover._run_slicer(["slicer.exe", "--slice"], None, 1.0, None, None)
     assert handover.crashed(completed.returncode)
     assert completed.stdout == function_seams.CRASH_OUTPUT
+
+
+def test_a_backup_lies_beside_the_project_last_opened(tmp_path: Any) -> None:
+    """Neben der Kopie des Falls, jünger als sie: Beim Öffnen fragt die Anwendung."""
+    from app.core.scene.project import autosave_path, find_recovery
+    from app.ui.settings import load_settings, save_settings
+
+    project = tmp_path / "zweites_projekt.p3d"
+    project.write_bytes(b"projekt")
+    settings = load_settings()
+    settings.recent = [str(project)]
+    save_settings(settings)
+    function_seams.backup_beside_recent()
+    assert autosave_path(project).read_bytes() == b"projekt"
+    assert find_recovery(project) == autosave_path(project)
+
+
+def test_the_local_chat_model_answers_nowhere(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ollama auf diesem Rechner, an einem Port ohne Antwort: Der KI-Hinweis fragt lokal."""
+    from app.core.backends import llm
+    from app.ui.ai_disclosure import target_for_backend
+
+    monkeypatch.setattr(llm, "first_available", llm.first_available)
+    function_seams.local_chat_model()
+    backend = llm.first_available()
+    assert backend is not None and backend.id == "ollama"
+    assert backend.url == function_seams.CLOSED_LOCAL_URL
+    target = target_for_backend(backend)
+    assert target is not None and target.target_class == "local"
+
+
+def test_the_activation_request_needs_no_key_and_reaches_no_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import json
+
+    from app.core import activation
+
+    monkeypatch.setattr(activation, "remember", activation.remember)
+    monkeypatch.setattr(
+        activation, "create_activation_request", activation.create_activation_request
+    )
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
+    function_seams.activation_request()
+    assert activation.remember("") is activation.state()
+    assert json.loads(activation.create_activation_request("Prüfstand")) == {"device": "Prüfstand"}

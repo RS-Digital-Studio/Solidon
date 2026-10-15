@@ -796,7 +796,8 @@ def route_of(row: Mapping[str, Any]) -> list[tuple[str, str]]:
     ``row.route`` stellt die Auswahl der Anforderung her (``function_list``:
     Baumzeile, mit Strg weitere), ``spec.route`` nennt, was ``next_click``
     allein nicht findet (Rechtsklick, Kontextmenü). Jeder Schritt ist
-    ``{target, button, modifier}``.
+    ``{target, button, modifier}``, ein Feld auf dem Weg dazu ``text``
+    (:func:`route_texts`).
     """
     steps = [*(row.get("route") or ()), *((row.get("spec") or {}).get("route") or ())]
     route = [
@@ -810,6 +811,17 @@ def route_of(row: Mapping[str, Any]) -> list[tuple[str, str]]:
     if target and (not route or route[-1][0] != target):
         route.append((target, "left"))
     return route
+
+
+def route_texts(row: Mapping[str, Any]) -> list[str]:
+    """Was der Kunde je Schritt von :func:`route_of` tippt — leer, wo er nur klickt.
+
+    Ein Schritt mit ``text`` ist ein Feld auf dem Weg, das erst eine Eingabe
+    freigibt: *Erzeugen* bleibt grau, bis eine Beschreibung dasteht (FD-175).
+    """
+    steps = [*(row.get("route") or ()), *((row.get("spec") or {}).get("route") or ())]
+    texts = [str(entry.get("text") or "") for entry in steps]
+    return texts + [""] * (len(route_of(row)) - len(texts))
 
 
 def selected_feature(row: Mapping[str, Any]) -> tuple[str, str] | None:

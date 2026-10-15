@@ -288,6 +288,15 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     # Reiter in eigenem Fenster und zurück: Ansicht und Anordnung sind D11.
     "tabs.bar": ("D11", "leer"),
     "tabs.return": ("D11", "leer"),
+    # Chat, KI-Hinweis und Freischalten: D12.
+    "chat.starter": ("D12", "leer"),
+    "chat.send": ("D12", "leer"),
+    "disclosure.privacy": ("D12", "leer"),
+    "activation.offline": ("D12", "leer"),
+    "disclosure.continue": ("D12", "leer"),
+    # Beschreibung und *Erzeugen* gehören zu *Modell erzeugen*: D2.
+    "generate.prompt": ("D2", "leer"),
+    "generate.start": ("D2", "leer"),
 }
 
 #: Wortschatznamen mit Art, die Zeilen tragen: Präfix → Paket und Anforderung.
@@ -1573,13 +1582,20 @@ PRECONDITIONS: Final[dict[str, tuple[str, ...]]] = {
     "druckhinweis": ("gesehen", "offen"),
     # Zustände, die keine Maschine liefert, über die Nähte des Prüfstands
     # (``function_seams.SEAMS``, FD-175): eine neue Version, ein Browser, der nicht
-    # öffnet, eine Installation, die scheitert, ein Slicer, der abstürzt, und
-    # Filamente, die im Slicer eingelegt sind.
+    # öffnet, eine Installation, die scheitert, ein Slicer, der abstürzt,
+    # Filamente, die im Slicer eingelegt sind, eine Sicherung neben dem zuletzt
+    # geöffneten Projekt, ein lokales Sprachmodell für den Chat, ein Kaufcode,
+    # dessen Geräteanfrage ohne Schlüssel entsteht, und ein Generator, der sofort
+    # antwortet.
     "update": ("neu",),
     "browser": ("fehlt",),
     "installation": ("scheitert", "comfyui_installiert"),
     "slicerlauf": ("absturz",),
     "slicerfilamente": ("eingelegt",),
+    "sicherung": ("neben_projekt",),
+    "chatmodell": ("lokal",),
+    "aktivierung": ("anfrage",),
+    "erzeugung": ("antwortet",),
 }
 
 
@@ -1688,6 +1704,10 @@ def validate_specs(
                 issues.append(f"{where}: Zusatztaste {step.get('modifier')!r} unbekannt")
             if step.get("button", "left") not in BUTTONS:
                 issues.append(f"{where}: Taste {step.get('button')!r} unbekannt")
+            if not isinstance(step.get("text", ""), str):
+                issues.append(
+                    f"{where}: Eingabe auf dem Weg zu {step.get('target')!r} ist kein Text"
+                )
         if "inputs" in spec and not spec.get("example_goal"):
             issues.append(f"{where}: Eingaben ohne Beispielziel")
         for name in spec.get("inputs", {}):

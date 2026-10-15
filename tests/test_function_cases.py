@@ -208,3 +208,27 @@ def test_the_start_row_runs_as_a_start_case_in_every_language(
     for case in walked:
         assert STARTUP_ROW not in [row["id"] for row in function_cases.rows_of(rows, case.row)]
     assert [case.number for case in cases] == list(range(1, len(cases) + 1))
+
+
+def test_the_licence_of_the_spec_is_the_licence_of_its_language_case() -> None:
+    """Ein Fenster, das nur ein Lizenzzustand zeigt, misst der Sprachfall in diesem (FD-175).
+
+    *Offline aktivieren …* steht nur, solange ein Kaufcode auf die Freischaltung
+    dieses Rechners wartet. Jeder Sprachfall lief freigeschaltet, und der Dateiweg
+    der Aktivierung hatte in keiner Sprache eine Fläche.
+    """
+    from tools import function_cases
+
+    row = {
+        "id": "dialog:offline_activation_dialog",
+        "package": "D12",
+        "start_scene": "leer",
+        "spec": {"preconditions": {"licence": "needs_activation"}},
+    }
+    setup = function_cases.setup_of(row)
+    assert (setup.key, setup.licence) == ("licence=needs_activation", "needs_activation")
+    (case,) = function_cases.language_cases([row], {"D12"}, ("de",), 1)
+    assert case.variant["licence"] == "needs_activation"
+    assert case.row == "D12@licence=needs_activation"
+    licensed = function_cases.setup_of({**row, "spec": {"preconditions": {"licence": "licensed"}}})
+    assert (licensed.key, licensed.licence) == ("", "")

@@ -172,6 +172,117 @@ def slicer_spools_loaded() -> None:
     filament_inventory.configured_spools = configured
 
 
+def backup_beside_recent() -> None:
+    """``sicherung = neben_projekt``: Neben dem zuletzt geöffneten Projekt liegt eine Sicherung.
+
+    Wie nach einem Absturz: Die Anwendung schreibt sie beim Arbeiten
+    (``project.write_autosave``) und fragt beim nächsten Öffnen, ob sie die
+    Sicherung öffnet (``MainWindow._offer_recovery``). Das Projekt ist die Kopie
+    im Fallordner (``function_setup.case_scene``), die Sicherung entsteht
+    daneben, jünger als die Datei. Lehnt der Kunde ab, räumt die Anwendung sie
+    selbst weg.
+    """
+    import shutil
+    from pathlib import Path
+
+    from app.core.scene.project import autosave_path
+    from app.ui.settings import load_settings
+
+    recent = load_settings().recent
+    if not recent:
+        raise RuntimeError("sicherung = neben_projekt: Das Profil nennt kein zuletzt geöffnetes")
+    project = Path(recent[0])
+    shutil.copyfile(project, autosave_path(project))
+
+
+#: Wo das nachgestellte lokale Sprachmodell steht: dieser Rechner, ein Port, an dem
+#: keiner antwortet (``discard``). Eine Anfrage scheitert dort sofort.
+CLOSED_LOCAL_URL: Final = "http://127.0.0.1:9"
+
+
+def local_chat_model() -> None:
+    """``chatmodell = lokal``: Der Chat spricht mit einem lokalen Sprachmodell (Ollama).
+
+    ``llm.first_available`` nennt Ollama auf diesem Rechner (:data:`CLOSED_LOCAL_URL`).
+    Vor dem ersten Zug fragt der KI-Hinweis, ob die Anfrage dorthin geht
+    (``ensure_ai_disclosure``); geht sie, scheitert sie mit der Meldung, die der
+    Chat dafür hat. Kein Modell rechnet, nichts verlässt den Rechner.
+    """
+    from app.core.backends import llm
+
+    def first_available() -> Any:
+        return llm.OllamaBackend(url=CLOSED_LOCAL_URL)
+
+    llm.first_available = first_available
+
+
+def activation_request() -> None:
+    """``aktivierung = anfrage``: Der Kaufcode im Feld gilt, und die Geräteanfrage entsteht.
+
+    Einen echten Kaufcode gibt es ohne private Schlüssel nicht (Plan D0, B12);
+    dass er auf die Freischaltung dieses Rechners wartet, setzt die Lizenz des
+    Falls (``needs_activation``). Die Naht nimmt den Schlüssel im Feld ohne
+    Prüfung an (``activation.remember``) und gibt eine Anfrage ohne Unterschrift
+    zurück (``create_activation_request``). Kein Server sieht sie.
+    """
+    import json
+
+    from app.core import activation
+
+    def remember(text: str) -> Any:
+        return activation.state()
+
+    def create_activation_request(device_name: str) -> str:
+        return json.dumps({"device": device_name}, ensure_ascii=False)
+
+    activation.remember = remember
+    activation.create_activation_request = create_activation_request
+
+
+#: Kantenlänge des Würfels, den der nachgestellte Generator liefert (mm).
+GENERATED_EDGE: Final = 20.0
+
+
+def generator_answers() -> None:
+    """``erzeugung = antwortet``: Der Generator ist bereit und liefert sofort einen Würfel.
+
+    ComfyUI an seiner Adresse auf diesem Rechner, ohne dass es läuft: Die
+    Bereitschaft ist „bereit“, und ein Wurf liefert ohne Anfrage einen Würfel
+    als STL — einen Versuch, wie ein echter Lauf ihn brächte. Den KI-Hinweis vor
+    dem ersten Wurf zeigt die Anwendung wie sonst. Nichts rechnet, nichts geht
+    nach draußen.
+    """
+    import trimesh
+
+    from app.core.backends import mesh
+    from app.core.geom.mesh import MeshData
+    from app.ui import generate_dialog
+
+    def cube(backend: Any, prompt: str, seed: int) -> Any:
+        body = trimesh.creation.box((GENERATED_EDGE,) * 3)
+        payload = body.export(file_type="stl")
+        return mesh.GeneratedMesh(
+            MeshData.of(body), bytes(payload), ".stl", backend.id, prompt, seed
+        )
+
+    class Answering(mesh.ComfyBackend):
+        """ComfyUI, das bereit ist und ohne Anfrage antwortet."""
+
+        def readiness(self, workflow: str = "image_to_mesh") -> Any:
+            return mesh.Readiness.READY
+
+        def model_choices(self, workflow: str = "image_to_mesh") -> dict[str, tuple[str, ...]]:
+            return {}
+
+        def text_to_mesh(self, prompt: str, *, seed: int = 0, **_named: Any) -> Any:
+            return cube(self, prompt, seed)
+
+        def image_to_mesh(self, image: bytes, *, seed: int = 0, **_named: Any) -> Any:
+            return cube(self, "", seed)
+
+    generate_dialog.ComfyBackend = Answering  # type: ignore[misc]
+
+
 #: Vorbedingung → Zustand → Naht. Die Zustände stehen gleich in
 #: ``function_list.PRECONDITIONS``.
 SEAMS: Final[dict[str, dict[str, Callable[[], None]]]] = {
@@ -180,4 +291,8 @@ SEAMS: Final[dict[str, dict[str, Callable[[], None]]]] = {
     "installation": {"scheitert": install_fails, "comfyui_installiert": comfyui_installed},
     "slicerlauf": {"absturz": slicer_crashes},
     "slicerfilamente": {"eingelegt": slicer_spools_loaded},
+    "sicherung": {"neben_projekt": backup_beside_recent},
+    "chatmodell": {"lokal": local_chat_model},
+    "aktivierung": {"anfrage": activation_request},
+    "erzeugung": {"antwortet": generator_answers},
 }

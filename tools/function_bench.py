@@ -81,6 +81,7 @@ from tools.function_setup import (
     place_window,
     preparation_route,
     route_of,
+    route_texts,
     scene_setup,
     selected_feature,
     walk_target,
@@ -651,20 +652,26 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
         """Der Weg der Zeile als Schritte. Ein Fenster als Ziel ist erreicht, sobald es
         dasteht: Ein Klick in seine Mitte träfe ein Bedienelement darin (FD-101).
         Ein Wegziel davor, das grau steht, klickt der Kunde erst, wenn es frei ist;
-        das Ziel der Zeile selbst nicht — sein Grau misst der Fehlfall (FD-175)."""
+        das Ziel der Zeile selbst nicht — sein Grau misst der Fehlfall (FD-175). Ein
+        Wegziel mit ``text`` ist ein Feld: hinklicken, alles markieren, tippen."""
         target = walk_target(self.row)
         standing = target.partition(":")[0] in surfaces.OPENED_ELSEWHERE
-        return [
-            self.action_step(name)
-            if name == target and name.startswith("feature:")
-            else self.walker.step(
-                name,
-                button,
-                stop_before_target=standing and name == target,
-                when_enabled=name != target,
+        steps: list[Step] = []
+        for (name, button), text in zip(route_of(self.row), route_texts(self.row), strict=True):
+            if text and name != target:
+                steps += self.typed_steps(name, text, number=False)
+                continue
+            steps.append(
+                self.action_step(name)
+                if name == target and name.startswith("feature:")
+                else self.walker.step(
+                    name,
+                    button,
+                    stop_before_target=standing and name == target,
+                    when_enabled=name != target,
+                )
             )
-            for name, button in route_of(self.row)
-        ]
+        return steps
 
     def action_step(self, target: str, *, stop_before: bool | Callable[[], bool] = False) -> Step:
         """Die Handlung am Merkmal: ihr Kopf im Merkmalfenster — oder schon offen im Bild.

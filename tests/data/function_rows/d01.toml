@@ -36,3 +36,10 @@ route = [
   { target = "menu:menubar.neu" },
   { target = "start.new" },
 ]
+
+# Die Frage nach der Sicherung: Neben dem zuletzt geöffneten Projekt liegt eine,
+# jünger als die Datei (Naht ``sicherung``); der erste Eintrag unter *Zuletzt
+# geöffnet* öffnet es (FD-175).
+[row."meldung:_ask_recovery"]
+preconditions = { sicherung = "neben_projekt" }
+route = [{ target = "start.recent:1" }]

@@ -814,6 +814,13 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "filament.import",
         "filaments.first",
         "tabs.return",
+        # Der KI-Hinweis, das Freischalten und *Modell erzeugen* sind am frischen
+        # Fenster nicht offen
+        "disclosure.privacy",
+        "disclosure.continue",
+        "activation.offline",
+        "generate.prompt",
+        "generate.start",
         *printing,
     }
     window = MainWindow(Session(), UiSettings())

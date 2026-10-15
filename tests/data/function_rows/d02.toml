@@ -35,3 +35,27 @@ route = [
   { target = "menu:menubar.zusaetzliche_programme" },
   { target = "install.follow.comfyui" },
 ]
+
+# Ein Versuch, der noch nicht im Projekt ist, und Solidon soll schließen: Der
+# Generator antwortet sofort (Naht ``erzeugung``). Beschreibung tippen,
+# *Erzeugen*, im KI-Hinweis *KI-Anfrage fortsetzen*, dann *Beenden* (FD-175).
+[row."generate.prompt"]
+preconditions = { erzeugung = "antwortet" }
+route = [{ target = "menu:menubar.modell_erzeugen" }]
+
+[row."generate.start"]
+preconditions = { erzeugung = "antwortet" }
+route = [
+  { target = "menu:menubar.modell_erzeugen" },
+  { target = "generate.prompt", text = "Würfel" },
+]
+
+[row."meldung:confirm_generation_loss"]
+preconditions = { erzeugung = "antwortet" }
+route = [
+  { target = "menu:menubar.modell_erzeugen" },
+  { target = "generate.prompt", text = "Würfel" },
+  { target = "generate.start" },
+  { target = "disclosure.continue" },
+  { target = "menu:menubar.beenden" },
+]

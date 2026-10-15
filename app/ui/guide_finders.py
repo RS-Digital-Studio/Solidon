@@ -47,6 +47,13 @@ MARKED: Final = frozenset(
         "usage.review",
         "tabs.bar",
         "tabs.return",
+        "chat.starter",
+        "chat.send",
+        "disclosure.privacy",
+        "activation.offline",
+        "generate.prompt",
+        "generate.start",
+        "disclosure.continue",
     }
 )
 

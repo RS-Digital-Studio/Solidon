@@ -36,6 +36,9 @@ ROW_PRECONDITIONS: Final[frozenset[str]] = frozenset({"licence", "printer"})
 #: dafür kostete nur Zeit.
 EVERY_CASE_STATES: Final[frozenset[str]] = frozenset({"vorhanden", "gesehen"})
 
+#: Der Lizenzzustand jedes Falls ohne eigene Angabe (``function_setup.Variant``).
+CASE_LICENCE: Final = "licensed"
+
 
 @dataclass(frozen=True, slots=True)
 class Setup:
@@ -47,6 +50,8 @@ class Setup:
     user_data: tuple[str, ...] = ()
     """Die Startszenen, deren Nutzerdaten vor dem Start liegen müssen: eigene Bausteine
     im Nutzerordner, Spulen im Lager (:func:`install_user_data`)."""
+    licence: str = ""
+    """Der Lizenzzustand der Spezifikation, leer für den freigeschalteten jedes Falls."""
 
 
 def setup_of(row: Mapping[str, Any]) -> Setup:
@@ -57,7 +62,9 @@ def setup_of(row: Mapping[str, Any]) -> Setup:
     der Spezifikation zählen die Vorbedingungen ohne Lizenz und Druckart — die
     prüfen eigene Läufe; ohne sie lief der Druckhinweis im Sprachfall nie offen
     (FD-101, FD-121). Was jeder Fall ohnehin hat (:data:`EVERY_CASE_STATES`),
-    bleibt im Sprachfall des Pakets.
+    bleibt im Sprachfall des Pakets. Die Lizenz der Spezifikation trägt die
+    Einrichtung mit (:attr:`Setup.licence`): Ein Fenster, das nur ein
+    Lizenzzustand zeigt, misst der Sprachfall sonst nie (FD-175).
     """
     from tools.function_scenes import load_scenes, row_scenes
     from tools.function_setup import scene_setup
@@ -77,9 +84,13 @@ def setup_of(row: Mapping[str, Any]) -> Setup:
         if setup.own_parts or (scene is not None and scene.spools):
             data.append(key)
     needed = {name: state for name, state in needed.items() if state not in EVERY_CASE_STATES}
-    words = [f"{name}={state}" for name, state in sorted(needed.items())]
+    licence = str((spec.get("preconditions") or {}).get("licence") or "")
+    if licence == CASE_LICENCE:
+        licence = ""
+    words = [f"licence={licence}"] if licence else []
+    words += [f"{name}={state}" for name, state in sorted(needed.items())]
     words += [f"nutzerdaten:{key}" for key in sorted(data)]
-    return Setup(",".join(words), needed, tuple(sorted(data)))
+    return Setup(",".join(words), needed, tuple(sorted(data)), licence)
 
 
 def install_user_data(key: str) -> list[str]:
@@ -165,6 +176,8 @@ def language_cases(
         for setup in setups:
             for language in languages:
                 entry: dict[str, Any] = {"set": "sprachen", "language": language}
+                if setup.licence:
+                    entry["licence"] = setup.licence
                 if setup.preconditions:
                     entry["preconditions"] = dict(setup.preconditions)
                 if predict:

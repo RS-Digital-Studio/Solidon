@@ -158,3 +158,51 @@ route = [
   { target = "install.locate" },
   { target = "menu:install.address" },
 ]
+
+# Der KI-Hinweis vor dem ersten Zug im Chat: ein lokales Sprachmodell (Naht
+# ``chatmodell``), das erste Beispiel, *Senden*. Im Hinweis führt
+# *Solidon-Datenschutz lokal öffnen* zur Erklärung ohne Netz (FD-175).
+[row."chat.starter"]
+preconditions = { chatmodell = "lokal" }
+route = [{ target = "chat" }]
+
+[row."chat.send"]
+preconditions = { chatmodell = "lokal" }
+route = [{ target = "chat" }, { target = "chat.starter" }]
+
+[row."dialog:ai_disclosure_dialog"]
+preconditions = { chatmodell = "lokal" }
+route = [{ target = "chat" }, { target = "chat.starter" }, { target = "chat.send" }]
+
+[row."disclosure.privacy"]
+preconditions = { chatmodell = "lokal" }
+route = [{ target = "chat" }, { target = "chat.starter" }, { target = "chat.send" }]
+
+[row."dialog:local_privacy_dialog"]
+preconditions = { chatmodell = "lokal" }
+route = [
+  { target = "chat" },
+  { target = "chat.starter" },
+  { target = "chat.send" },
+  { target = "disclosure.privacy" },
+]
+
+# Der Dateiweg der Aktivierung: Ein Kaufcode wartet auf die Freischaltung dieses
+# Rechners (Lizenz ``needs_activation``), die Geräteanfrage entsteht ohne
+# Schlüssel (Naht ``aktivierung``), dann *Offline aktivieren …* (FD-175).
+[row."activation.offline"]
+preconditions = { licence = "needs_activation", aktivierung = "anfrage" }
+route = [{ target = "menu:menubar.solidon_freischalten" }]
+
+[row."dialog:offline_activation_dialog"]
+preconditions = { licence = "needs_activation", aktivierung = "anfrage" }
+route = [
+  { target = "menu:menubar.solidon_freischalten" },
+  { target = "activation.offline" },
+]
+
+# *KI-Anfrage fortsetzen* im KI-Hinweis vor dem ersten Zug im Chat; die Anfrage
+# geht an das lokale Modell der Naht und scheitert dort (FD-175).
+[row."disclosure.continue"]
+preconditions = { chatmodell = "lokal" }
+route = [{ target = "chat" }, { target = "chat.starter" }, { target = "chat.send" }]

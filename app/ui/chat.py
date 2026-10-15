@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import activation
+from app.core import activation, guides
 from app.core.agent.context import is_discarded
 from app.core.types import ChatEntry, Document
 from app.i18n import TranslatableText, _, tr
@@ -205,6 +205,7 @@ class ChatPanel(QWidget):
         self.input.setFixedHeight(self.input.fontMetrics().lineSpacing() * 3 + 12)
         self.input.installEventFilter(self)
         self.send = QPushButton(tr("Senden"), self)
+        self.send.setProperty(guides.TARGET_PROPERTY, "chat.send")
         self.send.clicked.connect(self._send)
 
         entry_row = QHBoxLayout()
@@ -239,6 +240,9 @@ class ChatPanel(QWidget):
             button.installEventFilter(self)
             self.starter_buttons.append(button)
             starters_layout.addWidget(button)
+        # Das erste Beispiel trägt seinen Namen im Wortschatz (``chat.starter``).
+        if self.starter_buttons:
+            self.starter_buttons[0].setProperty(guides.TARGET_PROPERTY, "chat.starter")
 
         self.summary = QLabel("", self)
         self.summary.setWordWrap(True)

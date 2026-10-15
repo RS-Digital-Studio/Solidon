@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import guides
 from app.core.backends import llm, mesh
 from app.core.log import get_logger
 from app.i18n import get_language, tr
@@ -388,6 +389,7 @@ class AiDisclosureDialog(QDialog):
             tr("Öffnet die mit Solidon ausgelieferte Datenschutzerklärung ohne Netzverbindung."),
             self.provider_card,
         )
+        self.local_privacy_link.setProperty(guides.TARGET_PROPERTY, "disclosure.privacy")
         self.local_privacy_link.activated.connect(self._open_notice_link)
         provider_layout.addWidget(self.local_privacy_link)
 
@@ -456,6 +458,7 @@ class AiDisclosureDialog(QDialog):
         scroll_bar.rangeChanged.connect(self._scroll_range_changed)
 
         self.continue_button = QPushButton(tr("KI-Anfrage fortsetzen"), self)
+        self.continue_button.setProperty(guides.TARGET_PROPERTY, "disclosure.continue")
         self.continue_button.setAccessibleName(self.continue_button.text())
         self.continue_button.setAccessibleDescription(
             tr("Setzt den bereits angeforderten KI-Aufruf fort.")

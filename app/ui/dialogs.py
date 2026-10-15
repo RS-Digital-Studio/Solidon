@@ -2265,6 +2265,7 @@ class ActivationDialog(QDialog):
         make_primary(self.online_button)
         self.online_button.clicked.connect(self._activate_online)
         self.offline_button = QPushButton(tr("Offline aktivieren …"), self)
+        self.offline_button.setProperty(guides.TARGET_PROPERTY, "activation.offline")
         self.offline_button.clicked.connect(self._activate_offline)
         self.forget_button = QPushButton(tr("Schlüssel entfernen"), self)
         self.forget_button.clicked.connect(self._forget)

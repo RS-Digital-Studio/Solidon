@@ -147,6 +147,17 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # *In eigenem Fenster öffnen*) und *Zurück in Solidon* im eigenen Fenster
         "tabs.bar",
         "tabs.return",
+        # Im Chat das erste Beispiel und *Senden*; im KI-Hinweis *Solidon-Datenschutz
+        # lokal öffnen*; *Offline aktivieren …* beim Freischalten
+        "chat.starter",
+        "chat.send",
+        "disclosure.privacy",
+        "activation.offline",
+        # Die Beschreibung und *Erzeugen* in *Modell erzeugen*, *KI-Anfrage
+        # fortsetzen* im KI-Hinweis
+        "generate.prompt",
+        "generate.start",
+        "disclosure.continue",
     }
 )
 

@@ -104,7 +104,7 @@ Parallel innerhalb von W: Schritt 1 und 2 zuerst (ein halber Tag). Danach laufen
    - Herzschlag-Zeitgeber, Bildzähler, Modale und rohe Qt-Fenster;
    - Texte mit Breitenbedarf, Felder, Tab-Kette, Layoutmaße, Schriften, Zustandsbilder, Kontraste, Symbole, Animationen, Rollleisten;
    - Matrix der Auswahlstufen, Suchränge, Meldungen und Handlungen.
-4. **Sprachfälle:** je Sprache und Paket ein Prozess, der die Flächen aller Zeilen abgeht. Sechs Sprachen in einem Prozess brechen ab (tools/CLAUDE.md); wieder aufnehmbar je Fläche.
+4. **Sprachfälle:** je Sprache und Paket ein Prozess, der die Flächen aller Zeilen abgeht. Sechs Sprachen in einem Prozess brechen ab (tools/CLAUDE.md); wieder aufnehmbar je Fläche. Die Zeile des Startablaufs (`startup.expired_demo`) läuft stattdessen je Sprache als Startfall; keine Zeile bleibt ohne erreichte Fläche (`tests/test_function_rows_reach.py`).
 5. **Tests** nach §4.3.
 
 ### 1.4 D0-U Urteile – Schritte
@@ -207,12 +207,12 @@ In `app/core/guides.py`: `TARGET_PROPERTY = "guideTarget"`, `menubar_name(msgid,
 |---|---|---|
 | `[row."<id>"]` | ja | muss eine erzeugte `id` treffen, sonst rot im Tor |
 | `start_scene` | nein | weicht von der Tabelle ab |
-| `route` | nein | Schritte `{target, button}` für das, was `next_click` allein nicht findet (Rechtsklick auf `tree.row:…`, dann `menu:…`) |
+| `route` | nein | Schritte `{target, button, modifier}` für das, was `next_click` allein nicht findet (Rechtsklick auf `tree.row:…`, dann `menu:…`); ein Feld auf dem Weg, das erst eine Eingabe freigibt, trägt `text` (hinklicken, alles markieren, tippen) |
 | `example_goal`, `inputs` | ja für Stufe A | Satz („Bohrung auf 5 mm“) und getippte Werte `{feature.field:… = 5.0}` |
 | `search_probes` | ja für Prüfpunkt 1 | `[{word, origin}]`, `origin` ∈ slicer, cad, fragebogen; dazu `questions` für I6; keine Kundenkennungen (der Korpus wird veröffentlicht) |
 | `expectation` | ja für Prüfpunkt 4 | Kennzahlen mit `tolerance` und `origin` (Konstruktion oder Formel, `tests.md` „Korpus“) |
 | `fault_case` | ja für Prüfpunkt 7 | Eingabe oder Auswahl und erwartete Art der Absage |
-| `preconditions` | nein | ki, comfyui, slicer: vorhanden oder fehlt; licence: demo, gekauft, abgelaufen; printer: filament oder resin; druckhinweis: gesehen (Vorgabe im Profil jedes Falls) oder offen (nur die Zeile des Hinweises, ohne Gegenlauf) |
+| `preconditions` | nein | ki, comfyui, slicer: vorhanden oder fehlt; licence: ein Zustand aus `licence_states()` (der Sprachfall läuft dann darin); printer: filament oder resin; druckhinweis: gesehen (Vorgabe im Profil jedes Falls) oder offen (nur die Zeile des Hinweises, ohne Gegenlauf). Zustände, die keine Maschine liefert, über die Nähte aus `tools/function_seams.py`, ohne Gegenlauf und ohne Weg nach draußen: update, browser, installation, slicerlauf, slicerfilamente, sicherung, chatmodell, aktivierung, erzeugung |
 | `not_applicable` | nein | `{prüfpunkt = grund}`, Grund aus der geschlossenen Liste |
 | `budget_s`, `budget_ref` | nein | nur mit §31-Beleg, sonst „kein Budget“ |
 | `manual`, `website` | ja für Prüfpunkt 11 außerhalb des Registers | Handbuchseite (`<seite>` oder `<ref-seite>#<anker>`) und Abschnitte der Funktionsseite (`["funktionen.html#<anker>"]`, die Übersetzungen an derselben Stelle); eine Stelle, die es nicht gibt, macht P11 nicht prüfbar (`tools/function_promises.py`) |
