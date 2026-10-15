@@ -3095,6 +3095,9 @@ NEEDS_OP: Final = frozenset(
         "mesh_and_retry",
         # Öffnet den Schritt, den ein Befund meint (RM-374, *Größe ändern*).
         "change_step",
+        # Gibt dem Schritt andere Objekte (``_change_selection_after_error``);
+        # ohne Schritt kehrt der Handler sofort zurück, der Knopf täte nichts.
+        "change_selection",
     }
 )
 
@@ -3263,11 +3266,18 @@ def unhandled_advice(
     Grundsatz dazu stand längst daneben, bei den Knöpfen: „das Schließen ist
     kein Vorschlag, es steht ohnehin da" (:func:`offered_actions`). Der Textpfad
     hatte ihn nur nicht übernommen.
+
+    **Und was nur am fehlenden Schritt scheitert, steht hier auch** (RB-3):
+    Eine Absage ohne Schrittkennung — *Gegenstück zum Gewinde* ist ein Ablauf
+    vor jedem Schritt — verlor *Anderes Merkmal wählen* als Knopf
+    (:data:`NEEDS_OP`) und übersprang es als Satz, weil es einen Handler gibt.
+    Der Dialog endete dann mit *Schließen* und ohne Weg (Regel 17).
     """
     return [
         str(action.label)
         for action in error.suggestions
-        if action.id not in handlers and action.id != CANCEL.id
+        if action.id != CANCEL.id
+        and (action.id not in handlers or (action.id in NEEDS_OP and error.op_id is None))
     ]
 
 
