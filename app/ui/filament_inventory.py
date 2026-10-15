@@ -551,6 +551,7 @@ class InventoryView(QWidget):
         layout.addWidget(self.threshold_row)
         layout.addWidget(self.settings_panel)
         self.import_button = QPushButton(tr("Aus dem Slicer übernehmen"), shelf)
+        self.import_button.setProperty(guides.TARGET_PROPERTY, "filament.import")
         self.import_button.clicked.connect(self._import)
         # **Der Leerzustand ist ein Ort, kein Satz über der Leere.** Vorher
         # stand er unter der Suchleiste, ein Knopf oben rechts, der andere
@@ -582,6 +583,7 @@ class InventoryView(QWidget):
         make_primary(self.empty_add_button)
         empty_buttons.addWidget(self.empty_add_button)
         self.empty_import_button = QPushButton(tr("Aus dem Slicer übernehmen"), self.empty_actions)
+        self.empty_import_button.setProperty(guides.TARGET_PROPERTY, "filament.import")
         self.empty_import_button.clicked.connect(self._import)
         empty_buttons.addWidget(self.empty_import_button)
         empty_buttons.addStretch(1)

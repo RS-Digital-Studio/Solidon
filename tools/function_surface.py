@@ -456,20 +456,32 @@ def pending(window: Any) -> bool:
     Das Merkmalfenster zeigt :data:`PENDING_NOTE`, solange es seine Zeilen im
     Arbeiter rechnet (RM-232); die Sitzung rechnet, und ein Dialog nach der
     Rechnung kommt danach. Solange gilt ein fehlendes Ziel nicht als „nicht
-    auffindbar“. Ebenso ein Balken ohne Ende im Fenster, in dem der Kunde gerade
-    arbeitet: *Wählen …* im Fenster einer neuen Spule liest die Profile des
-    Slicers im Arbeiter, und die Auswahl kam nach der Frist (FD-101).
+    auffindbar“. Ebenso ein Balken ohne Ende oder ein Wartezeiger im Fenster, in
+    dem der Kunde gerade arbeitet: *Wählen …* im Fenster einer neuen Spule liest
+    die Profile des Slicers im Arbeiter, und die Auswahl kam nach der Frist
+    (FD-101); das Filamentlager liegt als Seite im Hauptfenster, zeigt beim Lesen
+    der Slicerfilamente sofort den Wartezeiger und den Balken erst nach zwei
+    Sekunden (FD-175).
     """
-    from PySide6.QtWidgets import QApplication, QLabel, QProgressBar
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QLabel, QProgressBar, QWidget
 
     from app.i18n import tr
 
     if bool(getattr(window.session, "busy", False)):
         return True
-    front = QApplication.activeModalWidget()
-    if front is not None and any(
+    front = QApplication.activeModalWidget() or window
+    if any(
         bar.isVisible() and bar.minimum() == bar.maximum() == 0
         for bar in front.findChildren(QProgressBar)
+    ):
+        return True
+    waiting = (Qt.CursorShape.BusyCursor, Qt.CursorShape.WaitCursor)
+    if any(
+        widget.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+        and widget.cursor().shape() in waiting
+        and widget.isVisible()
+        for widget in front.findChildren(QWidget)
     ):
         return True
     note = tr(PENDING_NOTE)

@@ -3619,6 +3619,7 @@ class DonationDialog(QDialog):
         set_level(self.browser_note, "caption")
 
         self.support_button = QPushButton(tr("PayPal im Browser öffnen"), self)
+        self.support_button.setProperty(guides.TARGET_PROPERTY, "donation.paypal")
         self.gofundme_button = QPushButton(tr("GoFundMe im Browser öffnen"), self)
         providers = QHBoxLayout()
         providers.setSpacing(NORMAL)

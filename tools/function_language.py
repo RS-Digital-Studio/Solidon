@@ -211,6 +211,7 @@ class LanguageFlow:
         """
         from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
+        from shiboken6 import isValid
 
         from tools.function_surface import windows_to_picture
 
@@ -221,6 +222,10 @@ class LanguageFlow:
             widget = opened[-1]
 
             def escape(machine: Any, widget: Any = widget) -> None:
+                # Ein Unterdialog geht mit seinem Dialog zu: Bis dieser Schritt dran
+                # ist, kann sein Wrapper schon tot sein (FD-175, Konturen wählen).
+                if not isValid(widget):
+                    return
                 flow.walker.record(
                     {"target": type(widget).__name__, "key": "Escape", "button": None}
                 )

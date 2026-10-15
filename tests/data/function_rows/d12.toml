@@ -87,3 +87,74 @@ route = [{ target = "tree.row:obj_1" }, { target = "command:edit.auto_split" }]
 # vorn hat (``function_language.LanguageFlow.grounded``).
 [row."dialog:main_window"]
 route = [{ target = "report" }]
+
+# Zustände, die keine Maschine liefert, über die Nähte des Prüfstands
+# (``tools/function_seams.py``, FD-175). Keine öffnet etwas außerhalb des Falls.
+
+# Eine neue Version: *Nach einer neuen Version sehen* findet sie und zeigt das
+# Fenster mit ihren Punkten.
+[row."dialog:update_dialog"]
+preconditions = { update = "neu" }
+route = [{ target = "menu:menubar.nach_einer_neuen_version_sehen" }]
+
+# Kein Browser nimmt die Adresse an: Unterstützen über PayPal sagt es im eigenen
+# Fenster, *Download-Seite öffnen* im Fenster der neuen Version in der Meldung;
+# beide Knöpfe nur mit dieser Naht, sonst öffnete der Klick am echten Fenster den
+# Browser. (*Solidon kaufen* beim Freischalten ist mit Lizenz grau.)
+[row."dialog:donation_open_error_dialog"]
+preconditions = { browser = "fehlt" }
+route = [{ target = "menu:menubar.app_unterstuetzen" }, { target = "donation.paypal" }]
+
+[row."meldung:open_donation"]
+preconditions = { browser = "fehlt" }
+route = [{ target = "menu:menubar.app_unterstuetzen" }, { target = "donation.paypal" }]
+
+[row."donation.paypal"]
+preconditions = { browser = "fehlt" }
+route = [{ target = "menu:menubar.app_unterstuetzen" }]
+
+[row."meldung:open_link"]
+preconditions = { browser = "fehlt", update = "neu" }
+route = [
+  { target = "menu:menubar.nach_einer_neuen_version_sehen" },
+  { target = "update.page" },
+]
+
+[row."update.page"]
+preconditions = { browser = "fehlt", update = "neu" }
+route = [{ target = "menu:menubar.nach_einer_neuen_version_sehen" }]
+
+# Eine Installation scheitert: *Installieren* der ersten Zeile, dann *Details
+# anzeigen*. Mit dieser Naht installiert der Klick nichts.
+[row."meldung:_show_details"]
+preconditions = { installation = "scheitert" }
+route = [
+  { target = "menu:menubar.zusaetzliche_programme" },
+  { target = "install.action" },
+  { target = "install.details" },
+]
+
+[row."install.action"]
+preconditions = { installation = "scheitert" }
+route = [{ target = "menu:menubar.zusaetzliche_programme" }]
+
+[row."install.details"]
+preconditions = { installation = "scheitert" }
+route = [{ target = "menu:menubar.zusaetzliche_programme" }, { target = "install.action" }]
+
+# ComfyUI steht als installiert da: Seine Zeile bietet *ComfyUI einrichten …* an.
+[row."install.follow.comfyui"]
+preconditions = { installation = "comfyui_installiert" }
+route = [{ target = "menu:menubar.zusaetzliche_programme" }]
+
+# *Ort angeben …* eines Dienstes öffnet sein Menü; *Web-/Netzadresse verwenden …*
+# fragt die Adresse.
+[row."install.locate"]
+route = [{ target = "menu:menubar.zusaetzliche_programme" }]
+
+[row."meldung:_choose_address"]
+route = [
+  { target = "menu:menubar.zusaetzliche_programme" },
+  { target = "install.locate" },
+  { target = "menu:install.address" },
+]

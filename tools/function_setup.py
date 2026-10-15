@@ -252,11 +252,14 @@ def spec_variants(spec: Mapping[str, Any] | None) -> tuple[dict[str, Any], list[
         base["licence"] = spec_licence(str(licence))
     if preconditions:
         base["preconditions"] = {str(key): str(value) for key, value in preconditions.items()}
+    from tools.function_seams import SEAMS
+
     others: list[dict[str, Any]] = []
     for name, state in sorted(preconditions.items()):
         states = PRECONDITIONS.get(str(name), ())
         # Der Druckhinweis hat keinen Gegenlauf: Gesehen gibt es seine Zeile nicht.
-        if name in ("printer", PRINT_HINT) or len(states) != 2:
+        # Eine Naht auch nicht: Ihr anderer Zustand ist die Maschine (FD-175).
+        if name in ("printer", PRINT_HINT) or name in SEAMS or len(states) != 2:
             continue
         other = states[1] if state == states[0] else states[0]
         others.append(
@@ -496,11 +499,17 @@ def apply_preconditions(preconditions: Mapping[str, str]) -> dict[str, str]:
     """
     from app.core import discover
     from app.core.backends import llm
+    from tools.function_seams import SEAMS
 
     applied: dict[str, str] = {}
     for name, state in preconditions.items():
         if name in ("printer", PRINT_HINT):
             # Druckart und Druckhinweis stehen schon im Profil (``profile_settings``).
+            applied[name] = state
+            continue
+        if name in SEAMS:
+            # Ein Zustand, den keine Maschine liefert, über seine Naht (FD-175).
+            SEAMS[name][state]()
             applied[name] = state
             continue
         if state == "fehlt":

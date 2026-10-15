@@ -141,6 +141,7 @@ class Ports(Protocol):
     def now(self) -> float: ...
     def pending(self) -> bool: ...
     def aim(self, click: ClickLike, point: Any) -> Any: ...
+    def enabled(self, widget: Any) -> bool: ...
 
 
 def button_name(button: Any) -> str:
@@ -193,6 +194,7 @@ class Walk:
         button: str = "left",
         *,
         stop_before_target: bool | Callable[[], bool] = False,
+        when_enabled: bool = False,
     ) -> Step:
         """Ein Schritt, der bis zum Ziel wächst: jeder Wegklick reiht den nächsten ein.
 
@@ -206,16 +208,19 @@ class Walk:
         in derselben Richtung weiterrückte, zählt nicht als Wegklick; nach
         :data:`STILL_ROLLS` Radschritten in Folge ohne Annäherung hält der Weg
         an (FD-131). Sagt die Oberfläche nicht, ob er rückte, zählt er.
+        ``when_enabled``: Ein Wegziel, das gerade grau steht, klickt der Kunde
+        erst, wenn es frei ist (:meth:`stable`).
         """
         counter = {"way": 0, "still": 0}
         rolling = {"wheel": ""}
         way: list[tuple[Any, ...]] = []
         waited: dict[str, str] = {}
 
+        def ready() -> Callable[[], bool]:
+            return self.stable(name, waited, when_enabled=when_enabled)
+
         def again(machine: StepMachine) -> None:
-            machine.insert(
-                [Step(f"weg zu {name}", act, ready=self.stable(name, waited), settle_ms=SETTLE_MS)]
-            )
+            machine.insert([Step(f"weg zu {name}", act, ready=ready(), settle_ms=SETTLE_MS)])
 
         def act(machine: StepMachine) -> None:
             if waited.get("silent"):
@@ -260,7 +265,7 @@ class Walk:
                 raise BenchFinding(NOT_FOUND, name, detail)
             again(machine)
 
-        return Step(f"weg zu {name}", act, ready=self.stable(name, waited), settle_ms=SETTLE_MS)
+        return Step(f"weg zu {name}", act, ready=ready(), settle_ms=SETTLE_MS)
 
     def stable(
         self,
@@ -268,6 +273,7 @@ class Walk:
         waited: dict[str, str] | None = None,
         *,
         button: Callable[[], Any] | None = None,
+        when_enabled: bool = False,
     ) -> Callable[[], bool]:
         """Ob der nächste Klick zu ``name`` fallen kann.
 
@@ -278,7 +284,10 @@ class Walk:
         Klick davor (Review M14) —, dann meldet der Klick „nicht auffindbar“.
         Solange das Fenster sagt, dass etwas kommt (``Ports.pending``), zählt die
         Frist nicht; sagt es das länger als :data:`PENDING_S`, steht in
-        ``waited`` der Grund, und der Klick meldet „keine Rückmeldung“.
+        ``waited`` der Grund, und der Klick meldet „keine Rückmeldung“. Mit
+        ``when_enabled`` gilt dasselbe für ein Wegziel, das grau steht: Der
+        Druckdialog sucht seine Slicer, *Slicen* ist bis dahin grau, und ein
+        Klick darauf tat nichts (FD-175).
 
         Erst den Zeiger öffentlich anfahren, dann in einem späteren Takt neu
         prüfen: Ein Tooltip kann erst durch diese Bewegung verschwinden. Für
@@ -353,6 +362,14 @@ class Walk:
             )
             if matches:
                 seen["covered"] = None
+                if when_enabled and not self.ports.enabled(hit):
+                    # Grau heißt hier: noch nicht frei (die Slicer werden gesucht).
+                    if seen.get("grey") is None:
+                        seen["grey"] = now
+                    if now - seen["grey"] < PENDING_S:
+                        return False
+                    if waited is not None:
+                        waited["silent"] = f"nach {PENDING_S:.0f} s ist {name} noch grau"
                 return True
             if seen["covered"] is None:
                 seen["covered"] = now
@@ -931,6 +948,10 @@ class QtPorts:
 
     def now(self) -> float:
         return time.perf_counter()
+
+    def enabled(self, widget: Any) -> bool:
+        """Ob der Treffer frei ist — ein Kind eines grauen Knopfs ist es nicht."""
+        return bool(widget.isEnabled())
 
     def aim(self, click: ClickLike, point: Any) -> Any:
         """Wohin der Kunde bei einem Feld klickt: in sein Eingabefeld, nicht in den Behälter.

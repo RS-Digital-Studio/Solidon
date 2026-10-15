@@ -17,6 +17,16 @@ route = [
   { target = "dialog.accept" },
 ]
 
+# Die Konturen einer Zeichnung und die Körper einer STEP-Baugruppe wählt der
+# Kunde am Ladeschritt: Doppelklick im Verlauf, dann der Knopf des Felds.
+[row."dialog:outline_dialog"]
+start_scene = "zeichnung.netz"
+route = [{ target = "history.row:1", button = "double" }, { target = "field:contours" }]
+
+[row."dialog:step_bodies_dialog"]
+start_scene = "step_baugruppe.exakt"
+route = [{ target = "history.row:1", button = "double" }, { target = "field:bodies" }]
+
 # Die Speicherfrage: Eine Änderung (*Löschen* wirkt ohne Werte), dann *Neu* und
 # auf dem Startbildschirm *Leeres Projekt*. *Datei → Neu* selbst fragt nicht,
 # erst der Wechsel zum neuen Projekt.

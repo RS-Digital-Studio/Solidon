@@ -32,6 +32,13 @@ MARKED: Final = frozenset(
         "feature.every",
         "measure.reference",
         "measure.apply",
+        "donation.paypal",
+        "update.page",
+        "install.action",
+        "install.details",
+        "install.follow.comfyui",
+        "install.locate",
+        "filament.import",
     }
 )
 
@@ -68,23 +75,30 @@ def spool_list(window: MainWindow) -> tuple[QComboBox, QAbstractItemView, list[i
     Gesucht wird im Fenster und in jedem offenen Fenster darüber — ein
     Operationsdialog hängt nicht immer am Hauptfenster. Eine Spule erkennt die
     Liste an ihrer zugänglichen Beschreibung (``filament_picker.spool_label``).
+    Erst das Filamentfeld eines Dialogs, dann die Schnellwahl unter *Filament
+    und Druck* der Auswahlkarte (``QuickFilamentPicker``, FD-175): Steht ein
+    Dialog offen, meint der Weg dessen Feld.
     """
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
 
     from app.core.knowledge import filaments
+    from app.ui.filament_assignment import QuickFilamentPicker
     from app.ui.filament_picker import FilamentField, spool_label
 
     labels = {spool_label(entry) for entry in filaments.catalogue()}
     roots = [window, *(top for top in QApplication.topLevelWidgets() if top is not window)]
-    for root in roots:
-        for field in root.findChildren(FilamentField):
-            if not field.isVisible():
-                continue
-            role = Qt.ItemDataRole.AccessibleDescriptionRole
-            rows = [row for row in range(field.count()) if field.itemData(row, role) in labels]
-            if rows:
-                return field, field.view(), rows
+    fields: list[QComboBox] = [
+        field for root in roots for field in root.findChildren(FilamentField)
+    ]
+    fields += [quick.picker for root in roots for quick in root.findChildren(QuickFilamentPicker)]
+    for field in fields:
+        if not field.isVisible():
+            continue
+        role = Qt.ItemDataRole.AccessibleDescriptionRole
+        rows = [row for row in range(field.count()) if field.itemData(row, role) in labels]
+        if rows:
+            return field, field.view(), rows
     return None
 
 

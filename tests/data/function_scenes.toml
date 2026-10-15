@@ -656,6 +656,28 @@ promises = { stops = true, findings = ["op.load_step.ValidationError"], actions 
 op = "load_step"
 params = { source = "src_1" }
 
+# Der Dialog *Körper wählen …* am Ladeschritt einer STEP-Baugruppe und der Dialog
+# *Konturen wählen …* an einer hochgezogenen Zeichnung: Beide öffnen aus dem
+# Operationsdialog ihres Schritts (Doppelklick im Verlauf, FD-175). Die Zeichnung
+# entsteht beim Bau der Szene (function_scenes.GENERATORS).
+[scene."step_baugruppe.exakt"]
+summary = "Eine STEP-Baugruppe aus mehreren Körpern, als ein Körper geladen."
+kernel = "exakt"
+sources = { src_1 = "step/multibody.step" }
+promises = { objects = 1 }
+[[scene."step_baugruppe.exakt".ops]]
+op = "load_step"
+params = { source = "src_1" }
+
+[scene."zeichnung.netz"]
+summary = "Eine SVG-Zeichnung mit zwei Konturen, 3 mm hochgezogen."
+kernel = "netz"
+built = { src_1 = "zeichnung_svg" }
+promises = { objects = 1 }
+[[scene."zeichnung.netz".ops]]
+op = "load_outline"
+params = { source = "src_1", height = 3.0 }
+
 # --- Projektparameter --------------------------------------------------------------
 
 [scene."parameter.exakt"]

@@ -202,6 +202,59 @@ REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
         "export_gemischt",
         ("tree.row:obj_1", "tree.row:obj_2", "menu:menubar.exportieren", "dialog.accept"),
     ),
+    # Zustände über die Nähte des Prüfstands (``function_seams``): neue Version,
+    # Browser ohne Antwort, gescheiterte Installation, ComfyUI installiert,
+    # abstürzender Slicer, eingelegte Slicerfilamente.
+    "dialog:update_dialog": ("leer", ("menu:menubar.nach_einer_neuen_version_sehen",)),
+    "dialog:donation_open_error_dialog": (
+        "leer",
+        ("menu:menubar.app_unterstuetzen", "donation.paypal"),
+    ),
+    "meldung:open_donation": ("leer", ("menu:menubar.app_unterstuetzen", "donation.paypal")),
+    "donation.paypal": ("leer", ("menu:menubar.app_unterstuetzen",)),
+    "meldung:open_link": (
+        "leer",
+        ("menu:menubar.nach_einer_neuen_version_sehen", "update.page"),
+    ),
+    "update.page": ("leer", ("menu:menubar.nach_einer_neuen_version_sehen",)),
+    "meldung:_show_details": (
+        "leer",
+        ("menu:menubar.zusaetzliche_programme", "install.action", "install.details"),
+    ),
+    "install.action": ("leer", ("menu:menubar.zusaetzliche_programme",)),
+    "install.details": ("leer", ("menu:menubar.zusaetzliche_programme", "install.action")),
+    "install.follow.comfyui": ("leer", ("menu:menubar.zusaetzliche_programme",)),
+    "dialog:comfy_setup_dialog": (
+        "leer",
+        ("menu:menubar.zusaetzliche_programme", "install.follow.comfyui"),
+    ),
+    "install.locate": ("leer", ("menu:menubar.zusaetzliche_programme",)),
+    "meldung:_choose_address": (
+        "leer",
+        ("menu:menubar.zusaetzliche_programme", "install.locate", "menu:install.address"),
+    ),
+    "filament.import": ("leer", ("menu:menubar.filamentlager",)),
+    "dialog:slicer_spool_dialog": (
+        "quader_mit_slicer.exakt",
+        ("menu:menubar.filamentlager", "filament.import"),
+    ),
+    "meldung:_show_slicer_output": (
+        "quader_mit_slicer.exakt",
+        (
+            "tree.row:obj_1",
+            "menu:menubar.an_den_slicer_uebergeben",
+            "print.slice",
+            "message.button:error.show_output",
+        ),
+    ),
+    # Die Schnellwahl unter *Filament und Druck* an einer Fläche; neue Szenen für die
+    # Ladeschritte von Zeichnung und STEP-Baugruppe.
+    "meldung:_assign_inventory_spool": (
+        "sieben_filamente.netz",
+        ("tree.row:obj_1", "tree.row:obj_1.face_1", "filament.picker", "filament.spool"),
+    ),
+    "dialog:outline_dialog": ("zeichnung.netz", ("history.row:1", "field:contours")),
+    "dialog:step_bodies_dialog": ("step_baugruppe.exakt", ("history.row:1", "field:bodies")),
 }
 
 #: Zeilen, die der Sprachfall noch nicht erreicht, je mit dem Grund (FD-175). Der
@@ -211,21 +264,9 @@ STILL_WITHOUT: dict[str, str] = {
     "dialog:ai_disclosure_dialog": "Chat-Starter ohne Wortschatznamen",
     "dialog:local_privacy_dialog": "Verweis im KI-Hinweis ohne Wortschatznamen",
     "dialog:offline_activation_dialog": "Zustand „nicht aktiviert“ im Sprachfall",
-    "dialog:update_dialog": "neue Version nur über das Netz",
-    "dialog:donation_open_error_dialog": "Browser, der nicht öffnet",
-    "meldung:open_donation": "Browser, der nicht öffnet",
-    "meldung:open_link": "Browser, der nicht öffnet",
-    "meldung:_choose_address": "Ort eines Dienstes ohne Wortschatznamen",
-    "meldung:_show_details": "Installation, die scheitert",
     "dialog:filament_override_dialog": "Filamentzeile im Kopf ohne Wortschatznamen",
-    "dialog:slicer_spool_dialog": "Übernahme aus dem Slicer ohne Wortschatznamen",
     "dialog:usage_dialog": "Spule am Projekt und Export ohne Tippen",
-    "meldung:_assign_inventory_spool": "Spule in der Schnellwahl",
-    "meldung:_show_slicer_output": "Slicer, der beim Schneiden abbricht",
-    "dialog:outline_dialog": "Szene mit SVG-Quelle",
-    "dialog:step_bodies_dialog": "Szene mit mehrteiliger STEP-Datei",
     "meldung:_ask_recovery": "Sicherung neben dem zuletzt geöffneten Projekt",
-    "dialog:comfy_setup_dialog": "ComfyUI ohne Modell",
     "meldung:confirm_generation_loss": "laufende Erzeugung",
     "dialog:expression_dialog": "Skizzenwortschatz",
     "dialog:point_dialog": "Skizzenwortschatz",

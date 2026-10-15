@@ -649,13 +649,20 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
 
     def path_steps(self) -> list[Step]:
         """Der Weg der Zeile als Schritte. Ein Fenster als Ziel ist erreicht, sobald es
-        dasteht: Ein Klick in seine Mitte träfe ein Bedienelement darin (FD-101)."""
+        dasteht: Ein Klick in seine Mitte träfe ein Bedienelement darin (FD-101).
+        Ein Wegziel davor, das grau steht, klickt der Kunde erst, wenn es frei ist;
+        das Ziel der Zeile selbst nicht — sein Grau misst der Fehlfall (FD-175)."""
         target = walk_target(self.row)
         standing = target.partition(":")[0] in surfaces.OPENED_ELSEWHERE
         return [
             self.action_step(name)
             if name == target and name.startswith("feature:")
-            else self.walker.step(name, button, stop_before_target=standing and name == target)
+            else self.walker.step(
+                name,
+                button,
+                stop_before_target=standing and name == target,
+                when_enabled=name != target,
+            )
             for name, button in route_of(self.row)
         ]
 

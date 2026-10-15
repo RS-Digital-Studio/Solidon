@@ -21,3 +21,35 @@ route = [
   { target = "menu:menubar.an_den_slicer_uebergeben" },
   { target = "print:filament.colour" },
 ]
+
+# *Aus dem Slicer übernehmen* im Filamentlager liest die Filamentprofile des
+# Slicers; die Szene verlangt einen (FD-175).
+[row."filament.import"]
+route = [{ target = "menu:menubar.filamentlager" }]
+
+[row."dialog:slicer_spool_dialog"]
+start_scene = "quader_mit_slicer.exakt"
+preconditions = { slicerfilamente = "eingelegt" }
+route = [{ target = "menu:menubar.filamentlager" }, { target = "filament.import" }]
+
+# Eine Spule aus dem Lager auf eine Fläche, deren Körper keine freie Nummer mehr
+# hat: Die Schnellwahl unter *Filament und Druck* fragt, welches Filament sie
+# ersetzt (Szene mit belegten Filamenten 1–7 und einer Spule im Lager, FD-175).
+[row."meldung:_assign_inventory_spool"]
+start_scene = "sieben_filamente.netz"
+route = [
+  { target = "tree.row:obj_1.face_1" },
+  { target = "filament.picker" },
+  { target = "filament.spool" },
+]
+
+# Der Slicer stürzt beim Schneiden ab (Naht ``slicerlauf``, startet keinen):
+# *Slicen*, dann in der Meldung *Ausgabe des Slicers zeigen*.
+[row."meldung:_show_slicer_output"]
+start_scene = "quader_mit_slicer.exakt"
+preconditions = { slicerlauf = "absturz" }
+route = [
+  { target = "menu:menubar.an_den_slicer_uebergeben" },
+  { target = "print.slice" },
+  { target = "message.button:error.show_output" },
+]

@@ -272,6 +272,15 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     # *Abbrechen* steht nur während einer langen Rechnung.
     "progress.cancel": ("D12", "langsam"),
     "preview.banner": ("D11", "koerper:1"),
+    # Die Knöpfe auf den Wegen zu Meldungen ohne Browser und zu den Fenstern der
+    # Zusatzprogramme (FD-175): D12; *Aus dem Slicer übernehmen* im Lager: D9.
+    "donation.paypal": ("D12", "leer"),
+    "update.page": ("D12", "leer"),
+    "install.action": ("D12", "leer"),
+    "install.details": ("D12", "leer"),
+    "install.follow.comfyui": ("D12", "leer"),
+    "install.locate": ("D12", "leer"),
+    "filament.import": ("D9", "leer"),
 }
 
 #: Wortschatznamen mit Art, die Zeilen tragen: Präfix → Paket und Anforderung.
@@ -1555,6 +1564,15 @@ PRECONDITIONS: Final[dict[str, tuple[str, ...]]] = {
     # damit er keine Zielfläche verdeckt; offen braucht ihn nur seine eigene Zeile
     # (FD-121, ``function_setup.PRINT_HINT``).
     "druckhinweis": ("gesehen", "offen"),
+    # Zustände, die keine Maschine liefert, über die Nähte des Prüfstands
+    # (``function_seams.SEAMS``, FD-175): eine neue Version, ein Browser, der nicht
+    # öffnet, eine Installation, die scheitert, ein Slicer, der abstürzt, und
+    # Filamente, die im Slicer eingelegt sind.
+    "update": ("neu",),
+    "browser": ("fehlt",),
+    "installation": ("scheitert", "comfyui_installiert"),
+    "slicerlauf": ("absturz",),
+    "slicerfilamente": ("eingelegt",),
 }
 
 

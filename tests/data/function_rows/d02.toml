@@ -26,3 +26,12 @@ route = [{ target = "selection.rebuild" }]
 [row."dialog:variants_dialog"]
 start_scene = "parameter.exakt"
 route = [{ target = "menu:menubar.varianten_erzeugen" }]
+
+# Die Einrichtung von ComfyUI ist der zweite Schritt nach seiner Installation:
+# *ComfyUI einrichten …* in *Zusätzliche Programme* (Naht ``installation``).
+[row."dialog:comfy_setup_dialog"]
+preconditions = { installation = "comfyui_installiert" }
+route = [
+  { target = "menu:menubar.zusaetzliche_programme" },
+  { target = "install.follow.comfyui" },
+]

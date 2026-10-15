@@ -614,9 +614,23 @@ def dense_plate() -> tuple[bytes, str]:
     return payload.getvalue(), ".ply"
 
 
+def outline_drawing() -> tuple[bytes, str]:
+    """Eine SVG-Zeichnung mit zwei Konturen: ein Rahmen 40 x 20 mm mit Fenster und ein
+    Steg daneben — genug, damit *Konturen wählen …* etwas zu wählen hat (FD-175)."""
+    drawing = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="80mm" height="30mm"'
+        ' viewBox="0 0 80 30">'
+        '<path d="M0 0 H40 V20 H0 Z M10 5 H30 V15 H10 Z"/>'
+        '<rect x="55" y="0" width="12" height="20"/>'
+        "</svg>"
+    )
+    return drawing.encode("utf-8"), ".svg"
+
+
 #: Name → Generator; :func:`build_scene` ruft ihn beim Bau der Szene.
 GENERATORS: Final[dict[str, Callable[[], tuple[bytes, str]]]] = {
     "dichte_platte": dense_plate,
+    "zeichnung_svg": outline_drawing,
 }
 
 

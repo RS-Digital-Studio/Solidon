@@ -126,6 +126,18 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # Die Seiten *Chat* und *Tour* der rechten Karte
         "chat",
         "tour",
+        # *PayPal im Browser öffnen* beim Unterstützen und *Download-Seite öffnen*
+        # im Fenster der neuen Version — Wege zu den Meldungen, wenn kein Browser öffnet
+        "donation.paypal",
+        "update.page",
+        # In *Zusätzliche Programme*: *Installieren* einer Zeile, *Details anzeigen*
+        # nach einem Fehlschlag, *ComfyUI einrichten …* und *Ort angeben …* eines Dienstes
+        "install.action",
+        "install.details",
+        "install.follow.comfyui",
+        "install.locate",
+        # *Aus dem Slicer übernehmen* im Filamentlager
+        "filament.import",
     }
 )
 
