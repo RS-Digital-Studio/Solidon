@@ -133,6 +133,21 @@ def test_a_script_has_its_own_names_apart_from_its_host() -> None:
     }
 
 
+def test_a_name_from_an_open_part_is_counted_not_reported() -> None:
+    """RR2-3: Ein Modul oder Name aus dem Platzhalter einer Vorlage steht erst zur Laufzeit
+    fest — offen wie ein ganzes Skript, kein W5-Fund. Der feste Name daneben bleibt ein Fund."""
+    index = _index(
+        "def test_run(name):\n"
+        "    subprocess.run([sys.executable, '-c', f'from app.{name} import target'])\n"
+        "    subprocess.run([sys.executable, '-c', f'from app.mod import {name}'])\n"
+        "    script = f'import app.mod\\napp.mod.{name}()\\napp.mod.MISSING\\n'\n"
+        "    subprocess.run([sys.executable, '-c', script])\n"
+    )
+    assert _missing(index) == {("script:attribute", "app.mod", "MISSING", 11)}
+    assert index.counts["scripts.template"] == 3
+    assert index.counts["scripts.open"] == 3
+
+
 def test_an_open_script_is_counted_not_guessed() -> None:
     index = _index(
         "def run(script):\n    subprocess.run([sys.executable, '-c', script])\n",

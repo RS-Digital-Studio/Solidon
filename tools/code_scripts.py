@@ -16,8 +16,9 @@ hinter einen Interpreter). ``git -c``, ``sh -c``, ``bash -c`` und ``-m pytest -c
 **Sein Text.** Faltet der Ausdruck genau zu Texten, gelten sie. Sonst wird er als Vorlage
 gelesen: ein offener Teil eines f-Strings (``{pfad!r}``) oder einer Summe wird
 :data:`PLACEHOLDER`, ein Name nimmt jede seiner Bindungen, ``textwrap.dedent`` und
-``"…".join`` wirken auf die Vorlage. Was so keinen Text ergibt (ein Parameter, ``str(pfad)``),
-zählt ``scripts.open``, was kein Python ist, ``scripts.unparsed`` (Inventar).
+``"…".join`` wirken auf die Vorlage. Was so keinen Text ergibt (ein Parameter, ``str(pfad)``)
+oder ein Modul oder einen Namen nur über den Platzhalter nennt, zählt ``scripts.open`` — nicht
+faltbar ist kein Fund —, was kein Python ist, ``scripts.unparsed`` (Inventar).
 """
 
 from __future__ import annotations
@@ -174,6 +175,7 @@ def scan(index: Index) -> Found:
                 continue
             if any(PLACEHOLDER in text for text in found_texts):
                 counts["scripts.template"] += 1
+            opened = False
             for number, text in enumerate(sorted(found_texts)):
                 readable = _parseable(text)
                 path = f"{host.path}#-c@{site.line}:{site.col}:{number}"
@@ -183,7 +185,16 @@ def scan(index: Index) -> Found:
                     continue
                 counts["scripts.read"] += 1
                 references, unresolved = index.scan_apart(facts)
-                for key, items in references.items():
+                # Ein Modul oder Name aus dem Platzhalter steht erst zur Laufzeit fest: offen wie
+                # ein ganzes Skript, weder Bezug noch Fund (RR2-3).
+                kept = [item for item in unresolved if not _open(item.module, item.name)]
+                opened |= len(kept) < len(unresolved)
+                unresolved = kept
+                for key, every in references.items():
+                    items = [item for item in every if not _open(item.module, item.name)]
+                    opened |= len(items) < len(every) or _open(*key)
+                    if not items or _open(*key):
+                        continue
                     found.setdefault(key, []).extend(
                         Reference(
                             host.path,
@@ -209,4 +220,11 @@ def scan(index: Index) -> Found:
                     )
                     for item in unresolved
                 )
+            if opened:
+                counts["scripts.open"] += 1
     return found, missing, dict(counts)
+
+
+def _open(module: str, name: str) -> bool:
+    """Ob ein Bezug aus dem offenen Teil einer Vorlage stammt."""
+    return PLACEHOLDER in module or PLACEHOLDER in name
