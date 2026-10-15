@@ -89,7 +89,7 @@ it into `website/version.json`.
 - If you work in inches, you enter length parameters in inches in *Create parameter …* and when saving a part. Version 0.6.0 showed only millimetres there.
 - The *Calibrate material* dialog calls an unmeasured material “not calibrated yet”, also on the command line. It used to say “starting values”.
 - A refusal in a dialog no longer repeats its title underneath. *Correct the input* puts the cursor into the field concerned.
-- The *Details* window names the body and the step and give the location in the chosen unit. *Show the values* shows the field names and is only as tall as needed.
+- The *Details* window names the body and the step and gives the location in the chosen unit. *Show the values* shows the field names and is only as tall as needed.
 - The fields of the *Analysis* and *Split* bars, the description in *Generate model*, the *Type* choice and the “Include values” checkbox explain themselves in tooltips and to screen readers.
 - From a tab of the card on the right, the Tab key goes into the page in front and moves through it from top to bottom.
 - A project dimension without a unit stays a plain number in the history and the parameter bar, also in inches. Version 0.6.0 added “mm” to it in the history.
