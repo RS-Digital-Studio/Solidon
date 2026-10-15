@@ -93,7 +93,7 @@ hat eine Zählgröße und eine Schwelle (Tabellen unten).
 | 6 | Rückmeldung und Zeit | Sieht man, dass sie läuft und was sie geändert hat? Bleibt das Fenster bedienbar — größte Lücke im Hauptfaden ≤ 100 ms? Wo §31 ein Budget nennt, liegt sie darin; eine Überschreitung ist ein Verdacht, den `window_bench.py` oder die Leistungstests bestätigen; ohne Budget steht „kein Budget“ | gemessene Zeiten |
 | 7 | Fehlerweg | Falsche Auswahl, ungültige Eingabe, Fehler: Sperrgrund, Grenzablehnung, Handlungsvorschlag (Regel 17), jede angebotene Handlung geklickt und wirksam | je ein erzwungener Fehlfall, V5 |
 | 8 | Verständlich | ohne Handbuch zu verstehen, für jemanden aus dem Slicer ohne CAD-Kenntnisse | V1–V6 |
-| 9 | Sprachen und Darstellung | In allen sechs Sprachen passt jeder sichtbare Text in sein Element (Schriftmaß gegen Breite, gemessen); Anzeigeeinheit Zoll; keine Bedeutung allein über Farbe (Regel 18) | Messung je Sprache; Bilder auf Deutsch im hellen Thema und in der längsten Übersetzung der Zeile, das dunkle Thema als Stichprobe je Dialogart |
+| 9 | Sprachen und Darstellung | In allen sechs Sprachen passt jeder sichtbare Text in sein Element (Schriftmaß gegen Breite, gemessen; eine umbrochene Listenzeile gegen die Höhe ihrer Zelle) — im ganzen Fenster und in jedem Bild der Zeile (Fläche, Ergebnis, Fehlfall), auch Objektbaum, Kopf- und Statusleiste; ein Abschneiden außerhalb der Zielfläche hält den Punkt mit dem Fund seiner Wurzel offen. Anzeigeeinheit Zoll an jeder Zeile, deren Bilder eine Länge zeigen; keine Bedeutung allein über Farbe (Regel 18). Skalierung und Fenstergröße prüft Z6 | Messung je Sprache; Bilder auf Deutsch im hellen Thema und in der längsten Übersetzung der Zeile, das dunkle Thema als Stichprobe je Dialogart (Karte, Dialog, Leiste) aus einem Fall desselben Pakets, im Urteil mit Fallnummer |
 | 10 | Tastatur und Zugänglichkeit | per Tastatur erreichbar; Tab-Folge folgt der Lesefolge, gemessen per Tastendruck und `focusWidget()`, und erreicht die Zielhandlung der Zeile, bevor sie die Fläche verlässt; kein leerer und kein doppelter Name, wie ein Bildschirmleser ihn liest (zugänglicher Name, Formularzeile, Knopftext — ein Klassenname ist keiner), der Name trägt die Handlung; der Fokus kehrt nach dem Dialog zurück. Bildschirmleser: ungeprüft, so vermerkt | Tab-Kette, Namensliste |
 | 11 | Versprechen | Deckt sie, was Website (`website/funktionen.html` und `website/{en,es,fr,it,pt}/`, Fließtext, Bildtexte und Titel) und die Handbuchstelle sagen — und sagen beide, was sie kann? Ein Angebot (Feld, Haken, Handlung, Hinweis) deckt sein Bild an der Zielfläche, eine Wirkung („in einem Zug“, „ein Undo“, „nimmt mit“) nur ein gefahrener Weg oder ein Kommandozeilen- oder Testbeleg am Laufkopf; ein nicht gefahrenes Wirkungsversprechen hält den Punkt offen. Die Übersetzungen sind gedeckt, wenn sie dieselben Abschnitte tragen | Abgleich; Fundstellen einer Operation aus dem Register (`manual.help_for`, Titel auf den Funktionsseiten), jeder anderen Zeile aus ihrer Zeilenspezifikation (`manual`, `website`) — fehlen sie dort, nennt Stufe B die gefundene Stelle |
 | 12 | Nachträglich ändern | Öffnen *Diesen Schritt ändern* und ein Doppelklick im Verlauf den Schritt mit seinen Werten, und ändert eine neue Zahl ihn, ohne dass der Verlauf wächst (§2.1)? | Schrittzahl vorher und nachher |
@@ -215,6 +215,17 @@ Fehlerweg ohne Handlung) oder *leicht* (Text, Darstellung). Urteil je Zeile:
 der nicht gilt, steht als *entfällt* mit einem Grund aus einer geschlossenen
 Liste (Operation ohne Rechnung, ohne Auswahlbezug, ohne Dialog, ohne Agenten-
 werkzeug, nur Stufe C).
+
+*Gut nach Fix* steht genau an Zellen, an denen die Funddatei einen behobenen
+Fund führt (Stand „behoben `<commit>`“, der Commit im Laufkopf; Zuordnung über
+„Funktion“ und „Prüfpunkt“, ein Punkt umfasst seine Kriterien: 2 die E1–E7,
+7 die V5, 8 die V1–V6, 19 die G, Z und I), und der eigene Befund am Lauf
+positiv ist. Ein offener Fund an der Zelle hält sie offen. Vor jeder
+Urteilsrunde zieht der Koordinator den Stand der Funde nach, deren Fix im
+Laufkopf liegt; `report` weist ein Urteil ab, das dem Stand der Funddatei
+widerspricht (`tools/function_verdict_rules.py`). Wie Stufe B und Zweitprüfer
+E1–E4, V1, V4, Z3, I1 und I4 auslegen, steht unter den Kriterientabellen der
+Skills `ux-review` und `ui-design`.
 
 **Gleiche Urteile bei zwei Prüfern:** Je Paket prüft ein zweiter Agent 10 % der
 Zeilen unabhängig. Stimmen weniger als 90 % der Urteile je Prüfpunkt und

@@ -389,7 +389,7 @@ Alle Gegenproben laufen ohne Fenster in `tests/test_function_report.py`. Sie spe
 | 6 Rückmeldung und Zeit | A | `timing`: Lücke ≤ 100 ms; ab 0,2 s Zeiger, ab 2 s Balken und *Abbrechen*; Budget überschritten = Verdacht | Lücke 150 ms; Lauf von 3 s ohne sichtbares *Abbrechen* |
 | 7 Fehlerweg | A misst, B (V5-Wortlaut) | `fault_case`, `messages[].actions` geklickt und wirksam | Meldung ohne Handlung; Handlung ohne Wirkung |
 | 8 Verständlich | A (V1–V3, V6 Handbuch), B (V4–V6, Gesamturteil) | `texts`, `fields`, Handbuchfenster geöffnet | Negativwort; Feld ohne eigenen Satz; B „gut“ trotz V1-Treffer |
-| 9 Sprachen und Darstellung | A (Textpassung in sechs Sprachen, Zoll), B (Regel 18 am Bild) | Sprachfälle: `texts` mit Bedarf und Platz; Zolllauf; Bilder auf Deutsch hell und in der längsten Übersetzung | Bedarf über Platz; „mm“ an einem Längenwert im Zolllauf |
+| 9 Sprachen und Darstellung | A (Textpassung in sechs Sprachen, Zoll), B (Regel 18 am Bild, jeder sichtbare Text im ganzen Fenster) | Sprachfälle: `texts` mit Bedarf und Platz (umbrochene Listenzeile: `axis` Höhe); Zolllauf; Bilder auf Deutsch hell und in der längsten Übersetzung | Bedarf über Platz; umbrochene Zeile höher als ihre Zelle; „mm“ an einem Längenwert im Zolllauf |
 | 10 Tastatur | A | `tab_chain` per Tastendruck und `focusWidget()` mit `name` (wie ein Bildschirmleser liest), `class`, `mark`, `primary`; `names`, `focus_return`; Bildschirmleser wird als „ungeprüft“ vermerkt | Rücksprung in der Kette; doppelter Name; Klassenname als Name; Kette ohne Zielhandlung (Hauptknopf oder Ziel der Zeile); leere Kette ergibt „nicht gemessen“; Fokus kommt nicht zurück |
 | 11 Versprechen | A (Fundstellen), B (Inhalt) | `manual.help_for`, Treffer auf `website/funktionen.html` und `website/{en,es,fr,it,pt}/` samt `alt` und `title`; außerhalb des Registers `spec.manual`, `spec.website` | Operation ohne Handbuchstelle; Fundstelle der Spezifikation, die es nicht gibt; B-Urteil ohne Bild oder Stelle wird abgewiesen |
 | 12 Nachträglich ändern | A | `menu:history.edit` und Doppelklick auf `history.row:<n>`; Felder = Parameter; Verlaufslänge gleich | Verlauf gewachsen; Feldwert ≠ Parameter |
@@ -400,6 +400,11 @@ Alle Gegenproben laufen ohne Fenster in `tests/test_function_report.py`. Sie spe
 | 17 Agentenweg | A ohne Fenster | `menu_path` aus `tool_schemas()` gegen `place`; Rücknahme des Vorschlags über die Agenten-Suite (Skriptmodell), nur verwiesen | Menüpfad „Datei → …“ bei Ort Karte |
 | 18 Lizenzzustand | A | `licence_runs`: Demo abgelaufen, Testlauf abgelaufen, gekauft | schreibendes Ziel freigegeben trotz Ablauf; grau ohne Grund |
 | 19 Gestaltung | A, B und C nach §3.3 | | je Kriterium nach §3.3 |
+
+Auslegung nach der Zweitprüfung am finalen Lauf (Abweichungsbericht §4.1):
+Prüfpunkte 9 und 11 und *gut nach Fix* im Konzept §4 (Tabelle der Prüfpunkte,
+„Urteil und Schwere“), E1–E4, V1 und V4 unter der Kriterientabelle im Skill
+`ux-review`, Z3, I1 und I4 unter der im Skill `ui-design`.
 
 ### 3.2 Einfachheit und Verständlichkeit
 

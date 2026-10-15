@@ -89,6 +89,25 @@ Prüfpunkt 17, Vorschlag ist bei I6 nur die Suche mit Frageformen.
 | I5 | Vorher und nachher mit einem Klick | ja an der Zeile Vorher/Nachher | A misst, B urteilt | `steps` |
 | I6 | Sagen statt suchen: Suchproben als Frage | Treffer unter den ersten drei | A | `search` |
 
+Auslegung nach der Zweitprüfung am finalen Lauf, für Stufe B und Zweitprüfer
+gleich:
+
+- **Z3:** „Merkmals- oder Körperbezug“ heißt: Der Weg der Zeile beginnt mit der
+  Auswahl eines Körpers, Merkmals oder einer Kante (Route mit Baumzeile oder
+  Bildstelle, Anforderung `koerper:`, `merkmal:` oder Kante — wie
+  `function_judges._has_selection_relation`). Befundhandlungen, Bericht,
+  Ansichten und Fensterbefehle ohne solche Auswahl: *entfällt*,
+  `ohne_auswahlbezug`. Ob eine Befundhandlung zusätzlich nach dem Klick auf den
+  Körper stehen sollte, ist ein I3-Vorschlag, kein Z3-Urteil.
+- **I1:** „jede Art“ ist jede, die die Erkennung an der Szene liefert; eine
+  erkannte Art, die nicht überfahren wurde, ist nicht gemessen.
+- **I4:** Paketwert. Je Zeile nur an Befundhandlungszeilen
+  (`finding.action:*`): *gut*, wenn ihre Befundart eine Handlung trägt, die
+  nach Prüfpunkt 7 wirkt, sonst *offen*. An anderen Zeilen kein I4-Urteil.
+
+*Gut nach Fix* und die Zuordnung eines Funds zu seiner Zelle regelt Konzept §4
+(„Urteil und Schwere“).
+
 ## Umsetzung und Sichtprüfung
 
 An der zuständigen Quelle ändern: sichtbare App-Texte über `tr()` und alle
