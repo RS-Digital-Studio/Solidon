@@ -72,7 +72,6 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMenu,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QSlider,
     QSpinBox,
@@ -230,6 +229,7 @@ from app.ui.overlay import (
     tell_the_zone,
 )
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
+from app.ui.scroll_areas import PassingScrollArea, ReadingScrollArea
 from app.ui.shortcut_schemes import delete_keys, return_opens
 from app.ui.style import (
     NORMAL,
@@ -6591,14 +6591,15 @@ class ReportPanel(QWidget):
         self.review_scope.setAccessibleName(tr("Grundlage des Übergabestatus"))
         scope_rows.addWidget(self.facts)
         scope_rows.addWidget(self.review_scope)
-        self.review_scroll = QScrollArea(body)
+        # Lesetext ohne Bedienelement: ein Halt mit Namen und Beschreibung (FD-139).
+        self.review_scroll = ReadingScrollArea(
+            tr("Prüfumfang"), tr("Mit Pfeil- und Bildtasten blättern."), body
+        )
         self.review_scroll.setWidgetResizable(True)
         self.review_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.review_scroll.setWidget(scope_box)
         self.review_scroll.setMaximumHeight(4 * TARGET_SIZE)
         self.review_scroll.setMinimumHeight(2 * TARGET_SIZE)
-        self.review_scroll.setAccessibleName(tr("Prüfumfang"))
-        self.review_scroll.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         scope = collapsible(
             tr("Prüfumfang"),
             self.review_scroll,
@@ -9077,7 +9078,7 @@ def column_choice(combo: QComboBox) -> QComboBox:
     return combo
 
 
-class ColumnScroller(QScrollArea):
+class ColumnScroller(PassingScrollArea):
     """Ein Rollbereich, der nur senkrecht rollt und so breit bleibt wie sein Inhalt (RM-488).
 
     Die Breite des Inhalts ist an die Spalte gebunden, in beide Richtungen:

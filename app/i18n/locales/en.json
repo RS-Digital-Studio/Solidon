@@ -5411,6 +5411,7 @@
   "Mit Lochwand-Haken auf der Seite liegend drucken: Die Rastzunge federt nur über ihre Schichten, nicht quer zu ihnen. Die Klemme sitzt stramm, weil ihr Spalt genau die eingetragene Plattenstärke hat.": "With pegboard hooks, print the holder lying on its side: the latch tongue only flexes along its layers, not across them. The clamp fits tightly because its gap is exactly the board thickness entered.",
   "Mit Merkmalserkennung laden": "Load with feature recognition",
   "Mit Mühe": "With difficulty",
+  "Mit Pfeil- und Bildtasten blättern.": "Use the arrow and Page Up/Down keys to scroll.",
   "Mit Pfeil- und Bildtasten durch den KI-Hinweis blättern.": "Use the arrow and Page Up/Down keys to move through the AI notice.",
   "Mit Reinigungsturm verlangt {slicer} gleiche Schichten für alle Teile neben „{name}“. Auf einer eigenen Platte gelten die feinen.": "With a prime tower, {slicer} needs the same layers for all parts beside “{name}”. On a plate of its own the fine layers apply.",
   "Mit Schichtanalyse geprüft": "Checked with layer analysis",

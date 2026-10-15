@@ -27,7 +27,6 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QPlainTextEdit,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -40,6 +39,7 @@ from app.i18n import TranslatableText, _, tr
 from app.ui.labels import volume
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import SEVERITY_ENCODING
+from app.ui.scroll_areas import PassingScrollArea
 from app.ui.style import NORMAL, make_primary, set_level
 from app.ui.theme import UNDONE_COLOUR
 
@@ -333,7 +333,7 @@ class ChatPanel(QWidget):
         self.content_layout.addWidget(self.starters)
         self.content_layout.addWidget(self.decision)
 
-        self.content_scroll = QScrollArea(self)
+        self.content_scroll = PassingScrollArea(self)
         self.content_scroll.setWidgetResizable(True)
         self.content_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)

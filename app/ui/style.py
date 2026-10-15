@@ -52,6 +52,7 @@ from PySide6.QtWidgets import (
 from app.core.log import get_logger
 from app.core.types import Action
 from app.ui import app_events
+from app.ui.scroll_areas import PassingScrollArea
 from app.ui.theme import THEMES, Theme
 
 _log = get_logger(__name__)
@@ -230,7 +231,7 @@ class WrappedNote(QLabel):
             self.grown.emit()
 
 
-class DialogScrollArea(QScrollArea):
+class DialogScrollArea(PassingScrollArea):
     """Dialoginhalt in natürlicher Größe, bei Platzmangel scrollbar.
 
     Die Aktionsknöpfe bleiben außerhalb. Anders als der gewöhnliche Rollbereich
