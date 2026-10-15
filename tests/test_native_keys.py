@@ -419,10 +419,11 @@ def test_a_list_that_opens_on_activation_carries_the_return_filter() -> None:
     """
     import ast
 
-    root = Path(__file__).resolve().parents[1] / "app" / "ui"
+    from tests import source_tree
+
     connected = re.compile(r"([\w.]+)\.itemActivated\.connect\(")
     missing: list[str] = []
-    for source in sorted(root.glob("*.py")):
+    for source in source_tree.python_files("app/ui"):
         text = source.read_text(encoding="utf-8")
         # Nur wenige Dateien hängen etwas an ``itemActivated``; die übrigen
         # zu zerlegen kostete Sekunden (Review 06.10.2026, U2-N8).
@@ -435,5 +436,5 @@ def test_a_list_that_opens_on_activation_carries_the_return_filter() -> None:
             scope = "\n".join(lines[node.lineno - 1 : node.end_lineno])
             for view in sorted(set(connected.findall(scope))):
                 if f"return_opens({view}," not in scope:
-                    missing.append(f"{source.name}: {node.name}.{view}")
+                    missing.append(f"{source_tree.relative(source)}: {node.name}.{view}")
     assert not missing, f"itemActivated ohne return_opens: {missing}"
