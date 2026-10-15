@@ -27,6 +27,7 @@ from app.core.errors import (
     CHANGE_THIS_STEP,
     CHOOSE_PRINTER,
     CORRECT_INPUT,
+    KEEP_SPLINTERS,
     RECOUNT_AND_RETRY,
     REPAIR_AND_RETRY,
     RESIZE_THE_WIDENING,
@@ -21733,7 +21734,9 @@ ONE_PIECE: Final = _("Der Körper besteht aus einem Stück. Es gibt nichts aufzu
     requires_body="parts",
     # 2: Splitter misst der Drucker und die Schale, nicht das größte Teil
     # (RM-639); ein Teil unter einem Prozent kam als Splitter aus dem Cache.
-    cache_version="2",
+    # 3: Ein druckbares Teil mit Splittern sagt ab mit *Splitter behalten*
+    # statt „aus einem Stück“ (FD-113) — eine alte Absage käme sonst wieder.
+    cache_version="3",
     doc=_(
         "Macht aus einem Körper, der aus mehreren nicht verbundenen Teilen "
         "besteht, je ein eigenes Objekt. Was nicht zusammenhängt, ist nicht "
@@ -21777,6 +21780,29 @@ def split_bodies(ctx: OpContext) -> OpResult:
     # nachher eine andere Zahl liefert, hält die ganze Kette an. Ist zu wenig
     # da, wird das gesagt statt geraten — mit der Zahl, die passen würde.
     found = len(kept)
+    if found <= 1 and dropped and found < params.count:
+        # **Ein druckbares Teil und Splitter daneben ist nicht „ein Stück“**
+        # (FD-113): Der Prüfbericht zählt die Splitter mit und meldet mehrere
+        # Teile. Die Absage nennt sie und den einen Schalter, der sie behält —
+        # der Schritt öffnet mit dem Cursor dort (``KEEP_SPLINTERS``).
+        raise ValidationError(
+            field="keep_tiny",
+            detail=(
+                _(
+                    "Der Körper hat nur ein druckbares Teil und einen Splitter, den der Drucker "
+                    "nicht abbildet."
+                )
+                if dropped == 1
+                else _(
+                    "Der Körper hat nur ein druckbares Teil und {count} Splitter, die der "
+                    "Drucker nicht abbildet.",
+                    count=dropped,
+                )
+            ),
+            constraint="too_many_parts",
+            values={"count": str(params.count), "found": str(found)},
+            suggestions=(KEEP_SPLINTERS, CANCEL),
+        )
     if found < params.count:
         raise ValidationError(
             field="count",

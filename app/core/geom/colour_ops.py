@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import re
-from typing import cast
+from typing import Final, cast
 
 from app.core.errors import (
     CHANGE_SELECTION,
@@ -311,6 +311,12 @@ class SlotsFromTextureParams(BaseParams):
     )
 
 
+#: Warum *Textur in Filamente umrechnen* an einem Körper nichts tun kann —
+#: derselbe Satz im Befund und, sobald der Eintrag ``requires_body="colour"``
+#: trägt, am Menüeintrag (``labels.body_requirement``, FD-135).
+NO_COLOUR: Final = _("Dieses Objekt trägt keine Farbinformation.")
+
+
 @register_op(
     name="slots_from_texture",
     # 2 seit dem 22.09.2026: Ein zu kleiner Farbfleck nimmt beim Wegfallen die
@@ -348,7 +354,7 @@ def slots_from_texture(ctx: OpContext) -> OpResult:
                 Finding(
                     code="colour.no_texture",
                     severity="warning",
-                    message=_("Dieses Objekt trägt keine Farbinformation."),
+                    message=NO_COLOUR,
                     object_id=source.id,
                     # Regel 17: Die Farbe trägt ein anderes Objekt.
                     suggestions=(CHANGE_SELECTION,),
