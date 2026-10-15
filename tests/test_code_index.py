@@ -705,3 +705,28 @@ def test_known_case_cost_matrix_has_no_reader() -> None:
     assert any((f.module, f.name) == key for f in index.patch_findings()["d"]), (
         "d) meldet _cost_matrix nicht"
     )
+
+
+def test_known_case_the_spool_ban_sits_on_the_binding_the_inventory_reads() -> None:
+    """CS-9a, behoben und umgekehrt gehalten: ``test_first_run.py`` verbietet
+    ``configured_spools`` an der Bindung in ``filament_inventory.py``, die das Lager zur
+    Aufrufzeit liest — nicht am Original in ``filament_picker``, das dessen Kopfkopie nie
+    erreicht. Solange W2 c) und d) ``xfail`` tragen, hält dieser Fall das ohne Fenster;
+    sind beide scharf, wird er gestrichen."""
+    index = _real()
+    binding = ("app.ui.filament_inventory", "configured_spools")
+    bans = [
+        site
+        for site in index.patch_sites()
+        if site.path == "tests/test_first_run.py"
+        and any(target.name == "configured_spools" for target in site.targets)
+    ]
+    assert bans, "kein Patch auf configured_spools in test_first_run.py"
+    for site in bans:
+        targets = {(target.module, target.name) for target in site.targets}
+        assert targets == {binding}, f"Zeile {site.line} verbietet an {targets}"
+    assert index.readers(*binding), "niemand liest filament_inventory.configured_spools"
+    assert ("app.ui.filament_picker", "configured_spools") not in index.patched_names()
+    found = index.patch_findings()
+    named = [f for rule in "cd" for f in found[rule] if f.name == "configured_spools"]
+    assert not named, named
