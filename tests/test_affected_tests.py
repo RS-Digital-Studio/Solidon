@@ -94,7 +94,7 @@ def test_module_name_strips_init_and_uses_the_given_root(tmp_path: Path) -> None
 
 def test_a_changed_module_selects_direct_indirect_typed_and_tree_readers(tree: Path) -> None:
     """Eine geänderte Kerndatei wählt, wer sie direkt, mittelbar oder nur für Typen importiert,
-    dazu jeden Baumleser — und nennt je Datei den Grund.
+    dazu jeden, der ihren Ordner liest — und nennt je Datei den Grund.
     """
     files, reasons = affected([tree / "app" / "x.py"], ImportGraph(tree))
 
@@ -104,46 +104,176 @@ def test_a_changed_module_selects_direct_indirect_typed_and_tree_readers(tree: P
         "tests/test_typed.py",
         "tests/test_reader.py",
     }
-    assert reasons[tree / "tests" / "test_reader.py"] == "liest den ganzen Baum"
+    assert reasons[tree / "tests" / "test_reader.py"] == (
+        "liest app/**/*.py (tests/test_reader.py:2)"
+    )
     assert reasons[tree / "tests" / "test_indirect.py"] == "importiert eine geänderte Datei"
 
 
 def test_an_unrelated_module_selects_only_the_tree_readers(tree: Path) -> None:
-    """``app.z`` importiert niemand außer ``test_unrelated`` — und der Baumleser sieht alles."""
+    """``app.z`` importiert niemand außer ``test_unrelated`` — und der Baumleser sieht ``app/``."""
     files, _ = affected([tree / "app" / "z.py"], ImportGraph(tree))
 
     assert _names(files, tree) == {"tests/test_unrelated.py", "tests/test_reader.py"}
 
 
 def test_a_flat_glob_reads_the_tree_too(tree: Path) -> None:
-    """CS-6, RM-725: Wer den Baum über ``glob`` liest, statt ihn zu importieren, sieht jede
-    Änderung an ``app/`` — auch über das Modul ``glob``."""
-    _write(tree, "tests/test_globber.py", "from pathlib import Path\nFILES = Path('t').glob('*')\n")
-    _write(tree, "tests/test_globmodule.py", "import glob\nFILES = glob.glob('t/*')\n")
+    """CS-6, RM-725: Wer den Baum über ``glob`` liest, statt ihn zu importieren, sieht eine
+    Änderung in dem Ordner, den er liest — auch über das Modul ``glob``, auch unter anderem
+    Namen, auch über ``os.walk`` und ``Path.walk`` (H-2)."""
+    for name, text in (
+        ("test_globber", "from pathlib import Path\nFILES = Path('app').glob('*.py')\n"),
+        ("test_globmodule", "import glob\nFILES = glob.glob('app/*.py')\n"),
+        ("test_renamed", "from glob import glob as find\nFILES = find('app/*.py')\n"),
+        ("test_oswalk", "import os\nFILES = list(os.walk('app'))\n"),
+        ("test_pathwalk", "from pathlib import Path\nFILES = list(Path('app').walk())\n"),
+    ):
+        _write(tree, f"tests/{name}.py", text)
 
     files, reasons = affected([tree / "app" / "z.py"], ImportGraph(tree))
 
-    assert {"tests/test_globber.py", "tests/test_globmodule.py"} <= _names(files, tree)
-    assert reasons[tree / "tests" / "test_globber.py"] == "liest den ganzen Baum"
+    assert {
+        "tests/test_globber.py",
+        "tests/test_globmodule.py",
+        "tests/test_renamed.py",
+        "tests/test_oswalk.py",
+        "tests/test_pathwalk.py",
+    } <= _names(files, tree)
+    assert reasons[tree / "tests" / "test_globber.py"] == (
+        "liest app/*.py (tests/test_globber.py:2)"
+    )
+
+
+def test_only_a_glob_that_can_meet_python_reads_the_sources(tree: Path) -> None:
+    """RQ-4: Ein ``glob`` auf Temp-Dateien oder Schriften liest keine Quellen und wählt bei
+    einer Codeänderung nichts; ``ast.walk`` geht über einen Syntaxbaum, nicht über einen
+    Ordner (H-2). Was ``*.py``, ``*`` oder ein offenes Muster in einem Ordner des Baums trifft,
+    bleibt drin. Ein Ordner, der sich nicht auflösen lässt, zählt nur mit einem Muster, das
+    Python nennt — ``rglob("*")`` über ihn geht über Programme und Archive —, wird aber
+    an der Aufrufstelle zum Ordner, den das Argument nennt."""
+    for name, text in (
+        ("test_temp", "from pathlib import Path\nLEFT = Path('app').glob('*.tmp')\n"),
+        ("test_fonts", "from pathlib import Path\nFONTS = Path('app').rglob('*.ttf')\n"),
+        ("test_syntax", "import ast\nNODES = list(ast.walk(ast.parse('x')))\n"),
+        ("test_any", "from pathlib import Path\nALL = Path('app').glob('*')\n"),
+        ("test_open", "from pathlib import Path\nFOUND = Path('app').glob(f'{NAME}*')\n"),
+        ("test_unknown_any", "def files(folder):\n    return sorted(folder.rglob('*'))\n"),
+        ("test_unknown_py", "def files(folder):\n    return sorted(folder.rglob('*.py'))\n"),
+        (
+            "test_copies_app",
+            "from pathlib import Path\nfrom tools.copy import copy\nX = copy(Path('app'))\n",
+        ),
+    ):
+        _write(tree, f"tests/{name}.py", text)
+    _write(tree, "tools/copy.py", "def copy(source):\n    return list(source.rglob('*'))\n")
+
+    files, _ = affected([tree / "app" / "z.py"], ImportGraph(tree))
+
+    names = _names(files, tree)
+    assert (
+        not {
+            "tests/test_temp.py",
+            "tests/test_fonts.py",
+            "tests/test_syntax.py",
+            "tests/test_unknown_any.py",
+        }
+        & names
+    )
+    assert {
+        "tests/test_any.py",
+        "tests/test_open.py",
+        "tests/test_unknown_py.py",
+        "tests/test_copies_app.py",
+    } <= names
+
+
+def test_a_listing_through_git_or_a_tool_loaded_by_path_reads_too(tree: Path) -> None:
+    """Gemessen an der Lesemessung aller Testdateien: ``test_source_escapes`` liest jede
+    ``.md`` über ``git ls-files``, ``test_delivery_tools`` den Baum über ein Werkzeug, das es
+    mit ``spec_from_file_location`` lädt. Beide fehlten, sobald ein unbekannter Ordner nicht
+    mehr jeden Ort liest. Eine Lesestelle zählt auch für eine geänderte Datei, die kein
+    Python ist."""
+    _write(
+        tree,
+        "tests/test_markdown.py",
+        "import subprocess\n"
+        "from pathlib import Path\n"
+        "ROOT = Path(__file__).resolve().parents[1]\n"
+        "def test_markdown():\n"
+        "    subprocess.run(['git', 'ls-files', '-co', '--', '*.md'], cwd=ROOT)\n",
+    )
+    _write(
+        tree,
+        "tests/test_app_files.py",
+        "import subprocess\n"
+        "def test_app():\n"
+        "    subprocess.run(['git', 'ls-files', '-z', '--', 'app'])\n",
+    )
+    _write(
+        tree,
+        "tools/digest.py",
+        "def code_digest(root):\n    return sorted((root / 'app').rglob('*'))\n",
+    )
+    _write(
+        tree,
+        "tests/test_loaded.py",
+        "import importlib.util\n"
+        "from pathlib import Path\n"
+        "ROOT = Path(__file__).resolve().parents[1]\n"
+        "def test_digest():\n"
+        "    script = ROOT / 'tools' / 'digest.py'\n"
+        "    spec = importlib.util.spec_from_file_location('digest_copy', script)\n"
+        "    driver = importlib.util.module_from_spec(spec)\n"
+        "    assert driver.code_digest(ROOT)\n",
+    )
+    notes = _write(tree, "docs/NOTES.md", "# Notizen\n")
+    graph = ImportGraph(tree)
+
+    files, reasons = affected([tree / "app" / "z.py"], graph)
+
+    assert {"tests/test_app_files.py", "tests/test_loaded.py"} <= _names(files, tree)
+    assert "tests/test_markdown.py" not in _names(files, tree)
+    assert reasons[tree / "tests" / "test_loaded.py"] == "liest app/**/* über tools/digest.py:2"
+
+    files, reasons = affected([notes], graph)
+
+    assert "tests/test_markdown.py" in _names(files, tree)
+    assert reasons[tree / "tests" / "test_markdown.py"] == (
+        "liest **/*.md (tests/test_markdown.py:5)"
+    )
 
 
 def test_a_test_reading_through_a_source_helper_is_a_tree_reader(tree: Path) -> None:
     """E5: Ein Wächter, der den Baum nur über einen gemeinsamen Helfer liest, steht in keinem
-    eigenen Text als Baumleser — er wird über den Helfer gewählt, mittelbar und aus
-    ``tests/`` wie aus ``tools/``. Der Helfer selbst sammelt keinen Test und gehört nicht in
-    die Auswahl."""
+    eigenen Text als Baumleser — er wird über die Funktion gewählt, die er dort bezieht, auch
+    über einen Zwischenhelfer und aus ``tools/``; der Ordner kommt aus seinem Argument. Der
+    Helfer selbst sammelt keinen Test und gehört nicht in die Auswahl."""
     _write(
         tree,
         "tests/source_tree.py",
         "from pathlib import Path\n"
+        "ROOT = Path(__file__).resolve().parent.parent\n"
         "def files(folder):\n"
-        "    return sorted(Path(folder).rglob('*.py'))\n",
+        "    return sorted((ROOT / folder).rglob('*.py'))\n",
     )
-    _write(tree, "tests/test_guard.py", "from tests import source_tree\n")
+    _write(
+        tree, "tests/test_guard.py", "from tests import source_tree\nX = source_tree.files('app')\n"
+    )
     _write(tree, "tests/guard_helpers.py", "from tests.source_tree import files\n")
-    _write(tree, "tests/test_far_guard.py", "from tests.guard_helpers import files\n")
+    _write(
+        tree, "tests/test_far_guard.py", "from tests.guard_helpers import files\nX = files('app')\n"
+    )
+    _write(
+        tree,
+        "tests/test_tests_guard.py",
+        "from tests import source_tree\nX = source_tree.files('tests')\n",
+    )
     _write(tree, "tools/code_scan.py", "def scan(root):\n    return sorted(root.glob('**/*.py'))\n")
-    _write(tree, "tests/test_scan_guard.py", "from tools.code_scan import scan\n")
+    _write(
+        tree,
+        "tests/test_scan_guard.py",
+        "from pathlib import Path\nfrom tools.code_scan import scan\nX = scan(Path('app'))\n",
+    )
 
     files, reasons = affected([tree / "app" / "z.py"], ImportGraph(tree))
 
@@ -152,46 +282,60 @@ def test_a_test_reading_through_a_source_helper_is_a_tree_reader(tree: Path) -> 
         "tests/test_far_guard.py",
         "tests/test_scan_guard.py",
     } <= _names(files, tree)
+    assert "tests/test_tests_guard.py" not in _names(files, tree), "liest nur tests/"
     assert reasons[tree / "tests" / "test_guard.py"] == (
-        "liest den ganzen Baum über tests/source_tree.py"
+        "liest app/**/*.py über tests/source_tree.py:4"
     )
     assert reasons[tree / "tests" / "test_scan_guard.py"] == (
-        "liest den ganzen Baum über tools/code_scan.py"
+        "liest app/**/*.py über tools/code_scan.py:2"
     )
     assert all(path.name.startswith("test_") for path in files), sorted(files)
 
 
-def test_a_test_borrowing_a_source_search_from_another_test_reads_the_tree(tree: Path) -> None:
-    """Wie ``test_wording`` die Quellen über ``application_sources`` aus ``test_text_length``
-    liest: Auch eine Testdatei kann ihren Baumgang verleihen. Wer dort nur einen Körper
-    leiht (``box`` aus ``test_boolean``), liest dadurch keine Quellen und bleibt draußen."""
+def test_only_who_borrows_the_reading_function_reads_through_a_test_file(tree: Path) -> None:
+    """RQ-3: Wie ``test_wording`` die Quellen über ``application_sources`` aus
+    ``test_text_length`` liest, kann auch eine Testdatei ihren Baumgang verleihen — aber nur
+    an den, der die lesende Funktion bezieht. ``test_boolean_empty_result`` leiht ``box`` aus
+    ``test_boolean``, das an anderer Stelle ``rglob`` trägt; durch ``box`` liest es nichts."""
     _write(
         tree,
         "tests/test_lengths.py",
         "from pathlib import Path\n"
         "def application_sources():\n"
-        "    return sorted(Path('app').rglob('*.py'))\n",
+        "    return sorted(Path('app').rglob('*.py'))\n"
+        "def box():\n"
+        "    return None\n",
     )
-    _write(tree, "tests/test_words.py", "from tests.test_lengths import application_sources\n")
-    _write(tree, "tests/test_solids.py", "def box():\n    return None\n")
-    _write(tree, "tests/test_empty_result.py", "from tests.test_solids import box\n")
+    _write(
+        tree,
+        "tests/test_words.py",
+        "from tests.test_lengths import application_sources\nX = application_sources()\n",
+    )
+    _write(tree, "tests/test_empty_result.py", "from tests.test_lengths import box\nX = box()\n")
 
     files, reasons = affected([tree / "app" / "z.py"], ImportGraph(tree))
 
+    assert "tests/test_empty_result.py" not in _names(files, tree)
     assert reasons[tree / "tests" / "test_words.py"] == (
-        "liest den ganzen Baum über tests/test_lengths.py"
+        "liest app/**/*.py über tests/test_lengths.py:3"
     )
-    assert reasons[tree / "tests" / "test_lengths.py"] == "liest den ganzen Baum"
-    assert not {"tests/test_solids.py", "tests/test_empty_result.py"} & _names(files, tree)
+    assert reasons[tree / "tests" / "test_lengths.py"] == (
+        "liest app/**/*.py (tests/test_lengths.py:3)"
+    )
 
 
 def test_a_helper_listing_a_foreign_tree_is_no_source_reader(tree: Path) -> None:
-    """Die Gegenrichtung zu E5: Ein Helfer, der ein Paketarchiv oder ein Profil durchgeht
-    (``rglob("*")``), sucht keine Python-Quellen. Seine Importeure laufen bei einer Änderung
-    an ``app/`` nicht mit — sonst zöge ``tests/helpers.py`` jede zweite Testdatei hinein —,
-    und er selbst steht auch dann nicht in der Auswahl, wenn er das Wort ``rglob`` trägt."""
+    """Die Gegenrichtung zu E5: Ein Helfer, der ein Paketarchiv in einem Temp-Ordner
+    durchgeht (``rglob("*")``), liest keine Quellen. Seine Importeure laufen bei einer
+    Änderung an ``app/`` nicht mit — sonst zöge ``tests/helpers.py`` jede zweite Testdatei
+    hinein —, und er selbst steht auch dann nicht in der Auswahl, wenn er das Wort ``rglob``
+    trägt."""
     _write(tree, "tests/archive.py", "def pack(tree):\n    return sorted(tree.rglob('*'))\n")
-    _write(tree, "tests/test_archive.py", "from tests.archive import pack\n")
+    _write(
+        tree,
+        "tests/test_archive.py",
+        "from tests.archive import pack\ndef test_pack(tmp_path):\n    pack(tmp_path / 'x')\n",
+    )
 
     files, _ = affected([tree / "app" / "z.py"], ImportGraph(tree))
 
@@ -251,37 +395,47 @@ def test_the_real_guards_are_chosen_for_any_change_under_app(real_graph: ImportG
 
     Geändert ist ein Modul, das es nicht gibt — gelöscht oder noch nicht angelegt —
     und das deshalb niemand importiert: So hängt die Auswahl an keiner Importkante
-    des heutigen Baums, nur am Lesen."""
+    des heutigen Baums, nur am Lesen. Und nur an dem Ordner, den ein Wächter liest: Die
+    Verbotsprüfungen über ``app/ui`` laufen bei einer Änderung unter ``perceive`` nicht mit,
+    die über ``perceive`` schon."""
     graph = real_graph
-    changed = graph.root / "app" / "core" / "perceive" / "zz_not_yet_imported.py"
-    assert not changed.exists()
+    surface = graph.root / "app" / "ui" / "render" / "zz_not_yet_imported.py"
+    perceive = graph.root / "app" / "core" / "perceive" / "zz_not_yet_imported.py"
+    assert not surface.exists() and not perceive.exists()
 
-    files, reasons = affected([changed], graph)
+    everywhere = (
+        "test_patch_targets.py",
+        "test_import_resolution.py",
+        "test_wording.py",
+        "test_source_readers.py",
+    )
+    surface_guards = ("test_leash.py", "test_native_keys.py", "test_widget_lifetime.py")
+    core_guards = ("test_core_package_direction.py", "test_features.py")
+    for changed, guards, others in (
+        (surface, surface_guards, (*core_guards[:1], "test_activation.py")),
+        (perceive, core_guards, (*surface_guards, "test_activation.py")),
+    ):
+        files, reasons = affected([changed], graph)
 
-    for name in ("test_patch_targets.py", "test_import_resolution.py"):
-        assert reasons[graph.root / "tests" / name] == (
-            "liest den ganzen Baum über tools/code_facts.py"
-        ), name
-    for name in ("test_leash.py", "test_native_keys.py", "test_widget_lifetime.py"):
-        assert reasons[graph.root / "tests" / name] == (
-            "liest den ganzen Baum über tests/source_tree.py"
-        ), name
-    assert reasons[graph.root / "tests" / "test_wording.py"].startswith(
-        "liest den ganzen Baum über tests/"
-    )
-    assert reasons[graph.root / "tests" / "test_source_readers.py"].startswith(
-        "liest den ganzen Baum"
-    )
-    assert all(path.name.startswith("test_") for path in files)
+        # Zugesichert wird die Eigenschaft, nicht der Wortlaut: Liest eine Datei den Ordner
+        # später an einer zweiten Stelle, ändert sich ihr Grund, nicht die Auswahl (RQ-9).
+        for name in (*everywhere, *guards):
+            assert reasons.get(graph.root / "tests" / name, "").startswith("liest "), name
+        for name in others:
+            assert graph.root / "tests" / name not in files, (name, changed)
+        assert all(path.name.startswith("test_") for path in files)
+        # Wer aus einer Testdatei nur einen Körper leiht, liest durch sie nichts (RQ-3).
+        for name in ("test_boolean_empty_result.py", "test_surface_placement.py"):
+            assert graph.root / "tests" / name not in files, name
 
 
 def test_the_real_guards_over_tests_are_chosen_for_a_change_to_a_test(
     real_graph: ImportGraph,
 ) -> None:
     """Gegen den echten Baum: Eine reine Teständerung wählt die Wächter, die ``tests/``
-    lesen — Querimporte und doppelte Definitionen, Sperrklinke, Verzeichniskarten und W4.
-    Bis Codestruktur Schritt 0 nannte die Auswahl nur die geänderte Datei und ihre
-    Importeure, und diese Wächter liefen erst im Tor."""
+    lesen — Querimporte und doppelte Definitionen, Sperrklinke, Verzeichniskarten und W4 —,
+    aber keinen, der nur ``app/`` liest (RQ-1). Vorher wählte sie alle rund 150 Baumleser,
+    und ``ci_selection`` fuhr dafür 47 Fensterprozesse auf Linux und macOS."""
     graph = real_graph
     changed = graph.root / "tests" / "test_wording.py"
     assert changed.is_file()
@@ -295,39 +449,58 @@ def test_the_real_guards_over_tests_are_chosen_for_a_change_to_a_test(
         "test_source_readers.py",
     ):
         assert graph.root / "tests" / name in files, name
+    for name in ("test_leash.py", "test_features.py", "test_ui.py", "test_widget_lifetime.py"):
+        assert graph.root / "tests" / name not in files, name
 
 
 def test_a_changed_test_file_selects_itself(tree: Path) -> None:
-    """Eine geänderte Testdatei ist selbst betroffen, dazu die Baumleser — sonst niemand."""
+    """Eine geänderte Testdatei ist selbst betroffen — der Baumleser über ``app/`` nicht."""
     files, reasons = affected([tree / "tests" / "test_unrelated.py"], ImportGraph(tree))
 
-    assert _names(files, tree) == {"tests/test_unrelated.py", "tests/test_reader.py"}
+    assert _names(files, tree) == {"tests/test_unrelated.py"}
     assert reasons[tree / "tests" / "test_unrelated.py"] == "selbst geändert"
 
 
-def test_a_change_under_tests_reaches_the_tree_readers(tree: Path) -> None:
-    """Auch ``tests/`` ist Baum: Private Querimporte, eine neue Definition in einer Datei der
-    Sperrklinke oder ein flaches ``glob`` entstehen gerade in einer Teständerung, und die
-    Wächter dafür (``test_toolchain``, ``test_size_ratchet``, ``test_source_readers``)
-    importieren die geänderte Datei nicht. Sie laufen mit, ob sie selbst lesen oder über
-    ein Werkzeug — für eine Testdatei wie für einen Helfer, geändert oder gelöscht."""
-    _write(tree, "tools/sizes.py", "def sizes(root):\n    return sorted(root.rglob('*.py'))\n")
-    _write(tree, "tests/test_sizes.py", "from tools.sizes import sizes\n")
+def test_a_change_under_tests_reaches_the_readers_of_tests_only(tree: Path) -> None:
+    """RQ-1: Auch ``tests/`` ist Baum. Private Querimporte, eine neue Definition in einer Datei
+    der Sperrklinke oder ein flaches ``glob`` entstehen gerade in einer Teständerung, und die
+    Wächter dafür importieren die geänderte Datei nicht. Gewählt wird, wessen Lesebereich
+    ``tests/`` einschließt — selbst, über ein Werkzeug oder mit einem Muster, das die Datei
+    trifft —, für eine Testdatei wie für einen Helfer, geändert oder gelöscht. Wer nur
+    ``app/`` liest, bleibt draußen."""
+    _write(
+        tree,
+        "tools/sizes.py",
+        "from pathlib import Path\n"
+        "ROOT = Path(__file__).resolve().parent.parent\n"
+        "def sizes(areas=('app', 'tests')):\n"
+        "    return [path for area in areas for path in (ROOT / area).rglob('*.py')]\n",
+    )
+    _write(tree, "tests/test_sizes.py", "from tools.sizes import sizes\nX = sizes()\n")
+    _write(
+        tree,
+        "tests/test_own_files.py",
+        "from pathlib import Path\nHERE = Path(__file__).parent\nX = HERE.glob('test_*.py')\n",
+    )
     helper = _write(tree, "tests/fakes.py", "FAKE = 1\n")
     graph = ImportGraph(tree)
 
-    for changed in (tree / "tests" / "test_direct.py", helper):
-        files, reasons = affected([changed], graph)
+    files, reasons = affected([tree / "tests" / "test_direct.py"], graph)
 
-        assert {"tests/test_reader.py", "tests/test_sizes.py"} <= _names(files, tree), changed
-        assert reasons[tree / "tests" / "test_sizes.py"] == (
-            "liest den ganzen Baum über tools/sizes.py"
-        )
+    assert {"tests/test_sizes.py", "tests/test_own_files.py"} <= _names(files, tree)
+    assert "tests/test_reader.py" not in _names(files, tree), "liest nur app/"
+    assert reasons[tree / "tests" / "test_sizes.py"] == "liest tests/**/*.py über tools/sizes.py:4"
+
+    files, _ = affected([helper], graph)
+
+    assert "tests/test_sizes.py" in _names(files, tree)
+    assert "tests/test_own_files.py" not in _names(files, tree), "test_*.py trifft fakes.py nicht"
+    assert "tests/test_reader.py" not in _names(files, tree)
 
     helper.unlink()
     files, _ = affected([helper], ImportGraph(tree))
 
-    assert {"tests/test_reader.py", "tests/test_sizes.py"} <= _names(files, tree)
+    assert "tests/test_sizes.py" in _names(files, tree)
 
 
 @pytest.mark.parametrize("deleted", [False, True])
@@ -363,7 +536,7 @@ def test_a_deleted_test_helper_selects_its_importers(tree: Path) -> None:
 
     files, _ = affected([helper], ImportGraph(tree))
 
-    assert _names(files, tree) == {"tests/test_probe.py", "tests/test_reader.py"}
+    assert _names(files, tree) == {"tests/test_probe.py"}
 
 
 def test_git_paths_keep_unicode_spaces_and_both_sides_of_a_rename(tmp_path: Path) -> None:
@@ -596,8 +769,8 @@ def test_a_bare_import_of_a_local_module_is_found(tree: Path) -> None:
 
     files, _ = affected([tree / "tests" / "fakes.py"], graph)
 
-    # Der Baumleser liest auch tests/ und läuft deshalb mit; test_bare fehlt.
-    assert _names(files, tree) == {"tests/test_prefixed.py", "tests/test_reader.py"}
+    # Der Baumleser liest nur app/ und bleibt draußen; test_bare fehlt.
+    assert _names(files, tree) == {"tests/test_prefixed.py"}
     assert bare_local_imports(graph) == [
         "tests/test_bare.py:2: fakes",
         "tests/test_forms.py:1: fakes",

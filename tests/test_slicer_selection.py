@@ -139,6 +139,46 @@ def test_a_changed_test_file_lands_in_both_lists_by_its_cases(tmp_path: Path) ->
     assert ci_selection.programs("; ".join(slicers), tmp_path) == ["cura"]
 
 
+def test_a_pure_test_change_runs_no_window_test_that_reads_only_the_application(
+    tmp_path: Path,
+) -> None:
+    """RQ-1: Eine Änderung nur an einem Test wählte über ``affected_tests`` jeden Baumleser,
+    und ``ci_selection`` fuhr dafür 47 Fenster- und 3 Slicerprozesse auf Linux und macOS.
+    Ein Fenstertest, der nur ``app/`` liest, läuft bei einer Teständerung nicht mit — bei
+    einer Änderung unter ``app/`` schon; einer, der ``tests/`` liest, läuft bei beiden."""
+    for package in ("app", "tools", "tests"):
+        (tmp_path / package).mkdir()
+    window = textwrap.dedent(
+        """
+        from pathlib import Path
+
+        import pytest
+
+        FOLDER = Path(__file__).resolve().parents[1] / {folder!r}
+
+        @pytest.mark.windowed
+        def test_window():
+            assert sorted(FOLDER.rglob("*.py")) is not None
+        """
+    )
+    (tmp_path / "tests" / "test_app_reader.py").write_text(
+        window.format(folder="app"), encoding="utf-8"
+    )
+    (tmp_path / "tests" / "test_tests_reader.py").write_text(
+        window.format(folder="tests"), encoding="utf-8"
+    )
+    changed_test = tmp_path / "tests" / "test_plain.py"
+    changed_test.write_text("def test_plain():\n    pass\n", encoding="utf-8")
+    changed_app = tmp_path / "app" / "module.py"
+    changed_app.write_text("VALUE = 1\n", encoding="utf-8")
+
+    windows, _slicers = ci_selection.select([changed_test], tmp_path)
+    assert {shlex.split(selection)[0] for selection in windows} == {"tests/test_tests_reader.py"}
+
+    windows, _slicers = ci_selection.select([changed_app], tmp_path)
+    assert {shlex.split(selection)[0] for selection in windows} == {"tests/test_app_reader.py"}
+
+
 def _unmarked_machine_searches(source: str, name: str) -> list[str]:
     """Stellen, die einen installierten Slicer an ``installed_slicer`` vorbei suchen."""
     tree = ast.parse(source)

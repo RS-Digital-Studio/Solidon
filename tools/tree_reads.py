@@ -4,13 +4,17 @@ Zwei Prüfungen fragen dasselbe:
 
 - **W4** (``tests/test_source_readers.py``): Liest ein ``glob`` auf Python-Quellen flach über
   ein Paket? Dafür der Ordner jedes solchen Globs (:func:`flat_globs`).
-- **Die Auswahl** (``tools/affected_tests.py``) braucht denselben Auflöser für die Frage,
-  welche Testdateien den Ordner einer Änderung lesen.
+- **Die Auswahl** (``tools/affected_tests.py``, über sie auch ``tools/ci_selection.py``):
+  Welche Testdateien lesen den Ordner, in dem eine Änderung liegt? Dafür jede Lesestelle mit
+  Ordner und Muster (:class:`Read`) — in der Testdatei selbst oder in einer Definition, die sie
+  aus einem anderen Modul bezieht (:class:`TreeReads`).
 
 **Lesestellen** sind ``glob``, ``rglob``, ``iterdir`` und ``walk`` eines Pfads, die Funktionen
 ``glob.glob``/``iglob``, ``os.walk``/``listdir``/``scandir``, ``pkgutil.walk_packages``/
-``iter_modules`` und ``shutil.copytree`` — auch umbenannt (``from glob import glob as find``).
-``ast.walk`` ist keine: Ein Empfänger, der ein fremdes Modul ist, liest keinen Ordner.
+``iter_modules`` und ``shutil.copytree`` — auch umbenannt (``from glob import glob as find``) —
+und ein Aufruf mit der Befehlsliste ``["git", "ls-files", …]``. ``ast.walk`` ist keine: Ein
+Empfänger, der ein fremdes Modul ist, liest keinen Ordner. Ein Modul, das ein Test über
+``spec_from_file_location`` lädt, ist das Modul des Baums.
 
 **Aufgelöst wird statisch**, wie Python einen Namen sucht: Funktion, umgebende Funktionen,
 Modul, eingebaut; ein Klassenrumpf nur für Code direkt darin. Gefaltet werden
@@ -51,6 +55,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 # --------------------------------------------------------------------------- Werte
 
@@ -108,6 +113,9 @@ Value = Module | Foreign | Place | Outside | Definition | Choice | str | None
 
 #: Werte der Parameter: ``(id(funktionsknoten), name)`` → Wert.
 Env = Mapping[tuple[int, str], Value]
+
+#: Eine Bindung: Art und was sie trägt (Wert und Anweisung, Import, Parameter, Definition).
+_Binding = tuple[str, Any]
 
 #: Konstruktoren, deren Argumente ein Pfad sind.
 _PATH_TYPES = frozenset(
@@ -238,7 +246,7 @@ class Resolver:
         #: Glob über den Arbeitsordner selbst der Fund.
         self.working_root = working_root
         self._trees: dict[str, tuple[ast.Module, dict[ast.AST, ast.AST]]] = {}
-        self._bindings: dict[ast.AST, dict[str, list[tuple[str, object]]]] = {}
+        self._bindings: dict[ast.AST, dict[str, list[_Binding]]] = {}
         self._busy: set[tuple[int, str]] = set()
         self._exists: dict[str, bool] = {}
         self._paths: dict[str, Path | None] = {}
@@ -312,11 +320,11 @@ class Resolver:
             current = parents.get(current)
         return found
 
-    def bindings(self, scope: ast.AST) -> dict[str, list[tuple[str, object]]]:
+    def bindings(self, scope: ast.AST) -> dict[str, list[_Binding]]:
         """Jeder Name, den ``scope`` bindet, mit der Art jeder Bindung."""
         if scope in self._bindings:
             return self._bindings[scope]
-        found: dict[str, list[tuple[str, object]]] = defaultdict(list)
+        found: dict[str, list[_Binding]] = defaultdict(list)
         if isinstance(scope, (*_FUNCTIONS, ast.Lambda)):
             arguments = scope.args
             for argument in (
@@ -344,7 +352,7 @@ class Resolver:
         self._bindings[scope] = found
         return found
 
-    def _bind(self, node: ast.AST, found: dict[str, list[tuple[str, object]]]) -> None:
+    def _bind(self, node: ast.AST, found: dict[str, list[_Binding]]) -> None:
         if isinstance(node, (*_FUNCTIONS, ast.ClassDef)):
             found[node.name].append(("def", node))
             return
@@ -395,7 +403,7 @@ class Resolver:
         for child in ast.iter_child_nodes(node):
             self._bind(child, found)
 
-    def binding(self, name: str, scopes: list[ast.AST]) -> tuple[int, tuple[str, object]] | None:
+    def binding(self, name: str, scopes: list[ast.AST]) -> tuple[int, _Binding] | None:
         """Die eine Bindung von ``name`` mit dem Index ihres Bereichs; mehrere verschiedene oder
         keine: ``None``. Derselbe Import zweimal ist eine Bindung."""
         for index, scope in enumerate(scopes):
@@ -425,7 +433,7 @@ class Resolver:
         if kind == "foreign":
             return Foreign(str(data))
         if kind == "from":
-            statement, imported = data  # type: ignore[misc]
+            statement, imported = data
             source = self.source_module(statement, relative)
             if not statement.level and not self.module_exists(source):
                 return Foreign(f"{source}.{imported}")
@@ -443,10 +451,10 @@ class Resolver:
             return Foreign(f"builtins.{name}") if hasattr(builtins, name) else None
         index, (kind, data) = found
         if kind == "row":
-            iterable, position = data  # type: ignore[misc]
+            iterable, position = data
             return self.column(iterable, position, scopes[index:], relative, env)
         if kind in ("value", "for", "with"):
-            expression = data[0] if kind == "value" else data  # type: ignore[index]
+            expression = data[0] if kind == "value" else data
             if expression is None:
                 return None
             key = (id(expression), relative)
@@ -456,8 +464,8 @@ class Resolver:
             try:
                 inner = scopes[index:]
                 if kind == "for":
-                    return self.elements(expression, inner, relative, env)  # type: ignore[arg-type]
-                value = self.evaluate(expression, inner, relative, env)  # type: ignore[arg-type]
+                    return self.elements(expression, inner, relative, env)
+                value = self.evaluate(expression, inner, relative, env)
                 if kind == "with":
                     return value if isinstance(value, Outside) else None
                 return value
@@ -468,12 +476,12 @@ class Resolver:
         if kind == "foreign":
             return Foreign(str(data))
         if kind == "from":
-            statement, imported = data  # type: ignore[misc]
+            statement, imported = data
             return self.imported(statement, imported, relative)
         if kind == "def":
-            return Definition(relative, data)  # type: ignore[arg-type]
+            return Definition(relative, data)
         if kind == "param":
-            function, parameter = data  # type: ignore[misc]
+            function, parameter = data
             if env is not None and (id(function), parameter) in env:
                 return env[(id(function), parameter)]
             if parameter in _TEMP_FIXTURES:
@@ -589,18 +597,18 @@ class Resolver:
         return self._defined((0, entries[0]), relative, depth + 1)
 
     def _defined(
-        self, found: tuple[int, tuple[str, object]] | None, relative: str, depth: int
+        self, found: tuple[int, _Binding] | None, relative: str, depth: int
     ) -> Definition | None:
         if found is None:
             return None
         kind, data = found[1]
         if kind == "def":
-            return Definition(relative, data)  # type: ignore[arg-type]
+            return Definition(relative, data)
         if kind == "value":
-            _value, statement = data  # type: ignore[misc]
+            _value, statement = data
             return Definition(relative, statement)
         if kind == "from":
-            statement, imported = data  # type: ignore[misc]
+            statement, imported = data
             source = self.source_module(statement, relative)
             if self.module_exists(source):
                 return self.module_definition(source, imported, depth)
@@ -613,7 +621,7 @@ class Resolver:
         if isinstance(node, ast.Constant):
             return node.value if isinstance(node.value, str) else None
         if isinstance(node, ast.JoinedStr):
-            texts = [part.value for part in node.values if isinstance(part, ast.Constant)]
+            texts = [str(part.value) for part in node.values if isinstance(part, ast.Constant)]
             return "".join(texts) if len(texts) == len(node.values) else None
         if isinstance(node, ast.Name):
             return self.lookup(node.id, scopes, relative, env)
@@ -740,8 +748,8 @@ class Resolver:
             return node, scopes, relative
         found = self.binding(node.id, scopes)
         if found is not None and found[1][0] == "value":
-            value, _statement = found[1][1]  # type: ignore[misc]
-            return value, scopes[found[0] :], relative  # type: ignore[return-value]
+            value, _statement = found[1][1]
+            return value, scopes[found[0] :], relative
         definition = self.definition(relative, node)
         if definition is not None and isinstance(definition.node, ast.Assign | ast.AnnAssign):
             tree, _parents = self.parsed(definition.relative)
@@ -752,7 +760,7 @@ class Resolver:
         found = self.binding(node.id, scopes)
         if found is None or found[1][0] != "value":
             return False
-        value, _statement = found[1][1]  # type: ignore[misc]
+        value, _statement = found[1][1]
         return isinstance(value, ast.Tuple | ast.List | ast.Set)
 
     def _attribute_of(self, value: Value, name: str) -> Value:
@@ -812,7 +820,21 @@ class Resolver:
             return each(values[0], lambda one: one if isinstance(one, Place | Outside) else None)
         if name == "os.path.dirname" and len(values) == 1:
             return each(values[0], lambda one: self._attribute_of(one, "parent"))
+        # Ein Modul, über seinen Pfad oder seinen Namen geladen, ist das Modul des Baums.
+        if name == "importlib.util.spec_from_file_location" and len(values) >= 2:
+            return each(values[1], self._module_at)
+        if name == "importlib.util.module_from_spec" and len(values) == 1:
+            return values[0] if isinstance(values[0], Module) else None
+        if name == "importlib.import_module" and len(values) == 1 and isinstance(values[0], str):
+            return Module(values[0]) if self.module_exists(values[0]) else None
         return None
+
+    def _module_at(self, value: Value) -> Value:
+        """Das Modul des Baums, dessen Datei ``value`` ist."""
+        if not isinstance(value, Place) or not value.parts or value.parts[0] not in _PACKAGES:
+            return None
+        name = self.module_name("/".join(value.parts))
+        return Module(name) if self.module_path(name) is not None else None
 
     def _path_method(
         self, base: Value, node: ast.Call, scopes: list[ast.AST], relative: str, env: Env | None
@@ -1000,6 +1022,15 @@ _FUNCTION_READS: dict[str, tuple[str, bool]] = {
 #: Die letzten Namen aller Lesestellen; andere Aufrufe braucht :func:`sites` nicht aufzulösen.
 _READ_NAMES = frozenset({*_PATH_READS, *(name.rsplit(".", 1)[1] for name in _FUNCTION_READS)})
 
+#: Der Text, an dem eine Datei überhaupt eine Lesestelle tragen kann: ein Aufruf als Methode
+#: (``ast.walk`` ausgenommen) oder ein Import des Namens, der danach bloß gerufen wird.
+READ_WORDS = re.compile(
+    r"\.(?:r?glob|iglob|iterdir|listdir|scandir|walk_packages|iter_modules|copytree)\s*\("
+    r"|(?<!\bast)\.walk\s*\("
+    r"|\bimport\b[^\n]*\b(?:glob|iglob|walk|listdir|scandir|walk_packages|iter_modules|copytree)\b"
+    r"|[\"']ls-files[\"']"
+)
+
 
 @dataclass(frozen=True)
 class Site:
@@ -1016,10 +1047,90 @@ class Site:
         return f"{self.relative}:{self.call.lineno}"
 
 
+def _matches(name: str, part: str) -> bool:
+    return part == "**" or PurePosixPath(name).full_match(part)
+
+
+def python_pattern(part: str) -> bool:
+    """Ob ein Muster für einen Dateinamen eine ``.py`` treffen kann: ``*``, ``*.py``,
+    ``test_*.py``, ``*_ops.py`` ja, ``*.json`` und ``*.pyi`` nein."""
+    if part == "**":
+        return True
+    last = max(part.rfind(mark) for mark in "*?]")
+    if last < 0:
+        return part.endswith(".py")
+    tail = part[last + 1 :]
+    return not tail or ".py".endswith(tail) or tail.endswith(".py")
+
+
+@dataclass(frozen=True)
+class Read:
+    """Was eine Lesestelle liest: Ordner, Muster relativ dazu (``**`` heißt jede Tiefe), Stelle.
+
+    ``folder`` ist ein :class:`Place` ohne Muster, :class:`Outside` oder ``None`` (nicht
+    auflösbar).
+    """
+
+    folder: Place | Outside | None
+    pattern: tuple[str, ...]
+    site: str
+
+    def meets_python(self) -> bool:
+        """Ob diese Stelle überhaupt eine Python-Datei des Baums lesen kann.
+
+        Ein Ordner im Repository zählt mit jedem Muster, das eine ``.py`` trifft (``*``,
+        ``*.py``). Ein nicht auflösbarer Ordner zählt nur mit einem Muster, das Python nennt
+        (``*.py``): Ein ``rglob("*")`` über einen unbekannten Ordner geht im Bestand über
+        Programme, Archive, Profile und Temp-Bäume, und die Lesemessung aller Testdateien
+        fand darunter keinen Leser von Quellen.
+        """
+        if isinstance(self.folder, Outside):
+            return False
+        if self.folder is None:
+            return ".py" in self.pattern[-1]
+        return python_pattern(self.pattern[-1])
+
+    def covers(self, path: PurePosixPath) -> bool:
+        """Ob ``path`` (relativ zur Wurzel) unter dem liegt, was diese Stelle liest; ein nicht
+        auflösbarer Ordner liest jeden Ort, auf dessen Namen das Muster passt, wenn es Python
+        nennt (:meth:`meets_python`)."""
+        if isinstance(self.folder, Outside):
+            return False
+        if self.folder is None:
+            return self.meets_python() and _matches(path.name, self.pattern[-1])
+        fixed = list(self.folder.parts)
+        rest = list(self.pattern)
+        while rest and not _WILDCARD.search(rest[0]):
+            fixed.append(rest.pop(0))
+        if tuple(path.parts[: len(fixed)]) != tuple(fixed):
+            return False
+        remainder = path.parts[len(fixed) :]
+        if not rest:
+            return not remainder
+        return bool(remainder) and PurePosixPath(*remainder).full_match("/".join(rest))
+
+    def describe(self) -> str:
+        """Was gelesen wird, als ein Pfadmuster: ``app/ui/**/*.py``."""
+        head = self.folder.parts if isinstance(self.folder, Place) else ("<unauflösbar>",)
+        return "/".join((*head, *self.pattern))
+
+
 def _pattern_parts(text: str, recursive: bool) -> tuple[str, ...]:
     parts = tuple(part for part in text.replace("\\", "/").split("/") if part not in ("", "."))
     parts = parts or ("*",)
     return ("**", *parts) if recursive and parts[0] != "**" else parts
+
+
+def _read(folder: Value, pattern: tuple[str, ...], site: str) -> Read:
+    """Eine Lesung; Muster im Ordner (aus einer Schleife über eine Lesestelle) wandern ins
+    Muster."""
+    if isinstance(folder, Place):
+        cut = next(
+            (index for index, part in enumerate(folder.parts) if _WILDCARD.search(part)),
+            len(folder.parts),
+        )
+        return Read(Place(folder.parts[:cut]), (*folder.parts[cut:], *pattern), site)
+    return Read(folder if isinstance(folder, Outside) else None, pattern, site)
 
 
 def sites(resolver: Resolver, relative: str) -> list[Site]:
@@ -1036,6 +1147,11 @@ def sites(resolver: Resolver, relative: str) -> list[Site]:
             )
     found: list[Site] = []
     for node in calls:
+        listing = _git_listing(node)
+        if listing is not None:
+            cwd = next((one.value for one in node.keywords if one.arg == "cwd"), None)
+            found.append(Site(relative, node, "git ls-files", cwd, listing))
+            continue
         function = node.func
         if isinstance(function, ast.Attribute):
             if function.attr not in _READ_NAMES:
@@ -1061,6 +1177,23 @@ def sites(resolver: Resolver, relative: str) -> list[Site]:
     return found
 
 
+def _git_listing(node: ast.Call) -> ast.List | ast.Tuple | None:
+    """Die Befehlsliste eines Aufrufs, der ``git ls-files`` startet — ``subprocess.run([…])``
+    und Co.; so lesen ``test_source_escapes`` und ``docs_scan`` die Dateien des Baums."""
+    for argument in node.args:
+        if (
+            isinstance(argument, ast.List | ast.Tuple)
+            and argument.elts
+            and isinstance(argument.elts[0], ast.Constant)
+            and argument.elts[0].value == "git"
+            and any(
+                isinstance(one, ast.Constant) and one.value == "ls-files" for one in argument.elts
+            )
+        ):
+            return argument
+    return None
+
+
 def _is_module_or_definition(resolver: Resolver, node: ast.expr, scopes: list[ast.AST]) -> bool:
     """Ob der Empfänger ein eigenes Modul oder eine Definition ist — dann ist ``x.walk()`` ein
     Aufruf ins Modul, kein Pfad. Geprüft an der Bindung, ohne das Modul zu lesen."""
@@ -1079,6 +1212,114 @@ def _function_site(relative: str, node: ast.Call, name: str) -> Site:
         root_dir = next((one.value for one in node.keywords if one.arg == "root_dir"), None)
         return Site(relative, node, name, root_dir, argument)
     return Site(relative, node, name, argument, None)
+
+
+def _pathspecs(
+    resolver: Resolver, site: Site, scopes: list[ast.AST], env: Env | None
+) -> list[str | None]:
+    """Die Pfadangaben eines ``git ls-files``-Aufrufs nach ``--``; keine heißt der ganze Baum,
+    eine, die sich nicht auflösen lässt, ``None``."""
+    assert isinstance(site.pattern, ast.List | ast.Tuple)
+    items = site.pattern.elts
+    marker = next(
+        (
+            index
+            for index, one in enumerate(items)
+            if isinstance(one, ast.Constant) and one.value == "--"
+        ),
+        None,
+    )
+    if marker is None:
+        return [""]
+    found: list[str | None] = []
+    for item in items[marker + 1 :]:
+        node = item.value if isinstance(item, ast.Starred) else item
+        value = resolver.evaluate(node, scopes, site.relative, env)
+        found.extend(one if isinstance(one, str) else None for one in options(value))
+    return found or [""]
+
+
+def _spec_reads(base: Value, spec: str | None, where: str) -> list[Read]:
+    """Was eine Pfadangabe von ``git ls-files`` liest: ``*.md`` jede Tiefe, ``app`` alles
+    darunter, ``app/x.py`` die Datei selbst; Vorsätze wie ``:(glob)`` fallen weg."""
+    if spec is None:
+        return [_read(base, ("**", "*"), where)]
+    text = re.sub(r"^:\([^)]*\)", "", spec).strip("/")
+    if not text or text == ".":
+        return [_read(base, ("**", "*"), where)]
+    parts = tuple(part for part in text.split("/") if part not in ("", "."))
+    if _WILDCARD.search(text):
+        return [_read(base, ("**", *parts) if len(parts) == 1 else parts, where)]
+    if not isinstance(base, Place):
+        return [_read(base, ("**", "*"), where)]
+    inside = joined(base, text)
+    if inside is None:
+        return []
+    return [_read(inside, ("**", "*"), where), _read(Place(inside.parts[:-1]), parts[-1:], where)]
+
+
+def evaluate_site(resolver: Resolver, site: Site, env: Env | None) -> list[Read]:
+    """Was eine Lesestelle liest, mit den Parameterwerten ``env``."""
+    _tree, parents = resolver.parsed(site.relative)
+    scopes = resolver.scopes(site.call, parents)
+
+    def folders(node: ast.expr | None) -> tuple[Value, ...]:
+        if node is None:
+            return (None,)
+        found = options(resolver.evaluate(node, scopes, site.relative, env))
+        return tuple(resolver.place(one) for one in found)
+
+    def patterns(node: ast.expr | None) -> tuple[str, ...]:
+        if node is None:
+            return ("*",)
+        found = options(resolver.pattern(node, scopes, site.relative, env))
+        return tuple(one if isinstance(one, str) else "*" for one in found)
+
+    how = site.how
+    if how == "git ls-files":
+        bases = (Place(()),) if site.receiver is None else folders(site.receiver)
+        return [
+            read
+            for base in bases
+            for spec in _pathspecs(resolver, site, scopes, env)
+            for read in _spec_reads(base, spec, site.where)
+        ]
+    if how in ("glob", "rglob"):
+        return [
+            _read(folder, _pattern_parts(text, how == "rglob"), site.where)
+            for folder in folders(site.receiver)
+            for text in patterns(site.pattern)
+        ]
+    if how in ("iterdir", "walk"):
+        pattern = ("*",) if how == "iterdir" else ("**", "*")
+        return [_read(folder, pattern, site.where) for folder in folders(site.receiver)]
+    kind, recursive = _FUNCTION_READS[how]
+    if kind == "folder":
+        pattern = ("**", "*") if recursive else ("*",)
+        return [_read(folder, pattern, site.where) for folder in folders(site.receiver)]
+    if kind == "pattern":
+        if site.receiver is not None:  # ``root_dir=``
+            return [
+                _read(folder, _pattern_parts(text, False), site.where)
+                for folder in folders(site.receiver)
+                for text in patterns(site.pattern)
+            ]
+        found: list[Read] = []
+        for one in folders(site.pattern):
+            if isinstance(one, Place) and one.parts:
+                found.append(_read(Place(one.parts[:-1]), (one.parts[-1],), site.where))
+            elif isinstance(one, Outside):
+                found.append(Read(one, ("*",), site.where))
+            else:
+                # Ein Text gilt relativ zum Arbeitsordner und ist nicht auflösbar.
+                found.extend(
+                    Read(None, _pattern_parts(text, False), site.where)
+                    for text in ((one,) if isinstance(one, str) else patterns(site.pattern))
+                )
+        return found
+    # Pakete: eine Liste von Ordnern, ``M.__path__`` oder nichts (der Suchpfad).
+    pattern = ("**", "*.py") if recursive else ("*.py",)
+    return [_read(folder, pattern, site.where) for folder in folders(site.receiver)]
 
 
 # --------------------------------------------------------------------------- W4
@@ -1147,3 +1388,377 @@ def sources_with_globs(root: Path, folders: tuple[str, ...]) -> list[str]:
         for path in sorted((root / folder).rglob("*.py"))
         if "__pycache__" not in path.parts and GLOB_MENTION.search(path.read_text(encoding="utf-8"))
     ]
+
+
+# --------------------------------------------------------------------------- Leser
+
+
+@dataclass(frozen=True)
+class Borrowed:
+    """Eine Lesung einer Testdatei mit der Datei, in der gelesen wird."""
+
+    read: Read
+    lender: str
+
+
+def _owner(node: ast.AST, parents: Mapping[ast.AST, ast.AST]) -> ast.AST | None:
+    """Die Einheit, zu der ``node`` gehört: die innerste Funktion, sonst der Klassenrumpf oder
+    die Zuweisung auf Modulebene. ``None`` heißt: Modulebene ohne Namen."""
+    current = parents.get(node)
+    statement: ast.AST = node
+    while current is not None:
+        if isinstance(current, (*_FUNCTIONS, ast.ClassDef)):
+            return current
+        if isinstance(current, ast.Module):
+            return statement if isinstance(statement, ast.Assign | ast.AnnAssign) else None
+        statement = current
+        current = parents.get(current)
+    return None
+
+
+def _unit_names(unit: ast.AST) -> list[str]:
+    if isinstance(unit, (*_FUNCTIONS, ast.ClassDef)):
+        return [unit.name]
+    if isinstance(unit, ast.Assign):
+        return [target.id for target in unit.targets if isinstance(target, ast.Name)]
+    if isinstance(unit, ast.AnnAssign) and isinstance(unit.target, ast.Name):
+        return [unit.target.id]
+    return []
+
+
+def _chains(node: ast.expr) -> Iterator[ast.expr]:
+    """Eine Attributkette und jedes ihrer Anfangsstücke: ``a.b.c`` → ``a.b.c``, ``a.b``, ``a``."""
+    while isinstance(node, ast.Attribute):
+        yield node
+        node = node.value
+    if isinstance(node, ast.Name):
+        yield node
+
+
+def _last(node: ast.expr) -> str:
+    return node.attr if isinstance(node, ast.Attribute) else node.id  # type: ignore[attr-defined]
+
+
+def _is_annotation(node: ast.AST, field: str) -> bool:
+    """Ob das Feld ``field`` von ``node`` eine Annotation trägt: Parameter, Rückgabe,
+    annotierte Zuweisung."""
+    return (
+        (isinstance(node, ast.arg) and field == "annotation")
+        or (isinstance(node, _FUNCTIONS) and field == "returns")
+        or (isinstance(node, ast.AnnAssign) and field == "annotation")
+    )
+
+
+#: Ein Bezeichner im Text — für die Vorauswahl, wer einen Namen überhaupt trägt.
+_WORD = re.compile(r"[A-Za-z_]\w*")
+
+_Key = tuple[tuple[str, int], frozenset[tuple[tuple[int, str], Value]]]
+
+
+class TreeReads:
+    """Welche Testdatei welchen Ordner liest — selbst oder über eine Definition, die sie nennt.
+
+    ``modules`` ordnet jedem Modulnamen unter ``app``, ``tools``, ``tests`` seine Datei zu,
+    ``importers`` jedem Modul die Module, die es direkt importieren (der Graph der Auswahl).
+
+    Eine **Einheit** ist eine Funktion, eine Methode, ein Klassenrumpf oder eine Zuweisung auf
+    Modulebene unter ``tests/`` oder ``tools/``. Sie liest, wenn sie eine Lesestelle trägt, die
+    nicht sicher draußen liegt, oder eine lesende Einheit nennt. Gesucht wird von den
+    Lesestellen aus über die Module, die den Namen der Einheit tragen und ihr Modul
+    mittelbar importieren — geparst wird nur, wer den Namen trägt. Mit ``python_only``
+    zählen nur Lesestellen, deren Muster eine ``.py`` treffen kann: Das genügt für eine
+    Änderung an Python und spart ein Drittel der Zeit.
+    """
+
+    def __init__(
+        self,
+        root: Path,
+        modules: Mapping[str, Path],
+        importers: Mapping[str, Iterable[str]],
+        resolver: Resolver | None = None,
+        *,
+        python_only: bool = False,
+    ) -> None:
+        self.root = root
+        self.python_only = python_only
+        self.resolver = resolver or Resolver(root, working_root=True)
+        self.relative = {name: path.relative_to(root).as_posix() for name, path in modules.items()}
+        self.names = {relative: name for name, relative in self.relative.items()}
+        self.importers = importers
+        self.texts = {
+            relative: (root / relative).read_text(encoding="utf-8")
+            for relative in self.relative.values()
+            if not relative.startswith("app/")
+        }
+        self._sites: dict[str, dict[ast.AST | None, list[Site]]] = {}
+        self._refs: dict[str, dict[ast.AST | None, list[tuple[ast.expr, ast.Call | None]]]] = {}
+        self._by_name: dict[str, dict[str, list[tuple[ast.AST | None, ast.expr]]]] = {}
+        self._word_sets: dict[str, set[str]] = {}
+        #: Jede lesende Einheit mit ihrer Datei.
+        self.reading: dict[ast.AST, str] = {}
+        #: Dateien, die eine lesende Einheit auf Modulebene ohne Namen nennen.
+        self.touched: set[str] = set()
+        self._memo: dict[_Key, list[Borrowed]] = {}
+        self._active: set[_Key] = set()
+        self._defined: dict[int, Definition | None] = {}
+        self._importers: dict[str, list[str]] = {}
+        self._spread()
+        self.reading_names = {name for unit in self.reading for name in _unit_names(unit)}
+
+    # Einheiten ---------------------------------------------------------------------
+
+    def _sites_by_unit(self, relative: str) -> dict[ast.AST | None, list[Site]]:
+        if relative not in self._sites:
+            _tree, parents = self.resolver.parsed(relative)
+            grouped: dict[ast.AST | None, list[Site]] = defaultdict(list)
+            if READ_WORDS.search(self.texts.get(relative, "")):
+                for site in sites(self.resolver, relative):
+                    grouped[_owner(site.call, parents)].append(site)
+            self._sites[relative] = grouped
+        return self._sites[relative]
+
+    def _words(self, relative: str) -> set[str]:
+        if relative not in self._word_sets:
+            self._word_sets[relative] = set(_WORD.findall(self.texts.get(relative, "")))
+        return self._word_sets[relative]
+
+    def _references(
+        self, relative: str
+    ) -> dict[ast.AST | None, list[tuple[ast.expr, ast.Call | None]]]:
+        """Je Einheit jeder gelesene Name und jedes Anfangsstück einer Attributkette, mit dem
+        Aufruf, dessen Ziel die ganze Kette ist."""
+        if relative not in self._refs:
+            self._scan(relative)
+        return self._refs[relative]
+
+    def _named(self, relative: str, name: str) -> list[tuple[ast.AST | None, ast.expr]]:
+        """Jede Nennung von ``name`` in einer Datei, mit ihrer Einheit."""
+        if relative not in self._by_name:
+            self._scan(relative)
+        return self._by_name[relative].get(name, [])
+
+    def _scan(self, relative: str) -> None:
+        """Ein Gang über den Baum: Nennungen je Einheit und je Name. Annotationen nennen einen
+        Typ und rufen nichts (``graph: ImportGraph``), sie zählen nicht."""
+        tree, _parents = self.resolver.parsed(relative)
+        by_owner: dict[ast.AST | None, list[tuple[ast.expr, ast.Call | None]]] = defaultdict(list)
+        by_name: dict[str, list[tuple[ast.AST | None, ast.expr]]] = defaultdict(list)
+
+        def emit(node: ast.expr, owner: ast.AST | None, call: ast.Call | None) -> ast.expr:
+            """Trägt die Kette ein und gibt ihren Grund zurück (``f(x).y`` → ``f(x)``)."""
+            for index, piece in enumerate(_chains(node)):
+                by_owner[owner].append((piece, call if index == 0 else None))
+                by_name[_last(piece)].append((owner, piece))
+            while isinstance(node, ast.Attribute):
+                node = node.value
+            return node
+
+        stack: list[tuple[ast.AST, ast.AST | None]] = [
+            (
+                statement,
+                statement
+                if isinstance(statement, (*_FUNCTIONS, ast.ClassDef, ast.Assign, ast.AnnAssign))
+                else None,
+            )
+            for statement in tree.body
+        ]
+        while stack:
+            node, owner = stack.pop()
+            if isinstance(node, (*_FUNCTIONS, ast.ClassDef)):
+                owner = node
+            pending: list[ast.AST] = []
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name | ast.Attribute):
+                base = emit(node.func, owner, node)
+                if not isinstance(base, ast.Name):
+                    pending.append(base)
+                pending.extend(node.args)
+                pending.extend(keyword.value for keyword in node.keywords)
+            elif isinstance(node, ast.Name | ast.Attribute) and isinstance(node.ctx, ast.Load):
+                base = emit(node, owner, None)
+                if not isinstance(base, ast.Name):
+                    pending.append(base)
+            else:
+                for field, value in ast.iter_fields(node):
+                    if _is_annotation(node, field):
+                        continue
+                    if isinstance(value, ast.AST):
+                        pending.append(value)
+                    elif isinstance(value, list):
+                        pending.extend(item for item in value if isinstance(item, ast.AST))
+            stack.extend((child, owner) for child in pending)
+        self._refs[relative] = by_owner
+        self._by_name[relative] = by_name
+
+    def _target(self, relative: str, node: ast.expr) -> Definition | None:
+        """Die lesende Einheit, die ``node`` nennt — auch eine Zuweisung auf Modulebene wie
+        ``FILES = sorted(…glob…)``."""
+        if id(node) not in self._defined:
+            self._defined[id(node)] = self.resolver.definition(relative, node)
+        found = self._defined[id(node)]
+        return found if found is not None and found.node in self.reading else None
+
+    def _mark(self, unit: ast.AST, relative: str, queue: list[tuple[str, ast.AST]]) -> None:
+        if unit in self.reading:
+            return
+        self.reading[unit] = relative
+        queue.append((relative, unit))
+        _tree, parents = self.resolver.parsed(relative)
+        parent = parents.get(unit)
+        if isinstance(unit, _FUNCTIONS) and isinstance(parent, ast.ClassDef):
+            # Wer die Klasse nennt, bezieht die Methode.
+            self._mark(parent, relative, queue)
+
+    def _spread(self) -> None:
+        """Markiert jede Einheit, die liest — selbst oder über eine, die sie nennt."""
+        queue: list[tuple[str, ast.AST]] = []
+        for relative, text in self.texts.items():
+            if not READ_WORDS.search(text):
+                continue
+            # Ein offener Ordner kann an einer Aufrufstelle einer im Baum werden.
+            for unit, found in self._sites_by_unit(relative).items():
+                if unit is None:
+                    continue
+                if any(
+                    not isinstance(read.folder, Outside)
+                    and (not self.python_only or python_pattern(read.pattern[-1]))
+                    for site in found
+                    for read in evaluate_site(self.resolver, site, None)
+                ):
+                    self._mark(unit, relative, queue)
+        done: set[tuple[str, str]] = set()
+        while queue:
+            relative, unit = queue.pop()
+            for name in _unit_names(unit):
+                if (relative, name) in done:
+                    continue
+                done.add((relative, name))
+                for candidate in self._candidates(relative):
+                    if name not in self._words(candidate):
+                        continue
+                    for owner, node in self._named(candidate, name):
+                        if owner is not None and owner in self.reading:
+                            continue
+                        if self._target(candidate, node) is None:
+                            continue
+                        if owner is None:
+                            self.touched.add(candidate)
+                        else:
+                            self._mark(owner, candidate, queue)
+
+    def _candidates(self, relative: str) -> Iterator[str]:
+        """Die Datei selbst, jede, die ihr Modul mittelbar importiert, und jede, die ihren
+        Dateinamen nennt — so laden Tests ein Werkzeug über den Pfad
+        (``spec_from_file_location``).
+        """
+        yield relative
+        if relative not in self._importers:
+            found: list[str] = []
+            module = self.names.get(relative)
+            seen = {module}
+            queue = [module] if module is not None else []
+            while queue:
+                for importer in self.importers.get(queue.pop(), ()):
+                    if importer not in seen:
+                        seen.add(importer)
+                        queue.append(importer)
+                        path = self.relative.get(importer)
+                        if path is not None and path in self.texts:
+                            found.append(path)
+            file_name = PurePosixPath(relative).name
+            known = set(found)
+            found.extend(
+                other
+                for other, text in self.texts.items()
+                if other not in known and other != relative and file_name in text
+            )
+            self._importers[relative] = found
+        yield from self._importers[relative]
+
+    # Auswertung --------------------------------------------------------------------
+
+    def unit_reads(self, relative: str, unit: ast.AST | None, env: Env | None) -> list[Borrowed]:
+        """Was eine Einheit liest — ihre Stellen und die lesenden Einheiten, die sie nennt."""
+        key: _Key = ((relative, id(unit)), frozenset((env or {}).items()))
+        if key in self._memo:
+            return self._memo[key]
+        if key in self._active:
+            return []
+        self._active.add(key)
+        try:
+            found = [
+                Borrowed(read, relative)
+                for site in self._sites_by_unit(relative).get(unit, ())
+                for read in evaluate_site(self.resolver, site, env)
+            ]
+            _tree, parents = self.resolver.parsed(relative)
+            for node, call in self._references(relative).get(unit, ()):
+                if _last(node) not in self.reading_names:
+                    continue
+                target = self._target(relative, node)
+                if target is None:
+                    continue
+                inner: dict[tuple[int, str], Value] = {}
+                _target_tree, target_parents = self.resolver.parsed(target.relative)
+                if target.relative == relative and not isinstance(
+                    target_parents.get(target.node), ast.Module | ast.ClassDef
+                ):
+                    inner.update(env or {})  # eine innere Funktion sieht die äußeren Parameter
+                if call is not None:
+                    scopes = self.resolver.scopes(call, parents)
+                    inner.update(self.resolver.arguments(call, relative, scopes, env, target))
+                found.extend(self._definition_reads(target, inner, called=call is not None))
+            self._memo[key] = found
+            return found
+        finally:
+            self._active.discard(key)
+
+    def _definition_reads(self, target: Definition, env: Env, *, called: bool) -> list[Borrowed]:
+        node = target.node
+        if not isinstance(node, ast.ClassDef):
+            return self.unit_reads(target.relative, node, env)
+        found = list(self.unit_reads(target.relative, node, {}))
+        for statement in node.body:
+            if isinstance(statement, _FUNCTIONS) and statement in self.reading:
+                inner = env if called and statement.name == "__init__" else {}
+                found.extend(self.unit_reads(target.relative, statement, inner))
+        return found
+
+    def test_reads(self, relative: str) -> list[Borrowed]:
+        """Alles, was eine Testdatei liest: Modulebene, jede Funktion, die sie nicht selbst
+        ruft (Test, Fixture, Rückruf), jede Klasse und was sie davon bezieht."""
+        tree, _parents = self.resolver.parsed(relative)
+        called = {
+            node.func.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+        found = list(self.unit_reads(relative, None, None))
+        for statement in tree.body:
+            if isinstance(statement, ast.Assign | ast.AnnAssign):
+                found.extend(self.unit_reads(relative, statement, None))
+            elif isinstance(statement, ast.ClassDef):
+                found.extend(
+                    self._definition_reads(Definition(relative, statement), {}, called=False)
+                )
+            elif isinstance(statement, _FUNCTIONS) and statement.name not in called:
+                found.extend(self.unit_reads(relative, statement, None))
+        return found
+
+    def readers(self, tests: Iterable[str]) -> dict[str, list[Borrowed]]:
+        """Je Testdatei aus ``tests``, die etwas liest, das nicht sicher draußen liegt, ihre
+        Lesungen."""
+        holders = set(self.reading.values()) | self.touched
+        found: dict[str, list[Borrowed]] = {}
+        for relative in tests:
+            if relative not in holders and not READ_WORDS.search(self.texts.get(relative, "")):
+                continue
+            reads = list(
+                dict.fromkeys(
+                    one
+                    for one in self.test_reads(relative)
+                    if not isinstance(one.read.folder, Outside)
+                )
+            )
+            if reads:
+                found[relative] = reads
+        return found

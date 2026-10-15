@@ -16,16 +16,17 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
 1. sie ein geändertes Modul importiert — auch mittelbar, auch träge in einer
    Funktion, auch nur unter ``TYPE_CHECKING``; oder
 2. sie selbst geändert wurde; oder
-3. sie den Baum liest statt ihn zu importieren — ``rglob``, ``glob``,
-   ``walk_packages``, ``iterdir`` über die Quellen: Sprachregel,
-   Kerntrennung, Fehlertexte, Verzeichniskarten —, selbst oder über ein
-   Modul unter ``tests/`` oder ``tools/``, das Python-Quellen sucht
-   (``tests/source_tree.py``, ``tools/code_facts.py``). Diese Wächter sehen
-   jede Änderung an Python unter ``app/``, ``tools/`` oder ``tests/`` und
-   gehören deshalb zu jeder dazu — auch zu einer reinen Teständerung, denn
-   private Querimporte, Definitionen in einer Datei der Sperrklinke und flache
-   Globs entstehen gerade dort (``test_toolchain``, ``test_size_ratchet``,
-   ``test_source_readers``); oder
+3. sie den Ordner einer geänderten Datei liest statt sie zu importieren —
+   ``rglob``, ``glob``, ``iterdir``, ``walk``, ``walk_packages``,
+   ``git ls-files`` über die Quellen: Sprachregel, Kerntrennung,
+   Fehlertexte, Sperrklinke, Verzeichniskarten —, selbst oder über eine
+   Definition, die sie aus einem anderen Modul bezieht
+   (``source_tree.python_files("app/ui")``, ``code_facts.source_files``).
+   Ordner und Muster löst :mod:`tools.tree_reads` statisch auf; ein Ordner,
+   der sich nicht auflösen lässt, liest jede Python-Datei, wenn sein Muster
+   Python nennt. So wählt eine reine Teständerung die Wächter über
+   ``tests/`` (``test_toolchain``, ``test_size_ratchet``,
+   ``test_source_readers``), aber keinen, der nur ``app/`` liest; oder
 4. eine geänderte Nicht-Python-Datei oder ein Skript außerhalb der Pakete
    bei ihrem Namen genannt wird — ``ROADMAP.md``, ``constraints.txt``, ein
    Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/`` —, auch über
@@ -57,13 +58,14 @@ from __future__ import annotations
 
 import argparse
 import ast
+import functools
 import os
 import re
 import subprocess
 import sys
 from collections import defaultdict
 from collections.abc import Iterable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent.parent
 PYTHON = Path(sys.executable)
@@ -73,25 +75,11 @@ PYTHON = Path(sys.executable)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools import tree_reads  # noqa: E402
+
 #: Die Pakete, deren Importgraph gelesen wird. ``app`` und ``tools`` reisen
 #: als Module, ``tests`` sind die Blätter.
 PACKAGES = ("app", "tools", "tests")
-
-#: Aufrufe, an denen eine Testdatei den Baum liest statt ihn zu importieren.
-#: Wer so einen Wächter schreibt, benutzt eines dieser Wörter — und wer eines
-#: benutzt, ohne den Baum zu lesen, bekommt einen Test zu viel, nie einen zu
-#: wenig. Auch ein flacher ``glob`` liest den Baum (Konzept Codestruktur 4.1).
-_TREE_READERS = re.compile(r"\b(rglob|glob|walk_packages|iterdir|iter_modules)\s*\(")
-
-#: Woran ein Modul unter ``tests/`` oder ``tools/`` erkennbar Python-Quellen
-#: sucht: ein Glob auf ``.py`` oder der Gang über Pakete. Wer es importiert,
-#: liest den Baum mit ihm (Codestruktur Schritt 0, E5). Enger als
-#: ``_TREE_READERS``, weil ein Helfer viele Importeure hat: Das ``rglob("*")``
-#: über ein Paketarchiv in ``tests/helpers.py`` zöge sonst jede zweite
-#: Testdatei in jede Auswahl.
-_SOURCE_SEARCH = re.compile(
-    r"\br?glob\s*\(\s*[fr]?[\"'][^\"']*\.pyi?[\"'*]|\b(?:walk_packages|iter_modules)\s*\("
-)
 
 #: Änderungen hieran betreffen jeden Test.
 _EVERYTHING = frozenset({"tests/conftest.py", "pyproject.toml", "constraints.txt"})
@@ -135,6 +123,7 @@ class ImportGraph:
 
     def __init__(self, root: Path = ROOT) -> None:
         self.root = root
+        self._texts: dict[str, str] = {}
         self.modules: dict[str, Path] = {}
         for package in PACKAGES:
             folder = root / package
@@ -182,6 +171,37 @@ class ImportGraph:
                     seen.add(importer)
                     queue.append(importer)
         return seen
+
+    @functools.cached_property
+    def resolver(self) -> tree_reads.Resolver:
+        """Der statische Auflöser für Ordner, einer je Graph — er parst jede Datei einmal."""
+        return tree_reads.Resolver(self.root, working_root=True)
+
+    @functools.cached_property
+    def reads(self) -> dict[str, list[tree_reads.Borrowed]]:
+        """Je Testdatei, relativ zur Wurzel, was sie an Python lesen kann; einmal je Graph, denn
+        ``ci_selection`` und die Tests fragen für viele Änderungen."""
+        return self._reads(python_only=True)
+
+    @functools.cached_property
+    def all_reads(self) -> dict[str, list[tree_reads.Borrowed]]:
+        """Wie :attr:`reads`, mit jedem Muster — für eine geänderte Datei, die kein Python ist."""
+        return self._reads(python_only=False)
+
+    def _reads(self, *, python_only: bool) -> dict[str, list[tree_reads.Borrowed]]:
+        analysis = tree_reads.TreeReads(
+            self.root, self.modules, self.importers, self.resolver, python_only=python_only
+        )
+        return analysis.readers(
+            path.relative_to(self.root).as_posix()
+            for name, path in self.modules.items()
+            if _is_test_file(self, name)
+        )
+
+    def text(self, name: str) -> str:
+        if name not in self._texts:
+            self._texts[name] = self.modules[name].read_text(encoding="utf-8")
+        return self._texts[name]
 
 
 #: ``tests/conftest.py`` lädt pytest als Plugin unter seinem bloßen Namen;
@@ -266,33 +286,28 @@ def _test_files_behind(graph: ImportGraph, name: str) -> list[str]:
     return sorted(one for one in graph.dependents([name]) if _is_test_file(graph, one))
 
 
-def _tree_readers(graph: ImportGraph) -> dict[str, str]:
-    """Die Testdateien, die den Baum lesen, je mit dem Grund — selbst oder über ein Modul.
+def _tree_readers(graph: ImportGraph, paths: Iterable[PurePosixPath]) -> dict[str, str]:
+    """Die Testdateien, die den Ordner einer dieser Dateien lesen, je mit dem Grund.
 
-    Zählte nur der eigene Text, liefe ein Wächter, der den Baum über
-    ``tests/source_tree.py`` oder ``tools/code_facts.py`` liest, bei keiner
-    Änderung an ``app/`` mit (Codestruktur Schritt 0, E5) — ebenso
-    ``test_wording.py``, das die Quellen über ``application_sources`` aus
-    ``test_text_length.py`` liest. Ein Modul, das Python-Quellen sucht,
-    überträgt das deshalb auf jede Testdatei, die es mittelbar importiert;
-    der eigene Grund einer Testdatei geht vor.
+    Was eine Testdatei liest, sagt :mod:`tools.tree_reads` — selbst oder über eine
+    Definition, die sie bezieht (``source_tree.python_files``, ``code_facts.source_files``,
+    ``application_sources`` aus ``test_text_length``). Gewählt wird, wessen Lesestelle den
+    Pfad mit Ordner und Muster deckt (:meth:`tools.tree_reads.Read.covers`).
     """
-    texts = {
-        name: path.read_text(encoding="utf-8")
-        for name, path in graph.modules.items()
-        if name.startswith(("tests.", "tools."))
-    }
-    found = {
-        name: "liest den ganzen Baum"
-        for name, text in sorted(texts.items())
-        if _is_test_file(graph, name) and _TREE_READERS.search(text)
-    }
-    for lender, text in sorted(texts.items()):
-        if not _SOURCE_SEARCH.search(text):
+    wanted = list(paths)
+    found: dict[str, str] = {}
+    python = all(path.suffix == ".py" for path in wanted)
+    for relative, borrowed in sorted((graph.reads if python else graph.all_reads).items()):
+        hit = next((one for path in wanted for one in borrowed if one.read.covers(path)), None)
+        if hit is None:
             continue
-        where = graph.modules[lender].relative_to(graph.root).as_posix()
-        for name in _test_files_behind(graph, lender):
-            found.setdefault(name, f"liest den ganzen Baum über {where}")
+        what = f"liest {hit.read.describe()}"
+        reason = (
+            f"{what} ({hit.read.site})"
+            if hit.lender == relative
+            else f"{what} über {hit.read.site}"
+        )
+        found[module_name(graph.root / relative, graph.root)] = reason
     return found
 
 
@@ -331,8 +346,8 @@ def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
     vergeblich und traut der Auswahl danach nicht mehr.
     """
     found: dict[str, str] = {}
-    for name, path in graph.modules.items():
-        if name.startswith("tests.") and file.name in path.read_text(encoding="utf-8"):
+    for name in graph.modules:
+        if name.startswith("tests.") and file.name in graph.text(name):
             found[name] = f"nennt {file.name}"
 
     # Der Ordner, in dem die Datei liegt — ``changelog``, ``locales``,
@@ -353,11 +368,7 @@ def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
     folder = file.parent.name
     if folder and folder not in {"", ".", "website"}:
         pattern = _folder_pattern(folder)
-        readers = [
-            name
-            for name, path in graph.modules.items()
-            if re.search(pattern, path.read_text(encoding="utf-8"))
-        ]
+        readers = [name for name in graph.modules if re.search(pattern, graph.text(name))]
         # Der Namensweg oben ist der genauere und behält den Vorrang, danach
         # die Testdatei, die den Ordner selbst nennt, vor dem Importeur.
         for name in readers:
@@ -404,7 +415,8 @@ def affected(
     changed_modules: set[str] = set()
     deleted_modules: set[str] = set()
     named_tools: list[str] = []
-    touches_code = False
+    #: Jede geänderte Datei, neu oder gelöscht — für die, die ihren Ordner lesen.
+    paths: list[PurePosixPath] = []
     for path in changed:
         relative = (
             path.relative_to(graph.root).as_posix() if path.is_absolute() else path.as_posix()
@@ -414,23 +426,18 @@ def affected(
                 if name.startswith("tests.") and test_path.name.startswith("test_"):
                     reasons.setdefault(test_path, f"{relative} betrifft jeden Test")
             continue
+        paths.append(PurePosixPath(relative))
         if path.suffix == ".py":
             name = module_name(graph.root / relative, graph.root)
             if name in graph.modules:
                 changed_modules.add(name)
                 if name.startswith("tests.") and path.name.startswith("test_"):
                     reasons.setdefault(graph.modules[name], "selbst geändert")
-                # Jedes Modul des Graphen ist Code unter app/, tools/ oder tests/,
-                # und die Baumleser lesen alle drei: Welcher davon auch tests/
-                # liest, steht nicht im Quelltext — test_directory_docs nennt
-                # den Ordner nirgends.
-                touches_code = True
                 if name.startswith("tools."):
                     named_tools.append(path.name)
             elif name.split(".", 1)[0] in PACKAGES:
                 # Gelöschte Module und Paketinitialisierer bleiben über ihre
                 # Importkanten erreichbar, auch Helfer unter tests/.
-                touches_code = True
                 changed_modules.add(name)
                 deleted_modules.add(name)
                 _note_readers(
@@ -438,9 +445,8 @@ def affected(
                     reasons,
                     {
                         reader: f"nennt {name}, und die Datei ist gelöscht"
-                        for reader, reader_path in graph.modules.items()
-                        if reader.startswith("tests.")
-                        and name in reader_path.read_text(encoding="utf-8")
+                        for reader in graph.modules
+                        if reader.startswith("tests.") and name in graph.text(reader)
                     },
                 )
             else:
@@ -463,20 +469,18 @@ def affected(
     # den Pfad — ohne Importkante. Seit die Matrix in ``tools/`` liegt, fehlte
     # ihr Prüftest in jeder Auswahl zu ihr (Review 06.10.2026, M3). Nach den
     # Importkanten, damit deren genauerer Grund stehen bleibt.
-    if named_tools:
-        texts = {
-            name: test_path.read_text(encoding="utf-8")
-            for name, test_path in graph.modules.items()
-            if name.startswith("tests.")
-        }
-        for file_name in named_tools:
-            _note_readers(
-                graph,
-                reasons,
-                {name: f"nennt {file_name}" for name, text in texts.items() if file_name in text},
-            )
-    if touches_code:
-        for name, reason in _tree_readers(graph).items():
+    for file_name in named_tools:
+        _note_readers(
+            graph,
+            reasons,
+            {
+                name: f"nennt {file_name}"
+                for name in graph.modules
+                if name.startswith("tests.") and file_name in graph.text(name)
+            },
+        )
+    if paths:
+        for name, reason in _tree_readers(graph, paths).items():
             reasons.setdefault(graph.modules[name], reason)
     return set(reasons), reasons
 
