@@ -1197,21 +1197,9 @@ argument = 0
 role = "flow_host"
 
 [[accesses]]
-path = "app/ui/board_tools.py"
-scope = "shout"
-member = "notify"
-decision = "keep"
-
-[[accesses]]
-path = "app/ui/board_tools.py"
-scope = "ring"
-member = "notify"
-decision = "component"
-
-[[accesses]]
-path = "app/ui/board_tools.py"
-scope = "poke"
-member = "count"
+path = "tools/board_probe.py"
+scope = "probe"
+member = "refresh"
 decision = "component"
 """
 

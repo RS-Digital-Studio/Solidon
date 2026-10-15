@@ -2,7 +2,7 @@
 
 Positiv: Der Schnitt erzeugt den von Hand geschriebenen Sollbaum Byte für Byte — jede Rolle der
 Ersetzungsliste im verschobenen Rumpf, der Wirt greift über die Komponente zu, Leser in ``app/``,
-``tools/`` und ``tests/`` ziehen mit (erklärt, laut Auflöser oder eindeutig), ein angewandter
+``tools/`` und ``tests/`` ziehen mit (erklärt, laut Auflöser oder laut Annotation), ein angewandter
 Schnitt wird erkannt. Gegenproben: Jeder Mutant des Sollbaums ist rot, jeder unzulässige Schnitt
 wird vor dem Schreiben abgewiesen.
 
@@ -148,7 +148,9 @@ def test_the_proof_names_every_replacement(tmp_path: Path) -> None:
         "Board.notify → Area.notify)"
     ) in text
     assert "window → window.area (erklärt in accesses)" in text
-    assert "window → window.area (Name nur am Wirt definiert)" in text
+    assert "window → window.area (laut Annotation Board)" in text
+    assert "window → window.area (laut Auflöser ein Exemplar von app.ui.board:Board)" in text
+    assert "self → self.area (laut Auflöser self einer Methode von Board)" in text
     assert "Der Laufzeitnachweis (kein Signal nach release, Wirt ohne gc.collect fort)" in text
 
 
@@ -532,17 +534,18 @@ def _rejected(
             "self.document in Board.refresh hat keine Rolle",
         ),
         (
-            "mehrdeutig-ohne-entscheidung",
-            '[[accesses]]\npath = "app/ui/board_tools.py"\nscope = "ring"\nmember = "notify"\n'
+            "offen-ohne-entscheidung",
+            '[[accesses]]\npath = "tools/board_probe.py"\nscope = "probe"\nmember = "refresh"\n'
             'decision = "component"\n',
             "",
-            "Zugriff auf notify (ring) — 'notify' gibt es auch in app/ui/toast.py",
+            "tools/board_probe.py:5: Zugriff auf refresh (probe) — Empfänger nicht nachweislich "
+            "der Wirt",
         ),
         (
             "erklärung-trifft-nichts",
-            'scope = "shout"',
-            'scope = "schreien"',
-            "accesses (app/ui/board_tools.py, schreien, notify) trifft keine Stelle",
+            'scope = "probe"',
+            'scope = "sonde"',
+            "accesses (tools/board_probe.py, sonde, refresh) trifft keine Stelle",
         ),
         (
             "rolle-trifft-nichts",
@@ -634,7 +637,7 @@ def _with(path: str, text: str) -> dict[str, str]:
         (
             "name-eines-eingebauten-typs",
             _with("tools/counter.py", "def tally(items):\n    return items.count(1)\n"),
-            "Zugriff auf count (tally) — 'count' gibt es auch in eingebauten Typen",
+            "tools/counter.py:2: Zugriff auf count (tally) — Empfänger nicht nachweislich der Wirt",
         ),
         (
             "kein-release",

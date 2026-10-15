@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import ast
 from collections import Counter
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 from tools.code_index import Index, PatchSite
 from tools.move_compare import (
@@ -124,7 +124,13 @@ class ComponentProof:
                 self.proof.error(f"{path}: fehlt im alten oder neuen Baum")
         old_host = trees.old(self.path)
         old_component = trees.old(self.component_path)
-        self.shape = Shape(self.cut, trees.old_index, old_host, old_component)
+        self.shape = Shape(
+            self.cut,
+            trees.old_index,
+            old_host,
+            old_component,
+            _source_of(trees.old, trees.old_files),
+        )
         sources = list(self._old_sources())
         self.shape.scan_uniqueness(iter(sources))
         mapping = ComponentMapping(self.shape)
@@ -169,7 +175,14 @@ class ComponentProof:
             if path in trees.new_files and any(n in trees.old_files[path] for n in needles):
                 self._unchanged(path)
         self._strings(sources)
-        new_shape = Shape(self.cut, trees.new_index, new_host, new_component, before=False)
+        new_shape = Shape(
+            self.cut,
+            trees.new_index,
+            new_host,
+            new_component,
+            _source_of(trees.new, trees.new_files),
+            before=False,
+        )
         for problem in [*new_shape.problems, *lifetime(new_shape)]:
             self.proof.error(f"Lebensdauer (statisch): {problem}")
         self.proof.note(
@@ -423,9 +436,7 @@ class _Rules(Comparison):
             else:
                 self.fail(old, new, f"Klassenbezug auf {self.shape.cut.component_class} erwartet")
             return True
-        decision, why = self.shape.decision(
-            self.rel, self._scope(old), old.attr, self.index_old.resolve(self.rel, base)
-        )
+        decision, why = self.shape.decision(self.rel, self.old, self._scope(old), old.attr, base)
         if decision == "component":
             self._receiver(base, new.value, why)
             return True
@@ -482,9 +493,10 @@ class _Rules(Comparison):
         else:
             decision, why = self.shape.decision(
                 self.rel,
+                self.old,
                 self._scope(old),
                 str(second.value),
-                self.index_old.resolve(self.rel, first),
+                first,
             )
             if decision == "component":
                 self._receiver(first, new.args[0], why)
@@ -810,6 +822,17 @@ class ComponentFileComparison(_FileRules):
                     f"{self.path}: neuer Import {binding.text()} gehört nicht zu den "
                     "verschobenen Methoden"
                 )
+
+
+def _source_of(
+    read: Callable[[str], Source], files: dict[str, bytes]
+) -> Callable[[str], Source | None]:
+    """Eine Datei des Baums als Quelle, ``None``, wenn es sie dort nicht gibt."""
+
+    def source(path: str) -> Source | None:
+        return read(path) if path in files else None
+
+    return source
 
 
 def _class(source: Source, name: str) -> ast.ClassDef | None:

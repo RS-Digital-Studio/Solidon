@@ -29,12 +29,14 @@ nacktes ``self`` an einer erklärten Stelle    ``qt_parent`` → ``self._parent`
 Im Wirt und überall sonst (``app/``, ``tools/``, ``tests/``) wird jedes verschobene Member
 ``<empfänger>.<host_attribute>.<name>`` — als Zugriff, Zuweisungsziel, an
 ``getattr``/``setattr``/``delattr``, ``monkeypatch.setattr`` und ``patch.object``, als Pfad
-``"<modul>.<Wirt>.<name>"``. Ob ein Empfänger der Wirt ist, entscheidet in dieser Reihenfolge:
-eine Erklärung je Stelle (``[[accesses]]``: Datei, Bereich, Member, ``component`` oder
-``keep``), der Auflöser (ein Modul, eine fremde Klasse oder ein Wert ist nicht der Wirt; ``self``
-einer Wirtsmethode und ``Wirt()`` sind es) und die Eindeutigkeit des Namens (Konzept 4.1, W5):
-Definiert kein anderer Ort ein Member dieses Namens, gilt jeder Zugriff dem Wirt. Sonst hält der
-Schnitt an. Eine allgemeine Auflösung von Instanzen gibt es nicht.
+``"<modul>.<Wirt>.<name>"`` — aber nur, wenn der Empfänger **nachweislich** der Wirt ist, und
+er bleibt nur stehen, wenn er nachweislich etwas anderes ist (``tools/move_receivers.py``: der
+Auflöser, dann die Annotation von Parameter, Variable oder Rückgabe). Was offen bleibt — ein
+Parameter ohne Annotation, ``timers["main"]`` —, entscheidet eine Erklärung je Stelle
+(``[[accesses]]``: Datei, Bereich, Member, ``component`` oder ``keep``), sonst hält der Schnitt an.
+Eine Erklärung, die dem Nachweis widerspricht oder nichts entscheidet, ist selbst ein Fund. Dass
+kein anderer Ort des Baums ein Member dieses Namens definiert, ist kein Nachweis: Fremde Typen
+tragen dieselben Namen (Review 2 über Paket M, RM-M18).
 
 Abgewiesen wird vor dem Schreiben, jeweils mit Ausweg: ein ``self.<x>`` ohne Rolle, ein nacktes
 ``self`` ohne Rolle, ``super()``, ein verdeckter Name ``self.__x``, eine verschobene Methode
@@ -55,9 +57,8 @@ Laufzeittest.
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from tools.code_index import Index, Val
 from tools.move_compare import (
@@ -78,6 +79,7 @@ from tools.move_qt import (
     qt_bases,
     qt_members,
 )
+from tools.move_receivers import HOST, NEUTRAL, OPEN, OTHER, Receivers
 from tools.move_refs import AlreadyAppliedError, Context, FileRewrite, quoted
 from tools.move_source import (
     AREAS,
@@ -107,12 +109,6 @@ OWNER_CALLS = frozenset(
 )
 #: Aufrufe, deren zweites Argument ein Attributname des ersten ist.
 NAMED_CALLS = frozenset({"getattr", "hasattr", "setattr", "delattr"})
-#: Die Member eingebauter Typen und von ``Path``: Ein Zugriff ``x.<name>`` mit unbekanntem
-#: Empfänger kann ihnen gelten (``items.count(1)``) — der Name ist dann nicht eindeutig.
-BUILTIN_MEMBERS = {
-    kind.__name__: frozenset(n for n in dir(kind) if not n.startswith("__"))
-    for kind in (str, bytes, list, tuple, dict, set, int, float, Path)
-}
 #: ``monkeypatch.setattr``/``delattr`` und ``patch.object``: der letzte Teil des Aufrufs.
 PATCH_CALLS = frozenset({"setattr", "delattr", "object"})
 
@@ -138,15 +134,25 @@ class Shape:
     beides nur aus dem Zuschnitt und dem Auflöser abgeleitet."""
 
     def __init__(
-        self, cut: Cut, index: Index, host: Source, component: Source, *, before: bool = True
+        self,
+        cut: Cut,
+        index: Index,
+        host: Source,
+        component: Source,
+        source_of: Callable[[str], Source | None],
+        *,
+        before: bool = True,
     ) -> None:
         """``before``: der Baum vor dem Schnitt (die Methoden stehen im Wirt); danach liest die
-        Form nur Klassen und Protokoll (für den Lebensdauernachweis am neuen Baum)."""
+        Form nur Klassen und Protokoll (für den Lebensdauernachweis am neuen Baum).
+        ``source_of`` liefert eine Datei desselben Baums (``None``, wenn es sie nicht gibt)."""
         self.cut = cut
         self.index = index
         self.host_source = host
         self.component_source = component
         self.module = module_of(cut.source)
+        #: Ob ein Empfänger nachweislich der Wirt ist (Review 2, RM-M18).
+        self.receivers = Receivers(index, self.module, cut.host, source_of)
         self.component_module = cut.component_module
         self.moved_names = set(cut.methods) | set(cut.own_attributes)
         self.problems: list[str] = []
@@ -303,32 +309,46 @@ class Shape:
         return None
 
     def decision(
-        self, path: str, scope: str, member: str, values: frozenset[Val]
+        self, path: str, source: Source, scope: str, member: str, node: ast.expr
     ) -> tuple[str | None, str]:
-        """Ob ein Zugriff ``<empfänger>.member`` dem Wirt gilt: ``("component" | "keep", Grund)``
-        oder ``(None, Grund)``, wenn es weder erklärt noch eindeutig ist."""
-        for access in self.cut.accesses:
-            if (access.path, access.scope, access.member) == (path, scope, member):
-                return access.decision, "erklärt in accesses"
-        if values:
-            if all(
-                v.kind in ("module", "ext", "def", "const", "seq", "map", "path")
-                or (v.kind == "class" and v.ref != f"{self.module}:{self.cut.host}")
-                for v in values
-            ):
-                return "keep", "laut Auflöser nicht der Wirt"
-            if all(v.kind == "obj" and self._host_instance(v) for v in values):
-                return "component", "laut Auflöser der Wirt"
+        """Ob ein Zugriff ``<node>.member`` in ``path`` dem Wirt gilt: ``("component" | "keep",
+        Grund)`` oder ``(None, Grund samt Ausweg)``. Umgeschrieben wird nur, was nachweislich
+        dem Wirt gilt; was der Nachweis offen lässt, entscheidet ``[[accesses]]``, und eine
+        Erklärung, die dem Nachweis widerspricht oder nichts entscheidet, ist selbst ein Fund
+        (Review 2, RM-M18; :mod:`tools.move_receivers`)."""
+        judged = self.receivers.judge(path, source, node)
+        declared = next(
+            (
+                access.decision
+                for access in self.cut.accesses
+                if (access.path, access.scope, access.member) == (path, scope, member)
+            ),
+            None,
+        )
+        if declared is not None:
+            if judged.verdict == OPEN:
+                return declared, "erklärt in accesses"
+            proven = "component" if judged.verdict == HOST else "keep"
+            if proven != declared:
+                return None, (
+                    f"erklärt als {declared}, aber {judged.why} — die Erklärung in [[accesses]] "
+                    "berichtigen oder streichen"
+                )
+            return None, (
+                f"erklärt als {declared}, doch das steht schon fest ({judged.why}) — die "
+                "Erklärung in [[accesses]] streichen; sie gilt nur, wo der Nachweis offen bleibt"
+            )
+        if judged.verdict == HOST:
+            return "component", judged.why
+        if judged.verdict in (OTHER, NEUTRAL):
+            return "keep", judged.why
         others = self.unique.get(member, [])
-        if not others:
-            return "component", "Name nur am Wirt definiert"
-        return None, f"{member!r} gibt es auch in {', '.join(others[:3])}"
-
-    def _host_instance(self, value: Val) -> bool:
-        if value.ref == f"{self.module}:{self.cut.host}()":
-            return True
-        head, _, tail = value.ref.partition(":")
-        return tail == "self" and head.partition(".")[0] == self.cut.host
+        also = f"; {member!r} gibt es auch in {', '.join(others[:3])}" if others else ""
+        return None, (
+            f"Empfänger nicht nachweislich der Wirt ({judged.why}){also} — in [[accesses]] "
+            "entscheiden (component oder keep) oder den Empfänger nachweisbar schreiben "
+            "(Annotation)"
+        )
 
     def needles(self) -> tuple[str, ...]:
         """Was eine Datei nennen muss, damit der Schnitt sie liest: ein verschobener Name, den
@@ -343,7 +363,7 @@ class Shape:
         Member definiert, und der Wirt als installierter Ereignisfilter, wenn ``eventFilter``
         wandert. Die Funde stehen danach in :attr:`problems`."""
         found: dict[str, list[str]] = {name: [] for name in self.moved_names}
-        classes: list[tuple[str, Source, ast.ClassDef, set[str]]] = []
+        classes: list[tuple[str, Source, ast.ClassDef]] = []
         for path, source in files:
             for node in ast.walk(source.tree):
                 if isinstance(node, ast.ClassDef):
@@ -356,29 +376,15 @@ class Shape:
                     for name in _class_members(node):
                         if name in found:
                             found[name].append(f"{path}:{node.lineno} ({node.name})")
-                    bases = {
-                        v.ref
-                        for base in node.bases
-                        for v in self.index.resolve(path, base)
-                        if v.kind == "class"
-                    }
-                    classes.append((path, source, node, bases))
+                    classes.append((path, source, node))
                 elif isinstance(node, ast.keyword) and node.arg in found:
                     found[node.arg].append(f"{path}:{node.lineno} (Schlüsselwort)")
                 elif isinstance(node, ast.Call) and "eventFilter" in self.methods:
-                    self._host_filter(path, node)
-        for name, places in found.items():
-            # Kein Ort im Baum, aber ein eingebauter Typ oder die Qt-Basis kennt den Namen auch:
-            # Ein Empfänger, den der Auflöser nicht kennt, kann einer von ihnen sein.
-            kinds = [kind for kind, members in BUILTIN_MEMBERS.items() if name in members]
-            if kinds:
-                places.append(f"eingebauten Typen ({', '.join(kinds)})")
-            if name in self.qt_names:
-                places.append("der Qt-Basis")
+                    self._host_filter(path, source, node)
         self.unique = {name: places for name, places in found.items() if places}
         self._subclasses(classes)
 
-    def _host_filter(self, path: str, call: ast.Call) -> None:
+    def _host_filter(self, path: str, source: Source, call: ast.Call) -> None:
         """``x.installEventFilter(<Wirt>)`` außerhalb der verschobenen Rümpfe: Danach filterte
         niemand, denn ``eventFilter`` wandert."""
         argument = filter_argument(call)
@@ -386,8 +392,7 @@ class Shape:
             return
         if path == self.cut.source and self.moved_method_of(call) is not None:
             return
-        values = self.index.resolve(path, argument)
-        if not values or not all(v.kind == "obj" and self._host_instance(v) for v in values):
+        if self.receivers.judge(path, source, argument).verdict != HOST:
             return
         self.problems.append(
             f"{path}:{call.lineno}: installiert den Wirt {self.cut.host} als Ereignisfilter, "
@@ -395,21 +400,15 @@ class Shape:
             "Komponente ziehen (eine verschobene Methode) oder eventFilter im Wirt lassen"
         )
 
-    def _subclasses(self, classes: list[tuple[str, Source, ast.ClassDef, set[str]]]) -> None:
-        """Eine Unterklasse des Wirts (auch über Zwischenklassen), die ein verschobenes Member
-        definiert: Danach riefe der Wirt die Fassung der Komponente, nicht ihre."""
-        derived = {f"{self.module}:{self.cut.host}"}
-        refs = [class_reference(module_of(p), s, n) for p, s, n, _b in classes]
-        grown = True
-        while grown:
-            grown = False
-            for ref, (_p, _s, _n, bases) in zip(refs, classes, strict=True):
-                if ref not in derived and bases & derived:
-                    derived.add(ref)
-                    grown = True
-        for ref, (path, _source, node, _bases) in zip(refs, classes, strict=True):
+    def _subclasses(self, classes: list[tuple[str, Source, ast.ClassDef]]) -> None:
+        """Eine Unterklasse des Wirts (auch über Zwischenklassen, die in Dateien ohne Bezug zum
+        Schnitt stehen — :meth:`Receivers.class_kind` folgt den Basen selbst), die ein
+        verschobenes Member definiert: Danach riefe der Wirt die Fassung der Komponente, nicht
+        ihre."""
+        for path, source, node in classes:
             own = sorted(_class_members(node) & self.moved_names)
-            if ref in derived and own:
+            ref = class_reference(module_of(path), source, node)
+            if own and self.receivers.class_kind(ref) == HOST:
                 self.problems.append(
                     f"{path}:{node.lineno}: {node.name} erbt von {self.cut.host} und definiert "
                     f"{', '.join(own)} — nach dem Schnitt riefe der Wirt die Fassung der "
@@ -583,7 +582,9 @@ class ComponentPlanner:
                 f"{self.cut.component} trägt schon {', '.join(self.cut.methods)}, "
                 f"{self.cut.host} keine davon — der Schnitt ist angewandt; nichts zu tun"
             )
-        self.shape = Shape(self.cut, self.ctx.index, self.host, self.component)
+        self.shape = Shape(
+            self.cut, self.ctx.index, self.host, self.component, self._source_or_none
+        )
         for problem in self.shape.problems:
             self.ctx.problem(problem)
         self.ctx.raise_problems()
@@ -612,6 +613,9 @@ class ComponentPlanner:
                 edits[path] = found
         self.ctx.raise_problems()
         return ComponentPlan(edits, self.notes)
+
+    def _source_or_none(self, path: str) -> Source | None:
+        return self.ctx.source(path) if (self.ctx.root / path).is_file() else None
 
     def _files(self) -> Iterator[tuple[str, Source]]:
         names = self.shape.needles()
@@ -770,36 +774,34 @@ class ComponentPlanner:
             self._class_reference(path, node, base, body=body)
             return
         if body:
-            self._decide_body(node, base, member, scope, values)
+            self._decide_body(node, base, member, scope)
             return
         rewrite = self.ctx.rewrite(path)
         if rewrite.covered(base):
             return
-        decision, _why = self._decide(path, scope, member, values, node.lineno)
+        decision, _why = self._decide(path, scope, member, base, node.lineno)
         if decision == "component":
             rewrite.replace(
                 base, receiver_text(rewrite.source, base, self.cut.host_attribute), RULE_OUTSIDE
             )
 
-    def _decide_body(
-        self, node: ast.Attribute, base: ast.expr, member: str, scope: str, values: frozenset[Val]
-    ) -> None:
-        decision, _why = self._decide(self.path, scope, member, values, node.lineno)
+    def _decide_body(self, node: ast.Attribute, base: ast.expr, member: str, scope: str) -> None:
+        decision, _why = self._decide(self.path, scope, member, base, node.lineno)
         if decision == "component":
             text = receiver_text(self.host, base, self.cut.host_attribute)
             self._edit(base, text, f"{self.host.node_text(base)} → {text}")
 
     def _decide(
-        self, path: str, scope: str, member: str, values: frozenset[Val], line: int
+        self, path: str, scope: str, member: str, receiver: ast.expr, line: int
     ) -> tuple[str | None, str]:
-        decision, why = self.shape.decision(path, scope, member, values)
-        if why == "erklärt in accesses":
+        """Die Entscheidung über den Zugriff ``<receiver>.member`` (:meth:`Shape.decision`);
+        ohne Entscheidung ein Fund mit Grund und Ausweg."""
+        source = self.host if path == self.path else self.ctx.source(path)
+        decision, why = self.shape.decision(path, source, scope, member, receiver)
+        if any((a.path, a.scope, a.member) == (path, scope, member) for a in self.cut.accesses):
             self.used_accesses.add((path, scope, member))
         if decision is None:
-            self.ctx.problem(
-                f"{path}:{line}: Zugriff auf {member} ({scope}) — {why}; ob der Empfänger der "
-                "Wirt ist, in [[accesses]] entscheiden (component oder keep)"
-            )
+            self.ctx.problem(f"{path}:{line}: Zugriff auf {member} ({scope}) — {why}")
         return decision, why
 
     def _named(
@@ -830,7 +832,7 @@ class ComponentPlanner:
         if self.shape.is_host_class(values):
             self._class_reference(path, None, first, body=body is not None)
             return
-        decision, _why = self._decide(path, scope, member, values, call.lineno)
+        decision, _why = self._decide(path, scope, member, first, call.lineno)
         if decision != "component":
             return
         if kind == "hasattr" or (kind == "getattr" and len(call.args) > 2):
