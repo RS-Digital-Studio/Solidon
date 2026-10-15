@@ -12411,6 +12411,12 @@ class MainWindow(QMainWindow):
             self._on_selection(self.object_tree.selected(), refresh_analysis=False)
         self._refresh_map_units()
         self._update_header()
+        # **Die Parameterleiste baut ihre Zeilen neu** (RA-2): Grenzen, Ablehnung,
+        # abgeleitete Maße und Einheitenliste stehen sonst in der alten Einheit —
+        # „über der Obergrenze 254,0000 in“ für 254 mm. Ein fremdes Dokument
+        # erzwingt den Neubau (``ParameterPanel.show_document``).
+        self.parameters._document = None
+        self._refresh_parameters()
         # Auch alte und nachträglich ergänzte Befunde lesen ihre Werte neu.
         # Der öffentliche Nachschubweg erhält Filter und Befundauswahl; die
         # bereits geöffneten Einzelheiten bleiben ebenfalls offen.
