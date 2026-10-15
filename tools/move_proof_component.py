@@ -16,7 +16,11 @@ Beweis wie der Planer aus dem Zuschnitt und dem Auflöser des alten Baums ab
 * **Komponente:** der Klassenrumpf gleich bis auf die angehängten Methoden, neue Importe nur
   solche, die die verschobenen Methoden im Wirtsmodul lasen.
 * **Leser:** ``x.<m>`` → ``x.<attr>.<m>`` genau dort, wo der Zuschnitt oder die Eindeutigkeit des
-  Namens den Wirt meint, ``Wirt.m`` → ``Komponente.m``, Pfade als Text auf die Komponente.
+  Namens den Wirt meint, ``Wirt.m`` → ``Komponente.m``, Pfade als Text auf die Komponente — in
+  **jeder** Datei, die einen verschobenen Namen nennt, auch in einer unveränderten: Der Auflöser
+  sieht Zugriffe über Instanzen nicht, ein vergessener Leser fiele baumweit nicht auf (Konzept
+  4.1, W5: ein Rest ist rot). Eine Zeichenkette gleich einem verschobenen Member ist erklärt
+  (``[[accesses]]`` mit ``keep``) oder das Namensargument eines Aufrufs mit festem Namen.
 
 **Lebensdauer liegt außerhalb dieses Vergleichs.** Der Beweis prüft am neuen Baum den statischen
 Teil (:func:`tools.move_component.lifetime`) und sagt im Protokoll, dass der Laufzeitnachweis
@@ -41,6 +45,7 @@ from tools.move_compare import (
     _text,
     comments,
     qualname_of,
+    string_constants,
 )
 from tools.move_component import (
     Method,
@@ -116,7 +121,8 @@ class ComponentProof:
         old_host = trees.old(self.path)
         old_component = trees.old(self.component_path)
         self.shape = Shape(self.cut, trees.old_index, old_host, old_component)
-        self.shape.scan_uniqueness(self._old_sources())
+        sources = list(self._old_sources())
+        self.shape.scan_uniqueness(iter(sources))
         mapping = ComponentMapping(self.shape)
         self.mapping = mapping
         self.values = MappedValues(mapping.ref)
@@ -146,6 +152,12 @@ class ComponentProof:
             else:
                 comparison = ComponentReaderComparison(self, path)
             self._file(path, comparison)
+        for path, _source in sources:
+            if path in trees.changed or path in (self.path, self.component_path):
+                continue
+            if path in trees.new_files:
+                self._unchanged(path)
+        self._strings(sources)
         new_shape = Shape(self.cut, trees.new_index, new_host, new_component, before=False)
         for problem in [*new_shape.problems, *lifetime(new_shape)]:
             self.proof.error(f"Lebensdauer (statisch): {problem}")
@@ -157,6 +169,66 @@ class ComponentProof:
             "gc.collect fort) ist eigens zu führen."
         )
         return mapping
+
+    def _unchanged(self, path: str) -> None:
+        """Eine Datei, die einen verschobenen Namen nennt und unverändert blieb, gegen sich selbst
+        verglichen: Jede Stelle, die laut Zuschnitt, Auflöser oder Eindeutigkeit des Namens dem
+        Wirt gilt, ist dann ein vergessener Leser — rot, auch wenn der Planer sie übersah oder sie
+        erst nach dem Planen entstand (Konzept 4.1, W5: ein Rest ist rot)."""
+        comparison = ComponentReaderComparison(self, path)
+        comparison.label = "Leser, unverändert"
+        comparison.run()
+        for error in comparison.errors:
+            self.proof.error(error)
+        self.proof.counts["unchanged_files"] += 1
+
+    def _strings(self, sources: list[tuple[str, Source]]) -> None:
+        """Jede Zeichenkette gleich einem verschobenen Member ist das zweite Argument eines
+        Aufrufs mit festem Namen (dort verglichen) oder in ``[[accesses]]`` mit ``keep`` erklärt;
+        kein Pfad als Text zeigt nachher noch auf den Wirt."""
+        moved = self.shape.moved_names
+        kept = {(a.path, a.scope, a.member) for a in self.cut.accesses if a.decision == "keep"}
+        for path, source in sources:
+            for node in string_constants(source):
+                value = str(node.value)
+                if value not in moved:
+                    continue
+                parent = source.parent(node)
+                if (
+                    isinstance(parent, ast.Call)
+                    and len(parent.args) > 1
+                    and parent.args[1] is node
+                    and named_call(parent) is not None
+                ):
+                    continue
+                scope = self._string_scope(path, source, node)
+                if (path, scope, value) in kept:
+                    continue
+                self.proof.error(
+                    f"{path}:{node.lineno}: Zeichenkette {value!r} ({scope}) nennt ein "
+                    "verschobenes Member ohne Erklärung — als Zugriff schreiben oder in "
+                    '[[accesses]] mit decision = "keep" erklären'
+                )
+        prefix = f"{self.shape.module}.{self.cut.host}."
+        for path, data in self.trees.new_files.items():
+            if not path.endswith(".py") or prefix.encode() not in data:
+                continue
+            for node in string_constants(self.trees.new(path)):
+                value = str(node.value)
+                if value.startswith(prefix) and value[len(prefix) :].split(".")[0] in moved:
+                    self.proof.error(
+                        f"{path}:{node.lineno}: Pfad als Text {value!r} zeigt noch auf "
+                        f"{self.cut.host} — auf {self.cut.component_class} umschreiben"
+                    )
+
+    def _string_scope(self, path: str, source: Source, node: ast.AST) -> str:
+        """Der Bereich einer Zeichenkette wie im Zuschnitt: im Wirt die Methode
+        (``Wirt.methode``), sonst der Qualname."""
+        scope = qualname_of(source, node)
+        parts = scope.split(".")
+        if path == self.path and parts[0] == self.cut.host and len(parts) > 2:
+            return ".".join(parts[:2])
+        return scope
 
     def _old_sources(self) -> Iterator[tuple[str, Source]]:
         names = tuple(self.shape.moved_names)

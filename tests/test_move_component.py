@@ -89,8 +89,10 @@ def _expected_bytes(files: dict[str, str]) -> dict[str, bytes]:
     return {path: fx.text_of(text).encode("utf-8") for path, text in files.items()}
 
 
-def _prove(tmp_path: Path, new_files: dict[str, str]) -> move_proof.Proof:
-    old = fx.write_tree(tmp_path / "old", fx.COMPONENT_OLD)
+def _prove(
+    tmp_path: Path, new_files: dict[str, str], old_files: dict[str, str] = fx.COMPONENT_OLD
+) -> move_proof.Proof:
+    old = fx.write_tree(tmp_path / "old", old_files)
     new = fx.write_tree(tmp_path / "new", new_files)
     cut_file = tmp_path / "cut.toml"
     cut_file.write_text(fx.COMPONENT_CUT, encoding="utf-8")
@@ -342,6 +344,58 @@ def test_every_mutant_of_the_component_cut_is_red(
 
 def test_the_component_mutant_list_is_not_empty() -> None:
     assert len(_mutants()) >= 15
+
+
+#: Eine Testdatei, die das Brett über eine Instanz patcht und befragt (Review RM-M1).
+INSTANCE_READER = (
+    '"""Instanzpatch und Zugriff am Brett."""\n\n'
+    "from app.ui import board\nfrom app.ui.session import Session\n\n\n"
+    "def test_extra(monkeypatch):\n"
+    "    window = board.Board(Session())\n"
+    '    monkeypatch.setattr(window, "bump", lambda: None)\n'
+    "    assert window.refresh() > 0\n"
+)
+
+
+def _unchanged() -> list[tuple[str, dict[str, str], dict[str, str], str]]:
+    """Ein Leser, der in einer **unveränderten** Datei steht: Der Beweis vergleicht jede Datei,
+    die einen verschobenen Namen nennt, nicht nur die geänderten (Konzept 4.1, W5)."""
+    probe = "tools/board_probe.py"
+    return [
+        ("leser-in-app", fx.COMPONENT_OLD, EXPECTED | {TOOLS: fx.COMPONENT_OLD[TOOLS]}, TOOLS),
+        ("leser-in-tools", fx.COMPONENT_OLD, EXPECTED | {probe: fx.COMPONENT_OLD[probe]}, probe),
+        (
+            "instanzpatch-in-tests",
+            fx.COMPONENT_OLD | {"tests/test_extra.py": INSTANCE_READER},
+            EXPECTED | {"tests/test_extra.py": INSTANCE_READER},
+            "tests/test_extra.py:9",
+        ),
+        (
+            "zeichenkette-ohne-erklärung",
+            fx.COMPONENT_OLD | {"tests/test_names.py": 'NAMES = ("bump",)\n'},
+            EXPECTED | {"tests/test_names.py": 'NAMES = ("bump",)\n'},
+            "tests/test_names.py:1: Zeichenkette 'bump'",
+        ),
+        (
+            "pfad-als-text",
+            fx.COMPONENT_OLD | {"tests/test_names.py": 'TARGET = "app.ui.board.Board.refresh"\n'},
+            EXPECTED | {"tests/test_names.py": 'TARGET = "app.ui.board.Board.refresh"\n'},
+            "tests/test_names.py:1: Pfad als Text 'app.ui.board.Board.refresh'",
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("label", "old_files", "new_files", "where"), _unchanged(), ids=[u[0] for u in _unchanged()]
+)
+def test_a_forgotten_reader_in_an_unchanged_file_is_red(
+    tmp_path: Path, label: str, old_files: dict[str, str], new_files: dict[str, str], where: str
+) -> None:
+    """RM-M1: Ein Leser, den der Planer übersah oder der nach dem Planen dazukam, bleibt nicht
+    grün, nur weil seine Datei unverändert ist."""
+    proof = _prove(tmp_path, new_files, old_files)
+    assert not proof.ok, f"{label}: Beweis grün\n{proof.text()}"
+    assert any(where in error for error in proof.errors), (label, proof.errors)
 
 
 # ------------------------------------------------------------------------------ abgewiesen
