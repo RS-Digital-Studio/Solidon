@@ -149,7 +149,7 @@ Nutzen da und sonst nichts.
 - In der Maßkarte bleibt *Übernehmen* grau, bis sich ein Wert oder der Haken für gleichartige Merkmale ändert, und nennt das erste Feld. Bisher genügte ein Klick ins Feld, ohne Wirkung.
 - Lehnt die Maßkarte einen Wert ab, steht der Grund einmal, direkt unter dem Feld. Bisher stand derselbe Satz noch einmal über den Knöpfen und in der Statusleiste.
 - Wird die Maßkarte durch einen Hinweis höher, bleibt sie stehen und rückt nur so weit, wie Bildrand oder Griff es verlangen, mit kurzer Bewegung. Bisher sprang sie an eine andere Stelle.
-- Der Dialog *Objekt umbenennen* beginnt mit dem jetzigen Namen im Feld.
+- Der Dialog *Objekt umbenennen* beginnt mit dem jetzigen Namen, markiert, sodass Tippen ihn ersetzt. Ohne neuen Namen entsteht kein Schritt.
 - Im Reiter *Auswahl* bleibt *Übernehmen* grau, bis sich ein Wert ändert, und nennt das erste Feld. Drehen oder Verdoppeln mit ihrer Vorgabe gehen weiter sofort.
 - Beim Bohren, Verschließen, Langloch und Lochfeld heißt der Ausgleich „Druckabweichung ausgleichen“ wie in der Maßgruppe und gibt die Lochkorrektur des Materials zu.
 - Wer einen vorhandenen Schritt öffnet, übernimmt mit *Übernehmen* statt *Einsetzen*. Der Knopf bleibt grau, bis sich ein Wert ändert, und nennt das Feld.

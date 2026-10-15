@@ -125,7 +125,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la tarjeta de medidas, *Aplicar* sigue en gris hasta que cambia un valor o la casilla de características iguales, e indica el primer campo. Antes bastaba un clic en un campo, sin efecto.
 - Si la tarjeta de medidas rechaza un valor, el motivo aparece una sola vez, justo debajo del campo. Antes la misma frase se repetía encima de los botones y en la barra de estado.
 - Si un aviso hace crecer la tarjeta de medidas, se queda en su sitio y solo se desplaza lo que exigen el borde o el tirador, con un movimiento breve. Antes saltaba a otro lugar.
-- El diálogo *Renombrar objeto* empieza con el nombre actual en el campo.
+- El diálogo *Renombrar objeto* empieza con el nombre actual seleccionado, y al escribir se reemplaza. Sin un nombre nuevo no se crea ningún paso.
 - En la pestaña *Selección*, *Aplicar* sigue en gris hasta que cambia un valor e indica el primer campo. Girar o duplicar con sus valores previstos sigue siendo inmediato.
 - Al taladrar, tapar, en ranuras y en campos de agujeros, el ajuste se llama «Compensar desviaciones de impresión», como en el grupo de cotas, y suma la compensación de agujeros.
 - Al abrir un paso existente, el botón dice *Aplicar* en lugar de *Insertar*. Sigue en gris hasta que cambia un valor e indica el campo.

@@ -103,3 +103,41 @@ def test_rename_waits_for_a_new_name(
     dialog.accept()
     QApplication.processEvents()
     assert len(two_bodies.session.project.document.ops) == steps, "kein leerer Schritt"
+
+
+def test_rename_in_one_go_name_selected_and_no_empty_step(
+    qt_app: QApplication, two_bodies: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FD-114 und RA-13 in einem Zug am Fenster: vorgegeben, beim ersten Fokus
+    markiert, und Enter ohne Änderung legt keinen Schritt an."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QLineEdit
+
+    from tests.ui_helpers import wait_until
+
+    monkeypatch.setattr(two_bodies, "_wire_preview", lambda *args, **kwargs: None)
+    two_bodies.show()
+    # Wie am Arbeitsplatz ist das Hauptfenster aktiv, bevor das Menü den
+    # Dialog öffnet; sonst holt seine späte Aktivierung den Fokus zurück.
+    assert QTest.qWaitForWindowActive(two_bodies)
+    two_bodies.object_tree.select_object(_body(two_bodies, "Deckel"))
+    steps = len(two_bodies.session.project.document.ops)
+
+    two_bodies.run_operation(REGISTRY.get("rename_object"))
+
+    dialog = two_bodies._op_dialog
+    assert dialog is not None
+    line = dialog._editors["name"]
+    assert isinstance(line, QLineEdit)
+    assert QTest.qWaitForWindowActive(dialog)
+    wait_until(qt_app, line.hasFocus)
+    qt_app.processEvents()
+    assert line.selectedText() == "Deckel", "der Name ist markiert, Tippen ersetzt ihn"
+    QTest.keyClick(line, Qt.Key.Key_Return)
+    qt_app.processEvents()
+    assert len(two_bodies.session.project.document.ops) == steps, "kein leerer Schritt"
+    QTest.keyClicks(line, "Haube")
+    qt_app.processEvents()
+    assert line.text() == "Haube", "Tippen ersetzt den markierten Namen"
+    assert dialog._accept_button.isEnabled(), "ein neuer Name geht"

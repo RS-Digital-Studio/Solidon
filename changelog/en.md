@@ -124,7 +124,7 @@ it into `website/version.json`.
 - In the measurement card, *Apply* stays grey until a value or the checkbox for matching features changes, and names the first field. Previously one click into a field enabled it, to no effect.
 - When the measurement card rejects a value, the reason appears once, directly below the field. Previously the same sentence was repeated above the buttons and in the status bar.
 - When a note makes the measurement card taller, it stays put and moves only as far as the view edge or handle requires, with a short movement. Previously it jumped elsewhere.
-- The *Rename object* dialog starts with the current name in the field.
+- The *Rename object* dialog starts with the current name selected, so typing replaces it. Without a new name, no step is added.
 - In the *Selection* tab, *Apply* stays grey until a value changes and names the first field. Rotating or duplicating with their preset values still works right away.
 - Drilling, filling, slots and hole fields call the adjustment “Compensate for printing deviations” as the dimension group does, and it adds the material's hole compensation.
 - Opening an existing step offers *Apply* instead of *Insert*. The button stays grey until a value changes and names the field.

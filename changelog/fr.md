@@ -125,7 +125,7 @@ dans `website/version.json`.
 - Dans la carte de cotes, *Appliquer* reste grisé tant qu'aucune valeur ni la case des éléments similaires ne change, et indique le premier champ. Avant, un clic dans un champ l'activait, sans effet.
 - Si la carte de cotes refuse une valeur, la raison apparaît une seule fois, juste sous le champ. Auparavant, la même phrase se répétait au-dessus des boutons et dans la barre d'état.
 - Si un message agrandit la carte de cotes, elle reste en place et ne se déplace que de ce qu'exigent le bord ou la poignée, avec un mouvement bref. Avant, elle sautait ailleurs.
-- Le dialogue *Renommer l'objet* s'ouvre avec le nom actuel dans le champ.
+- Le dialogue *Renommer l'objet* s'ouvre avec le nom actuel sélectionné, et la saisie le remplace. Sans nouveau nom, aucune étape n'est créée.
 - Dans l'onglet *Sélection*, *Appliquer* reste grisé tant qu'aucune valeur ne change, et indique le premier champ. Pivoter ou dupliquer avec leurs valeurs prévues reste immédiat.
 - Perçage, rebouchage, trous oblongs et champs de trous nomment le réglage « Compenser les écarts d'impression », comme le groupe de cotes. Il ajoute la compensation des trous.
 - À l'ouverture d'une étape existante, le bouton dit *Appliquer* au lieu d'*Insérer*. Il reste grisé tant qu'aucune valeur ne change, et indique le champ.

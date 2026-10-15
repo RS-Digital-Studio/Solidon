@@ -124,7 +124,7 @@ scrive in `website/version.json`.
 - Nella scheda delle misure *Applica* resta grigio finché non cambia un valore o la casella degli elementi uguali, e indica il primo campo. Prima bastava un clic in un campo, senza effetto.
 - Se la scheda delle misure rifiuta un valore, il motivo compare una sola volta, subito sotto il campo. Prima la stessa frase si ripeteva sopra i pulsanti e nella barra di stato.
 - Se un avviso fa crescere la scheda delle misure, resta al suo posto e si sposta solo quanto richiedono il bordo o la maniglia, con un breve movimento. Prima saltava altrove.
-- La finestra *Rinomina oggetto* parte dal nome attuale nel campo.
+- La finestra *Rinomina oggetto* parte dal nome attuale selezionato, così scrivendo lo si sostituisce. Senza un nome nuovo non nasce alcun passaggio.
 - Nella linguetta *Selezione*, *Applica* resta grigio finché non cambia un valore e indica il primo campo. Ruotare o duplicare con i valori predefiniti resta immediato.
 - Foratura, chiusura, asole e campi di fori chiamano la correzione «Compensare gli scostamenti di stampa», come il gruppo di quote, e aggiungono la compensazione dei fori.
 - Aprendo un passaggio esistente, il pulsante dice *Applica* invece di *Inserisci*. Resta grigio finché non cambia un valore e indica il campo.

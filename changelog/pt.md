@@ -124,7 +124,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No cartão de medidas, *Aplicar* fica cinzento até mudar um valor ou a caixa dos elementos iguais, e indica o primeiro campo. Antes bastava um clique num campo, sem efeito.
 - Se o cartão de medidas recusar um valor, o motivo aparece uma só vez, logo abaixo do campo. Antes a mesma frase repetia-se acima dos botões e na barra de estado.
 - Se um aviso fizer crescer o cartão de medidas, fica no lugar e só se desloca o que o limite ou a pega exigirem, com um movimento curto. Antes saltava para outro sítio.
-- O diálogo *Mudar o nome do objeto* começa com o nome atual no campo.
+- O diálogo *Mudar o nome do objeto* começa com o nome atual selecionado, e escrever substitui-o. Sem um nome novo, não se cria nenhum passo.
 - No separador *Seleção*, *Aplicar* fica cinzento até mudar um valor e indica o primeiro campo. Rodar ou duplicar com os valores predefinidos continua imediato.
 - Furar, tapar, furos oblongos e campos de furos chamam ao ajuste «Compensar desvios de impressão», como o grupo de cotas, e acrescentam a compensação de furos.
 - Ao abrir um passo existente, o botão diz *Aplicar* em vez de *Inserir*. Fica cinzento até mudar um valor e indica o campo.
