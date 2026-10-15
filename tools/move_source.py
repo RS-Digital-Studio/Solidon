@@ -419,7 +419,7 @@ def _annotations(node: ast.AST) -> list[ast.expr]:
 def _string_annotation_names(text: str) -> set[str]:
     try:
         expression = ast.parse(text.strip(), mode="eval")
-    except SyntaxError:
+    except SyntaxError, ValueError:
         return set()
     return {node.id for node in ast.walk(expression) if isinstance(node, ast.Name)}
 

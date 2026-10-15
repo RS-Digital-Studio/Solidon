@@ -637,7 +637,7 @@ def _is_annotation(parent: ast.AST | None, node: ast.AST) -> bool:
 def _string_names(text: str) -> set[str]:
     try:
         expression = ast.parse(text.strip(), mode="eval")
-    except SyntaxError:
+    except SyntaxError, ValueError:
         return set()
     return {node.id for node in ast.walk(expression) if isinstance(node, ast.Name)}
 
@@ -971,7 +971,7 @@ def loaded_names(tree: ast.AST) -> set[str]:
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             try:
                 inner = ast.parse(node.value, mode="eval")
-            except SyntaxError:
+            except SyntaxError, ValueError:
                 continue
             found |= {n.id for n in ast.walk(inner) if isinstance(n, ast.Name)}
     return found

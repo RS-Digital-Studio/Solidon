@@ -294,7 +294,7 @@ class CopiesReaderComparison(ReaderComparison):
         try:
             before = ast.parse(str(old.value), mode="eval")
             after = ast.parse(str(new.value), mode="eval")
-        except SyntaxError:
+        except SyntaxError, ValueError:
             self.fail(old, new, "Annotation als Zeichenkette nicht lesbar")
             return True
         back = _Back(self, {c.access: bound for bound, c in self.local.items()}).visit(after)

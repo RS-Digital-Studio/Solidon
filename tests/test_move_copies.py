@@ -109,6 +109,19 @@ def test_list_copies_proposes_the_originals_w2_flags(tmp_path: Path) -> None:
     assert [(b.module, b.name) for b in cut.bindings] == found
 
 
+def test_a_string_with_a_lone_surrogate_does_not_stop_the_tool(tmp_path: Path) -> None:
+    """Gefunden an der Trockenprobe K: Eine Zeichenkette mit einzelnem Surrogat (``"\\ud800"``,
+    so in ``tests/test_json_boundary.py``) ließ die Suche nach gelesenen Namen mit
+    ``UnicodeEncodeError`` abbrechen — Werkzeugfehler statt Beweis."""
+    head = "\n\n\ndef test_copy(monkeypatch):\n"
+    odd = '\n\nODD = "\\ud800"' + head
+    files = fx.edit(fx.COPIES_OLD, TESTS, head, odd)
+    root, result = _run(tmp_path, files)
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    expected = fx.edit(EXPECTED, TESTS, head, odd)
+    assert fx.tree_bytes(root) == _expected_bytes(expected)
+
+
 def test_a_hidden_original_is_read_through_its_lazy_package(tmp_path: Path) -> None:
     """``app.core.kit.measure`` liegt hinter dem gleichnamigen trägen Export: Ein Halter, der
     direkt daraus importiert, liest danach über das träge Paket, und ein Patch auf eine Kopie

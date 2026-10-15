@@ -585,7 +585,7 @@ class MovedComparison(Comparison):
         try:
             before = ast.parse(str(old.value).strip(), mode="eval")
             after = ast.parse(str(new.value).strip(), mode="eval")
-        except SyntaxError:
+        except SyntaxError, ValueError:
             return old.value == new.value
         names_before = [n for n in ast.walk(before) if isinstance(n, ast.Name)]
         names_after = [n for n in ast.walk(after) if isinstance(n, ast.Name)]

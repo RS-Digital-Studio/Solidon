@@ -1221,7 +1221,7 @@ class ComponentPlanner:
             if _is_annotation_node(parent, constant) and not rewrite.covered(constant):
                 try:
                     tree = ast.parse(str(constant.value), mode="eval")
-                except SyntaxError:
+                except SyntaxError, ValueError:
                     continue
                 if any(isinstance(n, ast.Name) and n.id == name for n in ast.walk(tree)):
                     return True

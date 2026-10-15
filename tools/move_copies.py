@@ -672,7 +672,7 @@ def _is_annotation(source: Source, node: ast.AST) -> bool:
 def _string_names(text: str) -> set[str]:
     try:
         tree = ast.parse(text, mode="eval")
-    except SyntaxError:
+    except SyntaxError, ValueError:
         return set()
     return {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
 
@@ -687,7 +687,7 @@ def _annotation_text(source: Source, node: ast.Constant, bound: str, text: str) 
         return None
     try:
         tree = ast.parse(value, mode="eval")
-    except SyntaxError:
+    except SyntaxError, ValueError:
         return None
     data = value.encode("utf-8")
     spots = sorted(
