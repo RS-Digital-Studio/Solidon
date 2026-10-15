@@ -4145,6 +4145,11 @@ class ParameterPanel(QWidget):
         details.setAccessibleName(tr("{name} ändern", name=title))
         unit.setAccessibleName(tr("Einheit von {name}", name=title))
         value.setAccessibleName(title)
+        # **Der Rechtsklick gehört der Zeile** (FD-174): Am Wertfeld stand Qts
+        # englisches Textfeldmenü („&Undo“, „&Step up“) statt *Ändern …*. Das
+        # Feld reicht ihn an die Leiste weiter (``context_menu``); Ausschneiden
+        # und Einfügen bleiben auf der Tastatur.
+        value.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         details.setProperty("parameterName", name)
         details.clicked.connect(self._details_clicked)
         layout.addWidget(details)
