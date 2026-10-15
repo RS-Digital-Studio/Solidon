@@ -364,6 +364,31 @@ festem Bildschirmbezug), `begin_card_drag`/`end_card_drag`,
 `settle_measure_layout` (Layoutaufträge zustellen) und
 `measure_more_heading`.
 
+`release_signing.py` hält ein eigenes Schlüsselpaar der Suite für unterschriebene
+Versionsdateien (`signed`, auch mit fremdem Schlüssel); die echten Schlüssel
+(`REAL_PUBLIC_KEYS`) samt Abdruck des ersten und Besitzproben (`KEY_PROOFS`)
+prüfen `test_the_published_version_file_is_signed` und
+`test_the_shipped_release_keys_are_proven`.
+
+`bundled_fonts.py` ist die eine Stelle für die gebündelte Prüfschrift: `bundled_font`
+lädt DejaVu Sans (auf Wunsch weitere Dateien), setzt sie als Anwendungsschrift,
+prüft Familie und echte Metrik und entfernt die Dateien danach wieder; Schrift
+und Thema gibt `conftest.py` zurück.
+
+`shell_helpers.py` ist die eine Stelle, die bash und sh der Suite sucht:
+`bash_executable` (der Starter aus Git, mit `keep_path` die bash selbst, nie der
+Starter von WSL) und `posix_shell` für das Linux-Installationsskript, beide mit
+Rückfall neben Git, unter `ProgramFiles` und in der Installation je Nutzer. Es
+lädt nur die Standardbibliothek. Dass keine Testdatei selbst per `which` sucht,
+hält `test_packaging_platform.py::test_only_the_shell_helpers_look_for_bash_or_sh`.
+
+`guide_window.py` gehört allein `test_guide_targets.py`: die Fixture
+`prepared_window` für den Wortschatz des Funktionsdurchgangs (Quader mit
+Bohrung unter dem Bett, im Kundenthema) und `settle`, das nach festen Runden
+wartet, bis keine Seitenkarte mehr gleitet (`at_rest`) — gelesen wird die Lage,
+die der Kunde nach dem Gleiten sieht, nicht eine Zwischenlage, die an der
+Rechnerlast hängt (FD-157).
+
 ## Stolperfallen
 
 *Früher unter „Die Fahrweise steht einmal — in `CLAUDE.md`“.*

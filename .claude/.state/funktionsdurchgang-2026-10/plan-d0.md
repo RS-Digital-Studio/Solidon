@@ -303,18 +303,35 @@ Ein Eintrag `[[verdict]]` je Urteil. Die Schlüssel sind englisch (Schemata), di
 | `verdict` | ja | gut, gut_nach_fix, offen, entfaellt |
 | `reviewer` | ja | stufe_b, zweitpruefer, stufe_c |
 | `reason` | ja | Begründung |
-| `image`, `place` | ja bei B | Bild relativ zu `--out` und Stelle in der Oberfläche |
+| `image`, `place` | ja bei B | Bild relativ zum Laufordner mit `/` (`cases/002/02-flaeche.png`; aus einer anderen Runde mit deren Kennung davor, `v4:cases/001/v4-nachher.png`) und Stelle in der Oberfläche, beide ohne Laufwerkspfad |
+| `no_image` | statt `image` | warum der Lauf zu diesem Urteil kein Bild hat; nie Prosa im Bildfeld |
 | `finding` | bei Fund | FD-n |
 | `rm` | bei *offen* | RM-Nummer, sonst abgewiesen |
 | `not_applicable` | bei *entfällt* | Grund aus der Liste |
 | `design_judgement` | bei G9, Z3, Z4, I1–I6 und Vergleich | `true`: Gestaltungsurteil, kein bewiesener Fehler |
 | `prediction` | bei V4 | vor dem Übernehmen geschriebene Vorhersage |
 
+Jede Runde (Kopfkommentar eines Prüfers) nennt vor ihren Urteilen den Lauf, an
+dem sie urteilt, als `[[run]]`, eine Runde wiederholt ihn gleich lautend.
+Bilder liegen außerhalb des Baums und auf jedem Rechner woanders; Name und
+Siegel finden sie, ein Laufwerkspfad nur an einem Rechner.
+
+| Schlüssel | Pflicht | Inhalt |
+|---|---|---|
+| `key` | nur für eine weitere Runde | Kennung vor deren Bildern (`v4`); ohne `key` ist es der Laufordner |
+| `name` | ja | Name des Laufordners in der Ablage der Läufe (`probelauf-d0-final-2ec37b23b-fortsetzung-03`) |
+| `head` | ja | Commit, an dem der Lauf maß; `report` verlangt ihn in den Protokollen |
+| `seal` | ja | Datei, die den Inhalt des Laufs bindet, mit SHA256 |
+
+Die Abhakliste nennt als Laufordner diesen Namen, nicht die bildlose Kopie,
+aus der `report` liest (`report` schreibt in `--out`; der Lauf selbst bleibt
+unberührt).
+
 ### 2.10 Abhakliste: `abhakliste-<paket>.md` (erzeugt, nie von Hand)
 
 | Teil | Inhalt |
 |---|---|
-| Kopf | Paket, Commit, Datum, Laufordner außerhalb des Baums, Zahl der Zeilen; *gut*, *gut nach Fix*, *offen* mit RM, *nicht geprüft* |
+| Kopf | Paket, Commit, Datum, Laufordner außerhalb des Baums (Name aus `[[run]]` der Urteile, sonst `--out`), Zahl der Zeilen; *gut*, *gut nach Fix*, *offen* mit RM, *nicht geprüft* |
 | Tabelle 1 | eine Zeile je Funktion: Kennung · Art · Szene · Spalten 1–19 mit `ja`, `FD-n`, `—` (entfällt), `B`, `C`, `?` (nicht gelaufen), `n.p.` (nicht prüfbar) · Urteil · Funde |
 | Tabelle 2 | Kriterien, die nicht erfüllt sind, je Zeile (Kennung, Messwert, Schwelle, FD) |
 | Paketwerte | E2-Anteil, I3-Anteil, I4-Zahl, Übereinstimmung der Prüfer je Prüfpunkt (Schwelle 90 %) |
@@ -491,7 +508,7 @@ Alle Gegenproben laufen ohne Fenster in `tests/test_function_report.py`. Sie spe
 **Abnahme:**
 - `PRUEFPUNKTE` hat 19 Einträge, `BROKEN_SAMPLES` deckt alle ab; ein Metatest macht einen neuen Prüfpunkt ohne Gegenprobe rot.
 - Jede Gegenprobe aus §3 wird rot.
-- Urteile werden geprüft: ohne Bild oder Stelle, *offen* ohne RM, ein fremder *entfällt*-Grund, G9 schwerer als leicht, „gut“ gegen einen A-Fund → alle abgewiesen.
+- Urteile werden geprüft: ohne Bild oder Stelle, Bild oder Stelle mit Laufwerkspfad, *offen* ohne RM, ein fremder *entfällt*-Grund, G9 schwerer als leicht, „gut“ gegen einen A-Fund → alle abgewiesen; ein Bild ohne seinen `[[run]]` macht `report` ungültig.
 - Die Abhakliste wird aus Musterdaten deterministisch erzeugt, eine Datei je Paket.
 - Funddatei: Nummern eindeutig, Art und Schwere aus der Liste, Stand gesetzt.
 - Übereinstimmung unter 90 % wird markiert.

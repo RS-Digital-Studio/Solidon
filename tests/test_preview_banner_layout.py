@@ -1,60 +1,55 @@
 """Das Vorschauband bemisst wieder eingeblendete Inhalte mit (FD52)."""
 
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
-from PySide6.QtGui import QFont, QFontDatabase, QFontInfo, QFontMetrics
+from PySide6.QtGui import QFont, QFontInfo, QFontMetrics
 from PySide6.QtWidgets import QApplication
 
 from app.core.geom.difference import Difference, SceneDifference
 from app.i18n import get_language, set_language, tr
 from app.i18n.catalog import install_language
 from app.ui.style import apply_style
-from app.ui.theme import apply_theme, current_theme
+from app.ui.theme import apply_theme
 from app.ui.viewport import Viewport
+from tests.bundled_fonts import bundled_font
 
 
 @pytest.fixture(params=[9, 13], ids=["9pt", "13pt"])
 def preview_view(qt_app: QApplication, request: pytest.FixtureRequest) -> Iterator[Viewport]:
-    """Inhaltsschrift und Thema wie im Betrieb, mit echter gebündelter Schrift."""
-    previous_font = qt_app.font()
-    previous_theme = current_theme()
+    """Inhaltsschrift und Thema wie im Betrieb, mit echter gebündelter Schrift.
+
+    Schrift und Thema gibt ``conftest.py`` zurück, die Sprache diese Fixture.
+    """
     previous_language = get_language()
-    font_path = Path(__file__).parents[1] / "app/core/geom/data/fonts/DejaVuSans.ttf"
-    font_id = QFontDatabase.addApplicationFont(str(font_path))
-    assert font_id >= 0, "Die gebündelte Inhaltsschrift wurde nicht geladen"
     point_size = request.param
-    qt_app.setFont(QFont(QFontDatabase.applicationFontFamilies(font_id)[0], point_size))
-    apply_theme(qt_app, "dark")
-    apply_style(qt_app, "dark")
-    view = Viewport()
-    view.resize(1920, 1080)
-    view.show()
-    qt_app.processEvents()
-    try:
-        assert (view.width(), view.height()) == (1920, 1080)
-        actual_font = QFontInfo(view.banner.note.font())
-        assert actual_font.family() == "DejaVu Sans"
-        assert actual_font.pointSize() == point_size
-        metrics = view.banner.note.fontMetrics()
-        assert metrics.horizontalAdvance("WWW") > metrics.horizontalAdvance("iii")
-        if point_size > 9:
-            standard = QFontMetrics(QFont("DejaVu Sans", 9))
-            assert metrics.horizontalAdvance("Vorschau") > standard.horizontalAdvance("Vorschau")
-            assert metrics.height() > standard.height()
-        yield view
-    finally:
-        view.mark_preview("")
-        view.release()
-        view.close()
-        view.deleteLater()
+    with bundled_font(qt_app, point_size):
+        apply_theme(qt_app, "dark")
+        apply_style(qt_app, "dark")
+        view = Viewport()
+        view.resize(1920, 1080)
+        view.show()
         qt_app.processEvents()
-        set_language(previous_language)
-        qt_app.setFont(previous_font)
-        apply_theme(qt_app, previous_theme)
-        apply_style(qt_app, previous_theme)
-        QFontDatabase.removeApplicationFont(font_id)
+        try:
+            assert (view.width(), view.height()) == (1920, 1080)
+            actual_font = QFontInfo(view.banner.note.font())
+            assert actual_font.family() == "DejaVu Sans"
+            assert actual_font.pointSize() == point_size
+            metrics = view.banner.note.fontMetrics()
+            assert metrics.horizontalAdvance("WWW") > metrics.horizontalAdvance("iii")
+            if point_size > 9:
+                standard = QFontMetrics(QFont("DejaVu Sans", 9))
+                wide = standard.horizontalAdvance("Vorschau")
+                assert metrics.horizontalAdvance("Vorschau") > wide
+                assert metrics.height() > standard.height()
+            yield view
+        finally:
+            view.mark_preview("")
+            view.release()
+            view.close()
+            view.deleteLater()
+            qt_app.processEvents()
+            set_language(previous_language)
 
 
 @pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])

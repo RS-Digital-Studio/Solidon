@@ -90,7 +90,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `viewport.py` | Szene/Picks/Merkmale; Griffe (`_dispatch_pointer`), Vorschau/Differenz (`_cover_body`), Analyse/Schnitt/`PreviewBanner`; Zuordnung mit Kandidat/Vorbezug |
-| `bed_scale.py` | Bettzahlen und -raster an denselben Lagen (§19.3) |
+| `bed_scale.py` | Bettzahlen und -raster (§19.3) |
 | `render/` | der Renderer hinter der Ansicht — eigene Karte |
 | `overlay.py` | Zonen über der Ansicht (§2.5): `OverlayHost`, `CardColumn`, `CardGrip`, `is_room_taker`, `FittedScroller`; natives Fenster nur für direkte Kinder (`keep_widgets_alien`, `hold_above_the_view`) |
 | `cursors.py` | Mauszeiger (§19.3, Regel 18) |
@@ -100,8 +100,9 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 
 | Datei | Zweck |
 |---|---|
-| `placement_flow.py` | Flächenplatzierung und Maße im Bild (§18.5), Dialog/`QuietHost` über `PlacementHost`; Größenänderung der Maßgruppe im bestehenden Ereignisfilter; Ablauf in `karte-app-ui.md`, `measured_frame` in `operationen.md` |
+| `placement_flow.py` | Flächenplatzierung und Maße im Bild (§18.5), Dialog/`QuietHost` über `PlacementHost`; Maßgruppengröße im Ereignisfilter; Ablauf in `karte-app-ui.md`, `measured_frame` in `operationen.md` |
 | `measure_card_drag.py` | `MeasureCardDrag`/`CardPlace`: Auftragslage, Titel-/Freiflächenzug; Feldgesten bleiben; aktive Mausgesten nur `QWidget`, `QWindow` durchlassen; `update_room`/`placed_rect`/`reset` |
+| `measure_field_places.py` | Platz der Maßfelder bei Enge |
 | `slot_handle.py` | der Langlochgriff: zwei Knöpfe am gewählten Loch, der Zug gibt Länge und Richtung (`slotDragged`); übernommen wird im Merkmalfenster |
 | `scale_widget.py` | der Skalierwürfel am Gizmo (§18.11) |
 | `transform_bar.py` | die Bewegen-Leiste: drei Rollen, die Zahlen daneben (§18.11) |

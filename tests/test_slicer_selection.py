@@ -26,7 +26,8 @@ ROOT = Path(__file__).resolve().parent.parent
 _INSTALL_ROOTS = frozenset({"C:/Program Files", "/Applications", "/usr/share", "/opt"})
 #: Wer so einen Ort liest, ruft eine dieser Methoden auf ihm auf.
 _READS = frozenset({"iterdir", "glob", "rglob", "is_dir", "exists", "is_file", "walk"})
-#: Die echte Programmsuche ohne die Attrappe aus ``conftest.py``.
+#: Die echte Programmsuche ohne die Attrappe aus ``conftest.py`` — die Fixtures gleichen
+#: Namens; gerufen unter diesem Namen oder einem örtlichen Alias (``find = …``).
 _REAL_SEARCH = frozenset({"unpatched_find_program", "unpatched_find_programs"})
 
 
@@ -151,6 +152,15 @@ def _unmarked_machine_searches(source: str, name: str) -> list[str]:
             ast.unparse(decorator) for decorator in node.decorator_list
         ):
             found.append(f"{name}:{node.lineno} {node.name}: installed_slicer ohne mark.slicer")
+        searches = _REAL_SEARCH | {
+            target.id
+            for assign in ast.walk(node)
+            if isinstance(assign, ast.Assign)
+            and isinstance(assign.value, ast.Name)
+            and assign.value.id in _REAL_SEARCH
+            for target in assign.targets
+            if isinstance(target, ast.Name)
+        }
         # Quelltext nur, wo eine echte Suche ihn braucht: ``get_source_segment``
         # zerlegt je Aufruf die ganze Datei, über alle Funktionen quadratisch.
         isolated: bool | None = None
@@ -158,16 +168,19 @@ def _unmarked_machine_searches(source: str, name: str) -> list[str]:
             if not isinstance(inner, ast.Call):
                 continue
             called = inner.func
-            if (
-                isinstance(called, ast.Attribute)
-                and called.attr in _REAL_SEARCH
-                and _asks_for_a_slicer(inner)
-            ):
+            called_name = (
+                called.id
+                if isinstance(called, ast.Name)
+                else called.attr
+                if isinstance(called, ast.Attribute)
+                else None
+            )
+            if called_name in searches and _asks_for_a_slicer(inner):
                 if isolated is None:
                     text = ast.get_source_segment(source, node) or ""
                     isolated = "isolated_search" in parameters or "_install_roots" in text
                 if not isolated:
-                    found.append(f"{name}:{inner.lineno} {node.name}: {called.attr} ohne Isolation")
+                    found.append(f"{name}:{inner.lineno} {node.name}: {called_name} ohne Isolation")
             if (
                 isinstance(called, ast.Attribute)
                 and called.attr in _READS
@@ -209,7 +222,8 @@ def _is_install_root(node: ast.AST) -> bool:
 
 def test_the_guard_finds_each_way_past_the_fixture() -> None:
     """Erst am bekannten Ausgang: der alte Cura-Helfer, die nackte Suche, die Suche
-    mit der Kennung in einer Variablen, der fehlende Marker."""
+    mit der Kennung in einer Variablen, die Suche unter einem Alias, der fehlende
+    Marker."""
     source = textwrap.dedent(
         """
         def _installed_cura():
@@ -217,17 +231,21 @@ def test_the_guard_finds_each_way_past_the_fixture() -> None:
                 if not base.is_dir():
                     continue
 
-        def test_search():
-            discover.unpatched_find_programs("slicer", SLICERS)
+        def test_search(unpatched_find_programs):
+            unpatched_find_programs("slicer", SLICERS)
 
-        def _found(kind):
-            return discover.unpatched_find_programs(kind, tools.SLICERS)
+        def _found(kind, unpatched_find_programs):
+            return unpatched_find_programs(kind, tools.SLICERS)
 
-        def test_isolated(isolated_search):
-            discover.unpatched_find_programs("slicer", SLICERS)
+        def test_isolated(isolated_search, unpatched_find_programs):
+            unpatched_find_programs("slicer", SLICERS)
 
-        def test_other_tool():
-            discover.unpatched_find_program("comfyui", ("Comfy Desktop",))
+        def test_other_tool(unpatched_find_program):
+            unpatched_find_program("comfyui", ("Comfy Desktop",))
+
+        def test_alias(unpatched_find_program):
+            find = unpatched_find_program
+            find("slicer", ("orca-slicer",))
 
         def test_unmarked(installed_slicer):
             pass
@@ -247,6 +265,7 @@ def test_the_guard_finds_each_way_past_the_fixture() -> None:
         "_installed_cura:",
         "test_search:",
         "_found:",
+        "test_alias:",
         "test_unmarked:",
     ], found
 

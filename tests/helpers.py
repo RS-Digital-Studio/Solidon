@@ -26,7 +26,6 @@ import io
 import json
 import math
 import os
-import shutil
 import socketserver
 import struct
 import subprocess
@@ -69,6 +68,9 @@ from app.core.types import (
     SliceContour,
     Source,
 )
+
+# Weitergereicht: Die eine bash-Quelle der Suite steht in ``tests/shell_helpers.py``.
+from tests.shell_helpers import bash_executable as bash_executable
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -1797,23 +1799,6 @@ def mirrored_thread(solid: Any) -> Any:
         (0.0, 0.0, 0.0, 1.0),
     )
     return edit.transformed(solid, matrix)
-
-
-def bash_executable() -> Path | None:
-    """Findet Bash im Suchpfad oder relativ zur tatsächlich installierten Git-Ausgabe."""
-    executable = shutil.which("bash")
-    if executable and "system32" not in Path(executable).parts[-2].lower():
-        return Path(executable)
-    git = shutil.which("git")
-    roots = [Path(git).parent.parent] if git else []
-    for variable, suffix in (("ProgramFiles", "Git"), ("LOCALAPPDATA", "Programs/Git")):
-        value = os.environ.get(variable)
-        if value:
-            roots.append(Path(value) / suffix)
-    return next(
-        (root / "bin" / "bash.exe" for root in roots if (root / "bin" / "bash.exe").is_file()),
-        None,
-    )
 
 
 def set_test_license(monkeypatch: Any, *, active: bool) -> None:

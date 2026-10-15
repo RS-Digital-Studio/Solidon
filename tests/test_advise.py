@@ -2203,7 +2203,7 @@ def test_scarf_advice_follows_a_changed_shared_ramp_length(monkeypatch: pytest.M
     round_one = _standing(trimesh.creation.cylinder(radius=12.5, height=20.0, sections=128))
     try:
         with monkeypatch.context() as changed:
-            changed.setattr(print_settings, "SCARF_LENGTH", 50.0, raising=False)
+            changed.setattr(print_settings, "SCARF_LENGTH", 50.0)
             importlib.reload(slicer_keys)
             importlib.reload(advise)
             assert "shell.scarf_seam" not in paths(advise.advise(settings, profile, round_one))

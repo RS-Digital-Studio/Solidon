@@ -4,19 +4,23 @@ Ein Klick von Bohrung zu Bohrung schickt rund 2 400 Ereignisse durch die
 Anwendung. Jeder eigene Filter an ihr kostete je Ereignis einen Aufruf in
 Python; drei davon 17 ms je Klick (RM-232, Durchsicht 0.5.1). Geprüft wird,
 dass der Verteiler nur weiterreicht, was jemand angemeldet hat, dass ein
-Zuhörer schlucken darf, dass ein toter Zuhörer herausfällt, dass der Verteiler
-keinen am Leben hält — und dass kein Modul wieder einen eigenen Filter an die
-Anwendung hängt.
+Zuhörer schlucken darf, dass ein toter Zuhörer herausfällt, auch mitten in
+einer Frage, dass der Verteiler keinen am Leben hält — und dass kein Modul
+wieder einen eigenen Filter an die Anwendung hängt.
 
-Die vier Tests mit Qt-Objekten brauchen die Anwendung (``qt_app``) und laufen
+Die fünf Tests mit Qt-Objekten brauchen die Anwendung (``qt_app``) und laufen
 damit in der Fenstergruppe, beim Release; der Wächter über den Quelltext läuft
 in jedem Tor.
 """
 
 from __future__ import annotations
 
+import gc
 import re
+import weakref
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import QEvent, QObject
 from shiboken6 import delete
@@ -106,6 +110,49 @@ def test_the_distributor_keeps_no_listener_alive(qt_app: object) -> None:
     assert kept.heard == [QEvent.Type.KeyPress]
     assert list(events._listeners) == [QEvent.Type.KeyPress]
     assert len(events._listeners[QEvent.Type.KeyPress]) == 1, "und vergisst den gegangenen"
+
+
+class _CollectingEntries(tuple[tuple[int, Any], ...]):
+    """Die Zuhörer einer Art, bei deren Lesung die Speicherbereinigung läuft."""
+
+    def __iter__(self) -> Iterator[tuple[int, Any]]:
+        gc.collect()
+        return super().__iter__()
+
+
+def test_asking_survives_a_listener_dying_in_the_question(qt_app: object) -> None:
+    """``listening`` antwortet, auch wenn während der Frage der letzte Zuhörer einer Art stirbt.
+
+    Der Abschied (``gone``) läuft als Rückruf des schwachen Verweises aus der
+    Speicherbereinigung heraus, an jedem Prüfpunkt einer Schleife, und nimmt
+    eine Art ohne Zuhörer ganz heraus — mitten in der Schleife über die Arten
+    hieß das ``dictionary changed size during iteration`` (Zwilling von FD-167).
+    Hier läuft die Bereinigung beim Lesen der ersten Art; der sterbende
+    Zuhörer hängt im Zyklus und ist bis dahin tot, aber nicht abgeräumt.
+    """
+    events = ApplicationEvents()
+    kept = _Listener()
+    events.listen(kept, (QEvent.Type.KeyPress,))
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        dying = _Listener()
+        dying.cycle = dying  # type: ignore[attr-defined]
+        events.listen(dying, (QEvent.Type.Show,))
+        gone = weakref.ref(dying)
+        del dying
+        assert gone() is not None, "die Vorbedingung: erst die Bereinigung räumt ihn ab"
+        entries = events._listeners[QEvent.Type.KeyPress]
+        events._listeners[QEvent.Type.KeyPress] = _CollectingEntries(entries)
+
+        assert not events.listening(_Listener())
+
+        assert gone() is None, "die Bereinigung lief in der Frage"
+        assert list(events._listeners) == [QEvent.Type.KeyPress]
+        assert events.listening(kept)
+    finally:
+        if enabled:
+            gc.enable()
 
 
 def test_no_module_hangs_its_own_filter_on_the_application() -> None:

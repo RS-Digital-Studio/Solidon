@@ -5,10 +5,10 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | | |
 |---|---|
 | Paket | D4 |
-| Prüfsumme | e47b73aa56b3d2fde70f112cb6a3c19492886b42f6e01d813d1a1336c1655e1e |
+| Prüfsumme | 97b07927ceea9fc6f182e2fddf3dddbcc76083f1a62bd0e1040fc7a83bf3a2e6 |
 | Commit | 2ec37b23bbc18bd76fc604c794ecd0c7231adaec |
-| Datum | 2026-10-14 |
-| Laufordner | `F:\tmp-suche\koord-claude-1014\lauf` |
+| Datum | 2026-10-15 |
+| Laufordner | `probelauf-d0-final-2ec37b23b-fortsetzung-03` |
 | Zeilen | 18 |
 | gut | 0 |
 | gut nach Fix | 0 |
@@ -21,24 +21,24 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 
 | Kennung | Art | Szene | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | Urteil | Funde |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| countersink_hole | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-741 |  |
+| countersink_hole | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-93 | offen RM-741 | FD-93 |
 | detect_region | operation | quader.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-737, RM-741 |  |
-| drill_hole | operation | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | FD-7 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-741 | FD-7, FD-12, FD-15 |
-| duplicate_feature | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-737, RM-741 |  |
-| group_pattern | operation | quader.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-54 | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-54 | offen RM-741 | FD-54 |
-| move_feature | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-57 | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-57 | offen RM-737, RM-741, RM-747 | FD-57 |
-| pattern_feature | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-45 | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-45 | offen RM-741, RM-747 | FD-45, FD-58 |
-| pin_for_bore | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-741 |  |
-| plug_hole | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | FD-7 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-741 | FD-7 |
+| drill_hole | operation | merkmal.face.exakt | offen | offen | offen | offen | offen | offen | offen | FD-7 | offen | FD-94 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-741 | FD-7, FD-12, FD-15, FD-94 |
+| duplicate_feature | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-96 | offen RM-737, RM-741 | FD-96, FD-102 |
+| group_pattern | operation | quader.exakt | FD-101 | FD-101 | offen | offen | offen | offen | FD-95 | offen | FD-54 | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-54 | offen RM-741 | FD-54, FD-95, FD-101 |
+| move_feature | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-57 | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-57 | offen RM-737, RM-741, RM-747 | FD-57, FD-96, FD-102 |
+| pattern_feature | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-45 | FD-94 | offen | offen | offen | offen | offen | offen | offen | offen | FD-45 | offen RM-741, RM-747 | FD-45, FD-58, FD-94 |
+| pin_for_bore | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-97 | FD-94 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-741 | FD-94, FD-97 |
+| plug_hole | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | FD-7 | offen | FD-94 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-741 | FD-7, FD-94 |
 | remove_feature | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-741 |  |
-| resize_feature | operation | merkmal.pin.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-98 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-737, RM-741 | FD-98 |
-| resize_hole | operation | erkannte_bohrung.netz | FD-34 | FD-47 | ja | ja | offen | FD-33 | FD-36 | FD-47 | FD-46 | FD-86 | offen | FD-48 | offen | offen | offen | offen | offen | FD-28 | FD-46 | offen RM-737, RM-741, RM-748 | FD-28, FD-29, FD-31, FD-32, FD-33, FD-34, FD-36, FD-46, FD-47, FD-48, FD-49, FD-63, FD-64, FD-86, FD-87, FD-88, FD-103 |
-| rotate_feature | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-741 |  |
-| slot_hole | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen RM-737 |  |
-| dialog:local_recognition_dialog | bedienflaeche | quader.netz | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
-| feature.apply | bedienflaeche | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-16 |
-| feature.every | bedienflaeche | gleiche_bohrungen.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
-| feature.in_view | bedienflaeche | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 |  |
+| resize_feature | operation | merkmal.pin.exakt | offen | offen | offen | offen | offen | offen | offen | offen | FD-98 | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-93 | offen RM-737, RM-741 | FD-93, FD-96, FD-98, FD-99, FD-102, FD-136, FD-138 |
+| resize_hole | operation | erkannte_bohrung.netz | FD-34 | offen | FD-161 | ja | offen | FD-33 | FD-36 | offen | FD-162 | FD-86 | offen | FD-48 | FD-100 | offen | offen | offen | offen | FD-28 | FD-67 | offen RM-737, RM-741, RM-748 | FD-28, FD-29, FD-31, FD-32, FD-33, FD-34, FD-36, FD-46, FD-47, FD-48, FD-49, FD-60, FD-63, FD-64, FD-67, FD-70, FD-84, FD-86, FD-87, FD-88, FD-99, FD-100, FD-103, FD-160, FD-161, FD-162 |
+| rotate_feature | operation | merkmal.hole.exakt | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-96 | offen RM-741 | FD-96 |
+| slot_hole | operation | merkmal.hole.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | FD-73 | offen RM-737 | FD-73, FD-101 |
+| dialog:local_recognition_dialog | bedienflaeche | quader.netz | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101 |
+| feature.apply | bedienflaeche | merkmal.hole.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-16, FD-101 |
+| feature.every | bedienflaeche | gleiche_bohrungen.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101 |
+| feature.in_view | bedienflaeche | merkmal.hole.exakt | FD-101 | FD-101 | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | offen | — | offen | offen | offen RM-737 | FD-101 |
 
 ## Kriterien, die nicht erfüllt sind
 
@@ -59,7 +59,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | countersink_hole | G9 | Gestaltungsurteil | Gestaltungsurteil, höchstens leicht | — |
 | countersink_hole | Z2 | nicht gemessen | kein modales Fenster außer den Ausnahmen | — |
 | countersink_hole | Z5 | nicht gemessen | 0, außer `QFileDialog` | — |
-| countersink_hole | Z6 | nicht gemessen | 1920 x 1080 logisch (maximiert, Task- und Titelleiste ab) ohne Rollleiste vorn; Symbole scharf bei 100%, 150%, 200%, solange ≥ 1920 x 1080 logisch | — |
+| countersink_hole | Z6 | nicht gemessen | 1920 x 1080 logisch (maximiert, Task- und Titelleiste ab) ohne Rollleiste vorn; Symbole scharf bei 100%, 150%, 200%, solange ≥ 1920 x 1080 logisch | FD-93 |
 | detect_region | E1 | 1 Klicks | ≤ 3; am Merkmal ≤ 2 nach der Auswahl | — |
 | detect_region | E2 | 0 Eingaben | ≤ 1 bei 90% der Funktionen | — |
 | detect_region | E3 | 0 Entscheidungen | ≤ 1 | — |
@@ -107,11 +107,11 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | duplicate_feature | E4 | nicht gemessen | ≤ 2; kein Dialog verdeckt die bearbeitete Stelle | — |
 | duplicate_feature | E6 | nicht gemessen | 0 | — |
 | duplicate_feature | E7 | nicht gemessen | 0 | — |
-| duplicate_feature | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | — |
+| duplicate_feature | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | FD-102 |
 | duplicate_feature | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
 | duplicate_feature | V5 | nicht gemessen | jede Handlung löst das Problem | — |
 | duplicate_feature | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
-| duplicate_feature | G4 | Schrift 9.0 pt, Gewicht 600 an i ist keine Stufe aus ['title', 'section', 'body', 'caption'] | nur die Stufen aus `LEVELS`; keine Größe oder Farbe im Stylesheet | — |
+| duplicate_feature | G4 | Schrift 9.0 pt, Gewicht 600 an i ist keine Stufe aus ['title', 'section', 'body', 'caption'] | nur die Stufen aus `LEVELS`; keine Größe oder Farbe im Stylesheet | FD-96 |
 | duplicate_feature | G5 | nicht gemessen | jeder unterscheidbar, zweite Kodierung, Fokus sichtbar | — |
 | duplicate_feature | G6 | kleinster Kontrast 4.92 | ≥ 4.5:1, große Schrift und Symbole ≥ 3:1 | — |
 | duplicate_feature | G8 | 0 Übergänge | Übergang aus `motion`, 110-220 ms, abschaltbar | — |
@@ -126,7 +126,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | group_pattern | E6 | nicht gemessen | 0 | — |
 | group_pattern | E7 | nicht gemessen | 0 | — |
 | group_pattern | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
-| group_pattern | V5 | nicht gemessen | jede Handlung löst das Problem | — |
+| group_pattern | V5 | nicht gemessen | jede Handlung löst das Problem | FD-95 |
 | group_pattern | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
 | group_pattern | G5 | nicht gemessen | jeder unterscheidbar, zweite Kodierung, Fokus sichtbar | — |
 | group_pattern | G6 | kleinster Kontrast 4.92 | ≥ 4.5:1, große Schrift und Symbole ≥ 3:1 | — |
@@ -140,11 +140,11 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | move_feature | E4 | nicht gemessen | ≤ 2; kein Dialog verdeckt die bearbeitete Stelle | — |
 | move_feature | E6 | nicht gemessen | 0 | — |
 | move_feature | E7 | nicht gemessen | 0 | — |
-| move_feature | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | — |
+| move_feature | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | FD-102 |
 | move_feature | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
 | move_feature | V5 | nicht gemessen | jede Handlung löst das Problem | — |
 | move_feature | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
-| move_feature | G4 | Schrift 9.0 pt, Gewicht 600 an i ist keine Stufe aus ['title', 'section', 'body', 'caption'] | nur die Stufen aus `LEVELS`; keine Größe oder Farbe im Stylesheet | — |
+| move_feature | G4 | Schrift 9.0 pt, Gewicht 600 an i ist keine Stufe aus ['title', 'section', 'body', 'caption'] | nur die Stufen aus `LEVELS`; keine Größe oder Farbe im Stylesheet | FD-96 |
 | move_feature | G5 | nicht gemessen | jeder unterscheidbar, zweite Kodierung, Fokus sichtbar | — |
 | move_feature | G6 | kleinster Kontrast 4.92 | ≥ 4.5:1, große Schrift und Symbole ≥ 3:1 | — |
 | move_feature | G8 | 0 Übergänge | Übergang aus `motion`, 110-220 ms, abschaltbar | — |
@@ -221,19 +221,19 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | resize_feature | E3 | 0 Entscheidungen | ≤ 1 | — |
 | resize_feature | E4 | nicht gemessen | ≤ 2; kein Dialog verdeckt die bearbeitete Stelle | — |
 | resize_feature | E6 | nicht gemessen | 0 | — |
-| resize_feature | E7 | nicht gemessen | 0 | — |
-| resize_feature | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | — |
+| resize_feature | E7 | nicht gemessen | 0 | FD-99 |
+| resize_feature | V3 | Feld „“ ohne Kurzhilfe; Feld „“ ohne Beschreibung | 100%; höchstens die Hälfte der Wörter mit dem Titel geteilt | FD-102 |
 | resize_feature | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
 | resize_feature | V5 | nicht gemessen | jede Handlung löst das Problem | — |
 | resize_feature | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
-| resize_feature | G4 | Schrift 9.0 pt, Gewicht 600 an i ist keine Stufe aus ['title', 'section', 'body', 'caption'] | nur die Stufen aus `LEVELS`; keine Größe oder Farbe im Stylesheet | — |
+| resize_feature | G4 | Schrift 9.0 pt, Gewicht 600 an i ist keine Stufe aus ['title', 'section', 'body', 'caption'] | nur die Stufen aus `LEVELS`; keine Größe oder Farbe im Stylesheet | FD-96 |
 | resize_feature | G5 | nicht gemessen | jeder unterscheidbar, zweite Kodierung, Fokus sichtbar | — |
 | resize_feature | G6 | kleinster Kontrast 4.92 | ≥ 4.5:1, große Schrift und Symbole ≥ 3:1 | — |
 | resize_feature | G8 | 0 Übergänge | Übergang aus `motion`, 110-220 ms, abschaltbar | — |
 | resize_feature | G9 | Gestaltungsurteil | Gestaltungsurteil, höchstens leicht | — |
 | resize_feature | Z2 | nicht gemessen | kein modales Fenster außer den Ausnahmen | — |
 | resize_feature | Z5 | nicht gemessen | 0, außer `QFileDialog` | — |
-| resize_feature | Z6 | nicht gemessen | 1920 x 1080 logisch (maximiert, Task- und Titelleiste ab) ohne Rollleiste vorn; Symbole scharf bei 100%, 150%, 200%, solange ≥ 1920 x 1080 logisch | — |
+| resize_feature | Z6 | nicht gemessen | 1920 x 1080 logisch (maximiert, Task- und Titelleiste ab) ohne Rollleiste vorn; Symbole scharf bei 100%, 150%, 200%, solange ≥ 1920 x 1080 logisch | FD-93 |
 | resize_hole | E7 | Meldung ohne Handlung: „Entfernt ein erkanntes Merkmal: Bohrung, Langloch, Zapfen, Senkung, Verjüngung, Kuppel, Pfanne, Wulst, Kehle, Gewinde, Rundung oder Muster — und füllt einen Lufteinschluss mit Material.“; Meldung ohne Handlung: „0,10 mm liegt unter der Untergrenze 0,20 mm.“; Meldung ohne Handlung: „Bohrung ändern“ | 0 | FD-31 |
 | resize_hole | V5 | Sperrgrund ohne Ausweg: „Entfernt ein erkanntes Merkmal: Bohrung, Langloch, Zapfen, Senkung, Verjüngung, Kuppel, Pfanne, Wulst, Kehle, Gewinde, Rundung oder Muster — und füllt einen Lufteinschluss mit Material.“; Meldung ohne Handlung: „0,10 mm liegt unter der Untergrenze 0,20 mm.“; Sperrgrund ohne Ausweg: „Bohrung ändern“ | jede Handlung löst das Problem | FD-36 |
 | resize_hole | G3 | Felder in _MeasureCard nicht bündig: [0.0, 104.0]; Felder in _MeasureCard nicht bündig: [0.0, 103.0]; Felder in _MeasureCard nicht bündig: [0.0, 108.0]; Felder in _MeasureCard nicht bündig: [0.0, 116.0]; Felder in _MeasureCard nicht bündig: [0.0, 123.0] | bündig; Werte rechtsbündig mit Einheit | — |
@@ -251,7 +251,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | rotate_feature | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
 | rotate_feature | V5 | nicht gemessen | jede Handlung löst das Problem | — |
 | rotate_feature | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
-| rotate_feature | G4 | Schrift 9.0 pt, Gewicht 600 an i ist keine Stufe aus ['title', 'section', 'body', 'caption'] | nur die Stufen aus `LEVELS`; keine Größe oder Farbe im Stylesheet | — |
+| rotate_feature | G4 | Schrift 9.0 pt, Gewicht 600 an i ist keine Stufe aus ['title', 'section', 'body', 'caption'] | nur die Stufen aus `LEVELS`; keine Größe oder Farbe im Stylesheet | FD-96 |
 | rotate_feature | G5 | nicht gemessen | jeder unterscheidbar, zweite Kodierung, Fokus sichtbar | — |
 | rotate_feature | G6 | kleinster Kontrast 4.92 | ≥ 4.5:1, große Schrift und Symbole ≥ 3:1 | — |
 | rotate_feature | G8 | 0 Übergänge | Übergang aus `motion`, 110-220 ms, abschaltbar | — |
@@ -280,7 +280,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | slot_hole | G6 | nicht gemessen | ≥ 4.5:1, große Schrift und Symbole ≥ 3:1 | — |
 | slot_hole | G7 | nicht gemessen | Symbol aus dem eigenen Satz, Tooltip mit Name und Kürzel, ein Stil | — |
 | slot_hole | G8 | nicht gemessen | Übergang aus `motion`, 110-220 ms, abschaltbar | — |
-| slot_hole | G9 | Gestaltungsurteil | Gestaltungsurteil, höchstens leicht | — |
+| slot_hole | G9 | Gestaltungsurteil | Gestaltungsurteil, höchstens leicht | FD-73 |
 | slot_hole | Z2 | nicht gemessen | kein modales Fenster außer den Ausnahmen | — |
 | slot_hole | Z3 | 0 Wegklicks | ja je Zeile mit Merkmals- oder Körperbezug | — |
 | slot_hole | Z4 | nicht gemessen | Knopf zur nächsten Handlung | — |
@@ -326,7 +326,7 @@ Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); nicht v
 | feature.apply | V4 | Vorhersage im Urteil | Abweichung vom Ergebnis ist ein Fund | — |
 | feature.apply | V5 | nicht gemessen | jede Handlung löst das Problem | — |
 | feature.apply | V6 | nicht gemessen | ≤ 1; nie das Handbuch | — |
-| feature.apply | G1 | nicht gemessen | ≤ 1 Hauptaktion je Dialog oder Karte, ≤ 1 Akzent je Fenster | FD-16 |
+| feature.apply | G1 | nicht gemessen | ≤ 1 Hauptaktion je Dialog oder Karte, ≤ 1 Akzent je Fenster | — |
 | feature.apply | G2 | nicht gemessen | Vielfaches von `SPACE` (4), je Gruppe einheitlich | — |
 | feature.apply | G3 | nicht gemessen | bündig; Werte rechtsbündig mit Einheit | — |
 | feature.apply | G4 | nicht gemessen | nur die Stufen aus `LEVELS`; keine Größe oder Farbe im Stylesheet | — |

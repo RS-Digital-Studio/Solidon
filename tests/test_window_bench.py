@@ -116,27 +116,92 @@ class _Application:
         self.events.append("application.processEvents")
 
 
-def test_the_renderer_closes_while_its_qt_parent_is_still_alive() -> None:
-    """Der native Renderer stirbt vor seinem Elternfenster, nicht beim Prozessende."""
+class _Sleeper:
+    """Steht für einen Arbeiter, der nach der Frist am Ende noch läuft."""
+
+
+def _exit_wait(
+    monkeypatch: pytest.MonkeyPatch, events: list[str], stubborn: tuple[Any, ...] = ()
+) -> None:
+    """Die Wartestelle der Leine als Ereignis, ohne echte Arbeiter (FD-154)."""
+    from app.ui import leash
+
+    def finish_before_exit() -> tuple[Any, ...]:
+        events.append("leash.finish_before_exit")
+        return stubborn
+
+    monkeypatch.setattr(leash, "finish_before_exit", finish_before_exit)
+
+
+def test_the_renderer_closes_while_its_qt_parent_is_still_alive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der native Renderer stirbt vor seinem Elternfenster, nicht beim Prozessende —
+    und beide erst, wenn jeder Arbeiter zurück ist (FD-154): Schloss das Fenster
+    vorher, lehnte ``closeEvent`` ab, und PySide zerstörte den Faden am Ende."""
     events: list[str] = []
     window = _Window(events)
+    _exit_wait(monkeypatch, events)
 
-    shutdown_window(window, _Application(events))
+    assert shutdown_window(window, _Application(events)) == ()
 
-    assert events[:3] == ["window.release", "renderer.close", "window.close"]
-    assert events[3:] == ["application.processEvents"] * EVENT_DRAIN_ROUNDS
+    assert events[:4] == [
+        "window.release",
+        "leash.finish_before_exit",
+        "renderer.close",
+        "window.close",
+    ]
+    assert events[4:] == ["application.processEvents"] * EVENT_DRAIN_ROUNDS
     assert window.viewport.renderer is None
 
 
-def test_offscreen_shutdown_uses_the_same_platform_neutral_order() -> None:
+def test_offscreen_shutdown_uses_the_same_platform_neutral_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Ohne Renderer bleibt derselbe Weg auf allen Qt-Plattformen gültig."""
     events: list[str] = []
     window = _Window(events, with_renderer=False)
+    _exit_wait(monkeypatch, events)
 
     shutdown_window(window, _Application(events))
 
-    assert events[:2] == ["window.release", "window.close"]
-    assert events[2:] == ["application.processEvents"] * EVENT_DRAIN_ROUNDS
+    assert events[:3] == ["window.release", "leash.finish_before_exit", "window.close"]
+    assert events[3:] == ["application.processEvents"] * EVENT_DRAIN_ROUNDS
+
+
+def test_a_worker_past_the_deadline_is_named_and_not_awaited_twice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wer nach der Frist noch läuft, steht mit Namen im Fallzustand, und der Prozess
+    endet gleich danach benannt — statt am Ende noch einmal ``EXIT_WAIT_MS`` zu warten
+    und mit Exit 3 ohne Grund im Fall zu enden (Schlussreview D0, RF-11)."""
+    from app.ui import leash
+    from tools.window_bench import record_shutdown
+
+    events: list[str] = []
+    _exit_wait(monkeypatch, events, (_Sleeper(), _Sleeper()))
+    left: list[str] = []
+
+    def leave_without_teardown(names: str) -> None:
+        left.append(names)
+        raise SystemExit(leash.STRAGGLER_EXIT_CODE)
+
+    monkeypatch.setattr(leash, "leave_without_teardown", leave_without_teardown)
+    stragglers = shutdown_window(_Window(events), _Application(events))
+    assert stragglers == ("_Sleeper", "_Sleeper")
+
+    state: dict[str, Any] = {"stage": "done"}
+    written: list[dict[str, Any]] = []
+    with pytest.raises(SystemExit):
+        record_shutdown(state, lambda: written.append(dict(state)), stragglers)
+    assert written == [
+        {"stage": "done", "shutdown_complete": False, "stragglers": ["_Sleeper", "_Sleeper"]}
+    ], "geschrieben, bevor der Prozess endet"
+    assert left == ["_Sleeper, _Sleeper"]
+
+    calm: dict[str, Any] = {}
+    record_shutdown(calm, lambda: None, ())
+    assert calm == {"shutdown_complete": True} and left == ["_Sleeper, _Sleeper"]
 
 
 def test_accepted_application_exit_uses_the_terminal_viewport_path(
@@ -305,3 +370,70 @@ def test_staying_with_a_generation_asks_nothing_else() -> None:
     MainWindow.closeEvent(_StayingWindow(), event)
 
     assert not event.isAccepted()
+
+
+def test_every_process_end_names_its_stragglers_once() -> None:
+    """Jedes Prozessende eines Werkzeugs geht über ``record_shutdown`` (Review 2, RF-18).
+
+    Wer die Rückgabe von ``shutdown_window`` verwirft, lässt den Haken am
+    Prozessende ein zweites Mal bis ``EXIT_WAIT_MS`` warten, und ein Nachzügler
+    endet mit Exit 3 ohne Namen im Fall; wer ``shutdown_complete`` selbst setzt,
+    meldet einen Abbau als fertig, den niemand geprüft hat. Gelesen wird der
+    Quelltext unter ``tools/``: Jeder Aufruf von ``shutdown_window`` und
+    ``wait_for_workers`` ist Argument von ``record_shutdown`` oder wird in eine
+    Variable gebunden, die ``record_shutdown`` in derselben Funktion bekommt.
+    """
+    import ast
+    from pathlib import Path
+
+    import tools
+
+    folder = Path(next(iter(tools.__path__)))
+    waits = {"shutdown_window", "wait_for_workers"}
+    seen: list[str] = []
+    loose: list[str] = []
+    for path in sorted(folder.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Subscript) and isinstance(node.ctx, ast.Store):
+                key = node.slice
+                owner = parents[node]
+                while not isinstance(owner, ast.FunctionDef | ast.Module):
+                    owner = parents[owner]
+                setter = getattr(owner, "name", "") == "record_shutdown"
+                named = isinstance(key, ast.Constant) and key.value == "shutdown_complete"
+                if named and not setter:
+                    loose.append(f"{path.name}:{node.lineno} setzt shutdown_complete selbst")
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in waits
+            ):
+                continue
+            where = f"{path.name}:{node.lineno} {node.func.id}"
+            seen.append(where)
+            parent = parents[node]
+            if isinstance(parent, ast.Call) and getattr(parent.func, "id", "") == "record_shutdown":
+                continue
+            function = parent
+            while not isinstance(function, ast.FunctionDef):
+                function = parents[function]
+            if function.name == "shutdown_window":
+                continue
+            names = (
+                {target.id for target in parent.targets if isinstance(target, ast.Name)}
+                if isinstance(parent, ast.Assign)
+                else set()
+            )
+            handed = {
+                argument.id
+                for call in ast.walk(function)
+                if isinstance(call, ast.Call) and getattr(call.func, "id", "") == "record_shutdown"
+                for argument in call.args
+                if isinstance(argument, ast.Name)
+            }
+            if not names & handed:
+                loose.append(f"{where}: Rückgabe geht nicht an record_shutdown")
+    assert len(seen) >= 7, seen
+    assert loose == [], loose

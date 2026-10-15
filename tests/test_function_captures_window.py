@@ -72,35 +72,31 @@ def test_fonts_carry_the_effective_font_of_their_carrier(qt_app: Any) -> None:
     Die Stufe verlangt eine gemessene Familie. Offscreen hat Qt unter Windows
     keine Schrift; die gebündelte DejaVu Sans gibt jeder Plattform eine.
     """
-    from pathlib import Path
-
-    from PySide6.QtGui import QFont, QFontDatabase, QFontInfo
+    from PySide6.QtGui import QFontInfo
     from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
+    from tests.bundled_fonts import bundled_font
     from tools.function_judges import _effective_level
 
-    path = Path(__file__).parents[1] / "app/core/geom/data/fonts/DejaVuSans.ttf"
-    font_id = QFontDatabase.addApplicationFont(str(path))
-    assert font_id >= 0, "Die gebündelte Prüfschrift wurde nicht geladen"
-    before = QFont(qt_app.font())
-    qt_app.setFont(QFont("DejaVu Sans", 9))
-    holder = QWidget()
-    label = QLabel("Durchmesser", holder)
-    QVBoxLayout(holder).addWidget(label)
-    holder.show()
-    _settle(qt_app)
-    try:
-        assert QFontInfo(label.font()).family() == "DejaVu Sans"
-        (entry,) = capture.font_entries(holder)
-        points = round(label.font().pointSizeF(), 2)
-    finally:
-        holder.close()
-        holder.deleteLater()
+    with bundled_font(qt_app, 9):
+        holder = QWidget()
+        label = QLabel("Durchmesser", holder)
+        QVBoxLayout(holder).addWidget(label)
+        holder.show()
         _settle(qt_app)
-        qt_app.setFont(before)
-        QFontDatabase.removeApplicationFont(font_id)
+        try:
+            assert QFontInfo(label.font()).family() == "DejaVu Sans"
+            (entry,) = capture.font_entries(holder)
+            points = round(label.font().pointSizeF(), 2)
+            # Die Grundschrift, solange sie gilt — nach der Rückgabe stünde dort
+            # die des Vorgängers, und gleich wären beide nur zufällig.
+            base = QApplication.font().pointSize()
+        finally:
+            holder.close()
+            holder.deleteLater()
+            _settle(qt_app)
     assert entry["level"] == ""
-    assert entry["base_points"] == QApplication.font().pointSize()
+    assert entry["base_points"] == base == 9
     assert entry["points"] == points
     assert _effective_level(entry) == "body", entry
 

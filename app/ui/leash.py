@@ -54,7 +54,7 @@ import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from threading import Lock
-from typing import Any, Final
+from typing import Any, Final, NoReturn
 
 from PySide6.QtCore import (
     QCoreApplication,
@@ -336,9 +336,18 @@ def _finish_at_exit() -> None:
     Qts Abbau führte in den Absturz von oben.
     """
     stubborn = finish_before_exit()
-    if not stubborn:
-        return
-    names = ", ".join(sorted(type(worker).__name__ for worker in stubborn))
+    if stubborn:
+        leave_without_teardown(", ".join(sorted(type(worker).__name__ for worker in stubborn)))
+
+
+def leave_without_teardown(names: str) -> NoReturn:
+    """Den Prozess benannt beenden, weil die Arbeiter ``names`` die Frist am Ende rissen.
+
+    Ohne Qts Abbau und mit :data:`STRAGGLER_EXIT_CODE`. Auch für einen
+    Prüfstand, der schon selbst :data:`EXIT_WAIT_MS` gewartet hat
+    (``tools/window_bench.record_shutdown``): Der Haken am Prozessende wartete
+    sonst ein zweites Mal auf denselben Arbeiter.
+    """
     _log.error(
         "workers %s still running %d ms after the end — leaving without Qt's teardown",
         names,

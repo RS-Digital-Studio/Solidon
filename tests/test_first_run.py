@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -212,7 +213,9 @@ def test_a_start_error_keeps_its_reason(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_the_official_comfy_desktop_name_is_found_in_a_program_folder(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    unpatched_find_program: Callable[..., Path | None],
 ) -> None:
     """Der Installer legt ``Comfy Desktop`` ab, nicht ``ComfyUI``.
 
@@ -241,7 +244,7 @@ def test_the_official_comfy_desktop_name_is_found_in_a_program_folder(
     comfyui = tools.by_id("comfyui")
     assert comfyui is not None
 
-    found = tools.discover.unpatched_find_program("comfyui", comfyui.executables)
+    found = unpatched_find_program("comfyui", comfyui.executables)
 
     assert found == executable
 
@@ -544,13 +547,18 @@ def test_a_printer_the_user_chose_is_not_overwritten(qt_app: QApplication) -> No
 def test_repeated_slicer_surveys_leave_material_and_inventory_for_the_later_step(
     qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ein gefundenes Slicerprogramm wählt weder Material noch physische Spulen."""
+    """Ein gefundenes Slicerprogramm wählt weder Material noch physische Spulen.
+
+    Verboten wird ``configured_spools`` an der Bindung, die das Filamentlager
+    liest; an einer anderen erreichte das Verbot keinen Aufruf und wäre immer grün
+    (CS-9a). Dass es den echten Aufruf trifft, zeigt ``test_first_run_spools.py``.
+    """
     from app.core.knowledge import filaments
-    from app.ui import filament_picker
+    from app.ui import filament_inventory
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
     configured = mock.Mock(return_value=(filaments.CatalogueFilament("PETG", "#112233", "PETG"),))
-    monkeypatch.setattr(filament_picker, "configured_spools", configured)
+    monkeypatch.setattr(filament_inventory, "configured_spools", configured)
     settings = UiSettings(material="abs")
     dialog = settled(FirstRunDialog(settings), qt_app)
     try:

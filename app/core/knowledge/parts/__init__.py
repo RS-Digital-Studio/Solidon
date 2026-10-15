@@ -26,36 +26,27 @@ if TYPE_CHECKING:
         GROUPS,
         LIBRARY_VERSION,
         PARTS,
-        PartChange,
         PartRegistry,
-        PartSpec,
         changed_since,
         missing_parts,
-        register_part,
     )
 
 _EXPORTS: Final = {
     "GROUPS": ("registry", "GROUPS"),
     "LIBRARY_VERSION": ("registry", "LIBRARY_VERSION"),
     "PARTS": ("builtin", "PARTS"),
-    "PartChange": ("registry", "PartChange"),
     "PartRegistry": ("registry", "PartRegistry"),
-    "PartSpec": ("registry", "PartSpec"),
     "changed_since": ("builtin", "changed_since"),
     "missing_parts": ("builtin", "missing_parts"),
-    "register_part": ("registry", "register_part"),
 }
 
 __all__ = [
     "GROUPS",
     "LIBRARY_VERSION",
     "PARTS",
-    "PartChange",
     "PartRegistry",
-    "PartSpec",
     "changed_since",
     "missing_parts",
-    "register_part",
 ]
 
 install(__name__, _EXPORTS)

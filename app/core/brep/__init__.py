@@ -18,17 +18,16 @@ from typing import TYPE_CHECKING, Final
 from app.core.lazy import install
 
 if TYPE_CHECKING:
-    from app.core.brep.kernel import BRepUnavailable, Solid, available
+    from app.core.brep.kernel import Solid, available
 
 #: Welcher Name in welchem Untermodul steht — geladen wird erst beim
 #: Zugriff, damit zwei Threads sich nicht über die Modul-Locks
 #: verklemmen (:mod:`app.core.lazy`).
 _EXPORTS: Final[dict[str, tuple[str, str]]] = {
-    "BRepUnavailable": ("kernel", "BRepUnavailable"),
     "Solid": ("kernel", "Solid"),
     "available": ("kernel", "available"),
 }
 
 install(__name__, _EXPORTS)
 
-__all__ = ["BRepUnavailable", "Solid", "available"]
+__all__ = ["Solid", "available"]
