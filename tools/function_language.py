@@ -5,6 +5,15 @@
 Protokoll unter ``surfaces/``. Vor jeder Fläche steht ein Anfangsvermerk in
 ``bench.json``; ein Vermerk ohne Ergebnis heißt, der vorige Lauf starb dort, und
 die Fläche wird mit diesem Fehler übersprungen (Review M14).
+
+**Jede Fläche beginnt im Ausgangszustand eines frischen Starts** (FD-132): Eine
+Fläche kann der nächsten einen aufgeklappten Abschnitt, den sich die Anwendung
+merkt, oder eine gerollte Karte hinterlassen; der Weg dorthin erschien dann
+kürzer, als er ist. Vor jeder Fläche steht der Prüfbericht vorn, wie nach dem
+Öffnen eines Projekts, und was sich darüber hinaus vom Ausgangszustand
+unterscheidet (:func:`ground_state`), beendet den Prozess vor dieser Fläche:
+``file_acceptance.run`` startet den Fall neu (``function_cases.RESTART_EXIT``), mit
+frischem Profil, und er nimmt seine Flächen ab dieser wieder auf.
 """
 
 from __future__ import annotations
@@ -21,6 +30,32 @@ from tools.function_surface import without_way
 
 #: Wie viele Ereignisrunden ein Fenster höchstens braucht, um nach vorn zu kommen.
 FORWARD_ROUNDS: Final = 50
+
+
+def ground_state(window: Any) -> tuple[Any, ...]:
+    """Was eine Fläche der nächsten hinterlassen kann (FD-132).
+
+    Der Reiter vorn in der rechten Karte, die Abschnitte, deren Zustand sich die
+    Anwendung merkt (``UiSettings.open_sections``), und die Rolllage jedes
+    Rollbereichs in den Karten. Nach dem Öffnen einer Szene ist nichts gewählt;
+    was hier abweicht, stammt von einer vorigen Fläche.
+    """
+    from PySide6.QtWidgets import QAbstractScrollArea, QWidget
+
+    from app.ui.overlay import CARD
+
+    cards = [widget for widget in window.findChildren(QWidget) if widget.objectName() == CARD]
+    rolled = tuple(
+        area.verticalScrollBar().value()
+        for card in cards
+        for area in card.findChildren(QAbstractScrollArea)
+    )
+    page = window.right.currentWidget()
+    return (
+        type(page).__name__ if page is not None else "",
+        tuple(sorted(window.settings.open_sections.items())),
+        rolled,
+    )
 
 
 def bring_forward(widget: Any) -> None:
@@ -69,8 +104,28 @@ class LanguageFlow:
         self.variant = variant
         self.scenes = scenes
         self.version = version
+        #: Der Ausgangszustand nach dem ersten Öffnen in diesem Prozess (FD-132).
+        self.pristine: tuple[Any, ...] | None = None
 
-    def run(self) -> None:
+    def grounded(self, flow: FunctionFlow) -> bool:
+        """Steht die Fläche im Ausgangszustand eines frischen Starts? (FD-132)
+
+        Nach dem Öffnen eines Projekts steht der Prüfbericht vorn; ließ die vorige
+        Fläche die Auswahl vorn, holt ihn ein Klick auf seinen Reiter zurück, wie
+        der Kunde es täte (Phase ``ausgangszustand``, kein Teil des Wegs).
+        Weicht danach etwas vom ersten Öffnen dieses Prozesses ab, ist die Fläche
+        nicht im Ausgangszustand.
+        """
+        right, report = self.window.right, self.window.report
+        if right.isVisible() and right.currentWidget() is not report:
+            flow.run_steps("ausgangszustand", [flow.walker.step("report", stop_before_target=True)])
+        state = ground_state(self.window)
+        if self.pristine is None:
+            self.pristine = state
+        return state == self.pristine
+
+    def run(self) -> bool:
+        """Die Flächen der Zeilen; ``False``, wenn vor einer ein neuer Prozess nötig ist."""
         from tools.file_acceptance import write_json
 
         surfaces = self.folder / "surfaces"
@@ -119,6 +174,14 @@ class LanguageFlow:
                 out=self.folder.parent.parent,
             )
             if flow.reset():
+                if not self.grounded(flow):
+                    # Die vorige Fläche hat den Ausgangszustand verändert: Diese
+                    # beginnt in einem neuen Prozess (FD-132), nichts ist gemessen.
+                    self.bench["restart_before"] = str(row.get("id"))
+                    self.bench["surfaces_done"] = done
+                    self.bench["surface_started"] = None
+                    self.persist()
+                    return False
                 flow.phase_surface()
             cleaned = self.close_surfaces(flow)
             write_json(path, protocol)
@@ -131,7 +194,9 @@ class LanguageFlow:
                 self.persist()
                 raise RuntimeError("Fenster der vorigen Fläche blieb offen; den Rückweg prüfen")
         self.bench["surfaces_done"] = done
+        self.bench.pop("restart_before", None)
         self.persist()
+        return True
 
     def close_surfaces(self, flow: FunctionFlow) -> bool:
         """Rückweg vor dem nächsten Projekt, auch aus nichtmodalen Fenstern.

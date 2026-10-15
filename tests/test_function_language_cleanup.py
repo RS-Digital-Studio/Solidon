@@ -48,6 +48,8 @@ def test_language_surfaces_close_their_windows_before_the_next_project(
     # Nach vorn holt die Attrappe nichts; das echte Fenster prüft
     # ``test_function_language_escape.py``.
     monkeypatch.setattr(function_language, "bring_forward", lambda widget: None)
+    # Der Ausgangszustand ist hier nicht die Frage (test_function_language_ground.py).
+    monkeypatch.setattr(function_language.LanguageFlow, "grounded", lambda self, flow: True)
     rows = [
         {"id": name, "target": "operation:test", "kind": "operation", "package": "D4"}
         for name in ("first", "second")

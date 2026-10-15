@@ -1004,6 +1004,7 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
     """
     sys.path.insert(0, str(ROOT))
     from app.core.process import no_error_dialogs, process_group_options, terminate_process_tree
+    from tools.function_cases import RESTART_EXIT, most_restarts
 
     cases = read_cases(out)
     if any(case.kind in ("function", "language") for case in cases):
@@ -1032,29 +1033,39 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
         ]
         if screen:
             command += ["--screen", screen]
-        with (
-            (folder / "stdout.log").open("w", encoding="utf-8") as stdout,
-            (folder / "stderr.log").open("w", encoding="utf-8") as stderr,
-            no_error_dialogs(),
-        ):
-            process = subprocess.Popen(
-                command,
-                stdout=stdout,
-                stderr=stderr,
-                cwd=ROOT,
-                env={**os.environ, "PYTHONUTF8": "1"},
-                **process_group_options(no_window=True),
-            )
-            try:
-                code = process.wait(timeout=case_timeout(case, timeout))
-                timed_out = False
-            except subprocess.TimeoutExpired:
-                terminate_process_tree(process)
-                code = process.wait()
-                timed_out = True
-            except BaseException:
-                terminate_process_tree(process)
-                raise
+        # Ein Sprachfall, der vor einer Fläche einen frischen Prozess braucht, läuft
+        # gleich weiter — höchstens einmal je Zeile (FD-132).
+        restarts = (
+            most_restarts(read_rows(out).values(), case.row) if case.kind == "language" else 0
+        )
+        mode = "w"
+        while True:
+            with (
+                (folder / "stdout.log").open(mode, encoding="utf-8") as stdout,
+                (folder / "stderr.log").open(mode, encoding="utf-8") as stderr,
+                no_error_dialogs(),
+            ):
+                process = subprocess.Popen(
+                    command,
+                    stdout=stdout,
+                    stderr=stderr,
+                    cwd=ROOT,
+                    env={**os.environ, "PYTHONUTF8": "1"},
+                    **process_group_options(no_window=True),
+                )
+                try:
+                    code = process.wait(timeout=case_timeout(case, timeout))
+                    timed_out = False
+                except subprocess.TimeoutExpired:
+                    terminate_process_tree(process)
+                    code = process.wait()
+                    timed_out = True
+                except BaseException:
+                    terminate_process_tree(process)
+                    raise
+            if code != RESTART_EXIT or timed_out or restarts <= 0:
+                break
+            restarts, mode = restarts - 1, "a"
         write_json(
             status,
             {
@@ -1227,7 +1238,7 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     sondern je Fläche ein Protokoll unter ``surfaces/``.
     """
     from tools import function_bench, function_language, function_protocol, function_setup
-    from tools.function_cases import rows_of, setup_of_case
+    from tools.function_cases import RESTART_EXIT, rows_of, setup_of_case
     from tools.function_scenes import row_scenes
 
     variant = function_setup.Variant.of({**case.variant, **({"screen": screen} if screen else {})})
@@ -1309,8 +1320,12 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
                 application, window, folder, data, persist, row, variant, scenes, state, out
             )
             flow.prepare()
-        flow.run()
-        state["stage"] = "done"
+        if flow.run() is False:
+            # Vor einer Fläche braucht der Sprachfall einen neuen Prozess (FD-132).
+            state["stage"] = "neustart"
+            exit_code = RESTART_EXIT
+        else:
+            state["stage"] = "done"
     except Exception:
         state["harness_exception"] = traceback.format_exc()
         persist()

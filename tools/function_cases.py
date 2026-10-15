@@ -21,6 +21,10 @@ from typing import Any, Final
 #: Trennt Paket und Einrichtung in der Kennung eines Sprachfalls.
 SEPARATOR: Final = "@"
 
+#: Der Ausgang eines Sprachfalls, der vor einer Fläche einen neuen Prozess braucht,
+#: weil die vorige den Ausgangszustand verändert hat (FD-132). ``EX_TEMPFAIL``.
+RESTART_EXIT: Final = 75
+
 
 @dataclass(frozen=True, slots=True)
 class Setup:
@@ -103,6 +107,15 @@ def language_cases(
                 )
                 number += 1
     return cases
+
+
+def most_restarts(rows: Iterable[Mapping[str, Any]], case: str) -> int:
+    """Wie oft ein Sprachfall höchstens neu startet: einmal je Zeile (FD-132).
+
+    Ein frischer Prozess misst seine erste Fläche immer im Ausgangszustand;
+    mehr Neustarts als Zeilen hieße, er käme nicht voran.
+    """
+    return len(rows_of(rows, case))
 
 
 def case_row(package: str, setup: Setup) -> str:
