@@ -1406,15 +1406,17 @@ class Index:
                     break
 
     def _query_kinds(self, facts: Facts, ref: Ref) -> set[str]:
-        """``getattr``, ``getattr-default`` oder ``hasattr`` — bei einem Alias (``query``) das,
-        woran sein Name gebunden ist."""
-        if not ref.kind.startswith("query") or ref.func is None:
+        """``getattr``, ``getattr-default`` oder ``hasattr`` — das, woran der gerufene Name
+        gebunden ist, für den Namen selbst wie für einen Alias (``query``). Ein Parameter oder
+        eine eigene Bindung namens ``hasattr`` ist keine Abfrage (RR2-6)."""
+        if ref.func is None:
             return {ref.kind}
         found = {value.ref for _env, value in self._fold(facts, ref.func) if value.kind == "ext"}
+        default = ref.kind in ("query-default", "getattr-default")
         kinds = set()
         if "builtins.getattr" in found:
-            kinds.add("getattr-default" if ref.kind == "query-default" else "getattr")
-        if "builtins.hasattr" in found and ref.kind == "query":
+            kinds.add("getattr-default" if default else "getattr")
+        if "builtins.hasattr" in found and not default:
             kinds.add("hasattr")
         return kinds
 

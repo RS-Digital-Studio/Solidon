@@ -291,8 +291,8 @@ class Fn:
 class Ref(NamedTuple):
     """Ein Bezug. ``kind``: ``attr``, ``store``, ``del``, ``getattr``, ``getattr-default``,
     ``hasattr`` — oder ``query``/``query-default``: ein Aufruf über einen Namen, der in der Datei
-    an ``getattr``/``hasattr`` gebunden wird (``has = hasattr``, ``builtins.hasattr``); welcher
-    der beiden, faltet der Index aus ``func``."""
+    an ``getattr``/``hasattr`` gebunden wird (``has = hasattr``, ``builtins.hasattr``). Ob und
+    welcher der beiden Eingebauten gerufen wird, faltet der Index für alle fünf aus ``func``."""
 
     kind: str
     scope: int
@@ -1153,9 +1153,11 @@ class _Extractor:
             if kind == "getattr" and len(node.args) >= 3:
                 kind = "getattr-default"
             at = (node.lineno, node.col_offset)
-            base, name = self.ir(node.args[0]), self.ir(node.args[1])
+            base, name, called = (self.ir(part) for part in (node.args[0], node.args[1], func))
+            # Mit ``func``: Ob der Name der eingebaute ist und kein Parameter oder eine eigene
+            # Bindung gleichen Namens, faltet der Index wie beim Alias (RR2-6).
             self.f.refs.append(
-                Ref(kind, self.scope, *at, base, (), name, self.runtime, self.checking)
+                Ref(kind, self.scope, *at, base, (), name, self.runtime, self.checking, called)
             )
         elif len(node.args) >= 2 and (
             isinstance(func, ast.Name)

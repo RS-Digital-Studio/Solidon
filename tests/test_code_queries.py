@@ -64,6 +64,23 @@ def test_without_a_query_the_patched_name_has_no_reader() -> None:
     assert [f.name for f in index.patch_findings()["d"]] == ["FLAG"]
 
 
+def test_a_name_that_only_shadows_the_builtin_is_no_query() -> None:
+    """RR2-6: ``def probe(hasattr)`` ruft, was der Aufrufer übergibt, ``getattr = lambda …`` den
+    eigenen Wert — keine Abfrage: kein Bezug, kein Leser, kein W5-Fund, und der gepatchte Name,
+    den sonst niemand liest, bleibt ein d)-Fund. Gegenprobe ist der erste Fall dieser Datei mit
+    dem eingebauten ``hasattr``."""
+    index = _queries(
+        "def probe(hasattr):\n    return hasattr(mod, 'FLAG')\n\n"
+        "def local():\n"
+        "    getattr = lambda module, name: None\n"
+        "    return getattr(mod, 'MISSING')\n"
+    )
+    assert not _kinds(index)
+    assert not index.readers("app.mod", "FLAG")
+    assert not index.unresolved()
+    assert [f.name for f in index.patch_findings()["d"]] == ["FLAG"]
+
+
 def test_getattr_with_a_default_is_a_reference_and_reads_the_name() -> None:
     index = _queries("def fallback():\n    return getattr(mod, 'FLAG', None)\n")
     assert ("getattr", "app/user.py", 5) in _kinds(index)
