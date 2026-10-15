@@ -5605,8 +5605,9 @@ class PlacementFlow(QObject):
             measure_room.setBottom(self._bar.geometry().top() - NORMAL - 1)
         self._refresh_measure_actions()
         # Wie groß die Karte im Bild stand: Wächst sie, gleitet sie an ihren
-        # neuen Platz, statt zu springen (FD-87).
-        shown_card = self._measure_box.size() if self._measure_box.isVisible() else None
+        # neuen Platz, statt zu springen (FD-87). Ohne Maßgruppe gibt es keine.
+        card = self._measure_box if self._measure_group is not None else None
+        shown_card = card.size() if card is not None and card.isVisible() else None
         self._size_measure_fields(measure_room)
         self._measure_drag.update_room(measure_room)
         user_rect = self._measure_drag.placed_rect() if self._measure_group is not None else None
@@ -6260,7 +6261,7 @@ class PlacementFlow(QObject):
             positions[self._measure_box] = user_rect
         for widget, _wanted, anchor in pending:
             rect = positions[widget]
-            if widget is self._measure_box:
+            if widget is card:
                 # **Eine gewachsene Karte gleitet** (FD-87): Sie bleibt, wo sie
                 # stand, und rückt nur so weit, wie der Platz verlangt
                 # (``measure_field_places.grown_place``) — mit dem Übergang
