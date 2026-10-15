@@ -6846,12 +6846,22 @@ def test_the_halt_refusal_does_not_repeat_its_sentence(tmp_path: Path) -> None:
     Eingabe war so nicht verwendbar.“ und „Operation: 1“ — der Titel des
     Fehlers und die Nummer, die der Satz schon sagt. Die Handler lesen
     ``op_id``.
+
+    **„Art“ lässt eine Stelle für Halt und Dialog weg** (FD-95):
+    ``dialogs.spoken_values``. Der Halt reicht den Wert durch; eine
+    Merkmalsart („Art: Bohrung“) bleibt so sichtbar.
     """
+    from app.ui.dialogs import spoken_values
+
     session = _session_with_unshown_import(_broken_stl(tmp_path))
     session.last_result = session.run_evaluation()
     refusal = session.halt_in_the_way()
     assert refusal is not None and refusal.op_id == 1
-    assert "kind" not in refusal.values and "op" not in refusal.values, refusal.values
+    assert "op" not in refusal.values, refusal.values
+    title = str(refusal.values.get("kind", ""))
+    assert title, f"der Halt reicht den Titel als Art durch: {refusal.values}"
+    lines = spoken_values(refusal)
+    assert not any(title in line for line in lines), lines
 
 
 def test_a_placement_the_end_state_undid_is_not_reported(profile: Profile) -> None:

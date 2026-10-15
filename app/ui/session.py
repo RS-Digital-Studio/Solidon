@@ -2769,14 +2769,12 @@ class Session(QObject):
         object_id = halt.object_id if halt is not None else None
         if object_id is None and step is not None and len(step.inputs) == 1:
             object_id = step.inputs[0]
-        # Die Werte des Halts, ohne die zwei, die der Satz schon sagt: „Art“
-        # ist bei einem Fehler des Schritts dessen Titel (``_finding_from``),
-        # die Nummer steht als „Schritt 1“ im Satz — der Dialog zeigte beide
-        # noch einmal als „Art: Die Eingabe war so nicht verwendbar.“ und
-        # „Operation: 1“ (KUNDE-12). Die Handler lesen ``op_id``.
+        # Die Werte des Halts, ohne die Nummer: Sie steht als „Schritt 1“ im
+        # Satz, der Dialog zeigte sie noch einmal als „Operation: 1“
+        # (KUNDE-12). Die Handler lesen ``op_id``. „Art“, bei einem Fehler des
+        # Schritts dessen Titel, lässt ``dialogs.spoken_values`` weg — für
+        # Halt und Dialog an einer Stelle (FD-95).
         values = dict(halt.values) if halt is not None else {}
-        if halt is not None and halt.code.startswith("op."):
-            values.pop("kind", None)
         values.pop("op", None)
         return UserError(
             _("Die Kette hält an — ein neuer Schritt dahinter würde nicht gerechnet."),
