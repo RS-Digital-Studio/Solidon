@@ -41,6 +41,7 @@ BENCH_MODULES: Final[tuple[str, ...]] = (
     "function_bench",
     "function_gestures",
     "function_switch",
+    "function_matrix",
     "function_revision",
     "function_surface",
     "function_start",
