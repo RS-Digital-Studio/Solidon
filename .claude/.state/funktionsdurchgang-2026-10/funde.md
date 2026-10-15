@@ -1026,10 +1026,10 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Funktion: Prüfanschlüsse des Prüfstands
 - Prüfpunkt: 19
 - Beleg: `tests/test_function_bench_window.py::test_button_probe_moves_away_from_a_real_tooltip_before_testing_coverage[wortschatz|knopf]` ist allein grün und nach `test_a_double_click_reaches_a_list_as_a_double_click` im selben Prozess rot (`verdeckt: feature:resize_hole … qtooltip_label`), am unveränderten `2ec37b23b` genauso (`F:\tmp-suche\fpf-liefern-claude\order-b.txt`, `order-c.txt`).
-- Ursache: offen; der Doppelklick hinterlässt Zustand, nach dem der Tooltip die Mausbewegung überdauert.
+- Ursache: `QtPorts.press(…, "double")` schickte nach `mouseClick` und `mouseDClick` kein Loslassen; bis zum nächsten Klick galt die linke Taste als gedrückt, jede Bewegung bis dahin war ein Zug ohne Enter und Leave, und der Tooltip des vorigen Ziels blieb über dem nächsten stehen.
 - Vorschlag: Ursache am Ablauf belegen und an der Wurzel beheben, Gegenprobe in derselben Datei in beiden Reihenfolgen.
-- Wirkung beim Kunden: Kein Produktfehler belegt; ein Fenstertest wird im Release-Tor reihenfolgeabhängig rot.
-- Stand: behoben `001effdcd`; Tooltipfall nach dem Doppelklickfall am alten Stand rot, am Fix in beiden Reihenfolgen grün, neue Zusicherung ohne gedrückte Taste; in welle4 `fe8f5bcd7`.
+- Wirkung beim Kunden: Kein Produktfehler; ein Fenstertest wird im Release-Tor reihenfolgeabhängig rot. Die Urteile des 48-Fall-Laufs verfälscht es nicht: In `phase_revise` folgt dem Doppelklick der Klick ins erste Dialogfeld, jede weitere Phase beginnt mit Klicks.
+- Stand: behoben `001effdcd`; Tooltipfall nach dem Doppelklickfall am alten Stand rot, am Fix in beiden Reihenfolgen grün, neue Zusicherung ohne gedrückte Taste; in welle4 `fe8f5bcd7`. Rückfallzweig (Widget im Doppelklick abgebaut) mit Fall `5c138af29`, Kommentar und Docstring `0f93ad296` (Review RD-2/RD-3).
 
 ### FD-85 Abhakliste lässt einen offenen Fund hinter einem älteren behobenen verschwinden
 
@@ -1730,9 +1730,9 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Funktion: Prüfanschlüsse und Videowerkzeug
 - Prüfpunkt: 19
 - Beleg: Neben dem in FD-83 behobenen `QtPorts.press` rufen `tests/test_start_screen.py:461`, `:957`, `:966` und `tools/make_workshop_videos.py:2462` `QTest.mouseDClick` ohne anschließendes Loslassen auf; in `make_workshop_videos.py` fehlt zusätzlich der Klick davor (`F:\3D Druck\output\konsolidierung-2026-10-12\fd83-claude.md`).
-- Ursache: `mouseDClick` schickt nur das Doppelklickereignis; Qt hält die linke Taste danach im ganzen Prozess für gedrückt.
+- Ursache: `mouseDClick` schickt nur das Doppelklickereignis; Qt hält die linke Taste danach bis zum nächsten Klick im selben Prozess für gedrückt.
 - Vorschlag: Dieselbe Folge wie der Kunde (Klick, Doppelklick, Loslassen) an allen Stellen; als Wächter eine Fixture, die nach jedem `qt_app`-Fall `QGuiApplication.mouseButtons() == NoButton` zusichert.
-- Wirkung beim Kunden: Kein Produktfehler; spätere Fälle im selben Prozess und Werkstattvideos sehen Bewegungen als Zug.
+- Wirkung beim Kunden: Kein Produktfehler; im selben Prozess sehen Bewegungen bis zum nächsten Klick wie ein Zug aus, in Tests wie in den Werkstattvideos.
 - Stand: offen RM-737
 
 ## Einordnung der Prüferabweichungen (FD-143 bis FD-153)
