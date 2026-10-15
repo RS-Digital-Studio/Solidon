@@ -263,15 +263,18 @@ def own_surface(row: Mapping[str, Any], widget: Any) -> bool:
     (``dialog:<klasse>``). Sonst hieße die Fehlermeldung nach dem Klick „eigene
     Fläche“, und Z2, Z5 und E6 sähen sie nicht.
     """
+    from app.core.guides import dialog_name
     from tools.function_capture import message_window
 
     if not message_window(widget):
         return True
     target = str(row.get("target") or "")
     kind, _separator, rest = target.partition(":")
+    # Die Zeile nennt den Dialog wie der Wortschatz (``dialog:ask_dialog``), nicht
+    # mit dem Klassennamen — vorher galt die eigene Rückfrage als fremd (FD-175).
     return (
         kind == "message"
-        or (kind == "dialog" and rest in classes_of(widget))
+        or (kind == "dialog" and rest in {dialog_name(name) for name in classes_of(widget)})
         or row.get("source") in MESSAGE_SOURCES
     )
 

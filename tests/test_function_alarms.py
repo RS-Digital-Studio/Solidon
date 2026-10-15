@@ -1019,7 +1019,12 @@ def test_a_message_after_the_click_is_not_the_surface_of_the_row() -> None:
         assert not function_surface.own_surface(operation, window), type(window).__name__
     assert function_surface.own_surface(operation, own)
     assert function_surface.own_surface({"target": "message:recovery"}, raw)
-    assert function_surface.own_surface({"target": "dialog:AskDialog"}, question)
+    # Die Zeile nennt den Dialog wie die Funktionsliste: ``dialog:<guides.dialog_name>``.
+    # Vorher stand hier der Klassenname, den keine echte Zeile trägt, und die
+    # Zeilen der Rückfrage und der Meldung maßen ihr eigenes Fenster als fremd (FD-175).
+    assert function_surface.own_surface({"target": "dialog:ask_dialog"}, question)
+    assert function_surface.own_surface({"target": "dialog:message_dialog"}, message)
+    assert not function_surface.own_surface({"target": "dialog:ask_dialog"}, message)
     assert function_surface.own_surface({"target": "", "source": "startablauf"}, raw)
 
 
