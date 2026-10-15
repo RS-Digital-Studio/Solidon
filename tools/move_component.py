@@ -41,7 +41,10 @@ Abgewiesen wird vor dem Schreiben, jeweils mit Ausweg: ein ``self.<x>`` ohne Rol
 mit ``classmethod``/``staticmethod``, ein Lesen einer Definition des Wirtsmoduls (die Komponente
 importiert den Wirt nicht), ein gepatchter Name des Wirtsmoduls, den eine verschobene Methode
 liest, ``hasattr`` oder ``getattr`` mit Vorgabe auf ein verschobenes Member, eine Zeichenkette mit
-seinem Namen ohne Erklärung, eine Erklärung, die nichts trifft.
+seinem Namen ohne Erklärung, eine Erklärung, die nichts trifft — und was Qt danach anders sähe
+(``tools/move_qt.py``): ``self.sender()`` in einem verschobenen Rumpf, eine verschobene
+Überschreibung einer Methode der Qt-Basis, ``eventFilter``, wenn der Wirt selbst als Filter
+installiert bleibt, und eine Unterklasse des Wirts, die ein verschobenes Member definiert.
 
 **Lebensdauer ist ein eigener Nachweis.** Gleiche Rümpfe heißen nicht gleiche Lebensdauer. Das
 Werkzeug prüft am Gerüst statisch, was sich statisch prüfen lässt (:func:`lifetime`); ob nach
@@ -59,6 +62,14 @@ from tools.code_index import Index, Val
 from tools.move_compare import FileScopes, Scopes, TopLevel, qualname_of, string_constants
 from tools.move_cut import Cut
 from tools.move_edits import Edit, EditError, apply_text
+from tools.move_qt import (
+    FILTER_CALLS,
+    RECEIVER_MEMBERS,
+    class_reference,
+    filter_argument,
+    qt_bases,
+    qt_members,
+)
 from tools.move_refs import AlreadyAppliedError, Context, FileRewrite, quoted
 from tools.move_source import (
     AREAS,
@@ -86,8 +97,6 @@ OWNER_CALLS = frozenset(
         "app.ui.leash:weak_slot",
     }
 )
-#: Aufrufe, deren nacktes ``self`` ein Ereignisfilter ist.
-FILTER_CALLS = frozenset({"installEventFilter", "removeEventFilter"})
 #: Aufrufe, deren zweites Argument ein Attributname des ersten ist.
 NAMED_CALLS = frozenset({"getattr", "hasattr", "setattr", "delattr"})
 #: ``monkeypatch.setattr``/``delattr`` und ``patch.object``: der letzte Teil des Aufrufs.
@@ -192,6 +201,70 @@ class Shape:
                         f"{self.cut.source}:{method.lineno}: {moved.name} hat kein self — "
                         "vorher umschreiben"
                     )
+        self._receivers()
+        self._qt_overrides()
+
+    def _receivers(self) -> None:
+        """``self.sender()`` in einem verschobenen Rumpf (``tools/move_qt.py``)."""
+        scopes = FileScopes(self.host_source)
+        for moved in self.methods.values():
+            for method in moved.defs:
+                me = self_name(method)
+                if me is None:
+                    continue
+                for node in ast.walk(method):
+                    first: ast.expr | None = None
+                    member = ""
+                    if isinstance(node, ast.Attribute) and node.attr in RECEIVER_MEMBERS:
+                        first, member = node.value, node.attr
+                    elif isinstance(node, ast.Call) and named_call(node) in NAMED_CALLS:
+                        second = node.args[1]
+                        assert isinstance(second, ast.Constant)
+                        if second.value in RECEIVER_MEMBERS:
+                            first, member = node.args[0], str(second.value)
+                    if not (
+                        isinstance(first, ast.Name)
+                        and first.id == me
+                        and refers_to(scopes.of(method), method, first, me)
+                    ):
+                        continue
+                    self.problems.append(
+                        f"{self.cut.source}:{first.lineno}: {me}.{member}() in "
+                        f"{self.cut.host}.{moved.name} gilt dem Empfänger eines Signals — nach "
+                        "dem Schnitt wäre das die Komponente oder niemand; vorher den Sender als "
+                        "Argument übergeben (connect mit functools.partial oder lambda) oder die "
+                        "Methode im Wirt lassen"
+                    )
+
+    def _qt_overrides(self) -> None:
+        """Eine verschobene Methode, die eine Methode der Qt-Basis von Wirt oder Komponente
+        überschreibt (``eventFilter`` prüft :meth:`scan_uniqueness`)."""
+        assert self.host_class is not None
+        refs, unresolved = qt_bases(self.index, self.cut.source, self.host_class)
+        if self.component_class is not None:
+            more, missing = qt_bases(
+                self.index, path_of(self.component_module), self.component_class
+            )
+            refs, unresolved = sorted({*refs, *more}), [*unresolved, *missing]
+        for text in unresolved:
+            self.problems.append(
+                f"{text}: eine Basis, die sich nicht auflöst — ob eine verschobene Methode Qt "
+                "überschreibt, ist so nicht prüfbar; vorher die Basis als Import schreiben"
+            )
+        members, failed = qt_members(refs)
+        for text in failed:
+            self.problems.append(
+                f"Qt-Basis {text} lässt sich nicht laden — ob eine verschobene Methode Qt "
+                "überschreibt, ist so nicht prüfbar; Umgebung prüfen (PySide6)"
+            )
+        for name, moved in self.methods.items():
+            if name in members and name != "eventFilter":
+                self.problems.append(
+                    f"{self.cut.source}:{moved.defs[0].lineno}: {name} überschreibt eine Methode "
+                    f"der Qt-Basis ({', '.join(refs)}) — Qt ruft sie am Wirt, in der Komponente "
+                    "riefe Qt sie anders oder nie; sie bleibt im Wirt (Konzept 3.3), aus methods "
+                    "streichen"
+                )
 
     # ---- Fragen an die Form
 
@@ -240,11 +313,20 @@ class Shape:
         head, _, tail = value.ref.partition(":")
         return tail == "self" and head.partition(".")[0] == self.cut.host
 
+    def needles(self) -> tuple[str, ...]:
+        """Was eine Datei nennen muss, damit der Schnitt sie liest: ein verschobener Name, den
+        Wirt (eine Unterklasse) oder ``EventFilter(`` (den Wirt als Ereignisfilter)."""
+        return (*sorted(self.moved_names), self.cut.host, "EventFilter(")
+
     def scan_uniqueness(self, files: Iterator[tuple[str, Source]]) -> None:
         """Wo ein Member gleichen Namens außerhalb von Wirt und Komponente definiert wird:
         Methode, Klassenattribut, ``self.<name> = …`` in einer Methode, Schlüsselwort eines
-        Aufrufs (``SimpleNamespace(count=…)``) — Konzept 4.1, W5."""
+        Aufrufs (``SimpleNamespace(count=…)``) — Konzept 4.1, W5. Dazu, was nach dem Schnitt
+        anders wirkte (``tools/move_qt.py``): eine Unterklasse des Wirts, die ein verschobenes
+        Member definiert, und der Wirt als installierter Ereignisfilter, wenn ``eventFilter``
+        wandert. Die Funde stehen danach in :attr:`problems`."""
         found: dict[str, list[str]] = {name: [] for name in self.moved_names}
+        classes: list[tuple[str, Source, ast.ClassDef, set[str]]] = []
         for path, source in files:
             for node in ast.walk(source.tree):
                 if isinstance(node, ast.ClassDef):
@@ -257,9 +339,58 @@ class Shape:
                     for name in _class_members(node):
                         if name in found:
                             found[name].append(f"{path}:{node.lineno} ({node.name})")
+                    bases = {
+                        v.ref
+                        for base in node.bases
+                        for v in self.index.resolve(path, base)
+                        if v.kind == "class"
+                    }
+                    classes.append((path, source, node, bases))
                 elif isinstance(node, ast.keyword) and node.arg in found:
                     found[node.arg].append(f"{path}:{node.lineno} (Schlüsselwort)")
+                elif isinstance(node, ast.Call) and "eventFilter" in self.methods:
+                    self._host_filter(path, node)
         self.unique = {name: places for name, places in found.items() if places}
+        self._subclasses(classes)
+
+    def _host_filter(self, path: str, call: ast.Call) -> None:
+        """``x.installEventFilter(<Wirt>)`` außerhalb der verschobenen Rümpfe: Danach filterte
+        niemand, denn ``eventFilter`` wandert."""
+        argument = filter_argument(call)
+        if argument is None:
+            return
+        if path == self.cut.source and self.moved_method_of(call) is not None:
+            return
+        values = self.index.resolve(path, argument)
+        if not values or not all(v.kind == "obj" and self._host_instance(v) for v in values):
+            return
+        self.problems.append(
+            f"{path}:{call.lineno}: installiert den Wirt {self.cut.host} als Ereignisfilter, "
+            "eventFilter wandert aber — danach filterte niemand; die Installation mit in die "
+            "Komponente ziehen (eine verschobene Methode) oder eventFilter im Wirt lassen"
+        )
+
+    def _subclasses(self, classes: list[tuple[str, Source, ast.ClassDef, set[str]]]) -> None:
+        """Eine Unterklasse des Wirts (auch über Zwischenklassen), die ein verschobenes Member
+        definiert: Danach riefe der Wirt die Fassung der Komponente, nicht ihre."""
+        derived = {f"{self.module}:{self.cut.host}"}
+        refs = [class_reference(module_of(p), s, n) for p, s, n, _b in classes]
+        grown = True
+        while grown:
+            grown = False
+            for ref, (_p, _s, _n, bases) in zip(refs, classes, strict=True):
+                if ref not in derived and bases & derived:
+                    derived.add(ref)
+                    grown = True
+        for ref, (path, _source, node, _bases) in zip(refs, classes, strict=True):
+            own = sorted(_class_members(node) & self.moved_names)
+            if ref in derived and own:
+                self.problems.append(
+                    f"{path}:{node.lineno}: {node.name} erbt von {self.cut.host} und definiert "
+                    f"{', '.join(own)} — nach dem Schnitt riefe der Wirt die Fassung der "
+                    "Komponente, nicht diese; vorher die Unterklasse auf die Komponente "
+                    "umstellen (etwa das Member der Komponente des Exemplars ersetzen)"
+                )
 
 
 def self_name(method: Method) -> str | None:
@@ -432,6 +563,9 @@ class ComponentPlanner:
             self.ctx.problem(problem)
         self.ctx.raise_problems()
         self.shape.scan_uniqueness(self._files())
+        for problem in self.shape.problems:
+            self.ctx.problem(problem)
+        self.ctx.raise_problems()
         self.host_scopes = FileScopes(self.host)
         for moved in self.shape.methods.values():
             for method in moved.defs:
@@ -455,7 +589,7 @@ class ComponentPlanner:
         return ComponentPlan(edits, self.notes)
 
     def _files(self) -> Iterator[tuple[str, Source]]:
-        names = tuple(self.shape.moved_names)
+        names = self.shape.needles()
         for area in AREAS:
             base = self.ctx.root / area
             if not base.is_dir():

@@ -152,10 +152,11 @@ class ComponentProof:
             else:
                 comparison = ComponentReaderComparison(self, path)
             self._file(path, comparison)
+        needles = tuple(n.encode() for n in self.shape.moved_names)
         for path, _source in sources:
             if path in trees.changed or path in (self.path, self.component_path):
                 continue
-            if path in trees.new_files:
+            if path in trees.new_files and any(n in trees.old_files[path] for n in needles):
                 self._unchanged(path)
         self._strings(sources)
         new_shape = Shape(self.cut, trees.new_index, new_host, new_component, before=False)
@@ -231,7 +232,7 @@ class ComponentProof:
         return scope
 
     def _old_sources(self) -> Iterator[tuple[str, Source]]:
-        names = tuple(self.shape.moved_names)
+        names = self.shape.needles()
         for path, data in self.trees.old_files.items():
             if path.endswith(".py") and any(n.encode() in data for n in names):
                 yield path, self.trees.old(path)
