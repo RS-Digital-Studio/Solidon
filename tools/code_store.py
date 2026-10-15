@@ -10,9 +10,9 @@ braucht (``resolve``, ``modules[…]``), und dann nur diesen aus dem Zwischenspe
 
 **Der Schlüssel** ist der Stand: der Inhaltshash jeder Datei unter ``app/``, ``tools/`` und
 ``tests/`` und der Quelltext des Auflösers selbst (``tools/code_*.py``), wie der Prozess ihn
-geladen hat (:data:`SOURCES`). Bauen zwei Prozesse
-zugleich, wartet der zweite an einer Sperre — das Betriebssystem gibt sie frei, wenn ihr Halter
-endet — und liest dann, was der erste schrieb; nach :data:`WAIT_SECONDS` baut er selbst.
+geladen hat (:data:`SOURCES`). Bauen zwei Prozesse zugleich, wartet der zweite an einer
+Sperre — das Betriebssystem gibt sie frei, wenn ihr Halter endet — und liest dann, was der
+erste schrieb; nach :data:`WAIT_SECONDS` baut er selbst.
 
 **Nur Daten.** Wie der Zwischenspeicher: Marshal ohne Codeobjekte, Stand und Baum im Klartext
 vor dem Inhalt, jede Form und jedes Feld gegen die Datensätze geprüft (:mod:`tools.code_cache`).

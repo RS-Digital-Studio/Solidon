@@ -427,15 +427,14 @@ def test_after_its_deadline_a_waiting_process_builds_itself(
     assert _answers(index) == expected
 
 
-def test_shared_freezes_the_collector_after_the_index_is_loaded(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``tests/conftest.py`` ruft je Fenstertest zweimal ``gc.collect()``; der Index lebt bis
-    zum Prozessende und wird danach nicht mehr durchsucht (CS-23)."""
+def test_shared_leaves_the_collector_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RR2-11: ``shared()`` lädt den Index und lässt den Sammler, wie er ist — kein
+    ``gc.freeze()``, das ein 3MF-Import ohnehin wieder auftaute und das bis dahin
+    ``gc.get_objects()`` blind machte für alles, was vorher lebte."""
     calls: list[str] = []
     marker = object()
     monkeypatch.setattr(code_store, "load", lambda root: calls.append("load") or marker)
     monkeypatch.setattr(gc, "collect", lambda *args: calls.append("collect") or 0)
     monkeypatch.setattr(gc, "freeze", lambda: calls.append("freeze"))
     assert code_index.shared.__wrapped__() is marker
-    assert calls == ["load", "collect", "freeze"]
+    assert calls == ["load"]

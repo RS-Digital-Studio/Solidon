@@ -54,7 +54,6 @@ import argparse
 import ast
 import builtins
 import functools
-import gc
 import hashlib
 import sys
 import textwrap
@@ -1908,14 +1907,15 @@ def shared() -> Index:
     teilen ihn. Er kommt aus dem Ergebnisspeicher (:func:`tools.code_store.load`) — gebaut wird
     einmal je Baumstand, nicht je Prozess.
 
-    Danach friert der Sammler alles ein, was lebt: Der Index lebt bis zum Prozessende, und
-    ``tests/conftest.py`` ruft je Fenstertest zweimal ``gc.collect()`` (CS-23)."""
+    Den Sammler friert er nicht ein, obwohl CS-23 es vorsah, damit die zwei ``gc.collect()`` je
+    Fenstertest (``tests/conftest.py``) den Index nicht durchsuchen (RR2-11):
+    ``app/core/ingest/threemf.py`` taut nach jedem 3MF-Import den ganzen Prozess wieder auf, und
+    bis dahin sähe ``gc.get_objects()`` nichts, was vor ``shared()`` lebte, und zyklischer Müll
+    daraus bliebe liegen. Der gelesene Index ist klein; einen Sammellauf kostet er kaum etwas,
+    und die Fenstertests laufen in den Toren nicht im selben Prozess wie W2, W5 und W6."""
     from tools import code_store
 
-    index = code_store.load(ROOT)
-    gc.collect()
-    gc.freeze()
-    return index
+    return code_store.load(ROOT)
 
 
 def main(argv: list[str] | None = None) -> int:
