@@ -107,6 +107,7 @@ Nutzen da und sonst nichts.
 - Bohrungsfelder und der Haken zum gemeinsamen Ändern gleichartiger Merkmale erklären ihre Wirkung. „Druckabweichung ausgleichen“ beschreibt die Korrektur aus dem Materialprofil verständlicher.
 - In der Maßkarte im Bild geht die Tabulatortaste von den Feldern über *Weitere Werte* und den Haken für gleichartige Merkmale zu *Übernehmen* und *Abbrechen* und danach zurück zum ersten Feld. Der Haken steht jetzt über den Knöpfen.
 - Nach *Abbrechen* oder Esc in der Maßkarte steht die Tastatur wieder in der 3D-Ansicht, wie nach *Übernehmen*. Bisher landete sie auf der Karte *Objekte*.
+- *Übernehmen* in der Maßkarte bleibt grau, bis sich ein Wert oder der Haken für gleichartige Merkmale ändert, und nennt das Feld, mit dem es losgeht. Bisher war es schon nach einem Klick ins Feld frei und tat nichts.
 
 ## 0.6.0
 

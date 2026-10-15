@@ -33,6 +33,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QColor, QFocusEvent, QKeyEvent, QPolygonF
 from PySide6.QtWidgets import (
+    QAbstractButton,
     QAbstractSpinBox,
     QApplication,
     QComboBox,
@@ -67,6 +68,7 @@ from app.core.types import Feature, SceneObject, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import TranslatableText, tr
 from app.ui.change_lock import change_refusal, hold_inputs
+from app.ui.first_change import first_change_sentence
 from app.ui.icons import icon
 from app.ui.labels import LengthSpin, feature_name, length, wheel_needs_focus
 from app.ui.leash import stop_watching_the_dying
@@ -279,6 +281,10 @@ class QuietHost(QObject):
         self._values = dict(values)
         self._accepted = accepted
         self.begun = False
+        #: Die Werte, mit denen die erste Geste den Entwurf begann. Weichen die
+        #: aktuellen davon ab, ist etwas geändert und *Übernehmen* hat etwas
+        #: zu tun (FD-31); ein Fokus im Feld allein bindet nur die Auswahl.
+        self.begun_with: dict[str, Any] = {}
         self.committing = False
         self._finished = False
         self._blocked_reason: str | None = None
@@ -305,6 +311,7 @@ class QuietHost(QObject):
         if self.begun or self.committing or self._finished:
             return
         self.begun = True
+        self.begun_with = dict(self._values)
         self.editStarted.emit()
 
     def take_placement(self, values: Mapping[str, Any]) -> None:
@@ -1725,6 +1732,9 @@ class PlacementFlow(QObject):
         self._measure_group: QWidget | None = None
         self._measure_hint = QSize()
         self._measure_scope: QWidget | None = None
+        #: Wie der Sammelhaken beim Aufbau stand: Ihn umzuschalten ist eine
+        #: Änderung, auch wenn kein Wert sich ändert (FD-31).
+        self._measure_scope_start: bool | None = None
         self._measure_interpret: Callable[[], bool] | None = None
         self._measure_refresh: Callable[[Mapping[str, Any]], None] | None = None
         #: Wem die Maßgruppe zurückgeht, wenn der Fluss sie abgibt — ``True``
@@ -1880,9 +1890,21 @@ class PlacementFlow(QObject):
             previous_scope.hide()
             previous_scope.deleteLater()
         self._measure_scope = scope
+        self._measure_scope_start = None
+        if isinstance(scope, QAbstractButton) and scope.isCheckable():
+            self._measure_scope_start = scope.isChecked()
         if scope is not None:
             self._measure_scope_layout.addWidget(scope)
             self._measure_targets.extend(self._watch_field(scope))
+            if isinstance(scope, QAbstractButton):
+                # Der Haken ändert den Umfang und keinen Wert; auch er gibt
+                # *Übernehmen* frei (FD-31) — gefragt, nachdem der Träger ihn
+                # als Geste kennt, deshalb in der nächsten Runde.
+                self._links.append(
+                    scope.toggled.connect(
+                        self._refresh_measure_actions, Qt.ConnectionType.QueuedConnection
+                    )
+                )
         self._measure_scope_box.setVisible(scope is not None)
         self._measure_interpret = interpret
         self._measure_refresh = refresh
@@ -1938,6 +1960,21 @@ class PlacementFlow(QObject):
         host = self.dialog
         reason = host.blocked_reason if isinstance(host, QuietHost) else None
         begun = not isinstance(host, QuietHost) or host.begun
+        # **Übernehmen braucht eine Änderung, nicht nur eine Geste** (FD-31):
+        # Schon der Fokus im Feld beginnt den Entwurf und hält die Auswahl;
+        # danach war der Knopf offen, und sein Klick tat nichts. Geändert ist,
+        # was von den Werten zu Beginn abweicht, oder der umgeschaltete
+        # Sammelhaken — er ändert den Umfang, keinen Wert.
+        scope = self._measure_scope
+        changed = begun and (
+            not isinstance(host, QuietHost)
+            or host.values() != host.begun_with
+            or (
+                isinstance(scope, QAbstractButton)
+                and self._measure_scope_start is not None
+                and scope.isChecked() != self._measure_scope_start
+            )
+        )
         # Ein wartender Langlochzug macht den Knopf frei — die Sperre gilt der
         # gebundenen Handlung, und die läuft dann nicht. Ob Übernehmen den Zug
         # meint, sagt **eine** Stelle (``MainWindow.slot_drag_takes_the_accept``):
@@ -1947,7 +1984,7 @@ class PlacementFlow(QObject):
         pulled = self._slot_drag_takes_the_accept()
         if pulled:
             reason = None
-            begun = True
+            begun = changed = True
         # **Ohne Freischaltung nimmt die Maßgruppe nichts an** (FD-28): Bis
         # hierher war nur *Übernehmen* grau, die Felder nahmen Zahlen an, die
         # nie übernommen wurden. Eingang und Knopf tragen den Satz aus
@@ -1988,29 +2025,18 @@ class PlacementFlow(QObject):
             and self._reference_pick is None
             and self.session.result_current
             and self._display_ready()
-            and begun
+            and changed
             and reason is None
             and (not isinstance(host, QuietHost) or not host.committing)
         )
         self._measure_accept.setEnabled(allowed)
         said = reason or ""
-        # ``begun`` zuerst: Erst ein stiller Träger hat eine Gruppe.
-        if not begun and not allowed and not said and (group := self._measure_group) is not None:
-            # **Vor der ersten Eingabe sagt der Knopf den Weg** (FD-31): Er war
-            # grau ohne Grund. Genannt wird das erste Feld der Gruppe, wie der
-            # Kunde es liest; sein Name endet nach dem Gedankenstrich.
-            first = next(
-                (
-                    target.accessibleName().rsplit(" — ", 1)[-1]
-                    for target in self._measure_targets
-                    if isinstance(target, QAbstractSpinBox | QComboBox)
-                    and group.isAncestorOf(target)
-                    and target.accessibleName()
-                ),
-                "",
-            )
-            if first:
-                said = tr("Erst „{field}“ ändern, dann übernehmen.", field=first)
+        # ``changed`` zuerst: Erst ein stiller Träger hat eine Gruppe.
+        if not changed and not allowed and not said and (group := self._measure_group) is not None:
+            # **Vor der ersten Änderung sagt der Knopf den Weg** (FD-31): Er war
+            # grau ohne Grund. Satz und erstes offenes Feld kommen aus der
+            # Regel aller Flächen mit *Übernehmen* (``first_change``).
+            said = first_change_sentence(self._measure_targets, group)
         for setter in (
             self._measure_accept.setToolTip,
             self._measure_accept.setStatusTip,

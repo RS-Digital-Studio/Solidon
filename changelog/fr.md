@@ -83,6 +83,7 @@ dans `website/version.json`.
 - Les champs du perçage et la case de modification simultanée des éléments similaires expliquent leur effet. « Compenser les écarts d'impression » précise la correction issue du profil du matériau.
 - Dans la carte de cotes de la vue, la touche Tab passe des champs à *Autres valeurs* et à la case des éléments similaires, puis à *Appliquer* et *Annuler*, et revient au premier champ. La case se trouve désormais au-dessus des boutons.
 - Après *Annuler* ou Échap dans la carte de cotes, le clavier revient dans la vue 3D, comme après *Appliquer*. Auparavant, il arrivait sur la carte *Objets*.
+- *Appliquer* dans la carte de cotes reste grisé tant qu'aucune valeur ni la case des éléments similaires n'a changé, et indique le champ par lequel commencer. Auparavant, il s'activait dès un clic dans un champ et ne faisait rien.
 
 ## 0.6.0
 

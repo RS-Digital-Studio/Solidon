@@ -83,6 +83,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
 - En la tarjeta de medidas de la vista, el tabulador va de los campos a *Más valores* y a la casilla de características iguales, luego a *Aplicar* y *Cancelar*, y vuelve al primer campo. La casilla está ahora encima de los botones.
 - Tras *Cancelar* o Esc en la tarjeta de medidas, el teclado vuelve a la vista 3D, como tras *Aplicar*. Antes acababa en la tarjeta *Objetos*.
+- *Aplicar* en la tarjeta de medidas sigue en gris hasta que cambia un valor o la casilla de características iguales, e indica el campo por el que empezar. Antes se activaba con solo hacer clic en un campo y no hacía nada.
 
 ## 0.6.0
 
