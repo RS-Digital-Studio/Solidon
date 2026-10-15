@@ -66,7 +66,8 @@ ABSENT = "cs0_name_lists_absent"
 
 #: Untergrenzen der Grundmengen, je mit ihrer Herkunft. Wo der Plan keine Zahl
 #: nennt, heißt die Untergrenze nur „nicht leer“: Der heutige Ist-Wert als
-#: Untergrenze machte jede berechtigte Streichung eines Eintrags rot (Regel 8).
+#: Untergrenze machte jede berechtigte Streichung eines Eintrags rot
+#: (``.claude/rules/tests.md``, „Prüft dieser Test eine Zusage — oder den Ist-Zustand?“).
 GROUND_SETS = {
     # Plan 2.6 a)
     "_OPERATION_MODULES": 31,
@@ -76,8 +77,9 @@ GROUND_SETS = {
     "_STEP_WAY_MODULES": 8,
     # Plan 2.6 d) nennt keine Zahl
     "_MATCH_WAYS": 1,
-    # Plan 2.0 zählte ``_EXPORTS`` in 7 Paketen; ``app.core.agent`` exportiert seit
-    # RP2-5 nichts mehr, weil niemand einen seiner zwölf Namen über das Paket bezog
+    # Plan 2.0 zählte ``_EXPORTS`` in 7 Paketen; ``app.core.agent`` exportiert nichts
+    # mehr, seit e) einen Bezug über das Paket verlangt (CS-19): Keinen seiner zwölf
+    # Namen bezog jemand so
     "Lazy-Pakete": 6,
     # Plan 2.6 g), Anhang A S15
     "app-Zeichenketten": 52,
