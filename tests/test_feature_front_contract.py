@@ -34,17 +34,35 @@ from tests.ui_helpers import window as window
 
 @pytest.fixture(autouse=True)
 def customer_theme(qt_app):
-    """Die wirkliche Gestaltung bleibt als konsistente Betriebslage bestehen.
+    """Die wirkliche Gestaltung gilt im Fall als konsistente Betriebslage.
 
-    Nur das Stylesheet zurückzusetzen ließe Palette und Themenmerker in
-    einem anderen Zustand. conftest setzt das Thema absichtlich nicht zurück.
+    Nur das Stylesheet zu setzen ließe Palette und Themenmerker in einem
+    anderen Zustand. Danach kehrt genau die Lage davor zurück — Stil,
+    Palette, Schrift, Stylesheet und Themenmerker —, nicht ein nacktes
+    Nichts (conftest, „Was hier absichtlich NICHT zurückgesetzt wird“): Das
+    stehen gebliebene dunkle Thema machte Fälle späterer Dateien im selben
+    Prozess rot, die allein grün sind (FD-84).
     """
-    from app.ui.style import apply_style
-    from app.ui.theme import apply_theme
+    from PySide6.QtGui import QFont, QPalette
 
-    apply_theme(qt_app, "dark")
+    from app.ui import theme
+    from app.ui.style import apply_style
+
+    style = qt_app.style().name()
+    palette = QPalette(qt_app.palette())
+    font = QFont(qt_app.font())
+    sheet = qt_app.styleSheet()
+    marker = qt_app.property("solidonTheme")
+    active = theme.current_theme()
+    theme.apply_theme(qt_app, "dark")
     apply_style(qt_app, "dark")
     yield
+    qt_app.setStyle(style)
+    qt_app.setStyleSheet(sheet)
+    qt_app.setPalette(palette)
+    qt_app.setFont(font)
+    qt_app.setProperty("solidonTheme", marker)
+    theme._ACTIVE = active
 
 
 def test_customer_theme_remains_consistent_after_a_light_predecessor(qt_app):
