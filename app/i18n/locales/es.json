@@ -8388,6 +8388,7 @@
   "{app} unterstützen …": "Apoyar {app} …",
   "{bed} {exclusions}": "{bed} {exclusions}",
   "{before} → {after} Körper": "{before} → {after} cuerpos",
+  "{body}: {feature}": "{body}: {feature}",
   "{check}{scope}: {state}": "{check}{scope}: {state}",
   "{colour}, dunkel": "{colour} oscuro",
   "{colour}, hell": "{colour} claro",
