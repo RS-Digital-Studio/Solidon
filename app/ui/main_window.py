@@ -26451,8 +26451,30 @@ class MainWindow(QMainWindow):
         return profiles.for_process(self.session.profile, settings, effective=True)
 
     def _foundation_crashed(self, detail: str) -> None:
+        """Der Arbeiter kam nicht zurück: Solidons Tabelle ist die Grundlage (RA-14).
+
+        Ohne Merker galt die Zahlenzeile danach für immer als vorläufig, und
+        ihre Kurzhilfe sagte, das Slicerprofil werde noch gelesen. Gemerkt wird
+        die Tabelle für genau den Schlüssel, für den gerechnet wurde — Schlüssel
+        und Stufe trägt der Arbeiter, der sich meldet. Der Absturz eines
+        abgelösten Arbeiters ändert nichts.
+        """
         _log.warning("print foundation worker crashed: %s", detail)
+        worker = self.sender()
+        key = getattr(worker, "_key", None)
+        quality = getattr(worker, "_quality", None)
+        if key is None or quality is None:
+            self._foundation_pending = None
+            return
+        if self._foundation_pending != key:
+            return
         self._foundation_pending = None
+        self._foundation_cache = (
+            key,
+            manufacturer.base_settings(self.session.profile, quality, None),
+        )
+        if not self._close_requested:
+            self._update_facts()
 
     def _foundation_worker_done(self, worker: Any) -> None:
         if self._foundation_worker is worker:
