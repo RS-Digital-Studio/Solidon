@@ -148,15 +148,22 @@ def _joined(separator: str, parts: Iterable[set[str] | None]) -> set[str] | None
 
 
 def runs_python(index: Index, host: Facts, site: Script) -> bool:
-    """Ob der Befehl um ``site`` ein Python startet."""
+    """Ob der Befehl um ``site`` ein Python startet: ja, wenn einer der Werte des Kopfes eines
+    ist, unabhängig von ihrer Reihenfolge (RR2-4). Bleibt ein Wert offen, entscheidet der
+    Kopf im Quelltext (``str(python)``)."""
     if site.head is None:
         return True
-    for value in index.fold(host, site.head):
+    undecided = False
+    values = index.fold(host, site.head)
+    for value in values:
         if value.kind == "ext" and value.ref == "sys.executable":
             return True
         if value.kind == "const" and isinstance(value.data, str):
-            return "python" in value.data.lower()
-    return "python" in site.head_text.lower()
+            if "python" in value.data.lower():
+                return True
+        else:
+            undecided = True
+    return (undecided or not values) and "python" in site.head_text.lower()
 
 
 def scan(index: Index) -> Found:

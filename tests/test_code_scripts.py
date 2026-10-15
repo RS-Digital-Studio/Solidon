@@ -12,7 +12,12 @@ Prozess erreicht kein Patch (W2 d bleibt, wie sie war). ``git -c``, ``sh -c`` un
 
 from __future__ import annotations
 
+import itertools
+
+import pytest
+
 from tests.code_index_helpers import build_index
+from tools import code_scripts
 from tools.code_index import Index
 
 HEAD = "import subprocess\nimport sys\nimport textwrap\nfrom app import mod\n\n\n"
@@ -111,6 +116,32 @@ def test_arguments_that_follow_an_interpreter_carry_their_script() -> None:
         "    subprocess.run([str(python), '-c', 'from app.mod import GONE'])\n"
     )
     assert {name for _kind, _module, name, _line in _missing(index)} == {"MISSING", "GONE"}
+
+
+def test_a_python_among_the_values_of_the_head_decides_in_any_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RR2-4: Faltet der Kopf eines Helfers zu mehreren Werten (``sys.executable``, ``"git"``,
+    ``"python3"``), entscheidet nicht der erste einer Menge — sonst hinge das Skript am
+    Hash-Startwert. Gegenprobe: ohne Python unter den Werten kein Skript."""
+    index = _index(
+        "def _start(program):\n"
+        "    return subprocess.run([program, '-c', 'from app.mod import MISSING'])\n\n"
+        "def test_python():\n    _start(sys.executable)\n\n"
+        "def test_git():\n    _start('git')\n\n"
+        "def test_python_text():\n    _start('python3')\n"
+    )
+    assert _missing(index) == {("script:from", "app.mod", "MISSING", 8)}
+    host = index.files["tests/test_probe.py"]
+    (site,) = host.scripts
+    values = list(index.fold(host, site.head))
+    assert len(values) == 3
+    for order in itertools.permutations(values):
+        monkeypatch.setattr(index, "fold", lambda facts, ir, order=order: list(order))
+        assert code_scripts.runs_python(index, host, site), order
+    git = [value for value in values if value.data == "git"]
+    monkeypatch.setattr(index, "fold", lambda facts, ir: git)
+    assert not code_scripts.runs_python(index, host, site)
 
 
 def test_a_script_has_its_own_names_apart_from_its_host() -> None:
