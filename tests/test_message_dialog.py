@@ -262,3 +262,278 @@ def test_the_symbol_reads_on_both_themes(qt_app: QApplication, theme: str) -> No
         apply_theme(qt_app, previous)
         qt_app.setPalette(previous_palette)
         qt_app.setStyleSheet(previous_sheet)
+
+
+def test_the_severity_word_comes_from_the_palette(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Wort für die Schwere hat eine Quelle: ``palette.SEVERITY_ENCODING`` (A-L3).
+
+    Meldung, Filterzeile und Befundzeile des Berichts und die Warnungen eines
+    Vorschlags im Chat lesen es dort — eine eigene Tabelle daneben ist ein
+    Zwilling, der auseinanderläuft.
+    """
+    from dataclasses import replace
+    from types import SimpleNamespace
+
+    from app.ui import chat, palette, panels
+    from app.ui.message_dialog import MessageDialog
+
+    renamed = replace(palette.SEVERITY_ENCODING["error"], label_key="Probewort")
+    monkeypatch.setitem(palette.SEVERITY_ENCODING, "error", renamed)
+    dialog = MessageDialog(title="T", headline="H", kind="error")
+    report = panels.ReportPanel()
+    try:
+        assert dialog.symbol.accessibleName() == "Probewort"
+        assert report.severity.itemText(report.severity.findData("error")).endswith("Probewort")
+        finding = SimpleNamespace(severity="error", source="internal")
+        assert panels.finding_meta(finding, "").startswith("Probewort")  # type: ignore[arg-type]
+        proposal = SimpleNamespace(findings=[SimpleNamespace(severity="error", message="Satz")])
+        assert chat._warnings(proposal) == [
+            chat.tr("{name}: {value}", name="Probewort", value="Satz")
+        ]
+    finally:
+        dialog.deleteLater()
+        report.deleteLater()
+
+
+@pytest.mark.parametrize("kind", ["error", "warning", "info"])
+def test_a_screen_reader_hears_what_went_wrong(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """Schwere, Kopfzeile und Ursache erreichen einen Bildschirmleser (A-M2).
+
+    Ein ``QMessageBox`` meldet sich als ``AlertMessage`` mit Text und Ursache; ein
+    eigener Dialog hat die Rolle ``Dialog`` und sagt von sich aus nichts. Seine
+    Beschreibung trägt deshalb Wort, Kopfzeile und Satz, und ein Fehler oder eine
+    Warnung meldet sich beim Zeigen mit einem ``Alert`` und einer Ansage mit
+    Vorrang: UIA und AT-SPI reichen das ``Alert`` vermutlich nicht weiter, die
+    Ansage schon. Ein Hinweis, um den der Kunde gebeten hat, sagt nichts an.
+    """
+    from PySide6.QtGui import QAccessible, QAccessibleAnnouncementEvent, QAccessibleEvent
+
+    from app.i18n import tr
+    from app.ui.message_dialog import MessageDialog
+    from app.ui.palette import SEVERITY_ENCODING
+
+    sent: list[QAccessible.Event] = []
+    said: list[tuple[str, QAccessible.AnnouncementPoliteness]] = []
+    real = QAccessible.updateAccessibility
+
+    def spy(event: QAccessibleEvent) -> None:
+        sent.append(event.type())
+        if isinstance(event, QAccessibleAnnouncementEvent):
+            said.append((event.message(), event.politeness()))
+        real(event)
+
+    monkeypatch.setattr(QAccessible, "updateAccessibility", spy)
+    dialog = MessageDialog(
+        title="Das hat so nicht funktioniert",
+        headline="Platte zu klein",
+        body="Das Teil misst 300 mm.",
+        kind=kind,  # type: ignore[arg-type]
+        target="message:error",
+    )
+    dialog.add_exit("Schließen", "message.button:error.cancel")
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    dialog.show()
+    try:
+        qt_app.processEvents()
+        face = QAccessible.queryAccessibleInterface(dialog)
+        assert face is not None
+        described = face.text(QAccessible.Text.Description)
+        assert tr(SEVERITY_ENCODING[kind].label_key) in described
+        assert "Platte zu klein" in described and "300 mm" in described
+        assert (QAccessible.Event.Alert in sent) == (kind != "info"), sent
+        if kind == "info":
+            assert said == []
+        else:
+            ((message, politeness),) = said
+            assert "Platte zu klein" in message and "300 mm" in message
+            assert politeness == QAccessible.AnnouncementPoliteness.Assertive
+    finally:
+        dialog.hide()
+        dialog.deleteLater()
+
+
+def test_a_notice_announces_itself(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``inform`` war ein ``QMessageBox.information``, das sich meldete — es sagt sich an.
+
+    Der Kunde hat um den Hinweis nicht gebeten („Der Browser ließ sich nicht
+    öffnen“); höflich, ohne Vorrang.
+    """
+    from PySide6.QtGui import QAccessible, QAccessibleAnnouncementEvent, QAccessibleEvent
+
+    from app.ui import message_dialog
+    from app.ui.message_dialog import MessageDialog
+
+    said: list[tuple[str, QAccessible.AnnouncementPoliteness]] = []
+    real = QAccessible.updateAccessibility
+
+    def spy(event: QAccessibleEvent) -> None:
+        if isinstance(event, QAccessibleAnnouncementEvent):
+            said.append((event.message(), event.politeness()))
+        real(event)
+
+    def shown(dialog: MessageDialog) -> int:
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        dialog.show()
+        qt_app.processEvents()
+        dialog.hide()
+        return 0
+
+    monkeypatch.setattr(QAccessible, "updateAccessibility", spy)
+    monkeypatch.setattr(MessageDialog, "exec", shown)
+    message_dialog.inform(
+        None, "Der Browser ließ sich nicht öffnen", "Satz", target="message:probe"
+    )
+    ((message, politeness),) = said
+    assert "Der Browser ließ sich nicht öffnen" in message and "Satz" in message
+    assert politeness == QAccessible.AnnouncementPoliteness.Polite
+
+
+def test_a_message_leaves_no_window_behind(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach ``exec`` hängt keine Meldung mehr am Elternteil (A-L1)."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QWidget
+
+    from app.core.errors import RETRY, AppError
+    from app.ui import dialogs, message_dialog
+    from app.ui.message_dialog import MessageDialog
+
+    monkeypatch.setattr(MessageDialog, "exec", lambda dialog: dialog.reject() or 0)
+    monkeypatch.setattr("app.ui.dialogs.QDesktopServices.openUrl", lambda _url: False)
+    parent = QWidget()
+    try:
+        for _ in range(3):
+            error = AppError("Probe", "x", suggestions=(RETRY,))
+            dialogs.show_error(error, parent, handlers={RETRY.id: lambda _error: None})
+            dialogs.show_details(AppError("Probe", "x"), parent)
+            message_dialog.inform(parent, "T", "Satz", target="message:browser_failed")
+            dialogs.open_donation(parent)
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        assert parent.findChildren(MessageDialog) == []
+    finally:
+        parent.deleteLater()
+
+
+def test_copy_takes_the_marked_part_first(qt_app: QApplication) -> None:
+    """Strg+C kopiert eine Markierung, sonst den ganzen Text — wie ``QMessageBox`` (A-L2)."""
+    from PySide6.QtGui import QTextCursor
+    from PySide6.QtTest import QTest
+
+    from app.ui.message_dialog import MessageDialog
+
+    dialog = MessageDialog(
+        title="Titel",
+        headline="Kopfzeile",
+        details="Zeile eins\nZeile zwei",
+        target="message:probe",
+    )
+    dialog.add_exit("Schließen", "message.button:probe.close")
+    previous = qt_app.clipboard().text()
+    dialog.show()
+    try:
+        qt_app.processEvents()
+        dialog.details.setFocus()
+        cursor = dialog.details.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        cursor.movePosition(QTextCursor.MoveOperation.EndOfLine, QTextCursor.MoveMode.KeepAnchor)
+        dialog.details.setTextCursor(cursor)
+        qt_app.clipboard().setText("")
+        QTest.keyClick(dialog.details, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+        assert qt_app.clipboard().text() == "Zeile eins"
+
+        cursor.clearSelection()
+        dialog.details.setTextCursor(cursor)
+        dialog.headline.setSelection(0, 4)
+        QTest.keyClick(dialog.details, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+        assert qt_app.clipboard().text() == "Kopf"
+
+        dialog.headline.setSelection(0, 0)
+        QTest.keyClick(dialog.details, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+        assert qt_app.clipboard().text() == dialog.text()
+
+        # Die Einzelheiten behalten ihre Markierung ohne Fokus, eine Zeile nicht:
+        # Die jüngere Markierung in der Kopfzeile gilt (Nachprüfung, Fund 2).
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        cursor.movePosition(QTextCursor.MoveOperation.EndOfLine, QTextCursor.MoveMode.KeepAnchor)
+        dialog.details.setTextCursor(cursor)
+        dialog.headline.setFocus()
+        dialog.headline.setSelection(0, 4)
+        QTest.keyClick(dialog.headline, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+        assert qt_app.clipboard().text() == "Kopf"
+    finally:
+        qt_app.clipboard().setText(previous)
+        dialog.hide()
+        dialog.deleteLater()
+
+
+def test_a_withdrawn_receipt_leaves_nothing_at_the_button(qt_app: QApplication) -> None:
+    """Weicht die Quittung, weicht auch ihre Beschreibung am Knopf (A-L4).
+
+    ``acknowledge`` legt den Satz als Beschreibung auf den nächsten Knopf, damit
+    ein Bildschirmleser ihn mitliest. Der Freischaltdialog verbarg beim nächsten
+    Schritt nur die Zeile, und *Schließen* las weiter „Solidon ist freigeschaltet“.
+    """
+    from app.ui.dialogs import ActivationDialog
+    from app.ui.message_dialog import acknowledge
+
+    dialog = ActivationDialog()
+    try:
+        acknowledge(dialog.receipt, "Gespeichert", "Satz", then=dialog.close_button)
+        assert dialog.close_button.accessibleDescription()
+        dialog.field.setPlainText("")
+        dialog._remember()
+        assert dialog.receipt.isHidden()
+        assert dialog.receipt.accessibleDescription() == ""
+        assert dialog.close_button.accessibleDescription() == ""
+    finally:
+        dialog.deleteLater()
+
+
+def test_a_new_receipt_takes_the_old_one_along(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Quittung ersetzt die vorige ganz, und ohne Knopf sagt sie sich an (Nachprüfung 5).
+
+    *Anfrage speichern* legte seinen Satz auf *Aktivierungsseite öffnen*; scheiterte
+    danach das Öffnen, stand die Warnung sichtbar da, der Knopf las aber weiter die
+    alte Quittung. Und eine Quittung ohne ``then`` bewegt keinen Fokus: Ohne Ansage
+    erfuhr ein Bildschirmleser von ihr nichts.
+    """
+    from PySide6.QtGui import QAccessible, QAccessibleAnnouncementEvent, QAccessibleEvent
+    from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout
+
+    from app.ui.message_dialog import acknowledge
+
+    said: list[tuple[str, QAccessible.AnnouncementPoliteness]] = []
+    real = QAccessible.updateAccessibility
+
+    def spy(event: QAccessibleEvent) -> None:
+        if isinstance(event, QAccessibleAnnouncementEvent):
+            said.append((event.message(), event.politeness()))
+        real(event)
+
+    monkeypatch.setattr(QAccessible, "updateAccessibility", spy)
+    window = QDialog()
+    layout = QVBoxLayout(window)
+    line = QLabel(window)
+    page = QPushButton("Seite öffnen", window)
+    for widget in (line, page):
+        layout.addWidget(widget)
+    try:
+        acknowledge(line, "Anfrage gespeichert", "Öffnen Sie die Seite.", then=page)
+        assert page.accessibleDescription()
+        assert said == [], "mit Knopf spricht der Fokus, keine Ansage"
+        acknowledge(line, "Die Seite ließ sich nicht öffnen.", role="warning")
+        assert page.accessibleDescription() == ""
+        # Angesagt wird, was die Zeile beschreibt: Wort der Bedeutung und Satz.
+        assert said == [
+            (line.accessibleDescription(), QAccessible.AnnouncementPoliteness.Assertive)
+        ]
+        assert "Die Seite ließ sich nicht öffnen." in said[0][0]
+    finally:
+        window.deleteLater()

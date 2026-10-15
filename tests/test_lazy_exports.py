@@ -1,6 +1,6 @@
 """Die Lazy-Pakete halten ihre drei Listen zusammen (``app/core/CLAUDE.md``).
 
-Sieben Kernpakete exportieren ihre Namen über ``_EXPORTS`` und
+Sechs Kernpakete exportieren ihre Namen über ``_EXPORTS`` und
 :func:`app.core.lazy.install`, weil ein eifriges ``__init__`` zwei Threads
 verklemmt (:mod:`app.core.lazy`). Die Karte sagt dazu: „Wer einen Namen
 hinzufügt, trägt ihn an **drei** Stellen ein — ``TYPE_CHECKING``-Block,

@@ -48,6 +48,7 @@ import argparse
 import os
 import sys
 import time
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -150,7 +151,7 @@ def drag_frames(window: Any, application: Any, count: int) -> list[float]:
     return times
 
 
-def shutdown_window(window: Any, application: Any) -> None:
+def shutdown_window(window: Any, application: Any) -> tuple[str, ...]:
     """Beendet Arbeiter, Renderer und Qt in ihrer sicheren Besitzreihenfolge.
 
     Das Fenster besitzt die Grafikfläche des Renderers. Wird nur das
@@ -165,12 +166,53 @@ def shutdown_window(window: Any, application: Any) -> None:
     Anwendung kann im selben Prozess ein weiteres Fenster folgen. Dieser
     Prüfstand endet dagegen nach genau einem Fenster und ruft deshalb
     denselben terminalen Viewport-Weg wie ``MainWindow.closeEvent``.
+
+    **Und erst, wenn jeder Arbeiter zurück ist** (FD-154). ``release`` wartet
+    2 s auf alles zusammen; wer länger rechnete, lief weiter, ``closeEvent``
+    lehnte das Schließen ab, und am Prozessende zerstörte PySide den noch
+    laufenden Faden (0xC0000409). Das Fenster der Anwendung schließt erst nach
+    dem letzten Arbeiter; hier wartet dieselbe Stelle, die den Prozess am Ende
+    schützt (``leash.finish_before_exit``). Zurück kommen die Namen derer, die
+    nach der Frist noch laufen (:func:`record_shutdown`).
     """
     window.release()
+    stragglers = wait_for_workers()
     window.viewport.release_renderer()
     window.close()
     for _ in range(EVENT_DRAIN_ROUNDS):
         application.processEvents()
+    return stragglers
+
+
+def wait_for_workers() -> tuple[str, ...]:
+    """Auf jeden gehaltenen Arbeiter warten (``leash.finish_before_exit``) und die
+    Namen derer zurückgeben, die nach der Frist noch laufen — für
+    :func:`record_shutdown`, auch an Prozessenden ohne Fenster (Startfall).
+    """
+    from app.ui.leash import finish_before_exit
+
+    return tuple(sorted(type(worker).__name__ for worker in finish_before_exit()))
+
+
+def record_shutdown(
+    record: dict[str, Any], persist: Callable[[], None], stragglers: Sequence[str]
+) -> None:
+    """Den Abbau im Fallzustand festhalten; wer die Frist riss, beendet den Prozess benannt.
+
+    ``shutdown_complete`` steht nur ohne Nachzügler, sonst stehen ihre Namen
+    unter ``stragglers`` — sie kamen vorher nur auf stderr an, und der Fall
+    hatte Exit 3 ohne Grund. Danach endet der Prozess sofort über
+    ``leash.leave_without_teardown``: :func:`shutdown_window` hat die Frist
+    schon gewartet, der Haken am Prozessende wartete sonst ein zweites Mal.
+    """
+    record["shutdown_complete"] = not stragglers
+    if stragglers:
+        record["stragglers"] = list(stragglers)
+    persist()
+    if stragglers:
+        from app.ui.leash import leave_without_teardown
+
+        leave_without_teardown(", ".join(stragglers))
 
 
 def await_scene(
@@ -324,7 +366,7 @@ def main() -> int:
         await_scene(window, application, previous, calls, spent, settle=arguments.settle)
     except TimeoutError as problem:
         print(str(problem), file=sys.stderr, flush=True)
-        shutdown_window(window, application)
+        record_shutdown({}, lambda: None, shutdown_window(window, application))
         return 1
     mark("auswertung+bild (bis ruhig)", since)
     renderer = getattr(window.viewport, "renderer", None)
@@ -375,7 +417,7 @@ def main() -> int:
     total = time.perf_counter() - wall
     print(f"GESAMT: {total:.2f} s (davon {arguments.settle:.0f} s Ruhe-Schwelle)", flush=True)
 
-    shutdown_window(window, application)
+    record_shutdown({}, lambda: None, shutdown_window(window, application))
     return 0
 
 

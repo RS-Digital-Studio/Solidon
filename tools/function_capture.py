@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 import time
 from collections.abc import Callable, Sequence
@@ -96,6 +97,10 @@ ASK_HOSTS: Final[frozenset[str]] = frozenset({"LocalRecognitionDialog"})
 #: Hausstil (``message_dialog.MessageDialog``, FD-21) und die Rückfrage
 #: (``AskDialog``); dazu die rohen Qt-Fenster (``function_checks.RAW_CLASSES``).
 MESSAGE_CLASSES: Final[frozenset[str]] = frozenset({"MessageDialog", "AskDialog"})
+
+#: Der Name der Fehlermeldung nach Regel 17 im Wortschatz: ``dialogs.show_error``
+#: zeigt sie als ``MessageDialog`` mit diesem Kennzeichen.
+ERROR_MESSAGE: Final = "message:error"
 
 
 def _raw_bases() -> tuple[str, ...]:
@@ -271,6 +276,18 @@ def modal_allowed(classes: Sequence[str], stack: Sequence[str], hosts: Sequence[
     return "AskDialog" in classes and bool(ASK_CALLERS & set(stack) or ASK_HOSTS & set(hosts))
 
 
+def error_proposal(classes: Sequence[str], target: str, actions: int) -> bool:
+    """Ob ein Meldungsfenster die Fehlermeldung mit Handlungsvorschlag ist — die Z2-Ausnahme.
+
+    Entscheidung Koordinator (Durchsicht welle4 D-M2): Eine Fehlermeldung nach
+    Regel 17 (``dialogs.show_error``, Kennzeichen :data:`ERROR_MESSAGE`) mit
+    mindestens einer Handlung antwortet auf eine Handlung des Kunden und darf
+    modal sein. Erfolg und Hinweis erscheinen nie als Meldungsfenster, und eine
+    Fehlermeldung ohne Handlung bleibt ein Fund (E7, V5) — auch in Z2.
+    """
+    return "MessageDialog" in classes and target == ERROR_MESSAGE and actions > 0
+
+
 def is_question(class_name: str, buttons: Sequence[str]) -> bool:
     """Eine Nachfrage (E6) statt einer Meldung (Z2): eine Wahl zwischen mindestens zwei Knöpfen.
 
@@ -300,6 +317,16 @@ def _buttons(widget: Any) -> list[str]:
     return [button.text() for button in widget.findChildren(QAbstractButton) if button.text()]
 
 
+def _offers_a_way(widget: Any, classes: Sequence[str]) -> bool:
+    """:func:`error_proposal` am offenen Fenster: Kennzeichen und Handlungen gelesen."""
+    if "MessageDialog" not in classes:
+        return False
+    from app.core.guides import TARGET_PROPERTY
+
+    target = str(widget.property(TARGET_PROPERTY) or "")
+    return error_proposal(classes, target, len(_house_actions(widget)))
+
+
 def _hosts(widget: Any) -> list[str]:
     """Die Klassen des Fensters, in dem ein Dialog steht — leer ohne Elternteil."""
     parent = widget.parentWidget()
@@ -322,7 +349,8 @@ class ModalWatch:
     Nur lesend: Die Wache schließt nichts. Was ein Fall öffnet und bedient,
     bedient er selbst über Eingabeereignisse; was liegen bleibt, räumt der Fall
     am Ende seiner Phase mit Escape ab. ``own`` nennt Klassen, die die Zeile
-    selbst öffnet (ihre Bedienfläche) — sie zählen als erlaubt.
+    selbst öffnet (ihre Bedienfläche) — sie zählen als erlaubt, ebenso die
+    Fehlermeldung mit Handlungsvorschlag (:func:`error_proposal`).
     """
 
     def __init__(self, began: float) -> None:
@@ -345,7 +373,9 @@ class ModalWatch:
             classes = _classes(widget)
             buttons = _buttons(widget)
             allowed = (
-                modal_allowed(classes, stack, _hosts(widget)) or type(widget).__name__ in self.own
+                modal_allowed(classes, stack, _hosts(widget))
+                or type(widget).__name__ in self.own
+                or _offers_a_way(widget, classes)
             )
             self.modals.append(
                 {
@@ -452,12 +482,23 @@ def _visible(widget: Any) -> bool:
 
 
 def _text_of(widget: Any) -> str:
-    from PySide6.QtWidgets import QGroupBox
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QAbstractButton, QGroupBox, QLabel
 
-    if isinstance(widget, QGroupBox):
-        return str(widget.title())
-    text = widget.text() if callable(getattr(widget, "text", None)) else ""
-    return str(text or "").replace("&", "")
+    text = (
+        widget.title()
+        if isinstance(widget, QGroupBox)
+        else widget.text()
+        if callable(getattr(widget, "text", None))
+        else ""
+    )
+    label = isinstance(widget, QLabel)
+    return _plain(
+        str(text or ""),
+        text_format=widget.textFormat() if label else Qt.TextFormat.PlainText,
+        mnemonic=isinstance(widget, (QAbstractButton, QGroupBox))
+        or (label and widget.buddy() is not None),
+    )
 
 
 def _top(widget: Any, root: Any) -> int:
@@ -502,6 +543,7 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
     ersten Feld (E5). Reiter einer Leiste stehen mit ihrem eigenen Rechteck da,
     Zeilen sichtbarer Listen und Bäume mit ihrer Zelle (:func:`_item_texts`).
     """
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QAbstractButton, QGroupBox, QLabel, QTabBar
 
     fields = [field for field in _input_widgets(root) if _visible(field)]
@@ -511,7 +553,7 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
     for widget in carriers + root.findChildren(QGroupBox):
         if not _visible(widget):
             continue
-        text = _plain(_text_of(widget))
+        text = _text_of(widget)
         if not text.strip():
             continue
         metrics = widget.fontMetrics()
@@ -547,7 +589,7 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
             if not bar.isTabVisible(index):
                 # Ein verborgener Reiter hat kein Rechteck — nicht abgeschnitten (F-14).
                 continue
-            text = bar.tabText(index).replace("&", "")
+            text = _plain(bar.tabText(index), text_format=Qt.TextFormat.PlainText, mnemonic=True)
             width = bar.tabRect(index).width()
             need = metrics.horizontalAdvance(text)
             found.append(
@@ -568,15 +610,19 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
 MOST_ITEM_TEXTS: Final = 200
 
 
-def _plain(text: str) -> str:
-    """Der sichtbare Text eines Trägers — Rich Text ohne seine Auszeichnung (Review M12)."""
+def _plain(text: str, *, text_format: Any = None, mnemonic: bool = False) -> str:
+    """Sichtbarer Trägertext: erst Qt-Auszeichnung, danach seine Tastaturmarkierung."""
     from PySide6.QtGui import Qt, QTextDocument
 
-    if not Qt.mightBeRichText(text):
-        return text
-    document = QTextDocument()
-    document.setHtml(text)
-    return str(document.toPlainText())
+    rich = text_format == Qt.TextFormat.RichText or (
+        text_format in (None, Qt.TextFormat.AutoText) and Qt.mightBeRichText(text)
+    )
+    if rich:
+        document = QTextDocument()
+        document.setHtml(text)
+        text = str(document.toPlainText())
+    # Nur Träger mit Tastaturmarkierungen: && ist ein sichtbares Ampersand.
+    return re.sub(r"&(.?)", r"\1", text, flags=re.DOTALL) if mnemonic else text
 
 
 def _indicator_contents(button: Any) -> int | None:
@@ -759,22 +805,26 @@ def field_values(root: Any) -> dict[str, Any]:
     Längen in Millimetern über ``value_mm``, wie der Kern sie hat; andere Zahlen
     über ``value``, Haken als wahr oder falsch, Auswahl und Text als Text.
     """
-    from PySide6.QtWidgets import QAbstractSpinBox, QCheckBox, QComboBox, QLineEdit
+    from PySide6.QtWidgets import QCheckBox, QComboBox, QLineEdit, QWidget
 
     values: dict[str, Any] = {}
-    for widget in _input_widgets(root):
+    # ValueField trägt das Wortschatzkennzeichen am Behälter. Seine innere
+    # Zahl besitzt keines; nur sie zu lesen ließ sämtliche Längen verschwinden.
+    marked = [widget for widget in root.findChildren(QWidget) if vocabulary_name(widget)]
+    for widget in [*marked, *_input_widgets(root)]:
         name = mark_of(widget)
         if not name:
             continue
         name = name.partition(":")[2] if ":" in name else name
         if callable(getattr(widget, "value_mm", None)):
             values[name] = round(float(widget.value_mm()), 4)
-        elif isinstance(widget, QAbstractSpinBox) and callable(getattr(widget, "value", None)):
+        elif callable(getattr(widget, "value", None)):
             values[name] = widget.value()
         elif isinstance(widget, QCheckBox):
             values[name] = bool(widget.isChecked())
         elif isinstance(widget, QComboBox):
-            values[name] = widget.currentText()
+            selected = widget.currentData()
+            values[name] = selected if selected is not None else widget.currentText()
         elif isinstance(widget, QLineEdit):
             values[name] = widget.text()
     return values
@@ -1011,11 +1061,15 @@ def font_entries(root: Any) -> list[dict[str, Any]]:
     wird, ``base_points`` die Grundgröße der Anwendung, aus der
     ``style.type_scale`` die vier Stufen rechnet. Ohne gesetzte Eigenschaft
     ``level`` ist das die Grundschrift — keine fehlende Stufe (Probelauf F-4).
+    ``primary`` belegt den wirklichen Hauptknopf. Seine halbfette Grundschrift
+    bleibt an die gemessene Familie der Anwendung gebunden.
     """
-    from PySide6.QtWidgets import QAbstractButton, QApplication, QLabel
+    from PySide6.QtGui import QFontInfo
+    from PySide6.QtWidgets import QAbstractButton, QApplication, QLabel, QPushButton
 
     surface = type(root).__name__
     base = QApplication.font().pointSize()
+    family = QFontInfo(QApplication.font()).family()
     return [
         {
             "surface": surface,
@@ -1025,6 +1079,9 @@ def font_entries(root: Any) -> list[dict[str, Any]]:
             "points": round(float(widget.font().pointSizeF()), 2),
             "weight": int(widget.font().weight().value),
             "base_points": base,
+            "primary": isinstance(widget, QPushButton) and widget.isDefault(),
+            "family": QFontInfo(widget.font()).family(),
+            "base_family": family,
         }
         for widget in root.findChildren(QLabel) + root.findChildren(QAbstractButton)
         if _visible(widget) and _text_of(widget).strip()
@@ -1034,9 +1091,11 @@ def font_entries(root: Any) -> list[dict[str, Any]]:
 def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
     """Schrift gegen Hintergrund je Textträger als ``#rrggbb`` (G6).
 
-    Die Schrift kommt aus der Palette des Trägers, die das Stylesheet beim
-    Polieren setzt; der Grund aus dem Bild, das der Kunde sieht — die häufigste
-    Farbe am Rand des Trägers im gerenderten Fenster (:func:`_shown_background`).
+    Die Schrift kommt aus der Palette des Trägers, beim Hauptknopf aus Qts
+    zustandsabhängiger Beschriftung; die Palette allein kennt dessen
+    ``:default``-Farbe nicht. Der Grund kommt aus dem Bild, das der Kunde sieht:
+    die häufigste Farbe am Rand des Trägers im gerenderten Fenster
+    (:func:`_shown_background`).
     Die Palette nannte bei ``background: transparent`` Schwarz ohne Deckung, und
     ``.name()`` warf die Deckung weg: Kontrast 1,28 an jedem durchsichtigen
     Träger (Probelauf F-1, F-3). Das Verhältnis rechnet U mit
@@ -1046,11 +1105,19 @@ def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
     1.4.3 nimmt sie aus (F-2). ``large`` ist große Schrift nach WCAG: ab 18 pt,
     fett ab 14 pt.
     """
-    from PySide6.QtWidgets import QAbstractButton, QLabel
+    from PySide6.QtWidgets import QAbstractButton, QApplication, QLabel, QPushButton
 
     surface = type(root).__name__
     top = root.window()
-    picture = top.grab().toImage()
+    # Wie die native Aufnahme in FunctionFlow.picture: Die Bildschirmfläche
+    # lesen, nicht das Hauptfenster samt nativer 3D-Fläche erneut rendern.
+    # Offscreen hat kein Schirmbild und keinen nativen Renderer; dort prüfen
+    # die Widgettests weiterhin ihr Qt-Bild.
+    picture = (
+        top.grab()
+        if QApplication.platformName() == "offscreen"
+        else top.screen().grabWindow(int(top.winId()))
+    ).toImage()
     found: list[dict[str, Any]] = []
     for widget in root.findChildren(QLabel) + root.findChildren(QAbstractButton):
         if not _visible(widget) or not widget.isEnabled():
@@ -1062,14 +1129,16 @@ def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
         palette = widget.palette()
         font = widget.font()
         size = font.pointSizeF()
-        background = _shown_background(picture, top, widget) or _opaque(
-            palette.color(widget.backgroundRole()), None
-        )
-        foreground = (
-            _icon_colour(widget)
-            if symbol
-            else _opaque(palette.color(widget.foregroundRole()), background)
-        )
+        # Ohne abgetastete Pixel bleibt die Messung offen. Eine Palette sagt
+        # nicht, welchen Hintergrund der Kunde tatsächlich gesehen hat.
+        background = _shown_background(picture, top, widget)
+        foreground: str | None
+        if symbol:
+            foreground = _icon_colour(widget)
+        elif isinstance(widget, QPushButton) and widget.isDefault():
+            foreground = _button_text_colour(widget) if background is not None else None
+        else:
+            foreground = _opaque(palette.color(widget.foregroundRole()), background)
         found.append(
             {
                 "surface": surface,
@@ -1082,6 +1151,49 @@ def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
             }
         )
     return found
+
+
+def _button_text_colour(button: Any) -> str | None:
+    """Die tatsächliche Zustandsfarbe der Knopfschrift ohne Palette oder Themenvorgabe.
+
+    Qt zeichnet nur die Beschriftung auf eine transparente Hilfsfläche, nicht
+    das Fenster oder den Renderer. Damit greifen dieselben zustandsabhängigen
+    Stilregeln, auch eine absichtlich falsche Farbe. Ein Symbol ist kein
+    Schriftbeleg. Ohne eindeutig voll gedeckte Schriftpixel bleibt die Farbe
+    offen; der echte Kundenhintergrund wird weiterhin unabhängig abgetastet.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QIcon, QImage, QPainter
+    from PySide6.QtWidgets import QStyle, QStyleOptionButton
+
+    option = QStyleOptionButton()
+    button.initStyleOption(option)
+    option.icon = QIcon()
+    ratio = float(button.devicePixelRatioF())
+    image = QImage(
+        round(button.width() * ratio),
+        round(button.height() * ratio),
+        QImage.Format.Format_RGBA8888,
+    )
+    if image.isNull():
+        return None
+    image.setDevicePixelRatio(ratio)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    try:
+        painter.setFont(button.font())
+        button.style().drawControl(
+            QStyle.ControlElement.CE_PushButtonLabel, option, painter, button
+        )
+    finally:
+        painter.end()
+    data = image.constBits()
+    colours = {
+        (data[index] << 16) | (data[index + 1] << 8) | data[index + 2]
+        for index in range(0, image.sizeInBytes(), 4)
+        if data[index + 3] == 255
+    }
+    return f"#{next(iter(colours)):06x}" if len(colours) == 1 else None
 
 
 def _opaque(colour: Any, under: str | None) -> str:
@@ -1199,11 +1311,27 @@ def icon_entries(root: Any) -> list[dict[str, Any]]:
 def _shows_itself(button: Any) -> bool:
     """Ob ein Knopf ohne Text kein Symbolknopf ist: Haken, Optionsknopf, Beschriftungen
     darin oder ein eigenes ``paintEvent`` in der Anwendung."""
-    from PySide6.QtWidgets import QCheckBox, QLabel, QRadioButton
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QCheckBox, QLabel, QRadioButton, QToolButton
 
     if isinstance(button, (QCheckBox, QRadioButton)):
         return True
     if any(_visible(label) and _text_of(label).strip() for label in button.findChildren(QLabel)):
+        return True
+    parent = button.parentWidget()
+    if (
+        isinstance(button, QToolButton)
+        and button.isCheckable()
+        and button.arrowType() != Qt.ArrowType.NoArrow
+        and button.accessibleName().strip()
+        and parent is not None
+        and any(
+            label.parentWidget() is parent
+            and _visible(label)
+            and _text_of(label).strip() == button.accessibleName().strip()
+            for label in parent.findChildren(QLabel)
+        )
+    ):
         return True
     return button.icon().isNull() and any(
         "paintEvent" in vars(cls)
@@ -1432,48 +1560,146 @@ def message_entries(window: Any) -> list[dict[str, Any]]:
                 "kind": "meldung",
             }
         )
-    ways = _ways_out(window)
+    menus, buttons, phrases = _ways(window)
     for button in window.findChildren(QPushButton):
         # Die Kurzhilfe zuerst, wie ``function_surface.grey_reason``: Sie zeigt der
         # graue Knopf dem Kunden; die Beschreibung kann vom offenen stammen (F-34).
         reason = button.toolTip() or button.accessibleDescription()
         if _visible(button) and not button.isEnabled() and reason:
-            found.append(
-                {
-                    "text": reason,
-                    "actions": [],
-                    "kind": "sperrgrund",
-                    "way_out": any(way in reason for way in ways),
-                }
-            )
+            fields = surface_field_titles(button)
+            way = names_a_way_out(reason, menus, buttons, phrases=phrases, fields=fields)
+            found.append({"text": reason, "actions": [], "kind": "sperrgrund", "way_out": way})
     return [*found, *_field_refusals(), *_house_messages()]
 
 
-def _ways_out(window: Any) -> set[str]:
-    """Wohin ein Sperrgrund den Kunden schicken kann: Menüzeilen und offene Knöpfe.
+def way_out(window: Any, reason: str, widget: Any = None) -> bool:
+    """Ob ein Sperrgrund am offenen Fenster einen Ausweg nennt (:func:`names_a_way_out`).
 
-    Ein Sperrgrund braucht keinen Knopf, er muss aber den Ausweg nennen (Konzept
-    V5, Entscheidung Koordinator) — etwa „(Hilfe → Solidon freischalten …)“.
-    Genannt ist er, wenn der Satz den Text einer bedienbaren Menüzeile oder eines
-    offenen Knopfs trägt, so wie der Kunde ihn in seiner Sprache liest. Kürzer als
-    vier Zeichen zählt nicht, „OK“ ist kein Ausweg.
+    ``widget`` ist das graue Bedienelement; die Titel der offenen Eingabefelder
+    seiner Fläche zählen als Ausweg (:func:`surface_field_titles`).
+    """
+    menus, buttons, phrases = _ways(window)
+    fields = surface_field_titles(widget) if widget is not None else []
+    return names_a_way_out(reason, menus, buttons, phrases=phrases, fields=fields)
+
+
+def _ways(window: Any) -> tuple[list[tuple[str, ...]], list[str], list[str]]:
+    """Wohin ein Sperrgrund den Kunden schicken kann: die bedienbaren Zeilen der
+    Menüleiste mit ihrem Weg, die offenen Knöpfe aller sichtbaren Fenster, so wie
+    der Kunde sie in seiner Sprache liest, und die Sätze, die selbst ein Weg sind.
+
+    **Eine Sperre, die von selbst fällt, nennt ihren Weg im Satz** (FD-30): Die
+    Befundhandlung während der Rechnung sagt, dass sie mit dem Ende der
+    Berechnung wieder frei ist (``change_lock.computing_refusal``) — dafür gibt
+    es keine Menüzeile.
     """
     from PySide6.QtWidgets import QAbstractButton, QApplication
 
+    from app.ui.change_lock import computing_refusal
     from app.ui.guide_targets import menubar_entries
 
-    texts = [
-        action.text() for _name, _menus, action in menubar_entries(window) if action.isEnabled()
+    menus = [
+        (*path, action.text())
+        for _name, path, action in menubar_entries(window)
+        if action.isEnabled()
     ]
-    for top in QApplication.topLevelWidgets():
-        if top.isVisible():
-            texts += [
-                button.text()
-                for button in top.findChildren(QAbstractButton)
-                if _visible(button) and button.isEnabled()
-            ]
-    cleaned = {text.replace("&", "").rstrip(".… ").strip() for text in texts}
-    return {text for text in cleaned if len(text) >= 4}
+    buttons = [
+        button.text()
+        for top in QApplication.topLevelWidgets()
+        if top.isVisible()
+        for button in top.findChildren(QAbstractButton)
+        if _visible(button) and button.isEnabled()
+    ]
+    return menus, buttons, [computing_refusal()]
+
+
+def surface_field_titles(widget: Any) -> list[str]:
+    """Die Titel der offenen Eingabefelder auf der Fläche eines grauen Bedienelements.
+
+    Entscheidung Koordinator (FD-31): *Übernehmen* der Maßgruppe ist vor der
+    ersten Eingabe grau und sagt „Erst „<Feldtitel>“ ändern, dann übernehmen.“ —
+    das Feld ist der Ausweg. Die Fläche ist der nächste Behälter des Elements,
+    der Eingabefelder trägt (die Maßgruppe, ein Dialog). Gesucht wird nicht über
+    eine Karte hinaus (eigener Hintergrund, ``autoFillBackground``) und nie im
+    Hauptfenster selbst: Dort stehen die Felder anderer Flächen. Ein graues Feld
+    ist kein Ausweg. Der Titel ist die Beschriftung im Formular, die
+    Beschriftung mit dem Feld als Partner oder der zugängliche Name.
+    """
+    from PySide6.QtWidgets import (
+        QAbstractSpinBox,
+        QComboBox,
+        QFormLayout,
+        QLabel,
+        QLineEdit,
+        QMainWindow,
+    )
+
+    def inputs(root: Any) -> list[Any]:
+        return [
+            field
+            for kind in (QAbstractSpinBox, QComboBox, QLineEdit)
+            for field in root.findChildren(kind)
+            if _visible(field)
+            and not isinstance(field.parentWidget(), (QAbstractSpinBox, QComboBox))
+        ]
+
+    surface = widget.parentWidget()
+    while surface is not None and not inputs(surface):
+        if surface.isWindow() or surface.autoFillBackground():
+            return []
+        surface = surface.parentWidget()
+    if surface is None or isinstance(surface, QMainWindow):
+        return []
+    titles: list[str] = []
+    for field in inputs(surface):
+        if not field.isEnabled() or (isinstance(field, QLineEdit) and field.isReadOnly()):
+            continue
+        titles.append(field.accessibleName())
+        for form in surface.findChildren(QFormLayout):
+            caption = form.labelForField(field)
+            if isinstance(caption, QLabel):
+                titles.append(caption.text())
+        titles += [label.text() for label in surface.findChildren(QLabel) if label.buddy() is field]
+    return [title for title in titles if title]
+
+
+def names_a_way_out(
+    reason: str,
+    menus: Sequence[Sequence[str]],
+    buttons: Sequence[str],
+    *,
+    phrases: Sequence[str] = (),
+    fields: Sequence[str] = (),
+) -> bool:
+    """Ob ein Sperrgrund den Ausweg nennt (Konzept V5, Entscheidung Koordinator).
+
+    Ein Sperrgrund braucht keinen Knopf, er muss aber den Weg nennen — als
+    Menüweg „Menü → Zeile“ (mindestens die letzten zwei Glieder, etwa
+    „Hilfe → Solidon freischalten …“), mit den ganzen Wörtern eines offenen
+    Knopfs, mit einem Satz, der selbst der Weg ist (``phrases``), oder mit dem
+    Titel eines offenen Eingabefelds derselben Fläche (``fields``, FD-31). Ein
+    Teilstring genügt nicht (Durchsicht welle4 C-L2): „Dateien“ nennt den Knopf
+    *Datei* nicht, und eine Menüzeile ohne ihr Menü findet der Kunde nicht.
+    Kürzelzeichen, Doppelpunkt und Auslassungspunkte zählen nicht mit; ein Knopf
+    oder Satz unter vier Zeichen ist kein Ausweg („OK“).
+    """
+    import re
+
+    def clean(text: str) -> str:
+        return text.replace("&", "").rstrip(":.… ").strip()
+
+    def named(text: str) -> bool:
+        return re.search(rf"(?<!\w){re.escape(text)}(?!\w)", reason) is not None
+
+    for path in menus:
+        parts = [clean(part) for part in path]
+        if len(parts[-1]) < 4:
+            continue
+        if any(named(" → ".join(parts[start:])) for start in range(len(parts) - 1)):
+            return True
+    if any(len(text) >= 4 and named(text) for text in map(clean, [*buttons, *phrases])):
+        return True
+    return any(text and named(text) for text in map(clean, fields))
 
 
 def _field_refusals() -> list[dict[str, Any]]:
@@ -1508,27 +1734,31 @@ def _house_messages() -> list[dict[str, Any]]:
     ``buttons()`` und ihre Rolle. Der Ausgang (*Schließen*, Escape) ist keine
     Handlung, die das Problem löst — er zählte sonst als „ohne Wirkung“ (V5).
     """
-    from PySide6.QtWidgets import QApplication, QDialogButtonBox
+    from PySide6.QtWidgets import QApplication
 
     found: list[dict[str, Any]] = []
     for dialog in QApplication.topLevelWidgets():
         if "MessageDialog" not in _classes(dialog) or not dialog.isVisible():
             continue
-        exits = QDialogButtonBox.ButtonRole.RejectRole
-        actions = [
-            {
-                "label": _text_of(button),
-                "target": vocabulary_name(button),
-                "clicked": False,
-                "effect": None,
-            }
-            for button in dialog.buttons()
-            if _visible(button)
-            and button.isEnabled()
-            and dialog.button_box.buttonRole(button) != exits
-        ]
-        found.append({"text": dialog.text(), "actions": actions, "kind": "meldung"})
+        found.append({"text": dialog.text(), "actions": _house_actions(dialog), "kind": "meldung"})
     return found
+
+
+def _house_actions(dialog: Any) -> list[dict[str, Any]]:
+    """Die Handlungen einer Meldung im Hausstil: ihre bedienbaren Knöpfe ohne den Ausgang."""
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    exits = QDialogButtonBox.ButtonRole.RejectRole
+    return [
+        {
+            "label": _text_of(button),
+            "target": vocabulary_name(button),
+            "clicked": False,
+            "effect": None,
+        }
+        for button in dialog.buttons()
+        if _visible(button) and button.isEnabled() and dialog.button_box.buttonRole(button) != exits
+    ]
 
 
 def visible_texts(root: Any) -> list[str]:

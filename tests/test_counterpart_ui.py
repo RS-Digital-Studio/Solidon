@@ -18,38 +18,10 @@ from app.i18n import tr
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from tests.ui_helpers import top_face as _top_face
+from tests.ui_helpers import two_plates as _two_plates
 
 THREADS = Path(__file__).parent / "data" / "threads"
-
-
-def _two_plates(window: MainWindow) -> tuple[str, str]:
-    """Zwei Platten nebeneinander, gerechnet — die Ausgangslage."""
-    window.session.start_new("centauri-carbon-2", "petg")
-    window.session.history.apply(
-        "Zwei Platten",
-        [
-            OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 10.0}),
-            OperationDraft(
-                op="create_box",
-                params={"width": 40.0, "depth": 30.0, "height": 10.0, "x": 60.0},
-            ),
-        ],
-    )
-    window.session.evaluate_now()
-    result = window.session.last_result
-    assert result is not None
-    return tuple(result.scene.objects)[:2]  # type: ignore[return-value]
-
-
-def _top_face(window: MainWindow, object_id: str) -> str:
-    """Die Kennung der Oberseite — die Stelle, an die ein Gegenstück kommt."""
-    result = window.session.last_result
-    assert result is not None
-    entry = result.scene.objects[object_id]
-    for name, feature in entry.features.items():
-        if feature.kind == "face" and name.startswith("face_top"):
-            return name
-    raise AssertionError(f"{object_id} hat keine Oberseite — dann prüft der Test nichts")
 
 
 def test_the_entry_stays_locked_until_two_places_are_marked(qt_app: QApplication) -> None:

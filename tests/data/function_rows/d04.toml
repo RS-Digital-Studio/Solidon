@@ -2,7 +2,9 @@
 # Eine Zeile ohne Eintrag hier ist „ungeprüft“, nie rot im Tor.
 
 [row."resize_hole"]
-start_scene = "merkmal.hole.exakt"
+# An einer erkannten Bohrung: An einer gebohrten stünde im Bild die Maßgruppe des
+# Bohrschritts, und die Zeile maß RM-199 statt *Bohrung ändern* (FD-29).
+start_scene = "erkannte_bohrung.netz"
 example_goal = "Die Bohrung auf 8 mm aufweiten."
 inputs = { "feature.field:resize_hole.diameter" = 8.0 }
 search_probes = [
@@ -15,4 +17,4 @@ fault_case = { inputs = { "feature.field:resize_hole.diameter" = 0.1 }, expected
 
 [row."resize_hole".expectation]
 "hole.diameter" = { value = 8.0, tolerance = 0.01, origin = "Konstruktion: getippte 8 mm; resize_hole gleicht nicht aus (compensate = false)" }
-volume = { value = 22994.69, tolerance = 5.0, origin = "Formel 24000 − π · 4² · 20 mm³; die Toleranz deckt die Sehnen der Darstellung (gemessen 22998,44 exakt, 22997,56 am Netz)" }
+volume = { value = 31089.64, tolerance = 3.0, origin = "Formel 80 · 50 · 8 − 3 · 8 · A − π · 4² · 8 mm³ mit A = 24 · 2,6² · sin 7,5°, dem Querschnitt einer Korpusbohrung (48 Ecken auf r = 2,6 mm, make_corpus.plate_holes); die Toleranz deckt die Sehnen der neuen Bohrung (gemessen 31090,79 am Netz, 31091,58 exakt), nicht 0,1 mm Durchmesser (10 mm³)" }

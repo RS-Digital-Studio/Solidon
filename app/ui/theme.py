@@ -134,6 +134,7 @@ THEMES: dict[Theme, dict[str, str]] = {
         "viewport_top": "#3b4350",
         "object": "#b9c4d0",
         "bed": "#5a6472",
+        "bed_grid": "#5a6472",
         "bed_surface": "#2a303a",
         "edge": "#4c5258",
     },
@@ -194,6 +195,9 @@ THEMES: dict[Theme, dict[str, str]] = {
         # Gefangen hat es derselbe Test, der die Zusage seit je hält.
         "object": "#78828e",
         "bed": "#bfcad8",
+        # Die beleuchtete Bettfläche ist dunkler als ihre Quellfarbe. Das
+        # unbeleuchtete Raster braucht darauf einen eigenen dunkleren Ton.
+        "bed_grid": "#5d646d",
         # Zieht mit dem Hintergrund mit: Der abgedunkelte Verlauf war der
         # bisherigen Plattenfarbe auf 1,07 nahegekommen, und eine Druckplatte,
         # die man vom Nichts dahinter nicht unterscheidet, ist keine. Mit 1,21

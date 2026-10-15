@@ -934,9 +934,10 @@ class CurrentPageTabs(DetachableTabs):
     Fenster bei Full HD rund 530 Punkte Karte für 225 Punkte Inhalt.
 
     Gerechnet wird der Rahmen (Reiterleiste, Rand) als Unterschied zwischen
-    Qts Wunsch für das Ganze und dem für den Stapel, und dazu die vordere
-    Seite. Die Breitenhöhe meldet es immer, weil die Karte darüber ihre Höhe
-    aus ihr liest; eine Seite ohne eigene nimmt ihre Wunschhöhe.
+    Qts Wunsch für das Ganze und der höchsten Wunschhöhe der sichtbaren Seiten
+    (:meth:`_chrome_height`), und dazu die vordere Seite. Die Breitenhöhe
+    meldet es immer, weil die Karte darüber ihre Höhe aus ihr liest; eine Seite
+    ohne eigene nimmt ihre Wunschhöhe.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -1886,9 +1887,14 @@ class OverlayHost(QWidget):
         die Zone selbst — höchstens bis an den Fensterrand. Ansicht und Zonen
         lesen dieselbe Zahl (:meth:`_tell_the_view_about_the_zones`).
         """
+        from app.ui.card_width import selection_card_width
+
         card = card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE)
         if self.right is None:
             return card
+        measured = selection_card_width(self.right, card)
+        if measured is not None:
+            card = min(measured, width - 2 * EDGE)
         least = self.right.minimumSizeHint().width()
         return max(card, min(least, width - 2 * EDGE))
 

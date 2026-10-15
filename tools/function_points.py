@@ -67,6 +67,11 @@ from tools.function_judges import (
 )
 from tools.function_list import LICENCE_STATES, NOT_APPLICABLE_REASONS, licence_states
 
+#: Wie das Ziel in einem Lizenzlauf dastand (``function_bench.phase_licence``):
+#: offen, grau oder gar nicht — dieselben Wörter wie in der Matrix.
+LICENCE_RUN_STATES: Final = ("angeboten", "grau", "fehlt")
+LICENCE_MISSING: Final = LICENCE_RUN_STATES[2]
+
 # --- Prüfpunkte -----------------------------------------------------------
 
 
@@ -704,6 +709,24 @@ def _point_12(
         )
         if wrong:
             issues.append(Issue(f"Feld ≠ Parameter über {title}: {wrong}", "schwer"))
+        typed = way.get("typed_values")
+        after_params = way.get("params_after")
+        if not isinstance(typed, Mapping) or not typed:
+            absent.append(f"revise ({title}): keine getippte Änderung gemessen")
+        elif not isinstance(after_params, Mapping):
+            absent.append(f"revise ({title}): geänderte Parameter nicht übernommen")
+        else:
+            for name, value in typed.items():
+                if name not in fields_ or name not in params:
+                    issues.append(Issue(f"Fremdes Feld geändert über {title}: {name}", "schwer"))
+                elif _close(value, params[name]) or value == params[name]:
+                    absent.append(f"revise ({title}): Wert blieb unverändert ({name})")
+                elif name not in after_params or not (
+                    value == after_params[name] or _close(value, after_params[name])
+                ):
+                    issues.append(
+                        Issue(f"Änderung nicht übernommen über {title}: {name}", "schwer")
+                    )
     return _settled(12, issues, absent, f"{len(ways)} Wege", {"ways": [w.get("way") for w in ways]})
 
 
@@ -856,33 +879,65 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
     Zeile über die Läufe aller ihrer Fälle; ein fehlender Lauf ist dann nicht
     gemessen. Ein einzelner Fall trägt nur seinen Lauf und wird nur an ihm
     gemessen.
+
+    Jeder Lauf trägt, wie das Ziel dastand (``state``: :data:`LICENCE_RUN_STATES`),
+    und den Grund aus dem grauen Ziel. **„fehlt“ ist kein Grund** (Durchsicht
+    welle4 C-S1): Fehlt das Ziel im gesperrten Lauf und steht es freigeschaltet
+    da, versteckt die Oberfläche es, statt es auszugrauen — ein Fund. Sonst hat
+    der Prüfstand das Ziel nicht erreicht, und der Lauf ist nicht gemessen.
     """
     issues = []
-    absent = []
+    absent = [f"unbekannter Lizenzzustand {state}" for state in runs if state not in LICENCE_STATES]
+    if not runs:
+        absent.append("licence_runs")
     if complete:
         absent += [f"Lizenzlauf {state}" for state in licence_states() if state not in runs]
+    measured = {
+        state: entry
+        for state, entry in runs.items()
+        if state in LICENCE_STATES
+        and isinstance(entry, Mapping)
+        and isinstance(entry.get("writes"), bool)
+        and entry.get("state") in LICENCE_RUN_STATES
+        and isinstance(entry.get("reason"), str)
+    }
     # Ob eine Funktion schreibt, ist ihre Eigenschaft, nicht die eines Laufs: Was
     # freigeschaltet das Dokument ändert, schreibt auch im gesperrten Lauf, wo
     # nichts geändert werden konnte (Probelauf F-35).
-    writing = any(
-        isinstance(entry, Mapping) and entry.get("writes") is True for entry in runs.values()
+    writing = any(entry["writes"] for entry in measured.values())
+    offered_unlocked = any(
+        LICENCE_UNLOCKED[state] and entry.get("state") == LICENCE_RUN_STATES[0]
+        for state, entry in measured.items()
     )
     for state in LICENCE_STATES:
-        entry = runs.get(state)
-        if entry is None:
+        if state not in runs:
             continue
-        writes = entry.get("writes") if isinstance(entry, Mapping) else None
-        if writing and isinstance(writes, bool):
-            writes = True
-        enabled = entry.get("enabled") if isinstance(entry, Mapping) else None
-        if not isinstance(writes, bool) or not isinstance(enabled, bool):
+        if state not in measured:
             absent.append(f"licence_runs.{state}")
             continue
+        entry = measured[state]
+        writes = writing or entry["writes"]
+        shown, reason = entry["state"], entry["reason"]
         should = LICENCE_UNLOCKED[state] or not writes
-        if not enabled and not str(entry.get("reason") or "").strip():
+        if shown == LICENCE_MISSING:
+            if LICENCE_UNLOCKED[state] or not offered_unlocked:
+                absent.append(f"licence_runs.{state} (Ziel nicht erreicht)")
+            elif writes:
+                issues.append(
+                    Issue(f"schreibendes Ziel fehlt bei {state}, statt grau mit Grund", "mittel")
+                )
+            else:
+                issues.append(
+                    Issue(f"lesendes Ziel fehlt bei {state}, obwohl es offen bleibt", "schwer")
+                )
+            continue
+        enabled = shown == LICENCE_RUN_STATES[0]
+        if not enabled and not reason.strip():
             issues.append(Issue(f"grau ohne Grund bei {state}", "schwer"))
         if enabled and not should:
-            issues.append(Issue(f"schreibendes Ziel frei trotz {state}", "schwer"))
+            # Regelverstoß und Umweg (Konzept §4, *mittel*): Der Kern lehnt an der
+            # Lizenzgrenze ab, die Oberfläche hätte grau sein sollen (D-L3).
+            issues.append(Issue(f"schreibendes Ziel frei trotz {state}", "mittel"))
         if not enabled and should:
             # Gekauft schaltet frei, und Lesendes bleibt in jedem Zustand offen
             # (``Activation.unlocked``, Lizenzgrenze in ``kern.md``).
@@ -893,9 +948,8 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
         absent,
         f"{len(runs)} Lizenzläufe",
         {
-            state: (runs.get(state) or {}).get("enabled")
-            for state in LICENCE_STATES
-            if state in runs
+            state: entry.get("state") if isinstance(entry, Mapping) else None
+            for state, entry in runs.items()
         },
     )
 

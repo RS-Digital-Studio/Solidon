@@ -50,7 +50,10 @@ class InputDialog(MessageDialog):
     ) -> None:
         super().__init__(parent, title=title, headline=title, body=sentence, target=target)
         # Kein Symbol der Schwere: Eine Frage nach einem Wert ist keine Meldung.
+        # Auch nicht für den Bildschirmleser — kein „Hinweis“, und der Satz steht
+        # schon am Feld.
         self.symbol.hide()
+        self.setAccessibleDescription("")
         self._check = check
         self.field = QLineEdit(text, self)
         self.field.setMinimumWidth(TEXT_WIDTH)

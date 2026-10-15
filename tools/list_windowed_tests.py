@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -239,13 +240,26 @@ def _collect(
     # Danach fand ``from conftest import make_object`` die ``conftest.py``
     # eines Testordners im Temp-Verzeichnis (CI 0.5.1, macOS). Ersetztes kommt
     # zurück, und der Suchpfad steht wieder, wie er stand.
+    #
+    # Ebenso Import-Haken und Umgebung: Die Sammlung führt ``tests/conftest.py``
+    # ein zweites Mal aus, die einen Import-Haken vorn in ``sys.meta_path``
+    # einsetzt und die Profilvariablen auf einen neuen Temp-Ordner biegt. Beides
+    # steht danach wieder, wie es stand.
     modules = dict(sys.modules)
     search_path = list(sys.path)
+    finders = list(sys.meta_path)
+    environment = dict(os.environ)
     try:
         with contextlib.redirect_stdout(captured_out), contextlib.redirect_stderr(captured_err):
             outcome = pytest.main(arguments, plugins=[collector])
     finally:
         sys.path[:] = search_path
+        sys.meta_path[:] = finders
+        for name in os.environ.keys() - environment.keys():
+            del os.environ[name]
+        for name, value in environment.items():
+            if os.environ.get(name) != value:
+                os.environ[name] = value
         for name, module in modules.items():
             if sys.modules.get(name) is not module:
                 sys.modules[name] = module

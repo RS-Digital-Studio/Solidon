@@ -277,6 +277,22 @@ def grid_lines(
     return np.asarray(points, dtype=float), [2] * (len(points) // 2)
 
 
+def grid_line_levels(
+    centre: Vec, width: float, depth: float, step: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Vorhandene Rasterlinien in Nebenlinien und jede fünfte Hauptlinie teilen.
+
+    Beide Richtungen zählen ab ihrem bisherigen Ursprung; Lage und Abstand
+    bleiben gleich. Keine Linie wird in beiden Stufen gezeichnet.
+    """
+    points, _spans = grid_lines(centre, width, depth, step)
+    columns = max(1, round(width / step)) + 1
+    pairs = points.reshape(-1, 2, 3)
+    indices = np.concatenate((np.arange(columns), np.arange(len(pairs) - columns)))
+    major = indices % 5 == 0
+    return pairs[~major].reshape(-1, 3), pairs[major].reshape(-1, 3)
+
+
 def merge(*meshes: Mesh) -> Mesh:
     """Mehrere Netze zu einem — die Indizes verschieben sich mit."""
     vertices: list[np.ndarray] = []

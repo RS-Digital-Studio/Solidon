@@ -8,14 +8,21 @@ des Wortschatzes selbst prüft ``tests/test_guide_targets.py``.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from app.core.bootstrap import load_operations
+from tests import qt_roots
+from tools.function_checks import SMALLEST_WINDOW
 
 load_operations()
+
+#: Baut die Karten ohne Elternteil ab (``tests/qt_roots.py``); pytest sammelt die
+#: Fixture unter diesem Namen im Modul.
+roots = qt_roots.roots
 
 
 def _settle(qt_app: Any, rounds: int = 20) -> None:
@@ -37,8 +44,10 @@ from app.core.bootstrap import load_operations
 load_operations()
 from app.ui.app import build_application
 from app.ui import guide_targets
+from tools.function_checks import SMALLEST_WINDOW
+from tools.window_bench import shutdown_window
 application, window = build_application([])
-window.resize(1920, 1032)
+window.resize(*SMALLEST_WINDOW)
 window.show()
 if os.environ.get('SOLIDON_PROBE_ITERATOR'):
     from PySide6.QtCore import Qt
@@ -79,8 +88,12 @@ if sys.argv[2] == 'build':
     ])
     assert window.session.wait_for_idle(60000)
     window.session.save_project(scene)
+    # Auch der Szenenbau beendet die Arbeiter vor dem Prozess. Der harte
+    # Exit riss sie mitten in ihrer Arbeit ab, teils sogar mit Exit-Code 0.
+    window.session.forget_changes()
+    shutdown_window(window, application)
     print('built', flush=True)
-    os._exit(0)
+    raise SystemExit(0)
 for round in range(5):
     previous = window.session.last_result
     window.session.forget_changes()
@@ -98,7 +111,6 @@ for round in range(5):
     held = None
 print('tree survived', flush=True)
 window.session.forget_changes()
-from tools.window_bench import shutdown_window
 shutdown_window(window, application)
 """
 
@@ -128,10 +140,12 @@ def test_the_tree_survives_new_scenes_after_a_row_was_found(qt_app: Any, tmp_pat
     del qt_app
     scene = tmp_path / "szene.p3d"
     built = _tree_rounds(scene, "build")
-    assert built.returncode == 0 and "built" in built.stdout, built.stderr[-3000:]
+    assert built.returncode == 0 and "built" in built.stdout, built.stderr
+    assert "Windows fatal exception:" not in built.stderr, built.stderr
     for attempt in range(6):
         done = _tree_rounds(scene, "rounds")
-        assert done.returncode == 0, (attempt, done.returncode, done.stderr[-4000:])
+        assert done.returncode == 0, (attempt, done.returncode, done.stderr)
+        assert "Windows fatal exception:" not in done.stderr, (attempt, done.stderr)
         assert "tree survived" in done.stdout
 
 
@@ -182,7 +196,7 @@ def test_a_tree_item_iterator_turns_the_guard_red() -> None:
     assert tree_iterator_uses(source) == [1, 4]
 
 
-def test_hidden_rows_take_no_height(qt_app: Any) -> None:
+def test_hidden_rows_take_no_height(qt_app: Any, roots: Callable[[Any], Any]) -> None:
     """Eine versteckte Zeile ist nicht zu sehen und braucht keinen Platz.
 
     Der Verlauf klappt die Teilschritte einer Transaktion ein, indem er ihre
@@ -196,32 +210,34 @@ def test_hidden_rows_take_no_height(qt_app: Any) -> None:
     from app.ui.overlay import rows_height
 
     del qt_app
-    one = QListWidget()
+    one = roots(QListWidget())
     one.addItem("Schritt 1")
-    folded = QListWidget()
+    folded = roots(QListWidget())
     for text in ("Schritt 1", "Teil a", "Teil b"):
         folded.addItem(text)
     folded.item(1).setHidden(True)
     folded.item(2).setHidden(True)
     assert rows_height(folded) == rows_height(one)
 
-    single = QTreeWidget()
+    single = roots(QTreeWidget())
     single.addTopLevelItem(QTreeWidgetItem(["Körper"]))
-    hiding = QTreeWidget()
+    hiding = roots(QTreeWidget())
     for text in ("Körper", "Versteckt"):
         hiding.addTopLevelItem(QTreeWidgetItem([text]))
     hiding.topLevelItem(1).setHidden(True)
     assert rows_height(hiding) == rows_height(single)
 
 
-def test_the_history_asks_only_for_the_rows_it_shows(qt_app: Any) -> None:
+def test_the_history_asks_only_for_the_rows_it_shows(
+    qt_app: Any, roots: Callable[[Any], Any]
+) -> None:
     """Ein eingeklappter Sammelschritt ist im Verlauf eine Zeile, und so viel
     Höhe verlangt der Verlauf auch — nicht die seiner versteckten Teilschritte,
     die der Objektbaum und die Parameter darüber dann nicht bekamen."""
     from app.ui.panels import HistoryPanel, row_height_of, view_chrome
 
     del qt_app
-    panel = HistoryPanel()
+    panel = roots(HistoryPanel())
     for text in ("1–2  Quader mit Bohrung", "    1  Quader", "    2  Bohrung"):
         panel.list.addItem(text)
     panel.list.item(1).setHidden(True)
@@ -230,7 +246,9 @@ def test_the_history_asks_only_for_the_rows_it_shows(qt_app: Any) -> None:
     assert panel.wanted_height() == expected
 
 
-def test_the_history_claims_the_timeline_as_it_stands_in_the_column(qt_app: Any) -> None:
+def test_the_history_claims_the_timeline_as_it_stands_in_the_column(
+    qt_app: Any, roots: Callable[[Any], Any]
+) -> None:
     """Die Zeitleiste von *Vorher/Nachher* meldet die Höhe, die sie in der Spalte hat.
 
     Der Satz unter dem Regler („Stand 3 von 3: Versteifung“) bricht in Qts
@@ -240,68 +258,62 @@ def test_the_history_claims_the_timeline_as_it_stands_in_the_column(qt_app: Any)
     gemessen am echten Fenster bei 1920 × 1032 und 2560 × 1392)."""
     from app.ui.panels import HistoryPanel
 
-    panel = HistoryPanel()
-    try:
-        panel.list.addItem("1  Grundkörper")
-        panel.compare.show()
-        panel.compare.setChecked(True)
-        panel.timeline.show()
-        panel.timeline_label.setText("Stand 2 von 2: Quader")
-        panel.resize(298, 100)
-        panel.show()
-        for _ in range(5):
-            qt_app.processEvents()
-        label = panel.timeline_label
-        assert label.sizeHint().height() > label.heightForWidth(label.width()), (
-            "der Satz bricht im Wunsch um, in der Spalte nicht — sonst prüft der Test nichts"
-        )
-        # Was Qt an dieser Breite über der Liste legt: das Ganze ohne die Liste.
-        laid_out = panel.heightForWidth(panel.width()) - panel.list.height()
-        assert panel._timeline_height() == laid_out
-    finally:
-        panel.deleteLater()
+    panel = roots(HistoryPanel())
+    panel.list.addItem("1  Grundkörper")
+    panel.compare.show()
+    panel.compare.setChecked(True)
+    panel.timeline.show()
+    panel.timeline_label.setText("Stand 2 von 2: Quader")
+    panel.resize(298, 100)
+    panel.show()
+    for _ in range(5):
+        qt_app.processEvents()
+    label = panel.timeline_label
+    assert label.sizeHint().height() > label.heightForWidth(label.width()), (
+        "der Satz bricht im Wunsch um, in der Spalte nicht — sonst prüft der Test nichts"
+    )
+    # Was Qt an dieser Breite über der Liste legt: das Ganze ohne die Liste.
+    laid_out = panel.heightForWidth(panel.width()) - panel.list.height()
+    assert panel._timeline_height() == laid_out
 
 
-def test_the_newest_step_stays_in_view_when_the_history_loses_room(qt_app: Any) -> None:
+def test_the_newest_step_stays_in_view_when_the_history_loses_room(
+    qt_app: Any, roots: Callable[[Any], Any]
+) -> None:
     """Wer am Ende des Verlaufs stand, bleibt dort, wenn die Spalte ihn kleiner legt.
 
     ``show_document`` rollt ans Ende, danach teilt die Überlagerung die Spalte
     neu: Bei 1920 × 1080 und zwölf Körpern zeigte der Verlauf die Schritte 4
     bis 11, der neueste lag unter der Kante. Wer nach oben gerollt hat, bleibt
     dagegen, wo er ist."""
-    from PySide6.QtCore import QCoreApplication, QEvent
-
     from app.ui.panels import HistoryPanel, row_height_of, view_chrome
 
-    panel = HistoryPanel()
-    try:
-        for number in range(1, 13):
-            panel.list.addItem(f"{number}  Quader {number}")
-        panel.resize(298, 800)
-        panel.show()
-        panel.set_room(panel.wanted_height())
-        _settle(qt_app, 6)
-        panel.list.scrollToBottom()
-        small = panel._timeline_height() + view_chrome(panel.list) + 5 * row_height_of(panel.list)
-        panel.set_room(small)
-        _settle(qt_app, 6)
-        last = panel.list.visualItemRect(panel.list.item(panel.list.count() - 1))
-        assert last.isValid() and last.bottom() < panel.list.viewport().height(), (
-            f"der neueste Schritt liegt unter der Kante: {last} im Sichtfeld "
-            f"{panel.list.viewport().height()}"
-        )
+    panel = roots(HistoryPanel())
+    for number in range(1, 13):
+        panel.list.addItem(f"{number}  Quader {number}")
+    panel.resize(298, 800)
+    panel.show()
+    panel.set_room(panel.wanted_height())
+    _settle(qt_app, 6)
+    panel.list.scrollToBottom()
+    small = panel._timeline_height() + view_chrome(panel.list) + 5 * row_height_of(panel.list)
+    panel.set_room(small)
+    _settle(qt_app, 6)
+    last = panel.list.visualItemRect(panel.list.item(panel.list.count() - 1))
+    assert last.isValid() and last.bottom() < panel.list.viewport().height(), (
+        f"der neueste Schritt liegt unter der Kante: {last} im Sichtfeld "
+        f"{panel.list.viewport().height()}"
+    )
 
-        panel.list.scrollToTop()
-        panel.set_room(small - row_height_of(panel.list))
-        _settle(qt_app, 6)
-        assert panel.list.verticalScrollBar().value() == 0, "wer oben las, bleibt oben"
-    finally:
-        panel.close()
-        panel.deleteLater()
-        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    panel.list.scrollToTop()
+    panel.set_room(small - row_height_of(panel.list))
+    _settle(qt_app, 6)
+    assert panel.list.verticalScrollBar().value() == 0, "wer oben las, bleibt oben"
 
 
-def test_a_card_with_few_rows_asks_no_floor_above_its_wish(qt_app: Any) -> None:
+def test_a_card_with_few_rows_asks_no_floor_above_its_wish(
+    qt_app: Any, roots: Callable[[Any], Any]
+) -> None:
     """Der Boden einer Liste sind drei Zeilen, aber nie mehr, als da sind (FD-25).
 
     Gerechnet wurde drei mal die erste Zeile, und im Objektbaum ist das die
@@ -316,7 +328,7 @@ def test_a_card_with_few_rows_asks_no_floor_above_its_wish(qt_app: Any) -> None:
     from app.ui.panels import MIN_ROWS, HistoryPanel, ObjectTree, least_height_of
 
     def tree_with(bodies: int) -> ObjectTree:
-        tree = ObjectTree()
+        tree = roots(ObjectTree())
         for number in range(bodies):
             # Die Körperzeile trägt das Vorschaubild und ist doppelt so hoch
             # wie ihre Merkmale, die zugeklappt darunter stehen.
@@ -332,35 +344,24 @@ def test_a_card_with_few_rows_asks_no_floor_above_its_wish(qt_app: Any) -> None:
 
     one = tree_with(1)
     many = tree_with(MIN_ROWS + 5)
-    panel = HistoryPanel()
-    try:
-        assert one.least_height() <= one.wanted_height(), (
-            f"ein Körper: Boden {one.least_height()} über dem Wunsch {one.wanted_height()}"
-        )
-        assert one.tree.height() <= one.wanted_height(), "keine Leere unter dem Körper"
-        assert one.tree.verticalScrollBar().maximum() == 0, "und nichts rollt"
-        assert many.least_height() == least_height_of(many.tree) < many.wanted_height(), (
-            "mit vielen Körpern bleibt der Boden drei Zeilen"
-        )
+    panel = roots(HistoryPanel())
+    assert one.least_height() <= one.wanted_height(), (
+        f"ein Körper: Boden {one.least_height()} über dem Wunsch {one.wanted_height()}"
+    )
+    assert one.tree.height() <= one.wanted_height(), "keine Leere unter dem Körper"
+    assert one.tree.verticalScrollBar().maximum() == 0, "und nichts rollt"
+    assert many.least_height() == least_height_of(many.tree) < many.wanted_height(), (
+        "mit vielen Körpern bleibt der Boden drei Zeilen"
+    )
 
-        panel.list.addItem("1  Quader anlegen")
-        panel.show()
-        panel.set_room(800)
-        _settle(qt_app, 6)
-        assert panel.least_height() <= panel.wanted_height(), (
-            f"ein Schritt: Boden {panel.least_height()} über dem Wunsch {panel.wanted_height()}"
-        )
-        assert panel.list.height() <= panel.wanted_height() - panel._timeline_height()
-    finally:
-        from PySide6.QtCore import QCoreApplication, QEvent
-
-        for card in (one, many, panel):
-            card.close()
-            card.deleteLater()
-        # Abgebaut wird hier, nicht im nächsten Sammlerlauf: Drei Karten ohne
-        # Elternteil starben sonst mitten im Bau eines späteren Tests, und der
-        # Lauf mit ``test_overlay.py`` brach nativ ab (``-p gcoff`` grün).
-        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    panel.list.addItem("1  Quader anlegen")
+    panel.show()
+    panel.set_room(800)
+    _settle(qt_app, 6)
+    assert panel.least_height() <= panel.wanted_height(), (
+        f"ein Schritt: Boden {panel.least_height()} über dem Wunsch {panel.wanted_height()}"
+    )
+    assert panel.list.height() <= panel.wanted_height() - panel._timeline_height()
 
 
 #: Der Kindprozess des Überstandstests: Anwendung wie beim Kunden (mit Stilblatt
@@ -492,8 +493,8 @@ def _sections(size: tuple[int, int], body: str, extra: dict[str, str] | None = N
 
 
 #: Die kleinste Fläche (``function_checks.SMALLEST_WINDOW``, 1920 x 1080 logisch
-#: maximiert, Taskleiste ab) und eine größere — darunter wird nie gemessen.
-_SECTION_SIZES = ((1920, 1032), (2560, 1392))
+#: maximiert, Task- und Titelleiste ab) und eine größere — darunter wird nie gemessen.
+_SECTION_SIZES = (SMALLEST_WINDOW, (2560, 1392))
 
 
 def test_the_object_tree_stays_inside_its_section_when_the_card_is_tight(qt_app: Any) -> None:
@@ -625,10 +626,12 @@ def _hidden_steps(size: tuple[int, int], scene: tuple[int, int], old: bool) -> d
 
 #: Je zulässige Fläche ein Verlauf, der in den neuen Stand gerade passt: Quader
 #: je Sammelschritt mal Sammelschritte, gemessen ohne Fenster mit DejaVu Sans.
-_HIDDEN_CASES = (((1920, 1032), (4, 2)), ((2560, 1392), (6, 2)))
+_HIDDEN_CASES = ((SMALLEST_WINDOW, (4, 2)), ((2560, 1392), (6, 2)))
 
 
-@pytest.mark.parametrize(("size", "scene"), _HIDDEN_CASES, ids=["1920x1032", "2560x1392"])
+@pytest.mark.parametrize(
+    ("size", "scene"), _HIDDEN_CASES, ids=[f"{w}x{h}" for (w, h), _scene in _HIDDEN_CASES]
+)
 def test_folded_steps_take_no_room_from_the_object_tree(
     qt_app: Any, size: tuple[int, int], scene: tuple[int, int]
 ) -> None:
@@ -655,7 +658,9 @@ def test_folded_steps_take_no_room_from_the_object_tree(
     )
 
 
-def test_a_row_cut_off_by_its_parent_is_reached_by_scrolling(qt_app: Any) -> None:
+def test_a_row_cut_off_by_its_parent_is_reached_by_scrolling(
+    qt_app: Any, roots: Callable[[Any], Any]
+) -> None:
     """Eine Zeile, deren Liste über ihren Elternteil ragt, ist nur halb zu sehen;
     gefragt wird der sichtbare Teil der Liste, nicht ihr ganzes Rechteck (Fund
     D0-P: die letzte Baumzeile hieß „ziel“, obwohl 8 Punkte abgeschnitten waren)."""
@@ -663,7 +668,7 @@ def test_a_row_cut_off_by_its_parent_is_reached_by_scrolling(qt_app: Any) -> Non
 
     from app.ui import guide_targets
 
-    host = QWidget()
+    host = roots(QWidget())
     host.resize(240, 100)
     listing = QListWidget(host)
     listing.setGeometry(0, 0, 240, 300)
@@ -673,26 +678,20 @@ def test_a_row_cut_off_by_its_parent_is_reached_by_scrolling(qt_app: Any) -> Non
         listing.addItem(f"Zeile {number}")
     host.show()
     _settle(qt_app, 5)
-    try:
-        visible = listing.viewport().visibleRegion().boundingRect()
-        cut = next(
-            listing.item(row)
-            for row in range(listing.count())
-            if listing.visualItemRect(listing.item(row)).bottom() > visible.bottom()
-            and listing.visualItemRect(listing.item(row)).top() <= visible.bottom()
-        )
-        step = guide_targets._visible_row_click(listing, cut, "history.row:1", "ziel")
-        assert (step.why, step.direction) == ("rollen", 1)
-        whole = listing.item(0)
-        assert guide_targets._visible_row_click(listing, whole, "history.row:1", "ziel").why == (
-            "ziel"
-        )
-    finally:
-        host.close()
-        host.deleteLater()
+    visible = listing.viewport().visibleRegion().boundingRect()
+    cut = next(
+        listing.item(row)
+        for row in range(listing.count())
+        if listing.visualItemRect(listing.item(row)).bottom() > visible.bottom()
+        and listing.visualItemRect(listing.item(row)).top() <= visible.bottom()
+    )
+    step = guide_targets._visible_row_click(listing, cut, "history.row:1", "ziel")
+    assert (step.why, step.direction) == ("rollen", 1)
+    whole = listing.item(0)
+    assert guide_targets._visible_row_click(listing, whole, "history.row:1", "ziel").why == "ziel"
 
 
-def test_a_list_that_cannot_roll_is_never_told_to(qt_app: Any) -> None:
+def test_a_list_that_cannot_roll_is_never_told_to(qt_app: Any, roots: Callable[[Any], Any]) -> None:
     """Rollen heißt der Schritt nur, wenn ein Mausrad dort etwas bewegt (Fund
     D0-P). Eine Liste, die so hoch ist wie ihre Zeilen, rollt nicht; ragt sie über
     ihren Elternteil, ist der sichtbare Teil der Zeile das Ziel, und eine Zeile
@@ -702,7 +701,7 @@ def test_a_list_that_cannot_roll_is_never_told_to(qt_app: Any) -> None:
     from app.ui import guide_targets
     from app.ui.overlay import rows_height
 
-    host = QWidget()
+    host = roots(QWidget())
     host.resize(240, 100)
     listing = QListWidget(host)
     for number in range(12):
@@ -713,25 +712,21 @@ def test_a_list_that_cannot_roll_is_never_told_to(qt_app: Any) -> None:
     listing.setFixedHeight(rows_height(listing))
     listing.move(0, 0)
     _settle(qt_app, 5)
-    try:
-        bar = listing.verticalScrollBar()
-        assert bar.maximum() == 0, "die Liste ist so hoch wie ihre Zeilen"
-        visible = listing.viewport().visibleRegion().boundingRect()
-        rows = [listing.item(row) for row in range(listing.count())]
-        cut = next(
-            item
-            for item in rows
-            if listing.visualItemRect(item).bottom() > visible.bottom()
-            and listing.visualItemRect(item).top() <= visible.bottom()
-        )
-        step = guide_targets._visible_row_click(listing, cut, "history.row:1", "ziel")
-        assert step.why == "ziel"
-        shown = listing.viewport().mapToGlobal(visible.topLeft())
-        assert step.rect.bottom() <= shown.y() + visible.height() - 1, "nur der sichtbare Teil"
-        outside = rows[-1]
-        assert listing.visualItemRect(outside).top() > visible.bottom()
-        with pytest.raises(guide_targets.MissingTargetError, match="rollt"):
-            guide_targets._visible_row_click(listing, outside, "history.row:1", "ziel")
-    finally:
-        host.close()
-        host.deleteLater()
+    bar = listing.verticalScrollBar()
+    assert bar.maximum() == 0, "die Liste ist so hoch wie ihre Zeilen"
+    visible = listing.viewport().visibleRegion().boundingRect()
+    rows = [listing.item(row) for row in range(listing.count())]
+    cut = next(
+        item
+        for item in rows
+        if listing.visualItemRect(item).bottom() > visible.bottom()
+        and listing.visualItemRect(item).top() <= visible.bottom()
+    )
+    step = guide_targets._visible_row_click(listing, cut, "history.row:1", "ziel")
+    assert step.why == "ziel"
+    shown = listing.viewport().mapToGlobal(visible.topLeft())
+    assert step.rect.bottom() <= shown.y() + visible.height() - 1, "nur der sichtbare Teil"
+    outside = rows[-1]
+    assert listing.visualItemRect(outside).top() > visible.bottom()
+    with pytest.raises(guide_targets.MissingTargetError, match="rollt"):
+        guide_targets._visible_row_click(listing, outside, "history.row:1", "ziel")

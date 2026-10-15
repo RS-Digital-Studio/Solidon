@@ -587,3 +587,53 @@ def test_the_overview_names_why_a_case_aborted(tmp_path: Path) -> None:
     row = function_summary(case, folder, {"exit_code": 3221226505, "crash": note})
     assert note in row["errors"]
     assert function_summary(case, folder, {"exit_code": 0, "crash": ""})["errors"] == []
+
+
+def test_a_crash_is_named_by_its_stack_not_by_an_earlier_critical_message(tmp_path: Path) -> None:
+    """Durchsicht welle4 C-L11: ``crash_note`` nennt die Meldung, an der der Fall starb.
+
+    Ein ``QtCriticalMsg`` ist eine Warnung, kein Abbruch — vorher stand die
+    letzte davon als Grund, obwohl ``stapel.log`` den Absturz mit Stapel trug.
+    Ein ``qFatal`` bleibt der Grund vor dem Stapel; ohne beides nennt die
+    kritische Meldung wenigstens, was zuletzt kam.
+    """
+    from tools.file_acceptance import QT_LOG, STACK_LOG, crash_note
+
+    critical = "QtCriticalMsg QWindowsWindow::setGeometry: Unable to set geometry"
+    stack = 'Windows fatal exception: access violation\n\nCurrent thread:\n  File "x.py", line 1'
+    (tmp_path / QT_LOG).write_text(f"QtWarningMsg schon da\n{critical}\n", encoding="utf-8")
+    (tmp_path / STACK_LOG).write_text(f"Stapel alle 30 s\n{stack}\n", encoding="utf-8")
+    assert crash_note(tmp_path).startswith("Windows fatal exception"), crash_note(tmp_path)
+    fatal = "QtFatalMsg ASSERT: false in qasciikey.cpp"
+    (tmp_path / QT_LOG).write_text(f"{critical}\n{fatal}\n", encoding="utf-8")
+    assert crash_note(tmp_path) == fatal
+    (tmp_path / QT_LOG).write_text(f"{critical}\n", encoding="utf-8")
+    (tmp_path / STACK_LOG).unlink()
+    assert crash_note(tmp_path) == critical
+
+
+def test_the_scene_of_the_fault_case_brings_its_preconditions_to_the_case() -> None:
+    """Durchsicht welle4 C-L4: Der Fehlfall läuft im selben Fall wie der Hauptweg.
+
+    Was seine eigene Startszene verlangt (hier: OpenCASCADE fehlt), muss vor dem
+    Start des Falls stehen; vorher galten nur die Vorbedingungen der Startszene
+    der Zeile. ``function_scenes.row_scenes`` nennt beide Szenen — dieselbe
+    Quelle für Vorbedingungen, eigene Bausteine und die gespeicherten Szenen.
+    """
+    from tools.file_acceptance import function_cases
+    from tools.function_scenes import row_scenes
+
+    row = {
+        "id": "finding.action:install",
+        "kind": "bedienflaeche",
+        "source": "befundhandlung",
+        "package": "D12",
+        "start_scene": "leer",
+        "spec": {"fault_case": {"start_scene": "ohne_opencascade.exakt"}},
+    }
+    assert row_scenes(row) == ("leer", "ohne_opencascade.exakt")
+    assert row_scenes({**row, "spec": {"fault_case": {"start_scene": "leer"}}}) == ("leer",)
+    cases = function_cases([row])
+    assert cases and all(
+        case.variant["preconditions"] == {"opencascade": "fehlt"} for case in cases
+    ), [case.variant for case in cases]

@@ -11,7 +11,8 @@ entscheidet das Thema, aber *wo* sie liegt, entscheidet diese Datei.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from typing import Any
 
 import pytest
 from PySide6.QtCore import QRect
@@ -35,7 +36,12 @@ from app.ui.overlay import (
 )
 from app.ui.style import ROOMY
 from app.ui.theme import THEMES
+from tests import qt_roots
 from tests.ui_helpers import shown_window
+
+#: Baut gezeigte Gastgeber ohne Elternteil ab (``tests/qt_roots.py``); pytest
+#: sammelt die Fixture unter diesem Namen im Modul.
+roots = qt_roots.roots
 
 
 @pytest.fixture(autouse=True)
@@ -430,14 +436,16 @@ def test_the_window_keeps_native_windows_to_the_overlays(window: MainWindow) -> 
     assert window.viewport.banner.testAttribute(native)
 
 
-def test_the_host_survives_zones_that_arrive_late(qt_app: QApplication) -> None:
+def test_the_host_survives_zones_that_arrive_late(
+    qt_app: QApplication, roots: Callable[[Any], Any]
+) -> None:
     """``setParent`` löst sofort ein Resize aus — vor den Zonen.
 
     Das ist kein erfundener Fall: der erste Entwurf setzte die drei Felder nach
     dem Umhängen der Ansicht, und das Fenster starb beim Bauen mit
     ``AttributeError`` aus ``resizeEvent``.
     """
-    host = OverlayHost(QLabel("Ansicht"))
+    host = roots(OverlayHost(QLabel("Ansicht")))
     host.show()
     host.resize(400, 300)
     qt_app.processEvents()
@@ -487,7 +495,7 @@ def test_a_card_glides_when_the_user_caused_it(
 
 
 def test_dragging_the_window_lets_nothing_lag_behind(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, roots: Callable[[Any], Any]
 ) -> None:
     """Wer am Fensterrand zieht, erwartet, dass alles folgt.
 
@@ -496,7 +504,7 @@ def test_dragging_the_window_lets_nothing_lag_behind(
     """
     monkeypatch.setattr(overlay, "MOVE_MS", 200)
 
-    host = OverlayHost(QLabel("Ansicht"))
+    host = roots(OverlayHost(QLabel("Ansicht")))
     left, right, bottom = QWidget(), QWidget(), QWidget()
     host.set_zones(left, right, bottom)
     host.show()

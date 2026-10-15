@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from tools.file_acceptance import MATERIAL, PRINTER
-from tools.function_checks import SCALES, SMALLEST_SCREEN, SMALLEST_WINDOW
+from tools.function_checks import SCALES, SMALLEST_AVAILABLE, SMALLEST_SCREEN, SMALLEST_WINDOW
 from tools.function_list import (
     LICENCE_STATES,
     STARTUP_LICENCE,
@@ -567,10 +567,12 @@ def place_window(application: Any, window: Any, variant: Variant) -> dict[str, A
     (Erinnerung „qt-sonde-am-echten-fenster“). Ohne Fenstergröße maximiert, wie
     die Aufnahmewerkzeuge; mit Größe (Z6) genau diese, oben links auf dem Schirm.
     Später verschieben wechselte Größe und DPI mitten im Lauf. Kleiner als
-    ``SMALLEST_WINDOW`` wird nie gemessen (Festlegung Robert): Ist die Fläche
-    des Schirms kleiner — offscreen 800 x 800 —, nimmt das Fenster die kleinste
-    Fläche an; eine Skalierung, die die Fläche darunter drückt, ist kein Fall
-    (:func:`below_smallest`).
+    ``SMALLEST_WINDOW`` wird nie gemessen (Festlegung Robert): Ist die
+    verfügbare Fläche des Schirms kleiner als die des kleinsten Schirms
+    (``SMALLEST_AVAILABLE``) — offscreen 800 x 800 —, nimmt das Fenster innen
+    die kleinste Fläche an; maximiert ergibt die verfügbare Fläche ohne
+    Titelleiste genau diese. Eine Skalierung, die die Fläche darunter drückt,
+    ist kein Fall (:func:`below_smallest`).
     """
     screens = list(application.screens())
     primary = application.primaryScreen()
@@ -597,12 +599,22 @@ def place_window(application: Any, window: Any, variant: Variant) -> dict[str, A
         chosen = next((screen for screen in screens if screen != primary), primary)
     area = chosen.availableGeometry()
     size = parse_size(variant.window_size) if variant.window_size else None
-    if size is None and (area.width() < SMALLEST_WINDOW[0] or area.height() < SMALLEST_WINDOW[1]):
+    if size is None and (
+        area.width() < SMALLEST_AVAILABLE[0] or area.height() < SMALLEST_AVAILABLE[1]
+    ):
         size = SMALLEST_WINDOW
     if size is None:
-        window.setGeometry(area)
+        # Am bereits maximierten Zielschirm ist area die Fläche MIT Rahmen.
+        # Erneutes setGeometry machte daraus einen zu großen logischen Client,
+        # während das native Fenster seine bisherige Clientfläche behielt.
+        if not window.isMaximized() or window.screen() != chosen:
+            if window.isMaximized():
+                window.showNormal()
+            window.setGeometry(area)
         window.showMaximized()
     else:
+        if window.isMaximized():
+            window.showNormal()
         window.resize(*size)
         window.move(area.topLeft())
         window.show()
@@ -619,12 +631,12 @@ def below_smallest(placed: Mapping[str, Any], variant: Variant) -> str:
     """Warum dieser Fall kein Fall ist — oder leer.
 
     Eine Skalierung, die die logische Fläche des Schirms (``placed["geometry"]``
-    aus :func:`place_window`, schon skaliert) unter ``SMALLEST_WINDOW`` drückt,
+    aus :func:`place_window`, schon skaliert) unter ``SMALLEST_AVAILABLE`` drückt,
     wird weder geprüft noch gestaltet (Festlegung Robert: 1920 x 1080 logisch,
     drunter nie). Bei 100 % stellt der Prüfstand die kleinste Fläche nach.
     """
     _x, _y, width, height = placed.get("geometry") or (0, 0, 0, 0)
-    if variant.scale == 1.0 or (width >= SMALLEST_WINDOW[0] and height >= SMALLEST_WINDOW[1]):
+    if variant.scale == 1.0 or (width >= SMALLEST_AVAILABLE[0] and height >= SMALLEST_AVAILABLE[1]):
         return ""
     return (
         f"Skalierung {variant.scale:.0%} lässt auf {placed.get('screen') or 'diesem Schirm'} "

@@ -49,6 +49,41 @@ from tools.function_list import STARTUP_LICENCE
 ACCEPTANCE = ROOT / "tools" / "file_acceptance.py"
 
 
+@pytest.mark.parametrize("explicit_size", [False, True])
+def test_repeated_window_placement_keeps_the_real_qt_client(qt_app, monkeypatch, explicit_size):
+    """FD75: Ein zweiter Aufbau wahrt Maximierung oder stellt die verlangte Clientgröße her."""
+    from PySide6.QtCore import QSize
+    from PySide6.QtWidgets import QMainWindow
+
+    # Dieser kleine Qt-Zustandsfall braucht keinen echten großen Schirm. Der
+    # Mindestgrößenvertrag bleibt separat geprüft; native Pixel folgen auf MSI.
+    monkeypatch.setattr(function_setup, "SMALLEST_AVAILABLE", (0, 0))
+    window = QMainWindow()
+    variant = function_setup.Variant(screen=qt_app.primaryScreen().name())
+    try:
+        function_setup.place_window(qt_app, window, variant)
+        qt_app.processEvents()
+        assert window.isMaximized()
+        original = window.geometry()
+        handle = window.windowHandle()
+        assert handle is not None
+        if explicit_size:
+            variant = replace(variant, window_size="1920x1009")
+        function_setup.place_window(qt_app, window, variant)
+        qt_app.processEvents()
+        if explicit_size:
+            assert not window.isMaximized()
+            assert window.size() == QSize(1920, 1009)
+        else:
+            assert window.isMaximized()
+            assert window.geometry() == original
+        assert window.contentsRect().size() == window.size() == handle.size()
+    finally:
+        window.close()
+        window.deleteLater()
+        qt_app.processEvents()
+
+
 def test_a_drag_counts_only_if_the_view_noticed_the_grip(qt_app: Any) -> None:
     """Review L11: Ein Zug, bei dem die Ansicht keinen Zugwert meldet, fasste keinen Griff.
 
@@ -329,32 +364,53 @@ def test_a_window_command_with_inputs_creates_and_tries_to_write_when_locked(
         "002",
     )
     run = locked["licence_runs"]["needs_activation"]
-    assert (not run["enabled"] and run["reason"]) or run["writes"], run
+    assert (run["state"] == "grau" and run["reason"]) or run["writes"], run
     assert all(
         entry["allowed"] for entry in locked["modals"] or () if entry["class"] == "ParameterDialog"
     ), locked["modals"]
 
 
 @pytest.mark.usefixtures("require_graphics_adapter")
+@pytest.mark.parametrize("start", ["", "merkmal.hole.exakt"], ids=["erkannt", "gebohrt"])
 def test_the_real_window_measures_the_action_of_the_row_not_the_one_in_the_view(
-    tmp_path: Path, native_window_platform: str
+    tmp_path: Path, native_window_platform: str, start: str
 ) -> None:
     """F-20 und N5 am echten Fenster: Die Maßgruppe im Bild zählt nur mit der Handlung der Zeile.
 
     Offscreen gibt es kein Bild, und *Bohrung ändern* steht im Merkmalfenster.
-    Am echten Fenster rückt an der gesetzten Bohrung von ``merkmal.hole.exakt``
-    *Bohrung im ursprünglichen Schritt ändern* (``drill_hole``) in die Maßgruppe,
-    und der Kopf von *Bohrung ändern* ist verborgen. Der Prüfstand tippte dort
-    für ``resize_hole``, änderte den Ursprungsschritt und maß 8,2 mm. Jetzt
-    misst er die Handlung der Zeile: nicht auffindbar, mit dem Vermerk, welche
-    Handlung im Bild stand.
+    Am echten Fenster rückt nach der Auswahl eine Maßgruppe ins Bild, und der
+    Kopf ihrer Handlung rechts tritt zurück (RM-199).
+
+    **Erkannt** — die Startszene der Zeile (FD-29, ``erkannte_bohrung.netz``):
+    Im Bild steht *Bohrung ändern* selbst. Der Prüfstand tippt dort ohne Klick,
+    übernimmt und misst 8 mm, ohne Fund und ohne Vermerk.
+
+    **Gebohrt** — die Startszene, die der Test im Inventar einsetzt: An der
+    Bohrung von ``merkmal.hole.exakt`` steht *Bohrung im ursprünglichen Schritt
+    ändern* (``drill_hole``) im Bild. Der Prüfstand tippte dort früher für
+    ``resize_hole``, änderte den Ursprungsschritt und maß 8,2 mm; er misst die
+    Handlung der Zeile: nicht auffindbar, mit dem Vermerk, welche Handlung im
+    Bild stand.
     """
     import os
     import subprocess
     import sys
 
+    from tools import function_list
+
     out = tmp_path / "abnahme"
     environment = {**os.environ, "QT_QPA_PLATFORM": native_window_platform, "PYTHONUTF8": "1"}
+
+    def started_elsewhere() -> None:
+        if not start:
+            return
+        listed = out / "rows.json"
+        rows = json.loads(listed.read_text(encoding="utf-8"))
+        for row in rows:
+            if row["id"] == "resize_hole":
+                row["start_scene"] = row["spec"]["start_scene"] = start
+        listed.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+
     for arguments, limit in (
         (["inventory", "--functions", "--rows", "resize_hole", "--phases", "main"], 600),
         (["run"], 900),
@@ -368,13 +424,31 @@ def test_the_real_window_measures_the_action_of_the_row_not_the_one_in_the_view(
             timeout=limit,
         )
         assert done.returncode == 0, done.stdout + done.stderr
+        if arguments[0] == "inventory":
+            started_elsewhere()
     data = json.loads((out / "cases" / "001" / "function.json").read_text(encoding="utf-8"))
     assert validate_protocol(data) == []
-    assert [(found["kind"], found["target"]) for found in data["findings"]] == [
-        (NOT_FOUND, "feature:resize_hole")
-    ], data["findings"]
-    assert "drill_hole" in data["unmeasured"]["im_bild:feature:resize_hole"]
-    assert data["result"] is None, "gemessen wurde eine andere Handlung"
+    if start:
+        assert data["scene"]["key"] == start, data["scene"]
+        assert [(found["kind"], found["target"]) for found in data["findings"]] == [
+            (NOT_FOUND, "feature:resize_hole")
+        ], data["findings"]
+        assert "drill_hole" in data["unmeasured"]["im_bild:feature:resize_hole"]
+        assert data["result"] is None, "gemessen wurde eine andere Handlung"
+        return
+    assert data["scene"]["key"] == "erkannte_bohrung.netz", data["scene"]
+    assert data["findings"] == [] and data["errors"] == [], (data["findings"], data["errors"])
+    assert "im_bild:feature:resize_hole" not in data["unmeasured"], data["unmeasured"]
+    assert any(
+        step.get("target") == "feature:resize_hole" and step.get("zone") == "ansicht"
+        for step in data["steps"]
+    ), "Bohrung ändern stand nach der Auswahl in der Maßgruppe im Bild"
+    assert data["result"] is not None, data["unmeasured"]
+    expected = function_list.load_specs()["resize_hole"].values["expectation"]
+    metrics = data["result"]["metrics"]
+    for name in ("hole.diameter", "volume"):
+        wanted = expected[name]
+        assert metrics[name] == pytest.approx(wanted["value"], abs=wanted["tolerance"]), name
 
 
 def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:
@@ -384,8 +458,13 @@ def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:
     Liste meldet ``itemDoubleClicked`` aber nur an der Zeile, die vorher
     gedrückt war. Kein Doppelklick des Prüfstands öffnete so je einen Schritt
     im Verlauf — der Fehlfall von *Auf das Bett setzen* fand sein Feld nie.
+
+    Danach ist die Taste wieder los (FD-83): ``mouseDClick`` lässt sie nicht
+    los, und Qt hielt sie bis zum nächsten Klick für gedrückt — jede Bewegung
+    bis dahin war ein Zug ohne Leave, ein Tooltip blieb über dem nächsten Ziel.
     """
-    from PySide6.QtWidgets import QListWidget
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QListWidget
 
     listing = QListWidget()
     listing.addItems(["1  Quader anlegen", "2  Bohrung setzen"])
@@ -400,9 +479,63 @@ def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:
         ports.press(ports.widget_under(point), point, "double")
         qt_app.processEvents()
         assert opened == ["2  Bohrung setzen"]
+        assert QApplication.mouseButtons() == Qt.MouseButton.NoButton
     finally:
         listing.close()
         listing.deleteLater()
+        qt_app.processEvents()
+
+
+def test_a_double_click_that_removes_its_widget_releases_at_the_pointer(
+    qt_app: Any, monkeypatch: Any
+) -> None:
+    """FD-83, Rückfallzweig: Baut der Doppelklick das gedrückte Widget ab, lässt das los,
+    was jetzt unter dem Zeiger liegt — wie Qt beim Kunden.
+
+    Offscreen lässt sich das gedrückte Widget im Doppelklick nicht abbauen, ohne
+    den Prozess zu verlieren. Der Fall öffnet deshalb an derselben Stelle eine
+    neue Fläche und meldet die Liste über ``shiboken6.isValid`` als abgebaut;
+    ``press`` holt ``isValid`` erst im Aufruf.
+    """
+    import shiboken6
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication, QListWidget, QStackedWidget, QWidget
+
+    stack = QStackedWidget()
+    listing = QListWidget()
+    listing.addItems(["1  Quader anlegen", "2  Bohrung setzen"])
+    opened = QWidget()
+    stack.addWidget(listing)
+    stack.addWidget(opened)
+    listing.itemDoubleClicked.connect(lambda _item: stack.setCurrentWidget(opened))
+    stack.resize(300, 200)
+    stack.show()
+    qt_app.processEvents()
+    pressed = listing.viewport()
+    valid = shiboken6.isValid
+    monkeypatch.setattr(shiboken6, "isValid", lambda thing: thing is not pressed and valid(thing))
+    released: list[Any] = []
+    release = QTest.mouseRelease
+
+    def record(widget: Any, *args: Any) -> None:
+        released.append(widget)
+        release(widget, *args)
+
+    monkeypatch.setattr(QTest, "mouseRelease", record)
+    try:
+        point = pressed.mapToGlobal(listing.visualItemRect(listing.item(1)).center())
+        ports = function_walk.QtPorts(None, 0.0)
+        assert ports.widget_under(point) is pressed
+        ports.press(pressed, point, "double")
+        qt_app.processEvents()
+        assert stack.currentWidget() is opened
+        assert ports.widget_under(point) is opened
+        assert released == [opened]
+        assert QApplication.mouseButtons() == Qt.MouseButton.NoButton
+    finally:
+        stack.close()
+        stack.deleteLater()
         qt_app.processEvents()
 
 
@@ -475,6 +608,228 @@ def test_a_right_click_brings_the_context_menu_event(qt_app: Any) -> None:
         listing.close()
         listing.deleteLater()
         qt_app.processEvents()
+
+
+@pytest.fixture
+def button_probe(qt_app: Any, monkeypatch: Any) -> Any:
+    """Echte Mauszustellung; nur die Wortschatzauflösung stammt aus der kleinen Szene."""
+    import time
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QEvent, QObject, QPoint, QRect, Qt
+    from PySide6.QtWidgets import QLabel, QPushButton, QWidget
+
+    from app.ui import guide_targets
+
+    holder = QWidget()
+    holder.resize(720, 480)
+    owner = QLabel("Weitere Werte", holder)
+    owner.setGeometry(30, 40, 160, 30)
+    owner.setToolTip("Änderungsumfang, X, Y …")
+    target = QPushButton("Abbrechen", holder)
+    target.setGeometry(420, 260, 180, 36)
+    state = SimpleNamespace(holder=holder, owner=owner, target=target, events=[], records=[])
+
+    class Observer(QObject):
+        def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt
+            if watched is state.target and event.type() == QEvent.Type.MouseButtonPress:
+                state.events.append(("press", event.globalPosition().toPoint()))
+            return False
+
+    observer = Observer(holder)
+    qt_app.installEventFilter(observer)
+
+    def resolve(window: Any, name: str) -> Any:
+        button = state.target
+        if not button.isVisible() or not button.isEnabled():
+            raise LookupError("Der Knopf ist gerade nicht bedienbar")
+        return guide_targets.Click(
+            QRect(button.mapToGlobal(QPoint()), button.size()),
+            Qt.MouseButton.LeftButton,
+            "ziel",
+            name,
+        )
+
+    monkeypatch.setattr(guide_targets, "next_click", resolve)
+    monkeypatch.setattr(guide_targets, "widget_for", lambda window, name: state.target)
+    monkeypatch.setattr(guide_targets, "zone_of", lambda window, widget: "karte")
+    state.ports = function_walk.QtPorts(holder, time.perf_counter())
+    monkeypatch.setattr(state.ports, "pending", lambda: False)
+    state.walker = function_walk.Walk(state.ports, state.records, time.perf_counter())
+    holder.show()
+    holder.activateWindow()
+    qt_app.processEvents()
+    state.ports.move(owner.mapToGlobal(owner.rect().center()))
+    qt_app.processEvents()
+    try:
+        yield state
+    finally:
+        qt_app.removeEventFilter(observer)
+        holder.close()
+        holder.deleteLater()
+        qt_app.processEvents()
+
+
+def _drive_button_probe(qt_app: Any, scene: Any, named: bool) -> Any:
+    """Derselbe Schrittautomat wie im Prüfstand, mit unveränderter 15-s-Klickfrist."""
+    import time
+
+    def press(machine: Any) -> None:
+        assert function_walk.click_button(scene.ports, scene.walker, scene.target, "Abbrechen")
+
+    step = (
+        scene.walker.step("feature:resize_hole")
+        if named
+        else function_machine.Step(
+            "Abbrechen",
+            press,
+            ready=scene.walker.stable("Abbrechen", button=lambda: scene.target),
+        )
+    )
+    step.timeout_s = 15
+    machine = function_machine.StepMachine(function_machine.qt_schedule, time.perf_counter)
+
+    def pump() -> None:
+        qt_app.processEvents()
+        time.sleep(0.001)
+
+    function_machine.drive(
+        machine,
+        [
+            step,
+            function_machine.Step(
+                "nach dem Klick", lambda machine: scene.events.append(("after", None))
+            ),
+        ],
+        pump,
+        time.perf_counter,
+        timeout_s=16,
+    )
+    return machine
+
+
+@pytest.mark.parametrize("named", [True, False], ids=["wortschatz", "knopf"])
+def test_button_probe_moves_away_from_a_real_tooltip_before_testing_coverage(
+    qt_app: Any, button_probe: Any, named: bool
+) -> None:
+    """FD74: Ein echter Tooltip verschwindet durch Mausbewegung, nicht durch den Prüfer."""
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtGui import QCursor
+    from PySide6.QtWidgets import QToolTip
+
+    scene = button_probe
+    # Nur der Ausgangszustand wird gestellt; der Prüfpfad darf den Tooltip
+    # weder ausblenden noch bei der Trefferprüfung überspringen.
+    QToolTip.showText(scene.target.mapToGlobal(QPoint()), scene.owner.toolTip(), scene.owner)
+    qt_app.processEvents()
+    tip = next(
+        widget
+        for widget in qt_app.topLevelWidgets()
+        if widget.objectName() == "qtooltip_label" and widget.isVisible()
+    )
+    centre = QRect(tip.mapToGlobal(QPoint()), tip.size()).center()
+    scene.target.move(scene.holder.mapFromGlobal(centre) - scene.target.rect().center())
+    assert scene.ports.widget_under(centre) is tip
+    assert QCursor.pos() != centre
+
+    machine = _drive_button_probe(qt_app, scene, named)
+
+    assert machine.error is None and machine.finding is None, (machine.error, machine.finding)
+    assert [event[0] for event in scene.events] == ["press", "after"]
+    assert scene.events[0][1] == scene.target.mapToGlobal(scene.target.rect().center())
+    assert not QToolTip.isVisible()
+    assert scene.records[-1]["hit"] is True
+
+
+@pytest.mark.parametrize("named", [True, False], ids=["wortschatz", "knopf"])
+def test_button_probe_keeps_a_real_persistent_cover_as_a_finding(
+    qt_app: Any, button_probe: Any, named: bool
+) -> None:
+    """FD74: Die neue Bewegung macht einen tatsächlich verdeckten Knopf nicht klickbar."""
+    from PySide6.QtWidgets import QLabel
+
+    scene = button_probe
+    cover = QLabel("Bleibende Überdeckung", scene.holder)
+    cover.setGeometry(scene.target.geometry())
+    cover.show()
+    cover.raise_()
+    qt_app.processEvents()
+
+    machine = _drive_button_probe(qt_app, scene, named)
+
+    assert not scene.events
+    assert machine.error is not None or machine.finding is not None
+    assert scene.records[-1]["finding"] == function_checks.COVERED
+    assert scene.records[-1]["widget_at"]["text"] == "Bleibende Überdeckung"
+
+
+@pytest.mark.parametrize("change", ["move", "replace", "hide", "disable"])
+def test_button_probe_resolves_the_target_again_after_the_move(
+    qt_app: Any, button_probe: Any, change: str
+) -> None:
+    """FD74: Zwischen Anfahren und Klick gilt das neue Widget an seiner neuen Stelle."""
+    import time
+
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QPushButton
+
+    scene = button_probe
+    original = scene.target
+    ready = scene.walker.stable("Abbrechen", button=lambda: scene.target)
+    old_centre = original.mapToGlobal(original.rect().center())
+    assert not ready(), "Die erste Bewegung muss eine spätere Ereignisrunde zulassen"
+    assert not scene.events
+    if change == "move":
+        original.move(original.pos() + QPoint(-180, 40))
+    elif change == "replace":
+        replacement = QPushButton("Neuer Knopf", scene.holder)
+        replacement.setGeometry(210, 320, 180, 36)
+        replacement.show()
+        original.hide()
+        scene.target = replacement
+    else:
+        if change == "hide":
+            original.hide()
+        else:
+            original.setEnabled(False)
+        qt_app.processEvents()
+        time.sleep(function_walk.STABLE_S)
+        assert not ready()
+        assert not scene.events
+        original.show()
+        original.setEnabled(True)
+        original.move(original.pos() + QPoint(-180, 40))
+    qt_app.processEvents()
+    assert not ready(), "Geänderte Lage muss neu angefahren werden"
+    deadline = time.perf_counter() + 15
+    while not ready() and time.perf_counter() < deadline:
+        qt_app.processEvents()
+        time.sleep(0.001)
+    assert ready()
+    assert function_walk.click_button(scene.ports, scene.walker, scene.target, "Abbrechen")
+    assert [event[0] for event in scene.events] == ["press"]
+    assert scene.events[0][1] != old_centre
+    assert scene.events[0][1] == scene.target.mapToGlobal(scene.target.rect().center())
+
+
+@pytest.mark.parametrize("change", ["hide", "disable", "delete"])
+def test_button_probe_final_guard_rejects_a_target_that_is_no_longer_usable(
+    qt_app: Any, button_probe: Any, change: str
+) -> None:
+    """Auch ein direkter Aufrufer darf keinen unsichtbaren, grauen oder gelöschten Knopf drücken."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    scene = button_probe
+    if change == "hide":
+        scene.target.hide()
+    elif change == "disable":
+        scene.target.setEnabled(False)
+    else:
+        scene.target.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    with pytest.raises(RuntimeError, match="nicht bedienbar"):
+        function_walk.click_button(scene.ports, scene.walker, scene.target, "Abbrechen")
+    assert not scene.events
 
 
 @pytest.mark.windowed
@@ -859,6 +1214,107 @@ def test_a_scroll_click_covers_its_scroll_area_and_not_a_list_over_it(qt_app: An
         root.close()
         root.deleteLater()
         settle()
+
+
+@pytest.mark.parametrize(
+    "kind, text, expected",
+    [
+        ("plain", "A & B <b>wörtlich</b> &nbsp;", "A & B <b>wörtlich</b> &nbsp;"),
+        ("auto", "A & B", "A & B"),
+        ("auto", "<b>A&nbsp;&amp;&nbsp;B</b>", "A & B"),
+        ("rich", "&nbsp;A&amp;B&nbsp;", " A&B "),
+        ("rich", "&lt;b&gt;X&lt;/b&gt; &#43; &#x2212;", "<b>X</b> + −"),
+        ("button", "&Datei && Ablage", "Datei & Ablage"),
+        ("button", "<b>&Datei</b>", "<b>Datei</b>"),
+        ("button", "A&", "A"),
+        ("button", "A&&&", "A&"),
+        ("buddy", "A&\nB", "A\nB"),
+        ("group", "&Datei && Ablage", "Datei & Ablage"),
+        ("buddy", "&Datei && Ablage", "Datei & Ablage"),
+        ("rich_buddy", "<b>&amp;Datei &amp;&amp; Ablage</b>", "Datei & Ablage"),
+        ("tab", "&Datei && Ablage", "Datei & Ablage"),
+    ],
+)
+def test_text_capture_respects_entities_formats_and_mnemonic_carriers(
+    qt_app: Any, kind: str, text: str, expected: str
+) -> None:
+    """FD76: Sichtbarer Text statt HTML-Reste oder pauschal entfernter Ampersands."""
+    from PySide6.QtCore import QCoreApplication, QEvent, Qt
+    from PySide6.QtWidgets import QGroupBox, QLabel, QLineEdit, QPushButton, QTabBar, QWidget
+
+    root = QWidget()
+    root.resize(900, 200)
+    if kind == "button":
+        carrier = QPushButton(text, root)
+    elif kind == "group":
+        carrier = QGroupBox(text, root)
+    elif kind == "tab":
+        carrier = QTabBar(root)
+        carrier.addTab(text)
+    else:
+        carrier = QLabel(text, root)
+        if kind == "plain":
+            carrier.setTextFormat(Qt.TextFormat.PlainText)
+        elif kind in ("rich", "rich_buddy"):
+            carrier.setTextFormat(Qt.TextFormat.RichText)
+        if kind in ("buddy", "rich_buddy"):
+            carrier.setBuddy(QLineEdit(root))
+    carrier.setGeometry(20, 60, 850, 60)
+    try:
+        root.show()
+        qt_app.processEvents()
+        entries = capture.text_entries(root)
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry["text"] == expected
+        assert not entry["cut"], entry
+        # Ein HTML-ähnlicher Plaintext darf auch am gemeinsamen Namensweg nicht verschwinden.
+        if kind != "tab":
+            assert capture.name_of(carrier) == expected
+    finally:
+        root.close()
+        root.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+@pytest.mark.parametrize("narrow", [False, True], ids=["passt", "wirklich_zu_schmal"])
+def test_real_preview_legend_keeps_its_visible_text_and_the_public_p9_guard(
+    qt_app: Any, narrow: bool
+) -> None:
+    """FD76: Echte Vorschaulegende ohne falschen P9-Fund; echter Platzmangel bleibt rot."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QWidget
+
+    from app.i18n import tr
+    from app.ui.viewport import PreviewBanner
+    from tools.function_points import judge_case
+    from tools.function_samples import sample_context, sample_protocol
+
+    root = QWidget()
+    root.resize(1920, 1080)
+    banner = PreviewBanner(root)
+    try:
+        root.show()
+        banner.show_preview("Vorschau", "blue_orange", "Vorher")
+        qt_app.processEvents()
+        expected = f" + {tr('Hinzugefügt')}    - {tr('Entfernt')} "
+        assert "&nbsp;" in banner.legend.text(), "Der echte Träger muss Entities enthalten"
+        if narrow:
+            banner.legend.setFixedWidth(1)
+            qt_app.processEvents()
+        entries = capture.text_entries(banner)
+        legend = next(entry for entry in entries if tr("Hinzugefügt") in entry["text"])
+        assert legend["text"] == expected
+        assert legend["cut"] is narrow, legend
+        protocol = sample_protocol()
+        protocol["texts"] = [legend]
+        outcome = judge_case(protocol, sample_context()).points[9]
+        assert (outcome.verdict == "fund") is narrow, outcome
+        assert bool(outcome.issues) is narrow
+    finally:
+        root.close()
+        root.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def test_text_needs_count_box_symbol_padding_rich_text_and_list_cells(qt_app: Any) -> None:

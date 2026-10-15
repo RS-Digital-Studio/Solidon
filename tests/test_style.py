@@ -159,7 +159,9 @@ def test_late_content_grows_an_automatic_dialog_but_never_a_drawn_one() -> None:
     unter dem Rand. Jetzt wächst die Höhe — Breite und Lage bleiben —, ein
     kürzerer Inhalt danach gibt nichts zurück, und eine gezogene Größe bleibt.
     """
-    from PySide6.QtCore import QPoint, QRect, QSize
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QPoint, QRect, QSize, Qt
 
     from app.ui.style import ContentHeight
 
@@ -212,6 +214,15 @@ def test_late_content_grows_an_automatic_dialog_but_never_a_drawn_one() -> None:
 
         def viewport(self) -> Viewport:
             return self._viewport
+
+        def horizontalScrollBar(self) -> SimpleNamespace:  # noqa: N802 — Qt-Name
+            return SimpleNamespace(minimum=lambda: 0, maximum=lambda: 0)
+
+        def horizontalScrollBarPolicy(self) -> Qt.ScrollBarPolicy:  # noqa: N802 — Qt-Name
+            return Qt.ScrollBarPolicy.ScrollBarAsNeeded
+
+        def maximumViewportSize(self) -> QSize:  # noqa: N802 — Qt-Name
+            return QSize(self._viewport.width(), self._viewport.height())
 
     class Dialog:
         def __init__(self) -> None:

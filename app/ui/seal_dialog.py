@@ -539,10 +539,12 @@ class SealPathDialog(QDialog):
         dialog = SketchEditorDialog(
             self._values["path_sketch"], self._parameters, self, self._surroundings
         )
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._values["path_sketch"] = dialog.sketch_text()
-            self._request()
-        dialog.deleteLater()
+        try:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self._values["path_sketch"] = dialog.sketch_text()
+                self._request()
+        finally:
+            dialog.deleteLater()
 
     def accept(self) -> None:
         if (

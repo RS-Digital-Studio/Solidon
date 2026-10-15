@@ -21,15 +21,9 @@ Name bräche dort erst im Kindprozess.
 Lazy-Exporte, Literale eines ``__getattr__``, Stubs (``.pyi``) und ``type``
 lösen auf; die Gegenproben dazu stehen in ``test_code_index.py``, die der
 Skripte in ``test_code_scripts.py``.
-
-**Scharf schalten** wie in ``test_patch_targets.py``: ``xfail(strict=True)`` mit
-dem Paket, dessen Fix die Regel grün macht; ein XPASS ist rot, die Markierung
-fällt im selben Commit.
 """
 
 from __future__ import annotations
-
-import pytest
 
 from tools.code_index import Index, Unresolved, shared
 
@@ -63,12 +57,6 @@ def test_every_import_of_an_own_module_resolves() -> None:
     assert not found, _report(found)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="scharf, wenn P1 die 20 Zugriffe auf discover.unpatched_* und "
-    "llm.unpatched_backends durch Fixtures ersetzt hat (Plan 1.6)",
-)
 def test_every_attribute_of_an_own_module_resolves() -> None:
     """``alias.N`` gelesen, zugewiesen oder gelöscht; eine Zuweisung auf einen fehlenden
     Namen legte ihn still an."""

@@ -67,25 +67,36 @@ def test_contrast_reads_the_ground_the_customer_sees(qt_app: Any) -> None:
 
 
 def test_fonts_carry_the_effective_font_of_their_carrier(qt_app: Any) -> None:
-    """F-4: Ohne ``level`` steht die wirksame Schrift im Protokoll — die Grundschrift."""
+    """F-4: Ohne ``level`` steht die wirksame Schrift im Protokoll — die Grundschrift.
+
+    Die Stufe verlangt eine gemessene Familie. Offscreen hat Qt unter Windows
+    keine Schrift; die gebündelte DejaVu Sans gibt jeder Plattform eine.
+    """
+    from PySide6.QtGui import QFontInfo
     from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
+    from tests.bundled_fonts import bundled_font
     from tools.function_judges import _effective_level
 
-    holder = QWidget()
-    label = QLabel("Durchmesser", holder)
-    QVBoxLayout(holder).addWidget(label)
-    holder.show()
-    _settle(qt_app)
-    try:
-        (entry,) = capture.font_entries(holder)
-        points = round(label.font().pointSizeF(), 2)
-    finally:
-        holder.close()
-        holder.deleteLater()
+    with bundled_font(qt_app, 9):
+        holder = QWidget()
+        label = QLabel("Durchmesser", holder)
+        QVBoxLayout(holder).addWidget(label)
+        holder.show()
         _settle(qt_app)
+        try:
+            assert QFontInfo(label.font()).family() == "DejaVu Sans"
+            (entry,) = capture.font_entries(holder)
+            points = round(label.font().pointSizeF(), 2)
+            # Die Grundschrift, solange sie gilt — nach der Rückgabe stünde dort
+            # die des Vorgängers, und gleich wären beide nur zufällig.
+            base = QApplication.font().pointSize()
+        finally:
+            holder.close()
+            holder.deleteLater()
+            _settle(qt_app)
     assert entry["level"] == ""
-    assert entry["base_points"] == QApplication.font().pointSize()
+    assert entry["base_points"] == base == 9
     assert entry["points"] == points
     assert _effective_level(entry) == "body", entry
 
@@ -419,12 +430,14 @@ def test_a_message_in_house_style_is_modal_but_neither_raw_nor_a_question(qt_app
 
     Mit Handlung und Ausgang hat er zwei Knöpfe; vorher hätte die Wache ihn
     deshalb als Nachfrage gezählt. Und der Klick, nach dem er aufgeht, macht ihn
-    nicht zur Fläche der Zeile (``function_surface.own_surface``).
+    nicht zur Fläche der Zeile (``function_surface.own_surface``). Ein Hinweis
+    erscheint nie als Meldungsfenster — auch mit Handlung bleibt er ein Z2-Fund;
+    ausgenommen ist nur die Fehlermeldung mit Handlungsvorschlag (Fall darunter).
     """
     from app.ui.message_dialog import MessageDialog
     from tools import function_surface
 
-    dialog = MessageDialog(None, title="Fehler", headline="Das ging nicht", kind="error")
+    dialog = MessageDialog(None, title="Hinweis", headline="Das ging", kind="info")
     dialog.add_action("Rückgängig", "message.button:probe.undo", lead=True)
     dialog.add_exit("Schließen", "message.button:probe.close")
     assert not function_surface.own_surface({"target": "operation:drill_hole"}, dialog)
@@ -434,6 +447,51 @@ def test_a_message_in_house_style_is_modal_but_neither_raw_nor_a_question(qt_app
     assert (entry["class"], entry["allowed"], entry["question"]) == ("MessageDialog", False, False)
     assert watch.raw_entries() == []
     assert _judged(watch, "Z2") and _judged(watch, "Z5") == [] and _judged(watch, "E6") == []
+
+
+def _shown_error(qt_app: Any, handlers: dict[str, Any]) -> Any:
+    """``dialogs.show_error`` am Werk, die Wache in der Schleife seines ``exec()``."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
+
+    from app.core.errors import RETRY, AppError
+    from app.ui.dialogs import show_error
+
+    watch = capture.ModalWatch(0.0)
+    rounds = {"left": 50}
+
+    def look() -> None:
+        dialog = QApplication.activeModalWidget()
+        rounds["left"] -= 1
+        if dialog is None and rounds["left"] > 0:
+            QTimer.singleShot(100, look)
+            return
+        watch.poll()
+        if dialog is not None:
+            dialog.reject()
+
+    QTimer.singleShot(100, look)
+    show_error(AppError("Das ging nicht", suggestions=(RETRY,)), None, handlers)
+    _settle(qt_app)
+    return watch
+
+
+def test_an_error_with_a_proposal_is_the_exception_to_z2(qt_app: Any) -> None:
+    """Durchsicht welle4 D-M2, Entscheidung Koordinator: Die Fehlermeldung nach Regel 17
+    mit mindestens einer Handlung antwortet auf eine Handlung des Kunden und darf modal sein.
+
+    Gefahren wird ``dialogs.show_error`` selbst. Vorher war jeder Fehlfall mit
+    ``AppError`` ein Z2-Fund, und „Z2 ohne offenen Fund“ war nicht erreichbar.
+    Gegenprobe: Dieselbe Meldung ohne einlösbare Handlung — nur *Schließen* —
+    bleibt ein Z2-Fund (und an ihrer Meldung E7/V5); der Hinweis darüber ebenso.
+    """
+    offered = _shown_error(qt_app, {"retry": lambda error: None})
+    entry = offered.modal_entries()[0]
+    assert (entry["class"], entry["allowed"]) == ("MessageDialog", True), entry
+    assert _judged(offered, "Z2") == []
+    bare = _shown_error(qt_app, {})
+    assert bare.modal_entries()[0]["allowed"] is False, bare.modal_entries()
+    assert _judged(bare, "Z2")
 
 
 def test_a_message_in_house_style_is_read_with_its_actions(qt_app: Any) -> None:
@@ -512,3 +570,58 @@ def test_a_lock_reason_names_its_way_out_and_a_field_names_its_limit(qt_app: Any
     }, entries
     limits = [entry for entry in entries if entry["kind"] == "grenzablehnung"]
     assert len(limits) == 1 and limits[0]["text"], entries
+
+
+def test_a_lock_reason_may_name_an_open_field_of_its_own_surface(qt_app: Any) -> None:
+    """FD-31, Entscheidung Koordinator: Ein Sperrgrund, der ein offenes Eingabefeld seiner
+    Fläche beim Titel nennt („Erst „Durchmesser“ ändern, dann übernehmen.“), nennt den
+    Ausweg — *Übernehmen* der Maßgruppe ist vor der ersten Eingabe grau.
+
+    Gegenprobe im selben Fall: Derselbe Satz an einem grauen Feld oder an einem Feld
+    einer anderen Fläche bleibt ein Sperrgrund ohne Ausweg.
+    """
+    from PySide6.QtWidgets import (
+        QDoubleSpinBox,
+        QFormLayout,
+        QFrame,
+        QMainWindow,
+        QPushButton,
+        QVBoxLayout,
+        QWidget,
+    )
+
+    def card(parent: QWidget, title: str, reason: str, *, open_field: bool) -> QFrame:
+        frame = QFrame(parent)
+        frame.setAutoFillBackground(True)
+        form = QFormLayout(frame)
+        field = QDoubleSpinBox(frame)
+        field.setEnabled(open_field)
+        form.addRow(f"{title}:", field)
+        accept = QPushButton("Übernehmen", frame)
+        accept.setToolTip(reason)
+        accept.setEnabled(False)
+        form.addRow(accept)
+        return frame
+
+    main = QMainWindow()
+    body = QWidget()
+    column = QVBoxLayout(body)
+    own = "Erst „Durchmesser“ ändern, dann übernehmen."
+    grey = "Erst „Breite“ ändern, dann übernehmen."
+    foreign = "Erst „Tiefe“ ändern, dann übernehmen."
+    column.addWidget(card(body, "Durchmesser", own, open_field=True))
+    column.addWidget(card(body, "Breite", grey, open_field=False))
+    column.addWidget(card(body, "Tiefe", "Tiefe angeben.", open_field=True))
+    column.addWidget(card(body, "Höhe", foreign, open_field=True))
+    main.setCentralWidget(body)
+    main.show()
+    _settle(qt_app)
+    try:
+        entries = capture.message_entries(main)
+    finally:
+        main.close()
+        main.deleteLater()
+        _settle(qt_app)
+    locks = {entry["text"]: entry["way_out"] for entry in entries if entry["kind"] == "sperrgrund"}
+    assert locks[own] is True, locks
+    assert locks[grey] is False and locks[foreign] is False, locks

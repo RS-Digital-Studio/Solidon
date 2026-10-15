@@ -18,7 +18,7 @@ oder öffentlich führt — kein privater Name, keine Abkürzung (``function_gua
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
 
@@ -48,8 +48,34 @@ def _shown(window: Any, name: str) -> Any | None:
 
 
 def open_dialog(window: Any) -> Any | None:
-    """Der offene Dialog — Operationsdialog oder modales Fenster —, sonst ``None``."""
-    return _shown(window, "dialog")
+    """Offene Bedienfläche, auch ein nichtmodaler Generator ohne Operationswortschatz."""
+    from PySide6.QtWidgets import QApplication
+
+    dialog = _shown(window, "dialog")
+    if dialog is not None:
+        return dialog
+    opened = windows_to_picture(window)
+    active = QApplication.activeWindow()
+    if active in opened:
+        return active
+    if len(opened) > 1:
+        raise RuntimeError("Mehrere offene Bedienflächen ohne eindeutiges aktives Fenster")
+    return opened[0] if opened else None
+
+
+def immediate_feature(window: Any, target: str) -> bool:
+    """Ob die sichtbare Merkmalshandlung sofort wirkt statt ihre Felder aufzuklappen."""
+    heading = _shown(window, target)
+    return heading is not None and not heading.isCheckable()
+
+
+def feature_in_view(window: Any, target: str) -> bool:
+    """Die Zielhandlung steht sichtbar im Bild, auch ohne Eingaben in der Sprachspezifikation."""
+    return (
+        target.startswith("feature:")
+        and op_in_view(window) == target.partition(":")[2]
+        and _shown(window, "measure.apply") is not None
+    )
 
 
 def surface_for(window: Any, target: str) -> Any:
@@ -77,7 +103,39 @@ def surface_for(window: Any, target: str) -> Any:
         bar = _shown(window, f"handle:bar.{rest}") or _shown(window, "tools")
         if bar is not None:
             return bar
+    if kind == "feature":
+        # Nur die Maßgruppe dieser Handlung gehört zur Zeile. Daneben kann
+        # eine andere Handlung im Bild bleiben, während ihre Zeile aufgeht.
+        if op_in_view(window) == rest:
+            accept = _shown(window, "measure.apply")
+            if accept is not None:
+                return accept.parentWidget()
+        heading = _shown(window, target)
+        if heading is not None:
+            return heading.parentWidget()
     return _shown(window, "selection") or window
+
+
+def surface_parts(window: Any, target: str, root: Any) -> tuple[Any, ...]:
+    """Eigene Merkmalzeile samt sichtbarem Footer; keine fremde Maßgruppe.
+
+    Der Footer steht außerhalb der rollenden Zeile. Nur deren aufgeklappter
+    Kopf ordnet ihn dieser Handlung zu; die Maßgruppe enthält alles selbst.
+    """
+    if target.startswith("feature:"):
+        heading = _shown(window, target)
+        if (
+            heading is not None
+            and heading.parentWidget() is root
+            and heading.isCheckable()
+            and heading.isChecked()
+        ):
+            accept = _shown(window, "feature.apply")
+            if accept is not None:
+                footer = accept.parentWidget()
+                if footer is not root and not root.isAncestorOf(footer):
+                    return root, footer
+    return (root,)
 
 
 #: Woher Zeilen stammen, deren Fläche selbst eine Meldung ist (``function_list``).
@@ -120,6 +178,41 @@ def report_findings(session: Any) -> dict[str, str]:
     }
 
 
+def shown_findings(window: Any) -> set[str]:
+    """Die Befundkennungen, die der Prüfbericht gerade als Zeilen zeigt."""
+    from PySide6.QtCore import Qt
+
+    listing = window.report.list
+    return {
+        str(getattr(finding, "code", ""))
+        for row in range(listing.count())
+        if (item := listing.item(row)) is not None
+        and (finding := item.data(Qt.ItemDataRole.UserRole)) is not None
+    }
+
+
+def require_findings(window: Any, promised: Iterable[str]) -> None:
+    """Hält an, wenn der Prüfbericht einen zugesagten Befund der Vorbereitung nicht zeigt.
+
+    Nach Einfügemarke, Export oder *Automatisch teilen* gibt die Szene ihre
+    Befunde zu (``promises.findings``); fehlt einer, ist die Vorbereitung nicht
+    hergestellt — kein Fund an der Anwendung (Durchsicht welle4 C-L3).
+    """
+    missing = sorted(set(promised) - shown_findings(window))
+    if missing:
+        raise RuntimeError(
+            f"Vorbereitung nicht hergestellt: der Prüfbericht zeigt {', '.join(missing)} nicht"
+        )
+
+
+def require_full_export_scope(window: Any) -> None:
+    """Der Auslöser exportiert die ganze Szene, keine geerbte Teilauswahl (FD53)."""
+    selected = set(window.object_tree.selected_objects())
+    result = window.session.last_result
+    if result is None or (selected and selected != set(result.scene.objects)):
+        raise RuntimeError("Vorbereitung nicht hergestellt: Export umfasst nicht die ganze Szene")
+
+
 def classes_of(widget: Any) -> set[str]:
     """Die Klassennamen eines Fensters samt Basisklassen."""
     return {cls.__name__ for cls in type(widget).__mro__}
@@ -158,6 +251,42 @@ def grey_reason(window: Any, target: str) -> str | None:
     text = action.text().replace("&", "")
     plain = {text, text.rstrip(".…").strip()}
     return tip if tip and tip not in plain else str(action.statusTip())
+
+
+def fault_messages(window: Any, targets: Sequence[str]) -> list[dict[str, Any]]:
+    """Was der Fehlfall meldet: die Meldungen der Oberfläche, als Sperrgrund aber nur der
+    Grund, mit dem die Ziele der Zeile grau stehen (Prüfpunkt 7, V5).
+
+    ``function_capture.message_entries`` nennt jeden grauen Knopf mit Kurzhilfe;
+    „erwartet Sperrgrund“ war damit erfüllt, sobald irgendein fremder Knopf grau
+    stand (Durchsicht welle4 C-L1). Gefragt wird :func:`grey_reason` an
+    ``targets`` — dem Ziel der Zeile und dem, womit sie übernommen wird.
+    """
+    from app.ui import guide_targets
+    from tools import function_capture as capture
+
+    found = [
+        entry for entry in capture.message_entries(window) if entry.get("kind") != "sperrgrund"
+    ]
+    for target in dict.fromkeys(targets):
+        reason = grey_reason(window, target)
+        if not reason:
+            continue
+        # Das graue Element selbst, damit die Felder seiner Fläche als Ausweg
+        # zählen (FD-31); eine Menüzeile hat keins.
+        try:
+            widget = guide_targets.widget_for(window, target)
+        except LookupError:
+            widget = None
+        found.append(
+            {
+                "text": reason,
+                "actions": [],
+                "kind": "sperrgrund",
+                "way_out": capture.way_out(window, reason, widget),
+            }
+        )
+    return found
 
 
 def windows_to_picture(window: Any) -> list[Any]:
@@ -319,10 +448,15 @@ def field_name(window: Any, name: str) -> str:
 
 
 def op_in_view(window: Any) -> str | None:
-    """Die Handlung, deren Maße die Gruppe im Bild trägt: die scharfe der Merkmalskarte."""
+    """Die Handlung, deren Maße die Gruppe im Bild trägt (``FeaturePanel.measure_op``).
+
+    Nicht die scharfe der Merkmalskarte: Die beiden fielen an einer erkannten
+    Bohrung auseinander (FD-34, *Merkmal verschieben* scharf, *Bohrung ändern*
+    im Bild), und der Prüfstand fand die Zeile dort nicht (FD-29).
+    """
     panel = getattr(window, "feature_panel", None)
-    armed = panel.preview_values() if panel is not None else None
-    return str(armed[0]) if armed else None
+    measured = getattr(panel, "measure_op", None)
+    return str(measured) if measured else None
 
 
 def in_view(window: Any, inputs: Sequence[str]) -> bool:

@@ -15,6 +15,7 @@ unbekannten Kennung.
 from __future__ import annotations
 
 import dataclasses
+import itertools
 import json
 import re
 import tomllib
@@ -113,7 +114,10 @@ def test_every_row_carries_its_fields(rows: list[fl.Row]) -> None:
         assert row.source in fl.ROW_SOURCES, row
         assert row.package in fl.PACKAGES, row
         assert row.requirement, row
-        assert row.target or row.source in fl.SOURCES_WITHOUT_TARGET, row
+        # Jede Zeile trägt ein Ziel — auch Meldungsfenster und Einstellungsabschnitte
+        # (Durchsicht welle4 D-L6: die Duldung ohne Ziel war leer und verdeckte
+        # eine Zeile, die ihr Ziel verliert).
+        assert row.target, row
         assert row.spec is None or not {"package", "file"} & set(row.spec), row
 
 
@@ -264,12 +268,8 @@ def test_every_surface_row_names_a_target_of_the_vocabulary(rows: list[fl.Row]) 
     """Jede Zeile zeigt auf ein Ziel des Wortschatzes — sonst findet der Prüfstand sie nicht."""
     from app.core.guides import is_target
 
-    wrong = [row.id for row in rows if row.target and not is_target(row.target)]
+    wrong = [row.id for row in rows if not is_target(row.target)]
     assert wrong == []
-    # Ohne Ziel bleiben nur Flächen, für die der Wortschatz noch keinen Namen hat
-    # (Bericht D0-L, „braucht W“): rohe Meldungsfenster und Einstellungsabschnitte.
-    missing = {row.source for row in rows if not row.target}
-    assert missing <= fl.SOURCES_WITHOUT_TARGET
     assert _by_id(rows)["startup.expired_demo"].target == "dialog:expired_demo"
 
 
@@ -473,27 +473,11 @@ def test_targets_of_raw_windows_and_sections_come_from_the_source(
     """Das Ziel einer Meldungsfensterzeile und eines Einstellungsabschnitts steht im
     Quelltext der Fläche — ``setProperty(…TARGET_PROPERTY, …)``, ``target=`` am Bauer im
     Hausstil oder der Abschnittsbauer der Einstellungen. Kontrollfall: das Demo-Ende trägt
-    ``dialog:expired_demo``. Eine Zeile ohne Ziel gibt es nur, wenn ihre Fläche kein
-    Kennzeichen setzt."""
-    import ast
-
+    ``dialog:expired_demo``. Eine Zeile ohne Ziel gibt es nicht
+    (``test_every_row_carries_its_fields``)."""
     assert _by_id(rows)["startup.expired_demo"].target == "dialog:expired_demo"
     scan = fscan.scan_ui(ui_sources)
     assert scan.raw_targets["show_expired_demo"] == "dialog:expired_demo"
-    marked = ("TARGET_PROPERTY", "target=")
-    for row in rows:
-        if row.target or row.source != "meldungsfenster":
-            continue
-        function = row.id.removeprefix("meldung:")
-        (path,) = scan.raw_places[function]
-        tree = ast.parse(ui_sources[path])
-        node = next(
-            item
-            for item in ast.walk(tree)
-            if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef) and item.name == function
-        )
-        text = ast.get_source_segment(ui_sources[path], node) or ""
-        assert not any(mark in text for mark in marked), row.id
 
 
 def test_a_marked_surface_without_its_target_turns_red() -> None:
@@ -543,6 +527,43 @@ def test_a_marked_surface_without_its_target_turns_red() -> None:
     assert windows.settings_targets == {
         "Vorgaben für neue Projekte": "setting.section:vorgaben_fuer_neue_projekte"
     }
+
+
+def test_a_subclass_of_a_house_builder_is_a_message_window() -> None:
+    """Eine Unterklasse von ``MessageDialog`` ist ein Meldungsfenster wie ihre Basis —
+    auch über eine Enkelklasse. Ihr Ziel steht im ``super().__init__(…, target=…)``;
+    reicht sie ``target`` nur weiter, nennt es der Aufruf (``DonationOpenErrorDialog``,
+    Nachprüfung der Fixrunde)."""
+    windows = fscan.scan_ui(
+        {
+            "app/ui/eigen.py": (
+                "class Failed(MessageDialog):\n"
+                "    def __init__(self, parent):\n"
+                "        super().__init__(parent, title='a', headline='b',\n"
+                "                         target='message:sample_failed')\n"
+                "class Later(Failed):\n"
+                "    pass\n"
+                "class Passed(MessageDialog):\n"
+                "    def __init__(self, parent, *, target):\n"
+                "        super().__init__(parent, title='a', headline='b', target=target)\n"
+                "def failed(parent):\n"
+                "    Failed(parent).exec()\n"
+                "def later(parent):\n"
+                "    Later(parent).exec()\n"
+                "def passed(parent):\n"
+                "    Passed(parent, target='message:sample_passed').exec()\n"
+                "def unnamed(parent):\n"
+                "    Passed(parent).exec()\n"
+            ),
+        }
+    )
+    assert set(windows.raw_windows) == {"failed", "later", "passed", "unnamed"}
+    assert windows.raw_targets == {
+        "failed": "message:sample_failed",
+        "later": "message:sample_failed",
+        "passed": "message:sample_passed",
+    }
+    assert fscan.message_builders(["class Failed(MessageDialog):\n    pass\n"])["Failed"] == ""
 
 
 def test_the_history_entries_come_from_the_context_menu(ui_sources: dict[str, str]) -> None:
@@ -673,6 +694,15 @@ def _light(kernel: str) -> list[str]:
         for key, scene in _scenes().items()
         if scene.project and not scene.heavy and (scene.kernel or "netz") == kernel
     ]
+
+
+def test_the_catalogue_header_names_every_key() -> None:
+    """C-L8: Der Kopf von ``function_scenes.toml`` nennt jeden Schlüssel, den der Leser
+    annimmt — Szene und Schritt. Sonst veraltet er still, sobald einer dazukommt."""
+    lines = fscenes.SCENES.read_text(encoding="utf-8").splitlines()
+    header = "\n".join(itertools.takewhile(lambda line: line.startswith("#"), lines))
+    words = set(re.findall(r"\w+", header))
+    assert sorted((fscenes.SCENE_KEYS | fscenes.STEP_KEYS) - words) == []
 
 
 def test_the_recipes_are_valid() -> None:
@@ -922,6 +952,17 @@ def test_every_selecting_row_carries_its_selection_clicks(rows: list[fl.Row]) ->
     # Eine Operation über die ganze Szene steht in der Karte am gewählten Körper
     # (Probelauf F-32: ohne Auswahl fand der Sprachfall sie nicht).
     assert targets("arrange_bed") == [("tree.row:obj_1", "")]
+    # Eine Kante wählt ein Klick ins Bild, nachdem der Körper gewählt ist
+    # (gestufte Tiefe, §18.5) — vorher wählte der Weg nur den Körper, und keine
+    # Kantenzeile lief an einer Kante (Durchsicht welle4 C-M4).
+    edge_way = [("tree.row:obj_1", ""), ("view.edge:obj_1", "")]
+    for row_id in (
+        "fillet_edges",
+        "chamfer_edges",
+        "bead_edges",
+        "edge:fillet_edges.variable_radius",
+    ):
+        assert targets(row_id) == edge_way, row_id
     steps = [step for row in rows for step in row.route]
     assert len(steps) >= 100
     assert all(is_target(step["target"]) and step["button"] == "left" for step in steps)
@@ -939,6 +980,65 @@ def test_a_feature_scene_without_its_selection_turns_red(
     found = fl.problems()
 
     assert any(issue.startswith("resize_hole:") and "Auswahlweg" in issue for issue in found)
+
+
+def test_the_resize_row_starts_at_a_recognised_hole(rows: list[fl.Row]) -> None:
+    """FD-29: *Bohrung ändern* beginnt an einer Bohrung, die kein Schritt gebohrt hat, und
+    wählt sie in dieser Szene — die Szene der Spezifikation, nicht die der Tabelle."""
+    found = _by_id(rows)["resize_hole"]
+    scene = _scenes()[found.start_scene]
+    assert found.start_scene == "erkannte_bohrung.netz"
+    assert [step["target"] for step in found.route] == [f"tree.row:{scene.select}"]
+
+
+@pytest.mark.parametrize(
+    ("key", "drilled"),
+    [
+        ("erkannte_bohrung.netz", False),
+        ("erkannte_bohrung.exakt", False),
+        ("merkmal.hole.exakt", True),
+    ],
+)
+def test_a_recognised_hole_has_no_drilling_step_to_measure(key: str, drilled: bool) -> None:
+    """FD-29: An einer gebohrten Bohrung holt das Fenster die Maßgruppe ihres Bohrschritts
+    ins Bild, und *Bohrung ändern* tritt zurück (RM-199, ``placement.bore_step_of``). An
+    der erkannten Bohrung gibt es diesen Schritt nicht; die gebohrte ist der Kontrollfall."""
+    from app.core.scene.placement import bore_step_of
+    from app.core.types import FeatureRef
+
+    scenes = _scenes()
+    if scenes[key].kernel == fscenes.EXACT:
+        exact_kernel()
+    project = fscenes.build_scene(key, scenes)
+    result = fscenes.evaluate_scene(project)
+    body, _dot, feature = scenes[key].select.partition(".")
+    step = bore_step_of(
+        project.document,
+        result.scene.objects,
+        FeatureRef(body, feature),
+        completed=result.completed,
+    )
+    assert (step is not None) is drilled, step
+
+
+def test_a_spec_start_scene_carries_the_selection(
+    monkeypatch: pytest.MonkeyPatch, cached_sources: dict[str, str]
+) -> None:
+    """Bauplan D0 §2.3: Die Startszene der Spezifikation gilt für die Zeile, ihr
+    Auswahlweg wählt dort. Gegenprobe: eine Startszene ohne gewähltes Merkmal ist rot."""
+
+    def spec(start: str) -> dict[str, fl.SpecEntry]:
+        return {"resize_hole": fl.SpecEntry("D4", "d04.toml", {"start_scene": start})}
+
+    monkeypatch.setattr(fl, "load_specs", lambda directory=fl.ROW_SPECS: spec("baustein.exakt"))
+    moved = _by_id(fl.rows())["resize_hole"]
+    assert moved.start_scene == "baustein.exakt"
+    assert [step["target"] for step in moved.route] == ["tree.row:obj_1.screw_hole_bore_1"]
+    assert not any("resize_hole" in issue for issue in fl.problems())
+
+    monkeypatch.setattr(fl, "load_specs", lambda directory=fl.ROW_SPECS: spec("quader.exakt"))
+    found = fl.problems()
+    assert any("[resize_hole]" in issue and "Auswahlweg" in issue for issue in found), found
 
 
 def test_the_promise_check_sees_a_wrong_selection() -> None:
@@ -1075,14 +1175,29 @@ def test_a_fault_case_is_checked_like_a_spec(rows: list[fl.Row]) -> None:
             "during": "irgendwann",
             "expected": "sperrgrund",
             "wann": "jetzt",
+            # Dieselbe Feldprüfung wie die Eingaben der Spezifikation (C-L13).
+            "inputs": {"feature.field:resize_hole.nirgends": 1.0},
         },
     }
     issues = fl.validate_specs(rows, _spec(bad), scenes)
-    for word in ("gibt_es_nicht", "'Knopf'", "irgendwann", "wann", "'mitte'", "'alt'"):
+    words = ("gibt_es_nicht", "'Knopf'", "irgendwann", "wann", "'mitte'", "'alt'", "'nirgends'")
+    for word in words:
         assert any(word in issue for issue in issues), (word, issues)
     fault = fl.load_specs()["finding.action:place_on_bed"].values["fault_case"]
     assert fault["during"] == "rechnung" and fault["expected"] == "sperrgrund"
     assert scenes[fault["start_scene"]].heavy
+
+
+def test_the_scenes_of_a_case_must_agree_on_their_preconditions(rows: list[fl.Row]) -> None:
+    """Durchsicht welle4 C-L4: Startszene und Szene des Fehlfalls laufen in einem Fall,
+    ihre Vorbedingungen gelten zusammen — verlangen sie Verschiedenes, hält es an."""
+    scenes = fscenes.load_scenes()
+    scenes["leer"] = dataclasses.replace(scenes["leer"], preconditions={"opencascade": "vorhanden"})
+    values = {"start_scene": "leer", "fault_case": {"start_scene": "ohne_opencascade.exakt"}}
+    issues = fl.validate_specs(rows, _spec(values), scenes)
+    assert any("verlangt opencascade anders" in issue for issue in issues), issues
+    agreeing = {"start_scene": "quader.exakt", "fault_case": values["fault_case"]}
+    assert not any("anders" in issue for issue in fl.validate_specs(rows, _spec(agreeing), scenes))
 
 
 def test_the_licence_preconditions_are_the_states_of_the_application() -> None:
@@ -1370,6 +1485,12 @@ def test_every_menubar_line_becomes_a_row_with_a_package(qt_app: Any, tmp_path: 
     used = {row.id.rsplit("/", 1)[-1] for row in commands}
     assert set(fl.COMMAND_PACKAGES) <= used, "Ausnahme ohne Menüzeile"
     assert {row.id.split("/")[0] for row in commands} == set(fl.MENU_PACKAGES)
+    # Menütitel tragen Komma und „und“ („Wie in Bambu Studio, Orca und PrusaSlicer …“):
+    # In Backticks bleibt jede Kennung in der Funddatei eine Zeile (Schlussreview D0, RF-3).
+    from tools.function_report import Finding
+
+    for row in found:
+        assert Finding(0, "", {"Funktion": f"`{row.id}`"}).rows == {row.id}, row.id
 
 
 def test_a_window_command_lands_in_the_package_of_its_area() -> None:

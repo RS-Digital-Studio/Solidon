@@ -128,7 +128,7 @@ def place_line(lines: list[str], line: str, section: str | None) -> list[str]:
 
     heading = f"## {section}"
     # **Genau einmal, sonst wird nicht geraten** (Regel 21). Ein doppelter
-    # Titel ist bei drei Maschinen ein realistisches Merge-Artefakt, und
+    # Titel ist bei parallel schreibenden Sitzungen ein realistisches Artefakt, und
     # `lines.index` nähme still den ersten — die Nachzählung unten fängt das
     # nicht, denn eine Zeile im falschen Abschnitt ist auch „genau eine dazu".
     hits = lines.count(heading)

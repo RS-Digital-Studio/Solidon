@@ -146,6 +146,8 @@ class ToolStrip(QWidget):
 
     toolChanged = Signal(object)
     """Der Schlüssel des aktiven Werkzeugs, oder ``None``."""
+    refused = Signal(str)
+    """Ein Kürzel traf einen grauen Umschalter — mit dessen Grund (:meth:`press`)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -286,12 +288,19 @@ class ToolStrip(QWidget):
         heißt. Sichtbar muss sie sein — ein Kürzel, das nirgends steht, lernt
         niemand, und die Werkzeugzeile hat keinen Platz für eine zweite Zeile
         neben jedem Knopf.
+
+        **Geschrieben wird über** :meth:`_hint_of`, die eine Stelle für den
+        Hinweis: Ein grauer Knopf behält dort seinen Grund, und das Kürzel
+        kommt mit der Freigabe. Das Fenster vergibt die Kürzel erst, nachdem
+        die leere Szene die Werkzeuge ausgegraut hat; ein eigenes
+        ``setToolTip`` hier schrieb „Schnitt  (Alt+1)“ über den Grund (FD-156).
         """
         tool = self._tools.get(key)
         if tool is None:
             return
         self._tools[key] = replace(tool, shortcut=sequence)
-        self._buttons[key].setToolTip(f"{tool.title}  ({sequence})")
+        button = self._buttons[key]
+        self._hint_of(key, button.isEnabled(), button.accessibleDescription())
 
     def _on_button(self, button: QAbstractButton) -> None:
         """Ein Klick auf einen Umschalter — welcher, sagt die Gruppe."""
@@ -303,6 +312,28 @@ class ToolStrip(QWidget):
     def toggle(self, key: str) -> None:
         """Ein Werkzeug öffnen — oder schließen, wenn es schon offen war."""
         self.activate(None if self._active == key else key)
+
+    def usable(self, key: str) -> tuple[bool, str]:
+        """Ob der Umschalter gerade geht — und sonst sein Grund, wie ihn der Knopf zeigt."""
+        button = self._buttons.get(key)
+        if button is None or button.isEnabled():
+            return True, ""
+        return False, button.toolTip()
+
+    def press(self, key: str) -> None:
+        """Was ein Kürzel tut: dasselbe wie ein Klick auf den Umschalter.
+
+        Ein grauer Knopf nimmt keinen Klick an; über Alt und Ziffer öffnete
+        *Bewegen* ohne Freischaltung trotzdem, und der erste Zug endete im
+        Meldungsfenster (FD-26). Gesperrt öffnet nichts, und :attr:`refused`
+        trägt den Grund des Knopfes; ein offenes Werkzeug schließt das Kürzel
+        weiter.
+        """
+        allowed, reason = self.usable(key)
+        if not allowed and self._active != key:
+            self.refused.emit(reason)
+            return
+        self.toggle(key)
 
     def activate(self, key: str | None) -> None:
         """Genau ein Werkzeug offen, oder keines.
@@ -410,6 +441,9 @@ class ToolStrip(QWidget):
         button.setEnabled(usable)
         label = f"{tool.title}  ({tool.shortcut})" if tool.shortcut else str(tool.title)
         button.setToolTip(label if usable else reason)
+        # Der Grund auch für den Bildschirmleser (Regel 18, FD-27); frei sagt
+        # der Name des Knopfes genug.
+        button.setAccessibleDescription("" if usable else reason)
 
     def set_usable(self, usable: bool, reason: str = "") -> None:
         """Alle Werkzeuge anbieten oder ausgrauen — mit dem Grund im Hinweis.

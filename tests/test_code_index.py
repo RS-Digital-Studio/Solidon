@@ -14,7 +14,8 @@ Grundmengen mit den Zahlen aus dem Plan.
 Die Bekanntfälle am echten Baum gelten, **solange ihre Fixes fehlen** (Plan
 2.2): Wer einen behebt, streicht seinen Fall hier im selben Commit; die
 Meldung des Tests nennt dann das Paket und die Regel von W2, die ihn ab da
-hält.
+hält. Trägt diese Regel noch ``xfail``, wird der Fall umgekehrt statt
+gestrichen und hält den behobenen Stand, bis sie scharf ist (CS-9a).
 """
 
 from __future__ import annotations
@@ -695,28 +696,26 @@ def test_known_case_head_copy_of_detect_in_evaluate() -> None:
     assert any(f.name == "detect" for f in rules)
 
 
-def test_known_case_cost_matrix_has_no_reader() -> None:
-    """``matching._cost_matrix`` wird verboten gepatcht, aber nur ``_MATCH_WAYS`` hält es
-    (CS-9b). Paket P2 behebt es; dann wird dieser Fall gestrichen, W2 d) hält es."""
+def test_known_case_the_spool_ban_sits_on_the_binding_the_inventory_reads() -> None:
+    """CS-9a, behoben und umgekehrt gehalten: ``test_first_run.py`` verbietet
+    ``configured_spools`` an der Bindung in ``filament_inventory.py``, die das Lager zur
+    Aufrufzeit liest — nicht am Original in ``filament_picker``, das dessen Kopfkopie nie
+    erreicht. Solange W2 c) und d) ``xfail`` tragen, hält dieser Fall das ohne Fenster;
+    sind beide scharf, wird er gestrichen."""
     index = _real()
-    key = ("app.core.perceive.matching", "_cost_matrix")
-    assert key in index.patched_names(), "kein Patch mehr: P2 hat CS-9b behoben, Fall streichen"
-    assert index.readers(*key) == ()
-    assert any((f.module, f.name) == key for f in index.patch_findings()["d"]), (
-        "d) meldet _cost_matrix nicht"
-    )
-
-
-def test_known_case_head_copy_of_configured_spools() -> None:
-    """``filament_inventory.py`` hält ``configured_spools`` aus ``filament_picker`` als
-    Kopfkopie; ``test_first_run.py`` patcht das Original (CS-9a). Paket P1 setzt den Patch
-    auf die Kopie um; dann wird dieser Fall gestrichen, W2 c) hält es."""
-    index = _real()
-    key = ("app.ui.filament_picker", "configured_spools")
-    assert key in index.patched_names(), "kein Patch am Original mehr: P1 hat CS-9a behoben"
-    copies = [
-        f
-        for f in index.patch_findings()["c"]
-        if (f.path, f.name) == ("app/ui/filament_inventory.py", "configured_spools")
+    binding = ("app.ui.filament_inventory", "configured_spools")
+    bans = [
+        site
+        for site in index.patch_sites()
+        if site.path == "tests/test_first_run.py"
+        and any(target.name == "configured_spools" for target in site.targets)
     ]
-    assert copies, "c) meldet die Kopie configured_spools nicht"
+    assert bans, "kein Patch auf configured_spools in test_first_run.py"
+    for site in bans:
+        targets = {(target.module, target.name) for target in site.targets}
+        assert targets == {binding}, f"Zeile {site.line} verbietet an {targets}"
+    assert index.readers(*binding), "niemand liest filament_inventory.configured_spools"
+    assert ("app.ui.filament_picker", "configured_spools") not in index.patched_names()
+    found = index.patch_findings()
+    named = [f for rule in "cd" for f in found[rule] if f.name == "configured_spools"]
+    assert not named, named

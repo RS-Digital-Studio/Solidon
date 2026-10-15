@@ -782,11 +782,19 @@ class InstallDialog(QDialog):
         if requirement.follow_up == "comfyui":
             from app.ui.comfy_dialog import ComfySetupDialog
 
-            ComfySetupDialog(self).exec()
+            dialog = ComfySetupDialog(self)
+            try:
+                dialog.exec()
+            finally:
+                dialog.deleteLater()
         elif requirement.follow_up == "chat":
             from app.ui.dialogs import KeyDialog
 
-            KeyDialog(parent=self, settings=self._settings).exec()
+            key = KeyDialog(parent=self, settings=self._settings)
+            try:
+                key.exec()
+            finally:
+                key.deleteLater()
         else:
             return
         self.refresh()
@@ -1088,7 +1096,10 @@ class InstallDialog(QDialog):
         copy = box.add_action(tr("Kopieren"), "message.button:install_details.copy", closes=False)
         copy.clicked.connect(weak_slot(box, MessageDialog.copy_text))
         box.add_exit(tr("Schließen"), "message.button:install_details.close")
-        box.exec()
+        try:
+            box.exec()
+        finally:
+            box.deleteLater()
 
     def _finished(self, result: object) -> None:
         assert isinstance(result, install.InstallResult)

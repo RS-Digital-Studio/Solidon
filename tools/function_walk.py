@@ -112,6 +112,7 @@ class ClickLike(Protocol):
     why: str
     target: Any
     direction: int
+    wheel_angle: int
 
 
 class Ports(Protocol):
@@ -121,7 +122,8 @@ class Ports(Protocol):
     def widget_under(self, point: Any) -> Any: ...
     def covers(self, click: ClickLike, hit: Any) -> bool: ...
     def centre(self, rect: Any) -> Any: ...
-    def press(self, widget: Any, point: Any, button: str) -> None: ...
+    def press(self, widget: Any, point: Any, button: str, *, wheel_angle: int = 120) -> None: ...
+    def move(self, point: Any) -> None: ...
     def keys(self, sequence: Any) -> None: ...
     def type_text(self, text: str) -> None: ...
     def describe(self, widget: Any, point: Any = None) -> dict[str, Any]: ...
@@ -177,7 +179,13 @@ class Walk:
         self.steps.append(entry)
         return entry
 
-    def step(self, name: str, button: str = "left") -> Step:
+    def step(
+        self,
+        name: str,
+        button: str = "left",
+        *,
+        stop_before_target: bool | Callable[[], bool] = False,
+    ) -> Step:
         """Ein Schritt, der bis zum Ziel wächst: jeder Wegklick reiht den nächsten ein.
 
         Geklickt wird erst, wenn der nächste Klick :data:`STABLE_S` lang derselbe
@@ -196,7 +204,7 @@ class Walk:
             if waited.get("silent"):
                 self.record({"target": name, "finding": NO_RESPONSE, "detail": waited["silent"]})
                 raise BenchFinding(NO_RESPONSE, name, waited["silent"])
-            why = self.click_once(name, button)
+            why = self.click_once(name, button, stop_before_target=stop_before_target)
             if why == TARGET_REASON:
                 return
             counter["way"] += 1
@@ -222,7 +230,13 @@ class Walk:
 
         return Step(f"weg zu {name}", act, ready=self.stable(name, waited), settle_ms=SETTLE_MS)
 
-    def stable(self, name: str, waited: dict[str, str] | None = None) -> Callable[[], bool]:
+    def stable(
+        self,
+        name: str,
+        waited: dict[str, str] | None = None,
+        *,
+        button: Callable[[], Any] | None = None,
+    ) -> Callable[[], bool]:
         """Ob der nächste Klick zu ``name`` fallen kann.
 
         Er muss seit :data:`STABLE_S` derselbe sein, und an seiner Mitte liegt
@@ -233,6 +247,13 @@ class Walk:
         Solange das Fenster sagt, dass etwas kommt (``Ports.pending``), zählt die
         Frist nicht; sagt es das länger als :data:`PENDING_S`, steht in
         ``waited`` der Grund, und der Klick meldet „keine Rückmeldung“.
+
+        Erst den Zeiger öffentlich anfahren, dann in einem späteren Takt neu
+        prüfen: Ein Tooltip kann erst durch diese Bewegung verschwinden. Für
+        Knöpfe ohne Wortschatznamen löst ``button`` das aktuelle Widget auf.
+        Kein Ereignispumpen hier oder im anschließenden ``click_button``:
+        Der Automat darf seinen Folgeschritt erst nach dem wirklichen Klick
+        betreten. Seine vorhandene Schrittfrist bleibt unverändert.
         """
         seen: dict[str, Any] = {
             "key": None,
@@ -244,8 +265,30 @@ class Walk:
 
         def ready() -> bool:
             now = self.ports.now()
+            target_button = None
+            identity: str | int
             try:
-                click = self.ports.next_click(name)
+                if button is None:
+                    click = self.ports.next_click(name)
+                    rect = click.rect
+                    point = self.ports.aim(click, self.ports.centre(rect))
+                    identity = str(click.why)
+                else:
+                    from PySide6.QtCore import QPoint, QRect
+                    from shiboken6 import isValid
+
+                    target_button = button()
+                    if (
+                        target_button is None
+                        or not isValid(target_button)
+                        or not target_button.isVisible()
+                        or not target_button.isEnabled()
+                    ):
+                        seen["key"] = seen["covered"] = None
+                        return False
+                    rect = QRect(target_button.mapToGlobal(QPoint()), target_button.size())
+                    point = rect.center()
+                    identity = id(target_button)
             except LookupError:
                 if self.ports.pending():
                     seen["missing"] = None
@@ -263,14 +306,20 @@ class Walk:
                     seen["missing"] = now
                 return bool(now - seen["missing"] >= MISSING_S)
             seen["missing"] = seen["pending"] = None
-            key = (str(click.why), tuple(self.ports.rect_data(click.rect)))
+            key = (identity, tuple(self.ports.rect_data(rect)), tuple(self.ports.point_data(point)))
             if key != seen["key"]:
                 seen["key"], seen["since"], seen["covered"] = key, now, None
+                self.ports.move(point)
                 return False
             if now - seen["since"] < STABLE_S:
                 return False
-            hit = self.ports.widget_under(self.ports.centre(click.rect))
-            if hit is not None and self.ports.covers(click, hit):
+            hit = self.ports.widget_under(point)
+            matches = hit is not None and (
+                (hit is target_button or target_button.isAncestorOf(hit))
+                if target_button is not None
+                else self.ports.covers(click, hit)
+            )
+            if matches:
                 seen["covered"] = None
                 return True
             if seen["covered"] is None:
@@ -279,7 +328,13 @@ class Walk:
 
         return ready
 
-    def click_once(self, name: str, button: str = "left") -> str:
+    def click_once(
+        self,
+        name: str,
+        button: str = "left",
+        *,
+        stop_before_target: bool | Callable[[], bool] = False,
+    ) -> str:
         """Ein Klick auf dem Weg zu ``name``; gibt seinen Grund zurück."""
         try:
             click = self.ports.next_click(name)
@@ -315,9 +370,24 @@ class Walk:
                 name,
                 f"an {record['point']} liegt {record['widget_at']}, nicht das Ziel des Klicks",
             )
+        if why == TARGET_REASON and (
+            stop_before_target() if callable(stop_before_target) else stop_before_target
+        ):
+            # Die Fläche einer Soforthandlung muss vor ihrer Wirkung stehen.
+            # Wegklicks und Trefferprüfung bleiben vollständig; nur der letzte
+            # Klick entfällt, und das Protokoll behauptet keinen solchen.
+            record["button"] = None
+            record["detail"] = "Ziel vor der Handlung erreicht"
+            return why
         if why == TARGET_REASON and self.before_target is not None:
             self.before_target(name)
-        self.ports.press(hit, point, record["button"])
+        angle = int(getattr(click, "wheel_angle", 120)) if why == "rollen" else 120
+        if why == "rollen":
+            record["wheel_angle"] = angle
+        if angle != 120:
+            self.ports.press(hit, point, record["button"], wheel_angle=angle)
+        else:
+            self.ports.press(hit, point, record["button"])
         return why
 
     def _t(self) -> float:
@@ -333,6 +403,12 @@ def click_button(ports: Any, walker: Walk, button: Any, label: str) -> bool:
     heißt: verdeckt, nicht geklickt — der Eintrag trägt den Fund.
     """
     from PySide6.QtCore import QPoint, QRect
+    from shiboken6 import isValid
+
+    if button is None or not isValid(button) or not button.isVisible() or not button.isEnabled():
+        raise RuntimeError(
+            f"{label}: Knopf nach der Zielprüfung nicht bedienbar; Ziel neu ermitteln"
+        )
 
     rect = QRect(button.mapToGlobal(QPoint(0, 0)), button.size())
     point = rect.center()
@@ -408,14 +484,6 @@ def place_of(steps: Sequence[Mapping[str, Any]], target: str) -> dict[str, Any]:
         if step.get("target") == target
     ]
     return {"where": where, "path": path, "error": None}
-
-
-def search_rank(hits: Sequence[str], target: str) -> int | None:
-    """Der Rang des Ziels unter den sichtbaren Treffern, ab 1; ``None``, wenn es fehlt."""
-    for rank, hit in enumerate(hits, 1):
-        if hit == target:
-            return rank
-    return None
 
 
 class QtPorts:
@@ -574,7 +642,7 @@ class QtPorts:
         """Das Widget, das ein Ziel ohne eigenes Widget trägt, oder ``None``.
 
         Die Liste oder der Baum einer Zeile, die Liste des offenen Katalogs für
-        ``part:``, die Ansicht für ``view:``, ``viewport`` und einen Griff im
+        ``part:``, die Ansicht für ``view:``, ``view.edge:``, ``viewport`` und einen Griff im
         Bild; eine Leiste über der Ansicht (``handle:bar.*``) ist ihr eigenes
         Widget und liegt in der Werkzeugzeile, nicht in der Ansicht (Review N1).
         """
@@ -586,7 +654,7 @@ class QtPorts:
         window = self.window
         if window is None:
             return None
-        if kind == "view" or name == "viewport":
+        if kind in ("view", "view.edge") or name == "viewport":
             return window.viewport
         if kind == "handle":
             try:
@@ -609,12 +677,13 @@ class QtPorts:
     def centre(self, rect: Any) -> Any:
         return rect.center()
 
-    def press(self, widget: Any, point: Any, button: str) -> None:
-        from PySide6.QtCore import QPoint, QPointF, Qt
-        from PySide6.QtGui import QWheelEvent
+    def press(self, widget: Any, point: Any, button: str, *, wheel_angle: int = 120) -> None:
+        from PySide6.QtCore import QPoint, Qt
         from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QApplication
 
+        if wheel_angle <= 0:
+            raise ValueError("Der Radwinkel muss positiv sein (Achtelgrad).")
         local = widget.mapFromGlobal(point)
         modifiers = Qt.KeyboardModifier.NoModifier
         held, plus, rest = button.rpartition("+")
@@ -643,18 +712,19 @@ class QtPorts:
             QApplication.processEvents()
         QTest.mouseMove(widget, local)
         if button in ("wheel_up", "wheel_down"):
-            step = 120 if button == "wheel_up" else -120
-            event = QWheelEvent(
-                QPointF(local),
-                QPointF(point),
-                QPoint(0, 0),
-                QPoint(0, step),
-                Qt.MouseButton.NoButton,
-                modifiers,
-                Qt.ScrollPhase.NoScrollPhase,
-                False,
+            if not hasattr(QTest, "wheelEvent"):
+                raise RuntimeError(
+                    "Der Prüfstand braucht QTest.wheelEvent ab Qt 6.8. "
+                    "Die gepinnte Umgebung über tools/check_env.py prüfen und "
+                    "mit --install gegen constraints.txt herstellen."
+                )
+            step = wheel_angle if button == "wheel_up" else -wheel_angle
+            # Der Qt-Eingabepfad reicht ignorierte Radereignisse an die Eltern
+            # weiter. Direktes sendEvent bleibt dagegen beim getroffenen Kind.
+            handle = top.windowHandle()
+            QTest.wheelEvent(
+                handle, handle.mapFromGlobal(point), QPoint(0, step), stateKey=modifiers
             )
-            QApplication.sendEvent(widget, event)
             return
         if button == "double":
             # Ein Doppelklick des Kunden ist erst ein Klick, dann der zweite
@@ -664,6 +734,19 @@ class QtPorts:
             # einen Verlaufsschritt (Probelauf F-34, Prüfpunkt 12).
             QTest.mouseClick(widget, Qt.MouseButton.LeftButton, modifiers, local)
             QTest.mouseDClick(widget, Qt.MouseButton.LeftButton, modifiers, local)
+            # Danach lässt der Kunde die Taste los; ``mouseDClick`` tut das nicht.
+            # Ohne Loslassen hielt Qt die linke Taste bis zum nächsten Klick für
+            # gedrückt: Jede Bewegung bis dahin war ein Zug ohne Enter und Leave,
+            # und ein Tooltip blieb über dem nächsten Ziel stehen (FD-83). Wie bei Qt
+            # empfängt das Loslassen das gedrückte Widget oder, wenn der
+            # Doppelklick es abgebaut hat, das unter dem Zeiger.
+            from shiboken6 import isValid
+
+            release = widget if isValid(widget) else self.widget_under(point)
+            if release is not None:
+                QTest.mouseRelease(
+                    release, Qt.MouseButton.LeftButton, modifiers, release.mapFromGlobal(point)
+                )
             return
         mouse = {
             "left": Qt.MouseButton.LeftButton,
@@ -792,6 +875,8 @@ class QtPorts:
         from app.ui import guide_targets
 
         name = str(getattr(click, "target", "") or "")
+        if str(getattr(click, "why", TARGET_REASON)) != TARGET_REASON:
+            return point
         if name.partition(":")[0] not in ("field", "feature.field", "measure.field"):
             return point
         try:

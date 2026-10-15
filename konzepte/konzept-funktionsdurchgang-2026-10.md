@@ -102,7 +102,7 @@ hat eine Zählgröße und eine Schwelle (Tabellen unten).
 | 15 | Halt und Einfügemarke | bei angehaltener Kette der Grund mit Schrittnummer; bei gesetzter Einfügemarke Ergebnis am Stand davor oder Absage mit *Einfügen beenden* (`fenster.md`) | je ein erzwungener Fall |
 | 16 | Projektwechsel | Ein Wechsel während Vorschau, Entwurf oder Rechnung räumt alles ab; nichts Spätes meldet ins neue Projekt | „Öffnen während der Rechnung“ |
 | 17 | Agentenweg | Das Agentenwerkzeug nennt denselben Ort (`menu_path` in `tool_schemas()`); ein Undo nimmt einen Vorschlag mit dieser Operation ganz zurück (Regel 16) | Ort offline; der Lauf in der Agenten-Suite |
-| 18 | Lizenzzustand | In der Demo und nach Ablauf grau mit Grund, nur Lesendes läuft weiter (`kern.md`, Lizenzgrenze) | zwei Läufe mit vorbereitetem Profil |
+| 18 | Lizenzzustand | In Demo und nach Ablauf grau mit Grund, nur Lesendes läuft weiter; schreibendes Ziel frei oder versteckt statt grau: jeweils *mittel*. Auswahl und bei offenem Ziel der ganze Handlungsweg müssen gelaufen sein; Nullwerte und beschädigte Einträge sind ungemessen (`kern.md`, Lizenzgrenze) | zwei Läufe mit vorbereitetem Profil |
 | 19 | Gestaltung | Wirkt sie zeitgemäß, ruhig und hochwertig — und bleibt sie dabei einfach? Nutzt sie, was Solidon besser kann, statt eines klassischen Formulars? | G1–G9, Z1–Z7, I1–I6 |
 
 **Szenenabdruck:** Ops, Parameter, Projektparameter, Passungen und der Hash der
@@ -129,7 +129,7 @@ Beispielziel je Zeile vorab festgelegt (etwa „Bohrung auf 5 mm“):
 | V2 | Satzlängen | die Grenzen aus `test_text_length` |
 | V3 | Felder mit eigenem Satz (Kurzhilfe und zugängliche Beschreibung) | 100 %; der Satz teilt höchstens die Hälfte seiner Wörter mit dem Titel |
 | V4 | Vorhersage: Der Prüfer schreibt vor dem Übernehmen aus Titel, erstem Satz und Vorschau auf, was geschehen wird | Abweichung vom Ergebnis ist ein Fund |
-| V5 | Meldungen | jede sagt, was nicht ging, warum und was jetzt; ihre Handlung löst das Problem. Ein Sperrgrund am grauen Bedienelement ist keine Meldung und braucht keinen Knopf, nennt aber den Ausweg (Menüweg oder offener Knopf); ohne Ausweg ist er ein Fund *mittel* |
+| V5 | Meldungen | jede sagt, was nicht ging, warum und was jetzt; ihre Handlung löst das Problem. Ein Sperrgrund am grauen Element braucht keinen Knopf, nennt aber den Ausweg: Menüweg A → B, ganze Wörter eines offenen Knopfs, ein Satz, der selbst der Weg ist (Rechensperre), oder Titel eines offenen Felds derselben Fläche; ohne Ausweg ein Fund *mittel* |
 | V6 | Kurzhilfen, die man bis zum Ziel öffnen muss | ≤ 1; nie das Handbuch |
 
 **Gestaltung** — innovativ und modern, aber einfach bedienbar (Robert,
@@ -255,7 +255,8 @@ Aktion).
 **Stufe B — Bild und Text lesen.** Ein Agent liest Bilder und Textauszug jeder
 Zeile und urteilt nach E1–E7, V1–V6, G9, Z3, Z4, I1–I6 und den Prüfpunkten 2, 8,
 9, 11 und 19. Die Urteile stehen je Paket in `urteile-<paket>.toml`, jedes mit
-Bild und Stelle.
+Bild und Stelle; das Bild relativ zum Lauf, den die Datei mit Name, Kopf und
+Siegel nennt, oder mit dem Grund, warum der Lauf keines hat.
 
 **Stufe C — von Hand am laufenden Fenster**, mit Maus und Tastatur
 (Computer-Steuerung), nur für das, was kein Skript kann: Dateidialoge des
@@ -327,8 +328,8 @@ nach Fix*. Kleine Funde in eigenen Commits im Paket, größere als Registerpunkt
 mit Verweis auf den Fund.
 
 **Abhakliste:** je Paket `.claude/.state/funktionsdurchgang-2026-10/
-abhakliste-<paket>.md`, versioniert, damit sie auf allen drei Maschinen gleich
-ist — nur Text; Bilder und Rohdaten liegen außerhalb des Baums (`--out`). Der
+abhakliste-<paket>.md`, versioniert, damit jede Sitzung und die Durchsicht
+denselben Stand lesen — nur Text; Bilder und Rohdaten liegen außerhalb des Baums (`--out`). Der
 Prüfstand erzeugt sie aus seinen Messungen und `urteile-<paket>.toml`; von Hand
 wird sie nicht bearbeitet. Eine Datei je Paket, damit zwei parallele Pakete
 keine erzeugte Datei mergen müssen. „Offen“ gibt es nur mit RM-Nummer — das

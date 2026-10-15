@@ -124,7 +124,7 @@ def _clicks(steps: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
 
 def _is_selection(step: Mapping[str, Any]) -> bool:
     target = str(step.get("target") or "")
-    return target.startswith(("tree.row:", "view:"))
+    return target.startswith(("tree.row:", "view:", "view.edge:"))
 
 
 def _route_targets(row: Mapping[str, Any]) -> list[str]:
@@ -178,7 +178,8 @@ def _selected_feature(steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any]
     Aus der Anforderung der Zeile (``function_list``: ``merkmal:<art>``, die
     Merkmalsauswahlen, ``kante``) oder, wo sie fehlt, aus der Startauswahl: ein
     Merkmal ist eine Baumzeile oder Stelle im Bild mit Merkmal
-    (``tree.row:obj_1.hole_1``). Ein Befund ist keines, auch wenn sein Code
+    (``tree.row:obj_1.hole_1``), eine Kante ihre Stelle im Bild
+    (``view.edge:obj_1``). Ein Befund ist keines, auch wenn sein Code
     einen Punkt trägt (``finding:arrange.below_bed``, Probelauf F-17).
     """
     requirement = str(row.get("requirement") or "")
@@ -190,7 +191,7 @@ def _selected_feature(steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any]
     if not chosen:
         return False
     kind, _separator, rest = chosen[-1].partition(":")
-    return kind in ("tree.row", "view") and "." in rest
+    return kind == "view.edge" or (kind in ("tree.row", "view") and "." in rest)
 
 
 def _has_selection_relation(row: Mapping[str, Any]) -> bool:
@@ -441,6 +442,10 @@ def _e7(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         if not entry.get("intended") and not str(entry.get("sentence") or "").strip():
             issues.append(Issue(f"leere Fläche ohne Satz: {entry.get('surface')}", "schwer", "E7"))
     for entry in messages or []:
+        if entry.get("kind") in ("sperrgrund", "grenzablehnung") and entry.get("way_out") is True:
+            # Derselbe Vertrag wie V5: Der gemessene Ausweg am gesperrten
+            # Bedienelement ist eine Handlungsmöglichkeit, kein Meldungsknopf.
+            continue
         if not entry.get("actions"):
             issues.append(
                 Issue(f"Meldung ohne Handlung: „{entry.get('text', '')}“", "schwer", "E7")
@@ -750,16 +755,36 @@ def _effective_level(entry: Mapping[str, Any]) -> str | None:
     ``type_scale`` der Grundgröße (``style.apply_style``) nennt je Stufe Größe
     und Gewicht; eine Schrift ohne gesetzte Eigenschaft ist die Grundschrift
     und damit ``body`` (Probelauf F-4). ``None``, wenn sie keiner Stufe
-    entspricht; ``""`` ohne Messung der Schrift.
+    entspricht; ``""`` ohne Messung der Schrift. Die belegte Primärrolle darf
+    die Grundschrift halbfett betonen, aber weder Größe noch Familie ändern.
     """
+    from PySide6.QtGui import QFont
+
     from app.ui.style import type_scale
 
     points, weight, base = (_number(entry.get(key)) for key in ("points", "weight", "base_points"))
     if points is None or weight is None or base is None or points <= 0 or base <= 0:
         return ""
-    for level, (size, bold) in type_scale(int(base)).items():
+    family, base_family = entry.get("family"), entry.get("base_family")
+    if family is not None or base_family is not None:
+        if (
+            not isinstance(family, str)
+            or not family
+            or not isinstance(base_family, str)
+            or not base_family
+        ):
+            return ""
+        if family != base_family:
+            return None
+    sizes = type_scale(int(base))
+    for level, (size, bold) in sizes.items():
         if abs(points - size) < 0.05 and int(weight) == bold:
             return level
+    if entry.get("primary") is True:
+        if not family or not base_family:
+            return ""
+        if abs(points - sizes["body"][0]) < 0.05 and int(weight) == QFont.Weight.DemiBold.value:
+            return "body"
     return None
 
 
@@ -776,7 +801,7 @@ def _g4(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         if "points" in entry:
             level = _effective_level(entry)
             if level == "":
-                absent.append(f"fonts.points an {widget}")
+                absent.append(f"fonts.points/Familie an {widget}")
             elif level is None:
                 issues.append(
                     Issue(
@@ -1007,6 +1032,9 @@ def _z1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
 
 
 def _z2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
+    # ``allowed`` setzt die Wache: die Ausnahmen aus Konzept Z2, die eigene
+    # Fläche der Zeile und die Fehlermeldung mit Handlungsvorschlag nach Regel 17
+    # (``function_capture.error_proposal``, Durchsicht welle4 D-M2).
     modals = _list(protocol, "modals")
     if modals is None:
         return _missing("Z2", "modals")

@@ -4881,9 +4881,12 @@ class SketchCanvas(QWidget):
         if not 0 <= flat < len(points):
             return
         dialog = PointDialog(points[flat], self.axis_names(), parent=self)
-        if dialog.exec() != PointDialog.DialogCode.Accepted:
-            return
-        across, up = dialog.point()
+        try:
+            if dialog.exec() != PointDialog.DialogCode.Accepted:
+                return
+            across, up = dialog.point()
+        finally:
+            dialog.deleteLater()
         self._remember()
         # **Getippte Koordinaten gewinnen auch gegen *Fest*.** Ein Zug lässt
         # einen festen Punkt stehen (der Anker ist die gespeicherte
@@ -7708,6 +7711,8 @@ class SketchPanel(QWidget):
         dialog.proposed.connect(weak_slot(self, SketchPanel._preview_new_plane, forward=True))
         dialog.accepted.connect(weak_slot(self, SketchPanel._take_new_plane))
         dialog.rejected.connect(weak_slot(self, SketchPanel._drop_new_plane))
+        # Nach Übernehmen oder Abbrechen gehört er niemandem mehr.
+        dialog.finished.connect(dialog.deleteLater)
         self._plane_dialog = dialog
         dialog.open()
         dialog.propose()
@@ -8000,9 +8005,12 @@ class SketchPanel(QWidget):
                 else measured_expression(self.canvas.points(), targets)
             )
             dialog = ExpressionDialog(self._params, start=start, parent=self)
-            if dialog.exec() != ExpressionDialog.DialogCode.Accepted:
-                return
-            value = dialog.expression()
+            try:
+                if dialog.exec() != ExpressionDialog.DialogCode.Accepted:
+                    return
+                value = dialog.expression()
+            finally:
+                dialog.deleteLater()
         self.canvas.add_constraint(core_kind(kind), targets, value)
         if takes_back:
             # **Die zweite Kodierung zum gedrückten Knopf** (Regel 18). Ohne
@@ -8294,7 +8302,7 @@ class SketchPanel(QWidget):
         (Regel 19). Vorbelegt mit dem alten — wer nur eine Ziffer tauschen will,
         tippt eine Ziffer.
 
-        Der Wert bleibt Text, weil er einer ist: „30" ebenso wie „breite/2".
+        Der Wert bleibt Text, weil er einer ist: „30" ebenso wie „@breite/2".
         Eine Zahleneingabe nähme dem Kunden die Ausdrücke weg, für die es die
         Projektparameter gibt (§13).
         """
@@ -8323,7 +8331,7 @@ class SketchPanel(QWidget):
                 title=str(tr("Maß ändern")),
                 caption=str(caption),
                 text=shown,
-                note=str(tr("Eine Zahl oder ein Ausdruck mit Projektparametern, etwa breite/2.")),
+                note=str(tr("Eine Zahl oder ein Ausdruck mit Projektparametern, etwa @breite/2.")),
                 target="message:constraint_value",
             )
             popup.submitted.connect(
@@ -8803,6 +8811,10 @@ class SketchField(QWidget):
         dialog = SketchEditorDialog(
             text, self._params, self, self._surroundings, planes=self.planes
         )
-        if dialog.exec() != SketchEditorDialog.DialogCode.Accepted:
-            return
-        self.set_text(dialog.sketch_text())
+        try:
+            if dialog.exec() != SketchEditorDialog.DialogCode.Accepted:
+                return
+            text = dialog.sketch_text()
+        finally:
+            dialog.deleteLater()
+        self.set_text(text)

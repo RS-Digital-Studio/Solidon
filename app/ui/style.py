@@ -258,7 +258,11 @@ class DialogScrollArea(QScrollArea):
         wanted = content.sizeHint().expandedTo(content.minimumSizeHint())
         layout = content.layout()
         if layout is not None and layout.hasHeightForWidth():
-            width = self.viewport().width() if self.isVisible() else wanted.width()
+            # Der Wunsch gilt dem vollständig sichtbaren Inhalt. Eine nur
+            # vorläufig nötige senkrechte Leiste verschwindet beim Einpassen;
+            # ihre alte Ausschnittbreite ergäbe zusätzliche Umbruchzeilen.
+            # Qt berücksichtigt dabei weiterhin dauerhaft gesetzte Leisten.
+            width = self.maximumViewportSize().width() if self.isVisible() else wanted.width()
             wanted.setHeight(
                 max(content.minimumSizeHint().height(), layout.totalHeightForWidth(width))
             )
@@ -274,7 +278,27 @@ class DialogScrollArea(QScrollArea):
         return hint
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt gibt den Namen
-        return QSize(TARGET_SIZE * 2, TARGET_SIZE * 2)
+        height = TARGET_SIZE * 2
+        if self.widget() is not None:
+            # sizeHint misst nur den Inhalt samt Umbruch und Rollleisten,
+            # nicht die Mindestgröße dieses Rollbereichs. Kurzer Inhalt
+            # braucht keine leere Reserve; lange Formulare bleiben scrollbar.
+            height = min(height, max(0, self.sizeHint().height()))
+        if (
+            self.isVisible()
+            and isinstance(self._content_height, ContentHeight)
+            and self._content_height.initial_fit_done
+        ):
+            # Der Ausschnitt gibt Platz an größere äußere Knöpfe ab. Seine
+            # alte Höhe ist keine Untergrenze; eine lesbare Inhaltszeile samt
+            # Querleiste muss aber bleiben, auch bei einem umbrochenen Footer.
+            content = self.widget()
+            assert content is not None
+            line = content.fontMetrics().lineSpacing() + 2 * self.frameWidth()
+            if self.horizontalScrollBar().isVisibleTo(self):
+                line += self.horizontalScrollBar().sizeHint().height()
+            height = min(height, line)
+        return QSize(TARGET_SIZE * 2, height)
 
     def setWidget(self, widget: QWidget) -> None:  # noqa: N802 — Qt gibt den Namen
         super().setWidget(widget)
@@ -534,7 +558,17 @@ def _hidden_height(scroll: QScrollArea) -> int:
     if layout is not None and layout.hasHeightForWidth():
         width = max(content.width(), scroll.viewport().width())
         needed = max(content.minimumSizeHint().height(), layout.totalHeightForWidth(width))
-    return max(0, needed - scroll.viewport().height())
+    available = scroll.viewport().height()
+    horizontal = scroll.horizontalScrollBar()
+    if (
+        scroll.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        and horizontal.maximum() == horizontal.minimum()
+    ):
+        # Eine bereits rollbereichslose Querleiste kann bis zum nächsten
+        # Qt-Umlauf noch Platz belegen. Ihre alte Geometrie ist kein verdeckter
+        # Inhalt; eine dauernde oder wirklich benötigte Leiste bleibt dagegen.
+        available = max(available, scroll.maximumViewportSize().height())
+    return max(0, needed - available)
 
 
 class ContentHeight:
@@ -546,7 +580,10 @@ class ContentHeight:
     Anfangsmessung bis zum Bildschirmrand vergrößern, nie verkleinern, und
     halten den Anker, sobald einmal ausdrücklich geklappt wurde.
     Sobald der Kunde Breite oder Höhe ändert, bleiben beide Maße für die
-    Dialoglebenszeit maßgeblich. Mehrinhalt rollt dann im Scrollbereich.
+    Dialoglebenszeit maßgeblich. Mehrinhalt rollt dann im Scrollbereich. Qt
+    verlangt dabei mindestens vollständige äußere Knöpfe und eine lesbare
+    Inhaltszeile; nur unter dieses tatsächlich nötige Maß kann der Rahmen
+    auch bei vergrößerter Schrift nicht gehen.
     """
 
     __slots__ = ("_anchored", "_initialized", "fitted", "user")
@@ -655,7 +692,7 @@ class ContentHeight:
     def _widen_before_measuring(
         self, dialog: QWidget, *, grow_width: bool, natural_width: int
     ) -> None:
-        """Stellt die Anfangsbreite ein, bevor die Höhe gemessen wird.
+        """Stellt eine nötige automatische Breite vor der Höhenmessung ein.
 
         Umbrochener Text braucht schmal mehr Zeilen als breit. Gemessen in der
         Ausgangsbreite und erst danach verbreitert, öffnete der Druckdialog
@@ -704,7 +741,9 @@ class ContentHeight:
         Dialog Platz, rückt er nur so weit hinauf wie nötig, nach einem
         ausdrücklichen Klappen nicht mehr (RM-487). Vor der Anfangsmessung
         und nach einem Zug des Kunden ändert ``passive`` nur das Layout im
-        Scrollbereich.
+        Scrollbereich. Eine ausdrücklich übergebene ``natural_width`` darf
+        davor automatische Breite schaffen, etwa für äußere Aktionsknöpfe;
+        die Bildschirmgrenze gilt weiterhin.
         """
         if isinstance(scroll, DialogScrollArea):
             scroll._content_height = self
@@ -721,7 +760,10 @@ class ContentHeight:
         floor = self.floor(dialog)
         if intent == "passive" and (self.user is not None or not self._initialized):
             return
-        if intent == "initial" and natural_size is None and self.user is None:
+        if (
+            (intent == "initial" and natural_size is None)
+            or (intent == "passive" and natural_width > 0)
+        ) and self.user is None:
             self._widen_before_measuring(dialog, grow_width=grow_width, natural_width=natural_width)
         scroll.updateGeometry()
         layout.invalidate()
@@ -1583,6 +1625,17 @@ QToolButton:checked:hover {{ background: {active_hover}; border-color: {accent_l
 QToolButton:focus {{
     border: 2px solid {focus};
     padding: {TIGHT - 1}px {NORMAL - 1}px;
+}}
+
+/* Die beiden Hauptwerkzeugleisten bilden schon eine gemeinsame Fläche.
+   In Ruhe braucht nicht jeder ihrer Knöpfe eine eigene Kante. Nur direkte
+   Kinder: Modusknöpfe in aufgeklappten Werkzeugkarten behalten ihren Rahmen.
+   Rahmenbreite und Innenabstand bleiben auch hier erhalten; Hover, Fokus,
+   Drücken und Auswahl tragen unverändert ihre sichtbaren Zustände. */
+QToolBar#mainTools > QToolButton:!hover:!pressed:!checked:!focus,
+QWidget#mainToolStrip > QToolButton:!hover:!pressed:!checked:!focus {{
+    border-color: transparent;
+    background: transparent;
 }}
 
 /* **Gesperrt war nicht zu erkennen.** Für das Ankreuzfeld gab es gar keine

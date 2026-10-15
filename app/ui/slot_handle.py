@@ -76,6 +76,9 @@ KNOB_HEIGHT_SHARE = 0.30
 #: Wie rund der Knopf gezeichnet wird.
 KNOB_SEGMENTS = 24
 
+#: Ruhende Knöpfe lassen die Öffnung durchscheinen; Treffergeometrie bleibt.
+KNOB_IDLE_OPACITY = 0.45
+
 #: Wie breit die zwei Knöpfe zusammen höchstens werden, im Maß der Länge.
 #:
 #: **Sonst decken sie zu, was sie anfassen sollen.** Gemessen am Anteil der
@@ -357,7 +360,11 @@ class SlotHandle:
                     faces,
                     name=f"slot-handle:knob:{index}",
                     style=SurfaceStyle(
-                        colour=colour, lighting=False, keep_in_front=True, pickable=True
+                        colour=colour,
+                        opacity=KNOB_IDLE_OPACITY,
+                        lighting=False,
+                        keep_in_front=True,
+                        pickable=True,
                     ),
                 )
             )
@@ -464,6 +471,7 @@ class SlotHandle:
             if self._hovered is None:
                 return False
             self._held = self._hovered
+            self._select(self._held)
             self.pressing = True
             self._start_length = self.length
             self._start_angle = self.angle
@@ -481,6 +489,9 @@ class SlotHandle:
         if event.kind == "release" and event.button == "left" and self.pressing:
             self.pressing = False
             self._held = None
+            # Leave während des Zugs hält die Hervorhebung. Am Loslasspunkt
+            # gilt wieder der tatsächliche Treffer, auch ohne weiteres Move.
+            self._hover(event)
             # **Der Umriss bleibt stehen.** Was der Zug hinterlässt, ist noch
             # keine Geometrie, sondern ein Vorschlag: Die Leiste daneben trägt
             # seine zwei Maße zum Nachbessern im Merkmalfenster, und
@@ -586,9 +597,11 @@ class SlotHandle:
     def _select(self, wanted: int | None) -> None:
         if self._hovered is not None and self._hovered < len(self._knobs):
             self._knobs[self._hovered].set_colour(self._colour)
+            self._knobs[self._hovered].set_opacity(KNOB_IDLE_OPACITY)
         self._hovered = wanted
         if wanted is not None:
             self._knobs[wanted].set_colour(HOVER_COLOUR)
+            self._knobs[wanted].set_opacity(1.0)
 
     def _drag(self, event: PointerEvent) -> None:
         """Der Zeiger auf der Mündungsebene wird Länge und Winkel.

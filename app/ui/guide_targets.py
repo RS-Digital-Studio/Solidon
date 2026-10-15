@@ -498,6 +498,8 @@ def area_for(window: MainWindow, name: str) -> QRect:
         return _item_area(view, item)
     if kind == "view":
         return _spot(point_for(window, *_object_and_feature(rest)))
+    if kind == "view.edge":
+        return _spot(edge_point_for(window, rest))
     if kind == "handle" and rest not in _BARS:
         return _spot(_grip_point(window, rest, name))
     if kind in ("command", "operation"):
@@ -962,6 +964,7 @@ RESOLVED_KINDS: Final[frozenset[str]] = frozenset(
         "tree.row",
         "history.row",
         "view",
+        "view.edge",
         "dialog",
         "start.recent",
         "message",
@@ -1255,6 +1258,111 @@ def point_for(window: MainWindow, object_id: str, feature_id: str | None = None)
     raise MissingTargetError(f"{name}: keine zugewandte Stelle, die ein Klick trifft")
 
 
+#: Wo auf einer Kante :func:`edge_point_for` probiert — Anteile ihrer Länge, die
+#: Mitte zuerst: An einer Ecke wählt ein Klick alle Kanten, die dort zusammenlaufen.
+_EDGE_SHARES: Final = (0.5, 0.375, 0.625, 0.25, 0.75)
+
+#: Wie weit :func:`edge_point_for` eine Stelle zur Mitte des Körpers hin rückt
+#: (Gerätepixel), falls der Pick genau auf der Umrisslinie vorbeigeht — weit
+#: innerhalb der Fangweite der Ansicht (``viewport.EDGE_REACH_PIXELS``).
+_EDGE_NUDGE: Final = 2.0
+
+
+def edge_point_for(window: MainWindow, object_id: str) -> QPoint:
+    """Eine Stelle im Bild, an der ein Klick eine bearbeitbare Kante dieses Körpers wählt.
+
+    Die Kanten kommen aus derselben Quelle wie die der Operation und der
+    Ansicht (``geom.edges.edges_in_kernel`` und ``points_in_kernel``): am
+    exakten Körper die Topologie, am Netz die Züge. Probiert wird die im Bild
+    längste Kante zuerst, an Stellen auf ihrem Zug (:data:`_EDGE_SHARES`), nie
+    an einer Ecke. Eine Stelle gilt, wenn dort die Ansicht selbst liegt und ihr
+    Pick den Körper **an der Kante** trifft: Weiter als
+    ``EDGE_REACH_WORLD_SHARE`` der Körperdiagonale entfernt nimmt die Ansicht
+    die Kante nicht — sie liegt dann hinter einer Fläche.
+
+    Die Kante wählt der Klick erst am gewählten Körper (gestufte Tiefe,
+    §18.5); den Körper wählt der Weg davor (``function_list.route_for``).
+    """
+    import numpy as np
+
+    from app.core.brep.kernel import Solid, available
+    from app.core.geom.edges import edges_in_kernel, points_in_kernel
+    from app.ui.viewport import EDGE_REACH_WORLD_SHARE
+
+    name = f"view.edge:{object_id}"
+    viewport = window.viewport
+    result = window.session.last_result
+    entry = result.scene.objects.get(object_id) if result is not None else None
+    if viewport.renderer is None or entry is None:
+        raise MissingTargetError(f"{name}: die Ansicht zeigt diesen Körper nicht")
+    body = entry.mesh
+    exact = available() and isinstance(body, Solid)
+    kernel, edges = edges_in_kernel(body, "brep" if exact else "mesh")
+    reach = float(body.bounds.diagonal) * EDGE_REACH_WORLD_SHARE
+    shift = np.asarray(viewport.view_offset_of(object_id), dtype=float)
+
+    def shown(world: Any) -> tuple[float, float] | None:
+        moved = np.asarray(world, dtype=float) + shift
+        return viewport.display_of(tuple(float(value) for value in moved))
+
+    centre = shown(body.bounds.centre)
+    ranked: list[tuple[float, int, Any]] = []
+    for index, edge in enumerate(edges):
+        points = np.asarray(points_in_kernel(kernel, body, edge), dtype=float)
+        if len(points) < 2:
+            continue
+        spots = [shown(_along(points, share)) for share in (0.0, 0.25, 0.5, 0.75, 1.0)]
+        if any(spot is None for spot in spots):
+            continue
+        drawn = np.diff(np.asarray(spots, dtype=float), axis=0)
+        ranked.append((-float(np.linalg.norm(drawn, axis=1).sum()), index, points))
+    for _length, _index, points in sorted(ranked, key=lambda item: (item[0], item[1])):
+        for share in _EDGE_SHARES:
+            spot = _along(points, share)
+            display = shown(spot)
+            if display is None:
+                continue
+            for x, y in _nudged(display, centre):
+                point = _display_to_global(window, x, y)
+                if point is None or not _shows_the_view(window, point):
+                    continue
+                hit = viewport.placement_hit(int(x), int(y))
+                if hit is None or hit[0] != object_id:
+                    continue
+                if float(np.linalg.norm(np.asarray(hit[1], dtype=float) - spot)) <= reach:
+                    return point
+    raise MissingTargetError(f"{name}: keine sichtbare Kante, die ein Klick trifft")
+
+
+def _along(points: Any, share: float) -> Any:
+    """Der Punkt bei ``share`` der Länge eines Zugs — eine Stelle auf ihm, auch am Kreis."""
+    import numpy as np
+
+    steps = np.linalg.norm(np.diff(points, axis=0), axis=1)
+    total = float(steps.sum())
+    if total <= 0.0:
+        return points[0]
+    reached = np.cumsum(steps)
+    index = min(int(np.searchsorted(reached, share * total)), len(steps) - 1)
+    part = float(steps[index])
+    fraction = (share * total - (float(reached[index]) - part)) / part if part > 0.0 else 0.0
+    return points[index] + fraction * (points[index + 1] - points[index])
+
+
+def _nudged(
+    display: tuple[float, float], centre: tuple[float, float] | None
+) -> list[tuple[float, float]]:
+    """Die Stelle selbst und, falls der Pick auf der Umrisslinie vorbeigeht, etwas zur Mitte."""
+    x, y = display
+    if centre is None:
+        return [(x, y)]
+    dx, dy = centre[0] - x, centre[1] - y
+    length = (dx * dx + dy * dy) ** 0.5
+    if length <= _EDGE_NUDGE:
+        return [(x, y)]
+    return [(x, y), (x + dx / length * _EDGE_NUDGE, y + dy / length * _EDGE_NUDGE)]
+
+
 def _grip_point(window: MainWindow, role: str, name: str) -> QPoint:
     """Eine Stelle auf einem Griff im Bild.
 
@@ -1442,6 +1550,7 @@ class Click:
     why: ClickReason
     target: str
     direction: int = 0
+    wheel_angle: int = 120  #: Positive Achtelgrade; die Richtung steht in ``direction``.
 
 
 def next_click(window: MainWindow, name: str) -> Click:
@@ -1492,6 +1601,8 @@ def next_click(window: MainWindow, name: str) -> Click:
     if kind == "view":
         point = point_for(window, *_object_and_feature(rest))
         return Click(_spot(point), Qt.MouseButton.LeftButton, "ziel", name)
+    if kind == "view.edge":
+        return Click(_spot(edge_point_for(window, rest)), Qt.MouseButton.LeftButton, "ziel", name)
     if kind == "handle" and rest not in _BARS:
         return Click(
             _spot(_grip_point(window, rest, name)), Qt.MouseButton.LeftButton, "ziel", name
@@ -1527,16 +1638,11 @@ def _widget_click(widget: QWidget, name: str, button: Qt.MouseButton) -> Click:
 
 
 def _scroll_needed(widget: QWidget, name: str) -> Click | None:
-    """Ob das Widget außerhalb des sichtbaren Teils eines seiner Rollbereiche steht.
+    """Ganze Feldhöhe durch alle Rollbereiche; überhohe Behälter nur bis zur Mitte.
 
-    **Jeder umgebende Rollbereich zählt, von innen nach außen** (D0, F-19). Die
-    Auswahlkarte steckt im Rollbereich der Karte und im äußeren
-    ``overlay.FittedScroller``: Innen stand das Ziel „sichtbar“, der äußere
-    schnitt es ab, und der Klick fiel unter die Karte. Gemessen wird die Mitte
-    gegen den Teil der Sichtfläche, den kein äußerer Bereich abschneidet
-    (:func:`_unclipped`); gerollt wird der erste Bereich, der in diese Richtung
-    rollen kann — wie das Mausrad, das Qt nach außen weiterreicht. Rollt keiner,
-    bleibt das Ziel, wie es steht.
+    Ein zu kleiner innerer Ausschnitt braucht erst den äußeren Rollbereich.
+    Dessen sichtbare Scrollbar empfängt das Rad selbst. Der Restwinkel hält die
+    fehlende Kante ein; unbrauchbare Schritte und Anschläge bleiben unerreicht.
     """
     areas: list[QScrollArea] = []
     parent: QWidget | None = widget.parentWidget()
@@ -1547,23 +1653,47 @@ def _scroll_needed(widget: QWidget, name: str) -> Click | None:
             break
         parent = parent.parentWidget()
     centre = widget.mapToGlobal(widget.rect().center())
-    hidden = next(
-        (area for area in areas if not _unclipped(area.viewport()).contains(centre)),
-        None,
-    )
-    if hidden is None:
+    reach = QRect(centre, QSize(1, 1))
+    if all(widget.height() <= area.viewport().height() for area in areas):
+        reach = QRect(centre.x(), widget.mapToGlobal(QPoint(0, 0)).y(), 1, widget.height())
+    if all(_unclipped(area.viewport()).contains(reach) for area in areas):
         return None
-    seen = _unclipped(hidden.viewport())
-    direction = 1 if centre.y() >= seen.center().y() else -1
     for area in areas:
-        bar = area.verticalScrollBar()
-        if bar is not None and (
-            bar.value() < bar.maximum() if direction > 0 else bar.value() > bar.minimum()
-        ):
-            return Click(
-                _unclipped(area.viewport()), Qt.MouseButton.NoButton, "rollen", name, direction
+        seen = _unclipped(area.viewport())
+        if seen.height() < reach.height():
+            # Erst einen ausreichend hohen Innenausschnitt freilegen, dann sein Feld.
+            nominal = _global(area.viewport())
+            reach.moveTop(
+                min(max(reach.top(), nominal.top()), nominal.bottom() - reach.height() + 1)
             )
-    return None
+            continue
+        if seen.contains(reach):
+            continue
+        direction = -1 if reach.top() < seen.top() else 1
+        bar = area.verticalScrollBar()
+        remaining = bar.maximum() - bar.value() if direction > 0 else bar.value() - bar.minimum()
+        span = bar.singleStep() * QApplication.wheelScrollLines()
+        if remaining <= 0 or span <= 0 or bar.pageStep() <= 0:
+            continue
+        distance = max(seen.top() - reach.top(), reach.bottom() - seen.bottom(), 1)
+        angle = min(120, (120 * distance + span - 1) // span)
+        travel = min(remaining, bar.pageStep(), (span * angle + 119) // 120)
+        if travel > distance + seen.height() - reach.height():
+            continue
+        use_bar = bar.isVisible() and (angle != 120 or area is not areas[0])
+        surface = _unclipped(bar.parentWidget() or bar) if use_bar else seen
+        hit = widget_under(surface.center())
+        if use_bar and hit is not bar:
+            continue
+        if not use_bar:
+            while hit is not None and not isinstance(hit, QAbstractScrollArea):
+                hit = hit.parentWidget()
+            if hit is not area:
+                continue
+        return Click(surface, Qt.MouseButton.NoButton, "rollen", name, direction, angle)
+    raise MissingTargetError(
+        f"{name}: Rollanschlag oder kein geeigneter Radschritt zum ganzen Ziel"
+    )
 
 
 def _unclipped(widget: QWidget) -> QRect:

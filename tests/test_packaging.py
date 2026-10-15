@@ -47,6 +47,17 @@ from typing import Any, Final
 import pytest
 
 from app.branding import APP_NAME
+from tests.packaging_helpers import (
+    LINUX_PACKAGE_RUNNER,
+    LINUX_RUNNER,
+    ROOT,
+    SPEC,
+    WORKFLOW,
+    as_tested,
+    start_report,
+    stays_in_linux_bundle,
+    workflow_shell,
+)
 from tests.workflow_helpers import (
     MAIN_PUSH,
     TAG_PUSH,
@@ -61,14 +72,10 @@ from tests.workflow_helpers import (
 )
 from tools import run_suite_isolated
 
-ROOT: Final = Path(__file__).resolve().parent.parent
-SPEC: Final = ROOT / "packaging" / "solidon3d.spec"
 INSTALLER_SCRIPT: Final = ROOT / "packaging" / "solidon3d.iss"
-WORKFLOW: Final = ROOT / ".github" / "workflows" / "build.yml"
 ICNS: Final = ROOT / "packaging" / "solidon3d.icns"
 ICO: Final = ROOT / "packaging" / "solidon3d.ico"
-#: Das Ubuntu, dessen Systembibliotheken das Linux-Paket mitnimmt.
-LINUX_RUNNER: Final = "ubuntu-24.04"
+
 
 #: Was beim Suchen nach Datenverzeichnissen nicht zählt.
 IGNORED: Final = ("__pycache__", ".pyc", ".pyo", "CLAUDE.md")
@@ -118,29 +125,6 @@ def _fake_bin(folder: Path, python_body: str) -> str:
         script.write_text(text, encoding="utf-8", newline="\n")
         script.chmod(0o755)
     return str(folder)
-
-
-def _workflow_shell() -> str | None:
-    """Die Shell, mit der die CI ihre ``run:``-Blöcke fährt — bash.
-
-    Jeder hier geprüfte Block deklariert ``shell: bash``, und er verlässt sich
-    darauf: ``set -o pipefail`` kennt POSIX-``sh`` nicht, ``dash`` weist es mit
-    ``Illegal option`` ab. Wer den Block zum Messen mit ``sh`` fährt, misst eine
-    Umgebung, in der er nie läuft — unter Windows fällt das nicht auf, weil die
-    ``sh`` aus Git für Windows eine bash ist.
-
-    Für das Linux-Installationsskript gilt das Gegenteil: Es ist bewusst
-    POSIX-``sh`` und wird mit :func:`_posix_shell` gefahren.
-    """
-    found = shutil.which("bash")
-    if found is not None:
-        return found
-
-    program_files = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
-    git_bash = program_files / "Git" / "usr" / "bin" / "bash.exe"
-    if git_bash.is_file():
-        return str(git_bash)
-    return None
 
 
 def _posix_shell() -> str | None:
@@ -460,7 +444,7 @@ def test_the_workflow_packages_every_delivered_platform() -> None:
     """
     workflow = WORKFLOW.read_text(encoding="utf-8")
     matrix = next(line for line in job_block(workflow, "package").splitlines() if "os: [" in line)
-    for runner in ("windows-latest", LINUX_RUNNER, "macos-latest"):
+    for runner in ("windows-latest", LINUX_PACKAGE_RUNNER, "macos-latest"):
         assert runner in matrix, f"{runner} fehlt in der Paket-Matrix"
     assert "-intel" in matrix, f"kein Intel-Mac in der Paket-Matrix: {matrix.strip()}"
 
@@ -470,10 +454,20 @@ def test_linux_builds_on_the_ubuntu_its_licence_tables_name() -> None:
 
     Das Linux-Paket nimmt die Systembibliotheken des Bauservers mit. Ihre
     Fassungen stehen in der Lizenzbeilage, und die glibc des Servers ist die
-    Untergrenze, auf der das AppImage startet. ``ubuntu-latest`` wandert ab dem
-    19.10.2026 auf Ubuntu 26 und höbe beides ohne Commit an; ein Wechsel muss
-    diese Konstante, die Lizenztexte und die Untergrenze gemeinsam bewegen.
+    Untergrenze, auf der AppImage und Archiv starten. ``ubuntu-latest`` wandert
+    ab dem 19.10.2026 auf Ubuntu 26 und höbe beides ohne Commit an; ein Wechsel
+    muss diese Konstante, die Lizenztexte und die Untergrenze gemeinsam
+    bewegen. Die Releaseakte startet das AppImage auf dem Bauläufer und auf dem
+    Prüfläufer.
     """
+    from tools import check_glibc_floor
+
+    package = job_block(WORKFLOW.read_text(encoding="utf-8"), "package")
+    matrix = next(line for line in package.splitlines() if "os: [" in line)
+    assert LINUX_PACKAGE_RUNNER in matrix and LINUX_RUNNER not in matrix
+    assert check_glibc_floor.OLDEST_GLIBC == (2, 35), "Ubuntu 22.04 trägt glibc 2.35"
+    started = job_block(WORKFLOW.read_text(encoding="utf-8"), "linux-release-start")
+    assert f"os: [{LINUX_PACKAGE_RUNNER}, {LINUX_RUNNER}]" in started
     workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
     assert workflows, "keine Workflows gefunden — dann prüft dieser Test nichts"
     drifting = [
@@ -485,7 +479,11 @@ def test_linux_builds_on_the_ubuntu_its_licence_tables_name() -> None:
     assert not drifting, f"ubuntu-latest statt {LINUX_RUNNER} in: {drifting}"
     assert LINUX_RUNNER in WORKFLOW.read_text(encoding="utf-8")
     tables = ROOT / "app" / "core" / "knowledge" / "data" / "third_party_licenses.toml"
-    assert "Ubuntu " + LINUX_RUNNER.removeprefix("ubuntu-") in tables.read_text("utf-8")
+    text = tables.read_text("utf-8")
+    assert "Ubuntu " + LINUX_PACKAGE_RUNNER.removeprefix("ubuntu-") in text
+    assert "Ubuntu " + LINUX_RUNNER.removeprefix("ubuntu-") not in text, (
+        "die Lizenztexte nennen noch den Prüfläufer statt des Bauservers"
+    )
 
 
 def test_a_tests_only_dispatch_excludes_every_packaging_and_signing_job() -> None:
@@ -530,7 +528,12 @@ def test_a_tests_only_dispatch_excludes_every_packaging_and_signing_job() -> Non
     package_matrix = next(
         line for line in job_block(workflow, "package").splitlines() if "os: [" in line
     )
-    packaged = package_matrix.split("[", 1)[1].split("]", 1)[0].replace(" ", "").split(",")
+    # Linux baut auf dem ältesten System und wird auf dem Prüfläufer geprüft —
+    # dieselbe Plattform (:func:`as_tested`).
+    packaged = [
+        as_tested(runner)
+        for runner in package_matrix.split("[", 1)[1].split("]", 1)[0].replace(" ", "").split(",")
+    ]
     assert len(tested) == len(set(tested)), "ein Prüfsystem steht doppelt in der Matrix"
     # **Jede angebotene Architektur braucht ihren echten Testlauf** — mit einer
     # benannten Ausnahme, und nur mit dieser. Der Intel-Mac ist am 07.09.2026
@@ -801,7 +804,8 @@ def test_a_red_latest_job_leaves_the_release_run_green() -> None:
     latest = job_block(workflow, "latest")
     assert re.search(r"(?m)^    continue-on-error: true$", latest)
     assert not re.search(r"(?m)^    needs:.*\blatest\b", workflow)
-    without = workflow.replace("    continue-on-error: true\n", "", 1)
+    # Auf Jobebene (vier Leerzeichen), nicht in einem eingerückten Schritt.
+    without = re.sub(r"(?m)^    continue-on-error: true\n", "", workflow, count=1)
     assert without != workflow
     assert not re.search(r"(?m)^    continue-on-error: true$", job_block(without, "latest"))
 
@@ -930,6 +934,8 @@ _ONLY_AT_RELEASE: Final = frozenset(
         "windows",
         "latest",
         "package",
+        "linux-flatpak",
+        "linux-release-start",
         "linux-release-check",
         "windows-installer",
         "windows-release-check",
@@ -1111,7 +1117,7 @@ def _assert_main_push(workflow: str, shell: str, folder: Path) -> None:
             given = _consumer_inputs(workflow, job, outputs)
             expected = windows if _SELECTION_CONSUMERS[job] == "window" else slicers
             assert given.get("tests") == expected, f"{job} bekommt {given}"
-    packaged = set(_release_runners(job_block(workflow, "package")))
+    packaged = {as_tested(runner) for runner in _release_runners(job_block(workflow, "package"))}
     for job in ("suite", "window-contracts"):
         runners = set(job_runners(job_block(workflow, job), MAIN_PUSH))
         if job == "window-contracts":
@@ -1145,7 +1151,7 @@ def test_a_push_to_main_runs_every_check_and_builds_nothing(tmp_path: Path) -> N
     Abgeleitet aus den Bedingungen der Jobs, ausgewertet für jedes Ereignis
     (``workflow_helpers.running_jobs``), mit den Ausgaben des echten Auswahlschritts.
     """
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     _assert_main_push(WORKFLOW.read_text(encoding="utf-8"), shell, tmp_path)
@@ -1284,7 +1290,7 @@ def test_the_main_push_contract_rejects_a_changed_workflow(
 ) -> None:
     """Gegenproben: Zweig oder Pull Request lösen aus, Intel fehlt, Renderer nur am Tag,
     Auswahl am Tag, ihre Weitergabe gebrochen, Paket auf main, Warteschlange."""
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -1326,7 +1332,7 @@ def test_the_selection_starts_at_the_last_checked_main_run(tmp_path: Path) -> No
     Auswahl ganz gefahren ist (``ci_selection.checked_base``), nicht der Vorgänger des
     Pushs — sonst fiele heraus, was ein ersetzter, abgebrochener oder abgelehnter Lauf
     brachte. Rückfall: voriger Tag, dann jede Datei."""
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -1410,7 +1416,7 @@ def test_no_shell_step_needs_a_bash_newer_than_the_macs() -> None:
 
 def test_the_selection_step_rejects_the_pushed_diff_alone(tmp_path: Path) -> None:
     """Gegenprobe: Wählt der Schritt wie vorher ab ``github.event.before``, ist er rot."""
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -1442,7 +1448,7 @@ def test_each_ci_window_group_is_executed_only_at_release_and_once(
     # Je Schritt eine Subshell: Ein Schritt, der mit ``exit`` endet, beendet nur
     # sich, wie auf dem Läufer.
     script = "\n".join(f"(\n{part}\n)" for part in scripts).replace("${{ matrix.shard }}", "0")
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     calls = tmp_path / "calls.txt"
@@ -1811,7 +1817,9 @@ def _assert_rendering_runs_everywhere(workflow: str, shell: str, folder: Path) -
     required = _release_gates(workflow)
     steps = _test_scripts(workflow, [*required, "latest"])
     calls = _calls_of(steps, shell, folder)
-    platforms = _release_runners(job_block(workflow, "package"))
+    platforms = tuple(
+        as_tested(runner) for runner in _release_runners(job_block(workflow, "package"))
+    )
     gaps = _rendering_gaps(steps, calls, required, platforms)
     assert not gaps, "Rendererfälle ohne Pflichtjob am Tag: " + "; ".join(gaps)
     latest = _release_runners(job_block(workflow, "latest"))
@@ -1837,7 +1845,9 @@ def _assert_rendering_runs_on_main(workflow: str, shell: str, folder: Path) -> N
     testing = [job for job in jobs if "\n    uses: " not in job_block(workflow, job)]
     steps = _test_scripts(workflow, testing, MAIN_PUSH)
     calls = _calls_of(steps, shell, folder)
-    platforms = _release_runners(job_block(workflow, "package"))
+    platforms = tuple(
+        as_tested(runner) for runner in _release_runners(job_block(workflow, "package"))
+    )
     gaps = _rendering_gaps(steps, calls, testing, platforms)
     assert not gaps, "Rendererfälle ohne Lauf beim Push nach main: " + "; ".join(gaps)
 
@@ -1848,7 +1858,7 @@ def test_every_rendering_case_runs_on_every_platform_when_main_is_pushed(
     """Der Push nach main fährt die Rendererfälle auf Windows, Linux und beiden Macs —
     unter Windows im Schritt der Fensterverträge, weil die Fenstergruppe dort nur am
     Tag läuft."""
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     _assert_rendering_runs_on_main(WORKFLOW.read_text(encoding="utf-8"), shell, tmp_path)
@@ -1877,7 +1887,7 @@ def test_the_main_rendering_guard_rejects_a_platform_left_out(
     tmp_path: Path, job: str, before: str, after: str
 ) -> None:
     """Gegenproben zum Push nach main: Windows ohne Renderer, ``ON_MAIN`` falsch, Intel aus."""
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     changed = _in_job(WORKFLOW.read_text(encoding="utf-8"), job, before, after)
@@ -1895,7 +1905,7 @@ def test_every_rendering_case_runs_on_every_platform_in_a_release_job(tmp_path: 
     Bis zum 09.10.2026 liefen über hundert davon nur unter Windows, und kein
     Test merkte es.
     """
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     _assert_rendering_runs_everywhere(WORKFLOW.read_text(encoding="utf-8"), shell, tmp_path)
@@ -1924,7 +1934,11 @@ _PLATFORM_STEP: Final = f"      - name: {_CONTRACT_STEP}\n"
         ),
         # Der Intel-Mac fehlt, oder seine Prüfung hält keine Releaseakte mehr an.
         ("window-contracts-intel", "runs-on: macos-26-intel", "runs-on: macos-latest"),
-        ("linux-release-check", "needs: [package, window-contracts-intel]", "needs: package"),
+        (
+            "linux-release-check",
+            "needs: [package, linux-flatpak, linux-release-start, window-contracts-intel]",
+            "needs: [package, linux-flatpak, linux-release-start]",
+        ),
         (
             "macos-release-check",
             "      needs.window-contracts-intel.result == 'success' &&\n",
@@ -1954,7 +1968,7 @@ def test_the_rendering_guard_rejects_a_workflow_that_drops_a_platform(
 ) -> None:
     """Gegenproben: Markerwahl zurückgedreht, ein Mac weniger, die Intel-Prüfung ohne
     Wirkung, Versionswächter ohne Renderer, Schrittbedingung, ``--plan-only``."""
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     changed = _in_job(WORKFLOW.read_text(encoding="utf-8"), job, before, after)
@@ -1965,7 +1979,7 @@ def test_the_rendering_guard_rejects_a_workflow_that_drops_a_platform(
 def test_the_rendering_guard_follows_the_workflow_and_not_a_list(tmp_path: Path) -> None:
     """Gegenprobe in die andere Richtung: Tragen Kernjobs auf allen vier Plattformen
     die Rendererfälle, ist der Wächter auch ohne die Gruppe ``rendering`` grün."""
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -2016,6 +2030,23 @@ def _apt_packages(block: str) -> set[str]:
 #: fällt einer heraus, prüfte er womöglich eine leere Menge.
 _XVFB_JOBS: Final = frozenset({"suite", "window-contracts", "latest", "package"})
 
+#: Linux-Jobs, die ein fertiges Paket starten statt Tests aus der Umgebung. Das
+#: AppImage bringt die xcb-Bibliotheken selbst mit — installiert verdeckten sie
+#: eine Lücke im Paket —, das Flatpak läuft in seiner Laufzeit. Bildschirm und
+#: beim AppImage Vulkan-Lader und Adapter kommen vom Rechner.
+_PACKAGE_START_JOBS: Final = frozenset({"linux-release-start", "linux-flatpak"})
+
+#: Die Bibliotheken der nativen xcb-Canvas, die PySide6 vom Rechner erwartet.
+_XCB_CANVAS_LIBRARIES: Final = (
+    "libxkbcommon-x11-0",
+    "libxcb-cursor0",
+    "libxcb-icccm4",
+    "libxcb-image0",
+    "libxcb-keysyms1",
+    "libxcb-render-util0",
+    "libxcb-xkb1",
+)
+
 
 def _assert_drawing_linux_jobs_have_a_graphics_stack(
     workflow: str, shell: str, folder: Path
@@ -2035,7 +2066,7 @@ def _assert_drawing_linux_jobs_have_a_graphics_stack(
     steps = [step for step in _test_scripts(workflow, testing) if _runner_os(step[1]) == "Linux"]
     calls = _calls_of(steps, shell, folder)
     cases = _rendering_cases(call for made in calls for call in made)
-    drawing = {"package"} | {
+    drawing = {"package", "linux-release-start"} | {
         job
         for (job, _label, _script), made in zip(steps, calls, strict=True)
         if any(_selects(call, *case) for call in made for case in cases)
@@ -2051,19 +2082,16 @@ def _assert_drawing_linux_jobs_have_a_graphics_stack(
             continue
         checked.add(job)
         installed = _apt_packages(block)
-        for dependency in (
-            "xvfb",
-            "xauth",
-            "libxkbcommon-x11-0",
-            "libxcb-cursor0",
-            "libxcb-icccm4",
-            "libxcb-image0",
-            "libxcb-keysyms1",
-            "libxcb-render-util0",
-            "libxcb-xkb1",
-        ):
+        assert {"xvfb", "xauth"} <= installed, f"{job} hat keinen virtuellen Bildschirm"
+        if job in _PACKAGE_START_JOBS:
+            masked = installed & set(_XCB_CANVAS_LIBRARIES)
+            assert not masked, f"{job} verdeckt mit {sorted(masked)} eine Lücke im Paket"
+            continue
+        for dependency in _XCB_CANVAS_LIBRARIES:
             assert dependency in installed, f"{job} fehlt {dependency} für die native xcb-Canvas"
-    assert checked >= _XVFB_JOBS, f"ohne xvfb-run: {sorted(_XVFB_JOBS - checked)}"
+    assert checked >= _XVFB_JOBS | _PACKAGE_START_JOBS, (
+        f"ohne xvfb-run: {sorted((_XVFB_JOBS | _PACKAGE_START_JOBS) - checked)}"
+    )
     return drawing
 
 
@@ -2077,7 +2105,7 @@ def test_every_linux_ci_path_that_uses_pygfx_has_a_vulkan_adapter(tmp_path: Path
     Welche Jobs zeichnen, liest der Wächter aus ihren Aufrufen; bis RM-344
     prüfte er feste Namen, darunter drei Jobs ohne einen einzigen Bildtest.
     """
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -2172,7 +2200,7 @@ def test_window_failures_block_the_package_on_every_platform(
     block = job_block(workflow, job)
     assert "continue-on-error" not in block
     script = step_script(step_block(block, name)).replace("${{ matrix.shard }}", "0")
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     done = subprocess.run(
@@ -2210,7 +2238,7 @@ def test_ci_preserves_the_first_failed_process_exit(
     step = section.split("      - name: Tests\n", 1)[1].split("\n      - name:", 1)[0]
     script = textwrap.dedent(step.split("        run: |\n", 1)[1])
     script = script.replace("${{ matrix.shard }}", "0")
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     fake_python = """
@@ -2319,12 +2347,15 @@ def test_the_frozen_helper_check_fails_without_a_package(
 
 #: Die Schritte, die ein fertiges Kundenpaket starten (``tools/check_frozen_start.py``):
 #: Paketjob auf allen vier Runnern, die Linux-Formate, das finale Mac-Paket und
-#: das Windows-Setup.
+#: das Windows-Setup; das AppImage zusätzlich auf frischen Läufern mit dem
+#: ältesten und dem geprüften Ubuntu.
 _START_STEPS: Final = (
     ("package", "Anwendung im Paket starten"),
-    ("package", "AppImage und Flatpak starten (Linux)"),
+    ("package", "AppImage starten (Linux)"),
     ("windows-installer", "Installer still installieren und starten"),
     ("macos-release-check", "Installiertes Paket starten"),
+    ("linux-flatpak", "Flatpak starten"),
+    ("linux-release-start", "AppImage auf frischem System starten"),
 )
 
 #: Ohne Bildschirm darf nur der Intel-Mac starten — sein Runner hat einen
@@ -2348,7 +2379,16 @@ def _assert_start_steps(workflow: str, installer_workflow: str) -> None:
     assert start.count("python tools/check_frozen_start.py dist") == 2
     formats = step_block(package, _START_STEPS[1][1])
     assert 'check_frozen_start.py --executable "$appimage"' in formats
-    assert 'check_frozen_start.py --flatpak "$app_id"' in formats
+    flatpak = step_block(job_block(workflow, _START_STEPS[4][0]), _START_STEPS[4][1])
+    assert 'check_frozen_start.py --flatpak "$app_id"' in flatpak
+    fresh = job_block(workflow, _START_STEPS[5][0])
+    assert 'check_frozen_start.py --executable "$appimage"' in step_block(fresh, _START_STEPS[5][1])
+    release = job_block(workflow, "linux-release-check")
+    gate = re.search(r"(?m)^    needs: \[([^\]]+)\]$", release)
+    assert gate is not None
+    assert {"linux-flatpak", "linux-release-start"} <= {
+        name.strip() for name in gate.group(1).split(",")
+    }, "die Linux-Pakete erscheinen, ohne gestartet zu sein"
     for job_name, name, later in (
         (
             "windows-installer",
@@ -2422,20 +2462,6 @@ def test_the_start_guard_rejects_an_installer_workflow_without_the_start() -> No
         )
 
 
-def _start_report(**changes: Any) -> dict[str, Any]:
-    from app.branding import APP_VERSION
-    from app.ui.start_check import FORMAT
-
-    report: dict[str, Any] = {
-        "format": FORMAT,
-        "version": APP_VERSION,
-        "window": {"visible": True, "title": "Unbenannt"},
-        "renderer": {"present": True, "kind": "GfxRenderer", "brightest": 74},
-    }
-    report.update(changes)
-    return report
-
-
 def test_the_start_check_judges_crash_hang_black_view_and_leftovers() -> None:
     """Jede Art, an der ein Start scheitern kann, ist rot und sagt, was zu tun ist."""
     from tools.check_frozen_start import judge
@@ -2450,48 +2476,47 @@ def test_the_start_check_judges_crash_hang_black_view_and_leftovers() -> None:
         values.update(extra)
         return judge(code, report, **values)
 
-    assert verdict(0, _start_report()) == []
-    assert any("SIGSEGV" in text for text in verdict(-11, _start_report()))
-    assert any("hängt" in text for text in verdict(None, _start_report()))
+    assert verdict(0, start_report()) == []
+    assert any("SIGSEGV" in text for text in verdict(-11, start_report()))
+    assert any("hängt" in text for text in verdict(None, start_report()))
     assert any("Kein Bericht" in text for text in verdict(-5, None))
-    assert verdict(0, _start_report(version="0.0.1")), "ein anderes Paket"
-    assert verdict(0, _start_report(window={"visible": False}))
-    assert verdict(0, _start_report(renderer={"present": False}))
-    assert verdict(0, _start_report(renderer={"present": True, "brightest": 0}))
-    assert verdict(0, _start_report(renderer={"present": True, "error": "Lost"}))
-    assert verdict(0, _start_report(renderer={"present": False}), offscreen=True) == []
-    assert verdict(0, _start_report(), crash_text="Fatal Python error")
+    assert verdict(0, start_report(version="0.0.1")), "ein anderes Paket"
+    assert verdict(0, start_report(window={"visible": False}))
+    assert verdict(0, start_report(renderer={"present": False}))
+    assert verdict(0, start_report(renderer={"present": True, "brightest": 0}))
+    assert verdict(0, start_report(renderer={"present": True, "error": "Lost"}))
+    assert verdict(0, start_report(renderer={"present": False}), offscreen=True) == []
+    assert verdict(0, start_report(), crash_text="Fatal Python error")
     caught = (
         "Windows fatal exception: code 0x8001010d\n\n"
         "Current thread 0x000056fc (most recent call first):\n"
         '  File "app.py", line 685 in main\n'
         "\n2026-10-06T12:00:00+00:00 normal end 0x56fc\n"
     )
-    assert verdict(0, _start_report(), crash_text=caught) == [], "abgefangen, kein Absturz"
-    assert verdict(0, _start_report(), crash_text=caught.replace("0x56fc\n", "0x1a2b\n"))
-    assert verdict(0, _start_report(), helpers_alive=[4711])
-    assert verdict(0, _start_report(), tree_changed=["Contents/MacOS/neu.txt"])
+    assert verdict(0, start_report(), crash_text=caught) == [], "abgefangen, kein Absturz"
+    assert verdict(0, start_report(), crash_text=caught.replace("0x56fc\n", "0x1a2b\n"))
+    assert verdict(0, start_report(), helpers_alive=[4711])
+    assert verdict(0, start_report(), tree_changed=["Contents/MacOS/neu.txt"])
     # RM-062: Unter Linux muss das IBus-Eingabemodul im Paket liegen.
     shipped = ["libcomposeplatforminputcontextplugin.so", "libibusplatforminputcontextplugin.so"]
     images = ["gzip", "zstd"]
     assert (
-        verdict(0, _start_report(input_modules=shipped, image_compressions=images), linux=True)
-        == []
+        verdict(0, start_report(input_modules=shipped, image_compressions=images), linux=True) == []
     )
     assert any(
-        "IBus" in text for text in verdict(0, _start_report(input_modules=shipped[:1]), linux=True)
+        "IBus" in text for text in verdict(0, start_report(input_modules=shipped[:1]), linux=True)
     )
-    assert any("IBus" in text for text in verdict(0, _start_report(), linux=True)), (
+    assert any("IBus" in text for text in verdict(0, start_report(), linux=True)), (
         "ein Bericht ohne Angabe ist kein Beleg"
     )
-    assert verdict(0, _start_report(input_modules=[])) == [], "unter Windows und macOS nicht"
+    assert verdict(0, start_report(input_modules=[])) == [], "unter Windows und macOS nicht"
     # RM-549/RM-599: Unter Linux muss das Paket zstd und gzip entpacken können.
     readable = {"input_modules": shipped, "image_compressions": ["gzip", "xz", "zstd"]}
-    assert verdict(0, _start_report(**readable), linux=True) == []
+    assert verdict(0, start_report(**readable), linux=True) == []
     without = {**readable, "image_compressions": ["gzip", "xz"]}
-    assert any("zstd" in text for text in verdict(0, _start_report(**without), linux=True))
+    assert any("zstd" in text for text in verdict(0, start_report(**without), linux=True))
     assert any(
-        "zstd" in text for text in verdict(0, _start_report(input_modules=shipped), linux=True)
+        "zstd" in text for text in verdict(0, start_report(input_modules=shipped), linux=True)
     ), "ein Bericht ohne Angabe ist kein Beleg"
 
 
@@ -2893,7 +2918,10 @@ def test_every_platform_can_do_the_same_things() -> None:
     # Display in einer Wayland-Sitzung weg und machte den Viewport nach dem
     # Laden eines Modells leer. Qt läuft über Xwayland, damit nicht zwei
     # Fenstersysteme im selben Fenster gegeneinander arbeiten.
-    assert "--device=dri" in manifest
+    # ``all`` deckt ``/dev/dri`` und ``/dev/hidraw*`` der 3D-Maus; ein engeres
+    # Recht für hidraw kennt Flatpak nicht, und mit ``dri`` allein war sie tot.
+    assert "--device=all" in manifest
+    assert "--device=dri" not in manifest, "dri ist in all enthalten"
     assert "--socket=x11" in manifest
     assert "--socket=wayland" not in manifest
     assert "--socket=fallback-x11" not in manifest
@@ -2946,11 +2974,18 @@ def test_the_workflow_builds_both_linux_formats() -> None:
     assert "make_linux_packages.py" in workflow, "die CI ruft das Werkzeug nicht"
     assert ".AppImage" in workflow, "das AppImage wird nicht mitgenommen"
     assert ".flatpak" in workflow, "das Flatpak wird nicht mitgenommen"
-    step = workflow.split("- name: AppImage und Flatpak bauen (Linux)", 1)[1].split(
-        "\n      - name:", 1
-    )[0]
-    assert "continue-on-error" not in step, "ein fehlendes öffentliches Paket bliebe grün"
+    for job, name, flag in (
+        ("package", "AppImage bauen (Linux)", "--appimage"),
+        ("linux-flatpak", "Flatpak bauen", "--flatpak"),
+    ):
+        step = step_block(job_block(workflow, job), name)
+        assert f"make_linux_packages.py {flag}" in step, f"{name} baut nicht"
+        assert "continue-on-error" not in step, "ein fehlendes öffentliches Paket bliebe grün"
     assert "Öffentliche Linux-Pakete prüfen" in workflow
+    # flatpak-builder trennt die Debug-Information mit ``eu-strip`` (elfutils);
+    # ``--no-install-recommends`` ließe es weg (Review 1, S4).
+    tools = _apt_packages(job_block(workflow, "linux-flatpak"))
+    assert {"flatpak", "flatpak-builder", "elfutils"} <= tools, tools
 
 
 def test_the_appimage_build_refuses_an_unpinned_runtime(
@@ -3906,6 +3941,10 @@ def test_the_linux_bundle_leaves_host_libraries_and_the_gtk_theme_behind() -> No
         ("libreadline.so.8", "/lib/x86_64-linux-gnu/libreadline.so.8", "BINARY"),
         ("libxcb-cursor.so.0", "/usr/lib/x86_64-linux-gnu/libxcb-cursor.so.0", "BINARY"),
         ("libgssapi_krb5.so.2", "/usr/lib/x86_64-linux-gnu/libgssapi_krb5.so.2", "BINARY"),
+        # Gebraucht und trotzdem draußen: Der Rechner hat dieselbe oder eine
+        # neuere Fassung, und eine ältere bräche seinen Grafiktreiber.
+        ("libstdc++.so.6", "/lib/x86_64-linux-gnu/libstdc++.so.6", "BINARY"),
+        ("libgcc_s.so.1", "/lib/x86_64-linux-gnu/libgcc_s.so.1", "BINARY"),
         (
             "pillow.libs/libjpeg-31e2ca52.so.62.4.0",
             "/site-packages/pillow.libs/libjpeg-31e2ca52.so.62.4.0",
@@ -3981,20 +4020,14 @@ def test_the_linux_bundle_leaves_no_dependency_open() -> None:
     eine andere Datei im Paket zeigen oder auf den Grundbestand jedes Linux.
     Bleibt eine Kante offen, fehlt dem Kunden eine Datei.
     """
-    from tools import make_linux_packages as tool
 
     karte: dict[str, list[str]] = json.loads(LINUX_DEPENDENCIES.read_text(encoding="utf-8"))
-    dropped_modules = ("readline.cpython", "_curses.cpython", "_curses_panel.cpython")
-
-    def bleibt(pfad: str) -> bool:
-        name = Path(pfad).name
-        if name in tool.ORPHANED_LIBRARIES:
-            return False
-        if any(pfad.endswith(plugin) for plugin in tool.DROPPED_QT_PLUGINS):
-            return False
-        return not any(name.startswith(modul) for modul in dropped_modules)
+    bleibt = stays_in_linux_bundle
 
     im_paket = {Path(pfad).name for pfad in karte if bleibt(pfad)}
+    assert not im_paket & {"libstdc++.so.6", "libgcc_s.so.1"}, (
+        "die Bibliotheken des Rechners reisen nicht mit"
+    )
     assert len(im_paket) > 500, "der Korpus ist leer oder der Filter nimmt alles"
 
     offen: dict[str, list[str]] = {}
@@ -4020,15 +4053,7 @@ def test_every_dropped_linux_library_is_really_orphaned() -> None:
     from tools import make_linux_packages as tool
 
     karte: dict[str, list[str]] = json.loads(LINUX_DEPENDENCIES.read_text(encoding="utf-8"))
-    dropped_modules = ("readline.cpython", "_curses.cpython", "_curses_panel.cpython")
-
-    def bleibt(pfad: str) -> bool:
-        name = Path(pfad).name
-        if name in tool.ORPHANED_LIBRARIES:
-            return False
-        if any(pfad.endswith(plugin) for plugin in tool.DROPPED_QT_PLUGINS):
-            return False
-        return not any(name.startswith(modul) for modul in dropped_modules)
+    bleibt = stays_in_linux_bundle
 
     noch_gebraucht: dict[str, list[str]] = {}
     for pfad, gebraucht in karte.items():
@@ -4533,7 +4558,10 @@ def test_the_selections_before_a_merge_run_where_packages_run() -> None:
     Windows deckt für Slicer das lokale Tor; Linux und macOS gibt es an keinem
     Arbeitsplatz, und genau dort sah bisher niemand einen echten Slicer.
     """
-    packaged = _matrix_of(job_block(WORKFLOW.read_text(encoding="utf-8"), "package"))
+    packaged = [
+        as_tested(runner)
+        for runner in _matrix_of(job_block(WORKFLOW.read_text(encoding="utf-8"), "package"))
+    ]
     windows = _matrix_of(job_block(_WINDOW_SELECTION.read_text(encoding="utf-8"), "selection"))
     slicers = _matrix_of(job_block(_SLICER_SELECTION.read_text(encoding="utf-8"), "selection"))
 
@@ -4659,7 +4687,7 @@ def test_a_programme_input_reaches_the_environment_only_as_names(
     """
     job = job_block(_SLICER_SELECTION.read_text(encoding="utf-8"), "selection")
     script = step_script(step_block(job, "Programme der Auswahl"))
-    shell = _workflow_shell()
+    shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     environment = tmp_path / "github_env"

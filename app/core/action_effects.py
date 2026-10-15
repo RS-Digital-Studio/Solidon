@@ -130,7 +130,7 @@ SIDE_EFFECTS: Final[Mapping[str, TranslatableText]] = {
     # Druckziel
     "choose_printer": _PRINT_TARGET,
     # Lage
-    "place_on_bed": _("Senkt den Körper bis auf das Bett; seitlich bleibt er, wo er ist."),
+    "place_on_bed": _("Setzt den Körper auf das Bett. Seitlich bleibt er, wo er ist."),
     "arrange_on_bed": _(
         "Verschiebt und verteilt alle Körper der Szene, auch die, die schon gut lagen."
     ),

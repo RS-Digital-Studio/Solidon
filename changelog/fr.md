@@ -20,9 +20,19 @@ dans `website/version.json`.
 
 ### Utilisation et système
 
+- Les cartes de mesures se déplacent et suivent les champs ouverts. Titres et cotes du plateau plus nets, barres et poignées plus sobres et grille visible en thème clair facilitent la vue du modèle.
+- Correction d’un plantage possible lors du changement de caractéristique ou de projet.
+- L'explication de «Poser sur le plateau» convient aussi aux corps situés sous le plateau.
+- Les listes d'actions sur les caractéristiques utilisent entièrement la langue choisie.
+- Sur Mac, Solidon peut désormais charger le pilote de 3Dconnexion (3DxWare) pour la souris 3D. De la version 0.4.1 à la 0.6.0, macOS ne l'autorisait pas.
+- Sur Mac, le paquet d'installation place désormais toujours Solidon dans *Applications*. Si Solidon ne s'y trouvait pas, le paquet mettait jusqu'ici à jour une copie située ailleurs.
+- Après la mise à jour sur Mac, lancer Solidon depuis *Applications*. Supprimer les anciennes copies de l'app hors de ce dossier et recréer le raccourci du Dock si nécessaire.
+- Sous Linux, l'AppImage démarre désormais aussi sur Ubuntu 22.04, Linux Mint 21 et Debian 12. En version 0.6.0, seul le Flatpak y fonctionnait.
+- Sous Linux, Solidon lit désormais la souris 3D par l'accès qu'ouvre la règle udev du manuel, y compris dans le Flatpak. Jusqu'à la version 0.6.0, la règle n'y suffisait pas.
 - La recherche trouve *Réunir*, *Soustraire* et *Intersection* aussi sous « booléen », et *Soustraire* aussi sous « différence ».
 - La recherche trouve aussi la fonction pour une question comme « Comment poser la pièce sur le plateau ? » et connaît des mots des slicers et de la CAO comme « variable ».
 - La recherche dans le manuel trouve aussi la bonne page pour une question posée avec vos propres mots.
+- Qui tape « trou » ou « perçage » dans la recherche obtient *Percer un trou* sur un corps et *Modifier le trou* sur un perçage sélectionné, dans toutes les langues.
 - Avec un corps sélectionné et un second dans la scène, l'onglet *Sélection* indique comment ajouter le second pour *Réunir*, *Soustraire* et *Intersection*.
 - Le champ de recherche de l'onglet *Sélection* est désormais toujours là, même sans sélection, et trouve chaque fonction et chaque commande avec son raccourci.
 - La palette de commandes disparaît, car le champ de recherche trouve la même chose. *Rechercher une fonction* et Ctrl+Maj+P y placent le curseur.
@@ -34,21 +44,30 @@ dans `website/version.json`.
 - S'il manque à une fonction un second corps dans la scène, la raison indique *Dupliquer l'objet* comme solution.
 - La liste des raccourcis clavier ne nomme plus qu'une fois *Sculpter*, *Squelette* et *Dessiner*.
 - Le bouton *Calculer plus grossièrement* disparaît : Solidon poursuit seul avec le calcul complet. Dans la version 0.6.0, il apparaissait aussi là où il ne changeait rien.
-- Les messages d'erreur, les détails et les avis s'affichent désormais dans le style de Solidon, avec les actions sous forme de boutons. Ctrl+C copie tout le message.
-- La couleur d'une bobine se choisit avec le sélecteur de Solidon, juste à côté du bouton, avec des couleurs nommées et la valeur exacte. Le dialogue de couleur de Windows disparaît.
+- Les messages d'erreur, les détails et les avis s'affichent désormais dans le style de Solidon, avec les actions sous forme de boutons. Ctrl+C copie la sélection, sinon tout le message.
+- La couleur d'une bobine se choisit avec le sélecteur de Solidon, juste à côté du bouton, avec des couleurs nommées et la valeur exacte. Le dialogue de couleur du système disparaît.
 - Une cote du dessin se modifie désormais dans un champ, sur place. Les adresses et le choix du filament à remplacer sont demandés dans le style de Solidon.
 - Après l'activation ou la désactivation, la confirmation s'affiche dans le dialogue même, sans fenêtre à fermer.
 - Le dialogue *Calibrer le matériau* n'affiche plus devant que le jeu, la surcote et la compensation des trous. Pied d'éléphant, retrait, paroi et surplomb sont sous *Autres réglages*.
 - Les nombres sont alignés à droite dans tous les champs, chiffre sous chiffre.
 - Un lecteur d'écran lit le nom et l'explication de chaque champ numérique d'un dialogue.
 - Après une action dans le *Rapport de contrôle*, le rapport reste au premier plan, et Ctrl+Z l'annule aussitôt. Jusqu'ici, l'onglet *Sélection* passait devant.
+- Les avis de plateau et d’adhérence suivent l’unité choisie. Passer de mm à pouces conserve constat sélectionné, détails ouverts, onglet et état déplié des corps.
 - Ctrl+Z et Ctrl+Y fonctionnent aussi quand le curseur se trouve dans un champ vide, par exemple le champ de recherche. Si vous y avez tapé du texte, c'est d'abord la saisie qui est annulée.
 - Sans activation, les actions qui modifient le modèle sont grisées avec leur raison dans le *Rapport de contrôle*, *Sélection*, les menus contextuels et le filament. Le refus venait après le clic.
+- Sans activation, *Créer un paramètre …*, *Déplacer*, *Diviser*, les touches de l'historique et les cotes dans la vue sont grisés. Chaque raison indique la voie, comme *Aide → Déverrouiller Solidon …*.
+- Quand une action du *Rapport de contrôle* attend le calcul en cours, elle indique qu'elle redevient disponible ensuite, aussi pour les lecteurs d'écran.
+- Dans une scène vide, les outils grisés comme *Coupe* et *Mesurer* indiquent la raison : il leur faut un corps. Jusqu'ici, l'info-bulle n'affichait que leur nom.
+- Quand la vue manque de place, les champs de cote restent visibles et laissent libre la poignée de déplacement. Jusqu'ici, un champ pouvait passer sous le bord ou masquer les flèches de la poignée.
 - Les messages de la barre d'état ne mettent plus de deux-points après une phrase complète.
 - Avec un seul corps, l'arbre des objets est aussi haut que son contenu, de même que l'historique avec une seule étape. La version 0.6.0 laissait un vide en dessous.
 - L'étape la plus récente reste visible dans l'historique quand de nouveaux corps agrandissent l'arbre des objets. Dans la version 0.6.0, elle glissait sous le bord du panneau.
 - La capture d'écran jointe à un retour montre désormais aussi le modèle sous Windows. Avec certaines cartes graphiques, elle montrait auparavant une image ancienne, comme l'écran de chargement.
 - Sous macOS, une boîte de dialogue ouverte, par exemple pour créer une vis du catalogue de blocs, reste au-dessus de la fenêtre principale. Un clic dans la fenêtre la passait derrière.
+- Listes de caractéristiques et petits dialogues sont plus compacts. Après un changement de police, explication du plan invalide, corrections, introduction et boutons restent lisibles et accessibles.
+- La carte de sélection suit contenu et police, gardant textes et colonnes. Les onglets détachés gardent leur taille. Si une modification est proposée, « Appliquer » est l’action principale.
+- Les contreparties demandent paire et taille et expliquent les deux moitiés. Forme et ajustement sont dans « Autres réglages ». La hauteur initiale du dialogue suit le contenu.
+- Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
 
 ### Imprimer et transmettre au slicer
 
@@ -58,8 +77,11 @@ dans `website/version.json`.
 
 - Un corps exact garde désormais ses caractéristiques après *Appliquer du texte*, *Incruster du texte* et *Creuser la contre-forme*. En version 0.6.0, plus aucune face ne pouvait ensuite être cliquée.
 - Un corps fileté du catalogue de blocs peut de nouveau être déplacé, tourné, mis en miroir, mis à l'échelle et posé sur le plateau. En version 0.6.0, la chaîne s'arrêtait sur une erreur du programme.
-- Dans l'onglet *Sélection*, un diamètre sous la limite dans *Modifier le trou* renvoie désormais à *Supprimer la caractéristique*, qui supprime tout le trou, fraisure comprise si on le veut.
+- Un diamètre inférieur à la limite renvoie à *Supprimer la caractéristique*, fraisure au choix. Si les cotes sont en cours de modification dans la vue, le message indique d’abord *Annuler*.
 - La reconstruction (*Reconstruire le modèle*) ne conseille plus d'autres limites quand aucune valeur permise ne suffirait, et n'affiche qu'une fois les propositions identiques.
+- Si un perçage ou un récipient ne réussit qu'avec des sommets déplacés d'un rien, l'ouverture reste libre. En version 0.6.0, une peau très fine pouvait rester par-dessus.
+- Pour les trous, vue et *Sélection* montrent la même action. Dimension, profondeur et entrée liée sont devant ; compensation d’impression et réglages fins, dans « Autres valeurs ».
+- Les champs du perçage et la case de modification simultanée des éléments similaires expliquent leur effet. « Compenser les écarts d'impression » précise la correction issue du profil du matériau.
 
 ## 0.6.0
 

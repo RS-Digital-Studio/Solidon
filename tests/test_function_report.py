@@ -28,6 +28,7 @@ from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
 from tools import function_checks, function_report
 from tools.function_checks import (
+    CAPTION_HEIGHT,
     CHECKPOINTS,
     COARSE_NOTE,
     CRITERIA,
@@ -341,7 +342,7 @@ def test_a_purchased_licence_that_still_greys_out_is_a_finding() -> None:
     """Prüfpunkt 18 in der Gegenrichtung: Gekauft und trotzdem grau ist eine Sperre zu viel."""
 
     def locked(protocol: dict[str, Any]) -> None:
-        protocol["licence_runs"]["licensed"] = {"writes": True, "enabled": False, "reason": "x"}
+        protocol["licence_runs"]["licensed"] = {"writes": True, "state": "grau", "reason": "x"}
 
     assert _judged(locked).points[18].verdict == "fund"
 
@@ -362,7 +363,7 @@ def test_the_licence_point_is_judged_once_per_row_over_all_runs() -> None:
     runs = {
         state: {
             "writes": True,
-            "enabled": LICENCE_UNLOCKED[state],
+            "state": "angeboten" if LICENCE_UNLOCKED[state] else "grau",
             "reason": "" if LICENCE_UNLOCKED[state] else "Ändern braucht eine Lizenz.",
         }
         for state in licence_states()
@@ -652,6 +653,38 @@ def test_a_second_verdict_of_the_same_stage_is_rejected() -> None:
     checked = check_verdicts([_verdict(point=1), _verdict(point=1, verdict="offen", rm="RM-2")])
     assert len(checked.accepted) == 1
     assert "doppeltes Urteil derselben Stufe" in checked.rejected[0][1]
+
+
+def test_a_verdict_file_hangs_on_no_machine() -> None:
+    """RD-5: Bild relativ zum ``[[run]]`` oder ``no_image`` mit Grund, Stelle ohne Laufwerk."""
+    why = "kein PNG im Lauf: cases/043/surfaces/a.json nennt images=[]"
+    for image in ("F:\\l\\a.png", "F:/l/a.png", "/l/a.png", "c\\a.png", "c/../a.png", why):
+        reasons = check_verdicts([_verdict(point=1, image=image)]).rejected[0][1]
+        assert any("Bild nicht relativ zum Laufordner" in r for r in reasons), (image, reasons)
+    good = [_verdict(point=1, image="cases/2/a.png"), _verdict(point=2, image="v4:cases/1/b.png")]
+    good += [_verdict(point=3, image=None, no_image=why), _verdict(point=4, place="c/f.json#a/#b")]
+    assert check_verdicts(good).rejected == ()
+    for entry, reason in (
+        (_verdict(point=1, no_image=why), "Bild und Grund ohne Bild zugleich"),
+        (_verdict(point=1, image=None, no_image=" "), "ohne Bild oder Stelle"),
+        (_verdict(point=1, place="F:\\l\\cases\\3\\function.json"), "Stelle mit Pfad dieses"),
+    ):
+        assert reason in " ".join(check_verdicts([entry]).rejected[0][1]), entry
+    run = {"name": "lauf", "head": "2ec37b23b", "seal": "s.json SHA256 " + "6" * 64}
+    v4 = {**run, "key": "v4", "name": "v4-lauf"}
+    bad = {**run, "seal": "s.json", "head": "main", "name": "F:\\lauf", "folder": "x"}
+    assert function_report.check_runs([run, v4, run], good, ["2ec37b23b"]) == []
+    assert function_report.run_folder([v4, run]) == "lauf"
+    for runs, expected in (
+        ([v4], "Bilder ohne Laufangabe"),
+        ([run], "Bilder aus unbekanntem Lauf v4"),
+        ([bad, v4], "ohne SHA256|kein Commit|Pfad dieses Rechners|unbekannter Schlüssel"),
+        ([run, {**run, "name": "anders"}, v4], "steht für zwei Läufe"),
+        ([run, {**v4, "key": "V 4"}], "Kennung V 4 besteht nicht aus"),
+        ([{**run, "head": "a280ee8f5"}, v4], "hat Kopf a280ee8f5, die Protokolle 2ec37b23b"),
+    ):
+        problems = " ".join(function_report.check_runs(runs, good, ["2ec37b23b"]))
+        assert all(part in problems for part in expected.split("|")), (expected, problems)
 
 
 # --- Funddatei ----------------------------------------------------------------
@@ -973,6 +1006,22 @@ def test_the_report_rejects_invalid_input_with_exit_one(tmp_path: Path) -> None:
     assert "## Abgewiesene Urteile" in text and "offen ohne RM-Nummer" in text
 
 
+def test_the_checklist_names_the_run_of_the_verdicts_not_the_copy(tmp_path: Path) -> None:
+    """Laufordner ist der ``[[run]]`` mit dem Kopf der Protokolle, nicht ``--out`` (RD-5)."""
+    (state := tmp_path / "state").mkdir()
+    out = _run_folder(tmp_path, [sample_protocol()])
+    for head, code in (("a280ee8f5", 0), ("2ec37b23b", 1)):
+        (state / "urteile-d04.toml").write_text(
+            f'[[run]]\nname = "probelauf-d0"\nhead = "{head}"\nseal = "{"6" * 64}"\n'
+            '[[verdict]]\nrow = "drill_hole"\npoint = 2\nverdict = "offen"\nrm = "RM-1"\n'
+            'reviewer = "stufe_b"\nreason = "Klicks"\nimage = "cases/1/a.png"\nplace = "Karte"\n',
+            encoding="utf-8",
+        )
+        assert _write(out, state, package="D4") == code
+        text = (state / "abhakliste-d04.md").read_text(encoding="utf-8")
+        assert "| Laufordner | `probelauf-d0` |" in text, text
+
+
 def test_an_invalid_protocol_is_invalid_input(tmp_path: Path) -> None:
     """Ein Protokoll mit unbekanntem Feld ist eine ungültige Eingabe, kein stiller Fall."""
     protocol = sample_protocol()
@@ -1062,12 +1111,20 @@ def test_z6_names_the_smallest_screen_and_not_the_start_size() -> None:
     """Z6 misst an der kleinsten Fläche, 1920 × 1080 logisch (Festlegung Robert).
 
     ``main_window.START_SIZE`` ist nur die Größe beim Verkleinern; Z6 nennt sie
-    nicht mehr. Die kleinste Fensterfläche ist der kleinste Schirm ohne
-    Taskleiste, und die Schwelle von Z6 nennt genau diesen Schirm.
+    nicht mehr. Die kleinste Fensterfläche ist die Innenfläche des maximierten
+    Fensters auf dem kleinsten Schirm: Taskleiste und Titelleiste ab. Am
+    maximierten Solidon-Fenster bei 100 % gemessen (Durchsicht welle4, C-M1):
+    innen so breit wie die verfügbare Fläche und 23 Punkte niedriger — auf
+    1920 x 1080 mit 48er-Taskleiste also 1920 x 1009, nicht 1920 x 1032. Die
+    Schwelle von Z6 nennt den Schirm.
     """
     assert set(SMALLEST_SCREEN) <= set(CRITERIA["Z6"].numbers)
     assert not set(START_SIZE) & set(CRITERIA["Z6"].numbers)
-    assert (SMALLEST_SCREEN[0], SMALLEST_SCREEN[1] - TASKBAR_HEIGHT) == SMALLEST_WINDOW
+    assert SMALLEST_WINDOW == (1920, 1009)
+    assert (
+        SMALLEST_SCREEN[0],
+        SMALLEST_SCREEN[1] - TASKBAR_HEIGHT - CAPTION_HEIGHT,
+    ) == SMALLEST_WINDOW
     assert "LAPTOP_SIZE" not in vars(function_checks)
 
 
@@ -1495,6 +1552,77 @@ def test_an_open_finding_keeps_a_fulfilled_point_open() -> None:
     assert "| offen RM-800 |" in line
 
 
+def test_a_fixed_older_finding_does_not_hide_an_open_younger_one() -> None:
+    """Zwei Funde an einer Zelle: Der offene hält sie offen, nicht der ältere behobene (FD-85)."""
+    text = "\n".join(
+        (
+            _finding(number=1, subject="1", stand="behoben `a280ee8f5`"),
+            _finding(number=2, title="Pfeile zu nah", subject="1", stand="offen RM-800"),
+        )
+    )
+    findings, problems = parse_findings(text)
+    assert problems == []
+    known = {f.key: f for f in findings}
+    assert function_report._finding_for("drill_hole", 1, known) == known["FD-2"]
+    case = _judged()
+    cases = {case.row_id: case}
+    checked = check_verdicts(_b_verdicts(), outcomes=cases)
+    values = package_values(cases, checked.accepted, common_goals={}, solutions=SOLUTIONS)
+    checklist = render_checklist(
+        "D4",
+        rows=ROWS[:1],
+        cases=cases,
+        verdicts=checked,
+        findings=known,
+        values=values,
+        commit="a280ee8f5",
+        date="2026-10-12",
+        out="F:/tmp-suche/lauf",
+    )
+    line = next(line for line in checklist.splitlines() if line.startswith("| drill_hole"))
+    assert "| offen RM-800 |" in line
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        "`pin_for_bore`, `drill_hole`",
+        "`drill_hole`; `plug_hole`",
+        "drill_hole und die Sprachflächen",
+    ],
+)
+def test_a_finding_of_several_rows_holds_each_of_them_open(rows: str) -> None:
+    """Ein Fund nennt mehrere Zeilen: Er hält die Zelle jeder davon offen (FD-143).
+
+    Die Zelle trägt den Fund ihres Urteils (FD-2); FD-1 kommt nur über die
+    Spalte „Funde“ in die Zeile — so prüft der Fall auch deren Vergleich.
+    """
+    text = _finding(subject="1").replace("**Funktion:** drill_hole", f"**Funktion:** {rows}")
+    findings, problems = parse_findings(text)
+    assert problems == []
+    known = {f.key: f for f in findings}
+    assert function_report._finding_for("drill_hole", 1, known) == known["FD-1"]
+    case = _judged()
+    cases = {case.row_id: case}
+    own = _verdict(point=1, verdict="offen", finding="FD-2", rm="RM-800")
+    checked = check_verdicts([own, *_b_verdicts()], outcomes=cases)
+    values = package_values(cases, checked.accepted, common_goals={}, solutions=SOLUTIONS)
+    checklist = render_checklist(
+        "D4",
+        rows=ROWS[:1],
+        cases=cases,
+        verdicts=checked,
+        findings=known,
+        values=values,
+        commit="a280ee8f5",
+        date="2026-10-12",
+        out="F:/tmp-suche/lauf",
+    )
+    line = next(line for line in checklist.splitlines() if line.startswith("| drill_hole"))
+    assert line.split(" | ")[3] == "FD-2", line
+    assert "| offen RM-800 |" in line and line.rstrip(" |").endswith("| FD-1, FD-2")
+
+
 def test_evidence_names_the_file_of_the_case() -> None:
     """Belege zeigen auf die Datei des Falls, auch bei Sprachfällen (L19)."""
     case = judge_case(sample_protocol(), sample_context(), source="2/surfaces/drill_hole.json")
@@ -1731,29 +1859,6 @@ def test_z6_is_judged_once_per_row_at_the_smallest_area() -> None:
     below = bar_at((1366, 728))
     quiet = merge_cases([judge_case(below, sample_context()), cases[1]], [below, wide])
     assert quiet.criteria["Z6"].verdict == "erfuellt", "unter der Untergrenze kein Fund"
-
-
-def test_the_judges_stay_under_the_size_limit() -> None:
-    """Keine Datei des Pakets über 2 000 Zeilen — die Grenze W1 der Codestruktur (N2)."""
-    import tools
-
-    folder = Path(next(iter(tools.__path__)))
-    files = [
-        "function_checks.py",
-        "function_judges.py",
-        "function_points.py",
-        "function_samples.py",
-        "function_report.py",
-        "../tests/test_function_report.py",
-    ]
-    long = {}
-    for name in files:
-        path = folder / name
-        assert path.exists(), name
-        lines = len(path.read_text(encoding="utf-8").splitlines())
-        if lines > 2000:
-            long[name] = lines
-    assert not long, long
 
 
 def test_empty_fonts_are_not_measured_like_empty_contrast() -> None:

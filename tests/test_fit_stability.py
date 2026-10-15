@@ -2280,7 +2280,7 @@ def test_a_cancelled_round_leaves_no_answer_for_its_patch(monkeypatch: pytest.Mo
         features_module._fitted(mesh)
     held = features_module._BY_GEOMETRY.get("classified") or {}
     assert len(held) == counts[1], "abgelegt nur, was vor dem Abbruch fertig war"
-    assert all(entry is not None for entry in held.values())
+    assert all(entry is not None for entry in tuple(held.values()))
 
 
 @pytest.mark.parametrize("name", ["plate_chamfered_mouths.stl", "plate_countersunk.stl"])

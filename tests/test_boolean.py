@@ -1416,7 +1416,10 @@ def test_the_jitter_stage_draws_the_same_on_every_machine() -> None:
 
     raw = np.random.PCG64(seed + index).random_raw(corners.size)
     unit = (raw >> np.uint64(11)).astype(np.float64) * 2.0**-53
-    reach = max(body.bounds.diagonal, 1.0) * chain.JITTER_AMPLITUDE * math.sqrt(3.0)
+    reach = min(
+        max(body.bounds.diagonal, 1.0) * chain.JITTER_AMPLITUDE * math.sqrt(3.0),
+        chain.JITTER_REACH_LIMIT,
+    )
     expected = corners + (unit.reshape(corners.shape) * 2.0 - 1.0) * reach
     assert np.array_equal(moved, expected)
 

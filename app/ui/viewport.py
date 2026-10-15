@@ -123,6 +123,7 @@ from app.core.units import (
 )
 from app.i18n import tr
 from app.ui import app_events, cursors
+from app.ui.change_lock import change_refusal
 from app.ui.icons import icon
 from app.ui.labels import (
     display_unit,
@@ -5133,6 +5134,7 @@ class Viewport(QWidget):
         self._selection_fade: Any = None
         """Die laufende Auswahlblende, damit die nächste sie ablösen kann."""
         self._bed_colour = BED_COLOUR
+        self._bed_grid_colour = THEMES["dark"]["bed_grid"]
         self._bed_surface = BED_SURFACE_COLOUR
         #: Woraus die stehende Kulisse gebaut wurde — Renderer, Bauraum,
         #: Plattenzahl und die beiden Farben (RM-124). Stimmt das Tupel noch,
@@ -5293,6 +5295,7 @@ class Viewport(QWidget):
         *Baustein verschieben* steht. Das Fenster setzt eine schwache Frage,
         keine gebundene Methode: Die hielte das Fenster (``wartezeit.md``)."""
         self._gizmo_labels: LabelsItem | None = None
+        self._gizmo_label_style: LabelStyle | None = None
         """Die Buchstaben an den Gizmo-Achsen. Sie gehen mit ihm — und
         während des Zugs mit der Matrix (``update_labels`` in
         :meth:`_on_gizmo_interacted`)."""
@@ -8871,7 +8874,16 @@ class Viewport(QWidget):
         #
         # Der Renderer steht mit im Tupel, weil ein Austausch (Tests, ein neu
         # aufgebautes Fenster) dieselben Aktoren woanders braucht.
-        built = (self.renderer, width, depth, height, beds, self._bed_colour, self._bed_surface)
+        built = (
+            self.renderer,
+            width,
+            depth,
+            height,
+            beds,
+            self._bed_colour,
+            self._bed_surface,
+            self._bed_grid_colour,
+        )
         if built != self._bed_built:
             for actor in self._frame_actors:
                 self.renderer.remove(actor)
@@ -8977,17 +8989,23 @@ class Viewport(QWidget):
         self._bed_surfaces.append(surface)
         self._frame_actors.append(surface)
         self._ground_actors.append(surface)
-        grid_points, grid_spans = shapes.grid_lines((shift, 0.0, 0.0), width, depth, 10.0)
-        grid = self.renderer.add_lines(
-            grid_points,
-            name=f"bed_{plate}",
-            colour=self._bed_colour,
-            width=1.0,
-            polylines=grid_spans,
-        )
-        grid.set_opacity(0.35)
-        self._frame_actors.append(grid)
-        self._ground_actors.append(grid)
+        minor, major = shapes.grid_line_levels((shift, 0.0, 0.0), width, depth, 10.0)
+        # Das Raster liegt auf der beleuchteten Fläche, der Bauraum dagegen
+        # vor dem Hintergrund. Ihre Farben sind deshalb getrennte Rollen.
+        for points, name, opacity in (
+            (minor, f"bed_{plate}", 0.55),
+            (major, f"bed_major_{plate}", 0.85),
+        ):
+            grid = self.renderer.add_lines(
+                points,
+                name=name,
+                colour=self._bed_grid_colour,
+                width=1.0,
+                polylines=[2] * (len(points) // 2),
+            )
+            grid.set_opacity(opacity)
+            self._frame_actors.append(grid)
+            self._ground_actors.append(grid)
 
         segments = volume_edges(width, depth, height)
         points = np.asarray([point for pair in segments for point in pair], dtype=float)
@@ -9006,7 +9024,9 @@ class Viewport(QWidget):
                 anchors,
                 [text for _point, text in marks],
                 name=f"bed_scale_{plate}",
-                style=LabelStyle(text_colour=self._bed_colour, font_size=9, always_visible=True),
+                style=LabelStyle(
+                    text_colour=self._sketch_label_colour, font_size=9, always_visible=True
+                ),
             )
         )
 
@@ -9039,6 +9059,7 @@ class Viewport(QWidget):
         # (``grid_minor`` und ``text``); sie hier zu einer siebten und achten
         # Szenenfarbe zu machen, hieße denselben Wert zweimal zu benennen.
         exact = THEMES["light" if theme == "light" else "dark"]
+        self._bed_grid_colour = exact["bed_grid"]
         # Gegen den Verlauf trägt ``grid_minor`` nicht zuverlässig. Beide
         # Rasterstufen benutzen deshalb den sichtbaren Farbton; allein ihre
         # Deckkraft (0,32 gegen 0,72 in ``show_sketch``) macht daraus leise
@@ -11494,6 +11515,7 @@ class Viewport(QWidget):
             or self._feature_patches
             or self._feature_outlines
             or self._hover_patch is not None
+            or self._slot_handle is not None
         ) and not self._feature_layout_timer.isActive():
             self._feature_layout_timer.start(0)
 
@@ -11577,6 +11599,10 @@ class Viewport(QWidget):
     def _layout_feature_labels(self) -> bool:
         """Textfelder in freiem Bildraum platzieren; Weltanker und Auswahl bleiben gleich."""
         preview_changed = self._sync_feature_preview()
+        # Im beanspruchten Gizmo-Zug führt dessen Matrix die Beschriftung;
+        # der Kameratimer darf XYZ nicht auf die Ausgangspunkte zurücksetzen.
+        if self._gizmo is None or not self._gizmo.pressing:
+            preview_changed = self._update_slot_labels() or preview_changed
         renderer = self.renderer
         style = self._feature_label_style
         if renderer is None or style is None or not self._feature_label_data:
@@ -13826,12 +13852,12 @@ class Viewport(QWidget):
                     filter(None, (note, tr("Der Ansichtsschnitt ist stellenweise offen.")))
                 )
         if note:
-            self.banner.show_preview(note, self._diff_palette, self._preview_hint)
             self.banner.legend.setVisible(
                 self._preview_changes
                 and not self._difference_pending
                 and not self._difference_failed
             )
+            self.banner.show_preview(note, self._diff_palette, self._preview_hint)
         else:
             self.banner.hide()
 
@@ -14688,6 +14714,13 @@ class Viewport(QWidget):
             self.gizmoStatus.emit("")
             return
         self._detach_gizmo()
+        if change_refusal():
+            # **Ohne Freischaltung kein Griff** (FD-28): Jeder Zug daran legt
+            # einen Schritt an, den der Kern ablehnt. Den Grund nennen Karte,
+            # Merkmalfenster und Maßgruppe; nach dem Freischalten stellt
+            # ``MainWindow._update_actions`` den Griff neu.
+            self.gizmoStatus.emit("")
+            return
         # **Wo er sitzt und was er tut, sind zwei Fragen.** ``gizmo_feature``
         # beantwortet die erste (jedes versetzbare Merkmal), ``gizmo_target``
         # die zweite (nur eine Fläche kennt Press/Pull entlang ihrer Normalen).
@@ -15317,22 +15350,30 @@ class Viewport(QWidget):
         texts = [text for _point, text in marks]
         self._gizmo_label_base = base
         self._gizmo_label_texts = texts
+        self._gizmo_label_style = LabelStyle(
+            text_colour=self._sketch_label_colour,
+            font_size=13,
+            bold=True,
+            always_visible=True,
+            background=self._sketch_label_background,
+            background_opacity=1.0,
+            margin=4,
+        )
         self._gizmo_labels = self.renderer.add_labels(
             base.copy(),
             texts,
             name="gizmo_labels",
-            # In der Körperfarbe des Themas: hell im dunklen, dunkel im
-            # hellen. Die Kantenfarbe war für Text auf dem Hintergrund zu
-            # leise — im Bild kaum zu lesen.
-            style=LabelStyle(
-                text_colour=self._object_colour, font_size=13, bold=True, always_visible=True
-            ),
+            # Auf eigenem Grund bleiben Maße und Griffbuchstaben auch über
+            # einem hellen Körper oder dessen Flächenhervorhebung lesbar.
+            style=self._gizmo_label_style,
         )
+        self._update_slot_labels()
 
     def _drop_gizmo_labels(self) -> None:
         if self._gizmo_labels is not None and self.renderer is not None:
             self.renderer.remove(self._gizmo_labels)
         self._gizmo_labels = None
+        self._gizmo_label_style = None
         self._gizmo_label_base = None
         self._gizmo_label_texts = []
 
@@ -15617,27 +15658,112 @@ class Viewport(QWidget):
             self.renderer.render()
         self._queue_feature_label_layout()
 
-    def _update_slot_labels(self) -> None:
+    def _update_slot_labels(self) -> bool:
         """Die beiden L folgen den aktuellen Knöpfen auch während der Vorschau."""
         if (
             self._slot_handle is None
             or self._gizmo_label_base is None
             or self._gizmo_labels is None
         ):
-            return
+            return False
+        import numpy as np
+
+        points = self._gizmo_label_base.copy()
+        texts = list(self._gizmo_label_texts)
         centre, _radius = self._slot_handle.clearance
         indices = [index for index, text in enumerate(self._gizmo_label_texts) if text == "L"]
         for index, seat in zip(indices, self._slot_handle.knob_seats, strict=True):
-            self._gizmo_label_base[index] = [
+            points[index] = [
                 origin + (point - origin) * GIZMO_LABEL_GAP
                 for origin, point in zip(centre, seat, strict=True)
             ]
+        renderer, style = self.renderer, self._gizmo_label_style
+        if renderer is not None and style is not None and indices:
+            # Die Weltlücke allein schrumpft beim Herauszoomen. Reserviert
+            # werden die echten Knopfhüllen und das unverändert große Textfeld.
+            font = QFont(self.font())
+            font.setPixelSize(style.font_size)
+            font.setBold(style.bold)
+            metrics = QFontMetricsF(font)
+            ratio = self._device_ratio()
+            padding = 2.0 * style.margin + 4.0
+            size = (
+                (max(metrics.horizontalAdvance("L"), 1.0) * 1.5 + padding) * ratio,
+                (max(metrics.height(), float(style.font_size)) * 1.5 + padding) * ratio,
+            )
+            gap = TIGHT * ratio
+            obstacles = []
+            anchors = []
+            projected = [renderer.world_to_display(tuple(points[index])) for index in indices]
+            for knob in self._slot_handle.knobs:
+                bounds = knob.bounds()
+                pixels = np.asarray(
+                    [
+                        renderer.world_to_display(point)
+                        for point in product(bounds[:2], bounds[2:4], bounds[4:])
+                    ]
+                )
+                if not np.isfinite(pixels).all() or not np.all(
+                    (pixels[:, 2] >= 0.0) & (pixels[:, 2] <= 1.0)
+                ):
+                    break
+                low, high = pixels[:, :2].min(axis=0), pixels[:, :2].max(axis=0)
+                obstacles.append((low[0] - gap, low[1] - gap, high[0] + gap, high[1] + gap))
+            if len(obstacles) == len(indices) and all(
+                all(math.isfinite(value) for value in point) and 0.0 <= point[2] <= 1.0
+                for point in projected
+            ):
+                origin = renderer.world_to_display(centre)
+                for ordinal, ((x, y, _depth), box) in enumerate(
+                    zip(projected, obstacles, strict=True)
+                ):
+                    dx, dy = x - origin[0], y - origin[1]
+                    # Bei einer Sicht entlang der Längsrichtung dürfen auch zwei
+                    # zusammenfallende Sitze ihre zwei Buchstaben behalten.
+                    if abs(dx) >= abs(dy):
+                        x = (
+                            max(x, box[2])
+                            if dx > EPS_DISPLAY or (abs(dx) <= EPS_DISPLAY and ordinal == 0)
+                            else min(x, box[0])
+                        )
+                    else:
+                        y = max(y, box[3]) if dy > 0 else min(y, box[1])
+                    anchors.append((x, y))
+                width, height = renderer.view_size()
+                placed = layout_feature_labels(
+                    anchors,
+                    [size] * len(indices),
+                    [2] * len(indices),
+                    (0.0, 0.0, float(width), float(height)),
+                    obstacles,
+                    gap=gap,
+                )
+                for ordinal, rect in placed:
+                    index = indices[ordinal]
+                    x, y, depth = projected[ordinal]
+                    before = renderer.display_to_world(x, y, depth)
+                    after = renderer.display_to_world(
+                        (rect[0] + rect[2]) / 2.0, (rect[1] + rect[3]) / 2.0, depth
+                    )
+                    if (
+                        before is not None
+                        and after is not None
+                        and np.isfinite((before, after)).all()
+                    ):
+                        points[index] += np.asarray(after) - np.asarray(before)
+            # Ohne verwertbare Projektion/freien Nahplatz bleiben die endlichen
+            # ursprünglichen Anker vollständig erhalten, keine Fernwanderung.
         # Die Länge steht hinter dem zweiten L; sie wandert mit und zählt mit.
         if indices and indices[-1] + 1 < len(self._gizmo_label_texts):
             measure = indices[-1] + 1
-            self._gizmo_label_base[measure] = list(slot_measure_seat(self._slot_handle))
-            self._gizmo_label_texts[measure] = self._slot_length_text()
-        self._gizmo_labels.update_labels(self._gizmo_label_base, self._gizmo_label_texts)
+            points[measure] = list(slot_measure_seat(self._slot_handle))
+            texts[measure] = self._slot_length_text()
+        if np.array_equal(points, self._gizmo_label_base) and texts == self._gizmo_label_texts:
+            return False
+        self._gizmo_label_base = points
+        self._gizmo_label_texts = texts
+        self._gizmo_labels.update_labels(points, texts)
+        return True
 
     def _slot_length_text(self) -> str:
         """Die Länge des Langlochgriffs, wie das Merkmalfenster sie schreibt.
@@ -15947,8 +16073,14 @@ class Viewport(QWidget):
             vertices,
             faces,
             name="face-handle",
-            style=SurfaceStyle(colour=MEASURE_COLOUR, opacity=0.6, pickable=False),
+            style=SurfaceStyle(
+                colour=MEASURE_COLOUR,
+                opacity=0.12 if feature.kind in slot_feature_kinds() else 0.6,
+                pickable=False,
+            ),
         )
+        if self._shape_actor is not None:
+            self._face_actor.set_visible(self._shape_actor.visible())
         return self._face_actor
 
     def _handle_seat(self, feature: Feature, centre: Any) -> Any:
@@ -16121,19 +16253,57 @@ class Viewport(QWidget):
         chosen = self.slot_handle_feature()
         return chosen is not None and chosen.id == feature.id
 
-    def _show_preview(self, feature: Feature, centre: Any, normal: Any, radius: float) -> None:
+    def _show_preview(
+        self, feature: Feature, centre: Any, normal: Any, radius: float, *, update: bool = False
+    ) -> None:
         """Das gewählte Merkmal in seiner Gestalt — ein eigener Aktor, damit
         der Griff an der Öffnung bleibt und die Vorschau beim Zug mitgeht."""
-        self._drop_preview()
+        if not update:
+            self._drop_preview()
         if self.renderer is None:
             return
+        handle = self._slot_handle
+        proposing = (
+            self._move_target == feature.id
+            or self._slot_target == feature.id
+            or (
+                self._slot_handle_is_at(feature)
+                and (
+                    self._slot_width is not None
+                    or self._slot_turn_base is not None
+                    or (handle is not None and handle.pressing)
+                )
+            )
+        )
+        # Die geschlossenen Hilfsflächen verschließen sonst eine ruhende
+        # Öffnung. Wand, Kontur und pickbare Knöpfe tragen ihre Auswahl.
+        visible = feature.kind not in slot_feature_kinds() or proposing
+        opacity = 0.45 if visible else 0.18
+        if update and self._face_actor is not None:
+            self._face_actor.set_visible(visible)
         vertices, faces = self._feature_shape(feature, centre, normal, radius)
+        if update and self._shape_actor is not None:
+            # Gleiche Form: Punkte und Darstellungszustand im stehenden Aktor.
+            # Nur ein Wechsel der Punktzahl braucht einen neuen Puffer.
+            try:
+                self._shape_actor.update_points(vertices)
+            except ValueError:
+                pass
+            else:
+                self._shape_actor.set_opacity(opacity)
+                self._shape_actor.set_visible(visible)
+                return
+        self._drop_preview()
         self._shape_actor = self.renderer.add_surface(
             vertices,
             faces,
             name="feature-preview",
-            style=SurfaceStyle(colour=MEASURE_COLOUR, opacity=0.45, lighting=False, pickable=False),
+            style=SurfaceStyle(
+                colour=MEASURE_COLOUR, opacity=opacity, lighting=False, pickable=False
+            ),
         )
+
+        self._shape_actor.set_visible(visible)
 
     def _repaint_preview(self) -> bool:
         """Die Marke des gewählten Merkmals neu — nach einem Zug, der ihre Form ändert.
@@ -16149,20 +16319,7 @@ class Viewport(QWidget):
         if chosen is None or seat is None or self.renderer is None:
             return False
         centre, normal, radius = seat
-        actor = self._shape_actor
-        if actor is not None:
-            # **Dieselbe Form, neue Punkte**: Mitten in einer Geste wird bei
-            # jeder Bewegung neu gezeichnet, und ein Aktor je Bewegung wäre
-            # ein Neuaufbau je Bewegung. Das Stadion behält seine Punktzahl;
-            # nur der Wechsel von Zylinder zu Stadion braucht einen neuen Aktor.
-            vertices, _faces = self._feature_shape(chosen, centre, normal, radius)
-            try:
-                actor.update_points(vertices)
-            except ValueError:
-                self._show_preview(chosen, centre, normal, radius)
-            self.renderer.render()
-            return True
-        self._show_preview(chosen, centre, normal, radius)
+        self._show_preview(chosen, centre, normal, radius, update=True)
         self.renderer.render()
         return True
 
@@ -16180,6 +16337,11 @@ class Viewport(QWidget):
         eine Drehung des Merkmals ändert seine Lage im Raum, und die ließe
         sich nur durch Neuaufbau einholen.
         """
+        if self._shape_actor is not None and (steps.moves or steps.turns):
+            self._shape_actor.set_opacity(0.45)
+            self._shape_actor.set_visible(True)
+            if self._face_actor is not None:
+                self._face_actor.set_visible(True)
         if not steps.moves or steps.turns:
             return
         if self._shape_actor is not None:

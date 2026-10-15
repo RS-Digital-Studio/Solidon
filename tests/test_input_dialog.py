@@ -228,6 +228,44 @@ def test_the_input_dialog_wears_the_house_style(qt_app: QApplication) -> None:
         dialog.deleteLater()
 
 
+def test_a_question_for_a_value_is_no_message_to_a_screen_reader(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Eingabefenster sagt dem Bildschirmleser weder „Hinweis“ noch den Satz doppelt.
+
+    Es erbt von der Meldung, zeigt aber kein Symbol der Schwere; der Satz steht
+    schon als Beschreibung am Feld. Und es kündigt sich nicht an wie eine Meldung.
+    """
+    from PySide6.QtGui import QAccessible, QAccessibleEvent
+
+    from app.ui.input_dialog import InputDialog
+
+    sent: list[QAccessible.Event] = []
+    real = QAccessible.updateAccessibility
+
+    def spy(event: QAccessibleEvent) -> None:
+        sent.append(event.type())
+        real(event)
+
+    monkeypatch.setattr(QAccessible, "updateAccessibility", spy)
+    dialog = InputDialog(
+        None,
+        title="Dienstadresse",
+        sentence="Wo läuft der Dienst?",
+        target="message:sample",
+        accept="Nehmen",
+    )
+    try:
+        _show(dialog, qt_app)
+        face = QAccessible.queryAccessibleInterface(dialog)
+        assert face is not None
+        assert face.text(QAccessible.Text.Description) == ""
+        assert dialog.field.accessibleDescription() == "Wo läuft der Dienst?"
+        assert QAccessible.Event.Alert not in sent and QAccessible.Event.Announcement not in sent
+    finally:
+        dialog.deleteLater()
+
+
 def test_escape_cancels_the_input_dialog(qt_app: QApplication) -> None:
     from PySide6.QtTest import QTest
 

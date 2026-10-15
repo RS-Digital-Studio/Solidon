@@ -40,8 +40,9 @@ Der zweite Lauf ist ein Release-Tor. Er verlangt:
 - exakt eine aus dieser SBOM erzeugte `THIRD-PARTY-NOTICES.md`;
 - gehashte äußere Pakete (`windows-installer`, `appimage` und `flatpak` oder
   `macos-installer`);
-- für jede Familie mit `source_delivery` (Qt, OCCT, GEOS, keyutils und im
-  AppImage dessen Laufzeitkern) ein Quellenangebot von RS Digital mit Kontakt
+- für jede Familie mit `source_delivery` (Qt, OCCT, GEOS, keyutils,
+  hidapi-libudev, hidapi-elfutils, hidapi-libattr und im AppImage dessen
+  Laufzeitkern) ein Quellenangebot von RS Digital mit Kontakt
   und Bereitstellung bis mindestens drei Jahre nach Freigabe — entweder
   `archive` mit gehashtem Quellarchiv und Austausch-/Relink-Material oder
   `written-offer` mit Angebotstext und Austauschweg;

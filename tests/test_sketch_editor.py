@@ -2073,6 +2073,8 @@ def test_a_point_can_be_set_by_number(
             self, point: tuple[float, float], axes: tuple[str, str], parent: object
         ) -> None:
             self.start = point
+            # Die Zeichenfläche gibt den Dialog nach ``exec`` frei.
+            self.deleteLater = lambda: None
 
         def exec(self) -> object:
             return sketch_editor.PointDialog.DialogCode.Accepted

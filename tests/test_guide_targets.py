@@ -22,7 +22,9 @@ from PySide6.QtWidgets import QMenu, QScrollArea, QToolButton
 from app.core import guides
 from app.core.bootstrap import load_operations
 from app.i18n import SOURCE_LANGUAGE
-from tools.function_scan import MESSAGE_BUILDERS
+from tests.guide_window import prepared_window as prepared_window
+from tests.guide_window import settle as _settle
+from tools.function_scan import MESSAGE_BUILDERS, message_builders
 
 load_operations()
 
@@ -98,6 +100,9 @@ NEW_RESOLVERS = (
     "_display_to_global",
     "_shows_the_view",
     "point_for",
+    "edge_point_for",
+    "_along",
+    "_nudged",
     "_grip_point",
     "widget_under",
     "zone_of",
@@ -159,53 +164,6 @@ def test_a_private_read_in_a_resolver_turns_the_guard_red() -> None:
     """Gegenprobe: ``window.feature_panel._apply`` wäre ein Zugriff am Kennzeichen vorbei."""
     source = "def next_click(window, name):\n    return window.feature_panel._apply\n"
     assert private_reads(source, ("next_click",)) == ["next_click: window.feature_panel._apply"]
-
-
-@pytest.fixture
-def prepared_window(qt_app: Any) -> Iterator[Any]:
-    """Ein Fenster mit einem Quader samt Bohrung, unter das Bett geschoben.
-
-    Die Attrappe des Renderers gibt der Ansicht eine Projektion; offscreen gibt
-    es sonst keine, und die Maßgruppe im Bild bliebe aus.
-    """
-    from app.core.scene.history import OperationDraft
-    from app.ui.main_window import MainWindow
-    from app.ui.session import Session
-    from app.ui.settings import UiSettings
-    from tests.render_fakes import RecordingRenderer
-
-    window = MainWindow(Session(), UiSettings())
-    window.viewport.renderer = RecordingRenderer(size=(900, 600))
-    window.resize(1920, 1032)
-    window.show()
-    window._show_start_screen(False)
-    assert window.session.apply(
-        "Quader mit Bohrung",
-        [
-            OperationDraft(op="create_box"),
-            OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 12.0}),
-            OperationDraft(
-                op="translate_object", inputs=("obj_1",), params={"dx": 0.0, "dy": 0.0, "dz": -15.0}
-            ),
-        ],
-    )
-    assert window.session.wait_for_idle(60_000)
-    window.report.show_result(window.session.last_result, window.session.project.document)
-    _settle(qt_app)
-    try:
-        yield window
-    finally:
-        for menu in [*window.findChildren(QMenu), *qt_app.topLevelWidgets()]:
-            if isinstance(menu, QMenu) and menu.isVisible():
-                menu.hide()
-        window.hide()
-        window.release()
-        window.viewport.renderer = None
-
-
-def _settle(qt_app: Any, rounds: int = 20) -> None:
-    for _ in range(rounds):
-        qt_app.processEvents()
 
 
 def _follow(qt_app: Any, window: Any, name: str) -> str:
@@ -365,6 +323,7 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
     from app.ui.settings_dialog import SettingsDialog
 
     window = prepared_window
+    assert qt_app.styleSheet(), "Voraussetzung: die Lage des Kunden, mit seinem Thema"
     seen: set[str] = set()
 
     def widget(name: str) -> Any:
@@ -382,17 +341,29 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
     assert click("tree.row:obj_1").why == "ziel"
     assert click("tree.row:obj_1.hole_1").why in {"aufklappen", "ziel"}
     # Drei Schritte in einer Transaktion: Schritt 1 steht in der zugeklappten
-    # Gruppe, der Klick auf ihre Zeile klappt sie auf.
+    # Gruppe, der Klick auf ihre Zeile klappt sie auf. Steht die Karte danach
+    # still, ist die Zeile im Kundenthema ganz da, ohne Rollen (FD-157).
     from PySide6.QtTest import QTest
 
     step = click("history.row:1")
     assert step.why == "aufklappen"
-    surface = window.history_panel.list.viewport()
+    listing = window.history_panel.list
+    surface = listing.viewport()
     QTest.mouseClick(
         surface, Qt.MouseButton.LeftButton, pos=surface.mapFromGlobal(step.rect.center())
     )
     _settle(qt_app)
+    first = window.session.project.document.ops[0].id
+    row = next(
+        listing.item(number)
+        for number in range(listing.count())
+        if listing.item(number).data(Qt.ItemDataRole.UserRole) == first
+    )
+
     assert click("history.row:1").why == "ziel"
+    # Ganz zu sehen in der Höhe; breiter als die Liste darf die Zeile sein.
+    shown, place = surface.visibleRegion().boundingRect(), listing.visualItemRect(row)
+    assert shown.top() <= place.top() and place.bottom() <= shown.bottom(), (shown, place)
     with pytest.raises(guide_targets.MissingTargetError):
         guide_targets.next_click(window, "history.row:99")
     assert _follow(qt_app, window, "finding:arrange.below_bed") == "ziel"
@@ -490,7 +461,7 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
     # zwei Fälle darunter an der Attrappe und der native Fall am echten Bild.
     # „Zuletzt geöffnet“ steht auf dem Startbildschirm: eigener Fall darunter.
     # Die rohen Meldungsfenster und ihre Knöpfe gehen modal auf: eigene Fälle darunter.
-    seen.update({"view", "start.recent", "message", "message.button"})
+    seen.update({"view", "view.edge", "start.recent", "message", "message.button"})
     assert seen >= NEW_KINDS, sorted(NEW_KINDS - seen)
 
 
@@ -752,8 +723,10 @@ def test_widget_under_finds_the_child_and_an_open_menu_first(qt_app: Any) -> Non
 @pytest.mark.usefixtures("require_graphics_adapter")
 def test_a_click_at_point_for_chooses_the_feature(native_window_platform: str) -> None:
     """Am echten Fenster: Klicks an der Stelle aus ``point_for`` wählen erst den
-    Körper, dann die Fläche — die Stelle trifft, was sie verspricht. Danach findet
-    ``handle:move.*`` die Pfeile des Bewegungsgriffs im echten Bild."""
+    Körper, dann die Fläche — die Stelle trifft, was sie verspricht. Am gewählten
+    Körper wählt ein Klick an ``view.edge:obj_1`` eine seiner Kanten (Durchsicht
+    welle4 C-M4). Danach findet ``handle:move.*`` die Pfeile des Bewegungsgriffs im
+    echten Bild."""
     import os
     import subprocess
     import sys
@@ -773,7 +746,8 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 window = MainWindow(Session(), UiSettings())
-window.resize(1920, 1032)
+from tools.function_checks import SMALLEST_WINDOW
+window.resize(*SMALLEST_WINDOW)
 window.show()
 assert QTest.qWaitForWindowExposed(window)
 window._show_start_screen(False)
@@ -801,6 +775,21 @@ for click in range(2):
         QTest.qWait(20)
 assert window.object_tree.selected_feature() == 'face_top', window.object_tree.selected_feature()
 window.object_tree.select_object('obj_1')
+for _ in range(10):
+    application.processEvents()
+    QTest.qWait(20)
+assert window.viewport.highlighted_edge() is None
+step = guide_targets.next_click(window, 'view.edge:obj_1')
+assert step.why == 'ziel', step
+under = guide_targets.widget_under(step.rect.center())
+QTest.mouseClick(under, Qt.MouseButton.LeftButton, pos=under.mapFromGlobal(step.rect.center()))
+for _ in range(30):
+    application.processEvents()
+    QTest.qWait(20)
+edge = window.viewport.highlighted_edge()
+assert edge is not None and edge[0] == 'obj_1', edge
+print('view.edge chose an edge', flush=True)
+window.object_tree.select_object('obj_1')
 window.tools.toggle('transform')
 for _ in range(30):
     application.processEvents()
@@ -823,6 +812,7 @@ os._exit(0)
     )
     assert done.returncode == 0, done.stdout + done.stderr
     assert "point_for chose the feature" in done.stdout, done.stdout
+    assert "view.edge chose an edge" in done.stdout, done.stdout
 
 
 def test_the_recent_projects_and_the_dialog_fields_resolve(qt_app: Any, tmp_path: Path) -> None:
@@ -833,9 +823,10 @@ def test_the_recent_projects_and_the_dialog_fields_resolve(qt_app: Any, tmp_path
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
+    from tools.function_checks import SMALLEST_WINDOW
 
     window = MainWindow(Session(), UiSettings())
-    window.resize(1920, 1032)
+    window.resize(*SMALLEST_WINDOW)
     window.show()
     try:
         first, second = tmp_path / "eins.p3d", tmp_path / "zwei.p3d"
@@ -870,9 +861,10 @@ def test_a_menu_hidden_from_the_bar_has_no_way(qt_app: Any) -> None:
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
+    from tools.function_checks import SMALLEST_WINDOW
 
     window = MainWindow(Session(), UiSettings())
-    window.resize(1920, 1032)
+    window.resize(*SMALLEST_WINDOW)
     window.show()
     _settle(qt_app)
     try:
@@ -1044,6 +1036,50 @@ def test_point_for_on_a_coarse_view_takes_only_a_hit_on_its_own_triangle(
     assert guide_targets.point_for(window, "obj_1", "hole_1") is not None
 
 
+def test_edge_point_for_takes_a_spot_on_an_edge_the_view_offers(
+    prepared_window: Any, monkeypatch
+) -> None:
+    """Durchsicht welle4 C-M4: ``view.edge:obj_1`` ist die Mitte einer Kante, die die
+    Ansicht selbst anklickbar führt (``Viewport._prepared_edges``), vom Pick bestätigt.
+
+    Der Pick ist nachgestellt und trifft den Körper nur an der Mitte einer geraden
+    Kante. Liegt der Treffer weit weg — die Kante steht hinter einer Fläche — oder
+    trifft er nichts, gibt es keine Stelle. Ob der Klick dort am echten Fenster
+    die Kante wählt, prüft der native Fall darüber.
+    """
+    import numpy as np
+
+    from app.ui import guide_targets
+
+    window = prepared_window
+    viewport = window.viewport
+    straight = [points for _key, points in viewport._prepared_edges("obj_1") if len(points) == 2]
+    assert straight, "der Quader hat gerade Kanten"
+    middle = np.asarray(straight[0], dtype=float).mean(axis=0)
+    spot = viewport.display_of(tuple(float(value) for value in middle))
+    assert spot is not None
+
+    def picked(distance: float) -> Any:
+        def pick(x: int, y: int) -> Any:
+            if abs(spot[0] - x) <= 1 and abs(spot[1] - y) <= 1:
+                return ("obj_1", tuple(float(value) for value in middle + distance), -1, None)
+            return None
+
+        return pick
+
+    monkeypatch.setattr(guide_targets, "_shows_the_view", lambda _window, _point: True)
+    monkeypatch.setattr(viewport, "placement_hit", picked(0.0))
+    point = guide_targets.edge_point_for(window, "obj_1")
+    local = viewport.mapFromGlobal(point)
+    assert abs(local.x() - spot[0]) <= 1 and abs(local.y() - spot[1]) <= 1, (local, spot)
+    step = guide_targets.next_click(window, "view.edge:obj_1")
+    assert (step.why, step.rect.center()) == ("ziel", point)
+    for pick in (picked(100.0), lambda _x, _y: None):
+        monkeypatch.setattr(viewport, "placement_hit", pick)
+        with pytest.raises(guide_targets.MissingTargetError, match="keine sichtbare Kante"):
+            guide_targets.edge_point_for(window, "obj_1")
+
+
 def test_the_menu_names_are_the_same_in_another_language(qt_app: Any) -> None:
     """Die Namen kommen aus der Quelle: auf Englisch gebaut dieselben wie auf Deutsch
     (Review M3) — auf Deutsch sind Anzeige und Quelle gleich und beweisen nichts."""
@@ -1122,17 +1158,12 @@ def test_a_widget_below_the_visible_part_is_reached_by_scrolling(qt_app: Any) ->
         window.deleteLater()
 
 
-def test_a_widget_cut_off_by_an_outer_scroll_area_is_reached_by_rolling_it(qt_app: Any) -> None:
-    """D0 F-19: Ein Feld, das sein innerer Rollbereich ganz zeigt, der äußere aber abschneidet.
-
-    Die Auswahlkarte steckt im Rollbereich der Karte und im äußeren
-    ``FittedScroller``. Gefragt war nur der nächste Rollbereich: Dort stand das
-    Ziel „sichtbar“, und der Klick fiel unter die Karte. Jetzt zählt jeder
-    Bereich, gerollt wird der erste, der rollen kann — hier der äußere.
-    """
+@pytest.fixture
+def nested_scroll(qt_app: Any) -> Iterator[tuple[Any, Any, Any]]:
+    """Fenster, äußerer und innerer Rollbereich: Der innere zeigt ``setting:probe``
+    ganz, der äußere schneidet es ab — wie Auswahlkarte und ``FittedScroller``."""
     from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
 
-    from app.ui import guide_targets
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -1159,18 +1190,66 @@ def test_a_widget_cut_off_by_an_outer_scroll_area_is_reached_by_rolling_it(qt_ap
     _settle(qt_app)
     try:
         assert inner.verticalScrollBar().maximum() == 0, "der innere Bereich rollt nicht"
-        bar = outer.verticalScrollBar()
-        assert bar.maximum() > 0
-        step = guide_targets.next_click(window, "setting:probe")
-        assert (step.why, step.direction, step.button) == ("rollen", 1, Qt.MouseButton.NoButton)
-        assert bar.value() == 0, "next_click hat selbst gerollt"
-        bar.setValue(bar.maximum())
-        _settle(qt_app)
-        assert guide_targets.next_click(window, "setting:probe").why == "ziel"
+        assert outer.verticalScrollBar().maximum() > 0
+        yield window, outer, inner
     finally:
         outer.close()
         outer.deleteLater()
         window.deleteLater()
+
+
+def test_a_widget_cut_off_by_an_outer_scroll_area_is_reached_by_rolling_it(
+    nested_scroll: tuple[Any, Any, Any], qt_app: Any
+) -> None:
+    """D0 F-19: Innen sichtbar genügt nicht beim äußeren ``FittedScroller`` der Karte.
+    Jeder Bereich zählt; der hilfreiche äußere Radweg muss das ganze Feld freilegen."""
+    from app.ui import guide_targets
+    from tools.function_walk import QtPorts
+
+    window, outer, inner = nested_scroll
+    bar = outer.verticalScrollBar()
+    step = guide_targets.next_click(window, "setting:probe")
+    assert (step.why, step.direction, step.button) == ("rollen", 1, Qt.MouseButton.NoButton)
+    assert bar.value() == 0, "next_click hat selbst gerollt"
+    bar.setValue(bar.maximum())
+    _settle(qt_app)
+    # Der äußere Anschlag legt die Mitte frei, schneidet oben aber eine Zeile ab.
+    step = guide_targets.next_click(window, "setting:probe")
+    assert (step.why, step.direction) == ("rollen", -1)
+    ports = QtPorts(window, 0.0)
+    hit = ports.widget_under(step.rect.center())
+    assert hit is not None and ports.covers(step, hit)
+    ports.press(hit, step.rect.center(), "wheel_up", wheel_angle=step.wheel_angle)
+    _settle(qt_app)
+    target = guide_targets.widget_for(window, "setting:probe")
+    for area in (inner, outer):
+        shown = area.viewport().rect()
+        actual = QRect(target.mapTo(area.viewport(), QPoint()), target.size())
+        assert shown.contains(actual), (shown, actual)
+    assert guide_targets.next_click(window, "setting:probe").why == "ziel"
+
+
+def test_area_for_rolls_every_scroll_area_that_cuts_the_target_off(
+    nested_scroll: tuple[Any, Any, Any], qt_app: Any
+) -> None:
+    """Durchsicht welle4 C-L14: der Zwilling aus F-19 in ``area_for`` (``_in_view``).
+
+    ``area_for`` deckt auf und rollt selbst — jeden umgebenden Bereich, von innen
+    nach außen. Rollte es nur den nächsten, stünde der Rahmen einer Tour oder
+    eines Handbuchbilds unter der Karte; ``next_click`` nennt danach dieselbe
+    Stelle als Ziel.
+    """
+    from app.ui import guide_targets
+
+    window, outer, _inner = nested_scroll
+    bar = outer.verticalScrollBar()
+    rect = guide_targets.area_for(window, "setting:probe")
+    _settle(qt_app)
+    shown = QRect(outer.viewport().mapToGlobal(QPoint(0, 0)), outer.viewport().size())
+    assert bar.value() > 0, "area_for hat den äußeren Bereich nicht gerollt"
+    assert shown.contains(rect.center()), (rect, shown)
+    step = guide_targets.next_click(window, "setting:probe")
+    assert (step.why, step.rect) == ("ziel", rect)
 
 
 def test_area_for_opens_the_group_that_next_click_names(prepared_window: Any, qt_app: Any) -> None:
@@ -1261,9 +1340,10 @@ def test_move_before_names_the_numbers_the_history_shows(qt_app: Any) -> None:
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
+    from tools.function_checks import SMALLEST_WINDOW
 
     window = MainWindow(Session(), UiSettings())
-    window.resize(1920, 1032)
+    window.resize(*SMALLEST_WINDOW)
     window.show()
     window._show_start_screen(False)
     try:
@@ -1439,11 +1519,14 @@ _RAW_STATIC = {
 
 
 #: Was eine Meldung oder Eingabe im Hausstil baut und ihr Kennzeichen als ``target=``
-#: nimmt — aus der Funktionsliste, damit beide dieselben Fenster kennen.
-HOUSE_BUILDERS = MESSAGE_BUILDERS
+#: nimmt — aus der Funktionsliste, damit beide dieselben Fenster kennen. Ohne
+#: Unterklassen; die bringt :func:`message_builders` aus den Quelltexten mit.
+HOUSE_BUILDERS: dict[str, str] = dict.fromkeys(MESSAGE_BUILDERS, "")
 
 
-def raw_window_names(source: str) -> tuple[list[str], list[str]]:
+def raw_window_names(
+    source: str, builders: dict[str, str] | None = None
+) -> tuple[list[str], list[str]]:
     """Die Meldungs- und Eingabefenster einer Datei: die ohne Kennzeichen und die Namen.
 
     Ein Fenster im Hausstil nennt sein Kennzeichen als ``target=``; ein
@@ -1451,10 +1534,13 @@ def raw_window_names(source: str) -> tuple[list[str], list[str]]:
     ``guides.TARGET_PROPERTY`` und einem Namen (oder einer Konstanten wie
     ``EXPIRED_DEMO_TARGET``). Ein statischer Aufruf (``QMessageBox.information``,
     ``QInputDialog.getText``) hat keinen Ort für ein Kennzeichen und fehlt immer.
-    Die Funktion ist die innerste, die den Aufruf trägt.
+    Die Funktion ist die innerste, die den Aufruf trägt. Eine Unterklasse eines
+    Bauers (``builders``, Name → eigenes Kennzeichen) zählt wie er; setzt sie ihr
+    Kennzeichen selbst, braucht der Aufruf keins.
     """
     import ast
 
+    builders = HOUSE_BUILDERS if builders is None else builders
     tree = ast.parse(source)
     parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
     missing: list[str] = []
@@ -1475,14 +1561,18 @@ def raw_window_names(source: str) -> tuple[list[str], list[str]]:
         )
         # Eine Meldung oder Eingabe im Hausstil (FD-21, FD-22) nennt ihr Kennzeichen
         # im Aufruf.
-        house = isinstance(func, ast.Name) and func.id in HOUSE_BUILDERS
+        house = isinstance(func, ast.Name) and func.id in builders
         if house:
+            assert isinstance(func, ast.Name)
             given_here = [word.value for word in node.keywords if word.arg == "target"]
-            if not given_here:
+            own = builders[func.id]
+            if not given_here and not own:
                 missing.append(f"{func.id} (Zeile {node.lineno})")
             names.extend(
                 str(value.value) for value in given_here[:1] if isinstance(value, ast.Constant)
             )
+            if not given_here and own:
+                names.append(own)
             continue
         if not (instance or static):
             continue
@@ -1528,10 +1618,11 @@ def test_every_raw_message_window_carries_its_name() -> None:
     root = Path(__file__).resolve().parents[1] / "app" / "ui"
     missing: list[str] = []
     names: list[str] = []
-    for path in sorted(root.rglob("*.py")):
-        if path.name == "window_names.py":
-            continue
-        lacking, named = raw_window_names(path.read_text(encoding="utf-8"))
+    sources = {path: path.read_text(encoding="utf-8") for path in sorted(root.rglob("*.py"))}
+    builders = message_builders(sources.values())
+    assert "DonationOpenErrorDialog" in builders, "die Suche nach Unterklassen greift nicht"
+    for path, source in sources.items():
+        lacking, named = raw_window_names(source, builders)
         missing.extend(f"{path.relative_to(root).as_posix()}: {entry}" for entry in lacking)
         names.extend(sorted(set(named)))
     assert missing == []
@@ -1559,6 +1650,24 @@ def test_an_unnamed_raw_window_turns_the_guard_red() -> None:
         ["ask (Zeile 2)", "boxed (Zeile 6)", "choose_colour (Zeile 9)", "typed (Zeile 11)"],
         ["message:sample_named"],
     )
+
+
+def test_a_subclass_of_a_house_builder_needs_a_name_too() -> None:
+    """Gegenprobe: Eine Unterklasse von ``MessageDialog`` ist ein Meldungsfenster; ohne
+    eigenes Kennzeichen fehlt ihr Name, mit ihm braucht der Aufruf keinen."""
+    source = (
+        "class Own(MessageDialog):\n"
+        "    pass\n"
+        "class Named(MessageDialog):\n"
+        "    def __init__(self, parent):\n"
+        "        super().__init__(parent, title='a', headline='b', target='message:sample_own')\n"
+        "def bare(parent):\n"
+        "    return Own(parent).exec()\n"
+        "def named(parent):\n"
+        "    return Named(parent).exec()\n"
+    )
+    builders = message_builders([source])
+    assert raw_window_names(source, builders) == (["Own (Zeile 7)"], ["message:sample_own"])
 
 
 def test_a_message_or_input_window_resolves_while_it_is_open(qt_app: Any) -> None:
@@ -1637,7 +1746,7 @@ def unnamed_message_buttons(source: str) -> list[str]:
 
     In einer Funktion, die ein ``QMessageBox`` baut, steht jedes ``addButton`` in
     einer Zuweisung, und derselbe Knopf geht an ``name_button``
-    (``message.button:<sache>.<knopf>``, ``app/ui/window_names.py``) — ein Knopf
+    (``message.button:<sache>.<knopf>``, ``app/ui/message_dialog.py``) — ein Knopf
     mit Text wie ein Standardknopf: Der Prüfstand drückt ihn über seinen Namen,
     nicht über die Beschriftung, die mit der Sprache wechselt."""
     import ast

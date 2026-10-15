@@ -19,9 +19,19 @@ scrive in `website/version.json`.
 
 ### Uso e sistema
 
+- Le schede delle misure si spostano e crescono con i campi aperti. Titoli e quote del piano più chiari, barre e maniglie più sobrie e griglia più visibile nel tema chiaro aiutano a vedere il modello.
+- Risolto un possibile arresto anomalo passando da una caratteristica o da un progetto all’altro.
+- La spiegazione di «Appoggia sul piano» ora vale anche per i corpi che si trovano sotto il piano.
+- Gli elenchi delle azioni sulle caratteristiche usano interamente la lingua scelta.
+- Su Mac, Solidon ora può caricare il driver di 3Dconnexion (3DxWare) per il mouse 3D. Dalla versione 0.4.1 alla 0.6.0 macOS non lo consentiva.
+- Su Mac, il pacchetto di installazione mette ora Solidon sempre in *Applicazioni*. Se Solidon non era lì, finora il pacchetto aggiornava una copia in un altro posto.
+- Dopo l'aggiornamento su Mac, avvia Solidon da *Applicazioni*. Elimina le vecchie copie dell'app fuori da questa cartella e ricrea il collegamento nel Dock se necessario.
+- Su Linux, l'AppImage ora si avvia anche su Ubuntu 22.04, Linux Mint 21 e Debian 12. Con la versione 0.6.0 lì funzionava solo il Flatpak.
+- Su Linux, Solidon ora legge il mouse 3D attraverso l'accesso che concede la regola udev del manuale, anche nel Flatpak. Fino alla versione 0.6.0 la regola non bastava.
 - La ricerca trova *Unisci*, *Sottrai* e *Intersezione* anche come «booleano», e *Sottrai* anche come «differenza».
 - La ricerca trova la funzione anche per una domanda come «Come appoggio il pezzo sul piano?» e conosce parole di slicer e CAD come «piano di stampa» o «variabile».
 - Anche la ricerca nel manuale trova la pagina giusta per una domanda con parole proprie.
+- Chi scrive «foro» o «buco» nella ricerca ottiene *Pratica un foro* su un corpo e *Cambia foro* su un foro selezionato, in tutte le lingue.
 - Con un corpo selezionato e un secondo nella scena, la linguetta *Selezione* dice come aggiungere il secondo per *Unisci*, *Sottrai* e *Intersezione*.
 - Il campo di ricerca della linguetta *Selezione* ora c'è sempre, anche senza selezione, e trova ogni funzione e ogni comando con la sua scorciatoia.
 - La palette dei comandi non c'è più, perché il campo di ricerca trova lo stesso. *Cerca funzione* e Ctrl+Maiusc+P vi portano il cursore.
@@ -33,21 +43,30 @@ scrive in `website/version.json`.
 - Se a una funzione manca un secondo corpo nella scena, il motivo indica *Duplica oggetto* come via.
 - L'elenco delle scorciatoie da tastiera nomina *Modella*, *Scheletro* e *Disegna* una sola volta.
 - Il pulsante *Calcolare in modo più grossolano* non c'è più: Solidon prosegue da solo con il calcolo completo. Nella versione 0.6.0 compariva anche dove non cambiava nulla.
-- Messaggi di errore, dettagli e avvisi ora appaiono nello stile di Solidon, con le azioni come pulsanti. Ctrl+C copia l'intero messaggio.
-- Il colore di una bobina si sceglie con il selettore di Solidon direttamente sul pulsante, con colori nominati e il valore esatto. La finestra colori di Windows non c'è più.
+- Messaggi di errore, dettagli e avvisi ora appaiono nello stile di Solidon, con le azioni come pulsanti. Ctrl+C copia la selezione, altrimenti l'intero messaggio.
+- Il colore di una bobina si sceglie con il selettore di Solidon direttamente sul pulsante, con colori nominati e il valore esatto. La finestra colori del sistema non c'è più.
 - Una quota del disegno ora si modifica in un campo sul posto. Indirizzi e la scelta del filamento da sostituire vengono chiesti nello stile di Solidon.
 - Dopo l'attivazione o la disattivazione la conferma compare nella finestra stessa, senza un'altra finestra da chiudere.
 - La finestra *Calibra il materiale* mostra davanti solo gioco, interferenza e compensazione dei fori. Piede d'elefante, ritiro, parete e sbalzo sono in *Altre impostazioni*.
 - I numeri sono allineati a destra in tutti i campi, cifra sotto cifra.
 - Uno screen reader legge il nome e la spiegazione di ogni campo numerico di una finestra di dialogo.
 - Dopo un'azione nel *Rapporto di verifica* il rapporto resta in primo piano e Ctrl+Z la annulla subito. Finora passava davanti la scheda *Selezione*.
+- Gli avvisi su piano e adesione usano l’unità scelta. Il cambio mm/pollici conserva segnalazione scelta, dettagli aperti, scheda e stato espanso dei corpi.
 - Ctrl+Z e Ctrl+Y funzionano anche con il cursore in un campo vuoto, per esempio nel campo di ricerca. Se lì ha scritto qualcosa, viene annullato prima il testo digitato.
 - Senza attivazione, le azioni che modificano qualcosa in *Rapporto di verifica*, *Selezione*, menu contestuali e filamento sono in grigio con il motivo. Prima il rifiuto arrivava dopo il clic.
+- Senza attivazione sono in grigio anche *Crea parametro …*, *Sposta*, *Dividi*, i tasti della cronologia e le misure nella vista. Ogni motivo indica la strada, come *Aiuto → Sblocca Solidon …*.
+- Se un'azione del *Rapporto di verifica* attende il calcolo in corso, dice che poi torna disponibile, anche ai lettori di schermo.
+- In una scena vuota, gli strumenti in grigio come *Sezione* e *Misura* indicano il motivo: serve un corpo. Finora il suggerimento mostrava solo il nome.
+- Se nella vista manca spazio, i campi delle misure restano visibili e lasciano libera la maniglia per spostare. Finora un campo poteva finire sotto il bordo o coprire le frecce della maniglia.
 - I messaggi nella barra di stato non mettono più i due punti dopo una frase completa.
 - Con un solo corpo l'albero degli oggetti è alto quanto il suo contenuto, e così la cronologia con un solo passo. Nella versione 0.6.0 sotto restava spazio vuoto.
 - Il passo più recente resta visibile nella cronologia quando nuovi corpi fanno crescere l'albero degli oggetti. Nella versione 0.6.0 scivolava sotto il bordo del pannello.
 - Lo screenshot allegato a un riscontro ora mostra anche il modello su Windows. Con alcune schede grafiche prima mostrava un'immagine vecchia, come la schermata di caricamento.
 - Su macOS una finestra di dialogo aperta, ad esempio per creare una vite dal catalogo dei blocchi, resta sopra la finestra principale. Prima un clic nella finestra la spingeva dietro.
+- Elenchi di caratteristiche e finestre brevi occupano meno spazio. Dopo un cambio di carattere, spiegazioni e rimedi per piani non validi, introduzione e pulsanti restano leggibili e accessibili.
+- La scheda di selezione segue contenuto e carattere, mantenendo testo e colonne. Le schede separate mantengono le dimensioni. Se è proposta una modifica, «Applica» è l’azione principale.
+- Le controparti chiedono coppia e dimensioni e spiegano entrambe le metà. Forma e accoppiamento sono in «Altre impostazioni». L’altezza iniziale del dialogo segue il contenuto.
+- Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
 
 ### Stampare e passare allo slicer
 
@@ -57,8 +76,11 @@ scrive in `website/version.json`.
 
 - Un corpo esatto ora conserva le sue caratteristiche dopo *Applica testo*, *Intarsia testo* e *Ricava controforma*. Nella versione 0.6.0 dopo non si poteva più fare clic su nessuna faccia.
 - Un corpo filettato dal catalogo dei blocchi si può di nuovo spostare, ruotare, specchiare, scalare e appoggiare sul piano. Nella versione 0.6.0 la catena si fermava con un errore del programma.
-- Nella scheda *Selezione*, un diametro sotto il limite in *Cambia foro* rimanda ora a *Rimuovi caratteristica*, che rimuove il foro del tutto, con la sua svasatura se vuoi.
+- Per un diametro del foro sotto il limite, l'avviso indica *Rimuovi caratteristica*, con la svasatura se vuoi. Se hai iniziato a modificare le quote nella vista, indica prima *Annulla*.
 - La ricostruzione (*Ricostruisci modello*) non suggerisce più altri limiti quando nessun valore consentito basterebbe, e mostra le proposte uguali una sola volta.
+- Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
+- Per i fori, vista e *Selezione* mostrano la stessa modifica. Misura, profondità e imbocco collegato sono davanti; compensazione di stampa e regolazioni fini, in «Altri valori».
+- I campi del foro e la casella per modificare insieme elementi uguali spiegano il loro effetto. «Compensare gli scostamenti di stampa» chiarisce la correzione del profilo del materiale.
 
 ## 0.6.0
 

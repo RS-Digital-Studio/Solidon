@@ -110,7 +110,7 @@ from app.ui.leash import (
     stop_watching_the_dying,
     weak_slot,
 )
-from app.ui.message_dialog import MessageDialog, acknowledge, inform
+from app.ui.message_dialog import MessageDialog, acknowledge, inform, name_button, withdraw
 from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
@@ -134,7 +134,6 @@ from app.ui.style import (
     set_level,
     set_role,
 )
-from app.ui.window_names import name_button
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
 #: schlechter lesbar als ein Wort. Der Name ist englisch wie jeder andere in
@@ -1541,7 +1540,11 @@ class KeyDialog(QDialog):
         if not tools.state_of(tool).installed:
             from app.ui.install_dialog import InstallDialog
 
-            InstallDialog(self, settings=self.settings).exec()
+            dialog = InstallDialog(self, settings=self.settings)
+            try:
+                dialog.exec()
+            finally:
+                dialog.deleteLater()
             self.look()
             return
         self.service_button.setEnabled(False)
@@ -2606,7 +2609,7 @@ class ActivationDialog(QDialog):
         self.forget_button.setAccessibleDescription(forget_hint)
 
     def _remember(self) -> None:
-        self.receipt.hide()
+        withdraw(self.receipt)
         text = self.field.toPlainText().strip()
         if not text:
             # Erreichbar bleibt das über die Tastatur; geschlossen wird deshalb
@@ -2635,7 +2638,7 @@ class ActivationDialog(QDialog):
 
     def _forget(self) -> None:
         """Nimmt den abgelegten Schlüssel weg — vor dem Verkauf des Rechners."""
-        self.receipt.hide()
+        withdraw(self.receipt)
         if (
             activation.state().certificate is not None
             or activation.pending_deactivation_request() is not None
@@ -2662,7 +2665,7 @@ class ActivationDialog(QDialog):
 
     def _activation_request(self) -> str | None:
         """Prüft Feld und Gerätename und erzeugt genau eine signierte Anfrage."""
-        self.receipt.hide()
+        withdraw(self.receipt)
         try:
             activation.remember(self.field.toPlainText().strip())
             return activation.create_activation_request(self.device_name.text())
@@ -2690,7 +2693,11 @@ class ActivationDialog(QDialog):
         request = self._activation_request()
         if request is None:
             return
-        answered = OfflineActivationDialog(request, self).exec()
+        dialog = OfflineActivationDialog(request, self)
+        try:
+            answered = dialog.exec()
+        finally:
+            dialog.deleteLater()
         self._show_state()
         self._follow_field()
         if answered == QDialog.DialogCode.Accepted:
@@ -2944,6 +2951,7 @@ class DonationOpenErrorDialog(MessageDialog):
                 "Bei Fragen hilft Ihnen {address}."
             ).format(address=SUPPORT_ADDRESS),
             kind="warning",
+            target="message:donation_failed",
         )
         self._url = url
         self.copy_button = self.add_action(
@@ -2961,7 +2969,11 @@ def open_donation(parent: QWidget | None = None, *, url: str = DONATION_URL) -> 
     """Öffnet den gewählten Unterstützungsweg erst nach dem ausdrücklichen Klick."""
     if QDesktopServices.openUrl(QUrl(url)):
         return True
-    DonationOpenErrorDialog(parent, url=url).exec()
+    dialog = DonationOpenErrorDialog(parent, url=url)
+    try:
+        dialog.exec()
+    finally:
+        dialog.deleteLater()
     return False
 
 
@@ -3037,8 +3049,12 @@ def show_expired_demo(state: activation.Activation) -> None:
     )
     website = box.add_action(tr("Website öffnen"), "message.button:expired_demo.website", lead=True)
     box.add_exit(tr("Schließen"), "message.button:expired_demo.close")
-    box.exec()
-    if box.clicked_button() is website:
+    try:
+        box.exec()
+        chosen = box.clicked_button()
+    finally:
+        box.deleteLater()
+    if chosen is website:
         open_website()
 
 
@@ -3465,8 +3481,11 @@ def show_error(
         f"message.button:error.{CANCEL.id}",
     )
 
-    box.exec()
-    chosen = buttons.get(box.clicked_button())
+    try:
+        box.exec()
+        chosen = buttons.get(box.clicked_button())
+    finally:
+        box.deleteLater()
     if chosen is not None:
         known[chosen.id](error)
     return chosen
@@ -3495,7 +3514,10 @@ def show_details(error: AppError, parent: QWidget | None = None) -> None:
     copy = box.add_action(tr("Kopieren"), "message.button:error_details.copy", closes=False)
     copy.clicked.connect(weak_slot(box, MessageDialog.copy_text))
     box.add_exit(tr("Schließen"), "message.button:error_details.close")
-    box.exec()
+    try:
+        box.exec()
+    finally:
+        box.deleteLater()
 
 
 #: Wie breit der Unterstützen-Dialog mindestens ist. Breit genug, dass die zwei
@@ -3929,14 +3951,12 @@ def damaged_line() -> str:
     Ersteinrichtung — die versprach sonst „Die ersten 14 Tage ist alles frei"
     an eine Installation, die schon in der ersten Sekunde nichts freigibt.
     """
-    problem = InstallationDamaged()
-    return f"{problem.title} {problem.detail}"
+    return str(InstallationDamaged())
 
 
 def deactivation_pending_line() -> str:
     """Erklärt die sichere lokale Sperre nach einer unklaren Serverantwort."""
-    problem = activation.DeviceDeactivationPending()
-    return f"{problem.title} {problem.detail}"
+    return str(activation.DeviceDeactivationPending())
 
 
 def licence_lock_line(state: activation.Activation | None = None) -> str:
@@ -3947,12 +3967,21 @@ def licence_lock_line(state: activation.Activation | None = None) -> str:
     beschädigte Installation und ein noch nicht aktivierter Rechner sperren
     zwar dieselben Handlungen, brauchen aber jeweils einen anderen nächsten
     Schritt. Diese eine Quelle hält Wortlaut und Handlung zusammen.
+
+    **Jeder Satz nennt den Weg** (FD-30, V5): die Menüzeile der Freischaltung,
+    an der Schlüssel, Aktivierung und das erneute Senden der Deaktivierung
+    liegen — oder, bei einer beschädigten Installation, die Neuinstallation.
     """
     current = state or activation.state()
     if current.damaged:
         return damaged_line()
     if current.deactivation_pending:
-        return deactivation_pending_line()
+        return str(
+            tr(
+                "Die Deaktivierung dieses Rechners ist noch nicht bestätigt. Senden Sie sie "
+                "erneut (Hilfe → Solidon freischalten …)."
+            )
+        )
     if current.needs_activation:
         return str(
             tr(
@@ -3962,7 +3991,10 @@ def licence_lock_line(state: activation.Activation | None = None) -> str:
         )
     if current.expired:
         return str(
-            tr("Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen Lizenzschlüssel.")
+            tr(
+                "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen "
+                "Lizenzschlüssel (Hilfe → Solidon freischalten …)."
+            )
         )
     return str(
         tr(
@@ -4071,9 +4103,11 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     make_danger(discard)
     box.setDefaultButton(save)
     as_plain_text(box)
-    box.exec()
-
-    clicked = box.clickedButton()
+    try:
+        box.exec()
+        clicked = box.clickedButton()
+    finally:
+        box.deleteLater()
     if clicked is save:
         return "save"
     return "discard" if clicked is discard else "cancel"
@@ -4163,8 +4197,11 @@ def _go_on_despite(
     make_primary(write)
     box.setDefaultButton(write)
     as_plain_text(box)
-    box.exec()
-    return box.clickedButton() is write
+    try:
+        box.exec()
+        return box.clickedButton() is write
+    finally:
+        box.deleteLater()
 
 
 def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = None) -> str:
@@ -4206,8 +4243,11 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
     make_danger(close)
     box.setDefaultButton(back)
     box.setEscapeButton(back)
-    box.exec()
-    return "close" if box.clickedButton() is close else "back"
+    try:
+        box.exec()
+        return "close" if box.clickedButton() is close else "back"
+    finally:
+        box.deleteLater()
 
 
 def ask_free_part_name(
@@ -4279,5 +4319,8 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
     box.setEscapeButton(cancel)
     cancel.setFocus()
     as_plain_text(box)
-    box.exec()
-    return box.clickedButton() is discard
+    try:
+        box.exec()
+        return box.clickedButton() is discard
+    finally:
+        box.deleteLater()

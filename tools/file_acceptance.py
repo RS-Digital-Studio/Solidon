@@ -391,6 +391,7 @@ def function_cases(
     """
     from app.i18n.catalog import available_languages
     from tools.function_list import STARTUP_LICENCE
+    from tools.function_scenes import row_scenes
     from tools.function_setup import PHASES, Variant, scene_setup, spec_variants
     from tools.function_setup import variant_sets as known_sets
 
@@ -441,8 +442,11 @@ def function_cases(
             scene = str((row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "")
             base, others = spec_variants(row.get("spec"))
             # Was die Startszene verlangt (OpenCASCADE fehlt, Generator läuft), gilt
-            # für jeden Fall der Zeile — ohne Gegenlauf, sonst fehlte ihr Befund.
-            needed = dict(scene_setup(scene).preconditions) if scene else {}
+            # für jeden Fall der Zeile — ohne Gegenlauf, sonst fehlte ihr Befund;
+            # ebenso die Szene des Fehlfalls, der im selben Fall läuft (C-L4).
+            needed: dict[str, str] = {}
+            for key in reversed(row_scenes(row)):
+                needed.update(scene_setup(key).preconditions)
             if needed:
                 base = {**base, "preconditions": {**base.get("preconditions", {}), **needed}}
             entries = [{**base, **entry, "phases": own} for entry in sets[name]]
@@ -532,14 +536,7 @@ def function_inventory(
     catalogue = function_scenes.load_scenes()
     # Auch die Startszene des Fehlfalls (``fault_case.start_scene``): Sie fehlte,
     # und der Fehlfall von *Auf das Bett setzen* lief nie (Probelauf F-34).
-    wanted = {
-        str(key)
-        for row in kept
-        for key in (
-            (row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "",
-            ((row.get("spec") or {}).get("fault_case") or {}).get("start_scene") or "",
-        )
-    }
+    wanted = {key for row in kept for key in function_scenes.row_scenes(row)}
     heavy = any(catalogue[key].heavy for key in wanted if key in catalogue)
     function_scenes.save_scenes(out / "scenes", heavy=heavy)
     return cases
@@ -590,14 +587,14 @@ def menubar_child(out: Path) -> int:
     from app.core.bootstrap import load_operations
     from app.ui.app import build_application
     from tools import function_list
-    from tools.window_bench import shutdown_window
+    from tools.window_bench import record_shutdown, shutdown_window
 
     load_operations()
     application, window = build_application([])
     try:
         function_list.write_menubar(out / "menubar.json", function_list.menubar_of(window))
     finally:
-        shutdown_window(window, application)
+        record_shutdown({}, lambda: None, shutdown_window(window, application))
     return 0
 
 
@@ -821,11 +818,8 @@ def function_summary(case: Case, folder: Path, process: Mapping[str, Any]) -> di
     Dateiabnahme es für ihre Fälle sagt.
     """
     state = _read(folder / "bench.json")
-    protocols = (
-        [_read(folder / "function.json")]
-        if case.kind in ("function", "start")
-        else [_read(path) for path in sorted((folder / "surfaces").glob("*.json"))]
-    )
+    protocols = [_read(folder / "function.json")] if case.kind in ("function", "start") else []
+    protocols += [_read(path) for path in sorted((folder / "surfaces").glob("*.json"))]
     return {
         "number": case.number,
         "relative": case.relative,
@@ -840,6 +834,7 @@ def function_summary(case: Case, folder: Path, process: Mapping[str, Any]) -> di
         "unmeasured": sum(len(protocol.get("unmeasured") or {}) for protocol in protocols),
         "errors": [error for protocol in protocols for error in protocol.get("errors") or []]
         + ([state["harness_exception"]] if "harness_exception" in state else [])
+        + [f"nicht beendet: {name}" for name in state.get("stragglers", [])]
         + ([process["crash"]] if process.get("crash") else []),
     }
 
@@ -874,6 +869,7 @@ def summary(out: Path, cases: Sequence[Case]) -> dict[str, Any]:
             ],
             "errors": result.get("errors", [])
             + ([result["harness_exception"]] if "harness_exception" in result else [])
+            + [f"nicht beendet: {name}" for name in result.get("stragglers", [])]
             + ([process["crash"]] if process.get("crash") else []),
         }
         rows.append(row)
@@ -1016,9 +1012,11 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
     misst der Lauf zuerst einmal den Referenzfaktor (§31, Entscheidung
     Koordinator 12.10.); alle Fälle dieses Laufs lesen ihn aus ``reference.json``.
     """
+    sys.path.insert(0, str(ROOT))
+    from app.core.process import no_error_dialogs, process_group_options, terminate_process_tree
+
     cases = read_cases(out)
     if any(case.kind in ("function", "language") for case in cases):
-        sys.path.insert(0, str(ROOT))
         from tools.function_capture import measure_reference
 
         print(f"Referenzfaktor {measure_reference(out):.3f}", flush=True)
@@ -1047,6 +1045,7 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
         with (
             (folder / "stdout.log").open("w", encoding="utf-8") as stdout,
             (folder / "stderr.log").open("w", encoding="utf-8") as stderr,
+            no_error_dialogs(),
         ):
             process = subprocess.Popen(
                 command,
@@ -1054,14 +1053,18 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
                 stderr=stderr,
                 cwd=ROOT,
                 env={**os.environ, "PYTHONUTF8": "1"},
+                **process_group_options(no_window=True),
             )
             try:
                 code = process.wait(timeout=case_timeout(case, timeout))
                 timed_out = False
             except subprocess.TimeoutExpired:
-                process.kill()
+                terminate_process_tree(process)
                 code = process.wait()
                 timed_out = True
+            except BaseException:
+                terminate_process_tree(process)
+                raise
         write_json(
             status,
             {
@@ -1110,7 +1113,7 @@ def child(out: Path, number: int, screen: str = "") -> int:
     from app.core.bootstrap import load_operations
     from app.ui.app import build_application
     from tools import function_setup
-    from tools.window_bench import shutdown_window
+    from tools.window_bench import record_shutdown, shutdown_window
 
     exit_code = 0
     application: Any = None
@@ -1131,11 +1134,11 @@ def child(out: Path, number: int, screen: str = "") -> int:
         persist()
         exit_code = 1
     finally:
+        stragglers: tuple[str, ...] = ()
         if window is not None:
             window.session.forget_changes()
-            shutdown_window(window, application)
-        data["shutdown_complete"] = True
-        persist()
+            stragglers = shutdown_window(window, application)
+        record_shutdown(data, persist, stragglers)
     return exit_code
 
 
@@ -1166,16 +1169,23 @@ def crash_records(folder: Path) -> None:
 
 
 def crash_note(folder: Path) -> str:
-    """Was ein abgebrochener Fall zuletzt sagte: das letzte ``qFatal``, sonst sein Absturzstapel."""
+    """Was ein abgebrochener Fall zuletzt sagte: das letzte ``qFatal``, sonst sein Absturzstapel.
+
+    Ein ``QtCriticalMsg`` ist eine Warnung, an der kein Fall stirbt; er nennt den
+    Grund nur, wenn es weder ``qFatal`` noch Stapel gibt (Durchsicht welle4 C-L11).
+    """
     qt = folder / QT_LOG
     lines = qt.read_text(encoding="utf-8", errors="replace").splitlines() if qt.is_file() else []
-    fatal = [line for line in lines if line.startswith(("QtFatalMsg", "QtCriticalMsg"))]
+    fatal = [line for line in lines if line.startswith("QtFatalMsg")]
     if fatal:
         return fatal[-1]
     stacks = folder / STACK_LOG
     text = stacks.read_text(encoding="utf-8", errors="replace") if stacks.is_file() else ""
     start = max(text.rfind("Fatal Python error"), text.rfind("Windows fatal exception"))
-    return text[start:].strip()[:2000] if start >= 0 else ""
+    if start >= 0:
+        return text[start:].strip()[:2000]
+    critical = [line for line in lines if line.startswith("QtCriticalMsg")]
+    return critical[-1] if critical else ""
 
 
 def no_native_dialogs() -> None:
@@ -1219,6 +1229,7 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     sondern je Fläche ein Protokoll unter ``surfaces/``.
     """
     from tools import function_bench, function_language, function_protocol, function_setup
+    from tools.function_scenes import row_scenes
 
     variant = function_setup.Variant.of({**case.variant, **({"screen": screen} if screen else {})})
     if variant.scale != 1.0:
@@ -1253,7 +1264,7 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     from app.core.bootstrap import load_operations
     from app.ui.app import build_application
     from tools.function_capture import run_reference_factor
-    from tools.window_bench import shutdown_window
+    from tools.window_bench import record_shutdown, shutdown_window
 
     exit_code = 0
     application: Any = None
@@ -1264,12 +1275,12 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         second = function_setup.case_scene(folder, scenes, function_setup.SECOND_SCENE)
         function_setup.write_profile(variant, recent=[second] if second is not None else [])
         if data is not None:
-            # Eigene Bausteine der Startszene liegen im Nutzerordner, bevor die
-            # Anwendung ihn liest (``function_setup.install_own_parts``).
-            spec = row.get("spec") or {}
-            key = str(spec.get("start_scene") or row.get("start_scene") or "")
+            # Eigene Bausteine der Startszene und der Szene des Fehlfalls liegen
+            # im Nutzerordner, bevor die Anwendung ihn liest
+            # (``function_setup.install_own_parts``, C-L4).
             state["own_parts"] = [
                 str(path)
+                for key in row_scenes(row)
                 for path in function_setup.install_own_parts(function_setup.scene_setup(key))
             ]
         load_operations()
@@ -1296,11 +1307,11 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         persist()
         exit_code = 1
     finally:
+        stragglers: tuple[str, ...] = ()
         if window is not None:
             window.session.forget_changes()
-            shutdown_window(window, application)
-        state["shutdown_complete"] = True
-        persist()
+            stragglers = shutdown_window(window, application)
+        record_shutdown(state, persist, stragglers)
     return exit_code
 
 
@@ -1312,6 +1323,7 @@ def start_child(out: Path, case: Case, folder: Path) -> int:
     Schema von D0-U, ``bench.json`` der Lauf samt Ausgang von ``main``.
     """
     from tools import function_protocol, function_setup, function_start
+    from tools.window_bench import record_shutdown, wait_for_workers
 
     variant = function_setup.Variant.of(case.variant)
     row = read_rows(out).get(case.row) or {"id": case.row}
@@ -1338,8 +1350,9 @@ def start_child(out: Path, case: Case, folder: Path) -> int:
         state["harness_exception"] = traceback.format_exc()
         exit_code = 1
     finally:
-        state["shutdown_complete"] = True
-        persist()
+        # Kein Fenster mehr, aber vielleicht ein Arbeiter: dieselbe Wartestelle
+        # und derselbe benannte Ausgang wie in den Fensterfällen (RF-11, RF-18).
+        record_shutdown(state, persist, wait_for_workers())
     return exit_code
 
 

@@ -28,9 +28,12 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import TYPE_CHECKING, Final
 
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    from app.core.perceive.actions import FeatureAction
 
 #: Die festen Ziele, die eine Anleitung nennen darf.
 #:
@@ -154,13 +157,15 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #: * ``tree.row:obj_1`` und ``tree.row:obj_1.hole_2`` — eine Zeile im Baum;
 #: * ``history.row:3`` — die Verlaufszeile mit der sichtbaren Nummer 3;
 #: * ``view:obj_1.hole_2`` — eine Stelle im Bild auf diesem Merkmal;
+#: * ``view.edge:obj_1`` — eine Stelle im Bild auf einer bearbeitbaren Kante
+#:   dieses Körpers; am gewählten Körper wählt ein Klick dort die Kante;
 #: * ``dialog:print_settings_dialog`` — ein offener Dialog dieser Klasse;
 #: * ``start.recent:1`` — ein Eintrag unter „Zuletzt geöffnet“ auf dem
 #:   Startbildschirm, gezählt ab 1 in der Folge der Liste. Eine Menüzeile
 #:   dafür gibt es nicht;
 #: * ``message:unsaved_changes`` — ein Meldungs-, Frage- oder Eingabefenster
 #:   über ein Wort für seine Frage: eine Rückfrage (``QMessageBox``), eine
-#:   Meldung, eine Eingabe, ein Farbwähler am Ort (``app/ui/window_names``);
+#:   Meldung, eine Eingabe, ein Farbwähler am Ort (``app/ui/message_dialog``);
 #: * ``message.button:unsaved_changes.save`` — ein Knopf darin; bei einer
 #:   Fehlermeldung ist der Knopf die Kennung der Handlung
 #:   (``message.button:error.retry``), in einer Rückfrage über Qts
@@ -194,6 +199,7 @@ TARGET_KINDS: Final[tuple[str, ...]] = (
     "tree.row",
     "history.row",
     "view",
+    "view.edge",
     "dialog",
     "start.recent",
     "message",
@@ -222,6 +228,7 @@ _PATTERNS: Final[dict[str, re.Pattern[str]]] = {
     "part": re.compile(_WORD),
     "field": re.compile(_WORD),
     "edge": re.compile(rf"{_WORD}(?:\.{_WORD})?"),
+    "view.edge": re.compile(_WORD),
     "feature.field": re.compile(rf"{_WORD}(?:\.{_WORD})+"),
     "measure.field": re.compile(_WORD),
     "finding": re.compile(r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*"),
@@ -301,7 +308,7 @@ def name_part(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text).strip("_")
 
 
-def action_key(action: Any) -> str:
+def action_key(action: FeatureAction) -> str:
     """Der Schlüssel einer Handlung im Merkmalfenster (``FeatureAction.key``).
 
     Leer heißt: der Name ihrer Operation. Eine Handlung ohne Operation und ohne
@@ -310,7 +317,7 @@ def action_key(action: Any) -> str:
     return str(action.key or action.op or "")
 
 
-def action_target(action: Any) -> str:
+def action_target(action: FeatureAction) -> str:
     """Das Ziel am Kopf einer Handlung: ``edge:<schlüssel>`` an einer angeklickten
     Kante, sonst ``feature:<schlüssel>``; leer ohne Schlüssel.
 
@@ -320,11 +327,11 @@ def action_target(action: Any) -> str:
     key = action_key(action)
     if not key:
         return ""
-    edge = ("edges", "named") in tuple(getattr(action, "fixed", ()))
+    edge = ("edges", "named") in action.fixed
     return f"{'edge' if edge else 'feature'}:{key}"
 
 
-def action_field_target(action: Any, field_name: str) -> str:
+def action_field_target(action: FeatureAction, field_name: str) -> str:
     """Das Ziel an einem Feld einer Handlung: ``feature.field:<schlüssel>.<feld>``."""
     key = action_key(action)
     return f"feature.field:{key}.{field_name}" if key else ""
