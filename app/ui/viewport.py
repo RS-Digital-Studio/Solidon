@@ -10578,6 +10578,10 @@ class Viewport(QWidget):
         Szene: Ein Befund gehört zu **einem** Körper, und wie weit man von ihm
         weg sein muss, hängt an dessen Größe und nicht an der des größten Teils
         auf dem Bett.
+
+        **Orthografisch ist der Abstand der Maßstab** (FD-111): Dort ändert die
+        Lage der Kamera die Bildgröße nicht, und die Stelle stand mittig, aber so
+        winzig oder so formatfüllend wie der Zoom davor.
         """
         if self.renderer is None:
             return
@@ -10601,6 +10605,7 @@ class Viewport(QWidget):
                 pose.view_up,
             )
         )
+        self._fit_parallel_scale(reach)
         # Nah heran heißt: die Nahebene neu legen, sonst schneidet sie ins
         # Material — und der Schatten gehört zur neuen Blickrichtung. Die
         # Meldung geht vor dem Bild hinaus (``kamera.md``): Wer sie hört,
