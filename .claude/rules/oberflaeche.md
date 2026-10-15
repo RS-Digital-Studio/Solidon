@@ -40,6 +40,10 @@ zwei Stellen gewinnen abwechselnd.
 Sperre (`hold_inputs`), Griffe. Grau trägt den Grund in Kurzhilfe und
 Beschreibung (`say_refusal`), und der Grund nennt den Weg.
 
+**Vor der ersten Änderung ist *Übernehmen* grau** und nennt das erste offene
+Feld als Weg (`first_change.first_change_sentence`, eine Quelle für Maßgruppe
+und Dialog). Ein Fokus ändert nichts, ein Umfangshaken schon.
+
 ## Texte
 
 Keine feste Zeichenkette — alles über `tr()`, deutsche Quelle, jeder Katalog
@@ -258,9 +262,8 @@ Rückmeldung im Bild.
 
 **Ohne Pflichtwahl keine Vorschau:** Fehlt ein Bild, eine Datei
 (`OperationDialog.source_missing`) oder die Stelle eines Bausteins
-(`place_missing`), rechnet der Dialog nicht — die Auswertung hielte sicher an
-und das Band nennte eine Absage, bevor jemand gewählt hat —, und *Übernehmen*
-nennt den Knopf oder „Stelle im Bild anklicken.“ (RM-773, RM-775).
+(`place_missing`), rechnet der Dialog nicht, und *Übernehmen* nennt den Knopf
+oder „Stelle im Bild anklicken.“ (RM-773, RM-775).
 
 Eine fehlgeschlagene oder unvollständige Rechnung sperrt auch ohne Bildpflicht
 das Übernehmen und verwirft einen bereits wartenden Klick. Neue Werte brauchen
@@ -295,10 +298,7 @@ Formularzeile ist ein Haken ein `labels.RowCheckBox`, die Beschriftung bekommt
 `labels.caption_toggles` (der Haken selbst ist ihr Ereignisfilter; wer mit
 gehaltener Taste hinausfährt, schaltet nichts), und die Zeile ist so hoch wie
 ihre Nachbarn (`RowCheckBox.sizeHint` über `labels.input_field_height`, an
-einem Drehfeld gemessen).
-`tests/test_operation_ui.py` prüft Klickfläche und Bauart über alle
-`bool`-Parameter; die Höhe zeigt nur die echte Plattform (Sonde mit
-`WA_DontShowOnScreen` — offscreen fehlen Stylesheet und Schrift).
+einem Drehfeld gemessen). Wie geprüft wird: `regel-oberflaeche.md`.
 
 ## PySide legt seine Qt-Typen an, bevor das erste Fenster entsteht
 
