@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from PySide6.QtWidgets import QApplication, QDialogButtonBox
+from PySide6.QtWidgets import QApplication, QDialogButtonBox, QLabel
 
 from app.core.types import Parameter
 from app.ui.dialogs import ParameterDialog
@@ -78,3 +78,37 @@ def test_only_name_value_and_unit_stand_in_front(qt_app: QApplication) -> None:
     finally:
         fresh.deleteLater()
         bounded.deleteLater()
+
+
+def _caption_of(dialog: ParameterDialog, field: object) -> QLabel:
+    """Die Beschriftung, die das Feld als Ziel trägt (``QLabel.buddy``)."""
+    found = [label for label in dialog.findChildren(QLabel) if label.buddy() is field]
+    assert len(found) == 1, f"genau eine Beschriftung führt zu {field!r}"
+    return found[0]
+
+
+@pytest.mark.parametrize("editing", [False, True])
+def test_every_field_says_what_it_does_on_both_halves(qt_app: QApplication, editing: bool) -> None:
+    """FD-11: Name, Wert, Ausdruck, Einheit und die Grenzen ohne Satz — wofür eine
+    Grenze gut ist, musste man raten. Jedes Feld trägt jetzt einen, an Feld und
+    Beschriftung und am Vorleser, und der Satz wiederholt nicht den Titel."""
+    existing = Parameter(name="spiel", value=0.4, unit="mm") if editing else None
+    dialog = ParameterDialog({"spiel": existing} if existing else {}, existing=existing)
+    try:
+        for field in (
+            dialog.name_field,
+            dialog.value_field,
+            dialog.expression_field,
+            dialog.unit_field,
+            dialog.minimum_field,
+            dialog.maximum_field,
+        ):
+            caption = _caption_of(dialog, field)
+            sentence = field.accessibleDescription()
+            assert sentence, f"{caption.text()}: ohne Satz"
+            assert field.toolTip() == sentence, f"{caption.text()}: Kurzhilfe fehlt"
+            assert caption.toolTip() == sentence, f"{caption.text()}: Beschriftung ohne Satz"
+            assert len(sentence.split()) >= 4, f"{caption.text()}: wiederholt nur den Titel"
+            assert field.accessibleName() == caption.text(), "FD-94: Name wie die Zeile"
+    finally:
+        dialog.deleteLater()

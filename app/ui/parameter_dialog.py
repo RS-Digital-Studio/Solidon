@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 from app.core import expressions, guides
 from app.core.errors import AppError
 from app.i18n import tr
-from app.ui.form_fields import name_rows
+from app.ui.form_fields import explain_row, name_rows
 from app.ui.labels import NumberSpin, fill_parameter_units, localised_value, wheel_needs_focus
 from app.ui.leash import weak_slot
 from app.ui.style import (
@@ -250,6 +250,29 @@ class ParameterDialog(QDialog):
         # Jedes Feld heißt wie seine Zeile (FD-94): Ohne Namen las ein
         # Vorleser „breite“ und „40,00“ statt „Name“ und „Wert“.
         name_rows(form, limits_form)
+        # **Jedes Feld sagt, was es tut** (FD-11) — an beiden Hälften der Zeile
+        # und am Vorleser. Wofür eine Grenze gut ist, musste man raten.
+        name_sentence = (
+            tr(
+                "Der Name ist der Schlüssel, mit dem Ausdrücke und "
+                "Operationen auf das Maß zeigen (@name). Zum Umbenennen "
+                "legen Sie ein neues Maß an."
+            )
+            if existing is not None
+            else tr("So heißt das Maß in Ausdrücken, etwa @breite.")
+        )
+        # Dieselben Sätze, mit denen der Agent die Grenzen kennt (``agent/tools``).
+        below = tr("Kleinster Wert, den die Parameterleiste annimmt.")
+        above = tr("Größter Wert, den die Parameterleiste annimmt.")
+        for row_form, field, sentence in (
+            (form, self.name_field, name_sentence),
+            (form, value_row, tr("Mit dieser Zahl rechnet jede Operation, die das Maß nennt.")),
+            (form, self.expression_row, tr("Rechnet den Wert aus anderen Maßen, etwa =@breite/2.")),
+            (form, self.unit_field, tr("Ob das Maß eine Länge, ein Winkel oder eine Anzahl ist.")),
+            (limits_form, self.minimum_field, below),
+            (limits_form, self.maximum_field, above),
+        ):
+            explain_row(row_form, field, str(sentence))
         bounded = existing is not None and (
             existing.minimum is not None or existing.maximum is not None
         )
@@ -288,13 +311,6 @@ class ParameterDialog(QDialog):
             # Komma wie den Punkt, der Rückweg bleibt also derselbe.
             self.name_field.setText(str(existing.name))
             self.name_field.setReadOnly(True)
-            self.name_field.setToolTip(
-                tr(
-                    "Der Name ist der Schlüssel, mit dem Ausdrücke und "
-                    "Operationen auf das Maß zeigen (@name). Zum Umbenennen "
-                    "legen Sie ein neues Maß an."
-                )
-            )
             self.value_field.setValue(float(existing.value))
             if existing.minimum is not None:
                 self.minimum_field.setText(localised_value(f"{float(existing.minimum):g}"))
