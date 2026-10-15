@@ -1,9 +1,11 @@
-"""Wo die bash der Suite liegt — eine Quelle für jede Testdatei, die Skripte wirklich fährt.
+"""Wo bash und sh der Suite liegen — eine Quelle für jede Testdatei, die Skripte wirklich fährt.
 
-``tests/helpers.py`` reicht ``bash_executable`` weiter, und
-``tests/packaging_helpers.py`` baut ``workflow_shell`` darauf: Zwei Finder
-derselben Auskunft laufen auseinander, sobald einer eine Falle kennt, die der
-andere nicht kennt.
+``tests/helpers.py`` reicht ``bash_executable`` weiter,
+``tests/packaging_helpers.py`` baut ``workflow_shell`` darauf, und die
+Linux-Installationsfälle in ``tests/test_packaging.py`` fragen ``posix_shell``:
+Zwei Finder derselben Auskunft laufen auseinander, sobald einer eine Falle
+kennt, die der andere nicht kennt. Dass keine Testdatei selbst sucht, hält
+``test_packaging_platform.py::test_only_the_shell_helpers_look_for_bash_or_sh``.
 
 Das Modul lädt nur die Standardbibliothek. Viele Testdateien importieren
 ``tests/helpers.py``, und ``tools/affected_tests.py`` folgt auch Importen in
@@ -38,7 +40,24 @@ def bash_executable(*, keep_path: bool = False) -> Path | None:
       mit den echten. Dafür trägt der Aufrufer den Ordner dieser bash selbst
       ein, wenn das Skript ``head`` oder ``grep`` braucht.
     """
-    executable = shutil.which("bash")
+    return _shell("bash", keep_path=keep_path)
+
+
+def posix_shell() -> Path | None:
+    """Die POSIX-``sh`` aus dem Suchpfad oder neben dem tatsächlich installierten Git.
+
+    Das Linux-Installationsskript ist bewusst POSIX-``sh``. Git für Windows
+    bringt ``usr\\bin\\sh.exe`` mit und trägt es in der Vorgabe nicht in den
+    ``PATH`` ein; gesucht wird an denselben Stellen wie bei ``bash_executable``.
+    Die ``sh`` dort lässt den ``PATH`` des Aufrufers, wie er ist — die Fälle
+    brauchen nur, was die Shell selbst kann.
+    """
+    return _shell("sh", keep_path=True)
+
+
+def _shell(name: str, *, keep_path: bool) -> Path | None:
+    """``name`` aus dem Suchpfad außer ``System32``, sonst aus dem Ordner von Git."""
+    executable = shutil.which(name)
     if executable and "system32" not in Path(executable).parts[-2].lower():
         return Path(executable)
     git = shutil.which("git")
@@ -47,8 +66,5 @@ def bash_executable(*, keep_path: bool = False) -> Path | None:
         value = os.environ.get(variable)
         if value:
             roots.append(Path(value) / suffix)
-    folder = "usr/bin" if keep_path else "bin"
-    return next(
-        (root / folder / "bash.exe" for root in roots if (root / folder / "bash.exe").is_file()),
-        None,
-    )
+    program = Path("usr/bin" if keep_path else "bin") / f"{name}.exe"
+    return next((root / program for root in roots if (root / program).is_file()), None)

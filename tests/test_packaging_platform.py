@@ -30,7 +30,7 @@ from typing import Final
 import pytest
 
 from tests.packaging_helpers import ROOT, SPEC, WORKFLOW, start_report, workflow_shell
-from tests.shell_helpers import bash_executable
+from tests.shell_helpers import bash_executable, posix_shell
 from tests.workflow_helpers import job_block, step_block
 
 
@@ -215,6 +215,71 @@ def test_a_wsl_starter_ahead_of_git_in_the_search_path_never_runs_the_ci_blocks(
     monkeypatch.setattr(shutil, "which", which)
     assert bash_executable() == starter
     assert workflow_shell() == str(bash)
+
+
+def test_the_posix_shell_is_found_beside_git_when_the_search_path_lacks_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Git je Nutzer installiert, im Suchpfad höchstens ``Git\\cmd``: ``posix_shell``
+    nimmt die ``sh`` neben Git, wie ``bash_executable`` die bash (CS-33). Der eigene
+    Finder in ``test_packaging.py`` sah nur unter ``ProgramFiles`` nach, und die
+    Fälle zum Linux-Installationsskript liefen dann nicht."""
+    git = tmp_path / "local" / "Programs" / "Git"
+    sh = git / "usr" / "bin" / "sh.exe"
+    sh.parent.mkdir(parents=True)
+    sh.touch()
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "leer"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "leer"))
+    found = {"git": str(git / "cmd" / "git.exe")}
+    monkeypatch.setattr(shutil, "which", lambda name, *_args, **_kwargs: found.get(name))
+
+    assert posix_shell() == sh, "neben dem Git aus dem Suchpfad"
+    found.clear()
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    assert posix_shell() == sh, "in der Installation je Nutzer"
+
+
+#: Die Shells, die allein ``tests/shell_helpers.py`` sucht.
+SHELLS: Final = frozenset({"bash", "sh"})
+
+
+def _shell_lookups(source: str) -> list[str]:
+    """Jeder Aufruf ``which("bash")`` oder ``which("sh")``, auch als ``shutil.which``.
+
+    Gelesen werden Aufrufe, nicht Text: Ein Docstring, der die Suche beschreibt,
+    ist keine Suche.
+    """
+    return sorted(
+        node.args[0].value
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and "which" in (getattr(node.func, "attr", None), getattr(node.func, "id", None))
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and node.args[0].value in SHELLS
+    )
+
+
+def test_only_the_shell_helpers_look_for_bash_or_sh() -> None:
+    """Jede Testdatei, die Skripte fährt, fragt ``tests/shell_helpers.py`` (CS-30, CS-33).
+
+    ``test_suite_script.py`` suchte die bash ein drittes Mal mit
+    ``which("bash")``, ohne Rückfall neben Git und ohne den WSL-Starter zu
+    verwerfen: Unter dem ``PATH`` einer PowerShell übersprang es seine Fälle,
+    und mit WSL vorn liefe das Tor-Skript in einem Linux. ``test_packaging.py``
+    suchte die ``sh`` mit einem halben Rückfall, nur unter ``ProgramFiles``.
+    """
+    planted = 'import shutil\nshutil.which("sh")\nwhich("bash")\nshutil.which("git")\n'
+    assert _shell_lookups(planted) == ["bash", "sh"], "der Leser findet keine Suche"
+    files = sorted((ROOT / "tests").glob("*.py"))
+    assert len(files) > 100, f"nur {len(files)} Dateien unter tests — falscher Pfad?"
+    asking = {
+        path.name: found
+        for path in files
+        if path.name != "shell_helpers.py"
+        and (found := _shell_lookups(path.read_text(encoding="utf-8")))
+    }
+    assert asking == {}
 
 
 def test_the_start_check_says_in_one_line_how_far_the_start_came() -> None:

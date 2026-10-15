@@ -27,9 +27,15 @@ from typing import IO
 
 import pytest
 
+from tests.shell_helpers import bash_executable
+
 SCRIPT = Path(__file__).parent.parent / ".claude" / "scripts" / "suite-getrennt.sh"
 
-BASH = shutil.which("bash")
+#: Die bash aus der einen Quelle (CS-30): Der Suchpfad allein übersprang
+#: unter dem ``PATH`` einer PowerShell jeden Fall und nähme den WSL-Starter.
+#: Der Starter aus Git, nicht die bash selbst: Das Skript braucht ``head`` und
+#: ``grep``, und das Doppel kommt über ``SUITE_PYTHON``, nicht über den ``PATH``.
+BASH = str(found) if (found := bash_executable()) else None
 
 #: Ein Lauf hängt, wenn so lange weder ein Aufruf des Doppels noch eine Ausgabe
 #: noch eine Datei im Arbeitsordner dazukommt. Eine feste Gesamtzeit war es nicht:

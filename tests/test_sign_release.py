@@ -785,7 +785,9 @@ def test_check_reads_prerequisites_without_an_archive_or_file_changes(
     def forbidden(*args: object, **kwargs: object) -> None:
         pytest.fail("--check hat die Archiv- oder Signierkette erreicht")
 
-    for name in ("verify_archive", "extract_archive", "download_handoff", "sign_file", "run"):
+    # ``run`` steht nicht in der Liste: Es hält nur Aufrufer des alten Komplettbaus an,
+    # und ``main`` ruft es auf keinem Weg — ein Verbot dort prüfte nichts (W2 d).
+    for name in ("verify_archive", "extract_archive", "download_handoff", "sign_file"):
         monkeypatch.setattr(sign_release, name, forbidden)
     before = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
     capsys.readouterr()

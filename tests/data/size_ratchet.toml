@@ -101,7 +101,7 @@
 "tests/test_native_references.py" = 85
 "tests/test_operation_ui.py" = 318
 "tests/test_overlay.py" = 71
-"tests/test_packaging.py" = 202
+"tests/test_packaging.py" = 201
 "tests/test_parts.py" = 428
 "tests/test_pattern_features.py" = 112
 "tests/test_performance.py" = 83
@@ -127,7 +127,7 @@
 "tests/test_slice_findings.py" = 295
 "tests/test_slicer_profiles.py" = 257
 "tests/test_slot_features.py" = 218
-"tests/test_style.py" = 184
+"tests/test_style.py" = 78
 "tests/test_surface_placement.py" = 179
 "tests/test_surface_placement_ui.py" = 154
 "tests/test_toolchain.py" = 225
