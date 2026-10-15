@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 
 from tools.move_compare import (
     Scopes,
+    fixed_parts,
     folded_texts,
     qualname_of,
     string_constants,
@@ -42,7 +43,7 @@ from tools.move_compare import (
 )
 from tools.move_cut import Target
 from tools.move_edits import Edit
-from tools.move_refs import AlreadyAppliedError, Context, quoted
+from tools.move_refs import AlreadyAppliedError, Context, FileRewrite, quoted
 from tools.move_source import (
     AREAS,
     IMPORTS,
@@ -1080,6 +1081,7 @@ class ModulePlanner:
                     "und nennt die alte Quelle — vor dem Schnitt als feste Zeichenkette schreiben "
                     "(dann erklärbar in [[name_lists]])"
                 )
+        self._fixed_parts(self.path, self.source, moved)
         last = self.src.rpartition(".")[2]
         for relative in self._files((file_name, last)):
             rewrite = self.ctx.rewrites().get(relative)
@@ -1105,6 +1107,24 @@ class ModulePlanner:
                         "vor dem Schnitt als feste Zeichenkette schreiben (dann erklärbar in "
                         "[[name_lists]])"
                     )
+            self._fixed_parts(relative, source, moved, rewrite)
+
+    def _fixed_parts(
+        self, path: str, source: Source, moved: set[str], rewrite: FileRewrite | None = None
+    ) -> None:
+        """Ein f-String, den der Auflöser nicht faltet, mit einem festen Teil, der die Quelle
+        nennt (``f"app/x.py:{zeile}"``): Er lässt sich weder umschreiben noch erklären."""
+        for part in fixed_parts(self.ctx.index, path, source):
+            value = str(part.value)
+            if rewrite is not None and rewrite.covered(part):
+                continue
+            if names_source(value, self.path, self.src, moved):
+                self.ctx.problem(
+                    f"{path}:{part.lineno}: f-String mit dem festen Teil {value!r} nennt die "
+                    "alte Quelle, und der Platzhalter lässt sich nicht falten — vor dem Schnitt "
+                    "den Pfad oder Modulnamen als eigene feste Zeichenkette schreiben (dann "
+                    "erklärbar in [[name_lists]]) und nur den Rest einsetzen"
+                )
 
 
 def _short_text(source: Source, node: ast.AST) -> str:

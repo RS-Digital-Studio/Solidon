@@ -553,7 +553,8 @@ def all_comments(source: Source) -> Counter[str]:
 
 def string_constants(source: Source) -> Iterator[ast.Constant]:
     """Jede Zeichenkette einer Datei außer Docstrings und den Textteilen eines f-Strings (die
-    zählen nur über den ganzen f-String, :func:`folded_texts`)."""
+    zählen über den ganzen f-String, :func:`folded_texts`, oder, wenn er sich nicht falten
+    lässt, je Teil, :func:`fixed_parts`)."""
     skip = docstring_ids(source.tree)
     for node in ast.walk(source.tree):
         if isinstance(node, ast.JoinedStr):
@@ -561,6 +562,24 @@ def string_constants(source: Source) -> Iterator[ast.Constant]:
     for node in ast.walk(source.tree):
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in skip:
             yield node
+
+
+def fixed_parts(index: Index, path: str, source: Source) -> Iterator[ast.Constant]:
+    """Die festen Teile jedes f-Strings, den der Auflöser nicht faltet (``f"app/x.py:{zeile}"``):
+    Sie lassen sich nicht umschreiben, wohl aber prüfen — nennt ein fester Teil die alte Quelle,
+    zeigt der Text danach ins Leere, ganz gleich, was der Platzhalter einsetzt (Review 2,
+    RM-M22). Einen gefalteten f-String prüft :func:`folded_texts` als Ganzes."""
+    for node in ast.walk(source.tree):
+        if not isinstance(node, ast.JoinedStr) or isinstance(
+            source.parent(node), ast.FormattedValue
+        ):
+            continue
+        values = index.resolve(path, node)
+        if values and all(v.kind == "const" and isinstance(v.data, str) for v in values):
+            continue
+        for part in node.values:
+            if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                yield part
 
 
 def folded_texts(index: Index, path: str, source: Source) -> Iterator[tuple[ast.expr, str]]:

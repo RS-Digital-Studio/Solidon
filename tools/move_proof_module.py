@@ -29,6 +29,7 @@ from tools.move_compare import (
     _string_names,
     _text,
     comments,
+    fixed_parts,
     folded_texts,
     import_bindings,
     qualname_of,
@@ -460,6 +461,12 @@ class ModuleProof:
                     self.proof.error(
                         f"{path}:{folded.lineno}: zusammengesetzte Zeichenkette ergibt {value!r} "
                         "und nennt die alte Quelle"
+                    )
+            for part in fixed_parts(self.trees.new_index, path, source):
+                if names_source(str(part.value), self.src_path, self.src, moved):
+                    self.proof.error(
+                        f"{path}:{part.lineno}: f-String mit dem festen Teil {part.value!r} nennt "
+                        "die alte Quelle (der Platzhalter lässt sich nicht falten)"
                     )
 
 

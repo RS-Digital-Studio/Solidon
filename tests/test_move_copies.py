@@ -562,6 +562,8 @@ def test_a_copy_of_an_assignment_copy_declared_as_original_is_rejected(tmp_path:
 #: Ein Halter, der eine Kopie über seinen Namensraum liest (Review RM-M15).
 BY_GLOBALS = 'def by_globals() -> object:\n    return globals()["operation"]\n\n\n'
 COLON = 'NAMES = ("app.core.consumer:operation",)\n'
+#: Review 2, RM-M22: ein f-String, den der Auflöser nicht faltet, mit der Kopie im festen Teil.
+FSTRING = 'def target(attr: str) -> str:\n    return f"app.core.consumer.operation.{attr}"\n'
 
 
 @pytest.mark.parametrize(
@@ -585,6 +587,12 @@ COLON = 'NAMES = ("app.core.consumer:operation",)\n'
             fx.COPIES_OLD | {"tests/test_extra.py": COLON},
             EXPECTED | {"tests/test_extra.py": COLON},
             "tests/test_extra.py:1: Zeichenkette 'app.core.consumer:operation'",
+        ),
+        (
+            "f-string-mit-platzhalter",
+            fx.COPIES_OLD | {"tests/test_extra.py": FSTRING},
+            EXPECTED | {"tests/test_extra.py": FSTRING},
+            "tests/test_extra.py:2: f-String mit dem festen Teil 'app.core.consumer.operation.'",
         ),
     ],
 )

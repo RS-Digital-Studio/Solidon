@@ -35,6 +35,7 @@ from tools.move_compare import (
     TopLevel,
     _is_annotation,
     _text,
+    fixed_parts,
     string_constants,
 )
 from tools.move_copies import Copy, families, names_copy, namespace_reads
@@ -149,6 +150,12 @@ class CopiesProof:
                     self.proof.error(
                         f"{path}:{node.lineno}: Zeichenkette {node.value!r} nennt eine Kopie, "
                         "die es nachher nicht mehr gibt"
+                    )
+            for part in fixed_parts(self.trees.new_index, path, self.trees.new(path)):
+                if names_copy(str(part.value), names):
+                    self.proof.error(
+                        f"{path}:{part.lineno}: f-String mit dem festen Teil {part.value!r} nennt "
+                        "eine Kopie, die es nachher nicht mehr gibt"
                     )
         for path in sorted({c.head.path for c in self.copies.values()}):
             if path not in self.trees.new_files:

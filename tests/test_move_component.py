@@ -357,6 +357,10 @@ INSTANCE_READER = (
 )
 
 
+#: Review 2, RM-M22: ein Pfad auf den Wirt als f-String, dessen Member offen bleibt.
+OPEN_PATH = 'def target(name: str) -> str:\n    return f"app.ui.board.Board.{name}"\n'
+
+
 def _unchanged() -> list[tuple[str, dict[str, str], dict[str, str], str]]:
     """Ein Leser, der in einer **unveränderten** Datei steht: Der Beweis vergleicht jede Datei,
     die einen verschobenen Namen nennt, nicht nur die geänderten (Konzept 4.1, W5)."""
@@ -381,6 +385,12 @@ def _unchanged() -> list[tuple[str, dict[str, str], dict[str, str], str]]:
             fx.COMPONENT_OLD | {"tests/test_names.py": 'TARGET = "app.ui.board.Board.refresh"\n'},
             EXPECTED | {"tests/test_names.py": 'TARGET = "app.ui.board.Board.refresh"\n'},
             "tests/test_names.py:1: Pfad als Text 'app.ui.board.Board.refresh'",
+        ),
+        (
+            "f-string-pfad-offen",
+            fx.COMPONENT_OLD | {"tests/test_names.py": OPEN_PATH},
+            EXPECTED | {"tests/test_names.py": OPEN_PATH},
+            "tests/test_names.py:2: f-String mit dem festen Teil 'app.ui.board.Board.'",
         ),
     ]
 
@@ -615,6 +625,11 @@ def _with(path: str, text: str) -> dict[str, str]:
             "zeichenkette",
             _with("tests/test_names.py", 'NAMES = ("bump",)\n'),
             "Zeichenkette 'bump' (<module>) nennt ein verschobenes Member",
+        ),
+        (
+            "f-string-pfad-offen",
+            _with("tests/test_names.py", OPEN_PATH),
+            "tests/test_names.py:2: f-String mit dem festen Teil 'app.ui.board.Board.'",
         ),
         (
             "name-eines-eingebauten-typs",

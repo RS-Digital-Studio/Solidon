@@ -34,7 +34,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from tools.code_index import HeadCopy, Index
-from tools.move_compare import FileScopes, TopLevel, string_constants
+from tools.move_compare import FileScopes, TopLevel, fixed_parts, string_constants
 from tools.move_cut import Cut
 from tools.move_edits import Edit
 from tools.move_refs import (
@@ -562,6 +562,13 @@ class CopiesPlanner:
                             self.ctx.problem(
                                 f"{relative}:{node.lineno}: Zeichenkette {value!r} nennt eine "
                                 "Kopie — vor dem Schnitt umschreiben (Patch auf das Original)"
+                            )
+                    for part in fixed_parts(self.ctx.index, relative, source):
+                        if names_copy(str(part.value), dotted_names):
+                            self.ctx.problem(
+                                f"{relative}:{part.lineno}: f-String mit dem festen Teil "
+                                f"{part.value!r} nennt eine Kopie, und der Platzhalter lässt sich "
+                                "nicht falten — vor dem Schnitt auf das Original schreiben"
                             )
                 if hit_attr:
                     self._attribute_names(relative, source, rewrite)

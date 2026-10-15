@@ -45,6 +45,7 @@ from tools.move_compare import (
     _difference,
     _text,
     comments,
+    fixed_parts,
     loaded_names,
     qualname_of,
     string_constants,
@@ -199,7 +200,8 @@ class ComponentProof:
         moved = self.shape.moved_names
         kept = {(a.path, a.scope, a.member) for a in self.cut.accesses if a.decision == "keep"}
         for path, source in sources:
-            for node in string_constants(source):
+            parts = list(fixed_parts(self.trees.old_index, path, source))
+            for node in [*string_constants(source), *parts]:
                 value = str(node.value)
                 if value not in moved:
                     continue
@@ -229,6 +231,14 @@ class ComponentProof:
                     self.proof.error(
                         f"{path}:{node.lineno}: Pfad als Text {value!r} zeigt noch auf "
                         f"{self.cut.host} — auf {self.cut.component_class} umschreiben"
+                    )
+            for part in fixed_parts(self.trees.new_index, path, self.trees.new(path)):
+                value = str(part.value)
+                rest = value.partition(prefix)[2] if prefix in value else None
+                if rest is not None and rest.split(".")[0] in {*moved, ""}:
+                    self.proof.error(
+                        f"{path}:{part.lineno}: f-String mit dem festen Teil {value!r} zeigt noch "
+                        f"auf {self.cut.host} (der Platzhalter lässt sich nicht falten)"
                     )
 
     def _string_scope(self, path: str, source: Source, node: ast.AST) -> str:

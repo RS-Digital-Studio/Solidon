@@ -60,7 +60,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from tools.code_index import Index, Val
-from tools.move_compare import FileScopes, Scopes, TopLevel, qualname_of, string_constants
+from tools.move_compare import (
+    FileScopes,
+    Scopes,
+    TopLevel,
+    fixed_parts,
+    qualname_of,
+    string_constants,
+)
 from tools.move_cut import Cut
 from tools.move_edits import Edit, EditError, apply_text
 from tools.move_qt import (
@@ -657,6 +664,9 @@ class ComponentPlanner:
         for node in string_constants(self.host):
             if _inside(method, node):
                 self._string(self.path, node, label, body=True)
+        for part in fixed_parts(self.ctx.index, self.path, self.host):
+            if _inside(method, part):
+                self._fixed_part(self.path, part, label)
 
     def _self(self, moved: Moved, method: Method, node: ast.Name, me: str) -> None:
         source = self.host
@@ -1018,6 +1028,9 @@ class ComponentPlanner:
             for node in string_constants(self.host):
                 if _inside(stmt, node):
                     self._string(self.path, node, label)
+            for part in fixed_parts(self.ctx.index, self.path, self.host):
+                if _inside(stmt, part):
+                    self._fixed_part(self.path, part, label)
         if built is None:
             self.ctx.problem(
                 f"{self.path}: {self.cut.host}.__init__ baut die Komponente nicht "
@@ -1047,6 +1060,24 @@ class ComponentPlanner:
                 if path == self.path and _inside(cls, constant):
                     continue
                 self._string(path, constant, qualname_of(source, constant))
+            for part in fixed_parts(self.ctx.index, path, source):
+                self._fixed_part(path, part, qualname_of(source, part))
+
+    def _fixed_part(self, path: str, node: ast.Constant, scope: str) -> None:
+        """Der feste Teil eines f-Strings, den der Auflöser nicht faltet: Er lässt sich nicht
+        umschreiben — nennt er den Pfad eines verschobenen Members oder das Member selbst
+        (ohne Erklärung ``keep``), hält der Schnitt an (Review 2, RM-M22)."""
+        value = str(node.value)
+        prefix = f"{self.shape.module}.{self.cut.host}."
+        rest = value.partition(prefix)[2] if prefix in value else None
+        if rest is not None and rest.split(".")[0] in {*self.shape.moved_names, ""}:
+            self.ctx.problem(
+                f"{path}:{node.lineno}: f-String mit dem festen Teil {value!r} zeigt auf "
+                f"{self.cut.host} und lässt sich nicht falten — vor dem Schnitt den Pfad als "
+                "feste Zeichenkette schreiben"
+            )
+        elif value in self.shape.moved_names:
+            self._string(path, node, scope)
 
     def _declared_used(self) -> None:
         for number, role in enumerate(self.cut.self_roles):

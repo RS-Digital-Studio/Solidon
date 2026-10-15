@@ -183,6 +183,22 @@ STRING_FORMS = [
         'PATH = "app/core/" + "legacy.py"\n',
         "tests/test_strings.py:1: zusammengesetzte Zeichenkette ergibt 'app/core/legacy.py'",
     ),
+    # Review 2, RM-M22: Ein f-String, den der Auflöser nicht faltet, wird je festem Teil geprüft.
+    (
+        "f-string-pfad-mit-platzhalter",
+        'def where(line: int) -> str:\n    return f"app/core/legacy.py:{line}"\n',
+        "tests/test_strings.py:2: f-String mit dem festen Teil 'app/core/legacy.py:'",
+    ),
+    (
+        "f-string-modul-mit-platzhalter",
+        'def target(name: str) -> str:\n    return f"app.core.legacy:{name}"\n',
+        "tests/test_strings.py:2: f-String mit dem festen Teil 'app.core.legacy:'",
+    ),
+    (
+        "f-string-platzhalter-vorn",
+        'def under(root: str) -> str:\n    return f"{root}/app/core/legacy.py"\n',
+        "tests/test_strings.py:2: f-String mit dem festen Teil '/app/core/legacy.py'",
+    ),
 ]
 
 
