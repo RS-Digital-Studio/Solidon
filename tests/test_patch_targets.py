@@ -94,12 +94,6 @@ def test_rule_c_no_head_copy_of_a_name_patched_at_its_original() -> None:
     assert not findings, _report(findings)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="scharf, wenn P2 _cost_matrix (CS-9b) und der Verbotspatch auf sign_release.run "
-    "(test_sign_release.py:789, neuer Punkt) behoben sind",
-)
 def test_rule_d_every_patched_name_is_read_by_somebody() -> None:
     """Wer einen Namen patcht, den niemand zur Aufrufzeit liest, prüft nichts — auch ein
     Verbotspatch („darf nicht gerufen werden“) wäre dann grün, ohne dass der Aufruf je

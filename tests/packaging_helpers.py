@@ -53,7 +53,7 @@ def workflow_shell() -> str | None:
     ``sh`` aus Git für Windows eine bash ist.
 
     Für das Linux-Installationsskript gilt das Gegenteil: Es ist bewusst
-    POSIX-``sh`` und wird mit ``_posix_shell`` aus ``tests/test_packaging.py`` gefahren.
+    POSIX-``sh`` und wird mit ``posix_shell`` aus ``tests/shell_helpers.py`` gefahren.
 
     Wo die bash liegt, sagt allein ``bash_executable`` (``tests/shell_helpers.py``),
     das den Starter von WSL verwirft. Gefragt wird nach der bash, die den
