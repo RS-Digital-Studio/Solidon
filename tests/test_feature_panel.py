@@ -1552,7 +1552,11 @@ def test_focusing_a_field_names_the_action_above_apply(qt_app: QApplication) -> 
     )
     qt_app.sendEvent(editor, QFocusEvent(QEvent.Type.FocusIn))
     assert panel._armed == editor.property("handlingKey")
-    assert panel._armed_title.isVisibleTo(panel)
+    # Seit FD-136 steht die Knopfzeile unter der Handlung; deren Kopfzeile
+    # nennt sie direkt darüber, ein zweiter Titel am Knopf entfällt.
+    box = next(row.box for row in panel._shown_rows.values() if row.key == panel._armed)
+    assert panel._rows.indexOf(panel._footer) == panel._rows.indexOf(box) + 1
+    assert not panel._armed_title.isVisibleTo(panel)
     assert panel._armed_title.text() == panel._apply.accessibleName()
 
 
@@ -3818,6 +3822,10 @@ def test_the_one_button_stands_below_every_handling(qt_app: QApplication) -> Non
     (``footer``), damit ein Träger sie aus dem Rollinhalt heben kann; ihre
     Reihenfolge zueinander gilt dort weiter, und die Zeile als Ganzes steht
     unter den Handlungen.
+
+    **Seit FD-136 unter der offenen Handlung, nicht unter allen:** Das Feld
+    stand oben, *Übernehmen* am Kartenende. Über den Handlungen steht die
+    Zeile weiterhin nie.
     """
     identifier, feature = a_hole()
     panel = FeaturePanel()
@@ -3830,7 +3838,9 @@ def test_the_one_button_stands_below_every_handling(qt_app: QApplication) -> Non
     plaetze = {rows.itemAt(index).widget(): index for index in range(rows.count())}
     zeilen = [plaetze[row] for row in panel._built if row in plaetze]
     assert zeilen, "ohne Zeilen prüft dieser Test nichts"
-    assert plaetze[panel.footer()] > max(zeilen), "die Knopfzeile steht über den Handlungen"
+    assert plaetze[panel.footer()] > min(zeilen), "die Knopfzeile steht über den Handlungen"
+    scharf = next(row.box for row in panel._shown_rows.values() if row.key == panel._armed)
+    assert plaetze[panel.footer()] == plaetze[scharf] + 1, "direkt unter der offenen Handlung"
 
     unten = panel.footer().layout()
     assert unten is not None

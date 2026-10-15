@@ -185,6 +185,7 @@ from app.ui.change_lock import (
 )
 from app.ui.dialogs import ADDRESS_VALUES, NEEDS_OP, handlers_of, unhandled_advice
 from app.ui.feature_editing import advanced_fields, configure_scope, explain_value_help
+from app.ui.feature_footer import keep_in_sight, place_below
 from app.ui.icons import icon, icon_name_for, svg_pixmap
 from app.ui.labels import (
     BoundedLengthSpin,
@@ -11468,8 +11469,15 @@ class FeaturePanel(QWidget):
         soll.
         """
         if self._footer.parentWidget() is self:
-            self._rows.removeWidget(self._footer)
-            self._rows.insertWidget(self._rows.count() - 1, self._footer)
+            # Unter der offenen Handlung, sonst am Ende (FD-136, :meth:`_arm`).
+            place_below(
+                self._rows,
+                self._footer,
+                next(
+                    (row.box for row in self._shown_rows.values() if row.key == self._armed),
+                    None,
+                ),
+            )
         self._settle_tab_order()
         # Wiederverwendete Zeilen bringen ihren alten Zustand mit; offen ist
         # danach genau die scharfe (RM-510), und jede nennt ihre Werte.
@@ -11623,7 +11631,18 @@ class FeaturePanel(QWidget):
         self._open_only(key)
         self._armed_title.setText(entry.title)
         # Beim Messen trägt die Maßgruppe im Bild Titel und Übernehmen.
-        _set_shown(self._armed_title, not self._measuring)
+        # **Die Knopfzeile steht unter dieser Handlung** (FD-136), solange sie
+        # dem Panel gehört: Das Feld oben und *Übernehmen* am Kartenende
+        # trennte sonst die ganze Karte. Dort braucht sie keinen eigenen
+        # Titel — die Kopfzeile der Handlung steht direkt darüber.
+        under = self._footer.parentWidget() is self and place_below(
+            self._rows,
+            self._footer,
+            next((row.box for row in self._shown_rows.values() if row.key == key), None),
+        )
+        if under:
+            keep_in_sight(self._footer)
+        _set_shown(self._armed_title, not self._measuring and not under)
         # **Der Titel steht am Knopf, nur nicht auf ihm.** Ein Bildschirmleser
         # liest den zugänglichen Namen, und „Übernehmen" allein sagte dort
         # nicht, was übernommen wird (§19.1).
