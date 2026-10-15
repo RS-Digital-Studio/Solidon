@@ -20853,7 +20853,10 @@ class TestPieceParams(BaseParams):
         doc=_("Wie groß der Ausschnitt wird. Groß genug, dass die Passung Material hat."),
     )
     spot: str = param(
-        title=_("Stelle"),
+        # Nicht „Stelle“: So heißt vorn schon die Lesezeile mit den
+        # Koordinaten, und zweimal dasselbe Wort ließ raten, welches Feld die
+        # Stelle festlegt (FD-119).
+        title=_("Lage des Würfels"),
         # Vorgabe die genannte Stelle: Ein Schritt von vor diesem Feld bleibt,
         # was er war.
         default="point",

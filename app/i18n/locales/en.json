@@ -5020,6 +5020,7 @@
   "Laden Sie ihren aktuellen Stand neu und ändern Sie sie dann noch einmal.": "Reload its current state, then change it again.",
   "Lage": "Position",
   "Lage des Werkzeugs prüfen": "Check where the tool sits",
+  "Lage des Würfels": "Cube position",
   "Lage im Bauraum": "Position in build volume",
   "Lage in der Baugruppe": "Position in the assembly",
   "Lagen je Merkmal: read_digest mit objects": "Positions per feature: read_digest with objects",
