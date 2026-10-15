@@ -79,6 +79,11 @@ dans `website/version.json`.
 - Sur un constat d'un modèle généré, *Générer de nouveau* ouvre le générateur avec sa description et la graine suivante.
 - Quand la carte d'analyse refuse un modèle trop grand, les nombres de triangles s'affichent par groupes de trois, par exemple 2 103 472.
 - Quand la chaîne s'arrête, une fonction qui ajouterait une étape derrière n'ouvre plus de dialogue au bouton grisé. L'arrêt et la suite à donner s'affichent tout de suite.
+- Dans le rapport de contrôle, la touche Tab atteint l'action proposée, et aucune zone défilante n'est plus un arrêt à part sans nom.
+- Un double-clic sur une modification de cote dans l'historique ouvre cette cote pour la modifier.
+- La colonne des cotes de l'arborescence affiche en entier aussi les cotes non rondes ; la carte de gauche s'élargit un peu au besoin.
+- Les lignes de constat du rapport affichent leur mesure en entier et ne nomment chaque corps qu'une fois.
+- La barre des paramètres affiche les longueurs en pouces lorsque les pouces sont réglés. Un clic droit sur le champ de valeur ouvre *Modifier …*.
 
 ### Imprimer et transmettre au slicer
 
@@ -93,6 +98,9 @@ dans `website/version.json`.
 - Si un perçage ou un récipient ne réussit qu'avec des sommets déplacés d'un rien, l'ouverture reste libre. En version 0.6.0, une peau très fine pouvait rester par-dessus.
 - Pour les trous, vue et *Sélection* montrent la même action. Dimension, profondeur et entrée liée sont devant ; compensation d’impression et réglages fins, dans « Autres valeurs ».
 - Les champs du perçage et la case de modification simultanée des éléments similaires expliquent leur effet. « Compenser les écarts d'impression » précise la correction issue du profil du matériau.
+- Dans l'onglet *Sélection*, *Appliquer* se trouve juste sous l'action ouverte, « Filament et impression » est en haut avec la couleur de l'affectation, et il ne reste plus d'espace vide sous la liste.
+- Un perçage modifié garde sa place dans l'arborescence.
+- Les actions impossibles sur un élément s'affichent comme « Impossible ici : … » avec leur raison.
 
 ## 0.6.0
 

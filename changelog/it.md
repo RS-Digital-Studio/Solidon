@@ -78,6 +78,11 @@ scrive in `website/version.json`.
 - Su una segnalazione di un modello generato, *Genera di nuovo* apre il generatore con la sua descrizione e il seme successivo.
 - Quando la mappa di analisi rifiuta un modello troppo grande, il numero di triangoli compare in gruppi di tre, come 2 103 472.
 - Quando la catena si ferma, una funzione che aggiungerebbe un passaggio dopo non apre più una finestra con il pulsante grigio. L'arresto e la via d'uscita compaiono subito.
+- Nel rapporto di controllo il tasto Tab raggiunge l'azione proposta, e nessuna area scorrevole è più una fermata a sé senza nome.
+- Un doppio clic su una modifica di quota nella cronologia apre quella quota per modificarla.
+- La colonna delle quote nell'albero degli oggetti mostra per intero anche le quote non tonde; se serve, la scheda a sinistra si allarga un poco.
+- Le righe dei rilievi nel rapporto mostrano la misura per intero e nominano ogni corpo una volta sola.
+- La barra dei parametri mostra le lunghezze in pollici quando sono impostati i pollici. Un clic destro sul campo del valore apre *Cambia …*.
 
 ### Stampare e passare allo slicer
 
@@ -92,6 +97,9 @@ scrive in `website/version.json`.
 - Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
 - Per i fori, vista e *Selezione* mostrano la stessa modifica. Misura, profondità e imbocco collegato sono davanti; compensazione di stampa e regolazioni fini, in «Altri valori».
 - I campi del foro e la casella per modificare insieme elementi uguali spiegano il loro effetto. «Compensare gli scostamenti di stampa» chiarisce la correzione del profilo del materiale.
+- Nella scheda *Selezione*, *Applica* sta subito sotto l'azione aperta, «Filamento e stampa» sta in alto con il colore dell'assegnazione, e sotto l'elenco non resta spazio vuoto.
+- Un foro modificato mantiene il suo posto nell'albero degli oggetti.
+- Le azioni che su un elemento non funzionano compaiono come «Qui non è possibile: …» con il loro motivo.
 
 ## 0.6.0
 

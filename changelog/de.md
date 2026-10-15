@@ -103,6 +103,11 @@ Nutzen da und sonst nichts.
 - Am Befund eines erzeugten Modells öffnet *Neu erzeugen* den Generator mit dessen Beschreibung und dem nächsten Startwert.
 - Lehnt die Analysekarte ein zu großes Modell ab, stehen die Dreieckszahlen in Dreiergruppen, etwa 2 103 472.
 - Hält die Kette an, öffnet eine Funktion, die einen Schritt dahinter anlegen würde, keinen Dialog mit grauem Knopf mehr. Der Halt und sein Weg weiter stehen gleich da.
+- Im Prüfbericht erreicht die Tabulatortaste die angebotene Handlung, und kein Rollbereich ist mehr ein eigener Halt ohne Namen.
+- Ein Doppelklick auf eine Maßänderung im Verlauf öffnet das Maß zum Ändern.
+- Die Maßspalte im Objektbaum zeigt auch krumme Maße ganz; die linke Karte wird dafür bei Bedarf etwas breiter.
+- Befundzeilen im Prüfbericht zeigen ihre Maßangabe vollständig und nennen jeden Körper nur einmal.
+- Die Parameterleiste zeigt Längen in Zoll, wenn Zoll eingestellt ist. Ein Rechtsklick auf das Wertfeld öffnet *Ändern …*.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -117,6 +122,9 @@ Nutzen da und sonst nichts.
 - Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
 - Bei Bohrungen zeigen Bild und *Auswahl* dieselbe Änderung. Zielmaß, Tiefe und mitgehender Einlauf stehen vorn; Druckkorrektur und Feinwerte unter „Weitere Werte“.
 - Bohrungsfelder und der Haken zum gemeinsamen Ändern gleichartiger Merkmale erklären ihre Wirkung. „Druckabweichung ausgleichen“ beschreibt die Korrektur aus dem Materialprofil verständlicher.
+- Im Reiter *Auswahl* steht *Übernehmen* direkt unter der offenen Handlung, „Filament und Druck“ steht oben mit der Farbe der Zuweisung, und unter der Liste bleibt keine leere Fläche.
+- Eine geänderte Bohrung behält ihren Platz im Objektbaum.
+- Handlungen, die an einem Merkmal nicht gehen, stehen als „Hier nicht möglich: …“ mit ihrem Grund da.
 
 ## 0.6.0
 

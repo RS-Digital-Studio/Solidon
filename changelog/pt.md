@@ -78,6 +78,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Numa observação de um modelo gerado, *Gerar de novo* abre o gerador com a sua descrição e a semente seguinte.
 - Quando o mapa de análise recusa um modelo demasiado grande, o número de triângulos aparece em grupos de três, como 2 103 472.
 - Quando a cadeia para, uma função que acrescentaria um passo depois já não abre um diálogo com o botão cinzento. A paragem e o caminho a seguir aparecem logo.
+- No relatório de verificação, a tecla Tab chega à ação oferecida, e nenhuma área de deslocamento é já uma paragem própria sem nome.
+- Um duplo clique numa alteração de medida no histórico abre essa medida para a alterar.
+- A coluna de medidas da árvore de objetos mostra completas também as medidas com decimais; o cartão da esquerda alarga um pouco quando é preciso.
+- As linhas de constatações do relatório mostram a medida completa e nomeiam cada corpo uma só vez.
+- A barra de parâmetros mostra os comprimentos em polegadas quando estão definidas as polegadas. Um clique direito no campo do valor abre *Alterar …*.
 
 ### Imprimir e entregar ao slicer
 
@@ -92,6 +97,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
 - Nos furos, vista e *Seleção* mostram a mesma alteração. Dimensão, profundidade e entrada associada ficam à frente; compensação de impressão e ajustes finos, em «Mais valores».
 - Os campos do furo e a caixa para alterar elementos iguais em conjunto explicam o seu efeito. «Compensar desvios de impressão» esclarece a correção do perfil do material.
+- No separador *Seleção*, *Aplicar* fica logo abaixo da ação aberta, «Filamento e impressão» fica em cima com a cor da atribuição, e abaixo da lista não fica espaço vazio.
+- Um furo alterado mantém o seu lugar na árvore de objetos.
+- As ações que não funcionam num elemento aparecem como «Aqui não é possível: …» com o seu motivo.
 
 ## 0.6.0
 

@@ -78,6 +78,11 @@ it into `website/version.json`.
 - On a finding of a generated model, *Generate again* opens the generator with its description and the next seed.
 - When the analysis map refuses a model as too large, the triangle counts are shown in groups of three, such as 2 103 472.
 - When the chain stops, a function that would add a step behind it no longer opens a dialog with a greyed-out button. The stop and the way on are shown right away.
+- In the check report, the Tab key reaches the offered action, and no scroll area is a separate unnamed stop any more.
+- Double-clicking a dimension change in the history opens that dimension for editing.
+- The dimensions column in the object tree shows uneven dimensions in full; the left card grows a little wider when needed.
+- Finding rows in the check report show their measurement in full and name each body only once.
+- The parameter bar shows lengths in inches when inches are set. Right-clicking the value field opens *Change …*.
 
 ### Printing and slicer handover
 
@@ -92,6 +97,9 @@ it into `website/version.json`.
 - If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
 - For holes, the view and *Selection* show the same edit. Size, depth and a linked entrance stay in front; print compensation and fine settings are under “More values”.
 - Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
+- In the *Selection* tab, *Apply* sits directly below the open action, “Filament and printing” sits at the top with the colour of the assignment, and no empty space is left below the list.
+- A changed hole keeps its place in the object tree.
+- Actions that do not work on a feature read “Not possible here: …” with their reason.
 
 ## 0.6.0
 

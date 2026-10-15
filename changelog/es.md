@@ -79,6 +79,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En un aviso de un modelo generado, *Volver a generar* abre el generador con su descripción y la siguiente semilla.
 - Cuando el mapa de análisis rechaza un modelo demasiado grande, el número de triángulos aparece en grupos de tres, como 2 103 472.
 - Cuando la cadena se detiene, una función que añadiría un paso detrás ya no abre un diálogo con el botón en gris. La parada y el camino a seguir aparecen enseguida.
+- En el informe de comprobación, la tecla Tab llega a la acción ofrecida, y ninguna zona desplazable es ya una parada propia sin nombre.
+- Un doble clic en un cambio de medida del historial abre esa medida para editarla.
+- La columna de medidas del árbol de objetos muestra completas también las medidas con decimales; la tarjeta izquierda se ensancha un poco si hace falta.
+- Las filas de hallazgos del informe muestran su medida completa y nombran cada cuerpo una sola vez.
+- La barra de parámetros muestra las longitudes en pulgadas cuando están ajustadas las pulgadas. Un clic derecho en el campo del valor abre *Cambiar …*.
 
 ### Imprimir y entregar al slicer
 
@@ -93,6 +98,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro o un recipiente solo sale adelante moviendo las esquinas una cantidad mínima, la abertura queda libre. En la versión 0.6.0 podía quedar encima una piel finísima.
 - En agujeros, vista y *Selección* muestran el mismo cambio. Medida, profundidad y entrada vinculada están delante; compensación de impresión y ajustes finos, en «Más valores».
 - Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
+- En la pestaña *Selección*, *Aplicar* queda justo debajo de la acción abierta, «Filamento e impresión» está arriba con el color de la asignación, y bajo la lista no queda espacio vacío.
+- Un taladro modificado conserva su lugar en el árbol de objetos.
+- Las acciones que no funcionan en un elemento aparecen como «Aquí no es posible: …» con su motivo.
 
 ## 0.6.0
 
