@@ -44,7 +44,7 @@ from app.ui.palette import (
     readable_on,
 )
 from app.ui.panels import origin_label
-from app.ui.style import NORMAL, TIGHT, make_primary
+from app.ui.style import NORMAL, TIGHT
 from app.ui.tool_strip import BarComboBox
 
 #: Wie lang der Farbbalken der Ringlegende ist.
@@ -318,12 +318,13 @@ class MapLegend(QWidget):
         Knopf, der sie höher macht, schiebt die Ansicht bei jedem abgelehnten
         Kartenwunsch ein Stück zusammen.
         """
+        # **Ein gewöhnlicher Knopf, kein zweiter Akzent** (FD-107): Derselbe
+        # Ausweg steht im Prüfbericht als dessen Hauptknopf, und zwei orange
+        # Knöpfe mit „Dreiecke verringern“ ließen lesen, welcher gemeint ist.
+        # Ein Ausweg neben einem Satz ist eine Hinweishandlung — höchstens ein
+        # Akzent je Fenster (``fenster.md``, „Der Hauptknopf“).
         button = QPushButton(label, self)
-        # Dieselbe Erscheinung wie im Prüfbericht, wo derselbe Ausweg seit je
-        # steht: ein Hauptknopf, damit er nicht wie eine Nebenbemerkung
-        # aussieht. Wer ihn hier anders zeichnete, hätte zwei Gestalten für
-        # eine Handlung.
-        make_primary(button)
+        button.setAutoDefault(False)
         button.setAccessibleName(label)
         button.clicked.connect(on_action)
         self.action = button
