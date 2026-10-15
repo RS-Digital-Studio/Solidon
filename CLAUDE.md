@@ -11,7 +11,7 @@ Zeile, Codex liest diese Datei nach `AGENTS.md`, „Paketstruktur“.
 
 Solidon — eine Desktop-Anwendung in **Python (3.14 oder neuer) mit PySide6**.
 Die Untergrenze steht in `pyproject.toml`; die CI und damit jedes Paket
-verwenden CPython 3.14.8, die Arbeitsplätze noch 3.14.7 (RM-468).
+verwenden CPython 3.14.8, der Arbeitsplatz noch 3.14.7 (RM-468).
 
 | Datei | Beantwortet |
 |---|---|
@@ -115,9 +115,8 @@ Signierung/   Übergabe der Windows-Signatur (README.md)
 Releases/     lokale Pakete; nur die veröffentlichten Handbuch-PDFs versioniert
 output/, tmp/ örtliche Prüfstände und Sicherungen, nicht versioniert
 marketing/    Pressetexte und Kampagnen, nur örtlich, nicht versioniert
-3D Drucker/   physische Druckprojekte, eigenes Repository, nicht versioniert;
-              fehlt auf manchem Rechner hier, auf einem liegt es unter
-              F:\3D Dateien\3D Drucker
+3D Drucker/   physische Druckprojekte, eigenes Repository, nicht in diesem
+              Baum, sondern unter F:\3D Dateien\3D Drucker
 ```
 
 Jedes Verzeichnis mit Code trägt seine eigene Karte; `tests/test_directory_docs.py`
@@ -156,7 +155,7 @@ Feldliste steht deshalb als Tabelle, nicht als Codeblock.
   Hook-Definition eine Freigabe über `/hooks`, nach jeder Änderung erneut.
   Testmarken sind Erinnerungen, kein Nachweis eines Tors.
 - **`pyright-lsp`** gibt Sprachhilfe, bei Claude und Codex als Plugin
-  (Einrichtung je Rechner in `/erzeugen`); die verbindliche Typprüfung bleibt mypy.
+  (Einrichtung in `/erzeugen`); die verbindliche Typprüfung bleibt mypy.
 - **`context7`** liefert Bibliotheksdoku, bei Claude als Plugin, bei Codex
   über `.codex/config.toml`. Gefragt wird nach Bibliothek und Fachfrage — nie
   mit Projektcode oder Zugangsdaten.
@@ -173,10 +172,11 @@ raten — das steht in `AGENTS.md`. Dazu:
   (`solidon3d-review`, Entscheidung Robert), auch für Unterlagen und
   Review-Fixes, Nachprüfung nur bei mehreren mittleren oder schweren Befunden;
   danach eigene Worktrees und Zweige abbauen (`/liefern`).
-- **`.githooks/post-commit` pusht** jeden Commit, weil auf drei Maschinen
-  gearbeitet wird. Er holt und rebasiert nicht — ist die Gegenstelle weiter,
-  scheitert er und sagt es. `SOLIDON_KEIN_PUSH=1` hält einen Commit lokal,
-  wenn Robert ausdrücklich „nicht pushen" sagt.
+- **`.githooks/post-commit` pusht** jeden Commit: die Gegenstelle ist die
+  Sicherung, und auf main startet der Push die CI. Er holt und rebasiert
+  nicht — ist die Gegenstelle weiter, scheitert er und sagt es.
+  `SOLIDON_KEIN_PUSH=1` hält einen Commit lokal, wenn Robert ausdrücklich
+  „nicht pushen" sagt.
 - **`.githooks/pre-commit`** fährt bei Änderungen an `app/` oder `tools/` die
   Bezeichnerprüfung und `tools/check_new_texts.py`; Befunde an Dateien dieses
   Commits halten ihn an. Die Zuordnung vergleicht vollständige Repositorypfade;
