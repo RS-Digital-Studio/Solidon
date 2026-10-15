@@ -37,6 +37,7 @@ from PySide6.QtGui import (
     QFont,
     QFontMetrics,
     QFontMetricsF,
+    QIcon,
     QKeyEvent,
     QPainter,
     QPalette,
@@ -81,6 +82,7 @@ from app.core.registry.search import first_choice, ranked
 from app.core.registry.surfaces import first_sentence, menu_rank
 from app.i18n import sort_key, tr
 from app.ui.change_lock import change_refusal
+from app.ui.filament_picker import swatch
 from app.ui.icons import icon, icon_name_for
 from app.ui.labels import adding_key
 from app.ui.leash import stop_watching_the_dying, weak_slot
@@ -1038,6 +1040,12 @@ class SelectionOperationsPanel(QWidget):
         layout.setSpacing(TIGHT)
         layout.addWidget(self.summary)
         layout.addLayout(quick)
+        # **Filament und Druck oben, als eine Zeile** (FD-19): Am Ende der
+        # Liste lag die Zuweisung bei gewähltem Körper unter rund vierzig
+        # Handlungen, erst nach Rollen und Aufklappen — und Mehrfarbdruck ist
+        # ein häufiges Ziel. Zugeklappt kostet die Zeile so viel wie ein
+        # Satz und nennt mit Farbfeld, was zugewiesen ist (:meth:`describe_print`).
+        layout.addWidget(self.print_section)
         layout.addWidget(self.pairing_hint)
         layout.addWidget(self.search)
         layout.addWidget(self._nothing)
@@ -1045,7 +1053,6 @@ class SelectionOperationsPanel(QWidget):
         layout.addWidget(self.hits, 1)
         layout.addWidget(self.scroller, 1)
         layout.addLayout(separate)
-        layout.addWidget(self.print_section)
         layout.addStretch(0)
         self.hide()
 
@@ -1083,6 +1090,10 @@ class SelectionOperationsPanel(QWidget):
         if heading is not None:
             heading.setToolTip(text)
             heading.setAccessibleDescription(text)
+            # Die Farbe der Zuweisung vor dem Namen (FD-19), aus dem Wähler,
+            # der den Satz gerade gemeldet hat; ohne Zuweisung kein Feld.
+            colours = getattr(self._print_widget, "current_colours", None)
+            heading.setIcon(swatch(colours) if colours else QIcon())
 
     @override
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
