@@ -18,6 +18,23 @@ if TYPE_CHECKING:
 #: Die erste Spule aus dem Lager in einem Filamentfeld — ein Ort, kein Widget.
 SPOOL: Final = "filament.spool"
 
+#: Feste Namen, deren Widget den Namen als Kennzeichen trägt
+#: (``guides.TARGET_PROPERTY``); ``guide_targets.widget_for`` sucht sie über
+#: ``marked_widgets``. Ein neuer Name steht hier und am Widget, sonst nirgends.
+MARKED: Final = frozenset(
+    {
+        "parts.save",
+        "filament.add",
+        "filament.profile",
+        "filament.colour",
+        "feature.apply",
+        "feature.in_view",
+        "feature.every",
+        "measure.reference",
+        "measure.apply",
+    }
+)
+
 
 def first_parameter_label(window: MainWindow) -> QWidget:
     """Die Beschriftung der ersten Zeile unter *Parameter* (``parameters.first.label``).

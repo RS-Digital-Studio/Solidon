@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import guides
-from app.ui.guide_finders import SPOOL, bind_button, first_parameter_label, spool_click
+from app.ui.guide_finders import MARKED, SPOOL, bind_button, first_parameter_label, spool_click
 from app.ui.guide_wheel import takes_wheel
 from app.ui.labels import RowCheckBox
 from app.ui.overlay import MARGIN, free_span
@@ -410,17 +410,8 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "parameters.first": _first_parameter,
     "parameters.first.label": first_parameter_label,
     "parameters.bind": bind_button,
-    "parts.save": _marked("parts.save"),
-    "filament.add": _marked("filament.add"),
-    "filament.profile": _marked("filament.profile"),
-    "filament.colour": _marked("filament.colour"),
     "toolbar.draw": _draw_button,
     "sketch.done": _sketch_done,
-    "feature.apply": _marked("feature.apply"),
-    "feature.in_view": _marked("feature.in_view"),
-    "feature.every": _marked("feature.every"),
-    "measure.reference": _marked("measure.reference"),
-    "measure.apply": _marked("measure.apply"),
     "search": _search_field,
     "toolbar.search": _toolbar_search,
     "progress.cancel": _progress_cancel,
@@ -438,7 +429,7 @@ _PLACES: Final = frozenset({"history.last", SPOOL})
 #: Anleitung, die erst beim Release scheitert.
 RESOLVED: Final[frozenset[str]] = (
     frozenset(_AREAS) | frozenset(_START) | frozenset(_PRINT) | frozenset(_FINDERS) | _PLACES
-)
+) | MARKED
 
 
 def widget_for(window: MainWindow, name: str) -> QWidget:
@@ -460,6 +451,8 @@ def widget_for(window: MainWindow, name: str) -> QWidget:
     finder = _FINDERS.get(name)
     if finder is not None:
         return finder(window)
+    if name in MARKED:
+        return _marked(name)(window)
     kind, _separator, rest = name.partition(":")
     if kind == "operation":
         button = window.selection_operations.button_for(rest)
