@@ -16,7 +16,7 @@ import shutil
 import sys
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -837,27 +837,75 @@ def _the_language_starts_at_the_source() -> Iterator[None]:
     set_key_platform("")
 
 
-#: **Was hier absichtlich NICHT zurückgesetzt wird: das Stylesheet.**
+#: **Das Aussehen der Anwendung wird zurückgegeben, nicht auf ein Ziel gesetzt.**
 #:
-#: ``apply_theme`` legt es über die *Anwendung*, und ``app.py`` tut das beim
-#: Start — der Kunde sieht die Oberfläche also nie ohne. Eine Fixture, die es
-#: nach jedem Test abräumt, stellte einen Zustand her, den es im Betrieb nicht
-#: gibt: Ein Test, der Abstände oder Innenmaße misst, bekäme Zahlen, die
-#: niemand je sieht.
-#:
-#: **Womit dieser Hinweis am 30.08.2026 begründet war, trug allerdings nicht.**
-#: Hier stand, die Parameterkarte messe ohne Stylesheet 258 und mit 270 gegen
-#: eine Zone von 260, ein Rücksetzen hätte also einen Kundenfehler zugedeckt.
-#: Beide Zahlen stammten aus einem Offscreen-Lauf, und dort hat Qt gar keine
-#: Schrift — am echten Bildschirm sind es 166 mit Stylesheet wie ohne. Der
-#: Hinweis bleibt, weil das Stylesheet Abstände wirklich verändert; die
-#: Kartenbreite ist nur kein Beleg dafür.
-#:
-#: Wer eine Rücksetzung baut, prüft deshalb zuerst: Setzt sie auf das zurück,
-#: was der Kunde hat, oder auf ein nacktes Nichts? Ein Thema, ein Stylesheet,
-#: ein geladenes Register gehören zur Betriebslage. Wer eine Breite oder ein
-#: Layout misst, stellt sie **her** (``apply_theme`` im Test), statt sie
-#: wegzuräumen.
+#: ``apply_theme`` legt Stil, Palette und Stylesheet über die *Anwendung*, und
+#: ``app.py`` tut das beim Start — der Kunde sieht die Oberfläche nie ohne. Eine
+#: Fixture, die es nach jedem Test auf „kein Thema“ abräumte, stellte einen
+#: Zustand her, den es im Betrieb nicht gibt. Die Fixture darunter tut das
+#: nicht: Sie gibt nur zurück, was der Test vorfand. Die Suite startet ohne
+#: Thema, und jeder Qt-Fall findet dieselbe Lage wie als erster seines
+#: Prozesses — die er in der Auswahl ohnehin haben kann. Wer eine Breite, eine
+#: Farbe oder ein Layout misst, stellt die Betriebslage weiter selbst **her**
+#: (``apply_theme`` im Test); nur hängt sein Ergebnis nicht mehr am Vorgänger.
+
+
+@pytest.fixture(autouse=True)
+def _the_application_look_stays_with_its_test() -> Iterator[None]:
+    """Stil, Palette, Stylesheet, Schrift und Thema gehen zurück, wie der Test sie fand.
+
+    Eine Fixture mit ``autouse``, die das dunkle Thema setzte und stehen ließ,
+    nahm jeden folgenden Fall im selben Prozess mit: Der Wortschatzfall von
+    ``test_guide_targets.py`` war allein grün und nach
+    ``test_measure_card_placement.py`` zeitweise rot. Dieselbe Sorte Zustand
+    wie Sprache und Einheit darüber, nur an der ``QApplication``. Geprüft in
+    ``test_suite_isolation.py``. Ohne Qt-Anwendung gibt es nichts zu halten.
+    """
+    widgets = sys.modules.get("PySide6.QtWidgets")
+    application = widgets.QApplication.instance() if widgets is not None else None
+    # ``instance()`` liefert auch eine reine ``QCoreApplication``; die hat kein
+    # Aussehen.
+    if widgets is None or not isinstance(application, widgets.QApplication):
+        yield
+        return
+    before = _application_look(application)
+    yield
+    if _application_look(application) == before:
+        return
+    from app.ui import theme
+
+    style, palette, sheet, font, marker, active = before
+    # Das Stylesheet zuerst: Solange eines gilt, meldet ``style()`` den
+    # Stylesheet-Stil ohne Namen, und der Vergleich darunter griffe ins Leere.
+    if application.styleSheet() != sheet:
+        application.setStyleSheet(sheet)
+    if application.style().name() != style:
+        assert application.setStyle(style) is not None, f"Stil {style!r} nicht herstellbar"
+    if application.palette() != palette:
+        application.setPalette(palette)
+    if application.font() != font:
+        application.setFont(font)
+    application.setProperty(theme._THEME_PROPERTY, marker)
+    theme._ACTIVE = active
+    assert _application_look(application) == before, "Aussehen nicht zurückgegeben"
+
+
+def _application_look(application: object) -> tuple[object, ...]:
+    """Was ``apply_theme``, ``apply_style`` und ``setFont`` an der Anwendung ändern."""
+    from PySide6.QtGui import QFont, QPalette
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui import theme
+
+    assert isinstance(application, QApplication)
+    return (
+        application.style().name(),
+        QPalette(application.palette()),
+        application.styleSheet(),
+        QFont(application.font()),
+        application.property(theme._THEME_PROPERTY),
+        theme.current_theme(),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -1313,6 +1361,27 @@ def qt_app() -> object:
     # Hauptfaden ab (RM-021), sonst verklemmt sich ein Arbeiter mit ihm.
     collect_in_main_thread(application)
     return application
+
+
+@pytest.fixture
+def record_trace(request: pytest.FixtureRequest) -> Callable[[str, object], None]:
+    """Befunddaten eines Falls an seinen Bericht — ``record_property`` ohne JUnit.
+
+    ``record_property`` schreibt nur in den JUnit-Bericht, und der ist in jedem
+    Lauf ``xunit2``: ``tools/run_suite_isolated.py`` und ``build.yml`` setzen
+    ``--junitxml`` ohne Familie, und pytest lehnt die Fixture dort mit einer
+    Warnung ab — unter ``filterwarnings = error`` ein Setup-Fehler. Die
+    Fensterauswahl ohne JUnit blieb grün, der Release-Job ``windows`` wäre an
+    jedem solchen Fall rot gewesen (RD-9). Hier wird jeder Wert ein eigener
+    Abschnitt des Berichts: Ein roter Fall zeigt ihn als „Captured trace
+    <name> call“, ein grüner mit ``-rP``. ``test_suite_isolation.py`` hält,
+    dass kein Test ``record_property`` anfordert.
+    """
+
+    def record(name: str, value: object) -> None:
+        request.node.add_report_section("call", f"trace {name}", str(value))
+
+    return record
 
 
 @pytest.fixture
