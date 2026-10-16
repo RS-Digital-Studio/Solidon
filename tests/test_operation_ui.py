@@ -7228,15 +7228,15 @@ def test_a_checkbox_row_answers_on_its_whole_width(qt_app: QApplication) -> None
 
         # Ein Doppelklick schaltet auf beiden Hälften der Zeile gleich oft —
         # das Kästchen zählt ihn als zweiten Druck, die Beschriftung also auch.
-        # Die echte Folge ist Druck, Loslassen, Doppelklick, Loslassen;
-        # ``QTest.mouseDClick`` allein schickt am Widget nur das dritte
-        # Ereignis, und danach schaltet nicht einmal das Kästchen.
+        # Die echte Folge ist Druck, Loslassen, Doppelklick, Loslassen
+        # (``qt_clicks.double_click``); ``QTest.mouseDClick`` allein
+        # schickt am Widget nur das dritte Ereignis, und danach schaltet nicht
+        # einmal das Kästchen.
         def double_click(target: QWidget, at: QPoint) -> int:
+            from tools.qt_clicks import double_click as customer_double_click
+
             before = len(toggles)
-            QTest.mousePress(target, Qt.MouseButton.LeftButton, pos=at)
-            QTest.mouseRelease(target, Qt.MouseButton.LeftButton, pos=at)
-            QTest.mouseDClick(target, Qt.MouseButton.LeftButton, pos=at)
-            QTest.mouseRelease(target, Qt.MouseButton.LeftButton, pos=at)
+            customer_double_click(target, at)
             return len(toggles) - before
 
         box.setEnabled(True)

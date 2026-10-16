@@ -1691,6 +1691,7 @@ def test_the_grip_moves_its_card_by_keyboard_and_returns_it_by_double_click(
     from PySide6.QtTest import QTest
 
     from app.ui.overlay import NUDGE_FAR, CardGrip, CardPlace
+    from tools.qt_clicks import double_click
 
     host, left, _right = _host_with_cards(qt_app)
     grip = CardGrip(host, "left", "Karte verschieben", left, corner=True)
@@ -1721,7 +1722,7 @@ def test_the_grip_moves_its_card_by_keyboard_and_returns_it_by_double_click(
         assert host.places == {"left": CardPlace("right"), "right": CardPlace("left")}
         assert grip.accessibleDescription() != before, "der Bildschirmleser hört die neue Lage"
 
-        QTest.mouseDClick(grip, Qt.MouseButton.LeftButton)
+        double_click(grip)
         qt_app.processEvents()
         assert host.places == {"left": CardPlace("left"), "right": CardPlace("right")}
 
