@@ -25,7 +25,7 @@ from typing import Any
 
 import pytest
 
-from app.core.paths import ISOLATED_KEYRING
+from app.core.paths import ISOLATED_KEYRING, LLM_KEY_VARIABLE
 from tools import native_binding, native_runs
 from tools.native_binding import RUNNER_FILES, SealError
 from tools.native_runs import (
@@ -81,7 +81,8 @@ def tree(tmp_path: Path) -> Path:
     (root / "app" / "core").mkdir()
     (root / "app" / "core" / "__init__.py").write_text("", encoding="utf-8")
     (root / "app" / "core" / "paths.py").write_text(
-        f"ISOLATED_KEYRING = {ISOLATED_KEYRING!r}\n", encoding="utf-8"
+        f"ISOLATED_KEYRING = {ISOLATED_KEYRING!r}\nLLM_KEY_VARIABLE = {LLM_KEY_VARIABLE!r}\n",
+        encoding="utf-8",
     )
     (root / "tests").mkdir()
     (root / "tests" / "test_x.py").write_text("X = 1\n", encoding="utf-8")

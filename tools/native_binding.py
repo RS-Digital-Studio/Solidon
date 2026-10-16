@@ -383,7 +383,7 @@ def enter(
             )
     # Der Schlüsselbund des Falls (RC-12, CS-36): die Quelle liegt in der gebundenen
     # Anwendung, gelesen erst, wenn sie aus der Wurzel kommt.
-    from app.core.paths import ISOLATED_KEYRING
+    from app.core.paths import ISOLATED_KEYRING, LLM_KEY_VARIABLE
 
     for name, value in ISOLATED_KEYRING.items():
         if os.environ.get(name) != value:
@@ -392,6 +392,14 @@ def enter(
                 "Starten Sie den Kindprozess nur über `tools/native_runs.py`; er setzt den"
                 " Schlüsselbund des Falls.",
             )
+    secrets = sorted(name for name in os.environ if name.upper().startswith(LLM_KEY_VARIABLE))
+    if secrets:
+        raise SealError(
+            f"{', '.join(secrets)} steht in der Umgebung: Der Fall läse den Chat-Schlüssel"
+            " des Nutzers (RC2-10).",
+            "Starten Sie den Kindprozess nur über `tools/native_runs.py`; er nimmt die"
+            " Variable aus der Umgebung des Falls.",
+        )
     if os.environ.get("PYSIDE6_OPTION_LAZY") != "0" or "PySide6" in sys.modules:
         raise SealError(
             "Der Paketeinstieg app.ui hat PySide6 geladen oder PYSIDE6_OPTION_LAZY nicht gesetzt.",

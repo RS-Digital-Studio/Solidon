@@ -53,7 +53,7 @@ def profile_writers(source: str) -> list[tuple[str, bool]]:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             text = _own_source(source, node)
             if PROFILE_NAMES.search(text) and WRITES.search(text):
-                found.append((node.name, "ISOLATED_KEYRING" in text))
+                found.append((node.name, "isolate_secrets(" in text))
     return found
 
 
@@ -73,17 +73,24 @@ def test_every_profile_isolation_in_the_tools_takes_the_keyring_too() -> None:
 
 
 def test_the_scan_sees_an_isolation_without_the_keyring() -> None:
-    """Gegenprobe: jede Bauart einer Umbiegung fällt ohne Schlüsselbund auf, mit ihm nicht."""
+    """Gegenprobe: jede Bauart einer Umbiegung fällt ohne Schlüsselbund auf, mit ihm nicht.
+
+    Den Schlüsselbund allein zu setzen genügt nicht mehr (RC2-10): Es zählt
+    ``isolate_secrets``, das auch den Chat-Schlüssel aus der Umgebung nimmt.
+    """
     planted = (
+        "def g(p):\n    os.environ.update(ISOLATED_KEYRING)\n"
+        "    for v in PROFILE_VARIABLES:\n        os.environ[v] = p\n"
         "def a(p):\n    for v in PROFILE_VARIABLES:\n        os.environ[v] = p\n"
         "def b(p):\n    env = {}\n    env['APPDATA'] = p\n    return env\n"
         "def c(p):\n    os.environ.update(dict.fromkeys(PROFILE_VARIABLES, p))\n"
         'def d(p):\n    for n, c in (("APPDATA", "r"),):\n        os.environ[n] = c\n'
-        "def e(p):\n    os.environ.update(ISOLATED_KEYRING)\n"
+        "def e(p):\n    isolate_secrets(os.environ)\n"
         "    for v in PROFILE_VARIABLES:\n        os.environ[v] = p\n"
         "def f():\n    return os.environ['APPDATA']\n"
     )
     assert profile_writers(planted) == [
+        ("g", False),
         ("a", False),
         ("b", False),
         ("c", False),
@@ -117,8 +124,13 @@ def test_a_tool_profile_hands_the_attrappe_to_its_children(
     for name in PROFILE_VARIABLES:
         monkeypatch.setenv(name, str(tmp_path / "vorher"))
     monkeypatch.setenv("PYTHON_KEYRING_BACKEND", "keyring.backends.fail.Keyring")
+    monkeypatch.setenv("SOLIDON3D_LLM_KEY_ANTHROPIC", "ausgedacht")
     module = importlib.import_module(f"tools.{tool}")
-    ask = "import keyring; t = type(keyring.get_keyring()); print(t.__module__ + '.' + t.__name__)"
+    ask = (
+        "import keyring, os; t = type(keyring.get_keyring());"
+        " print(t.__module__ + '.' + t.__name__,"
+        " sorted(n for n in os.environ if n.startswith('SOLIDON3D_LLM_KEY')))"
+    )
 
     def chosen() -> str:
         return subprocess.run(
@@ -132,9 +144,34 @@ def test_a_tool_profile_hands_the_attrappe_to_its_children(
 
     if tool == "check_print_equal":
         module._isolated(str(tmp_path / "profil"))
-        assert chosen() == "keyring.backends.null.Keyring"
+        assert chosen() == "keyring.backends.null.Keyring []"
         return
     bend = module._own_profile() if tool == "registry_dump" else module._isolate(tmp_path)
     with bend:
-        assert chosen() == "keyring.backends.null.Keyring"
+        assert chosen() == "keyring.backends.null.Keyring []"
     assert os.environ["PYTHON_KEYRING_BACKEND"] == "keyring.backends.fail.Keyring"
+    assert os.environ["SOLIDON3D_LLM_KEY_ANTHROPIC"] == "ausgedacht"
+
+
+def test_no_case_reads_the_chat_key_of_the_user_from_the_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RC2-10: Fallprozess (``isolate``, Umgebung von ``run``) und natives Kind ohne Chat-Schlüssel.
+
+    ``keys.source`` sagte sonst „environment“, und *Chat einrichten* hing an Daten
+    des Nutzers wie vor RC-12.
+    """
+    from app.core import paths
+    from app.core.backends import keys
+    from tools import file_acceptance, native_runs
+
+    assert keys.ENVIRONMENT_VARIABLE == paths.LLM_KEY_VARIABLE
+    monkeypatch.setenv(paths.LLM_KEY_VARIABLE, "ausgedacht")
+    monkeypatch.setenv(f"{paths.LLM_KEY_VARIABLE}_OPENAI", "ausgedacht")
+    child = native_runs.profile_environment(dict(os.environ), tmp_path / "profil")
+    assert not [name for name in child if name.startswith(paths.LLM_KEY_VARIABLE)]
+    for name in (*file_acceptance.PROFILE_VARIABLES, "PYTHON_KEYRING_BACKEND"):
+        monkeypatch.setenv(name, os.environ.get(name, ""))
+    file_acceptance.isolate(tmp_path / "fall")
+    monkeypatch.setattr(keys, "_keyring", lambda: None)  # nur die Umgebung zählt hier
+    assert keys.source("anthropic") == "none" and keys.read("anthropic") is None

@@ -68,9 +68,9 @@ def isolate(profile: Path) -> None:
         "XDG_CACHE_HOME",
     ):
         os.environ[variable] = str(profile)
-    from app.core.paths import ISOLATED_KEYRING
+    from app.core.paths import isolate_secrets
 
-    os.environ.update(ISOLATED_KEYRING)
+    isolate_secrets(os.environ)
 
 
 def working_set_mb() -> float:

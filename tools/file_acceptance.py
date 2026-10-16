@@ -351,9 +351,9 @@ def isolate(profile: Path) -> None:
     """Nutzerordner auf ``profile``, Schlüsselbund auf die Attrappe — vor ``import app``."""
     profile.mkdir(parents=True, exist_ok=True)
     os.environ.update(dict.fromkeys(PROFILE_VARIABLES, str(profile)))
-    from app.core.paths import ISOLATED_KEYRING  # nach den Ordnern: app liest sie
+    from app.core.paths import isolate_secrets  # nach den Ordnern: app liest sie
 
-    os.environ.update(ISOLATED_KEYRING)
+    isolate_secrets(os.environ)
 
 
 # --- Funktionsfälle (RM-737) -----------------------------------------------------
@@ -543,7 +543,7 @@ def menubar(out: Path) -> Path:
     Ein eigener Prozess, weil das Inventar selbst kein Fenster baut und ein
     Fenster im selben Prozess die Fälle danach nicht stören soll.
     """
-    from app.core.paths import ISOLATED_KEYRING as KEYRING
+    from app.core.paths import isolate_secrets
 
     out.mkdir(parents=True, exist_ok=True)  # cwd des Kindes (RC-10)
     target = out / "menubar.json"
@@ -551,7 +551,7 @@ def menubar(out: Path) -> Path:
         finished = subprocess.run(
             [sys.executable, str(Path(__file__).resolve()), "menubar", "--out", str(out)],
             cwd=out,
-            env={**os.environ, "PYTHONUTF8": "1", "QT_QPA_PLATFORM": "offscreen", **KEYRING},
+            env=isolate_secrets({**os.environ, "PYTHONUTF8": "1", "QT_QPA_PLATFORM": "offscreen"}),
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -944,7 +944,7 @@ def run(
     jedem Fall geprüft, die Frist des Falls höchstens die verbleibende Zeit.
     """
     sys.path.insert(0, str(ROOT))
-    from app.core.paths import ISOLATED_KEYRING as KEYRING
+    from app.core.paths import isolate_secrets
     from app.core.process import no_error_dialogs, process_group_options, terminate_process_tree
     from tools.function_cases import RESTART_EXIT, most_restarts, prediction_wait_s
 
@@ -1002,7 +1002,7 @@ def run(
                     stdout=stdout,
                     stderr=stderr,
                     cwd=folder,
-                    env={**os.environ, "PYTHONUTF8": "1", **KEYRING},
+                    env=isolate_secrets({**os.environ, "PYTHONUTF8": "1"}),
                     **process_group_options(no_window=True),
                 )
                 try:
