@@ -596,7 +596,6 @@ def test_cancelled_final_checks_publish_neither_cache_nor_completion(
 
     document, _history, registry = fit_document(profile, flush=flush)
     module = importlib.import_module("app.core.scene.evaluate")
-    original = getattr(module, finish)
     signal = CancelSignal()
     cache = ResultCache()
     progress = []
@@ -606,7 +605,15 @@ def test_cancelled_final_checks_publish_neither_cache_nor_completion(
         signal.cancel()
         return result
 
-    monkeypatch.setattr(module, finish, cancel)
+    # ``check_fits`` ist die Passungsprüfung aus ``fits`` unter neuem Namen (eine
+    # Kopfkopie, CS-11): Sie steht mit festem Text da, damit der erzeugte Schnitt
+    # Zugriff und Ersatz auf das Original umstellt.
+    if finish == "check_fits":
+        original = module.check_fits
+        monkeypatch.setattr(module, "check_fits", cancel)
+    else:
+        original = getattr(module, finish)
+        monkeypatch.setattr(module, finish, cancel)
     if flush and finish == "check_thin_walls":
         # Zwei bündige Quader tragen keine belegte Bohrungswand. Dieser
         # Prüfauftrag ist nachweislich unzutreffend und beginnt nicht.
