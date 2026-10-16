@@ -33,6 +33,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
+# Mit diesem Modul geladen, nicht erst beim ersten Speichern: Der Stand (:func:`stamp`) trägt
+# die Quelle von ``code_cache``, die rechnet (RR2-13). ``code_cache`` bezieht dieses Modul nur
+# in Funktionen.
+from tools import code_cache
+
 #: Bereiche, deren Module der Index als Ziele prüft (W2 und W5).
 INDEXED = ("app", "tools")
 #: Bereiche, deren Dateien gelesen werden; ``tests`` liefert Patch-Stellen und Importe.
@@ -1547,10 +1552,9 @@ _SOURCE = Path(__file__).read_bytes()
 
 #: Der Stand beim Import, nicht beim Bau: Ein Prozess, der den alten Code geladen hat, während
 #: die Datei schon neu ist, schrieb sonst alte Auszüge unter dem neuen Stand (gemessen: ein
-#: Lauf ohne ``import_reads`` unter dem Stand mit).
-_STAMP = hashlib.sha256(
-    _SOURCE + Path(__file__).with_name("code_cache.py").read_bytes()
-).hexdigest()
+#: Lauf ohne ``import_reads`` unter dem Stand mit). Ebenso ``code_cache``: dessen geladene
+#: Quelle, nicht die auf der Platte (RR2-13).
+_STAMP = hashlib.sha256(_SOURCE + code_cache._SOURCE).hexdigest()
 
 
 def stamp() -> str:
@@ -1563,15 +1567,11 @@ def load_cache(
 ) -> dict[str, tuple[str, Facts]]:
     """Die gespeicherten Auszüge je Pfad mit ihrem Inhaltshash; leer bei anderem Stand. Mit
     ``wanted`` (Pfad → Hash) nur die Auszüge, deren Inhalt noch so aussieht."""
-    from tools.code_cache import decode
-
-    return decode(path, current, wanted)
+    return code_cache.decode(path, current, wanted)
 
 
 def save_cache(path: Path, current: str, files: dict[str, tuple[str, Facts]]) -> None:
     """Über :func:`tools.code_cache.replace_atomically`; ein zweiter Prozess liest so nie eine
     halbe Datei. Hält ein anderer die Datei gerade offen, bleibt dessen Stand — seine Einträge
     sind nach Inhaltshash ebenso gültig, fehlende zieht der nächste Bau nach."""
-    from tools.code_cache import encode, replace_atomically
-
-    replace_atomically(path, encode(current, files))
+    code_cache.replace_atomically(path, code_cache.encode(current, files))

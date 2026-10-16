@@ -35,30 +35,48 @@ from tools.code_index import Index
 #: Namen, die es in der Attrappe nicht gibt — ``exists`` muss auch dort gleich antworten.
 ABSENT = ("FEHLT", "__path__", "__name__", "sub")
 
-#: Der Stand des Auflösers in einer Kopie von ``tools/code_*.py`` (``argv[1]``).
+#: Die Stände beider Speicher in einer Kopie von ``tools/code_*.py`` (``argv[1]``): Ergebnisse
+#: (``code_store``) und Auszüge (``code_facts``).
 STAMPING = """
 import sys
 
 sys.path.insert(0, sys.argv[1])
-from tools import code_store
+from tools import code_facts, code_store
 
-print(code_store.stamp())
+print(code_store.stamp(), code_facts.stamp())
 """
 
-#: Ein Prozess, der den Auflöser lädt wie die Sammlung, dessen Quelle danach auf der Platte
-#: wechselt und der erst dann den Speicher für den Baum ``argv[2]`` schreibt (RR2-1).
+#: Ein Prozess, der den Auflöser lädt wie die Sammlung (``code_index``; ``code_store`` erst mit
+#: dem ersten ``shared()``). Die Quelle ``argv[3]`` wechselt auf der Platte zweimal: vor dem
+#: Laden von ``code_store`` (RR2-1, RR2-13; nicht für ``code_store.py`` selbst, das dann erst
+#: geladen wird) und nachdem er beide Speicher für den Baum ``argv[2]`` geschrieben hat — mit
+#: anderen Annotationen, die ein Leser der Platte als anderes Format verstünde (RR2-13). Danach
+#: sagt er, ob der Stand der Auszüge zu den geladenen Quellen passt und ob er seine eigenen
+#: Speicher noch liest.
 RACING = """
+import hashlib
 import sys
 from pathlib import Path
 
 sys.path.insert(0, sys.argv[1])
 from tools import code_index
 
-changed = Path(sys.argv[1], "tools", "code_values.py")
-changed.write_text(changed.read_text(encoding="utf-8") + "\\n# Fassung B\\n", encoding="utf-8")
-from tools import code_store
+changed = Path(sys.argv[1], "tools", sys.argv[3])
+if changed.name != "code_store.py":
+    changed.write_text(changed.read_text(encoding="utf-8") + "\\n# Fassung B\\n", encoding="utf-8")
+from tools import code_cache, code_facts, code_store
 
-code_store.load(Path(sys.argv[2]))
+root = Path(sys.argv[2])
+code_store.load(root)
+text = changed.read_text(encoding="utf-8")
+changed.write_text(text.replace(": str\\n", ": bytes\\n") + "\\n# Fassung C\\n", encoding="utf-8")
+loaded = hashlib.sha256(code_facts._SOURCE + code_cache._SOURCE).hexdigest()
+tree = code_store.tree_key(code_store.tree_digests(root))
+print(
+    code_facts.stamp() == loaded,
+    code_store.read(root / code_store.RESULT, tree) is not None,
+    len(code_cache.decode(root / code_index.CACHE, code_facts.stamp())),
+)
 """
 
 
@@ -281,9 +299,9 @@ def _resolver_copy(target: Path) -> Path:
     return target
 
 
-def _stamp_of(copy: Path) -> str:
+def _run(copy: Path, script: str, *args: str) -> str:
     done = subprocess.run(
-        [sys.executable, "-I", "-c", STAMPING, str(copy)],
+        [sys.executable, "-I", "-c", script, str(copy), *args],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -295,29 +313,39 @@ def _stamp_of(copy: Path) -> str:
     return done.stdout.strip()
 
 
-def test_a_process_writes_under_the_stamp_of_the_code_it_loaded(tmp_path: Path) -> None:
-    """RR2-1: Wechselt eine Quelle des Auflösers auf der Platte, nachdem ein Prozess ihn geladen
-    hat, rechnet er mit dem alten Code und muss unter dessen Stand schreiben. Unter dem neuen
-    gälten seine Antworten für jeden späteren Prozess mit dem neuen Code, bis sich der Baum
-    ändert."""
+def _stamp_of(copy: Path) -> tuple[str, str]:
+    """Die Stände von Ergebnis- und Zwischenspeicher, die ein frischer Prozess mit dieser Kopie
+    rechnet."""
+    store, facts = _run(copy, STAMPING).split()
+    return store, facts
+
+
+@pytest.mark.parametrize("source", sorted(code_store.SOURCES))
+def test_a_process_writes_under_the_stamp_of_the_code_it_loaded(
+    tmp_path: Path, source: str
+) -> None:
+    """RR2-1, RR2-13: Wechselt eine Quelle des Auflösers auf der Platte, nachdem ein Prozess
+    ihn geladen hat, rechnet er mit dem alten Code und muss unter dessen Stand schreiben —
+    beide Speicher. Unter dem neuen gälten seine Antworten für jeden späteren Prozess mit dem
+    neuen Code, bis sich der Baum ändert. Und er liest weiter, was er selbst schrieb: Ein Leser
+    der Platte verwürfe es oder deutete es nach einem anderen Format."""
     copy = _resolver_copy(tmp_path / "werkzeug")
     root = _tree(tmp_path / "baum")
     loaded = _stamp_of(copy)
-    done = subprocess.run(
-        [sys.executable, "-I", "-c", RACING, str(copy), str(root)],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-        timeout=300,
-        cwd=copy,
+    answer = _run(copy, RACING, str(root), source)
+    assert _stamp_of(copy)[0] != loaded[0], "die geänderte Quelle muss den Stand ändern"
+    for path, magic, stamp in (
+        (code_store.RESULT, code_store.MAGIC, loaded[0]),
+        (code_index.CACHE, code_cache.MAGIC, loaded[1]),
+    ):
+        header = (root / path).read_bytes().split(b"\n", 2)
+        assert header[0] + b"\n" == magic
+        assert header[1].decode("ascii") == stamp, f"{path.name} unter dem Stand der Platte"
+    files = len(code_store.tree_digests(root))
+    assert answer == f"True True {files}", (
+        "Stand der Auszüge passt zu den geladenen Quellen, Ergebnisse und Auszüge lesbar",
+        answer,
     )
-    assert done.returncode == 0, done.stderr
-    on_disk = _stamp_of(copy)
-    assert on_disk != loaded, "die geänderte Quelle muss den Stand ändern"
-    header = (root / code_store.RESULT).read_bytes().split(b"\n", 3)
-    assert header[0] + b"\n" == code_store.MAGIC
-    assert header[1].decode("ascii") == loaded, "geschrieben unter dem Stand der Platte"
 
 
 def test_the_stamp_covers_every_source_of_the_resolver() -> None:

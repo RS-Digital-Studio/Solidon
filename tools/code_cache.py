@@ -352,12 +352,12 @@ _SCHEMAS: dict[str, Records] = {}
 
 
 def _schema(current: str) -> Records:
-    """Die Datensätze von ``code_facts``; nur wenn dessen Quelle auf der Platte zum Stand passt.
-
-    Gelesen und gehasht wird die Quelle bei jedem Aufruf, geparst nur einmal je Inhalt."""
+    """Die Datensätze von ``code_facts``, aus der Quelle, die der Prozess geladen hat — nicht
+    der auf der Platte, die sich seitdem geändert haben kann (RR2-13); nur wenn sie zum Stand
+    passt. Geparst einmal je Inhalt."""
     from tools import code_facts
 
-    source = Path(code_facts.__file__).read_bytes()
+    source = code_facts._SOURCE
     if hashlib.sha256(source + _SOURCE).hexdigest() != current:
         raise ValueError("Die Quelle des Auszugs passt nicht zum Stand")
     key = hashlib.sha256(source).hexdigest()
@@ -437,12 +437,12 @@ def _stamp() -> str:
 
 
 def records_of(*modules: ModuleType) -> Records:
-    """Die geprüften Datensätze der NamedTuples und Datenklassen dieser Module, je aus dem
-    eigenen Quelltext gelesen — für einen weiteren Speicher derselben Bauart."""
+    """Die geprüften Datensätze der NamedTuples und Datenklassen dieser Module, je aus der
+    Quelle, die das Modul beim Import las (``_SOURCE``; die Platte kann seitdem eine andere
+    tragen, RR2-13) — für einen weiteren Speicher derselben Bauart."""
     found: Records = {}
     for module in modules:
-        source = Path(str(module.__file__)).read_bytes()
-        found.update(_records(vars(module), source))
+        found.update(_records(vars(module), module._SOURCE))
     return found
 
 

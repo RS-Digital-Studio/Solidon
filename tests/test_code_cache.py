@@ -318,9 +318,9 @@ def test_changed_schema_source_invalidates_imported_cache(
     files = _stored()
     cache.write_bytes(code_cache.encode(code_facts.stamp(), files))
     assert code_cache.decode(cache, code_facts.stamp()) == files
-    changed_source = tmp_path / "code_facts.py"
-    changed_source.write_bytes(Path(code_facts.__file__).read_bytes() + b"\n# anderer Stand\n")
-    monkeypatch.setattr(code_facts, "__file__", str(changed_source))
+    # Die Datensätze kommen aus der geladenen Quelle (RR2-13): Passt sie nicht zum Stand des
+    # Speichers, wird nichts gedeutet.
+    monkeypatch.setattr(code_facts, "_SOURCE", code_facts._SOURCE + b"\n# anderer Stand\n")
     assert code_cache.decode(cache, code_facts.stamp()) == {}
 
 
