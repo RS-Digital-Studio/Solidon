@@ -38,6 +38,12 @@ DRAG_TICK_S: Final = 1 / 60
 #: wie der Kunde sie sieht, solange er die Taste hält.
 HELD_PICTURE: Final = "05-zug-gehalten"
 
+#: Wie lange der Zug vor :data:`HELD_PICTURE` auf das Bild der letzten Bewegung
+#: wartet (Sekunden): Die Aufnahme hält den Hauptfaden an und fiele sonst in die
+#: Zeit bis zum nächsten Bild, die Z1 misst (RC2-2). Kommt bis dahin keins, ist
+#: das selbst ein Fund an Z1.
+HELD_FRAME_WAIT_S: Final = 0.5
+
 #: Die Meldungen der Ansicht während eines Zugs am Griff: Geist, Zahl am Zeiger,
 #: verschobener Körper. Kommt keine, hat der Zug den Griff nicht gefasst.
 DRAG_SIGNALS: Final[tuple[str, ...]] = (
@@ -177,7 +183,8 @@ class GesturePhases:
         Der Griff ist das Ziel der Zeile — oder ``spec.drag``, wenn erst die
         Handlung der Zeile ihn zeigt (*Zum Langloch ziehen*: ``handle:slot.end``);
         dann geht der Weg bis zur Handlung, und der Zug folgt. Vor dem Loslassen
-        nimmt der Fall das Fenster auf (:data:`HELD_PICTURE`, FD-73). Außer im
+        nimmt der Fall das Fenster auf (:data:`HELD_PICTURE`, FD-73), nach dem
+        Bild der letzten Bewegung (:data:`HELD_FRAME_WAIT_S`). Außer im
         Satz ``basis`` zieht nur eine Zeile mit ``spec.drag`` (``dunkel``: das
         Griffmaß im dunklen Thema).
         """
@@ -225,7 +232,11 @@ class GesturePhases:
                 until = time.perf_counter() + DRAG_TICK_S
                 while time.perf_counter() < until:
                     self.application.processEvents()
-            # Gehalten, noch nicht losgelassen: Griffmaß und Geist im Bild (FD-73).
+            # Gehalten, noch nicht losgelassen: Griffmaß und Geist im Bild (FD-73) —
+            # erst nach dem Bild der letzten Bewegung, sonst misst Z1 die Aufnahme.
+            until = time.perf_counter() + HELD_FRAME_WAIT_S
+            while self.frames.first_after(moves[-1]) is None and time.perf_counter() < until:
+                self.application.processEvents()
             self.picture(HELD_PICTURE)
             QTest.mouseRelease(
                 hit, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, local

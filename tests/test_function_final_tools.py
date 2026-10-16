@@ -149,6 +149,7 @@ def _drag_flow(qt_app: Any, row_set: str, spec: dict[str, Any]) -> tuple[Any, li
     from PySide6.QtWidgets import QWidget
 
     from tools import function_bench
+    from tools.function_capture import FrameCounter
 
     events: list[str] = []
 
@@ -173,6 +174,8 @@ def _drag_flow(qt_app: Any, row_set: str, spec: dict[str, Any]) -> tuple[Any, li
     flow.variant = function_setup.Variant.of({"set": row_set, "theme": "dark"})
     flow.data = {"images": [], "unmeasured": {}}
     flow.frames_wrapped = True
+    flow.frames = FrameCounter()
+    flow.reference_factor = 1.0
     flow.ports = SimpleNamespace(
         next_click=lambda name: click,
         centre=lambda rect: rect.center(),
@@ -206,6 +209,61 @@ def test_the_held_drag_is_pictured_before_the_release(qt_app: Any) -> None:
     plain, plain_events = _drag_flow(qt_app, "dunkel", {})
     plain.phase_drag()
     assert plain_events == [] and plain.data["unmeasured"] == {}
+
+
+def test_the_held_picture_does_not_fall_into_the_frame_time_of_the_drag(qt_app: Any) -> None:
+    """RC2-2: Z1 misst je Bewegung die Zeit bis zum nächsten Bild — nicht die Aufnahme.
+
+    Die Ansicht malt 40 ms nach der jeweils letzten Bewegung, länger als der Takt
+    des Zugs (16,7 ms); die Aufnahme hält den Hauptfaden 120 ms an. Vorher nahm
+    der Zug das Bild vor dem Bild der letzten Bewegung auf, und deren Zeit trug
+    die Aufnahme (über 120 ms, Z1 „fund“). Jetzt wartet er auf dieses Bild.
+    """
+    import time
+
+    from PySide6.QtCore import QEvent, QObject, QTimer, Signal
+
+    class View(QObject):
+        slotDragged = Signal(float)  # noqa: N815 - Name der Ansicht
+
+    flow, events = _drag_flow(qt_app, "basis", {"drag": "handle:slot.end"})
+    view = View()
+    flow.window = SimpleNamespace(viewport=view)
+    renderer = SimpleNamespace(render=lambda: None)
+    assert flow.frames.wrap(renderer)
+    picture_s = 0.12
+    moved: list[float] = []
+
+    painting = QTimer()
+    painting.setSingleShot(True)
+    painting.setInterval(40)
+    painting.timeout.connect(renderer.render)
+
+    class Renderer(QObject):
+        def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qts Name
+            if event.type() == QEvent.Type.MouseMove:
+                moved.append(time.perf_counter())
+                view.slotDragged.emit(1.0)
+                painting.start()
+            return False
+
+    grip = flow._keep[0]
+    painter = Renderer(grip)
+    grip.installEventFilter(painter)
+    taken: list[float] = []
+
+    def picture(label: str) -> None:
+        taken.append(time.perf_counter())
+        time.sleep(picture_s)  # grabWindow und PNG eines großen Fensters, Hauptfaden
+        events.append(label)
+
+    flow.picture = picture
+    flow.phase_drag()
+    raw = flow.data["frames"]["raw_drag_ms"]
+    assert len(raw) == len(moved) and taken, (raw, taken)
+    frame = flow.frames.first_after(moved[-1])
+    assert frame is not None and frame <= taken[0], "aufgenommen vor dem Bild der letzten Bewegung"
+    assert raw[-1] is not None and raw[-1] < picture_s * 1000.0, raw
 
 
 def test_the_slot_row_names_its_grip() -> None:
