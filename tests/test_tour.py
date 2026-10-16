@@ -11,7 +11,7 @@ Operation), fällt genau das hier um — nicht erst vor einem neuen Nutzer.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING
 
 import pytest
@@ -28,6 +28,25 @@ from app.i18n.catalog import install_language
 
 if TYPE_CHECKING:
     from app.ui.tour import TourPanel
+
+
+@pytest.fixture(autouse=True)
+def _measured_in_the_bundled_font(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Jeder Fall mit Fenster misst in der gebündelten Schrift (CS-40).
+
+    Die Ersatzschrift misst je nach Vorgänger im Prozess anders: Nach einem
+    Fall, der DejaVu geladen und wieder entfernt hat
+    (``test_placement_dimensions.py``), war die Liste 216 statt 214 Punkte
+    breit und ein Schritt 84 statt über 86 hoch (``tests.md``, „Offscreen gibt
+    es keine Schrift“).
+    """
+    if "qt_app" not in request.fixturenames:
+        yield
+        return
+    from tests.bundled_fonts import bundled_font
+
+    with bundled_font(request.getfixturevalue("qt_app"), 9):
+        yield
 
 
 def test_every_example_has_a_tour() -> None:
@@ -833,7 +852,7 @@ def test_a_step_taller_than_the_card_shows_its_beginning(
     longest = max(range(len(tour.steps)), key=lambda at: len(str(tour.steps[at].text)))
     panel = TourPanel(session)
     try:
-        panel.resize(220, 240)
+        panel.resize(220, 200)
         panel.show()
         panel.start(example, tour)
         panel._current = longest
@@ -853,7 +872,7 @@ def test_a_step_taller_than_the_card_shows_its_beginning(
         panel.resize(220, 2000)
         for _ in range(6):
             QApplication.processEvents()
-        panel.resize(220, 240)
+        panel.resize(220, 200)
         for _ in range(6):
             QApplication.processEvents()
         assert host.mapTo(viewport, QPoint(0, 0)).y() == 0, "nach dem Verkleinern steht er oben"

@@ -22,6 +22,7 @@ from app.core import bootstrap
 from app.core.registry import REGISTRY
 from app.ui.style import apply_style
 from app.ui.theme import apply_theme
+from tests.bundled_fonts import bundled_font
 
 #: Grundschrift unter Windows und die große Schrift aus den Einstellungen.
 POINTS = (9, 16)
@@ -160,7 +161,9 @@ def test_a_font_change_keeps_every_line(qt_app: QApplication) -> None:
     from app.ui.op_dialog import OperationDialog
 
     bootstrap.load_operations()
-    with _font(qt_app, POINTS[0]):
+    # Mit der gebündelten Schrift: Die Ersatzschrift misst je nach Vorgänger im
+    # Prozess anders (Review 2 F2a/D, D7; CS-40).
+    with bundled_font(qt_app, POINTS[0]):
         dialog = OperationDialog(REGISTRY.get("drill_hole"), {"obj_1": "Quader"}, None)
         try:
             dialog.show()
@@ -191,27 +194,29 @@ def test_a_caption_follows_its_own_font_both_ways(qt_app: QApplication) -> None:
 
     from app.ui.wrapped_caption import keep_whole_lines
 
-    host = QWidget()
-    try:
-        layout = QVBoxLayout(host)
-        label = QLabel("Durchmesser der Aufweitung am Grund der Bohrung", host)
-        label.setWordWrap(True)
-        label.setFixedWidth(90)
-        layout.addWidget(label)
-        keep_whole_lines(label)
-        host.show()
-        _settle(qt_app)
-        first = _need(label)
-        assert first > label.fontMetrics().lineSpacing(), "bricht nicht um"
-        for points in (POINTS[1] * 2, POINTS[0]):
-            font = QFont(label.font())
-            font.setPointSize(points)
-            label.setFont(font)
+    with bundled_font(qt_app, POINTS[0]):
+        host = QWidget()
+        try:
+            layout = QVBoxLayout(host)
+            label = QLabel("Durchmesser der Aufweitung am Grund der Bohrung", host)
+            label.setWordWrap(True)
+            label.setFixedWidth(90)
+            layout.addWidget(label)
+            keep_whole_lines(label)
+            host.show()
             _settle(qt_app)
-            assert label.minimumHeight() == _need(label), (points, label.minimumHeight())
-        assert label.minimumHeight() <= first + 1
-    finally:
-        host.deleteLater()
+            first = _need(label)
+            assert first > label.fontMetrics().lineSpacing(), "bricht nicht um"
+            for points in (POINTS[1] * 2, POINTS[0]):
+                font = QFont(label.font())
+                font.setPointSize(points)
+                label.setFont(font)
+                _settle(qt_app)
+                assert label.minimumHeight() == _need(label), (points, label.minimumHeight())
+            assert label.minimumHeight() <= first + 1
+        finally:
+            host.hide()
+            host.deleteLater()
 
 
 @contextmanager
