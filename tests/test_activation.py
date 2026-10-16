@@ -24,6 +24,7 @@ import pytest
 from app.core import activation
 from app.core.activation import certificate, ed25519, integrity, key, store
 from app.core.errors import DeviceActivationRequired, InstallationDamaged, LicenceRequired
+from tests import source_tree
 from tools.make_licence_keys import main as make_licence_keys
 from tools.make_licence_keys import make_key, public_key, sign
 
@@ -1208,7 +1209,9 @@ def test_a_read_only_profile_keeps_the_checked_key_only_for_the_session(
 
 
 def _sources() -> list[Path]:
-    return sorted(Path(activation.__file__).parent.glob("*.py"))
+    """Jedes Modul des Prüfpakets, auch eines in einem Unterordner (W4) — dass das
+    Paket flach bleiben muss, hält ``test_licence_build.py``, nicht diese Auswahl."""
+    return source_tree.python_files("app/core/activation")
 
 
 def _imported_modules(source: Path) -> set[str]:
@@ -1238,7 +1241,7 @@ def test_the_activation_never_asks_the_network() -> None:
     for source in _sources():
         for module in _imported_modules(source):
             root = module.split(".")[0]
-            assert root not in forbidden, f"{source.name} reaches for {module}"
+            assert root not in forbidden, f"{source_tree.relative(source)} reaches for {module}"
 
 
 def test_there_is_no_switch_to_flip() -> None:
@@ -1255,6 +1258,7 @@ def test_there_is_no_switch_to_flip() -> None:
     Ablageort und kein Schalter.
     """
     for source in _sources():
+        where = source_tree.relative(source)
         tree = ast.parse(source.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             reached = (
@@ -1264,14 +1268,14 @@ def test_there_is_no_switch_to_flip() -> None:
                 if isinstance(node, ast.Name)
                 else ""
             )
-            assert reached not in {"environ", "getenv"}, f"{source.name} reads the environment"
+            assert reached not in {"environ", "getenv"}, f"{where} reads the environment"
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                assert all(alias.name != "os" for alias in node.names), source.name
+                assert all(alias.name != "os" for alias in node.names), where
             elif isinstance(node, ast.ImportFrom) and node.module == "os":
                 # Nur die Ablage braucht Dateisynchronisierung und POSIX-Erkennung.
-                assert source.name == "store.py", source.name
-                assert {alias.name for alias in node.names} <= {"fsync", "name"}, source.name
+                assert where == "app/core/activation/store.py", where
+                assert {alias.name for alias in node.names} <= {"fsync", "name"}, where
 
 
 def test_an_activation_document_is_read_through_the_json_boundary() -> None:

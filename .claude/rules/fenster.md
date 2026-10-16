@@ -242,12 +242,8 @@ Stellen halten das, beide sind nötig:
   verwenden denselben Treffer.
 - Befundklick (§2.7): Ort → Kameraflug und `mark_finding`; sonst Körper → Auswahl
   und Rahmen (`reset_camera`), neues Projekt → `frame_next_scene`;
-  sonst `op_id` → `HistoryPanel.point_at`. Ortsmarken verwenden `FINDING_COLOUR`
-  vor Material, Abstand als Radius, Titelgrund in Kamera-Oben-Richtung und
-  `Finding.outline` als Rand (`ansicht.md`, „Was gefärbt wird“). Marke nicht
-  nach vorn ziehen; nur Beschriftung `always_visible`. Szenenorte gehen durch
-  `view_point_of`, Kartenorte kommen in `_map_ready`. Mehrschritt-Transaktionen
-  tragen am Gruppenknoten nur `OPS_ROLE`.
+  sonst `op_id` → `HistoryPanel.point_at`. Ortsmarken: `ansicht.md`, „Was
+  gefärbt wird“, Einzelheiten in `regel-fenster.md`.
 
 ## Das Merkmalfenster
 

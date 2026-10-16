@@ -46,7 +46,13 @@ from tools.move_compare import (
 )
 from tools.move_cut import Target
 from tools.move_edits import Edit
-from tools.move_forms import annotation_names, attribute_kind, is_annotation
+from tools.move_forms import (
+    REPORTED_QUERIES,
+    annotation_names,
+    attribute_kind,
+    is_annotation,
+    reported_calls,
+)
 from tools.move_refs import AlreadyAppliedError, Context, FileRewrite, quoted
 from tools.move_source import (
     AREAS,
@@ -644,6 +650,14 @@ class ModulePlanner:
             for ref in self.ctx.index.references(self.src, name):
                 if ref.path == self.path or ref.kind == "patch":
                     continue
+                if ref.kind.startswith("script:"):
+                    # Im Text eines Skripts für ``python -c`` (CS-18): Umschreiben kann es nur,
+                    # wer den Text baut; Import oder Attribut ist es dort schon (RR2-7).
+                    self.ctx.problem(
+                        f"{ref.path}:{ref.line}: Skript für python -c liest {self.src}.{name} — "
+                        f"vor dem Schnitt im Skripttext auf {module}.{new_name} umschreiben"
+                    )
+                    continue
                 rewrite = self.ctx.rewrite(ref.path)
                 where = (ref.line, ref.col, self.src, name, module, new_name, rule)
                 if ref.kind == "from":
@@ -651,7 +665,9 @@ class ModulePlanner:
                 elif ref.kind in ("attribute", "store", "delete"):
                     # Ohne Zugriff über das Modul: ein Lazy-Export, den _lazy_exports umschreibt.
                     rewrite.retarget_attribute(*where)
-                elif ref.kind == "getattr":
+                elif ref.kind in REPORTED_QUERIES:
+                    # ``getattr`` (auch mit Vorgabe) und ``hasattr``, auch über einen Alias
+                    # derselben Datei: dieselbe Stelle, das Modul wird das Zielmodul.
                     rewrite.retarget_getattr(*where)
                 else:
                     self.ctx.problem(
@@ -891,22 +907,26 @@ class ModulePlanner:
             rewrite.replace(first, text, "Patch-Ziel folgt dem Namen")
 
     def _attribute_calls(self) -> None:
-        """``hasattr(M, "N")``, ``setattr``/``delattr`` und jeder dieser Aufrufe über einen
-        Alias (``has = hasattr``, ``builtins.hasattr``) fragen danach das Zielmodul — der
-        Auflöser zählt nur ``getattr(M, "N")`` als Bezug, ohne Umschreiben antworteten die
-        übrigen still anders (Review 2, RM-M20). Erkannt über ``tools/move_forms.py``."""
+        """Was der Auflöser nicht als Bezug nennt, fragt nach dem Schnitt sonst still das alte
+        Modul (Review 2, RM-M20): ``setattr``/``delattr`` und ein ``getattr``/``hasattr`` über
+        einen Alias aus einem anderen Modul. ``getattr``/``hasattr`` selbst und über einen Alias
+        derselben Datei nennt er (CS-27); die stellt :meth:`_references` um, hier nicht noch
+        einmal (:func:`tools.move_forms.reported_calls`). Erkannt über ``tools/move_forms.py``."""
         moved = self._moved()
         calls = self.ctx.calls()
+        reported = {name: reported_calls(self.ctx.index, self.src, name) for name in moved}
         for path in self._files(tuple(calls.names)):
             source = self.ctx.source(path)
             for found in calls.every(path, source.tree):
                 name = found.fixed
-                if name not in moved or (found.plain and found.kind == "getattr"):
+                if name is None or name not in moved:
+                    continue
+                node = found.call
+                if (path, node.lineno, node.col_offset) in reported[name]:
                     continue
                 if not self.ctx.is_module(path, found.target, self.src):
                     continue
                 module, new_name = moved[name]
-                node = found.call
                 self.ctx.rewrite(path).retarget_getattr(
                     node.lineno, node.col_offset, self.src, name, module, new_name, "verschoben"
                 )

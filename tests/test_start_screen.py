@@ -994,9 +994,21 @@ def test_the_wide_layout_starts_only_when_a_third_column_has_room(screen: StartS
 
 
 def test_two_columns_start_only_when_both_tiles_and_the_gap_fit(screen: StartScreen) -> None:
-    """Die Rasterrechnung enthält die echte Fuge und gewährt der Spalte den Raum."""
-    from app.ui.style import WIDE
+    """Die Rasterrechnung enthält die echte Fuge und gewährt der Spalte den Raum.
 
+    In der Betriebslage, mit Thema und Stilblatt: Die Umschaltgrenze hält
+    :data:`~app.ui.style.WIDE` für den Rollbalken frei, den das Stilblatt
+    schmaler macht. Ohne Stilblatt zeichnet Fusion unter macOS offscreen einen
+    Balken von 18 Punkten, und im ersten Umbruch nach dem Umschalten stand er
+    noch: zwei Kacheln zu 419 (CI-Lauf 38781742486).
+    """
+    from app.ui.style import WIDE, apply_style
+    from app.ui.theme import apply_theme
+
+    application = QApplication.instance()
+    assert isinstance(application, QApplication)
+    apply_theme(application, "light")
+    apply_style(application, "light")
     outer = 4 * WIDE
     screen.show()
     screen.resize(MEDIUM_LAYOUT_MIN_WIDTH + outer - 1, 900)

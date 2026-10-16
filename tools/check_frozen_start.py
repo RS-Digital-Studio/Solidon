@@ -55,7 +55,7 @@ if str(ROOT) not in sys.path:
 
 from app.branding import APP_NAME, APP_VERSION  # noqa: E402
 from app.core.log import fatal_records  # noqa: E402
-from app.core.paths import PROFILE_VARIABLES  # noqa: E402
+from app.core.paths import PROFILE_VARIABLES, isolate_secrets  # noqa: E402
 from app.ui.start_check import FORMAT, REPORT_VARIABLE, SECONDS  # noqa: E402
 from tools.check_frozen_helper import application, image_of, is_the_application  # noqa: E402
 
@@ -144,6 +144,7 @@ def environment_for(args: argparse.Namespace, report: Path, profile: Path) -> di
     if not args.flatpak:
         for name in PROFILE_VARIABLES:
             env[name] = str(profile)
+    isolate_secrets(env)  # Schlüsselbund und Chat-Schlüssel des Nutzers bleiben ungefragt.
     # Der Runner hat kein FUSE; das AppImage packt sich dann selbst aus.
     if args.executable and Path(args.executable).suffix == ".AppImage":
         env["APPIMAGE_EXTRACT_AND_RUN"] = "1"

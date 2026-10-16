@@ -12,7 +12,6 @@ import os
 import plistlib
 import re
 import shlex
-import subprocess
 import sys
 import textwrap
 from itertools import pairwise
@@ -22,6 +21,7 @@ from typing import Final
 import pytest
 
 from tests.helpers import bash_executable
+from tests.process_helpers import run_bounded
 from tests.workflow_helpers import job_block
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -462,7 +462,7 @@ def _run_fetch(tmp_path: Path, fetch: str, codes: str, checksum: str) -> tuple[i
         "CALLS": calls.as_posix(),
         "CODES": queue.as_posix(),
     }
-    finished = subprocess.run(
+    finished = run_bounded(
         [str(bash), script.as_posix()],
         env=environment,
         capture_output=True,

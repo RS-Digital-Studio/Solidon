@@ -32,7 +32,6 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QAbstractButton,
     QAbstractItemView,
-    QAbstractScrollArea,
     QApplication,
     QDialog,
     QDialogButtonBox,
@@ -52,6 +51,17 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import guides
+from app.ui.guide_finders import (
+    MARKED,
+    MARKED_KINDS,
+    PLACE_CLICKS,
+    PLACE_KINDS,
+    active_sketch_panel,
+    bind_button,
+    first_parameter_label,
+    place_click,
+)
+from app.ui.guide_wheel import takes_wheel
 from app.ui.labels import RowCheckBox
 from app.ui.overlay import MARGIN, free_span
 
@@ -76,6 +86,19 @@ def _drop_area(window: MainWindow) -> QWidget:
     return area
 
 
+#: Der Wrapper des modalen Dialogs bleibt gehalten: Gab Python ihn frei, verfielen die
+#: Wrapper seiner Kinder, und der Hauptknopf des Speicherdialogs war tot (FD-175).
+#: Ebenso das Fenster, in dem die Probe zuletzt traf (:func:`widget_under`).
+_HELD: list[QWidget] = []
+_PROBED: list[QWidget] = []
+
+
+def release_held() -> None:
+    """Gibt die gehaltenen Fenster frei — am Ende einer Fläche und eines Falls (RC-11)."""
+    _HELD.clear()
+    _PROBED.clear()
+
+
 def _open_dialog(window: MainWindow) -> QWidget:
     """Der offene Operationsdialog, sonst der Dialog, der gerade modal läuft."""
     dialog = window._op_dialog
@@ -84,6 +107,7 @@ def _open_dialog(window: MainWindow) -> QWidget:
     modal = QApplication.activeModalWidget()
     if modal is None:
         raise MissingTargetError("dialog: es ist kein Dialog offen")
+    _HELD[:] = [modal]
     return modal
 
 
@@ -177,10 +201,8 @@ def _draw_button(window: MainWindow) -> QWidget:
 
 
 def _sketch_panel(window: MainWindow, name: str) -> Any:
-    panel = window._sketch_panel
-    if panel is None:
-        raise MissingTargetError(f"{name}: der Zeichenmodus ist nicht offen")
-    return panel
+    """Das Panel des offenen Skizzeneditors, sonst das des Zeichenmodus."""
+    return active_sketch_panel(window, name)
 
 
 def _sketch_done(window: MainWindow) -> QWidget:
@@ -407,13 +429,10 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "dialog.more": _more_flap,
     "transform.values": _transform_values,
     "parameters.first": _first_parameter,
+    "parameters.first.label": first_parameter_label,
+    "parameters.bind": bind_button,
     "toolbar.draw": _draw_button,
     "sketch.done": _sketch_done,
-    "feature.apply": _marked("feature.apply"),
-    "feature.in_view": _marked("feature.in_view"),
-    "feature.every": _marked("feature.every"),
-    "measure.reference": _marked("measure.reference"),
-    "measure.apply": _marked("measure.apply"),
     "search": _search_field,
     "toolbar.search": _toolbar_search,
     "progress.cancel": _progress_cancel,
@@ -424,14 +443,14 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
 }
 
 #: Die Namen, die keinen eigenen Widget haben, nur einen Ort.
-_PLACES: Final = frozenset({"history.last"})
+_PLACES: Final = frozenset({"history.last", *PLACE_CLICKS})
 
 #: Was diese Datei auflöst. ``tests/test_guides.py`` hält es gegen den
 #: Wortschatz im Kern — ein Name dort, den hier niemand kennt, wäre eine
 #: Anleitung, die erst beim Release scheitert.
 RESOLVED: Final[frozenset[str]] = (
     frozenset(_AREAS) | frozenset(_START) | frozenset(_PRINT) | frozenset(_FINDERS) | _PLACES
-)
+) | MARKED
 
 
 def widget_for(window: MainWindow, name: str) -> QWidget:
@@ -453,6 +472,8 @@ def widget_for(window: MainWindow, name: str) -> QWidget:
     finder = _FINDERS.get(name)
     if finder is not None:
         return finder(window)
+    if name in MARKED:
+        return _marked(name)(window)
     kind, _separator, rest = name.partition(":")
     if kind == "operation":
         button = window.selection_operations.button_for(rest)
@@ -460,7 +481,7 @@ def widget_for(window: MainWindow, name: str) -> QWidget:
             return button
     if kind == "message.button":
         return _message_button(window, name, rest)
-    if kind in _MARKED_KINDS:
+    if kind in MARKED_KINDS:
         return _marked(name)(window)
     if kind == "handle" and rest in _BARS:
         return _bar(window, rest)
@@ -484,6 +505,8 @@ def area_for(window: MainWindow, name: str) -> QRect:
     """
     if name == "history.last":
         return _last_row(window.history_panel.list, name)
+    if (place := place_click(name)) is not None:
+        return place(window, name).rect
     if name == "viewport":
         return _open_view(window)
     kind, separator, rest = name.partition(":")
@@ -888,22 +911,7 @@ def _open_menu_entry_named(object_name: str, name: str) -> QRect:
 
 
 # --- Die neuen Arten (RM-737) --------------------------------------------------
-
-#: Arten, deren Widget sein Ziel als Kennzeichen trägt (``guides.TARGET_PROPERTY``).
-_MARKED_KINDS: Final = frozenset(
-    {
-        "field",
-        "feature",
-        "edge",
-        "feature.field",
-        "measure.field",
-        "finding.action",
-        "print",
-        "setting",
-        "message",
-        "setting.section",
-    }
-)
+# Die Arten mit Kennzeichen am Widget stehen in ``guide_finders.MARKED_KINDS``.
 
 #: Arten, deren Ziel eine Zeile in einer Liste oder einem Baum ist.
 _ROW_KINDS: Final = frozenset({"tree.row", "history.row", "finding", "start.recent"})
@@ -939,38 +947,33 @@ _GRIPS: Final[dict[str, str]] = {
 _GRIP_ORIGINS: Final = frozenset({"feature.grip", "part.grip"})
 
 #: Was diese Datei an Arten auflöst — ``tests/test_guides.py`` hält es gegen
-#: ``guides.TARGET_KINDS``.
-RESOLVED_KINDS: Final[frozenset[str]] = frozenset(
-    {
-        "command",
-        "operation",
-        "field",
-        "part",
-        "tool",
-        "transform",
-        "section",
-        "sketch",
-        "history",
-        "feature",
-        "edge",
-        "feature.field",
-        "measure.field",
-        "menu",
-        "finding",
-        "finding.action",
-        "print",
-        "setting",
-        "handle",
-        "tree.row",
-        "history.row",
-        "view",
-        "view.edge",
-        "dialog",
-        "start.recent",
-        "message",
-        "message.button",
-        "setting.section",
-    }
+#: ``guides.TARGET_KINDS``. Dazu die Arten mit Kennzeichen am Widget und die Orte
+#: aus ``guide_finders``.
+RESOLVED_KINDS: Final[frozenset[str]] = (
+    frozenset(
+        {
+            "command",
+            "operation",
+            "part",
+            "tool",
+            "transform",
+            "section",
+            "sketch",
+            "history",
+            "menu",
+            "finding",
+            "handle",
+            "tree.row",
+            "history.row",
+            "view",
+            "view.edge",
+            "dialog",
+            "start.recent",
+            "message.button",
+        }
+    )
+    | MARKED_KINDS
+    | frozenset(PLACE_KINDS)
 )
 
 #: Wie viele Dreiecke :func:`point_for` probiert, bevor es aufgibt.
@@ -1439,7 +1442,8 @@ def widget_under(point: QPoint) -> QWidget | None:
 
     Zuerst ein offenes Menü und ein modaler Dialog, dann ``QApplication.widgetAt``;
     findet das nichts (ohne Fenstersystem), das oberste Fenster, das die Stelle
-    enthält, und darin ``childAt``.
+    enthält, und darin ``childAt``. Das Fenster eines Treffers bleibt gehalten: Mit
+    seinem Wrapper fiele der des Treffers (FD-175, aufgeklappte Liste).
     """
     tops: list[QWidget | None] = [
         QApplication.activePopupWidget(),
@@ -1447,6 +1451,7 @@ def widget_under(point: QPoint) -> QWidget | None:
     ]
     for top in tops:
         if top is not None and top.isVisible() and top.rect().contains(top.mapFromGlobal(point)):
+            _PROBED[:] = [top]
             return top.childAt(top.mapFromGlobal(point)) or top
     found = QApplication.widgetAt(point)
     if found is not None:
@@ -1457,6 +1462,7 @@ def widget_under(point: QPoint) -> QWidget | None:
     for top in windows:
         local = top.mapFromGlobal(point)
         if top.rect().contains(local):
+            _PROBED[:] = [top]
             return top.childAt(local) or top
     return None
 
@@ -1567,6 +1573,8 @@ def next_click(window: MainWindow, name: str) -> Click:
     """
     if not guides.is_target(name):
         raise MissingTargetError(f"{name}: kein Name aus dem Wortschatz der Anleitungen")
+    if (place := place_click(name)) is not None:
+        return place(window, name)
     if name == "history.last":
         listing = window.history_panel.list
         last = next(
@@ -1618,7 +1626,9 @@ def _obstacle_click(obstacle: _Obstacle, name: str) -> Click:
     """Der Klick, der das erste Hindernis wegnimmt — wenn der Kunde es sehen kann."""
     if not obstacle.clicked.isVisible():
         raise MissingTargetError(f"{name}: der Weg führt über etwas, das gerade nicht dasteht")
-    return Click(obstacle.rect(), Qt.MouseButton.LeftButton, obstacle.why, name)
+    # Eine Klappe unter dem Rand rollt erst heran wie jedes Ziel (FD-131).
+    scrolled = _scroll_needed(obstacle.clicked, name)
+    return scrolled or Click(obstacle.rect(), Qt.MouseButton.LeftButton, obstacle.why, name)
 
 
 def _widget_click(widget: QWidget, name: str, button: Qt.MouseButton) -> Click:
@@ -1656,10 +1666,10 @@ def _scroll_needed(widget: QWidget, name: str) -> Click | None:
     reach = QRect(centre, QSize(1, 1))
     if all(widget.height() <= area.viewport().height() for area in areas):
         reach = QRect(centre.x(), widget.mapToGlobal(QPoint(0, 0)).y(), 1, widget.height())
-    if all(_unclipped(area.viewport()).contains(reach) for area in areas):
+    if all(unclipped(area.viewport()).contains(reach) for area in areas):
         return None
     for area in areas:
-        seen = _unclipped(area.viewport())
+        seen = unclipped(area.viewport())
         if seen.height() < reach.height():
             # Erst einen ausreichend hohen Innenausschnitt freilegen, dann sein Feld.
             nominal = _global(area.viewport())
@@ -1680,23 +1690,22 @@ def _scroll_needed(widget: QWidget, name: str) -> Click | None:
         travel = min(remaining, bar.pageStep(), (span * angle + 119) // 120)
         if travel > distance + seen.height() - reach.height():
             continue
-        use_bar = bar.isVisible() and (angle != 120 or area is not areas[0])
-        surface = _unclipped(bar.parentWidget() or bar) if use_bar else seen
-        hit = widget_under(surface.center())
-        if use_bar and hit is not bar:
+        # Ein innerer Bereich am Anschlag reicht das Rad weiter wie Qt; nimmt er es
+        # selbst, dreht es über der Leiste des Bereichs, der das Ziel trägt (FD-159).
+        hit = widget_under(seen.center())
+        while hit is not None and hit is not area and not takes_wheel(hit, direction):
+            hit = hit.parentWidget()
+        use_bar = bar.isVisible() and (angle != 120 or area is not areas[0] or hit is not area)
+        surface = unclipped(bar.parentWidget() or bar) if use_bar else seen
+        if (widget_under(surface.center()) is not bar) if use_bar else (hit is not area):
             continue
-        if not use_bar:
-            while hit is not None and not isinstance(hit, QAbstractScrollArea):
-                hit = hit.parentWidget()
-            if hit is not area:
-                continue
         return Click(surface, Qt.MouseButton.NoButton, "rollen", name, direction, angle)
     raise MissingTargetError(
         f"{name}: Rollanschlag oder kein geeigneter Radschritt zum ganzen Ziel"
     )
 
 
-def _unclipped(widget: QWidget) -> QRect:
+def unclipped(widget: QWidget) -> QRect:
     """Der Teil des Widgets, den seine Eltern bis zum Fenster nicht abschneiden — global.
 
     Anders als ``visibleRegion`` zählen Kinder und Geschwister darüber nicht:
@@ -1795,12 +1804,8 @@ def _can_roll(surface: QWidget, direction: int) -> bool:
     """
     holder = surface.parentWidget()
     while holder is not None and not holder.isWindow():
-        if isinstance(holder, QAbstractScrollArea):
-            bar = holder.verticalScrollBar()
-            if bar is not None and (
-                bar.value() < bar.maximum() if direction > 0 else bar.value() > bar.minimum()
-            ):
-                return True
+        if takes_wheel(holder, direction):
+            return True
         holder = holder.parentWidget()
     return False
 

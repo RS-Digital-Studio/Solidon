@@ -94,6 +94,38 @@ _REAL_LOCAL_APPDATA = os.environ.get("LOCALAPPDATA")
 for _variable in PROFILE_VARIABLES:
     os.environ[_variable] = _ISOLATED
 
+import keyring
+import keyring.backend
+import keyring.errors
+
+
+class SuiteKeyring(keyring.backend.KeyringBackend):
+    """Der Schlüsselbund der Suite: im Speicher und je Fall leer (§38).
+
+    Wie die Nutzerordner gehört auch der Schlüsselbund des Systems dem Nutzer.
+    Fälle, die das LLM-Backend oder die Gerätekennung erreichen, fragten ihn
+    ohne eigenen Ersatz — gemessen in ``test_chat_ui.py`` (``solidon-llm``).
+    Ein Fall, der einen eigenen Schlüsselbund braucht, ersetzt ihn wie bisher;
+    die Fixture darunter setzt vor jedem Fall diesen wieder ein.
+    """
+
+    priority = 1
+    values: dict[tuple[str, str], str] = {}  # noqa: RUF012 — einer für den Prozess
+
+    def get_password(self, service: str, username: str) -> str | None:
+        return self.values.get((service, username))
+
+    def set_password(self, service: str, username: str, password: str) -> None:
+        self.values[(service, username)] = password
+
+    def delete_password(self, service: str, username: str) -> None:
+        if self.values.pop((service, username), None) is None:
+            raise keyring.errors.PasswordDeleteError(f"{service}/{username}")
+
+
+SUITE_KEYRING = SuiteKeyring()
+keyring.set_keyring(SUITE_KEYRING)
+
 from app.core import discover
 from app.core.activation import store as activation_store
 from app.core.backends import llm
@@ -939,6 +971,20 @@ def _the_language_starts_at_the_source() -> Iterator[None]:
 #: Prozesses — die er in der Auswahl ohnehin haben kann. Wer eine Breite, eine
 #: Farbe oder ein Layout misst, stellt die Betriebslage weiter selbst **her**
 #: (``apply_theme`` im Test); nur hängt sein Ergebnis nicht mehr am Vorgänger.
+
+
+@pytest.fixture(autouse=True)
+def _the_keyring_stays_the_suites() -> Iterator[None]:
+    """Jeder Fall findet den leeren Schlüsselbund der Suite (:class:`SuiteKeyring`).
+
+    Gesetzt **vor** dem Fall, nicht nur danach: So hängt es nicht an der
+    Reihenfolge, ob der erste Fall eines Arbeiters ihn hat (Review 1, RCI-3).
+    Das Setzen beim Import bleibt für Code, der vor jeder Fixture fragt.
+    """
+    if keyring.get_keyring() is not SUITE_KEYRING:
+        keyring.set_keyring(SUITE_KEYRING)
+    SuiteKeyring.values.clear()
+    yield
 
 
 @pytest.fixture(autouse=True)

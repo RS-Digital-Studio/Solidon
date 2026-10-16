@@ -12,11 +12,12 @@ import hashlib
 import importlib
 import os
 import sys
+from collections.abc import MutableMapping
 from contextlib import suppress
 from pathlib import Path
 from typing import Any, BinaryIO, Final
 
-from app.branding import APP_NAME, APP_VENDOR, APP_VERSION
+from app.branding import APP_NAME, APP_VENDOR, APP_VERSION, ENVIRONMENT_PREFIX
 
 #: Die Umgebungsvariablen, aus denen dieses Modul die Nutzerordner liest. Wer
 #: sie vor dem Start auf einen leeren Ordner setzt, hat ein frisches Profil:
@@ -31,6 +32,48 @@ PROFILE_VARIABLES: Final = (
     "XDG_CONFIG_HOME",
     "XDG_CACHE_HOME",
 )
+
+
+def drawing_profile_variables() -> tuple[str, ...]:
+    """Die Nutzerordner eines Profils, in dem die Ansicht zeichnet (Fall, Erzeuger).
+
+    ``HOME`` nur unter macOS, wo jede Auflösung über ``Path.home()`` läuft —
+    sonst schrieb der Prozess ins echte Profil (CI-Lauf 38781742486). Unter
+    Windows und Linux bleibt es, wo es ist: Grafiktreiber und ihre
+    Zwischenspeicher hängen daran, und die Adapterfrage der Ansicht hing. Die
+    Suite biegt alle :data:`PROFILE_VARIABLES` um, sie zeichnet offscreen.
+    """
+    return tuple(name for name in PROFILE_VARIABLES if name != "HOME" or sys.platform == "darwin")
+
+
+#: Der Schlüsselbund eines frischen Profils. Er liegt in keinem der Ordner oben
+#: (Windows-Tresor, macOS-Schlüsselbund, Secret Service); ``keyring`` wählt sein
+#: Backend für einen Prozess und jedes Kind aus dieser Variable, und die
+#: Attrappe antwortet auf jede Frage mit nichts. Wer die Nutzerordner umbiegt,
+#: setzt sie mit — sonst fragte ein Fall, eine Aufnahme oder ein Prüflauf die
+#: Schlüssel des Nutzers (``tests/test_keyring_isolation.py``).
+ISOLATED_KEYRING: Final = {"PYTHON_KEYRING_BACKEND": "keyring.backends.null.Keyring"}
+
+#: Die zweite Quelle eines Chat-Schlüssels: die Umgebung (``backends.keys``, auch
+#: ``…_<KONTO>``). Ein frisches Profil trägt keinen — sonst sagte *Chat
+#: einrichten* „Ein Schlüssel kommt aus der Umgebung“, und der Fall hinge wieder
+#: an Daten des Nutzers (RC2-10).
+LLM_KEY_VARIABLE: Final = f"{ENVIRONMENT_PREFIX}_LLM_KEY"
+
+
+def isolate_secrets(environment: MutableMapping[str, str]) -> MutableMapping[str, str]:
+    """Nimmt einer Umgebung die Schlüssel des Nutzers und gibt sie zurück.
+
+    Der Schlüsselbund wird die Attrappe (:data:`ISOLATED_KEYRING`), jede Variable
+    eines Chat-Schlüssels (:data:`LLM_KEY_VARIABLE`) fällt weg. Gilt für
+    ``os.environ`` des Prozesses wie für die Umgebung eines Kindes; wer die
+    Nutzerordner umbiegt, ruft es mit (``tests/test_keyring_isolation.py``).
+    """
+    for name in [name for name in environment if name.upper().startswith(LLM_KEY_VARIABLE)]:
+        del environment[name]
+    environment.update(ISOLATED_KEYRING)
+    return environment
+
 
 _windows_ctypes: Any = None
 _windows_msvcrt: Any = None

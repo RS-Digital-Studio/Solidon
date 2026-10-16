@@ -85,7 +85,8 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
 `tests/conftest.py` hält die Maschine aus dem Ergebnis: Offscreen-Qt,
 Nutzerverzeichnisse im Temp-Ordner (§38), kein gefundenes Fremdprogramm, kein
 erreichbares Modell (`_the_network_stays_out_of_it` leert die Liste der
-Backends). Einstellungen, Profile und eigene Bausteine kehren nach jedem
+Backends), kein Schlüsselbund des Nutzers (`SuiteKeyring`, je Fall leer).
+Einstellungen, Profile und eigene Bausteine kehren nach jedem
 Test zum vorherigen Dateiabbild zurück; Abbaufehler bleiben rot. Wer diese
 Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
 
@@ -271,10 +272,7 @@ einem begründeten Verfahrenswechsel zurückzusetzen ist richtig.
   Serie und wird von selbst grün. Ob er streut oder sich verschlechtert hat,
   entscheidet eine Messreihe gegen einen **älteren** Stand.
 - **Die Bestmarke ist ein Median, kein Minimum** (`measure`, `WINDOW`,
-  `MIN_RUNS`): Ein Minimum kann nur sinken, der Median der letzten fünf Läufe
-  folgt dem Maschinenzustand, und eine echte Verlangsamung reißt die Schwelle
-  trotzdem sofort (`REGRESSION_STRIKES`). `MIN_RUNS = 3`: Zwei Läufe bewusst
-  blind sind ehrlicher als zwei Läufe falsch rot.
+  `MIN_RUNS`); warum: `regel-tests.md`.
 
 Das ist der einzige Teil des Tors, dessen Rot nicht „nicht fertig“ bedeutet.
 
@@ -301,10 +299,10 @@ Das ist der einzige Teil des Tors, dessen Rot nicht „nicht fertig“ bedeutet.
   je Rechenkern einen Puffer zu, und Läufe nebeneinander reißen die
   Zusagegrenze. Leistungsläufe messen damit
   denselben Stand wie der Kunde.
-- **Im Tor eine feste Arbeiterzahl, nie `-n auto`**: Parallelität zeigt
-  Speicherhunger als Korrektheitsfehler, 32 Arbeiter sterben schon beim
-  Verteilen, und eine Zahl, die an der Kernzahl hängt, ist eine stille
-  Variable.
+- **Eine feste Arbeiterzahl, nie `-n auto`** — im Tor wie in
+  `affected_tests.py --run`, das ab acht Dateien `-n 4 --dist worksteal`
+  fährt (`--workers N`, 0 seriell): Parallelität zeigt Speicherhunger als
+  Korrektheitsfehler, und eine Zahl an der Kernzahl ist eine stille Variable.
 - **Zweimal fahren und die Mengen vergleichen**: Ein Test, der von einem
   Vorgänger abhängt, wird parallel *manchmal* rot — zwei gleiche Läufe sind
   kein Beweis, zwei ungleiche sofort einer.

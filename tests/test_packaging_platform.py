@@ -18,6 +18,7 @@ hat über 2 000 Zeilen und bekommt in der Sperrklinke keine neue Definition mehr
 from __future__ import annotations
 
 import ast
+import hashlib
 import os
 import re
 import shutil
@@ -29,9 +30,12 @@ from typing import Final
 
 import pytest
 
+from tests.code_index_helpers import build_index, stored_index
 from tests.packaging_helpers import ROOT, SPEC, WORKFLOW, start_report, workflow_shell
+from tests.process_helpers import run_bounded
 from tests.shell_helpers import bash_executable, posix_shell
 from tests.workflow_helpers import job_block, step_block
+from tools import code_index
 
 
 def test_the_spec_packs_the_hid_module_the_spacemouse_reader_chooses() -> None:
@@ -170,7 +174,7 @@ def test_the_window_trial_always_writes_its_outcome_and_ends_with_the_start(
         f"python() {{ echo 'Ergebnis: Plattform cocoa'; return {started}; }}\n"
     )
     summary = tmp_path / "summary.md"
-    done = subprocess.run(
+    done = run_bounded(
         [shell, "-c", stand_ins + script],
         cwd=tmp_path,
         env=dict(
@@ -242,22 +246,149 @@ def test_the_posix_shell_is_found_beside_git_when_the_search_path_lacks_it(
 #: Die Shells, die allein ``tests/shell_helpers.py`` sucht.
 SHELLS: Final = frozenset({"bash", "sh"})
 
+#: Je Schreibweise einer Suche der Kopf der gepflanzten Datei, der Aufruf und was der Wächter
+#: darin finden muss; ``shell`` ist in der gepflanzten Datei an ``"sh"`` gebunden. Die letzte
+#: ist eine eigene Funktion ``which``, keine Suche.
+LOOKUPS: Final = [
+    ("import shutil", 'shutil.which("sh")', ["sh"]),
+    ("from shutil import which", 'which("bash")', ["bash"]),
+    ("from shutil import which as find", 'find("sh")', ["sh"]),
+    ("import shutil", 'getattr(shutil, "which")("bash")', ["bash"]),
+    ("import shutil\n\nlook = shutil.which", 'look("sh")', ["sh"]),
+    ("import shutil", 'shutil.which("sh.exe")', ["sh"]),
+    ("import shutil", 'shutil.which("Bash.EXE")', ["bash"]),
+    ("import shutil", 'shutil.which("/usr/bin/sh")', ["sh"]),
+    ("import shutil", r'shutil.which(r"C:\Program Files\Git\bin\bash.exe")', ["bash"]),
+    ("import shutil", "shutil.which(shell)", ["sh"]),
+    ("import shutil", 'shutil.which(cmd="sh")', ["sh"]),
+    ("import shutil", 'shutil.which("git")', []),
+    ("def which(name: str) -> str:\n    return name", 'which("sh")', []),
+]
 
-def _shell_lookups(source: str) -> list[str]:
-    """Jeder Aufruf ``which("bash")`` oder ``which("sh")``, auch als ``shutil.which``.
+#: Was eine Suche aufruft, gefaltet.
+WHICH: Final = ("ext", "shutil.which")
+
+
+def _is_which(node: ast.expr | None, aliases: set[str]) -> bool:
+    """Ob der Ausdruck selbst ``which`` sein kann: ``x.which``, der Name ``which`` oder einer
+    der ``aliases``, ``getattr(x, "which")``."""
+    if isinstance(node, ast.Attribute):
+        return node.attr == "which"
+    if isinstance(node, ast.Name):
+        return node.id == "which" or node.id in aliases
+    return isinstance(node, ast.Call) and any(
+        isinstance(argument, ast.Constant) and argument.value == "which" for argument in node.args
+    )
+
+
+def _which_calls(tree: ast.Module) -> list[ast.Call]:
+    """Die Aufrufe, die ``shutil.which`` sein können: Das Aufgerufene ist ``which``
+    (:func:`_is_which`) oder ein Name, den die Datei aus einem Import von ``which`` oder aus
+    einem solchen Ausdruck bindet (``find = shutil.which``, auch über weitere Zuweisungen). Nur
+    ihr Aufgerufenes fragt der Wächter den Auflöser: ``resolve`` über jeden Aufruf faltete
+    auch Aufrufe von Testhelfern, und deren Aufrufstellen lädt der Index aus den Auszügen des
+    ganzen Baums — genau das, was der Ergebnisspeicher einem Arbeiter erspart (CS-23)."""
+    aliases: set[str] = set()
+    bindings: list[tuple[list[ast.expr], ast.expr | None]] = []
+    calls: list[ast.Call] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.alias) and node.name == "which":
+            aliases.add(node.asname or node.name)
+        elif isinstance(node, ast.Assign):
+            bindings.append((node.targets, node.value))
+        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
+            bindings.append(([node.target], node.value))
+        elif isinstance(node, ast.Call):
+            calls.append(node)
+    known = -1
+    while len(aliases) != known:
+        known = len(aliases)
+        for targets, value in bindings:
+            if _is_which(value, aliases):
+                aliases.update(target.id for target in targets if isinstance(target, ast.Name))
+    return [call for call in calls if _is_which(call.func, aliases)]
+
+
+def _shell_lookups(index: code_index.Index, path: str, source: str) -> list[str]:
+    """Jede Suche nach ``bash`` oder ``sh`` über ``shutil.which``.
 
     Gelesen werden Aufrufe, nicht Text: Ein Docstring, der die Suche beschreibt,
-    ist keine Suche.
+    ist keine Suche. Beides faltet der Auflöser (RCS-1, RCS-2): was aufgerufen
+    wird — ``shutil.which``, auch importiert unter anderem Namen, über
+    ``getattr`` oder einen Alias — und was gesucht wird, das erste Argument
+    oder ``cmd=``, als Text oder als Name. Gezählt wird der letzte Teil eines
+    Pfads ohne ``.exe``: ``/usr/bin/sh`` und ``sh.exe`` suchen die ``sh``.
+    Einen Namen für ``which`` aus einem anderen Modul verfolgt der Wächter so
+    wenig wie eine Hülle um die Suche (:func:`_which_calls`).
     """
-    return sorted(
-        node.args[0].value
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Call)
-        and "which" in (getattr(node.func, "attr", None), getattr(node.func, "id", None))
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and node.args[0].value in SHELLS
+    if "which" not in source:
+        # Jede Form aus :func:`_which_calls` nennt ``which`` im Text; die übrigen Dateien
+        # brauchen keinen Syntaxbaum.
+        return []
+    found = []
+    for node in _which_calls(ast.parse(source)):
+        if not any((value.kind, value.ref) == WHICH for value in index.resolve(path, node.func)):
+            continue
+        named = [keyword.value for keyword in node.keywords if keyword.arg == "cmd"]
+        for argument in [*node.args[:1], *named]:
+            values = {value.data for value in index.resolve(path, argument)}
+            names = {
+                re.split(r"[\\/]", value)[-1].lower().removesuffix(".exe")
+                for value in values
+                if type(value) is str
+            }
+            found.extend(names & SHELLS)
+    return sorted(found)
+
+
+@pytest.mark.parametrize(("head", "call", "expected"), LOOKUPS)
+def test_the_shell_guard_finds_every_way_of_looking(
+    head: str, call: str, expected: list[str]
+) -> None:
+    """Gegenprobe zum Wächter: je Schreibweise eine gepflanzte Suche, über denselben Leser."""
+    planted = "tests/test_planted.py"
+    source = f'{head}\n\n\ndef probe():\n    shell = "sh"\n    return {call}\n'
+    assert _shell_lookups(build_index({planted: source}), planted, source) == expected
+
+
+#: Die eine Datei, die nach ``bash`` und ``sh`` sucht. Der Wächter fragt sie nicht: Ihre Suche
+#: über den Parameter ``name`` zu falten, hieße die Aufrufstellen des ganzen Baums zu laden.
+SHELL_HELPERS: Final = "tests/shell_helpers.py"
+
+
+def _shell_lookups_by_file(index: code_index.Index) -> dict[str, list[str]]:
+    """Je Testdatei unter ``tests/`` (ohne Unterordner, ohne :data:`SHELL_HELPERS`) die Shells,
+    nach denen sie sucht.
+
+    Gelesen wird ``ROOT / "tests"`` flach, wie der Index die Dateien führt; eine Attrappe setzt
+    ``ROOT`` dieses Moduls auf ihren Baum. So bleibt die Lesestelle für W4 ein Ordner des
+    Baums (``tests/``) statt eines Parameters, der sich nicht auflösen lässt.
+
+    Der Index antwortet für den Stand, zu dem er geladen wurde — ``shared()`` lädt einmal je
+    Prozess, und andere Sitzungen ändern den Baum während eines Laufs. Steht eine Testdatei
+    seitdem anders auf der Platte, neu oder fort, hieße die Antwort über einen alten Auszug
+    nichts, eine neue fehlte ihm ganz (``KeyError``): dann eine Meldung mit Handlung (RCS-3).
+    """
+    indexed = {
+        path: digest
+        for path, digest in index.digests.items()
+        if path.startswith("tests/") and path.count("/") == 1 and path.endswith(".py")
+    }
+    sources = {f"tests/{file.name}": file.read_bytes() for file in (ROOT / "tests").glob("*.py")}
+    changed = sorted(
+        path
+        for path in indexed.keys() | sources.keys()
+        if path not in sources or hashlib.sha256(sources[path]).hexdigest() != indexed.get(path)
     )
+    assert not changed, (
+        f"Testdateien seit dem Laden des Index geändert: {', '.join(changed)} — den Lauf neu "
+        "starten; der Index baut sich dann für den neuen Stand."
+    )
+    return {
+        path: _shell_lookups(index, path, data.decode("utf-8"))
+        for path, data in sorted(sources.items())
+        if path != SHELL_HELPERS
+    }
 
 
 def test_only_the_shell_helpers_look_for_bash_or_sh() -> None:
@@ -269,17 +400,38 @@ def test_only_the_shell_helpers_look_for_bash_or_sh() -> None:
     und mit WSL vorn liefe das Tor-Skript in einem Linux. ``test_packaging.py``
     suchte die ``sh`` mit einem halben Rückfall, nur unter ``ProgramFiles``.
     """
-    planted = 'import shutil\nshutil.which("sh")\nwhich("bash")\nshutil.which("git")\n'
-    assert _shell_lookups(planted) == ["bash", "sh"], "der Leser findet keine Suche"
-    files = sorted((ROOT / "tests").glob("*.py"))
-    assert len(files) > 100, f"nur {len(files)} Dateien unter tests — falscher Pfad?"
-    asking = {
-        path.name: found
-        for path in files
-        if path.name != "shell_helpers.py"
-        and (found := _shell_lookups(path.read_text(encoding="utf-8")))
-    }
-    assert asking == {}
+    lookups = _shell_lookups_by_file(code_index.shared())
+    assert len(lookups) > 100, f"nur {len(lookups)} Dateien unter tests — falscher Pfad?"
+    assert {path: found for path, found in lookups.items() if found} == {}
+
+
+@pytest.mark.parametrize("change", ["neu", "umgeschrieben", "entfernt"])
+def test_the_shell_guard_answers_only_for_the_state_the_index_was_loaded_at(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    """RCS-3: Eine Testdatei, die nach dem Laden des Index entsteht, sich ändert oder
+    verschwindet, gibt die Meldung „Lauf neu starten“ — keinen rohen ``KeyError`` und keine
+    Antwort über den alten Auszug. Gegenprobe: am geladenen Stand findet derselbe Weg die
+    gepflanzte Suche, und die ausgenommene Datei fragt er nicht."""
+    root = tmp_path / "baum"
+    index = stored_index(
+        root,
+        {
+            "tests/test_old.py": 'import shutil\n\nshutil.which("sh")\n',
+            "tests/shell_helpers.py": 'import shutil\n\nshutil.which("bash")\n',
+        },
+    )
+    monkeypatch.setattr(sys.modules[__name__], "ROOT", root)
+    assert _shell_lookups_by_file(index) == {"tests/test_old.py": ["sh"]}
+    old = root / "tests" / "test_old.py"
+    if change == "neu":
+        (root / "tests" / "test_new.py").write_text(old.read_text("utf-8"), encoding="utf-8")
+    elif change == "umgeschrieben":
+        old.write_text('import shutil\n\n\n\nshutil.which("bash")\n', encoding="utf-8")
+    else:
+        old.unlink()
+    with pytest.raises(AssertionError, match=r"test_(new|old)\.py — den Lauf neu starten"):
+        _shell_lookups_by_file(index)
 
 
 def test_the_start_check_says_in_one_line_how_far_the_start_came() -> None:

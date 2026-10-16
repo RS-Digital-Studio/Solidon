@@ -115,6 +115,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Várias traduções leem-se com mais clareza, entre elas a introdução de *Criar parâmetro …*. O pino começa com maiúscula em todas as línguas.
 - As explicações nos painéis ocupam só as linhas de que o texto precisa, também num painel largo. Na versão 0.6.0 ficavam linhas vazias em algumas línguas, por exemplo sob duas faces selecionadas.
 - Um campo de seleção nomeia um valor que a sua lista não oferece, como «Face 1 · não serve aqui», e uma aresta pela orientação e posição. A versão 0.6.0 mostrava um código interno.
+- Na janela *Desbloquear o Solidon …*, *Comprar o Solidon* continua disponível num computador ativado. Os botões a cinzento indicam o motivo, e *Verificar chave* também o caminho para uma chave nova.
+- Em francês, o primeiro dia do mês escreve-se agora «1er», por exemplo «1er décembre 2026».
+- Sem controlador gráfico, por exemplo numa máquina virtual, o Solidon termina agora de forma fiável ao fechar. Na versão 0.6.0 o programa podia continuar a correr aí sem ser visto.
 
 ### Imprimir e entregar ao slicer
 
@@ -151,6 +154,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se uma característica selecionada não servir, por exemplo um furo, uma rosca, uma câmara ou um fecho, a mensagem oferece *Escolher outra característica*.
 - Os botões *Escolher outras arestas*, *Escolher outras faces* e *Escolher outra característica* abrem o passo com o cursor no campo correspondente, também atrás de *Mais definições*.
 - Se uma mensagem não pertence a nenhum passo, como em *Contraparte da rosca*, indica o caminho numa frase, por exemplo *Escolher outra característica*, e só mostra botões que ali têm efeito.
+- Um clique em *Aplicar* numa característica durante um cálculo mantém a alteração, mesmo que a pré-visualização demore mais. Na versão 0.6.0 perdia-se sem aviso em modelos maiores.
+- Uma textura apresentada já não calcula uma pré-visualização sem alterações nem oferece *Cancelar*.
 
 ## 0.6.0
 

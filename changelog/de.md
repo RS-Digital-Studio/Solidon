@@ -140,6 +140,9 @@ Nutzen da und sonst nichts.
 - Einige Übersetzungen lesen sich klarer, darunter die Einleitung von *Parameter anlegen …*. Der Zapfen beginnt in allen Sprachen groß.
 - Erklärungen in den Karten sind so hoch wie ihr Text, auch in einer breiten Karte. In Version 0.6.0 standen dort je nach Sprache leere Zeilen, etwa unter zwei gewählten Flächen.
 - Ein Auswahlfeld nennt einen Wert, den seine Liste nicht anbietet, beim Namen, etwa „Fläche 1 · passt hier nicht“, eine Kante mit Lage und Ort. Version 0.6.0 zeigte eine interne Kennung.
+- Im Fenster *Solidon freischalten …* bleibt *Solidon kaufen* auch auf einem freigeschalteten Rechner bedienbar. Graue Knöpfe nennen ihren Grund, *Schlüssel prüfen* auch den Weg zum neuen Schlüssel.
+- Auf Französisch heißt der Erste eines Monats jetzt „1er“, etwa „1er décembre 2026“.
+- Ohne Grafiktreiber, etwa in einer virtuellen Maschine, endet Solidon nach dem Schließen jetzt zuverlässig. In Version 0.6.0 konnte das Programm dort unsichtbar weiterlaufen.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -176,6 +179,8 @@ Nutzen da und sonst nichts.
 - Passt ein gewähltes Merkmal nicht, etwa eine Bohrung, ein Gewinde, eine Kammer oder ein Verschluss, bietet die Meldung *Anderes Merkmal wählen* an.
 - Die Knöpfe *Andere Kanten wählen*, *Andere Flächen wählen* und *Anderes Merkmal wählen* öffnen den Schritt mit dem Cursor im passenden Feld, auch hinter *Weitere Einstellungen*.
 - Gehört eine Meldung zu keinem Schritt, etwa bei *Gegenstück zum Gewinde*, nennt sie ihren Weg als Satz, zum Beispiel *Anderes Merkmal wählen*, und zeigt nur Knöpfe, die dort etwas bewirken.
+- Ein Klick auf *Übernehmen* an einem Merkmal während einer Berechnung behält die Änderung, auch wenn die Vorschau länger braucht. In Version 0.6.0 ging sie an größeren Modellen still verloren.
+- Eine angezeigte Textur rechnet ohne Änderung keine Vorschau mehr und bietet kein *Abbrechen* an.
 
 ## 0.6.0
 

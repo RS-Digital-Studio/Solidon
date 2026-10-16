@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import guides
 from app.core.errors import Action, AppError, ValidationError
 from app.core.export.threemf import slot_identity
 from app.core.filament_usage import UsageLine, UsageRequest, costs_for, from_stored_inputs
@@ -1133,6 +1134,7 @@ class UsageNotice(QWidget):
         self.choice.setMinimumContentsLength(10)
         self.choice.currentTextChanged.connect(self.choice.setToolTip)
         self.review = QPushButton(tr("Filament abziehen …"), self)
+        self.review.setProperty(guides.TARGET_PROPERTY, "usage.review")
         self.review.clicked.connect(self._review)
         self.choice.currentIndexChanged.connect(self._sync_review)
         layout = QVBoxLayout(self)

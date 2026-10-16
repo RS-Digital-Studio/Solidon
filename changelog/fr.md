@@ -116,6 +116,9 @@ dans `website/version.json`.
 - Plusieurs traductions se lisent plus clairement, dont l'introduction de *Créer un paramètre …*. Le tenon commence par une majuscule dans toutes les langues.
 - Les explications des cartes sont aussi hautes que leur texte, même dans une carte large. La version 0.6.0 laissait des lignes vides dans certaines langues, comme sous deux faces sélectionnées.
 - Un champ de sélection nomme une valeur absente de sa liste, comme « Face 1 · ne convient pas ici », et une arête par orientation et position. La version 0.6.0 affichait un code interne.
+- Dans la fenêtre *Déverrouiller Solidon …*, *Acheter Solidon* reste disponible sur un ordinateur activé. Les boutons grisés indiquent leur raison, *Vérifier la clé* aussi la voie vers une nouvelle clé.
+- Le premier jour du mois s'écrit désormais « 1er », par exemple « 1er décembre 2026 ».
+- Sans pilote graphique, par exemple dans une machine virtuelle, Solidon se termine désormais de façon fiable à la fermeture. En version 0.6.0, il pouvait y continuer à tourner sans être vu.
 
 ### Imprimer et transmettre au slicer
 
@@ -152,6 +155,8 @@ dans `website/version.json`.
 - Si une caractéristique sélectionnée ne convient pas, par exemple un perçage, un filetage, une chambre ou une fermeture, le message propose *Choisir une autre caractéristique*.
 - Les boutons *Choisir d'autres arêtes*, *Choisir d'autres faces* et *Choisir une autre caractéristique* ouvrent l'étape avec le curseur dans le champ concerné, même derrière *Autres réglages*.
 - Un message sans étape, comme avec *Contrepartie du filetage*, donne la marche à suivre en une phrase, par exemple *Choisir une autre caractéristique*, et n'affiche que des boutons qui agissent.
+- Un clic sur *Appliquer* d'un élément pendant un calcul garde la modification, même si l'aperçu prend plus de temps. En version 0.6.0, elle se perdait sans avertissement sur les gros modèles.
+- Une texture affichée ne calcule plus d'aperçu sans modification et ne propose plus *Annuler*.
 
 ## 0.6.0
 

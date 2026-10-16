@@ -68,6 +68,16 @@ PRINTERS: Final[dict[str, tuple[str, str]]] = {
     "resin": ("generic-resin-130", "resin"),
 }
 
+#: Der einmalige Druckhinweis (``app.ui.print_disclosure``) als Vorbedingung
+#: eines Falls (FD-121): ``gesehen`` ohne Angabe, ``offen`` nur im Fall seiner
+#: eigenen Zeile. Die Zustände führt die Liste der Spezifikation
+#: (``function_list.PRECONDITIONS``); ``profile_settings`` setzt sie ins Profil.
+PRINT_HINT: Final = "druckhinweis"
+PRINT_HINT_STATES: Final = ("gesehen", "offen")
+#: Wann das Profil den Druckhinweis gesehen hat — fest, damit zwei Läufe
+#: dasselbe Profil schreiben.
+PROFILE_MOMENT: Final = "2026-01-01T00:00:00Z"
+
 #: Die Fenstergröße aus Z6: die kleinste Fläche (``function_checks.SMALLEST_WINDOW``).
 #: Größere misst jeder Satz, der maximiert auf einem größeren Schirm läuft.
 WINDOW_SIZES: Final[tuple[str, ...]] = (f"{SMALLEST_WINDOW[0]}x{SMALLEST_WINDOW[1]}",)
@@ -91,10 +101,16 @@ PHASES: Final[dict[str, tuple[str, ...]]] = {
         "drag",
     ),
     "lizenz": ("licence",),
+    # Der Hauptweg mit dem Vorhersagetor vor dem Übernehmen (V4, FD-168).
+    "vorhersage": ("main",),
     "zoll": ("surface",),
     "skalierung": ("surface",),
-    "dunkel": ("surface",),
+    # Das Griffmaß im dunklen Thema zieht nur eine Zeile mit ``spec.drag`` (FD-73).
+    "dunkel": ("surface", "drag"),
     "bewegung": ("surface",),
+    # Inhaltsschrift 14 und 18 pt, und ihr Wechsel zur Laufzeit (``function_fonts``).
+    "schrift": ("surface",),
+    "schriftwechsel": ("fontchange",),
     "sprachen": (),
     "start": (),
 }
@@ -111,6 +127,11 @@ class Variant:
     :data:`PHASES`). ``phases`` beschränkt auf einzelne davon — die Nachprüfung
     einer Zeile nach einem Fix fährt nur, was der Fix berührt (Konzept §7).
     ``motion`` falsch heißt: Lauf mit ``SOLIDON3D_MOTION=aus`` (G8).
+    ``predict`` hält vor jedem Handlungsklick an, bis eine Vorhersage gebunden
+    ist (``function_prediction``, V4): der Satz ``vorhersage`` und die
+    Sprachfälle daneben. ``font`` ist die Inhaltsschrift in Punkt (0: die des
+    Systems), ``font_change`` die Folge des Wechsels zur Laufzeit
+    (``function_fonts``, FD-54, 57, 58, 185).
     """
 
     set: str = "basis"
@@ -124,6 +145,9 @@ class Variant:
     window_size: str = ""
     motion: bool = True
     phases: tuple[str, ...] = ()
+    predict: bool = False
+    font: float = 0.0
+    font_change: tuple[float, ...] = ()
 
     @classmethod
     def of(cls, data: Mapping[str, Any] | None) -> Variant:
@@ -133,8 +157,9 @@ class Variant:
         unknown = sorted(set(data) - known)
         if unknown:
             raise ValueError(f"unbekannte Angaben in der Variante: {', '.join(unknown)}")
-        if "phases" in data:
-            data["phases"] = tuple(data["phases"])
+        for key in ("phases", "font_change"):
+            if key in data:
+                data[key] = tuple(data[key])
         variant = cls(**data)
         variant.check()
         return variant
@@ -143,6 +168,7 @@ class Variant:
         data = asdict(self)
         data["preconditions"] = dict(self.preconditions)
         data["phases"] = list(self.phases)
+        data["font_change"] = list(self.font_change)
         return data
 
     def protocol(
@@ -180,10 +206,18 @@ class Variant:
             raise ValueError(f"Anzeigeeinheit {self.unit!r} ist keine aus {DISPLAY_UNITS}")
         if self.theme not in ("light", "dark"):
             raise ValueError(f"Thema {self.theme!r} gibt es nicht")
+        from app.i18n.catalog import available_languages
+
+        if self.language not in available_languages():
+            raise ValueError(f"Sprache {self.language!r} gibt es nicht")
         if self.window_size and parse_size(self.window_size) is None:
             raise ValueError(f"Fenstergröße {self.window_size!r} ist nicht BREITExHÖHE")
         if not self.scale > 0:
             raise ValueError(f"Skalierung {self.scale} ist nicht positiv")
+        if self.font < 0 or any(not points > 0 for points in self.font_change):
+            raise ValueError(f"Schrift {self.font} oder Folge {self.font_change} nicht positiv")
+        if (self.font or self.font_change) and self.set not in ("schrift", "schriftwechsel"):
+            raise ValueError("Schrift und Schriftwechsel gibt es nur in ihren Sätzen")
 
     @property
     def printing(self) -> str:
@@ -203,8 +237,15 @@ FIXED_VARIANT_SETS: Final[dict[str, tuple[dict[str, Any], ...]]] = {
     ),
     "dunkel": ({"set": "dunkel", "theme": "dark"},),
     "bewegung": ({"set": "bewegung", "motion": False},),
+    "vorhersage": ({"set": "vorhersage", "predict": True},),
+    "schrift": ({"set": "schrift", "font": 14.0}, {"set": "schrift", "font": 18.0}),
+    "schriftwechsel": ({"set": "schriftwechsel", "font_change": [9.0, 14.0, 9.0]},),
     "sprachen": (),
 }
+
+#: Sätze, die je Sprache einen Fall bekommen (``file_acceptance.function_cases``):
+#: Die Schrift bricht in jeder Sprache anders um (FD-54, 57, 58; RC2-4).
+LANGUAGE_SETS: Final = frozenset({"schrift", "schriftwechsel"})
 
 
 def variant_sets() -> dict[str, tuple[dict[str, Any], ...]]:
@@ -235,10 +276,14 @@ def spec_variants(spec: Mapping[str, Any] | None) -> tuple[dict[str, Any], list[
         base["licence"] = spec_licence(str(licence))
     if preconditions:
         base["preconditions"] = {str(key): str(value) for key, value in preconditions.items()}
+    from tools.function_seams import SEAMS
+
     others: list[dict[str, Any]] = []
     for name, state in sorted(preconditions.items()):
         states = PRECONDITIONS.get(str(name), ())
-        if name == "printer" or len(states) != 2:
+        # Der Druckhinweis hat keinen Gegenlauf: Gesehen gibt es seine Zeile nicht.
+        # Eine Naht auch nicht: Ihr anderer Zustand ist die Maschine (FD-175).
+        if name in ("printer", PRINT_HINT) or name in SEAMS or len(states) != 2:
             continue
         other = states[1] if state == states[0] else states[0]
         others.append(
@@ -349,13 +394,20 @@ def profile_settings(variant: Variant) -> Any:
 
     Sprache, Thema, Einheit und Drucker kommen aus der Variante. Die
     Ersteinrichtung gilt als erledigt und die Updateprüfung ist aus: Beides ist
-    eine eigene Zeile (D12) und gehört nicht in jeden Fall. Die Hinweise zu KI und
-    Druck bleiben unbestätigt — sie sind Teil des Kundenwegs (Z2).
+    eine eigene Zeile (D12) und gehört nicht in jeden Fall. Der KI-Hinweis
+    bleibt unbestätigt — er ist Teil des Kundenwegs (Z2).
+
+    **Der Druckhinweis gilt als gesehen** (FD-121): Er erscheint einmal, vor den
+    ersten Druckeinstellungen, und lag in jedem Fall über der Zielfläche —
+    gemessen wurde der Hinweis statt *Drucker wählen*. Er ist eine eigene Zeile
+    (``dialog:print_disclosure_dialog``); ihr Fall verlangt ihn mit der
+    Vorbedingung ``druckhinweis = "offen"`` (:data:`PRINT_HINT`).
     """
+    from app.ui.print_disclosure import remember_disclosure
     from app.ui.settings import UiSettings
 
     printer, material = PRINTERS[variant.printing]
-    return UiSettings(
+    settings = UiSettings(
         language=variant.language,
         theme=variant.theme,
         display_unit=variant.unit,
@@ -365,6 +417,9 @@ def profile_settings(variant: Variant) -> Any:
         check_for_updates=False,
         update_default_lifted=True,
     )
+    if variant.preconditions.get(PRINT_HINT, PRINT_HINT_STATES[0]) == PRINT_HINT_STATES[0]:
+        remember_disclosure(settings, now=PROFILE_MOMENT)
+    return settings
 
 
 def write_profile(variant: Variant, recent: Sequence[Path] = ()) -> Path:
@@ -374,11 +429,18 @@ def write_profile(variant: Variant, recent: Sequence[Path] = ()) -> Path:
     über das Menü, wie beim Kunden. Der Aufrufer hat die Nutzerordner vorher auf
     den Profilordner des Falls gelegt (``file_acceptance.isolate``); die Suite tut
     dasselbe in ``tests/conftest.py``.
+
+    Ein Export landet im Profilordner (``exporte``): Ohne gemerkten Ordner schlug
+    der Speicherdialog nur den Dateinamen vor, und Qt legte die Datei im
+    Arbeitsordner des Prozesses ab — im Baum des Prüfstands (FD-175).
     """
     from app.ui.settings import save_settings, settings_path
 
     settings = profile_settings(variant)
     settings.recent = [str(path) for path in recent]
+    exports = settings_path().parent / "exporte"
+    exports.mkdir(parents=True, exist_ok=True)
+    settings.export_dirs = {"": str(exports)}
     written = save_settings(settings)
     if written is None:
         raise OSError(f"Das Profil ließ sich nicht schreiben: {settings_path()}")
@@ -468,10 +530,17 @@ def apply_preconditions(preconditions: Mapping[str, str]) -> dict[str, str]:
     """
     from app.core import discover
     from app.core.backends import llm
+    from tools.function_seams import SEAMS
 
     applied: dict[str, str] = {}
     for name, state in preconditions.items():
-        if name == "printer":
+        if name in ("printer", PRINT_HINT):
+            # Druckart und Druckhinweis stehen schon im Profil (``profile_settings``).
+            applied[name] = state
+            continue
+        if name in SEAMS:
+            # Ein Zustand, den keine Maschine liefert, über seine Naht (FD-175).
+            SEAMS[name][state]()
             applied[name] = state
             continue
         if state == "fehlt":
@@ -574,6 +643,11 @@ def place_window(application: Any, window: Any, variant: Variant) -> dict[str, A
     Titelleiste genau diese. Eine Skalierung, die die Fläche darunter drückt,
     ist kein Fall (:func:`below_smallest`).
     """
+    if variant.font:
+        # Die Inhaltsschrift des Falls steht, bevor das Fenster erscheint (FD-54, 185).
+        from tools.function_fonts import set_content_font
+
+        set_content_font(application, variant.font, variant.theme)
     screens = list(application.screens())
     primary = application.primaryScreen()
     chosen = None
@@ -640,8 +714,8 @@ def below_smallest(placed: Mapping[str, Any], variant: Variant) -> str:
         return ""
     return (
         f"Skalierung {variant.scale:.0%} lässt auf {placed.get('screen') or 'diesem Schirm'} "
-        f"nur {width} x {height} logisch — unter {SMALLEST_SCREEN[0]} x "
-        f"{SMALLEST_SCREEN[1]} kein Fall"
+        f"nur {width} x {height} logisch — unter der kleinsten Arbeitsfläche "
+        f"{SMALLEST_SCREEN[0]} x {SMALLEST_SCREEN[1]} logisch (Konzept §4, Z6) kein Fall"
     )
 
 
@@ -751,7 +825,8 @@ def route_of(row: Mapping[str, Any]) -> list[tuple[str, str]]:
     ``row.route`` stellt die Auswahl der Anforderung her (``function_list``:
     Baumzeile, mit Strg weitere), ``spec.route`` nennt, was ``next_click``
     allein nicht findet (Rechtsklick, Kontextmenü). Jeder Schritt ist
-    ``{target, button, modifier}``.
+    ``{target, button, modifier}``, ein Feld auf dem Weg dazu ``text``
+    (:func:`route_texts`).
     """
     steps = [*(row.get("route") or ()), *((row.get("spec") or {}).get("route") or ())]
     route = [
@@ -765,6 +840,17 @@ def route_of(row: Mapping[str, Any]) -> list[tuple[str, str]]:
     if target and (not route or route[-1][0] != target):
         route.append((target, "left"))
     return route
+
+
+def route_texts(row: Mapping[str, Any]) -> list[str]:
+    """Was der Kunde je Schritt von :func:`route_of` tippt — leer, wo er nur klickt.
+
+    Ein Schritt mit ``text`` ist ein Feld auf dem Weg, das erst eine Eingabe
+    freigibt: *Erzeugen* bleibt grau, bis eine Beschreibung dasteht (FD-175).
+    """
+    steps = [*(row.get("route") or ()), *((row.get("spec") or {}).get("route") or ())]
+    texts = [str(entry.get("text") or "") for entry in steps]
+    return texts + [""] * (len(route_of(row)) - len(texts))
 
 
 def selected_feature(row: Mapping[str, Any]) -> tuple[str, str] | None:

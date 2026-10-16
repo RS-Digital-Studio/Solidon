@@ -66,7 +66,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
 
 from app.core.bootstrap import load_operations
-from app.core.paths import PROFILE_VARIABLES
+from app.core.paths import PROFILE_VARIABLES, isolate_secrets
 from app.i18n import SOURCE_LANGUAGE, install_catalog, set_language
 from app.i18n.catalog import read_catalog
 from tools import make_figures as figures
@@ -658,6 +658,7 @@ def take_screens(language: str) -> list[Path]:
         environment = dict(os.environ)
         for name in ISOLATED_VARIABLES:
             environment[name] = room
+        isolate_secrets(environment)
         environment[ROOM_VARIABLE] = room
         environment.pop("QT_QPA_PLATFORM", None)
         environment.pop("QT_SCALE_FACTOR", None)

@@ -13,7 +13,13 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final, Protocol
 
-from tools.function_checks import COVERED, NOT_FOUND
+from tools.function_checks import (
+    COVERED,
+    NOT_FOUND,
+    SWITCH_RUN_OVER,
+    SWITCH_WITHOUT_INPUTS,
+    SWITCH_WITHOUT_PREVIEW,
+)
 from tools.function_machine import SETTLE_MS, BenchFinding, Step, StepMachine
 from tools.function_protocol import compare_prints, unmeasured
 from tools.function_setup import SECOND_SCENE
@@ -90,7 +96,7 @@ class SwitchPhase:
           Vorschau zu warten;
         * ``rechnung`` — *Übernehmen* geklickt, gewechselt wird, während die
           Sitzung rechnet. War die Rechnung beim ersten Wechselklick schon vorbei,
-          ist diese Lage nicht gemessen.
+          hat die Zeile diese Lage nicht (FD-128).
 
         Spät heißt: Nach dem Wechsel, wenn das neue Projekt steht, kommt binnen
         :data:`LATE_WINDOW_S` noch ein Fenster, eine neue Meldung oder eine
@@ -114,10 +120,10 @@ class SwitchPhase:
                 notes.append(f"{situation}: Startszene nicht herstellbar")
                 continue
             if situation in ("vorschau", "entwurf") and not inputs:
-                notes.append(f"{situation}: keine Eingaben, kein {situation}")
+                notes.append(f"{situation}: {SWITCH_WITHOUT_INPUTS}, kein {situation}")
                 continue
             if situation == "vorschau" and not self.expects_preview():
-                notes.append("vorschau: die Zeile zeigt keine Vorschau")
+                notes.append(f"vorschau: {SWITCH_WITHOUT_PREVIEW}")
                 continue
             outcome = self.switch_once(situation, inputs, new_line)
             if isinstance(outcome, str):
@@ -190,8 +196,9 @@ class SwitchPhase:
             return "der Wechsel kam nicht an"
         if situation == "rechnung" and not computing["busy"]:
             # Rechnet die Operation schneller als der Weg zum ersten Wechselklick,
-            # gibt es keine Rechnung, in die gewechselt würde — nicht gemessen.
-            return "die Rechnung war vor dem ersten Wechselklick fertig"
+            # gibt es keine Rechnung, in die der Kunde wechseln könnte — diese
+            # Lage hat die Zeile nicht, Prüfpunkt 16 verlangt sie nicht (FD-128).
+            return SWITCH_RUN_OVER
         self.watch.poll()
         modals_before = len(self.watch.modals)
         print_before = self.scene_now()

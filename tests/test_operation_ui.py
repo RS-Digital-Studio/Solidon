@@ -19,6 +19,7 @@ import contextlib
 import inspect
 import textwrap
 import threading
+import time
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -2548,9 +2549,17 @@ def test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_
     Schritts, also einen anderen Auftrag als den gemerkten. Das ist keine
     Eingabe des Kunden und darf den getragenen Klick nicht als „Werte
     geändert“ verwerfen (``MainWindow._binds_for_the_waiting_click``).
+
+    **Auch nicht, wenn die Vorschau des Klicks länger rechnet als die
+    Entprellung des Merkmalfensters** (300 ms): Der Neuaufbau meldete die
+    Werte des Schritts und stellte die Uhr; lief sie vor der Vorschau ab,
+    band sie die alten Werte und der Klick verfiel still (CI macOS Intel,
+    Lauf 38815410592). Der Fall hält die Vorschau an und lässt die Uhr
+    ablaufen, statt auf einen langsamen Rechner zu hoffen.
     """
     from app.core.scene.placement import top_face
     from app.ui.op_dialog import ValueField
+    from app.ui.session import _PreviewWorker
 
     object_id = select(window)
     face = top_face(window.session.last_result.scene.objects[object_id].features)
@@ -2590,17 +2599,34 @@ def test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_
         return evaluate(self, *args, **kwargs)
 
     monkeypatch.setattr(Session, "run_evaluation", held)
+    previewed = threading.Event()
+    work = _PreviewWorker.work
+    monkeypatch.setattr(_PreviewWorker, "work", lambda self: (previewed.wait(15), work(self))[1])
     try:
         window.session.evaluate_async()
         assert window.session.busy, "die Lage: die Szene rechnet denselben Stand nach"
         panel._apply.click()
         assert window._click_after_evaluation is not None, "der Klick wartet"
         gate.set()
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and (
+            window._preview_approval is None or window._preview_approval.pending_click is None
+        ):
+            QApplication.processEvents()
+            time.sleep(0.01)
+        assert window._preview_approval is not None
+        assert window._preview_approval.pending_click is not None, "die Lage: er wartet aufs Bild"
+        if window._feature_preview.isActive():
+            # Die Uhr läuft ab, solange die Vorschau des Klicks noch rechnet.
+            window._feature_preview.stop()
+            window._preview_feature_change()
+        previewed.set()
         for _ in range(3):
             assert window.session.wait_for_idle(60_000)
             QApplication.processEvents()
     finally:
         gate.set()
+        previewed.set()
 
     assert len(window.session.project.document.ops) == count, "kein neuer Schritt"
     updated = window.session.project.document.ops[-1]

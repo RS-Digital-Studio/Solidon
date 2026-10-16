@@ -27,6 +27,12 @@
 #   insert_before die Einfügemarke der Sitzung vor diesem Schritt (sichtbare Nummer)
 #   cause         was der Prüfstand vor der Zeile auslöst: {kind = "export", format}
 #                 oder {kind = "auto_split", object}
+#   built         Quellkennung → Generator (``function_scenes.GENERATORS``): die Datei
+#                 entsteht beim Bau, zu groß für tests/data
+#   recognition   "declined": die Frage vor der langen Vollerkennung ist im
+#                 Ladeschritt abgelehnt gespeichert (§21.1)
+#   spools        Spulen im Filamentlager des Falls vor dem Start: [{name, colour,
+#                 material_type}]
 #   promises      objects, kinds (Merkmalsarten), body (closed, open, parts, cavity),
 #                 findings (Befundkennungen), actions (Handlung → Befund, an dem der
 #                 Bericht sie anbietet), stops, triangles_over, seconds_over
@@ -129,6 +135,25 @@ promises = { objects = 1, body = "closed", findings = ["arrange.below_bed"], act
 [[scene."unter_dem_bett.netz".ops]]
 op = "load"
 params = { source = "src_1", unit = "mm" }
+
+[scene."zwei_unter_dem_bett.netz"]
+summary = "Zwei gleiche Netzwürfel 20 mm nebeneinander, beide halb unter dem Druckbett: Der Bericht fasst ihren Befund in einer Sammelzeile, deren Handlung nach den Körpern fragt."
+kernel = "netz"
+promises = { objects = 2, body = "closed", findings = ["arrange.below_bed"], actions = { place_on_bed = "arrange.below_bed" } }
+[[scene."zwei_unter_dem_bett.netz".ops]]
+op = "create_box"
+params = { width = 20.0, depth = 20.0, height = 20.0 }
+[[scene."zwei_unter_dem_bett.netz".ops]]
+op = "create_box"
+params = { width = 20.0, depth = 20.0, height = 20.0 }
+[[scene."zwei_unter_dem_bett.netz".ops]]
+op = "translate_object"
+inputs = ["obj_1"]
+params = { dz = -10.0 }
+[[scene."zwei_unter_dem_bett.netz".ops]]
+op = "translate_object"
+inputs = ["obj_2"]
+params = { dx = 40.0, dz = -10.0 }
 
 [scene."zu_gross.netz"]
 summary = "Eine Platte 400 × 300 × 20 mm: größer als der Bauraum des Vorgabedruckers."
@@ -489,6 +514,16 @@ op = "sketch_pocket"
 inputs = ["obj_1"]
 params = { depth = 2.0, sketch = '{"plane": "through:0,0,20;10,0,20;20,0,20", "elements": [{"kind": "line", "points": [[0, 0], [20, 0]]}, {"kind": "line", "points": [[20, 0], [20, 10]]}, {"kind": "line", "points": [[20, 10], [0, 10]]}, {"kind": "line", "points": [[0, 10], [0, 0]]}], "constraints": []}' }
 
+[scene."skizzentasche.exakt"]
+summary = "Der exakte Quader mit einer gezeichneten Tasche 20 × 10 × 2 mm in der Deckfläche: ein Verlaufsschritt mit Zeichnung."
+kernel = "exakt"
+base = "quader.exakt"
+promises = { objects = 1 }
+[[scene."skizzentasche.exakt".ops]]
+op = "sketch_pocket"
+inputs = ["obj_1"]
+params = { depth = 2.0, sketch = '{"plane": "through:0,0,20;10,0,20;0,10,20", "elements": [{"kind": "line", "points": [[0, 0], [20, 0]]}, {"kind": "line", "points": [[20, 0], [20, 10]]}, {"kind": "line", "points": [[20, 10], [0, 10]]}, {"kind": "line", "points": [[0, 10], [0, 0]]}], "constraints": []}' }
+
 [scene."ebene_durch_linie.exakt"]
 summary = "Dasselbe am exakten Quader."
 kernel = "exakt"
@@ -602,6 +637,15 @@ promises = { stops = true, findings = ["op.create_brep_box.BRepUnavailable"], ac
 op = "create_brep_box"
 params = { width = 40.0, depth = 30.0, height = 20.0 }
 
+# Die Profile des Slicers gibt es nur mit Slicer; ohne ihn nennt das Fenster der
+# neuen Spule den Grund, und die Auswahl bleibt zu (FD-101).
+[scene."quader_mit_slicer.exakt"]
+summary = "Der exakte Quader auf einer Maschine mit eingerichtetem Slicer."
+kernel = "exakt"
+base = "quader.exakt"
+preconditions = { slicer = "vorhanden" }
+promises = { objects = 1, body = "closed" }
+
 [scene."erzeugte_haut.netz"]
 summary = "Ein erzeugtes Modell, das nur eine Haut von 0,3 mm ist (Weg 3, Generator läuft)."
 kernel = "netz"
@@ -621,6 +665,28 @@ promises = { stops = true, findings = ["op.load_step.ValidationError"], actions 
 [[scene."step_ohne_geometrie.exakt".ops]]
 op = "load_step"
 params = { source = "src_1" }
+
+# Der Dialog *Körper wählen …* am Ladeschritt einer STEP-Baugruppe und der Dialog
+# *Konturen wählen …* an einer hochgezogenen Zeichnung: Beide öffnen aus dem
+# Operationsdialog ihres Schritts (Doppelklick im Verlauf, FD-175). Die Zeichnung
+# entsteht beim Bau der Szene (function_scenes.GENERATORS).
+[scene."step_baugruppe.exakt"]
+summary = "Eine STEP-Baugruppe aus mehreren Körpern, als ein Körper geladen."
+kernel = "exakt"
+sources = { src_1 = "step/multibody.step" }
+promises = { objects = 1 }
+[[scene."step_baugruppe.exakt".ops]]
+op = "load_step"
+params = { source = "src_1" }
+
+[scene."zeichnung.netz"]
+summary = "Eine SVG-Zeichnung mit zwei Konturen, 3 mm hochgezogen."
+kernel = "netz"
+built = { src_1 = "zeichnung_svg" }
+promises = { objects = 1 }
+[[scene."zeichnung.netz".ops]]
+op = "load_outline"
+params = { source = "src_1", height = 3.0 }
 
 # --- Projektparameter --------------------------------------------------------------
 
@@ -970,6 +1036,22 @@ op = "thread_exact"
 op = "brep_to_mesh"
 inputs = ["obj_1"]
 
+# Gemessen trennt ein Netz M4 und #8-36 UNF nicht: 0,17 mm im Durchmesser, 0,8 %
+# in der Steigung. Das Gegenstück fragt nach der Größe (RM-544, Regel 21; FD-101).
+[scene."gewinde_zwei_reihen.netz"]
+summary = "Ein gemessener Gewindebolzen Ø 4,08 × 0,703 mm neben einer Platte."
+kernel = "netz"
+promises = { objects = 2, kinds = ["thread", "face"] }
+[[scene."gewinde_zwei_reihen.netz".ops]]
+op = "thread_exact"
+params = { diameter = 4.08, pitch = 0.703, length = 10.0 }
+[[scene."gewinde_zwei_reihen.netz".ops]]
+op = "brep_to_mesh"
+inputs = ["obj_1"]
+[[scene."gewinde_zwei_reihen.netz".ops]]
+op = "create_box"
+params = { width = 20.0, depth = 20.0, height = 5.0, x = 30.0 }
+
 [scene."merkmal.pin.exakt"]
 summary = "Der exakte Quader mit aufgesetztem Zapfen Ø 6 × 10 mm."
 kernel = "exakt"
@@ -995,6 +1077,65 @@ params = { diameter = 6.0, height = 10.0, z = 20.0 }
 [[scene."merkmal.pin.netz".ops]]
 op = "union_objects"
 inputs = ["obj_1", "obj_2"]
+
+# Drei gleiche Zapfen sind weniger, als die Erkennung ohne Erzeugerwissen als
+# Muster liest (``patterns.MIN_CELLS``); *Als Muster zusammenfassen* fasst die
+# markierten zusammen (RM-504; FD-101).
+[scene."drei_zapfen.netz"]
+summary = "Der Netzquader mit drei gleichen Zapfen Ø 6 × 5 mm in einer Reihe."
+kernel = "netz"
+base = "quader.netz"
+promises = { objects = 1, kinds = ["pin"] }
+[[scene."drei_zapfen.netz".ops]]
+op = "create_cylinder"
+params = { diameter = 6.0, height = 5.0, x = -12.0, z = 20.0 }
+[[scene."drei_zapfen.netz".ops]]
+op = "create_cylinder"
+params = { diameter = 6.0, height = 5.0, z = 20.0 }
+[[scene."drei_zapfen.netz".ops]]
+op = "create_cylinder"
+params = { diameter = 6.0, height = 5.0, x = 12.0, z = 20.0 }
+[[scene."drei_zapfen.netz".ops]]
+op = "union_objects"
+inputs = ["obj_1", "obj_2", "obj_3", "obj_4"]
+
+# Alle sieben Filamente des Körpers sind belegt: Eine Spule aus dem Lager ersetzt
+# eines, und das Feld fragt, welches (FilamentField._replacement_slot; FD-101).
+# Die Spule liegt vor dem Start im Lager des Falls.
+[scene."sieben_filamente.netz"]
+summary = "Die drei Zapfen, sieben Flächen in den Filamenten 1 bis 7; eine Spule PETG Rot im Lager."
+kernel = "netz"
+base = "drei_zapfen.netz"
+spools = [{ name = "PETG Rot", colour = "#c0392b", material_type = "PETG" }]
+promises = { objects = 1, kinds = ["pin", "face"] }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 1, at_feature = "face_1", colour = "#1f77b4" }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 2, at_feature = "face_3", colour = "#ff7f0e" }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 3, at_feature = "face_4", colour = "#2ca02c" }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 4, at_feature = "face_5", colour = "#d62728" }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 5, at_feature = "face_6", colour = "#9467bd" }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 6, at_feature = "face_7", colour = "#8c564b" }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 7, at_feature = "face_8", colour = "#e377c2" }
 
 # Am exakten Kern über *Verrunden mit Verlauf*: Die Rundung mit wachsendem Radius
 # ist keine Verrundung fester Breite, sondern eine gerundete Seite. *Text
@@ -1045,18 +1186,21 @@ op = "remesh_mesh"
 inputs = ["obj_1"]
 params = { edge = 2.0 }
 
+# *Alle Merkmale erkennen* holt nach, was beim Laden ausgelassen wurde: Die Wahl
+# steht am Ladeschritt (history.recognition_reopenable). Ein Quader, der erst
+# nach dem Laden über die Grenze wuchs, trug keine, und die Zusage stimmte nicht
+# (FD-101). Das Netz entsteht beim Bau der Szene (function_scenes.GENERATORS), zu groß für
+# tests/data.
 [scene.ueber_erkennungsgrenze]
-summary = "Derselbe Quader auf 0,7 mm Kantenlänge verfeinert: über FEATURE_LIMIT_TRIANGLES (§21.1)."
+summary = "Eine geladene Platte mit 1,54 Millionen Dreiecken, über FEATURE_LIMIT_TRIANGLES; die Vollerkennung beim Laden abgelehnt (§21.1)."
 kernel = "netz"
 heavy = true
+built = { src_1 = "dichte_platte" }
+recognition = "declined"
 promises = { objects = 1, triangles_over = 1500000, findings = ["perceive.too_large"], actions = { recognize_fully = "perceive.too_large", recognize_local = "perceive.too_large", decimate_mesh = "perceive.too_large" } }
 [[scene.ueber_erkennungsgrenze.ops]]
-op = "create_box"
-params = { width = 200.0, depth = 200.0, height = 100.0 }
-[[scene.ueber_erkennungsgrenze.ops]]
-op = "remesh_mesh"
-inputs = ["obj_1"]
-params = { edge = 0.7 }
+op = "load"
+params = { source = "src_1", unit = "mm" }
 
 [scene.langsam_2s]
 summary = "Zwei Kugeln Ø 40 mm, auf 0,22 mm verfeinert, voneinander abgezogen: rechnet über 2 s."

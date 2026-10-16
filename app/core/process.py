@@ -816,6 +816,34 @@ class _LineDispatcher:
             self.done.set()
 
 
+def start_bounded(command: Sequence[str], **options: Any) -> subprocess.Popen[Any]:
+    """Startet ``command`` in einer Prozessgrenze, die den ganzen Baum hält.
+
+    Angehalten gestartet, unter Windows an ein Jobobjekt gebunden, dann
+    fortgesetzt: Jeder Nachkomme liegt darin, auch einer, der erst während des
+    Abbruchs entsteht. :func:`terminate_process_tree` beendet so den Baum,
+    nicht nur den Starter — unter Windows ist ``Git\\bin\\bash.exe`` einer, mit
+    der Shell als Kind, und ``kill()`` ließ sie weiterlaufen (CS-35). Unter
+    POSIX hält die eigene Prozessgruppe den Baum. ``options`` gehen an
+    ``Popen``; scheitert die Bindung, endet der Prozess, und seine Leitungen
+    schließen.
+    """
+    with no_error_dialogs():
+        process = subprocess.Popen(
+            list(command), **options, **process_group_options(no_window=True, suspended=True)
+        )
+    try:
+        _attach_process_boundary(process)
+        _resume_process_boundary(process)
+    except BaseException:
+        terminate_process_tree(process)
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if stream is not None:
+                stream.close()
+        raise
+    return process
+
+
 def run_limited(
     command: Sequence[str],
     *,
@@ -850,26 +878,16 @@ def run_limited(
         raise ValueError("linger")
 
     launched = list(command)
-    with no_error_dialogs():
-        process = subprocess.Popen(
-            launched,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=cwd,
-            env=trusted_environment(graphical=graphical),
-            **process_group_options(no_window=True, suspended=True),
-        )
+    process = start_bounded(
+        launched,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=cwd,
+        env=trusted_environment(graphical=graphical),
+    )
     assert process.stdout is not None
     assert process.stderr is not None
-    try:
-        _attach_process_boundary(process)
-        _resume_process_boundary(process)
-    except BaseException:
-        terminate_process_tree(process)
-        process.stdout.close()
-        process.stderr.close()
-        raise
 
     stdout = bytearray()
     stderr = bytearray()
@@ -962,24 +980,15 @@ def run_stream_limited(
         raise ValueError("output_limit")
 
     launched = list(command)
-    with no_error_dialogs():
-        process = subprocess.Popen(
-            launched,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            cwd=cwd,
-            env=trusted_environment(),
-            **process_group_options(no_window=True, suspended=True),
-        )
+    process = start_bounded(
+        launched,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        cwd=cwd,
+        env=trusted_environment(),
+    )
     assert process.stdout is not None
-    try:
-        _attach_process_boundary(process)
-        _resume_process_boundary(process)
-    except BaseException:
-        terminate_process_tree(process)
-        process.stdout.close()
-        raise
     feed: queue.Queue[bytes | None] = queue.Queue(maxsize=16)
     stopped = threading.Event()
     reader = threading.Thread(

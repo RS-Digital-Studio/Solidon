@@ -71,7 +71,8 @@ jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.
 
 Der einzige Einstieg am Fenster ist `file_acceptance.py`; `function_bench`
 stellt den Fall zusammen, `function_machine`/`function_walk` führen ihn,
-`function_setup`/`function_start` bereiten ihn vor, `function_protocol` schreibt
+`function_setup`/`function_start` bereiten ihn vor (`place_window` belässt
+maximierte Clientmaße ohne Ziel- oder Größenwechsel), `function_protocol` schreibt
 das Protokoll und `function_language` prüft die Sprache. `function_gestures`
 fährt Zeigen und Ziehen, `function_switch` den Projektwechsel. Die Schritte
 gehen über echte Eingabeereignisse und `guide_targets.next_click`; die
@@ -97,6 +98,10 @@ nicht. `names_a_way_out(reason, menus, buttons, *, phrases=(), fields=())` und
 `way_out(window, reason, widget=None)` prüfen Auswege. `surface_field_titles`
 nimmt nur offene Felder auf derselben Fläche, nicht die einer anderen Karte
 oder des gesamten Hauptfensters. Ein graues Feld ist kein Ausweg.
+`function_tooltips.reason_pictures` zeigt im Fehlfall die Kurzhilfe jedes
+grauen Ziels wie beim Überfahren und nimmt sie als eigenes Bild auf
+(`04-fehlfall-grund-<n>.png`): Ein Urteil über einen Sperrgrund stützt sich auf
+den angezeigten Satz, nicht auf das Protokoll.
 
 Lizenzläufe tragen `state` mit `angeboten`, `grau` oder `fehlt`; `reason`
 stammt aus `grey_reason`, zuerst aus der Kurzhilfe, dann aus der zugänglichen
@@ -124,7 +129,17 @@ Unterklassen und festen oder weitergereichten Zielen. `raw_window_names` nimmt
 diese erhobene Menge an, statt eine zweite Klassenliste zu führen.
 `function_checks` hält Schema und Schwellen, `function_points` und
 `function_judges` urteilen; `function_samples` liefert Gegenproben,
-`function_report` Funde, Abhakliste und die Übereinstimmung der Urteile.
+`function_report` Funde und Abhakliste; die Übereinstimmung der Urteile rechnet
+`function_agreement` je Paket zur Auskunft und bindend über die Runde (alle
+Pakete mit demselben Laufordner), Zellen ohne Gegenurteil weist es aus.
+`function_verdict_rules` hält, was ein Urteil zur Zeit seiner Runde gegen
+Funddatei und Vorhersage einhalten muss: *gut nach Fix* genau dort, wo ein
+behobener Fund an der Zelle steht (ein Prüfpunkt umfasst seine Kriterien), und
+V4 nur mit vor dem Klick gebundener Vorhersage. `report` prüft das, der
+Wächter über die versionierten Urteile nur ihre Form. `function_promises`
+findet die Fundstellen von Prüfpunkt 11 außerhalb des Registers über die
+Zeilenspezifikation (`manual`, `website`, die Übersetzungen an derselben Stelle
+der Gliederung) und liest Seiten samt Bildtexten und Titeln.
 
 #### Messflächen und nachträgliche Änderung
 
@@ -218,6 +233,9 @@ kein Prüfstandsmodul, damit sein Nutzer nicht unter `function_guard` fällt.
 `place_window` belässt maximierte Clientmaße ohne Ziel- und Größenwechsel.
 Die allgemeine Ereignissperre gilt weiter: direkte Widget-Handler,
 Handleraliase und dynamische `getattr`-Umwege bleiben unzulässig.
+Ein Radschritt, der in derselben Richtung weiterrückte, zählt nicht als
+Wegklick; nach `function_walk.STILL_ROLLS` Radschritten ohne Annäherung hält
+der Weg an (FD-131). Direktes `click_button` bleibt synchron mit letztem Guard.
 
 Vor einem Export für die ganze Szene stellt der Prüfstand eine leere Auswahl
 über den Kundenweg her; `function_surface.require_full_export_scope` liest
@@ -225,6 +243,13 @@ den tatsächlichen Exportumfang öffentlich zurück. Gleiche Objektkennungen
 nach einem Projektwechsel belegen keine absichtlich ausgewählte Teilmenge.
 Eine erwartete Rückfrage zum Netzkörper
 setzt voraus, dass dieser Körper im Exportumfang liegt.
+
+Prüfpunkt 15 setzt die Einfügemarke vor den letzten Schritt der Startszene.
+Fehlt dort ein Wegziel aus der Szene (`function_surface.SCENE_KINDS`: Baum,
+Bild, Befund), wendet der Fall die Zeile einmal an und setzt die Marke vor
+diesen Schritt; ein fehlendes Merkmal am früheren Stand ist kein Fund. Die
+Antwort wird gegen das Ergebnis am Stand davor gelesen, und eine Meldung aus
+dem Arbeiter schließt der Fall danach selbst.
 
 
 *HEAD-Fassung, früher unter „Die Familien“.*
@@ -316,7 +341,10 @@ Bild und `--shot` eine Bildschirmaufnahme dessen, was der Kunde sieht)
 
 Der Importgraph von `affected_tests.py` behält auch nicht mehr vorhandene
 Importziele als Knoten, damit gelöschte Module ihre direkten und indirekten
-Testabhängigkeiten behalten.
+Testabhängigkeiten behalten. Die geänderten Dateien liest es aus Git
+NUL-getrennt, damit Leerraum und Sonderzeichen nicht gequotet ankommen, und
+ohne Umbenennungserkennung, damit eine Umbenennung am alten und am neuen Ort
+zählt.
 
 `window_memory.py` stellt die andere Frage am selben Fenster: **was ein
 Fenster- und ein Sprachwechsel liegen lassen.** Es baut nacheinander Fenster
@@ -345,6 +373,28 @@ Zeile Paket, Startszene und Weg: `--paket`, `--format md|json`, `--menueleiste
 baut und prüft den Szenenkatalog `tests/data/function_scenes.toml`. Beide
 importieren kein anderes `function_*`-Modul; so bleibt die Liste ohne Kreis mit den
 Urteilsmodulen, die aus ihr importieren.
+
+Werkzeug für den Schlusslauf am echten Fenster (Plan Schluss, Entscheidungen
+des Koordinators): Die Sätze `schrift` (14 und 18 pt, gesetzt vor dem Fenster)
+und `schriftwechsel` (9 → 14 → 9 pt, schmal und groß im Wechsel), je Sprache
+ein Fall (`LANGUAGE_SETS`), stellen die
+Inhaltsschrift über die Schrift der Anwendung und ihren Stilweg her
+(`function_fonts.py`) — die Anwendung hat keine Schriftgröße im Profil, sie
+folgt der des Systems. `skalierung` kennt 125 %. Eine Spezifikation nennt mit
+`drag` den Griff, den erst ihre Handlung zeigt; `phase_drag` nimmt den Zug
+gehalten auf (`05-zug-gehalten`), nach dem Bild der letzten Bewegung, damit Z1
+die Aufnahme nicht mitmisst. Jede aufgenommene Fläche nimmt die Kurzhilfe an
+ihrem grauen Hauptknopf auf (`function_tooltips.grey_apply_pictures`,
+Protokollfeld `grey_apply`), der Hauptweg dazu die Tastenkette ab
+der Reiterleiste (`function_capture.bar_chain`, `tab_from_bar`); der Fehlfall
+geht den Weg einer Meldung mit mehreren genannten Knöpfen zu Ende, die Knöpfe zuerst
+im Fenster der Meldung, ohne zu raten; ein grauer oder fehlender steht als `reason` da
+(`function_way.py`, `messages[].way`). `run --total` und `--binding` halten
+Gesamtfrist und Siegel vor jedem Fall und nach dem letzten
+(`acceptance_guard.py`), die Tabelle des Berichts steht in
+`acceptance_summary.py`. `seal` versiegelt den Lauf für `[[run]].seal`;
+`report` rechnet das Siegel nach, bevor ein Urteil an V4 gilt
+(`function_verdict_rules.run_seal_problems`).
 
 ## Erzeugen
 
@@ -622,6 +672,25 @@ Freeze wird jedes davon entfernt oder bewusst aufgenommen.
   draußen.** `make_web_images.work_rect` berücksichtigt die Werkzeugleiste
   und die Ansichtsleiste. Das Lagerbild begrenzt sich auf das scrollbare
   Regal samt Gruppenüberschriften, unterhalb der Such- und Filterzeile.
+
+*Früher in der Karte unter „Fallen, die man einmal falsch macht“; dort steht
+seither die Kurzfassung.*
+
+**Sprache und Musik bleiben nachprüfbar.** Satzzeiten stammen aus den
+tatsächlich erzeugten WAV-Dateien. Shorts erhalten dieselben Zeiten als
+eingebrannte Untertitel; Tutorials zusätzlich als SRT. Jede Themenmusik
+hat ein eigenes prozedurales Arrangement. Der Mix senkt Musik unter Sprache
+ab und prüft den fertigen H.264/AAC-Film vollständig. Eine technische
+Prüfung ersetzt keine Sicht- oder Hörprüfung.
+Externe Musik wird nur mit Dateihash, Quelle und Lizenznachweis gemischt;
+die Sprachclips werden einzeln angeglichen, die Musik wird unter Sprache
+abgesenkt. Tempo und Tonhöhe der Stimmen bleiben erhalten.
+Zusammenhängende Sprecherabschnitte bleiben eine WAV-Datei. Eine separate
+akustische Satzzuordnung kann die Untertitel verfeinern; ihr Dateihash, der
+WAV-Hash, der unveränderte Text und die Zeitgrenzen werden vor Nutzung geprüft.
+Nach allen Audiofiltern wird jeder Abschnitt auf seine genaue Zahl von
+48-kHz-Samples gebracht. Die absolute Platzierung und Dateihashes stehen in
+`narration-placement.json`; Lautheitsfilter dürfen keine Zeitdrift ansammeln.
 
 ## Der Sitzungszustand ist ausgenommen
 

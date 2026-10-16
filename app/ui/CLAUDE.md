@@ -78,8 +78,8 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 
 | Datei | Zweck |
 |---|---|
-| `session.py` | die Brücke (§7, §15.6): Stapel, Auswertung, Vorschau, Import, Einfügemarke, Fragen des Kerns (`AskRequest`), `one_step` (mehrere `apply` als eine Transaktion); `evaluation_profile` (Profil der Auswertung samt Stützschwelle, `druckrat.md`), `evaluation_follows` (spät gelesene Grundlage wertet neu aus) |
-| `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `wait_for_all`, `weak_slot`; `collect_in_main_thread`, GC-Zähler mit Zustandswahrung; `stop_watching_the_dying` für Filter, die ihr Objekt überleben; `configure_gil_switching`, 1-ms-Takt in `Worker.run`; `RightOfWay`: Vortritt fürs Bild |
+| `session.py` | die Brücke (§7, §15.6): Stapel, Auswertung, Vorschau, Import, Fragen des Kerns (`AskRequest`); mehr: `karte-app-ui.md` |
+| `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `weak_slot`, `stop_watching_the_dying`; mehr: `karte-app-ui.md` |
 | `app_events.py` | der eine Ereignisfilter an der Anwendung; Zuhörer melden dort ihre Ereignisarten an (`listen`), wer es tut, sagt der Modul-Docstring |
 | `layout_lifetime.py` | `detach_from_layout`: Widget aus seinem haltenden Layout lösen, auch verschachtelt oder an externem Host; Elternschaft und wiederverwendete Widgets bleiben erhalten |
 | `change_lock.py` | ob geändert werden darf, für jeden Zugang |
@@ -90,6 +90,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `viewport.py` | Szene/Picks/Merkmale; Griffe (`_dispatch_pointer`), Vorschau/Differenz (`_cover_body`), Analyse/Schnitt/`PreviewBanner`; Zuordnung mit Kandidat/Vorbezug |
+| `waiting_click.py` | Ein Neuaufbau ohne Eingabe hält die Freigabe mit wartendem Klick und zeigt seine Werte (`kept_through_rebuild`); Begründung in `regel-wartezeit.md` |
 | `bed_scale.py` | Bettzahlen und -raster (§19.3) |
 | `render/` | der Renderer hinter der Ansicht — eigene Karte |
 | `overlay.py` | Zonen über der Ansicht (§2.5): `OverlayHost`, `CardColumn`, `CardGrip`, `is_room_taker`, `FittedScroller`; natives Fenster nur für direkte Kinder (`keep_widgets_alien`, `hold_above_the_view`) |
@@ -227,7 +228,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | Datei | Zweck |
 |---|---|
 | `manual_window.py` | Suche in `core/manual_search.py`; F1-Anker nur für geprüfte `MarkdownNoHTML`-Überschriften (`core/manual.py`) |
-| `guide_targets.py` | Gemeinsame Ziele für Tour, Anleitungen und Prüfstand: `TARGET_PROPERTY`, Menü-`objectName`, `next_click`; `view.edge:<körper>`/`edge_point_for` wählt eine gepickte Kante. Fehlend: `MissingTargetError`; API in `karte-app-ui.md` |
+| `guide_targets.py`, `guide_wheel.py`, `guide_finders.py` | Gemeinsame Ziele für Tour, Anleitungen, Prüfstand: `TARGET_PROPERTY`, Menü-`objectName`, `next_click`; Rad, Kennzeichen, Orte in den Teilen. Fehlt: `MissingTargetError`; API: `karte-app-ui.md` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
 | `shortcut_schemes.py` | Kürzel und Plattformtasten; `nothing_to_take_back`: Strg+Z/Y ans Fenster, wenn das Feld nichts zurückzunehmen hat; weitere Helfer in `karte-app-ui.md` |

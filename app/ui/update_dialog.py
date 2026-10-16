@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_VERSION, WEBSITE_URL, website_page_url
-from app.core import changes, updates
+from app.core import changes, guides, updates
 from app.core.changes import Group
 from app.core.errors import AppError, OperationCancelled
 from app.core.scene.cancel import CancelSignal
@@ -261,6 +261,7 @@ class UpdateDialog(QDialog):
         self.get_button.clicked.connect(self._start)
 
         self.page_button = QPushButton(tr("Download-Seite öffnen"), self)
+        self.page_button.setProperty(guides.TARGET_PROPERTY, "update.page")
         self.page_button.clicked.connect(self.open_page)
 
         self.buttons = QDialogButtonBox(self)

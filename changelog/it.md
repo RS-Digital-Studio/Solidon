@@ -115,6 +115,9 @@ scrive in `website/version.json`.
 - Diverse traduzioni si leggono con più chiarezza, tra cui l'introduzione di *Crea parametro …*. Il perno inizia con la maiuscola in tutte le lingue.
 - Le spiegazioni nelle schede sono alte quanto il loro testo, anche in una scheda larga. Nella versione 0.6.0 in alcune lingue restavano righe vuote, per esempio sotto due facce selezionate.
 - Un campo di scelta chiama per nome un valore assente dal suo elenco, come «Faccia 1 · non va bene qui», e uno spigolo per orientamento e posizione. La versione 0.6.0 mostrava un codice interno.
+- Nella finestra *Sblocca Solidon …*, *Acquista Solidon* resta disponibile su un computer attivato. I pulsanti in grigio indicano il motivo, *Verifica chiave* anche la via per una nuova chiave.
+- In francese il primo giorno del mese si scrive ora «1er», ad esempio «1er décembre 2026».
+- Senza driver grafico, ad esempio in una macchina virtuale, Solidon ora termina in modo affidabile alla chiusura. Nella versione 0.6.0 il programma poteva continuare a girare lì senza essere visto.
 
 ### Stampare e passare allo slicer
 
@@ -151,6 +154,8 @@ scrive in `website/version.json`.
 - Se una caratteristica selezionata non va bene, per esempio un foro, una filettatura, una camera o una chiusura, il messaggio offre *Scegli un'altra caratteristica*.
 - I pulsanti *Scegli altri spigoli*, *Scegli altre facce* e *Scegli un'altra caratteristica* aprono il passaggio con il cursore nel campo corrispondente, anche dietro *Altre impostazioni*.
 - Un messaggio senza passaggio, come con *Controparte della filettatura*, indica la via in una frase, ad esempio *Scegli un'altra caratteristica*, e mostra solo pulsanti che lì hanno effetto.
+- Un clic su *Applica* su un elemento durante un calcolo mantiene la modifica, anche se l'anteprima richiede più tempo. Nella versione 0.6.0 andava persa senza avviso sui modelli grandi.
+- Una texture visualizzata non calcola più un'anteprima senza modifiche e non offre più *Annulla*.
 
 ## 0.6.0
 

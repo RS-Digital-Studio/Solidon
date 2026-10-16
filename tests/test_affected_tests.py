@@ -16,6 +16,9 @@ from subprocess import CompletedProcess
 
 import pytest
 
+from tests.selection_trees import names as _names
+from tests.selection_trees import small_tree
+from tests.selection_trees import write as _write
 from tools.affected_tests import (
     ImportGraph,
     affected,
@@ -37,41 +40,19 @@ def _no_inherited_addopts(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
 
 
-def _write(root: Path, relative: str, text: str) -> Path:
-    path = root / relative
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    return path
-
-
 @pytest.fixture
 def tree(tmp_path: Path) -> Path:
-    _write(tmp_path, "app/__init__.py", "")
-    _write(tmp_path, "app/x.py", "VALUE = 1\n")
-    _write(tmp_path, "app/y.py", "from app.x import VALUE\n")
-    _write(tmp_path, "app/z.py", "OTHER = 2\n")
-    _write(tmp_path, "tests/__init__.py", "")
-    _write(tmp_path, "tests/conftest.py", "")
-    _write(tmp_path, "tests/test_direct.py", "from app import x\n")
-    _write(tmp_path, "tests/test_indirect.py", "def f():\n    from app.y import VALUE\n")
-    _write(
-        tmp_path,
-        "tests/test_typed.py",
-        "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from app.x import VALUE\n",
-    )
-    _write(
-        tmp_path,
-        "tests/test_reader.py",
-        "from pathlib import Path\nSOURCES = Path('app').rglob('*.py')\n",
-    )
-    _write(tmp_path, "tests/test_unrelated.py", "from app.z import OTHER\n")
-    _write(tmp_path, "tests/test_roadmap.py", "TEXT = 'ROADMAP.md'\n")
-    _write(tmp_path, "ROADMAP.md", "# Liste\n")
-    return tmp_path
+    return small_tree(tmp_path)
 
 
-def _names(files: set[Path], root: Path) -> set[str]:
-    return {path.relative_to(root).as_posix() for path in files}
+@pytest.fixture(scope="module")
+def real_graph() -> ImportGraph:
+    """Der Importgraph des echten Baums, einmal je Modul gebaut.
+
+    Ein Bau liest jede Datei unter ``app/``, ``tools/`` und ``tests/`` und kostet 15 bis
+    25 s; sechs Fälle bauten ihn je einmal. Keiner ändert Graph oder Baum.
+    """
+    return ImportGraph()
 
 
 def test_module_name_strips_init_and_uses_the_given_root(tmp_path: Path) -> None:
@@ -84,7 +65,7 @@ def test_module_name_strips_init_and_uses_the_given_root(tmp_path: Path) -> None
 
 def test_a_changed_module_selects_direct_indirect_typed_and_tree_readers(tree: Path) -> None:
     """Eine geänderte Kerndatei wählt, wer sie direkt, mittelbar oder nur für Typen importiert,
-    dazu jeden Baumleser — und nennt je Datei den Grund.
+    dazu jeden, der ihren Ordner liest — und nennt je Datei den Grund.
     """
     files, reasons = affected([tree / "app" / "x.py"], ImportGraph(tree))
 
@@ -94,23 +75,885 @@ def test_a_changed_module_selects_direct_indirect_typed_and_tree_readers(tree: P
         "tests/test_typed.py",
         "tests/test_reader.py",
     }
-    assert reasons[tree / "tests" / "test_reader.py"] == "liest den ganzen Baum"
+    assert reasons[tree / "tests" / "test_reader.py"] == (
+        "liest app/**/*.py (tests/test_reader.py:2)"
+    )
     assert reasons[tree / "tests" / "test_indirect.py"] == "importiert eine geänderte Datei"
 
 
 def test_an_unrelated_module_selects_only_the_tree_readers(tree: Path) -> None:
-    """``app.z`` importiert niemand außer ``test_unrelated`` — und der Baumleser sieht alles."""
+    """``app.z`` importiert niemand außer ``test_unrelated`` — und der Baumleser sieht ``app/``."""
     files, _ = affected([tree / "app" / "z.py"], ImportGraph(tree))
 
     assert _names(files, tree) == {"tests/test_unrelated.py", "tests/test_reader.py"}
 
 
+def test_a_flat_glob_reads_the_tree_too(tree: Path) -> None:
+    """CS-6, RM-725: Wer den Baum über ``glob`` liest, statt ihn zu importieren, sieht eine
+    Änderung in dem Ordner, den er liest — auch über das Modul ``glob``, auch unter anderem
+    Namen, auch über ``os.walk`` und ``Path.walk`` (H-2)."""
+    for name, text in (
+        ("test_globber", "from pathlib import Path\nFILES = Path('app').glob('*.py')\n"),
+        ("test_globmodule", "import glob\nFILES = glob.glob('app/*.py')\n"),
+        ("test_renamed", "from glob import glob as find\nFILES = find('app/*.py')\n"),
+        ("test_oswalk", "import os\nFILES = list(os.walk('app'))\n"),
+        ("test_pathwalk", "from pathlib import Path\nFILES = list(Path('app').walk())\n"),
+    ):
+        _write(tree, f"tests/{name}.py", text)
+
+    files, reasons = affected([tree / "app" / "z.py"], ImportGraph(tree))
+
+    assert {
+        "tests/test_globber.py",
+        "tests/test_globmodule.py",
+        "tests/test_renamed.py",
+        "tests/test_oswalk.py",
+        "tests/test_pathwalk.py",
+    } <= _names(files, tree)
+    assert reasons[tree / "tests" / "test_globber.py"] == (
+        "liest app/*.py (tests/test_globber.py:2)"
+    )
+
+
+def test_only_a_glob_that_can_meet_python_reads_the_sources(tree: Path) -> None:
+    """RQ-4: Ein ``glob`` auf Temp-Dateien oder Schriften liest keine Quellen und wählt bei
+    einer Codeänderung nichts; ``ast.walk`` geht über einen Syntaxbaum, nicht über einen
+    Ordner (H-2). Was ``*.py``, ``*`` oder ein offenes Muster in einem Ordner des Baums trifft,
+    bleibt drin. Ein Ordner, der sich nicht auflösen lässt, zählt nur mit einem Muster, das
+    Python nennt — ``rglob("*")`` über ihn geht über Programme und Archive —, wird aber
+    an der Aufrufstelle zum Ordner, den das Argument nennt."""
+    for name, text in (
+        ("test_temp", "from pathlib import Path\nLEFT = Path('app').glob('*.tmp')\n"),
+        ("test_fonts", "from pathlib import Path\nFONTS = Path('app').rglob('*.ttf')\n"),
+        ("test_syntax", "import ast\nNODES = list(ast.walk(ast.parse('x')))\n"),
+        ("test_any", "from pathlib import Path\nALL = Path('app').glob('*')\n"),
+        ("test_open", "from pathlib import Path\nFOUND = Path('app').glob(f'{NAME}*')\n"),
+        ("test_unknown_any", "def files(folder):\n    return sorted(folder.rglob('*'))\n"),
+        ("test_unknown_py", "def files(folder):\n    return sorted(folder.rglob('*.py'))\n"),
+        (
+            "test_copies_app",
+            "from pathlib import Path\nfrom tools.copy import copy\nX = copy(Path('app'))\n",
+        ),
+    ):
+        _write(tree, f"tests/{name}.py", text)
+    _write(tree, "tools/copy.py", "def copy(source):\n    return list(source.rglob('*'))\n")
+
+    files, _ = affected([tree / "app" / "z.py"], ImportGraph(tree))
+
+    names = _names(files, tree)
+    assert (
+        not {
+            "tests/test_temp.py",
+            "tests/test_fonts.py",
+            "tests/test_syntax.py",
+            "tests/test_unknown_any.py",
+        }
+        & names
+    )
+    assert {
+        "tests/test_any.py",
+        "tests/test_open.py",
+        "tests/test_unknown_py.py",
+        "tests/test_copies_app.py",
+    } <= names
+
+
+def test_a_listing_through_git_or_a_tool_loaded_by_path_reads_too(tree: Path) -> None:
+    """Gemessen an der Lesemessung aller Testdateien: ``test_source_escapes`` liest jede
+    ``.md`` über ``git ls-files``, ``test_delivery_tools`` den Baum über ein Werkzeug, das es
+    mit ``spec_from_file_location`` lädt. Beide fehlten, sobald ein unbekannter Ordner nicht
+    mehr jeden Ort liest. Eine Lesestelle zählt auch für eine geänderte Datei, die kein
+    Python ist."""
+    _write(
+        tree,
+        "tests/test_markdown.py",
+        "import subprocess\n"
+        "from pathlib import Path\n"
+        "ROOT = Path(__file__).resolve().parents[1]\n"
+        "def test_markdown():\n"
+        "    subprocess.run(['git', 'ls-files', '-co', '--', '*.md'], cwd=ROOT)\n",
+    )
+    _write(
+        tree,
+        "tests/test_app_files.py",
+        "import subprocess\n"
+        "def test_app():\n"
+        "    subprocess.run(['git', 'ls-files', '-z', '--', 'app'])\n",
+    )
+    _write(
+        tree,
+        "tools/digest.py",
+        "def code_digest(root):\n    return sorted((root / 'app').rglob('*'))\n",
+    )
+    _write(
+        tree,
+        "tests/test_loaded.py",
+        "import importlib.util\n"
+        "from pathlib import Path\n"
+        "ROOT = Path(__file__).resolve().parents[1]\n"
+        "def test_digest():\n"
+        "    script = ROOT / 'tools' / 'digest.py'\n"
+        "    spec = importlib.util.spec_from_file_location('digest_copy', script)\n"
+        "    driver = importlib.util.module_from_spec(spec)\n"
+        "    assert driver.code_digest(ROOT)\n",
+    )
+    notes = _write(tree, "docs/NOTES.md", "# Notizen\n")
+    graph = ImportGraph(tree)
+
+    files, reasons = affected([tree / "app" / "z.py"], graph)
+
+    assert {"tests/test_app_files.py", "tests/test_loaded.py"} <= _names(files, tree)
+    assert "tests/test_markdown.py" not in _names(files, tree)
+    assert reasons[tree / "tests" / "test_loaded.py"] == "liest app/**/* über tools/digest.py:2"
+
+    files, reasons = affected([notes], graph)
+
+    assert "tests/test_markdown.py" in _names(files, tree)
+    assert reasons[tree / "tests" / "test_markdown.py"] == (
+        "liest **/*.md (tests/test_markdown.py:5)"
+    )
+
+
+def test_a_test_reading_through_a_source_helper_is_a_tree_reader(tree: Path) -> None:
+    """E5: Ein Wächter, der den Baum nur über einen gemeinsamen Helfer liest, steht in keinem
+    eigenen Text als Baumleser — er wird über die Funktion gewählt, die er dort bezieht, auch
+    über einen Zwischenhelfer und aus ``tools/``; der Ordner kommt aus seinem Argument. Der
+    Helfer selbst sammelt keinen Test und gehört nicht in die Auswahl."""
+    _write(
+        tree,
+        "tests/source_tree.py",
+        "from pathlib import Path\n"
+        "ROOT = Path(__file__).resolve().parent.parent\n"
+        "def files(folder):\n"
+        "    return sorted((ROOT / folder).rglob('*.py'))\n",
+    )
+    _write(
+        tree, "tests/test_guard.py", "from tests import source_tree\nX = source_tree.files('app')\n"
+    )
+    _write(tree, "tests/guard_helpers.py", "from tests.source_tree import files\n")
+    _write(
+        tree, "tests/test_far_guard.py", "from tests.guard_helpers import files\nX = files('app')\n"
+    )
+    _write(
+        tree,
+        "tests/test_tests_guard.py",
+        "from tests import source_tree\nX = source_tree.files('tests')\n",
+    )
+    _write(tree, "tools/code_scan.py", "def scan(root):\n    return sorted(root.glob('**/*.py'))\n")
+    _write(
+        tree,
+        "tests/test_scan_guard.py",
+        "from pathlib import Path\nfrom tools.code_scan import scan\nX = scan(Path('app'))\n",
+    )
+
+    files, reasons = affected([tree / "app" / "z.py"], ImportGraph(tree))
+
+    assert {
+        "tests/test_guard.py",
+        "tests/test_far_guard.py",
+        "tests/test_scan_guard.py",
+    } <= _names(files, tree)
+    assert "tests/test_tests_guard.py" not in _names(files, tree), "liest nur tests/"
+    assert reasons[tree / "tests" / "test_guard.py"] == (
+        "liest app/**/*.py über tests/source_tree.py:4"
+    )
+    assert reasons[tree / "tests" / "test_scan_guard.py"] == (
+        "liest app/**/*.py über tools/code_scan.py:2"
+    )
+    assert all(path.name.startswith("test_") for path in files), sorted(files)
+
+
+def test_only_who_borrows_the_reading_function_reads_through_a_test_file(tree: Path) -> None:
+    """RQ-3: Wie ``test_wording`` die Quellen über ``application_sources`` aus
+    ``test_text_length`` liest, kann auch eine Testdatei ihren Baumgang verleihen — aber nur
+    an den, der die lesende Funktion bezieht. ``test_boolean_empty_result`` leiht ``box`` aus
+    ``test_boolean``, das an anderer Stelle ``rglob`` trägt; durch ``box`` liest es nichts."""
+    _write(
+        tree,
+        "tests/test_lengths.py",
+        "from pathlib import Path\n"
+        "def application_sources():\n"
+        "    return sorted(Path('app').rglob('*.py'))\n"
+        "def box():\n"
+        "    return None\n",
+    )
+    _write(
+        tree,
+        "tests/test_words.py",
+        "from tests.test_lengths import application_sources\nX = application_sources()\n",
+    )
+    _write(tree, "tests/test_empty_result.py", "from tests.test_lengths import box\nX = box()\n")
+
+    files, reasons = affected([tree / "app" / "z.py"], ImportGraph(tree))
+
+    assert "tests/test_empty_result.py" not in _names(files, tree)
+    assert reasons[tree / "tests" / "test_words.py"] == (
+        "liest app/**/*.py über tests/test_lengths.py:3"
+    )
+    assert reasons[tree / "tests" / "test_lengths.py"] == (
+        "liest app/**/*.py (tests/test_lengths.py:3)"
+    )
+
+
+def test_a_helper_listing_a_foreign_tree_is_no_source_reader(tree: Path) -> None:
+    """Die Gegenrichtung zu E5: Ein Helfer, der ein Paketarchiv in einem Temp-Ordner
+    durchgeht (``rglob("*")``), liest keine Quellen. Seine Importeure laufen bei einer
+    Änderung an ``app/`` nicht mit — sonst zöge ``tests/helpers.py`` jede zweite Testdatei
+    hinein —, und er selbst steht auch dann nicht in der Auswahl, wenn er das Wort ``rglob``
+    trägt."""
+    _write(tree, "tests/archive.py", "def pack(tree):\n    return sorted(tree.rglob('*'))\n")
+    _write(
+        tree,
+        "tests/test_archive.py",
+        "from tests.archive import pack\ndef test_pack(tmp_path):\n    pack(tmp_path / 'x')\n",
+    )
+
+    files, _ = affected([tree / "app" / "z.py"], ImportGraph(tree))
+
+    assert _names(files, tree) == {"tests/test_unrelated.py", "tests/test_reader.py"}
+
+
+def test_a_file_named_by_a_helper_selects_the_tests_behind_it(tree: Path) -> None:
+    """Nennt ein Helfer unter ``tests/`` eine Datei, zählen die Testdateien, die die nennende
+    Einheit beziehen (je Einheit, Entscheidung Koordinator) — der Helfer allein sammelt keinen
+    Test, und wer aus ihm nur anderes bezieht, liest die Datei nicht."""
+    _write(tree, "tests/roadmap_helper.py", "TEXT = 'ROADMAP.md'\nOTHER = 1\n")
+    _write(tree, "tests/test_roadmap_view.py", "from tests.roadmap_helper import TEXT\nX = TEXT\n")
+    _write(tree, "tests/test_other.py", "from tests.roadmap_helper import OTHER\nX = OTHER\n")
+
+    files, reasons = affected([tree / "ROADMAP.md"], ImportGraph(tree))
+
+    assert _names(files, tree) == {"tests/test_roadmap.py", "tests/test_roadmap_view.py"}
+    assert reasons[tree / "tests" / "test_roadmap_view.py"] == (
+        "nennt ROADMAP.md über tests/roadmap_helper.py:1"
+    )
+    assert (
+        reasons[tree / "tests" / "test_roadmap.py"] == "nennt ROADMAP.md (tests/test_roadmap.py:1)"
+    )
+
+
+def test_a_tool_or_a_deleted_module_named_by_a_helper_selects_the_tests_behind_it(
+    tree: Path,
+) -> None:
+    """Dieselbe Regel für die zwei anderen Namenswege: ein Werkzeug, das seine Tests über den
+    Pfad laden, und ein gelöschtes Modul, das nur noch als Text vorkommt — nennt es ein
+    Helfer, zählen dessen Importeure, nicht er."""
+    tool = _write(tree, "tools/runner_unit.py", "VALUE = 1\n")
+    _write(tree, "tests/runner_loader.py", "SCRIPT = 'runner_unit.py'\n")
+    _write(tree, "tests/test_runner.py", "from tests.runner_loader import SCRIPT\n")
+    _write(tree, "tests/module_names.py", "NAME = 'app.x'\n")
+    _write(tree, "tests/test_module_names.py", "from tests.module_names import NAME\n")
+
+    files, reasons = affected([tool], ImportGraph(tree))
+
+    assert reasons[tree / "tests" / "test_runner.py"] == (
+        "über tests/runner_loader.py: nennt runner_unit.py"
+    )
+    assert all(path.name.startswith("test_") for path in files), sorted(files)
+
+    removed = tree / "app" / "x.py"
+    removed.unlink()
+    files, reasons = affected([removed], ImportGraph(tree))
+
+    assert reasons[tree / "tests" / "test_module_names.py"] == (
+        "über tests/module_names.py: nennt app.x, und die Datei ist gelöscht"
+    )
+    assert all(path.name.startswith("test_") for path in files), sorted(files)
+
+
+def test_a_helper_names_a_file_in_strings_and_for_its_direct_importers_only(tree: Path) -> None:
+    """RQ-2: ``tests/php_probe.py`` nannte ``build.yml`` nur im Docstring und in einer
+    Fehlermeldung, und über ``tests/helpers.py`` hingen 189 Testdateien daran. Ein Kommentar
+    oder Docstring nennt nichts; was ein Helfer in einer Zeichenkette nennt, liest, wer die
+    nennende Einheit bezieht — auch über einen Zwischenhelfer, nicht wer den Helfer nur
+    importiert (je Einheit, Entscheidung Koordinator)."""
+    workflow = _write(tree, ".github/workflows/build.yml", "name: Bau\n")
+    _write(
+        tree,
+        "tests/php_probe.py",
+        '"""Liest, was build.yml dem Lauf mitgibt."""\n# siehe build.yml\nVALUE = 1\n',
+    )
+    _write(tree, "tests/test_probe_user.py", "from tests.php_probe import VALUE\nX = VALUE\n")
+    _write(tree, "tests/reader_helper.py", "WORKFLOW = 'build.yml'\nOTHER = 1\n")
+    _write(tree, "tests/between.py", "from tests.reader_helper import WORKFLOW\n")
+    _write(
+        tree,
+        "tests/test_direct_user.py",
+        "from tests.reader_helper import WORKFLOW\nX = WORKFLOW\n",
+    )
+    _write(tree, "tests/test_far_user.py", "from tests.between import WORKFLOW\nX = WORKFLOW\n")
+    _write(tree, "tests/test_other_user.py", "from tests.reader_helper import OTHER\nX = OTHER\n")
+    _write(tree, "tests/test_comment.py", "# build.yml steht hier nur im Kommentar\nX = 1\n")
+    _write(tree, "tests/test_names_it.py", "NAME = 'build.yml'\n")
+
+    files, reasons = affected([workflow], ImportGraph(tree))
+
+    assert _names(files, tree) == {
+        "tests/test_direct_user.py",
+        "tests/test_far_user.py",
+        "tests/test_names_it.py",
+    }
+    assert reasons[tree / "tests" / "test_direct_user.py"] == (
+        "nennt build.yml über tests/reader_helper.py:1"
+    )
+
+
+def test_a_data_folder_counts_by_its_path_not_by_its_last_name(tree: Path) -> None:
+    """RQ-5: Eine Datei unter ``app/core/knowledge/data`` wählte jedes Modul, das irgendeinen
+    Ordner ``data`` nennt — ``tests/data``, ``geom/data/fonts``, Temp-Ordner. Jetzt zählt, wohin
+    ein Pfadausdruck zeigt, auch über eine Konstante (``EXAMPLES_DIRNAME``) und auch, wenn er
+    eine Ebene über dem Ordner offen bleibt (``ROOT / "website" / sprache``); ein Text zählt,
+    wenn seine Teile zum Pfad passen. Ein bloßes ``"data"`` liest nichts."""
+    rules = _write(tree, "app/core/knowledge/data/rules.toml", "version = 1\n")
+    _write(tree, "app/core/__init__.py", "")
+    _write(tree, "app/core/knowledge/__init__.py", "")
+    for module, text in (
+        ("rules", "from pathlib import Path\nDATA = Path(__file__).parent / 'data'\n"),
+        (
+            "tables",
+            "from pathlib import Path\nDIRNAME = 'data'\nDIR = Path(__file__).parent / DIRNAME\n",
+        ),
+        (
+            "pick",
+            "from pathlib import Path\nHERE = Path(__file__).parent.parent / 'knowledge'\n"
+            "def table(kind):\n    return HERE / kind\n",
+        ),
+    ):
+        _write(tree, f"app/core/knowledge/{module}.py", text)
+        _write(tree, f"tests/test_{module}.py", f"from app.core.knowledge import {module}\n")
+    _write(
+        tree,
+        "tests/corpus.py",
+        "from pathlib import Path\nDATA = Path(__file__).parent / 'data'\n",
+    )
+    _write(tree, "tests/test_corpus.py", "from tests.corpus import DATA\n")
+    _write(tree, "tests/test_text_path.py", "WHERE = 'knowledge/data/'\n")
+    _write(tree, "tests/test_other_text.py", "WHERE = 'tests/data/'\n")
+    _write(tree, "tests/test_bare.py", "ROW = {'data': 1}\n")
+
+    files, reasons = affected([rules], ImportGraph(tree))
+
+    assert _names(files, tree) == {
+        "tests/test_rules.py",
+        "tests/test_tables.py",
+        "tests/test_pick.py",
+        "tests/test_text_path.py",
+    }
+    assert reasons[tree / "tests" / "test_rules.py"] == (
+        "hängt an einem Modul, das app/core/knowledge/data/ liest"
+    )
+
+
+def test_an_operation_module_selects_the_tests_that_name_its_operations(tree: Path) -> None:
+    """CS-31: ``chamber_ops`` lädt nur eine Namensliste in ``bootstrap``; ``test_chamber_ops``
+    ruft die Op über das Register und importiert das Modul nie. Die Namen der registrierten
+    Ops und Bausteine, statisch gelesen, sind die Kante — genau der Name als Zeichenkette,
+    nicht ein längerer, nicht ein Kommentar und nicht der Argumentname von ``parametrize``
+    (``test_slicer_placement`` hieß über ``parametrize("pattern", …)`` Leser von
+    ``scene.ops``)."""
+    module = _write(
+        tree,
+        "app/chamber_ops.py",
+        "from app.registry import register_op\n"
+        "NAME = 'zz_resize_chamber'\n"
+        "@register_op(name=NAME, title='Kammer')\n"
+        "def resize(ctx):\n    return ctx\n",
+    )
+    _write(
+        tree,
+        "app/panels.py",
+        "from app.parts import register_part\n"
+        "@register_part(name='zz_panel', title='Platte')\n"
+        "def panel(ctx):\n    return ctx\n",
+    )
+    _write(tree, "tests/test_chamber.py", "RESULT = run_op('zz_resize_chamber')\n")
+    _write(tree, "tests/test_longer.py", "RESULT = run_op('zz_resize_chamber_twice')\n")
+    _write(tree, "tests/test_mentioned.py", "# zz_resize_chamber\nX = 1\n")
+    _write(
+        tree,
+        "tests/test_argument.py",
+        "import pytest\n"
+        "@pytest.mark.parametrize('zz_resize_chamber', [1])\n"
+        "def test_one(zz_resize_chamber):\n    pass\n"
+        "@pytest.mark.parametrize(('zz_resize_chamber', 'b'), [(1, 2)])\n"
+        "def test_two(zz_resize_chamber, b):\n    pass\n"
+        "@pytest.mark.parametrize(argnames='zz_resize_chamber', argvalues=[1])\n"
+        "def test_three(zz_resize_chamber):\n    pass\n",
+    )
+    _write(tree, "tests/test_panel.py", "PART = 'zz_panel'\n")
+
+    files, reasons = affected([module], ImportGraph(tree))
+
+    assert {"tests/test_chamber.py"} <= _names(files, tree)
+    assert not {
+        "tests/test_longer.py",
+        "tests/test_mentioned.py",
+        "tests/test_argument.py",
+        "tests/test_panel.py",
+    } & (_names(files, tree))
+    assert reasons[tree / "tests" / "test_chamber.py"] == ("nennt die Operation zz_resize_chamber")
+    files, reasons = affected([tree / "app" / "panels.py"], ImportGraph(tree))
+    assert reasons[tree / "tests" / "test_panel.py"] == "nennt den Baustein zz_panel"
+
+
+def test_an_operation_module_reaches_the_tests_of_the_ops_that_import_it(tree: Path) -> None:
+    """``closure_ops`` importiert ``chamber_ops``; ``test_closure_ops`` nennt nur
+    ``resize_closure`` und lief bei einer Änderung an ``chamber_ops`` nicht mit, obwohl jede
+    Verschlussop die Kammer rechnet (Messung gegen die Ausführung)."""
+    chamber = _write(
+        tree,
+        "app/chamber_ops.py",
+        "from app.registry import register_op\n"
+        "@register_op(name='zz_resize_chamber')\ndef resize(ctx):\n    return ctx\n",
+    )
+    _write(
+        tree,
+        "app/closure_ops.py",
+        "from app.chamber_ops import resize\nfrom app.registry import register_op\n"
+        "@register_op(name='zz_resize_closure')\ndef close(ctx):\n    return resize(ctx)\n",
+    )
+    _write(tree, "tests/test_closure.py", "RESULT = run_op('zz_resize_closure')\n")
+
+    _files, reasons = affected([chamber], ImportGraph(tree))
+
+    assert reasons[tree / "tests" / "test_closure.py"] == "nennt die Operation zz_resize_closure"
+
+
+def test_a_test_over_the_whole_registry_or_the_examples_runs_for_every_operation_module(
+    tree: Path,
+) -> None:
+    """``test_registry_consistency`` geht über ``REGISTRY.all()``, ``test_examples`` rechnet die
+    Beispielprojekte — beide führen ``chamber_ops`` aus, ohne ``resize_chamber`` zu nennen
+    (Entscheidung Koordinator). Eine Frage nach einem Namen, ein Register als Gegenstand von
+    ``setattr`` und eine bloße Liste der Beispieldateien gehen nicht über alles; ein Modul, das
+    keine Op registriert, wählt keinen dieser Tests."""
+    chamber = _write(
+        tree,
+        "app/chamber_ops.py",
+        "from app.registry import register_op\n"
+        "@register_op(name='zz_resize_chamber')\ndef resize(ctx):\n    return ctx\n",
+    )
+    registry = "from app.core.registry import REGISTRY, PARTS\n"
+    over = {
+        "test_all": "NAMES = [spec.name for spec in REGISTRY.all()]\n",
+        "test_groups": "def test_groups():\n    for group in PARTS.by_group():\n        pass\n",
+        "test_passed": "ROWS = rows(registry=REGISTRY)\n",
+        "test_looped": "NAMES = [spec for spec in REGISTRY]\n",
+        "test_example_import": "from app.core import examples\n",
+        "test_example_load": "from pathlib import Path\n"
+        "from app.core.scene.project import load\n"
+        "PROJECTS = [load(p) for p in Path('app/examples').glob('*.p3d')]\n",
+    }
+    single = {
+        "test_get": registry + "SPEC = REGISTRY.get('zz_other')\nKNOWN = REGISTRY.has('zz_x')\n",
+        "test_patch": registry + "def test_patch(monkeypatch):\n"
+        "    monkeypatch.setattr(REGISTRY, '_ops', {})\n",
+        "test_example_list": "from pathlib import Path\n"
+        "FILES = sorted(Path('app/examples').glob('*.p3d'))\n",
+    }
+    for name, text in over.items():
+        _write(tree, f"tests/{name}.py", (registry if "REGISTRY" in text else "") + text)
+    for name, text in single.items():
+        _write(tree, f"tests/{name}.py", text)
+    _write(
+        tree,
+        "tests/helpers_registry.py",
+        registry + "def every():\n    return REGISTRY.in_registration_order()\n",
+    )
+    _write(tree, "tests/test_helped.py", "from tests import helpers_registry\n")
+    graph = ImportGraph(tree)
+
+    files, reasons = affected([chamber], graph)
+
+    chosen = _names(files, tree)
+    assert {f"tests/{name}.py" for name in over} | {"tests/test_helped.py"} <= chosen
+    assert not {f"tests/{name}.py" for name in single} & chosen
+    assert reasons[tree / "tests" / "test_all.py"] == "geht über das ganze Register"
+    assert reasons[tree / "tests" / "test_example_import.py"] == "rechnet die Beispielprojekte"
+    files, _reasons = affected([tree / "app" / "z.py"], graph)
+    assert not {f"tests/{name}.py" for name in over} & _names(files, tree)
+
+
+def test_a_data_file_under_app_counts_as_a_change_to_the_module_that_reads_it(
+    tree: Path,
+) -> None:
+    """``materials.toml`` liest ``knowledge/profiles.py``, und 33 von 78 Testdateien, die sie
+    gemessen öffnen, erreichen ``profiles`` erst über eine Op (Entscheidung Koordinator: wie
+    eine Änderung am Leser). Gelesen wird über den Pfad der Datei, über einen offenen Namen
+    im Ordner, wenn das Modul die Datei nennt, oder über eine Lesestelle, deren Muster sie
+    deckt — nicht über die gleichnamige Datei im Nutzerordner und nicht über eine Kopie des
+    ganzen Baums (``make_installer`` über ``app/**/*``)."""
+    _write(
+        tree,
+        "app/knowledge/profiles.py",
+        "from pathlib import Path\nDATA = Path(__file__).parent / 'data'\n"
+        "def printers():\n    return (DATA / 'printers.toml').read_text()\n"
+        "def shipped(table):\n    return (DATA / table).read_text()\n"
+        "MATERIALS = shipped('materials.toml')\n",
+    )
+    _write(
+        tree,
+        "app/knowledge/user.py",
+        "from pathlib import Path\nOWN = Path.home() / 'knowledge' / 'data'\n"
+        "def own():\n    return (OWN / 'colours.toml').read_text()\n",
+    )
+    _write(
+        tree,
+        "app/catalog.py",
+        "from pathlib import Path\nLOCALES = Path(__file__).parent / 'locales'\n"
+        "def languages():\n    return sorted(LOCALES.glob('*.json'))\n",
+    )
+    _write(
+        tree,
+        "tools/installer.py",
+        "from pathlib import Path\nROOT = Path(__file__).resolve().parents[1]\n"
+        "def stage():\n    return sorted((ROOT / 'app').rglob('*'))\n",
+    )
+    _write(tree, "tools/release.py", "from tools import installer\n")
+    _write(tree, "app/ops.py", "from app.knowledge import profiles\nfrom app import catalog\n")
+    _write(tree, "tests/test_deep.py", "from app.ops import profiles\n")
+    _write(tree, "tests/test_user.py", "from app.knowledge import user\n")
+    _write(tree, "tests/test_release.py", "from tools import release\n")
+    for name in ("materials.toml", "printers.toml", "colours.toml"):
+        _write(tree, f"app/knowledge/data/{name}", "[x]\n")
+    _write(tree, "app/locales/en.json", "{}\n")
+    graph = ImportGraph(tree)
+
+    for changed in ("materials.toml", "printers.toml"):
+        files, reasons = affected([tree / "app" / "knowledge" / "data" / changed], graph)
+        assert reasons[tree / "tests" / "test_deep.py"] == (
+            f"hängt an app/knowledge/profiles.py, das {changed} liest"
+        )
+        assert not {"tests/test_user.py", "tests/test_release.py"} & _names(files, tree)
+    files, _reasons = affected([tree / "app" / "knowledge" / "data" / "colours.toml"], graph)
+    assert "tests/test_deep.py" not in _names(files, tree)
+    files, reasons = affected([tree / "app" / "locales" / "en.json"], graph)
+    assert reasons[tree / "tests" / "test_deep.py"] == "hängt an app/catalog.py, das en.json liest"
+    _write(tree, "app/defaults.toml", "[x]\n")
+    files, _reasons = affected([tree / "app" / "defaults.toml"], graph)
+    assert "tests/test_release.py" not in _names(files, tree)
+
+
+def test_an_operation_reached_through_a_created_step_or_a_project_file_selects_its_tests(
+    tree: Path,
+) -> None:
+    """Gemessen gegen die Ausführung fehlten zehn Paare (Entscheidung Koordinator: 0 von 990):
+    ``test_import_placement`` ruft nur ``import_plan``, und ``ingest/plan.py`` legt den Schritt
+    ``load`` oder ``load_step`` an; ``test_platform_identity`` nennt ``insert_pipe_clamp``, die
+    Op des Bausteins ``pipe_clamp``; ``test_orphans`` lädt ``weg4-stein-formen.p3d``, die
+    ``sculpt_strokes`` rechnet. Ein Vergleich mit dem Namen legt keinen Schritt an, und eine
+    Projektdatei ohne die Op lädt sie nicht."""
+    import json
+    import zipfile
+
+    loading = _write(
+        tree,
+        "app/load_ops.py",
+        "from app.registry import register_op\n"
+        "@register_op(name='zz_load')\ndef load(ctx):\n    return ctx\n"
+        "@register_op(name='zz_load_step')\ndef load_step(ctx):\n    return ctx\n",
+    )
+    _write(
+        tree,
+        "app/plan.py",
+        "def loader(suffix):\n    if suffix == '.step':\n        return 'zz_load_step'\n"
+        "    return 'zz_other'\n"
+        "def draft():\n    return OperationDraft(op='zz_load')\n",
+    )
+    _write(tree, "app/history.py", "def special(entry):\n    return entry.op == 'zz_load'\n")
+    _write(tree, "tests/test_import.py", "from app import plan\n")
+    _write(tree, "tests/test_history_only.py", "from app import history\n")
+    part = _write(
+        tree,
+        "app/mounting.py",
+        "from app.parts import register_part\n"
+        "@register_part(name='zz_pipe_clamp')\ndef clamp(ctx):\n    return ctx\n",
+    )
+    _write(tree, "tests/test_part_op.py", "STEP = run_op('insert_zz_pipe_clamp')\n")
+    sculpt = _write(
+        tree,
+        "app/sculpt.py",
+        "from app.registry import register_op\n"
+        "@register_op(name='zz_sculpt')\ndef sculpt(ctx):\n    return ctx\n",
+    )
+    for name, ops in (("stein.p3d", ["create_box", "zz_sculpt"]), ("leer.p3d", ["create_box"])):
+        path = tree / "website" / "teile" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("project.json", json.dumps({"ops": [{"op": op} for op in ops]}))
+    _write(tree, "tests/test_stone.py", "PROJECT = ('website', 'teile', 'stein.p3d')\n")
+    _write(tree, "tests/test_empty.py", "PROJECT = ('website', 'teile', 'leer.p3d')\n")
+    graph = ImportGraph(tree)
+
+    files, reasons = affected([loading], graph)
+    assert reasons[tree / "tests" / "test_import.py"] == (
+        "über app/plan.py: legt einen Schritt zz_load an"
+    )
+    assert "tests/test_history_only.py" not in _names(files, tree)
+    _files, reasons = affected([part], graph)
+    assert reasons[tree / "tests" / "test_part_op.py"] == (
+        "nennt die Operation insert_zz_pipe_clamp"
+    )
+    files, reasons = affected([sculpt], graph)
+    assert reasons[tree / "tests" / "test_stone.py"] == "lädt stein.p3d mit zz_sculpt"
+    assert "tests/test_empty.py" not in _names(files, tree)
+
+
+def test_a_data_file_under_tests_or_website_counts_as_a_change_to_its_reader(tree: Path) -> None:
+    """``tests/data/function_scenes.toml`` liest ``tools/function_scenes.py``, und
+    ``test_function_export_preparation`` erreicht es über ``tools/function_bench.py``;
+    ``website/site.js`` liest ``tools/make_changelog.py`` für ``test_changelog_website``
+    (Entscheidung Koordinator: dieselbe Regel wie unter ``app/``)."""
+    _write(
+        tree,
+        "tools/scenes.py",
+        "from pathlib import Path\n"
+        "SCENES = Path(__file__).resolve().parents[1] / 'tests' / 'data' / 'scenes.toml'\n"
+        "def load():\n    return SCENES.read_text()\n",
+    )
+    _write(tree, "tools/bench.py", "from tools import scenes\n")
+    _write(
+        tree,
+        "tools/changelog.py",
+        "from pathlib import Path\n"
+        "SITE = Path(__file__).resolve().parents[1] / 'website'\n"
+        "def script():\n    return (SITE / 'site.js').read_text()\n",
+    )
+    _write(tree, "tests/test_bench.py", "from tools import bench\n")
+    _write(tree, "tests/test_changelog_pages.py", "from tools import changelog\n")
+    _write(tree, "tests/data/scenes.toml", "[x]\n")
+    _write(tree, "website/site.js", "x = 1;\n")
+    graph = ImportGraph(tree)
+
+    _files, reasons = affected([tree / "tests" / "data" / "scenes.toml"], graph)
+    assert reasons[tree / "tests" / "test_bench.py"] == (
+        "hängt an tools/scenes.py, das scenes.toml liest"
+    )
+    _files, reasons = affected([tree / "website" / "site.js"], graph)
+    assert reasons[tree / "tests" / "test_changelog_pages.py"] == (
+        "hängt an tools/changelog.py, das site.js liest"
+    )
+
+
+def test_an_application_module_reading_its_own_tree_lends_that_reading(tree: Path) -> None:
+    """CS-32: ``app/i18n/extract.py`` liest die Quellen unter ``app/`` nach ``tr()``-Schlüsseln;
+    ``tools/registry_dump.py`` ruft es, und ``test_registry_dump`` fehlte bei einem neuen Text
+    unter ``app/ui``. Unter ``app/`` zählt nur ein Ordner im Repository — ein Nutzerordner,
+    eine Umgebungsvariable oder ein offener Parameter zählte sonst bei jeder Änderung."""
+    _write(
+        tree,
+        "app/extract.py",
+        "from pathlib import Path\n"
+        "import os\n"
+        "PACKAGE_DIR = Path(__file__).resolve().parent\n"
+        "def message_ids():\n"
+        "    return sorted(PACKAGE_DIR.rglob('*.py'))\n"
+        "def user_parts():\n"
+        "    return sorted((Path.home() / 'parts').rglob('*.py'))\n"
+        "def profiles():\n"
+        "    return sorted(Path(os.environ['APPDATA']).rglob('*.py'))\n"
+        "def anything(folder):\n"
+        "    return sorted(folder.rglob('*.py'))\n",
+    )
+    _write(
+        tree,
+        "tools/dump.py",
+        "from app import extract\ndef registered():\n    return extract.message_ids()\n",
+    )
+    _write(tree, "tests/test_dump.py", "from tools import dump\nX = dump.registered()\n")
+    _write(
+        tree,
+        "tests/test_user_parts.py",
+        "from app import extract\nX = extract.user_parts()\nY = extract.profiles()\n"
+        "Z = extract.anything(None)\n",
+    )
+
+    files, reasons = affected([tree / "app" / "ui_new.py"], ImportGraph(tree))
+
+    assert "tests/test_dump.py" in _names(files, tree)
+    assert reasons[tree / "tests" / "test_dump.py"] == "liest app/**/*.py über app/extract.py:5"
+    assert "tests/test_user_parts.py" not in _names(files, tree)
+
+
+def test_the_real_extraction_of_texts_reaches_the_registry_dump(real_graph: ImportGraph) -> None:
+    """CS-32 gegen den echten Baum: Ein neuer Text unter ``app/ui`` ändert, was
+    ``app/i18n/extract.py`` einsammelt, und ``tools/registry_dump.py`` schreibt es in den Abzug.
+    ``test_registry_dump`` importiert ``gizmo`` nicht und lief bei einer Änderung dort nicht mit."""
+    changed = real_graph.root / "app" / "ui" / "render" / "gizmo.py"
+
+    _files, reasons = affected([changed], real_graph)
+
+    reason = reasons.get(real_graph.root / "tests" / "test_registry_dump.py", "")
+    assert reason.startswith("liest app/") and "app/i18n/extract.py" in reason, reason
+
+
+def test_the_real_operation_modules_reach_the_tests_that_name_their_operations(
+    real_graph: ImportGraph,
+) -> None:
+    """CS-31 gegen den echten Baum: ``chamber_ops``, ``closure_ops``, ``counter_form_ops`` und
+    ``scene.ops`` lädt nur ``bootstrap`` über eine Namensliste; ihre Tests rufen die Ops beim
+    Namen. ``test_slicer_placement`` nennt ``"pattern"`` nur als Argumentnamen von
+    ``parametrize`` und bleibt draußen."""
+    for module, test in (
+        ("app/core/geom/chamber_ops.py", "test_chamber_ops.py"),
+        ("app/core/geom/closure_ops.py", "test_closure_ops.py"),
+        ("app/core/geom/counter_form_ops.py", "test_counter_form.py"),
+        ("app/core/scene/ops.py", "test_scene_ops.py"),
+    ):
+        files, reasons = affected([real_graph.root / module], real_graph)
+
+        reason = reasons.get(real_graph.root / "tests" / test, "")
+        assert reason.startswith("nennt die Operation "), (module, reason)
+    assert real_graph.root / "tests" / "test_slicer_placement.py" not in files, reasons.get(
+        real_graph.root / "tests" / "test_slicer_placement.py"
+    )
+
+
+def test_the_real_operation_and_data_changes_reach_what_runs_them(
+    real_graph: ImportGraph,
+) -> None:
+    """Gegen den echten Baum und die Messung der Ausführung: ``chamber_ops`` führen
+    ``test_registry_consistency`` (ganzes Register), ``test_examples`` (Beispielprojekte) und
+    ``test_closure_ops`` (über ``closure_ops``) aus, ohne ``resize_chamber`` zu nennen;
+    ``materials.toml`` öffnen ``test_bore_mouth_resize`` und ``test_cli`` über eine Op und
+    ``knowledge.profiles``. Die letzten zehn Paare der Messung: ``load_step`` über
+    ``import_plan`` (``test_paint``), ``pipe_clamp`` als ``insert_pipe_clamp``
+    (``test_platform_identity``), ``sculpt_strokes`` in ``weg4-stein-formen.p3d``
+    (``test_orphans``); die letzten vier Lesungen: ``function_scenes.toml`` über
+    ``tools.function_scenes``, ``icon.svg`` über ``tools.make_changelog``."""
+    root = real_graph.root
+    for module, tests in (
+        (
+            "app/core/geom/chamber_ops.py",
+            ("test_registry_consistency.py", "test_examples.py", "test_closure_ops.py"),
+        ),
+        ("app/core/ingest/step_ops.py", ("test_paint.py", "test_exact_patterns.py")),
+        ("app/core/knowledge/parts/mounting.py", ("test_platform_identity.py",)),
+        ("app/core/geom/sculpt.py", ("test_orphans.py",)),
+        ("app/core/knowledge/data/materials.toml", ("test_bore_mouth_resize.py", "test_cli.py")),
+        ("tests/data/function_scenes.toml", ("test_function_export_preparation.py",)),
+        ("website/icon.svg", ("test_changelog_website.py",)),
+    ):
+        files, _reasons = affected([root / module], real_graph)
+        for test in tests:
+            assert root / "tests" / test in files, (module, test)
+
+
+def test_the_real_guards_are_chosen_for_any_change_under_app(real_graph: ImportGraph) -> None:
+    """Gegen den echten Baum (E5, RM-725): Die Wächter, die den Baum über
+    ``tools/code_index.py``, ``tests/source_tree.py`` oder eine andere Testdatei lesen,
+    laufen bei einer Änderung an einem Modul mit, das sie nicht importieren — und kein
+    Helfer steht in der Auswahl. Ohne den mittelbaren Weg fehlten ``test_leash``,
+    ``test_native_keys`` und ``test_widget_lifetime``, seit sie über den Helfer lesen.
+
+    Geändert ist ein Modul, das es nicht gibt — gelöscht oder noch nicht angelegt —
+    und das deshalb niemand importiert: So hängt die Auswahl an keiner Importkante
+    des heutigen Baums, nur am Lesen. Und nur an dem Ordner, den ein Wächter liest: Die
+    Verbotsprüfungen über ``app/ui`` laufen bei einer Änderung unter ``perceive`` nicht mit,
+    die über ``perceive`` schon."""
+    graph = real_graph
+    surface = graph.root / "app" / "ui" / "render" / "zz_not_yet_imported.py"
+    perceive = graph.root / "app" / "core" / "perceive" / "zz_not_yet_imported.py"
+    assert not surface.exists() and not perceive.exists()
+
+    everywhere = (
+        "test_patch_targets.py",
+        "test_import_resolution.py",
+        "test_wording.py",
+        "test_source_readers.py",
+    )
+    surface_guards = ("test_leash.py", "test_native_keys.py", "test_widget_lifetime.py")
+    core_guards = ("test_core_package_direction.py", "test_features.py")
+    for changed, guards, others in (
+        (surface, surface_guards, (*core_guards[:1], "test_activation.py")),
+        (perceive, core_guards, (*surface_guards, "test_activation.py")),
+    ):
+        files, reasons = affected([changed], graph)
+
+        # Zugesichert wird die Eigenschaft, nicht der Wortlaut: Liest eine Datei den Ordner
+        # später an einer zweiten Stelle, ändert sich ihr Grund, nicht die Auswahl (RQ-9).
+        for name in (*everywhere, *guards):
+            assert reasons.get(graph.root / "tests" / name, "").startswith("liest "), name
+        for name in others:
+            assert graph.root / "tests" / name not in files, (name, changed)
+        assert all(path.name.startswith("test_") for path in files)
+        # Wer aus einer Testdatei nur einen Körper leiht, liest durch sie nichts (RQ-3).
+        for name in ("test_boolean_empty_result.py", "test_surface_placement.py"):
+            assert graph.root / "tests" / name not in files, name
+
+
+def test_the_real_guards_over_tests_are_chosen_for_a_change_to_a_test(
+    real_graph: ImportGraph,
+) -> None:
+    """Gegen den echten Baum: Eine reine Teständerung wählt die Wächter, die ``tests/``
+    lesen — Querimporte und doppelte Definitionen, Sperrklinke, Verzeichniskarten und W4 —,
+    aber keinen, der nur ``app/`` liest (RQ-1). Vorher wählte sie alle rund 150 Baumleser,
+    und ``ci_selection`` fuhr dafür 47 Fensterprozesse auf Linux und macOS."""
+    graph = real_graph
+    changed = graph.root / "tests" / "test_wording.py"
+    assert changed.is_file()
+
+    files, _ = affected([changed], graph)
+
+    for name in (
+        "test_toolchain.py",
+        "test_size_ratchet.py",
+        "test_directory_docs.py",
+        "test_source_readers.py",
+    ):
+        assert graph.root / "tests" / name in files, name
+    for name in ("test_leash.py", "test_features.py", "test_ui.py", "test_widget_lifetime.py"):
+        assert graph.root / "tests" / name not in files, name
+
+
 def test_a_changed_test_file_selects_itself(tree: Path) -> None:
-    """Eine geänderte Testdatei ist selbst betroffen, und nur sie."""
+    """Eine geänderte Testdatei ist selbst betroffen — der Baumleser über ``app/`` nicht."""
     files, reasons = affected([tree / "tests" / "test_unrelated.py"], ImportGraph(tree))
 
     assert _names(files, tree) == {"tests/test_unrelated.py"}
     assert reasons[tree / "tests" / "test_unrelated.py"] == "selbst geändert"
+
+
+def test_a_change_under_tests_reaches_the_readers_of_tests_only(tree: Path) -> None:
+    """RQ-1: Auch ``tests/`` ist Baum. Private Querimporte, eine neue Definition in einer Datei
+    der Sperrklinke oder ein flaches ``glob`` entstehen gerade in einer Teständerung, und die
+    Wächter dafür importieren die geänderte Datei nicht. Gewählt wird, wessen Lesebereich
+    ``tests/`` einschließt — selbst, über ein Werkzeug oder mit einem Muster, das die Datei
+    trifft —, für eine Testdatei wie für einen Helfer, geändert oder gelöscht. Wer nur
+    ``app/`` liest, bleibt draußen."""
+    _write(
+        tree,
+        "tools/sizes.py",
+        "from pathlib import Path\n"
+        "ROOT = Path(__file__).resolve().parent.parent\n"
+        "def sizes(areas=('app', 'tests')):\n"
+        "    return [path for area in areas for path in (ROOT / area).rglob('*.py')]\n",
+    )
+    _write(tree, "tests/test_sizes.py", "from tools.sizes import sizes\nX = sizes()\n")
+    _write(
+        tree,
+        "tests/test_own_files.py",
+        "from pathlib import Path\nHERE = Path(__file__).parent\nX = HERE.glob('test_*.py')\n",
+    )
+    helper = _write(tree, "tests/fakes.py", "FAKE = 1\n")
+    graph = ImportGraph(tree)
+
+    files, reasons = affected([tree / "tests" / "test_direct.py"], graph)
+
+    assert {"tests/test_sizes.py", "tests/test_own_files.py"} <= _names(files, tree)
+    assert "tests/test_reader.py" not in _names(files, tree), "liest nur app/"
+    assert reasons[tree / "tests" / "test_sizes.py"] == "liest tests/**/*.py über tools/sizes.py:4"
+
+    files, _ = affected([helper], graph)
+
+    assert "tests/test_sizes.py" in _names(files, tree)
+    assert "tests/test_own_files.py" not in _names(files, tree), "test_*.py trifft fakes.py nicht"
+    assert "tests/test_reader.py" not in _names(files, tree)
+
+    helper.unlink()
+    files, _ = affected([helper], ImportGraph(tree))
+
+    assert "tests/test_sizes.py" in _names(files, tree)
 
 
 @pytest.mark.parametrize("deleted", [False, True])
@@ -202,7 +1045,9 @@ def test_a_named_text_file_selects_the_test_that_names_it(tree: Path) -> None:
     files, reasons = affected([tree / "ROADMAP.md"], ImportGraph(tree))
 
     assert _names(files, tree) == {"tests/test_roadmap.py"}
-    assert reasons[tree / "tests" / "test_roadmap.py"] == "nennt ROADMAP.md"
+    assert (
+        reasons[tree / "tests" / "test_roadmap.py"] == "nennt ROADMAP.md (tests/test_roadmap.py:1)"
+    )
 
 
 def test_a_data_file_selects_the_tests_of_the_module_that_reads_it(tree: Path) -> None:
@@ -255,6 +1100,53 @@ def test_a_data_file_does_not_drag_in_the_whole_tree(tree: Path) -> None:
     )
 
 
+def test_a_helper_of_a_data_reader_stays_out_and_drags_in_nothing(tree: Path) -> None:
+    """Der Ordnerweg bleibt auch über einen Helfer bei einem Glied: ``tests/helpers.py``
+    importiert ein Modul, das ``changelog/`` nennt, und zöge sonst jede Testdatei, die ihn
+    benutzt, in die Auswahl einer Changelog-Datei. Der Helfer selbst sammelt keinen Test
+    und steht deshalb auch nicht darin."""
+    _write(tree, "app/reader.py", 'from pathlib import Path\nDIR = Path("daten")\n')
+    _write(tree, "tests/shared.py", "from app import reader\n")
+    _write(tree, "tests/test_shared.py", "from tests.shared import reader\n")
+    _write(tree, "daten/tabelle.toml", "wert = 1\n")
+
+    files, _ = affected([tree / "daten" / "tabelle.toml"], ImportGraph(tree))
+
+    assert _names(files, tree) == set()
+
+
+def test_a_folder_named_by_a_test_or_a_test_helper_selects_its_readers(tree: Path) -> None:
+    """RPL-1 (Review des Plattformpakets): Nach dem Schnitt nennt nur
+    ``tests/packaging_helpers.py`` den Ordner ``.github/workflows``, und der
+    Workflow-Wächter in ``test_packaging_platform.py`` fehlte bei drei Workflows in der
+    Auswahl. Ein Helfer unter ``tests/``, der den Ordner nennt, liest ihn für die Testdateien,
+    die die nennende Einheit beziehen (je Einheit); eine Testdatei, die ihn nennt, liest ihn
+    selbst. Attrappe, weil die Plattformdateien in diesem Zweig noch fehlen."""
+    workflow = _write(tree, ".github/workflows/mac-netz.yml", "name: Mac\n")
+    _write(
+        tree,
+        "tests/packaging_helpers.py",
+        "from pathlib import Path\nWORKFLOWS = Path('.github/workflows')\nOTHER = 1\n",
+    )
+    _write(
+        tree,
+        "tests/test_packaging_platform.py",
+        "from tests.packaging_helpers import WORKFLOWS\nX = check(WORKFLOWS)\n",
+    )
+    _write(tree, "tests/test_other_packaging.py", "from tests.packaging_helpers import OTHER\n")
+    _write(tree, "tests/test_ci_files.py", "WORKFLOWS = '.github/workflows/'\n")
+
+    files, reasons = affected([workflow], ImportGraph(tree))
+
+    assert _names(files, tree) == {"tests/test_packaging_platform.py", "tests/test_ci_files.py"}
+    assert reasons[tree / "tests" / "test_packaging_platform.py"] == (
+        "liest .github/workflows/* über tests/packaging_helpers.py:2"
+    )
+    assert reasons[tree / "tests" / "test_ci_files.py"] == (
+        "nennt den Ordner .github/workflows/ (tests/test_ci_files.py:1)"
+    )
+
+
 def test_a_script_outside_the_packages_selects_the_test_that_loads_it(tree: Path) -> None:
     """Ein Skript außerhalb von ``app/``, ``tools/`` und ``tests/`` importiert niemand.
 
@@ -283,13 +1175,13 @@ def test_a_script_outside_the_packages_selects_the_test_that_loads_it(tree: Path
         assert reasons[tree / "tests" / "test_matrix.py"] == f"nennt {script}"
 
 
-def test_the_real_graph_finds_the_test_of_the_shared_hook() -> None:
+def test_the_real_graph_finds_the_test_of_the_shared_hook(real_graph: ImportGraph) -> None:
     """Gegen den echten Baum: Der Hook unter ``.claude/hooks/`` hat seinen Test.
 
     ``test_solidon3d_hooks.py`` lädt ihn über seinen Pfad; eine Änderung am
     Hook ohne diesen Test wäre ein grüner Stand, der keiner ist.
     """
-    graph = ImportGraph()
+    graph = real_graph
     hook = graph.root / ".claude" / "hooks" / "solidon3d_hooks.py"
     assert hook.is_file()
 
@@ -309,9 +1201,9 @@ def test_a_syntax_error_in_the_tree_does_not_stop_the_selection(tree: Path) -> N
     assert "tests/test_direct.py" in _names(files, tree)
 
 
-def test_the_real_graph_knows_this_file() -> None:
+def test_the_real_graph_knows_this_file(real_graph: ImportGraph) -> None:
     """Gegen den echten Baum: Das Werkzeug findet sich selbst über seinen Test."""
-    graph = ImportGraph()
+    graph = real_graph
     files, reasons = affected([graph.root / "tools" / "affected_tests.py"], graph)
 
     assert graph.root / "tests" / "test_affected_tests.py" in files
@@ -327,32 +1219,48 @@ def test_a_bare_import_of_a_local_module_is_found(tree: Path) -> None:
     _write(tree, "tests/fakes.py", "FAKE = 1\n")
     _write(tree, "tests/test_bare.py", "def f():\n    from fakes import FAKE\n")
     _write(tree, "tests/test_prefixed.py", "import conftest\nfrom tests.fakes import FAKE\n")
+    # Jede Form, die die Textvorauswahl durchlassen muss: nach Semikolon, nach Doppelpunkt,
+    # in einer Liste mit Alias. Ein Name nur in einem Text ist kein Import.
+    _write(
+        tree,
+        "tests/test_forms.py",
+        "x = 1; import fakes\nif x: import fakes\nimport os as o, fakes as f\n"
+        "TEXT = 'import fakes'\n",
+    )
     graph = ImportGraph(tree)
 
     files, _ = affected([tree / "tests" / "fakes.py"], graph)
 
+    # Der Baumleser liest nur app/ und bleibt draußen; test_bare fehlt.
     assert _names(files, tree) == {"tests/test_prefixed.py"}
-    assert bare_local_imports(graph) == ["tests/test_bare.py:2: fakes"]
+    assert bare_local_imports(graph) == [
+        "tests/test_bare.py:2: fakes",
+        "tests/test_forms.py:1: fakes",
+        "tests/test_forms.py:2: fakes",
+        "tests/test_forms.py:3: fakes",
+    ]
 
 
-def test_tests_and_tools_import_their_neighbours_with_the_package_prefix() -> None:
+def test_tests_and_tools_import_their_neighbours_with_the_package_prefix(
+    real_graph: ImportGraph,
+) -> None:
     """Wer einen Nachbarn aus ``tests/`` oder ``tools/`` ohne Präfix importiert, fehlt in jeder
     Auswahl zu dessen Änderung (``bare_local_imports``). Der Präfix ist die ganze Abhilfe.
     """
-    graph = ImportGraph()
+    graph = real_graph
     assert sum(name.startswith("tests.test_") for name in graph.modules) > 300
 
     assert bare_local_imports(graph) == []
 
 
-def test_a_tool_its_tests_load_by_path_selects_those_tests() -> None:
+def test_a_tool_its_tests_load_by_path_selects_those_tests(real_graph: ImportGraph) -> None:
     """Review 06.10.2026, M3: Ein Werkzeug, das beim Import ``sys.argv`` liest,
     laden seine Tests über den Pfad — ohne Importkante. Seit die Matrix in
     ``tools/`` liegt, fehlte ``test_delivery_matrix_review.py`` in jeder
     Auswahl zu ihr."""
     root = Path(__file__).resolve().parents[1]
 
-    files, reasons = affected([root / "tools" / "matrix_unit.py"], ImportGraph())
+    files, reasons = affected([root / "tools" / "matrix_unit.py"], real_graph)
 
     names = {path.name for path in files}
     assert {"test_delivery_matrix_review.py", "test_delivery_tools.py"} <= names
@@ -846,6 +1754,40 @@ def test_the_selection_leaves_out_generated_comparisons_like_the_gate(release: b
     assert "not rendering" in config.option.markexpr
     lines = _commands([], [Path("tests/test_plain.py").resolve()], release=release)
     assert ("--with-rendered" in lines[0]) is release
+
+
+def test_run_spreads_a_large_plain_group_over_a_fixed_number_of_workers() -> None:
+    """``--run`` fuhr die Gruppe ``plain`` in einem Prozess; eine Auswahl über ``viewport`` lief
+    so 1 bis 1,5 Stunden, das Tor mit Arbeitern dieselbe Menge in 18 Minuten (Zusatzauftrag Q).
+    Ab ``PARALLEL_FROM`` Dateien bekommt sie eine feste Zahl Arbeiter mit ``worksteal``, nie
+    ``-n auto``; darunter kostet der Start der Arbeiter mehr, als sie sparen, und ``--workers 0``
+    fährt seriell. Eine Arbeiterzahl, die keine ganze Zahl ab 0 ist, lehnt die Kommandozeile
+    ab."""
+    from tools import affected_tests
+    from tools.affected_tests import PARALLEL_FROM, WORKERS, _commands
+
+    def files(count: int) -> list[Path]:
+        return [Path(f"tests/test_probe_{index}.py").resolve() for index in range(count)]
+
+    def options(line: list[str]) -> list[str]:
+        return line[: line.index("--window-group")]
+
+    # Beide Zahlen sind gemessen (``konzepte/begruendungen/regel-tests.md``, Arbeiter für
+    # ``--run``), und Regel, Karte und Begründung nennen sie (F-8).
+    assert WORKERS == 4
+    assert PARALLEL_FROM == 8
+    assert "-n" not in options(_commands([], files(PARALLEL_FROM - 1), release=False)[0])
+    large = options(_commands([], files(PARALLEL_FROM), release=False)[0])
+    start = large.index("-n")
+    assert large[start : start + 4] == ["-n", "4", "--dist", "worksteal"]
+    assert "-n" not in options(_commands([], files(PARALLEL_FROM), release=False, workers=0)[0])
+    two = options(_commands([], files(PARALLEL_FROM), release=False, workers=2)[0])
+    assert two[two.index("-n") : two.index("-n") + 2] == ["-n", "2"]
+    windowed = _commands(files(PARALLEL_FROM), [], release=True)
+    assert all("-n" not in line for line in windowed)
+    for wrong in ("auto", "-1", "zwei"):
+        with pytest.raises(SystemExit):
+            affected_tests.main(["--workers", wrong, "--split", "ROADMAP.md"])
 
 
 @pytest.mark.parametrize("exit_code", [0, 5, 139])

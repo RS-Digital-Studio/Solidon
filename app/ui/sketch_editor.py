@@ -58,6 +58,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
+from app.core import guides
 from app.core.errors import AppError, SketchConflictError, ValidationError
 from app.core.sketch import edit, shapes
 from app.core.sketch.planes import (
@@ -6859,6 +6860,7 @@ class SketchPanel(QWidget):
         self.selection_tools.setAccessibleName(tr("Werkzeuge für die Auswahl"))
 
         self.coordinate_button = QToolButton(self.selection_tools)
+        self.coordinate_button.setProperty(guides.TARGET_PROPERTY, "sketch.coordinates")
         self.coordinate_button.setText(tr("Koordinaten …"))
         self.coordinate_button.setToolTip(
             tr("Den gewählten Punkt über genaue Koordinaten verschieben.")
@@ -6988,6 +6990,7 @@ class SketchPanel(QWidget):
                 )
             )
             constraint_button.clicked.connect(weak_slot(self, SketchPanel.request_constraint, kind))
+            constraint_button.setProperty(guides.TARGET_PROPERTY, f"sketch.constrain:{kind}")
             self._constraint_buttons[kind] = constraint_button
             constraints_row.addWidget(
                 constraint_button, position // CONSTRAINTS_PER_ROW, position % CONSTRAINTS_PER_ROW

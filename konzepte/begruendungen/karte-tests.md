@@ -391,6 +391,13 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 - Es biegt **die Nutzerverzeichnisse in einen Temp-Ordner** um (§38), `HOME`
   eingeschlossen. Läuft ein Test außerhalb der Suite, fehlt ihm das, und er
   liest in Roberts echtem Profil.
+  Je Prozess ein `solidon-tests-*`, beim Ende abgeräumt; Reste über einen
+  Tag räumt der nächste Start.
+- Es setzt **einen Schlüsselbund im Speicher** (`SuiteKeyring`) vor jedem
+  Fall leer ein; ein Fall, der einen bestimmten braucht, ersetzt
+  `keys._keyring` oder `device._load_keyring` per `monkeypatch`.
+  Kindprozesse erreicht er nicht (eigene Isolierung mit `isolate_secrets`,
+  Restpaket C).
 - Unter `CI` beendet es den Lauf, wenn der exakte Kern fehlt
   (`pytest_sessionstart`, Muster `php_probe.py`): `build.yml` installiert das
   Extra `brep` in jedem Testlauf, und ohne den Kern übersprängen sich die
@@ -447,6 +454,13 @@ Starter von WSL) und `posix_shell` für das Linux-Installationsskript, beide mit
 Rückfall neben Git, unter `ProgramFiles` und in der Installation je Nutzer. Es
 lädt nur die Standardbibliothek. Dass keine Testdatei selbst per `which` sucht,
 hält `test_packaging_platform.py::test_only_the_shell_helpers_look_for_bash_or_sh`.
+
+`process_helpers.py` trägt `run_bounded`: wie `subprocess.run`, aber die
+Zeitgrenze beendet den ganzen Prozessbaum (`process.start_bounded`,
+`terminate_process_tree`). Wer die bash aus Git mit Zeitgrenze fährt, nimmt es
+— der Starter `Git\bin\bash.exe` hat die Shell als Kind, und `kill()` ließ sie
+weiterlaufen; mit `capture_output` wartete `subprocess.run` danach bis zu ihrem
+Ende (CS-35).
 
 `guide_window.py` gehört allein `test_guide_targets.py`: die Fixture
 `prepared_window` für den Wortschatz des Funktionsdurchgangs (Quader mit

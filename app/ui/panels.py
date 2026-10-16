@@ -10300,9 +10300,12 @@ class FeaturePanel(QWidget):
         details.clicked.connect(lambda: self.stepEditRequested.emit(int(operation.id)))
         self._rows.insertWidget(self._rows.count() - 1, details)
         self._built.append(details)
+        # **Gemeldet wird hier nichts** (FD-192): Die Werte des Schritts sind
+        # keine Änderung. Gebunden werden sie nach dem Aufbau
+        # (``MainWindow._start_feature_preview``); die Meldung stellte die Uhr,
+        # rechnete 300 ms später eine Vorschau ohne Änderung, zeigte *Abbrechen*
+        # und verlor einen wartenden Klick (CI macOS Intel, Lauf 38815410592).
         self._settle_apply()
-        if (entered := self.preview_values()) is not None:
-            self.valuesChanged.emit(*entered)
 
     def show_edge(
         self,

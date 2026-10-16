@@ -1,0 +1,208 @@
+# Zeilenspezifikationen für D12 — Fenster, Einstellungen, Hilfe und Hinweise.
+# Format: Bauplan D0 §2.4. Eine Zeile ohne Eintrag hier ist „ungeprüft“.
+
+# Der Druckhinweis steht einmal vor dem Druckdialog, den *An den Slicer übergeben …*
+# öffnet; im Profil der übrigen Fälle gilt er als gesehen (FD-101, FD-121).
+[row."dialog:print_disclosure_dialog"]
+start_scene = "quader.exakt"
+preconditions = { druckhinweis = "offen" }
+route = [{ target = "menu:menubar.an_den_slicer_uebergeben" }]
+
+# Die Fenster des Hilfemenüs und der Bearbeiten-Leiste: je ein Menüeintrag in
+# einem leeren Projekt (FD-175).
+[row."dialog:about_dialog"]
+route = [{ target = "menu:menubar.ueber_solidon" }]
+
+[row."dialog:activation_dialog"]
+route = [{ target = "menu:menubar.solidon_freischalten" }]
+
+[row."dialog:changes_dialog"]
+route = [{ target = "menu:menubar.neuerungen" }]
+
+[row."dialog:donation_dialog"]
+route = [{ target = "menu:menubar.app_unterstuetzen" }]
+
+[row."dialog:install_dialog"]
+route = [{ target = "menu:menubar.zusaetzliche_programme" }]
+
+[row."dialog:key_dialog"]
+route = [{ target = "menu:menubar.chat_einrichten" }]
+
+[row."dialog:manual_window"]
+route = [{ target = "menu:menubar.handbuch" }]
+
+[row."dialog:settings_dialog"]
+route = [{ target = "menu:menubar.einstellungen" }]
+
+[row."dialog:shortcuts_window"]
+route = [{ target = "menu:menubar.tastenkuerzel" }]
+
+[row."dialog:support_dialog"]
+route = [{ target = "menu:menubar.rueckmeldung_senden" }]
+
+# *Erste Schritte …* zeigt die Ersteinrichtung auch nach dem ersten Start; das
+# Profil jedes Falls hat sie erledigt (``function_setup.profile_settings``).
+[row."dialog:first_run_dialog"]
+route = [{ target = "menu:menubar.erste_schritte" }]
+
+# *Modell aus dem Netz …* fragt die Adresse in der Eingabe im Hausstil; ins Netz
+# geht erst *Herunterladen*.
+[row."dialog:input_dialog"]
+route = [{ target = "menu:menubar.modell_aus_dem_netz" }]
+
+# Die Rückfrage im Hausstil: *Gegenstücke setzen …* an einem Gewinde, das M4 und
+# #8-36 UNF nicht trennt (Szene wie ``meldung:action_counterpart``).
+[row."dialog:ask_dialog"]
+start_scene = "gewinde_zwei_reihen.netz"
+route = [
+  { target = "tree.row:obj_1.thread_1" },
+  { target = "tree.row:obj_2.face_1", modifier = "ctrl" },
+  { target = "menu:menubar.gegenstuecke_setzen" },
+]
+
+# Die Meldung im Hausstil: *Einzelheiten* zum Befund der dünnen Wand.
+[row."dialog:message_dialog"]
+start_scene = "duenne_huelse.netz"
+route = [{ target = "finding:perceive.thin_wall" }, { target = "finding.action:show_details" }]
+
+[row."meldung:show_details"]
+start_scene = "duenne_huelse.netz"
+route = [{ target = "finding:perceive.thin_wall" }, { target = "finding.action:show_details" }]
+
+# Der Operationsdialog eines Schritts: Doppelklick auf seine Zeile im Verlauf.
+# Derselbe Weg führt zum offenen Dialog als Rahmen (``dialog``).
+[row."dialog:operation_dialog"]
+route = [{ target = "history.row:1", button = "double" }]
+
+[row."dialog"]
+route = [{ target = "history.row:1", button = "double" }]
+
+# Die Fehlermeldung: *Automatisch teilen* an der Einfügemarke vor einem Schritt
+# sagt ab (``session._inserting_refusal``).
+[row."meldung:show_error"]
+start_scene = "einfuegen.netz"
+route = [{ target = "tree.row:obj_1" }, { target = "command:edit.auto_split" }]
+
+# Das Hauptfenster selbst steht immer; sein Weg ist der Reiter, den jeder Fall
+# vorn hat (``function_language.LanguageFlow.grounded``).
+[row."dialog:main_window"]
+route = [{ target = "report" }]
+
+# Zustände, die keine Maschine liefert, über die Nähte des Prüfstands
+# (``tools/function_seams.py``, FD-175). Keine öffnet etwas außerhalb des Falls.
+
+# Eine neue Version: *Nach einer neuen Version sehen* findet sie und zeigt das
+# Fenster mit ihren Punkten.
+[row."dialog:update_dialog"]
+preconditions = { update = "neu" }
+route = [{ target = "menu:menubar.nach_einer_neuen_version_sehen" }]
+
+# Kein Browser nimmt die Adresse an: Unterstützen über PayPal sagt es im eigenen
+# Fenster, *Download-Seite öffnen* im Fenster der neuen Version in der Meldung;
+# beide Knöpfe nur mit dieser Naht, sonst öffnete der Klick am echten Fenster den
+# Browser. (*Solidon kaufen* beim Freischalten ist mit Lizenz grau.)
+[row."dialog:donation_open_error_dialog"]
+preconditions = { browser = "fehlt" }
+route = [{ target = "menu:menubar.app_unterstuetzen" }, { target = "donation.paypal" }]
+
+[row."meldung:open_donation"]
+preconditions = { browser = "fehlt" }
+route = [{ target = "menu:menubar.app_unterstuetzen" }, { target = "donation.paypal" }]
+
+[row."donation.paypal"]
+preconditions = { browser = "fehlt" }
+route = [{ target = "menu:menubar.app_unterstuetzen" }]
+
+[row."meldung:open_link"]
+preconditions = { browser = "fehlt", update = "neu" }
+route = [
+  { target = "menu:menubar.nach_einer_neuen_version_sehen" },
+  { target = "update.page" },
+]
+
+[row."update.page"]
+preconditions = { browser = "fehlt", update = "neu" }
+route = [{ target = "menu:menubar.nach_einer_neuen_version_sehen" }]
+
+# Eine Installation scheitert: *Installieren* der ersten Zeile, dann *Details
+# anzeigen*. Mit dieser Naht installiert der Klick nichts.
+[row."meldung:_show_details"]
+preconditions = { installation = "scheitert" }
+route = [
+  { target = "menu:menubar.zusaetzliche_programme" },
+  { target = "install.action" },
+  { target = "install.details" },
+]
+
+[row."install.action"]
+preconditions = { installation = "scheitert" }
+route = [{ target = "menu:menubar.zusaetzliche_programme" }]
+
+[row."install.details"]
+preconditions = { installation = "scheitert" }
+route = [{ target = "menu:menubar.zusaetzliche_programme" }, { target = "install.action" }]
+
+# ComfyUI steht als installiert da: Seine Zeile bietet *ComfyUI einrichten …* an.
+[row."install.follow.comfyui"]
+preconditions = { installation = "comfyui_installiert" }
+route = [{ target = "menu:menubar.zusaetzliche_programme" }]
+
+# *Ort angeben …* eines Dienstes öffnet sein Menü; *Web-/Netzadresse verwenden …*
+# fragt die Adresse.
+[row."install.locate"]
+route = [{ target = "menu:menubar.zusaetzliche_programme" }]
+
+[row."meldung:_choose_address"]
+route = [
+  { target = "menu:menubar.zusaetzliche_programme" },
+  { target = "install.locate" },
+  { target = "menu:install.address" },
+]
+
+# Der KI-Hinweis vor dem ersten Zug im Chat: ein lokales Sprachmodell (Naht
+# ``chatmodell``), das erste Beispiel, *Senden*. Im Hinweis führt
+# *Solidon-Datenschutz lokal öffnen* zur Erklärung ohne Netz (FD-175).
+[row."request.example"]
+preconditions = { chatmodell = "lokal" }
+route = [{ target = "chat" }]
+
+[row."request.send"]
+preconditions = { chatmodell = "lokal" }
+route = [{ target = "chat" }, { target = "request.example" }]
+
+[row."dialog:ai_disclosure_dialog"]
+preconditions = { chatmodell = "lokal" }
+route = [{ target = "chat" }, { target = "request.example" }, { target = "request.send" }]
+
+[row."disclosure.privacy"]
+preconditions = { chatmodell = "lokal" }
+route = [{ target = "chat" }, { target = "request.example" }, { target = "request.send" }]
+
+[row."dialog:local_privacy_dialog"]
+preconditions = { chatmodell = "lokal" }
+route = [
+  { target = "chat" },
+  { target = "request.example" },
+  { target = "request.send" },
+  { target = "disclosure.privacy" },
+]
+
+# Der Dateiweg der Aktivierung: Ein Kaufcode wartet auf die Freischaltung dieses
+# Rechners (Lizenz ``needs_activation``), die Geräteanfrage entsteht ohne
+# Schlüssel (Naht ``aktivierung``), dann *Offline aktivieren …* (FD-175).
+[row."activation.offline"]
+preconditions = { licence = "needs_activation", aktivierung = "anfrage" }
+route = [{ target = "menu:menubar.solidon_freischalten" }]
+
+[row."dialog:offline_activation_dialog"]
+preconditions = { licence = "needs_activation", aktivierung = "anfrage" }
+route = [
+  { target = "menu:menubar.solidon_freischalten" },
+  { target = "activation.offline" },
+]
+
+# *KI-Anfrage fortsetzen* im KI-Hinweis vor dem ersten Zug im Chat; die Anfrage
+# geht an das lokale Modell der Naht und scheitert dort (FD-175).
+[row."disclosure.continue"]
+preconditions = { chatmodell = "lokal" }
+route = [{ target = "chat" }, { target = "request.example" }, { target = "request.send" }]

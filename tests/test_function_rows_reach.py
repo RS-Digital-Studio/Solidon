@@ -1,0 +1,475 @@
+"""Keine Zeile der Liste FD-101 ohne Weg zu ihrer Fläche (FD-101, FD-151, RM-737).
+
+Im Sprachfall erreichte der Prüfstand eine Reihe von Flächen nie: Dialoge ohne
+Weg, Operationen über die ganze Szene, deren Weg einen Körper wählte, Fußknöpfe
+des Merkmalfensters ohne offene Handlungszeile, Szenen ohne den Befund oder die
+Merkmale der Zeile. Ohne Fenster prüfbar ist, dass jede dieser Zeilen eine
+Startszene aus dem Katalog hat, deren Zusagen ihren Weg tragen, und dass der
+Weg der ist, der die Fläche öffnet — am Fenster belegt ihn der Probelauf
+(Bericht ``fix-f7-claude.md``).
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict
+from typing import Any
+
+import pytest
+
+from tools import function_list, function_surface
+
+#: Der Weg in den Skizzeneditor der Dichtung aus dem Bausteinkatalog (Zeilen D7).
+SEAL_EDITOR: tuple[str, ...] = (
+    "menu:menubar.bausteinkatalog",
+    "part:seal_gasket",
+    "dialog.accept",
+    "field:path_sketch",
+)
+
+#: Zeile → (Startszene, Weg der Zeile samt Spezifikation, ohne das Ziel). Der Weg
+#: ist der Kundenweg zur Fläche, gemessen offscreen (Bericht, Abschnitt FD-101).
+REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
+    # D4
+    "slot_hole": ("erkannte_bohrung.netz", ("tree.row:obj_1.hole_1",)),
+    "group_pattern": (
+        "drei_zapfen.netz",
+        ("tree.row:obj_1", "tree.row:obj_1.pin_1", "tree.row:obj_1.pin_2", "tree.row:obj_1.pin_3"),
+    ),
+    "feature.apply": ("merkmal.hole.exakt", ("tree.row:obj_1.hole_1", "feature:move_feature")),
+    "feature.in_view": ("merkmal.hole.exakt", ("tree.row:obj_1.hole_1", "feature:move_feature")),
+    "feature.every": (
+        "gleiche_bohrungen.exakt",
+        ("tree.row:obj_1.hole_1", "feature:move_feature"),
+    ),
+    "dialog:local_recognition_dialog": (
+        "quader.netz",
+        ("tree.row:obj_1", "operation:detect_region", "view:obj_1"),
+    ),
+    # D8
+    "arrange_bed": ("zwei_koerper.exakt", ()),
+    "check_collisions": ("zwei_koerper.exakt", ()),
+    "orient_for_print": ("zwei_koerper.exakt", ()),
+    "dialog:step_values_dialog": (
+        "alter_farbschritt.netz",
+        ("finding:evaluate.legacy_point_paint", "finding.action:show_step_values"),
+    ),
+    "dialog:body_choice_dialog": (
+        "zwei_unter_dem_bett.netz",
+        ("finding:arrange.below_bed", "finding.action:place_on_bed"),
+    ),
+    "finding.action:install": (
+        "ohne_opencascade.exakt",
+        ("finding:op.create_brep_box.BRepUnavailable",),
+    ),
+    "finding.action:keep_saved_parts": ("baustein_geaendert.netz", ("finding:parts.own_changed",)),
+    "finding.action:recognize_fully": ("ueber_erkennungsgrenze", ("finding:perceive.too_large",)),
+    "command:edit.auto_split": ("zu_gross.netz", ("tree.row:obj_1",)),
+    "dialog:seal_path_dialog": (
+        "merkmal.face.exakt",
+        ("tree.row:obj_1.face_6", "operation:create_seal", "field:path_sketch"),
+    ),
+    # D9
+    "filament.add": ("leer", ("menu:menubar.filamentlager",)),
+    # D10
+    "menu:parameters.edit": ("parameter.exakt", ("parameters.first.label",)),
+    "dialog:binding_dialog": ("parameter.exakt", ("parameters.bind",)),
+    "dialog:recipe_dialog": (
+        "parameter.exakt",
+        ("tree.row:obj_1", "menu:menubar.bausteinkatalog", "parts.save"),
+    ),
+    "dialog:slicer_filament_dialog": (
+        "quader_mit_slicer.exakt",
+        (
+            "tree.row:obj_1",
+            "menu:menubar.filamentlager",
+            "filament.add",
+            "filament.profile",
+        ),
+    ),
+    "meldung:_pick_colour": (
+        "quader.exakt",
+        ("tree.row:obj_1", "menu:menubar.filamentlager", "filament.add", "filament.colour"),
+    ),
+    # Die Knöpfe auf diesen Wegen sind selbst Zeilen des Wortschatzes.
+    "parameters.first.label": ("parameter.exakt", ()),
+    "parameters.bind": ("parameter.exakt", ()),
+    "parts.save": ("parameter.exakt", ("menu:menubar.bausteinkatalog",)),
+    "filament.profile": ("leer", ("menu:menubar.filamentlager", "filament.add")),
+    "filament.colour": ("leer", ("menu:menubar.filamentlager", "filament.add")),
+    "dialog:parameter_dialog": ("leer", ("menu:menubar.parameter_anlegen",)),
+    "dialog:calibration_dialog": ("leer", ("menu:menubar.material_kalibrieren",)),
+    "dialog:counterpart_dialog": (
+        "zwei_koerper.exakt",
+        (
+            "tree.row:obj_1",
+            "tree.row:obj_2",
+            "tree.row:obj_1.face_1",
+            "tree.row:obj_2.face_1",
+            "menu:menubar.gegenstuecke_setzen",
+        ),
+    ),
+    "meldung:action_counterpart": (
+        "gewinde_zwei_reihen.netz",
+        (
+            "tree.row:obj_1",
+            "tree.row:obj_2",
+            "tree.row:obj_1.thread_1",
+            "tree.row:obj_2.face_1",
+            "menu:menubar.gegenstuecke_setzen",
+        ),
+    ),
+    "meldung:_replacement_slot": (
+        "sieben_filamente.netz",
+        ("tree.row:obj_1", "operation:label_text", "field:slot", "filament.spool"),
+    ),
+    "filament.spool": (
+        "sieben_filamente.netz",
+        ("tree.row:obj_1", "operation:label_text", "field:slot"),
+    ),
+    # D12: Der Druckhinweis vor dem Druckdialog, im eigenen Sprachfall mit offenem Hinweis.
+    "dialog:print_disclosure_dialog": ("quader.exakt", ("menu:menubar.an_den_slicer_uebergeben",)),
+    # FD-175: die Fenster ohne Weg in D1, D2, D7, D9, D11 und D12, offscreen erreicht
+    # (Bericht ``fix-rest-c-claude.md``). Hilfe und Bearbeiten im leeren Projekt.
+    "dialog:about_dialog": ("leer", ("menu:menubar.ueber_solidon",)),
+    "dialog:activation_dialog": ("leer", ("menu:menubar.solidon_freischalten",)),
+    "dialog:changes_dialog": ("leer", ("menu:menubar.neuerungen",)),
+    "dialog:donation_dialog": ("leer", ("menu:menubar.app_unterstuetzen",)),
+    "dialog:install_dialog": ("leer", ("menu:menubar.zusaetzliche_programme",)),
+    "dialog:key_dialog": ("leer", ("menu:menubar.chat_einrichten",)),
+    "dialog:manual_window": ("leer", ("menu:menubar.handbuch",)),
+    "dialog:settings_dialog": ("leer", ("menu:menubar.einstellungen",)),
+    "dialog:shortcuts_window": ("leer", ("menu:menubar.tastenkuerzel",)),
+    "dialog:support_dialog": ("leer", ("menu:menubar.rueckmeldung_senden",)),
+    "dialog:first_run_dialog": ("startbildschirm", ("menu:menubar.erste_schritte",)),
+    "dialog:input_dialog": ("leer", ("menu:menubar.modell_aus_dem_netz",)),
+    "dialog:ask_dialog": (
+        "gewinde_zwei_reihen.netz",
+        ("tree.row:obj_1.thread_1", "tree.row:obj_2.face_1", "menu:menubar.gegenstuecke_setzen"),
+    ),
+    "dialog:message_dialog": (
+        "duenne_huelse.netz",
+        ("finding:perceive.thin_wall", "finding.action:show_details"),
+    ),
+    "meldung:show_details": (
+        "duenne_huelse.netz",
+        ("finding:perceive.thin_wall", "finding.action:show_details"),
+    ),
+    "dialog:operation_dialog": ("quader.exakt", ("tree.row:obj_1", "history.row:1")),
+    "dialog": ("quader.exakt", ("tree.row:obj_1", "history.row:1")),
+    "meldung:show_error": ("einfuegen.netz", ("tree.row:obj_1", "command:edit.auto_split")),
+    "dialog:main_window": ("leer", ("report",)),
+    "dialog:new_filament_dialog": ("leer", ("menu:menubar.filamentlager", "filament.add")),
+    "dialog:print_settings_dialog": (
+        "quader.exakt",
+        ("tree.row:obj_1", "menu:menubar.an_den_slicer_uebergeben"),
+    ),
+    "meldung:_choose": (
+        "quader.exakt",
+        ("tree.row:obj_1", "menu:menubar.an_den_slicer_uebergeben", "print:filament.colour"),
+    ),
+    "meldung:action_import_url": ("leer", ("menu:menubar.modell_aus_dem_netz",)),
+    "meldung:confirm_unsaved": (
+        "quader.exakt",
+        ("tree.row:obj_1", "operation:delete_object", "menu:menubar.neu", "start.new"),
+    ),
+    "part:*": ("leer", ("menu:menubar.bausteinkatalog",)),
+    "dialog:part_catalog": ("leer", ("menu:menubar.bausteinkatalog",)),
+    "dialog:generate_dialog": ("leer", ("menu:menubar.modell_erzeugen",)),
+    "dialog:organizer_dialog": ("leer", ("operation:create_organizer", "field:layout")),
+    "dialog:rebuild_dialog": ("quader.exakt", ("tree.row:obj_1", "selection.rebuild")),
+    "dialog:variants_dialog": (
+        "parameter.exakt",
+        ("tree.row:obj_1", "menu:menubar.varianten_erzeugen"),
+    ),
+    "dialog:sketch_editor_dialog": (
+        "quader.exakt",
+        (
+            "menu:menubar.bausteinkatalog",
+            "part:seal_gasket",
+            "dialog.accept",
+            "field:path_sketch",
+        ),
+    ),
+    "meldung:confirm_discard": (
+        "kasten_runden.exakt",
+        (
+            "tree.row:obj_1",
+            "menu:menubar.rueckgaengig",
+            "menu:menubar.rueckgaengig",
+            "history.row:2",
+            "history:insert",
+        ),
+    ),
+    "meldung:remove_history_operations": (
+        "quader.exakt",
+        ("tree.row:obj_1", "history.row:1", "history:delete"),
+    ),
+    # Die Frage vor dem Export mit Befund: Speichern im Dialog von Qt
+    # (``test_guide_dialog_wrapper.py``).
+    "meldung:_go_on_despite": (
+        "export_gemischt",
+        ("tree.row:obj_1", "tree.row:obj_2", "menu:menubar.exportieren", "dialog.accept"),
+    ),
+    # Zustände über die Nähte des Prüfstands (``function_seams``): neue Version,
+    # Browser ohne Antwort, gescheiterte Installation, ComfyUI installiert,
+    # abstürzender Slicer, eingelegte Slicerfilamente.
+    "dialog:update_dialog": ("leer", ("menu:menubar.nach_einer_neuen_version_sehen",)),
+    "dialog:donation_open_error_dialog": (
+        "leer",
+        ("menu:menubar.app_unterstuetzen", "donation.paypal"),
+    ),
+    "meldung:open_donation": ("leer", ("menu:menubar.app_unterstuetzen", "donation.paypal")),
+    "donation.paypal": ("leer", ("menu:menubar.app_unterstuetzen",)),
+    "meldung:open_link": (
+        "leer",
+        ("menu:menubar.nach_einer_neuen_version_sehen", "update.page"),
+    ),
+    "update.page": ("leer", ("menu:menubar.nach_einer_neuen_version_sehen",)),
+    "meldung:_show_details": (
+        "leer",
+        ("menu:menubar.zusaetzliche_programme", "install.action", "install.details"),
+    ),
+    "install.action": ("leer", ("menu:menubar.zusaetzliche_programme",)),
+    "install.details": ("leer", ("menu:menubar.zusaetzliche_programme", "install.action")),
+    "install.follow.comfyui": ("leer", ("menu:menubar.zusaetzliche_programme",)),
+    "dialog:comfy_setup_dialog": (
+        "leer",
+        ("menu:menubar.zusaetzliche_programme", "install.follow.comfyui"),
+    ),
+    "install.locate": ("leer", ("menu:menubar.zusaetzliche_programme",)),
+    "meldung:_choose_address": (
+        "leer",
+        ("menu:menubar.zusaetzliche_programme", "install.locate", "menu:install.address"),
+    ),
+    "filament.import": ("leer", ("menu:menubar.filamentlager",)),
+    "dialog:slicer_spool_dialog": (
+        "quader_mit_slicer.exakt",
+        ("menu:menubar.filamentlager", "filament.import"),
+    ),
+    "meldung:_show_slicer_output": (
+        "quader_mit_slicer.exakt",
+        (
+            "tree.row:obj_1",
+            "menu:menubar.an_den_slicer_uebergeben",
+            "print.slice",
+            "message.button:error.show_output",
+        ),
+    ),
+    # Die Schnellwahl unter *Filament und Druck* an einer Fläche; neue Szenen für die
+    # Ladeschritte von Zeichnung und STEP-Baugruppe.
+    "meldung:_assign_inventory_spool": (
+        "sieben_filamente.netz",
+        ("tree.row:obj_1", "tree.row:obj_1.face_1", "filament.picker", "filament.spool"),
+    ),
+    "dialog:outline_dialog": ("zeichnung.netz", ("history.row:1", "field:contours")),
+    "dialog:step_bodies_dialog": ("step_baugruppe.exakt", ("history.row:1", "field:bodies")),
+    # Ohne Weg am Fenster: Die Meldung zeigt ``main`` vor dem Hauptfenster, je
+    # Sprache im Startfall (``function_cases.language_cases``).
+    "startup.expired_demo": ("startbildschirm", ()),
+    # Die Druckwerte einer Spule über ihre Zeile unter *Filamente*, die Buchung nach
+    # einem Export (Datei im Profilordner des Falls) und ein Reiter in eigenem Fenster.
+    "filaments.first": ("sieben_filamente.netz", ("tree.row:obj_1",)),
+    "dialog:filament_override_dialog": (
+        "sieben_filamente.netz",
+        ("tree.row:obj_1", "filaments.first"),
+    ),
+    "usage.review": (
+        "quader.exakt",
+        ("tree.row:obj_1", "menu:menubar.exportieren", "dialog.accept"),
+    ),
+    "dialog:usage_dialog": (
+        "quader.exakt",
+        ("tree.row:obj_1", "menu:menubar.exportieren", "dialog.accept", "usage.review"),
+    ),
+    "tabs.bar": ("leer", ()),
+    "dialog:panel_window": ("leer", ("tabs.bar", "menu:tabs.detach")),
+    "tabs.return": ("leer", ("tabs.bar", "menu:tabs.detach")),
+    # Über Nähte: die Sicherung neben dem zuletzt geöffneten Projekt, ein lokales
+    # Sprachmodell vor dem KI-Hinweis, ein Kaufcode, der auf die Freischaltung wartet.
+    "meldung:_ask_recovery": ("startbildschirm", ("start.recent:1",)),
+    "request.example": ("leer", ("chat",)),
+    "request.send": ("leer", ("chat", "request.example")),
+    "dialog:ai_disclosure_dialog": ("leer", ("chat", "request.example", "request.send")),
+    "disclosure.privacy": ("leer", ("chat", "request.example", "request.send")),
+    "dialog:local_privacy_dialog": (
+        "leer",
+        ("chat", "request.example", "request.send", "disclosure.privacy"),
+    ),
+    "activation.offline": ("leer", ("menu:menubar.solidon_freischalten",)),
+    "dialog:offline_activation_dialog": (
+        "leer",
+        ("menu:menubar.solidon_freischalten", "activation.offline"),
+    ),
+    "disclosure.continue": ("leer", ("chat", "request.example", "request.send")),
+    # Ein Generator, der sofort antwortet; die Beschreibung tippt der Weg.
+    "generate.prompt": ("leer", ("menu:menubar.modell_erzeugen",)),
+    "generate.start": ("leer", ("menu:menubar.modell_erzeugen", "generate.prompt")),
+    "meldung:confirm_generation_loss": (
+        "leer",
+        (
+            "menu:menubar.modell_erzeugen",
+            "generate.prompt",
+            "generate.start",
+            "disclosure.continue",
+            "menu:menubar.beenden",
+        ),
+    ),
+    # Der Skizzeneditor der Dichtung: ein Kreis um den festen Mittelpunkt mit Maß.
+    "sketch.coordinates": ("quader.exakt", (*SEAL_EDITOR, "sketch.point:2")),
+    "dialog:point_dialog": (
+        "quader.exakt",
+        (*SEAL_EDITOR, "sketch.point:2", "sketch.coordinates"),
+    ),
+    "meldung:change_constraint_value": (
+        "quader.exakt",
+        (*SEAL_EDITOR, "sketch.point:1", "sketch.constraint:distance"),
+    ),
+    "dialog:expression_dialog": (
+        "quader.exakt",
+        (
+            *SEAL_EDITOR,
+            "sketch:line",
+            "sketch.at:5_5",
+            "sketch.at:10_10",
+            "sketch:select",
+            "sketch.point:2",
+            "sketch.point:3",
+            "sketch.constrain:distance",
+        ),
+    ),
+    "sketch.new_plane": ("quader.exakt", SEAL_EDITOR),
+    "dialog:new_plane_dialog": ("quader.exakt", (*SEAL_EDITOR, "sketch.new_plane")),
+}
+
+
+@pytest.fixture(scope="module")
+def rows() -> dict[str, dict[str, Any]]:
+    return {row.id: asdict(row) for row in function_list.rows()}
+
+
+def _way(row: dict[str, Any]) -> tuple[str, ...]:
+    steps = [*(row.get("route") or ()), *((row.get("spec") or {}).get("route") or ())]
+    return tuple(str(step["target"]) for step in steps)
+
+
+def test_the_list_is_the_list_of_the_finding(rows: dict[str, dict[str, Any]]) -> None:
+    """Jede Zeile der Liste ist eine erzeugte Zeile — eine umbenannte fiele sonst still heraus."""
+    assert sorted(set(REACHED) - set(rows)) == []
+
+
+@pytest.mark.parametrize("row_id", sorted(REACHED))
+def test_every_row_of_the_list_has_its_scene_and_its_way(
+    rows: dict[str, dict[str, Any]], row_id: str
+) -> None:
+    from tools.function_setup import walk_target
+
+    row = rows[row_id]
+    scene, way = REACHED[row_id]
+    assert (row.get("spec") or {}).get("start_scene", row["start_scene"]) == scene
+    assert _way(row) == way, _way(row)
+    assert function_surface.without_way(row) == "", function_surface.without_way(row)
+    assert walk_target(row) not in way
+
+
+def test_no_row_of_any_package_is_without_a_way(rows: dict[str, dict[str, Any]]) -> None:
+    """Keine Zeile ohne erreichte Fläche, in allen Paketen (FD-175).
+
+    Vorher hielt der Wächter nur die Liste aus FD-101 (D4, D8, D10); 37 Zeilen in D9
+    und D12 und 22 in D1, D2, D7 und D11 hatten keinen Weg, und ihr Sprachfall maß
+    sie nie. Eine neue Zeile ohne Weg macht diesen Test rot, bis sie einen hat.
+    """
+    without = {
+        row_id: reason
+        for row_id, row in rows.items()
+        if (reason := function_surface.without_way(row))
+    }
+    assert without == {}
+
+
+def test_an_operation_over_the_whole_scene_is_walked_without_a_selection(
+    rows: dict[str, dict[str, Any]],
+) -> None:
+    """Seit RM-735 stehen sie nur ohne Auswahl in der Karte; ein Weg mit Auswahl fand sie nie."""
+    whole = [row for row in rows.values() if row["requirement"] == "szene"]
+    assert len(whole) >= 3
+    for row in whole:
+        assert not any(name.startswith(("tree.row:", "view")) for name in _way(row)), row["id"]
+
+
+def test_a_way_over_a_finding_the_scene_does_not_promise_is_no_way(
+    rows: dict[str, dict[str, Any]],
+) -> None:
+    """Gegenprobe: Ein Befund, den die Startszene nicht zusagt, ist kein Weg — kein Fund."""
+    row = {**rows["dialog:step_values_dialog"]}
+    row["spec"] = {**row["spec"], "route": [{"target": "finding:arrange.below_bed"}]}
+    assert "sagt den Befund arrange.below_bed nicht zu" in function_surface.without_way(row)
+    row["spec"] = {**row["spec"], "route": [{"target": "finding.action:place_on_bed"}]}
+    assert "sagt die Handlung place_on_bed nicht zu" in function_surface.without_way(row)
+
+
+def test_the_thread_of_its_scene_asks_for_its_size() -> None:
+    """``gewinde_zwei_reihen.netz`` trägt ein Gewinde, das M4 und #8-36 UNF nicht trennt:
+    Nur dann stellt *Gegenstücke setzen …* die Rückfrage, deren Fenster die Zeile
+    ``meldung:action_counterpart`` misst."""
+    from app.core import counterpart
+    from app.core.errors import AppError
+    from app.core.knowledge import standards
+    from tests.helpers import exact_kernel
+    from tools import function_scenes
+
+    exact_kernel()
+    result = function_scenes.evaluate_scene(function_scenes.build_scene("gewinde_zwei_reihen.netz"))
+    thread = result.scene.objects["obj_1"].features["thread_1"]
+    with pytest.raises(AppError) as asked:
+        counterpart.thread_values_for(thread, families=standards.shown_thread_families())
+    assert asked.value.constraint == counterpart.AMBIGUOUS_THREAD
+    assert set(asked.value.values["choices"]) == {"M4", "#8-36 UNF"}
+
+
+def test_the_three_pins_of_its_scene_are_one_pattern_after_grouping() -> None:
+    """``drei_zapfen.netz`` trägt drei Einzelzapfen — weniger, als die Erkennung als
+    Muster liest —, und *Als Muster zusammenfassen* macht aus den markierten eines:
+    das Beispielziel der Zeile ``group_pattern``. Am Quader ohne gleiche Merkmale
+    sagte der Schritt ab."""
+    from dataclasses import replace
+
+    from app.core.types import Operation
+    from tools import function_scenes
+
+    project = function_scenes.build_scene("drei_zapfen.netz")
+    before = function_scenes.evaluate_scene(project).scene.objects["obj_1"].features
+    pins = sorted(name for name, feature in before.items() if feature.kind == "pin")
+    assert pins == ["pin_1", "pin_2", "pin_3"]
+    assert not any(feature.kind == "pattern" for feature in before.values())
+    document = project.document
+    step = Operation(
+        id=max(op.id for op in document.ops) + 1,
+        op="group_pattern",
+        inputs=("obj_1",),
+        outputs=("obj_1",),
+        params={"at_features": pins},
+    )
+    grouped = replace(project, document=replace(document, ops=[*document.ops, step]))
+    result = function_scenes.evaluate_scene(grouped)
+    assert result.stopped_at is None
+    patterns = [
+        feature
+        for feature in result.scene.objects["obj_1"].features.values()
+        if feature.kind == "pattern"
+    ]
+    assert len(patterns) == 1 and patterns[0].params.get("grouped") is True
+
+
+def test_every_filament_of_the_body_in_its_scene_is_taken() -> None:
+    """``sieben_filamente.netz``: Der Körper trägt die Filamente 1 bis 7 — mehr hat das
+    Feld nicht (``MAX_SLOTS``), und eine Spule aus dem Lager bekommt keine freie Nummer.
+    Nur dann fragt es, welches Filament sie ersetzt (``message:filament_slot``)."""
+    from app.core.export.threemf import slots_for_object
+    from app.core.types import MAX_SLOTS
+    from tools import function_scenes
+
+    scene = function_scenes.load_scenes()["sieben_filamente.netz"]
+    assert scene.spools, "ohne Spule im Lager gibt es nichts zu ersetzen"
+    result = function_scenes.evaluate_scene(function_scenes.build_scene(scene.key))
+    taken = {slot.index for slot in slots_for_object(result.scene.objects["obj_1"])}
+    assert set(range(1, MAX_SLOTS)) <= taken, sorted(taken)

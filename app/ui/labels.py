@@ -3044,6 +3044,12 @@ def local_moment(value: datetime) -> str:
     return locale.toString(QDateTime.fromSecsSinceEpoch(int(value.timestamp())), pattern)
 
 
+#: Wie der Erste eines Monats heißt, wo ``QLocale`` nur die Zahl kennt: auf
+#: Französisch „1er décembre“ (FD-181). Die übrigen Sprachen schreiben ihn wie
+#: jeden anderen Tag.
+_FIRST_OF_MONTH: Final[dict[str, str]] = {"fr": "er"}
+
+
 def calendar_date(value: date | None) -> str:
     """Ein Kalendertag mit ausgeschriebenem Jahr in der Anzeigesprache."""
     if value is None:
@@ -3051,12 +3057,18 @@ def calendar_date(value: date | None) -> str:
     # ``QLocale()`` folgt der Prozesssprache. Solidon kann seine Sprache aber
     # im laufenden Prozess wechseln; dann bliebe ein ausgeschriebener Monat
     # sonst deutsch in einem spanischen Dialog stehen.
-    locale = QLocale(get_language())
+    language = get_language()
+    locale = QLocale(language)
     pattern = locale.dateFormat(QLocale.FormatType.LongFormat)
     # Der Wochentag macht aus „bis mindestens 31. Oktober“ einen schwer
     # lesbaren Satz. Reihenfolge, Monatsname und Bindewörter bleiben Sache der
     # Sprache; nur ``dddd`` samt anschließender Trennung fällt weg.
     without_weekday = pattern.replace("dddd", "").lstrip(" ,")
+    suffix = _FIRST_OF_MONTH.get(language, "") if value.day == 1 else ""
+    if suffix:
+        # Der Tag steht im Muster als einzelnes ``d``; dahinter kommt das
+        # Suffix als Literal — „d'er' MMMM yyyy“.
+        without_weekday = re.sub(r"(?<![d'])d(?![d'])", f"d'{suffix}'", without_weekday, count=1)
     return locale.toString(QDate(value.year, value.month, value.day), without_weekday)
 
 

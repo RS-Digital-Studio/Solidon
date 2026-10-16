@@ -1105,3 +1105,15 @@ Halt Wege frei, die die Sitzung danach ablehnte. Seither antwortet
 `revision.halt_finding` für Sitzung, Revision und Bericht: Die Handlungen am
 haltenden Befund gehen, jede andere ändernde steht grau mit dem Halt als
 Grund.
+
+## Befundklick: Ortsmarken
+
+*Aus `fenster.md` beim Merge von welle5 (16.10.2026), wegen der Ladelast von
+`main_window.py`.*
+
+Ortsmarken verwenden `FINDING_COLOUR` vor Material, Abstand als Radius,
+Titelgrund in Kamera-Oben-Richtung und `Finding.outline` als Rand
+(`ansicht.md`, „Was gefärbt wird“). Die Marke wird nicht nach vorn gezogen;
+nur die Beschriftung ist `always_visible`. Szenenorte gehen durch
+`view_point_of`, Kartenorte kommen in `_map_ready`. Mehrschritt-Transaktionen
+tragen am Gruppenknoten nur `OPS_ROLE`.

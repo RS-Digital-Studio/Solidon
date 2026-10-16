@@ -15758,12 +15758,23 @@ def test_parameter_rows_recalculate_the_card_height(
 def test_parameter_tab_keeps_titles_and_details_inside_the_scroll_area(
     qt_app: QApplication,
 ) -> None:
-    """Tab zum rechten Änderungsweg darf nicht sämtliche Maßnamen wegschieben."""
+    """Tab zum rechten Änderungsweg darf nicht sämtliche Maßnamen wegschieben.
+
+    In der Betriebslage, mit Thema und Stilblatt: Die Spalte hält für den
+    Rollbalken das Stilmaß frei, und das Stilblatt macht ihn schmaler. Ohne
+    Stilblatt zeichnet Fusion unter macOS offscreen einen Balken von 18 statt
+    14 Punkten, und der Inhalt rollte um die Differenz quer (CI-Lauf
+    38781742486) — eine Lage, die es in der Anwendung nicht gibt.
+    """
     from PySide6.QtTest import QTest
 
     from app.core.types import Document
     from app.ui.panels import ParameterPanel
+    from app.ui.style import apply_style
+    from app.ui.theme import apply_theme
 
+    apply_theme(qt_app, "light")
+    apply_style(qt_app, "light")
     document = Document(format_version=1, app_version="0.0.1")
     for index in range(12):
         name = f"wall_{index}"
@@ -16079,12 +16090,13 @@ def test_no_worker_hands_its_field_to_a_blind_lambda() -> None:
     """
     import re
 
-    ui = Path(__file__).parent.parent / "app" / "ui"
+    from tests import source_tree
+
     pattern = re.compile(r"finished\.connect\(\s*lambda[^)]*setattr", re.MULTILINE)
 
     culprits = [
-        path.relative_to(ui.parent.parent)
-        for path in sorted(ui.glob("*.py"))
+        source_tree.relative(path)
+        for path in source_tree.python_files("app/ui")
         if pattern.search(path.read_text(encoding="utf-8"))
     ]
 
@@ -16959,12 +16971,13 @@ def test_no_window_overrides_the_application_icon() -> None:
     """
     import re
 
-    ui = Path(__file__).parent.parent / "app" / "ui"
+    from tests import source_tree
+
     pattern = re.compile(r"^\s*(?!application\b)\w+\.setWindowIcon\(", re.MULTILINE)
 
     culprits = [
-        path.relative_to(ui.parent.parent)
-        for path in sorted(ui.glob("*.py"))
+        source_tree.relative(path)
+        for path in source_tree.python_files("app/ui")
         if pattern.search(path.read_text(encoding="utf-8"))
     ]
 

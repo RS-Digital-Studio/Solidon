@@ -93,6 +93,42 @@ def test_a_step_that_never_becomes_ready_stops_with_its_name() -> None:
     assert "Zeitgrenze" in machine.error
 
 
+@pytest.mark.parametrize(("arrives_after", "seen"), [(0.3, True), (None, False)])
+def test_marking_waits_for_the_focus_a_click_hands_over_late(
+    arrives_after: float | None, seen: bool
+) -> None:
+    """Der Fokus eines Klicks ins Feld kommt unter Windows als Fenstermeldung nach.
+
+    Am CI-Runner traf er 44 ms nach der festen Ruhe ein, und *alles markieren*
+    meldete „der Fokus liegt auf Viewport“ (Lauf 38781742486, Probe
+    38847967414). Der Schritt wartet jetzt, bis er da ist; kommt er nie, handelt
+    er nach der Frist trotzdem, damit ``focus_check`` den Halter nennt.
+    """
+    timer = FakeTimer()
+    clicked: list[float] = []
+    acted: list[tuple[float, bool]] = []
+
+    def inside() -> bool:
+        return arrives_after is not None and timer.now >= clicked[0] + arrives_after
+
+    machine = run_machine(
+        timer,
+        [
+            function_machine.Step("klicken", lambda machine: clicked.append(timer.now)),
+            function_machine.Step(
+                "alles markieren",
+                lambda machine: acted.append((timer.now, inside())),
+                ready=function_walk.focus_arrived(inside, timer.clock),
+            ),
+        ],
+    )
+    assert machine.done and machine.error is None, machine.error
+    ((when, focused),) = acted
+    assert focused is seen
+    if not seen:
+        assert when - clicked[0] > function_walk.FOCUS_GRACE_S
+
+
 def test_a_modal_left_open_is_closed_until_the_action_returns() -> None:
     """Endet der Automat, während eine Handlung noch in einer modalen Schleife steht, räumt er ab.
 
@@ -593,6 +629,8 @@ def test_the_surface_of_a_surface_set_counts_as_the_rows_own_window() -> None:
     flow.surface = ParameterDialog  # type: ignore[method-assign]
     flow.capture_surface = lambda root: None  # type: ignore[method-assign]
     flow.picture = pictures.append  # type: ignore[method-assign]
+    flow.data = {}
+    flow.widget = lambda name: None  # type: ignore[method-assign]
     flow.path_steps = list  # type: ignore[method-assign]
     flow.still_step = lambda name, root: function_machine.Step(name, lambda machine: None)  # type: ignore[method-assign]
     flow.run_steps = lambda label, steps: all(  # type: ignore[method-assign]

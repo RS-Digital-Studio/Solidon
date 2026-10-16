@@ -1574,7 +1574,10 @@ def unusable_address(text: str) -> TranslatableText | None:
     if not address:
         # Leer heißt „wieder die Vorgabe" und ist kein Fehler.
         return None
-    if Path(address).drive or address.startswith(("/", "\\", "~", "file:")):
+    # Ein Laufwerk ist Buchstabe, Doppelpunkt und Trenner, auf jeder Plattform:
+    # Mit ``Path`` las Linux und macOS ``C:\…`` als Rechner mit kaputtem Port, und
+    # ``PureWindowsPath(...).drive`` nähme auch ``[::1]:11434`` als Laufwerk.
+    if re.match(r"[A-Za-z]:(?:[\\/]|$)", address) or address.startswith(("/", "\\", "~", "file:")):
         return _(
             "Das sieht nach einem Ordner oder einer Datei aus. Hier gehört die "
             "Adresse hin, unter der der Dienst im Netz antwortet — sie beginnt "

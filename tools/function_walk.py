@@ -54,6 +54,12 @@ PATH_PHASE, APPLY_PHASE = MAIN_PHASES
 #: Klappe und Rollen in der Karte — sieben. Einer Luft.
 MOST_WAY_CLICKS: Final = 8
 
+#: Nach so vielen Radschritten in Folge, die nichts näher brachten, kommt das Ziel
+#: nicht ins Bild. Ein Radschritt mit Annäherung zählt nicht als Wegklick: Eine
+#: lange Karte braucht auf der kleinsten Arbeitsfläche mehr Schritte, als
+#: :data:`MOST_WAY_CLICKS` Wegklicks erlaubt (FD-131).
+STILL_ROLLS: Final = 2
+
 #: Wie lange der nächste Klick unverändert stehen muss, bevor er fällt (Sekunden):
 #: Die Karten setzen ihre Höhen über Nullzeitgeber, mehrere Ereignisrunden nach
 #: einem Aufklappen. Die Probezeile ``resize_hole`` traf nach 120 ms noch die
@@ -123,7 +129,9 @@ class Ports(Protocol):
     def widget_under(self, point: Any) -> Any: ...
     def covers(self, click: ClickLike, hit: Any) -> bool: ...
     def centre(self, rect: Any) -> Any: ...
-    def press(self, widget: Any, point: Any, button: str, *, wheel_angle: int = 120) -> None: ...
+    def press(
+        self, widget: Any, point: Any, button: str, *, wheel_angle: int = 120
+    ) -> bool | None: ...
     def move(self, point: Any) -> None: ...
     def keys(self, sequence: Any) -> None: ...
     def type_text(self, text: str) -> None: ...
@@ -134,6 +142,7 @@ class Ports(Protocol):
     def now(self) -> float: ...
     def pending(self) -> bool: ...
     def aim(self, click: ClickLike, point: Any) -> Any: ...
+    def enabled(self, widget: Any) -> bool: ...
 
 
 def button_name(button: Any) -> str:
@@ -186,6 +195,7 @@ class Walk:
         button: str = "left",
         *,
         stop_before_target: bool | Callable[[], bool] = False,
+        when_enabled: bool = False,
     ) -> Step:
         """Ein Schritt, der bis zum Ziel wächst: jeder Wegklick reiht den nächsten ein.
 
@@ -195,11 +205,23 @@ class Walk:
         Ereignisrunden (``fenster.md``, „Wie die Karten ihre Höhe teilen“);
         vorher lag an der genannten Stelle noch die Karte oder die nächste
         Klappe, und die Probe meldete „verdeckt“, wo nur gewartet werden musste.
-        Was :data:`COVERED_S` lang deckt, bleibt der Fund.
+        Was :data:`COVERED_S` lang deckt, bleibt der Fund. Ein Radschritt, der
+        in derselben Richtung weiterrückte, zählt nicht als Wegklick; nach
+        :data:`STILL_ROLLS` Radschritten in Folge ohne Annäherung hält der Weg
+        an (FD-131). Sagt die Oberfläche nicht, ob er rückte, zählt er.
+        ``when_enabled``: Ein Wegziel, das gerade grau steht, klickt der Kunde
+        erst, wenn es frei ist (:meth:`stable`).
         """
-        counter = {"way": 0}
+        counter = {"way": 0, "still": 0}
+        rolling = {"wheel": ""}
         way: list[tuple[Any, ...]] = []
         waited: dict[str, str] = {}
+
+        def ready() -> Callable[[], bool]:
+            return self.stable(name, waited, when_enabled=when_enabled)
+
+        def again(machine: StepMachine) -> None:
+            machine.insert([Step(f"weg zu {name}", act, ready=ready(), settle_ms=SETTLE_MS)])
 
         def act(machine: StepMachine) -> None:
             if waited.get("silent"):
@@ -208,9 +230,26 @@ class Walk:
             why = self.click_once(name, button, stop_before_target=stop_before_target)
             if why == TARGET_REASON:
                 return
-            counter["way"] += 1
             last = self.steps[-1] if self.steps else {}
             way.append((last.get("why"), tuple(last.get("rect") or ())))
+            wheel = str(last.get("button") or "")
+            if why != "rollen":
+                counter["still"], rolling["wheel"] = 0, ""
+            elif last.get("moved") is not None:
+                if last["moved"] and rolling["wheel"] in ("", wheel):
+                    # Annäherung, kein Kreis: Der Rollbereich rückte zum Ziel.
+                    counter["still"], rolling["wheel"] = 0, wheel
+                    again(machine)
+                    return
+                counter["still"] += 1
+                if counter["still"] >= STILL_ROLLS:
+                    raise BenchFinding(
+                        NOT_FOUND,
+                        name,
+                        f"{STILL_ROLLS} Radschritte in Folge brachten es nicht näher,"
+                        " das Ziel kam nicht ins Bild",
+                    )
+            counter["way"] += 1
             if counter["way"] > MOST_WAY_CLICKS:
                 detail = f"nach {MOST_WAY_CLICKS} Wegklicks noch nicht am Ziel"
                 same = len(way) - next(
@@ -225,11 +264,9 @@ class Walk:
                         " das Ziel kam nicht ins Bild"
                     )
                 raise BenchFinding(NOT_FOUND, name, detail)
-            machine.insert(
-                [Step(f"weg zu {name}", act, ready=self.stable(name, waited), settle_ms=SETTLE_MS)]
-            )
+            again(machine)
 
-        return Step(f"weg zu {name}", act, ready=self.stable(name, waited), settle_ms=SETTLE_MS)
+        return Step(f"weg zu {name}", act, ready=ready(), settle_ms=SETTLE_MS)
 
     def stable(
         self,
@@ -237,6 +274,7 @@ class Walk:
         waited: dict[str, str] | None = None,
         *,
         button: Callable[[], Any] | None = None,
+        when_enabled: bool = False,
     ) -> Callable[[], bool]:
         """Ob der nächste Klick zu ``name`` fallen kann.
 
@@ -247,7 +285,10 @@ class Walk:
         Klick davor (Review M14) —, dann meldet der Klick „nicht auffindbar“.
         Solange das Fenster sagt, dass etwas kommt (``Ports.pending``), zählt die
         Frist nicht; sagt es das länger als :data:`PENDING_S`, steht in
-        ``waited`` der Grund, und der Klick meldet „keine Rückmeldung“.
+        ``waited`` der Grund, und der Klick meldet „keine Rückmeldung“. Mit
+        ``when_enabled`` gilt dasselbe für ein Wegziel, das grau steht: Der
+        Druckdialog sucht seine Slicer, *Slicen* ist bis dahin grau, und ein
+        Klick darauf tat nichts (FD-175).
 
         Erst den Zeiger öffentlich anfahren, dann in einem späteren Takt neu
         prüfen: Ein Tooltip kann erst durch diese Bewegung verschwinden. Für
@@ -322,6 +363,14 @@ class Walk:
             )
             if matches:
                 seen["covered"] = None
+                if when_enabled and not self.ports.enabled(hit):
+                    # Grau heißt hier: noch nicht frei (die Slicer werden gesucht).
+                    if seen.get("grey") is None:
+                        seen["grey"] = now
+                    if now - seen["grey"] < PENDING_S:
+                        return False
+                    if waited is not None:
+                        waited["silent"] = f"nach {PENDING_S:.0f} s ist {name} noch grau"
                 return True
             if seen["covered"] is None:
                 seen["covered"] = now
@@ -386,13 +435,37 @@ class Walk:
         if why == "rollen":
             record["wheel_angle"] = angle
         if angle != 120:
-            self.ports.press(hit, point, record["button"], wheel_angle=angle)
+            moved = self.ports.press(hit, point, record["button"], wheel_angle=angle)
         else:
-            self.ports.press(hit, point, record["button"])
+            moved = self.ports.press(hit, point, record["button"])
+        if why == "rollen":
+            # Ob ein Rollbereich um den Treffer in diese Richtung rückte (FD-131).
+            record["moved"] = moved
         return why
 
     def _t(self) -> float:
         return round(self.ports.now() - self.began, 4)
+
+
+def rolled_values(widget: Any) -> tuple[int, ...]:
+    """Die Stände der senkrechten Rollleisten um ein Widget, von innen nach außen (FD-131).
+
+    Auch die Leiste selbst, wenn das Rad über ihr dreht: Dann ist sie der Treffer.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QAbstractScrollArea, QScrollBar
+
+    values: list[int] = []
+    node = widget
+    while node is not None:
+        if isinstance(node, QAbstractScrollArea):
+            values.append(node.verticalScrollBar().value())
+        elif isinstance(node, QScrollBar) and node.orientation() == Qt.Orientation.Vertical:
+            values.append(node.value())
+        if node.isWindow():
+            break
+        node = node.parentWidget()
+    return tuple(values)
 
 
 def click_button(ports: Any, walker: Walk, button: Any, label: str) -> bool:
@@ -649,7 +722,7 @@ class QtPorts:
         """
         from PySide6.QtWidgets import QApplication
 
-        from app.ui import guide_targets
+        from app.ui import guide_finders, guide_targets
         from app.ui.catalog import PartCatalog
 
         window = self.window
@@ -673,12 +746,40 @@ class QtPorts:
             return window.start_screen.recent_list
         if kind == "finding":
             return window.report.list
+        if name == guide_finders.SPOOL:
+            # Die Spule steht in der aufgeklappten Liste ihres Filamentfelds (FD-101).
+            found = guide_finders.spool_list(window)
+            return found[1] if found is not None and found[1].isVisible() else None
+        if name == guide_finders.PROJECT_FILAMENT and window.filament_popup.isVisible():
+            # Die Zeile steht in der Liste unter *Filamente* der Kopfzeile (FD-175).
+            return window.filaments.list
+        if (
+            kind in ("sketch.point", "sketch.at", "sketch.constraint")
+            or name == guide_finders.NEW_PLANE_ENTRY
+        ):
+            # Punkt, Stelle, Bedingung und neue Ebene im Skizzeneditor (FD-175).
+            try:
+                panel = guide_finders.active_sketch_panel(window, name)
+            except LookupError:
+                return None
+            if kind in ("sketch.point", "sketch.at"):
+                # Im Zeichenmodus des Fensters zeichnet die Ansicht, nicht die Fläche.
+                return panel.canvas if panel.canvas.isVisible() else window.viewport
+            if kind == "sketch.constraint":
+                return panel.constraint_list
+            view = panel.plane_choice.view()
+            return view if view.isVisible() else None
         return None
 
     def centre(self, rect: Any) -> Any:
         return rect.center()
 
-    def press(self, widget: Any, point: Any, button: str, *, wheel_angle: int = 120) -> None:
+    def press(self, widget: Any, point: Any, button: str, *, wheel_angle: int = 120) -> bool | None:
+        """Drücken, Doppelklick oder Radschritt an der Stelle; beim Rad, ob es weiterrückte.
+
+        Ein Radschritt sagt, ob ein Rollbereich um ``widget`` in seine Richtung
+        weiterrückte — gelesen an den Rollleisten vorher und nachher (FD-131).
+        """
         from PySide6.QtCore import QPoint, Qt
         from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QApplication
@@ -723,10 +824,15 @@ class QtPorts:
             # Der Qt-Eingabepfad reicht ignorierte Radereignisse an die Eltern
             # weiter. Direktes sendEvent bleibt dagegen beim getroffenen Kind.
             handle = top.windowHandle()
+            before = rolled_values(widget)
             QTest.wheelEvent(
                 handle, handle.mapFromGlobal(point), QPoint(0, step), stateKey=modifiers
             )
-            return
+            after = rolled_values(widget)
+            towards = 1 if button == "wheel_down" else -1
+            # Wandert der Treffer in eine andere Kette, zählt der gemeinsame Anfang.
+            pairs = zip(before, after, strict=False)
+            return any((late - early) * towards > 0 for early, late in pairs)
         if button == "double":
             double_click(widget, local, modifiers, under=self.widget_under)
             return
@@ -844,15 +950,28 @@ class QtPorts:
     def now(self) -> float:
         return time.perf_counter()
 
+    def enabled(self, widget: Any) -> bool:
+        """Ob der Treffer frei ist — ein Kind eines grauen Knopfs ist es nicht."""
+        return bool(widget.isEnabled())
+
     def aim(self, click: ClickLike, point: Any) -> Any:
         """Wohin der Kunde bei einem Feld klickt: in sein Eingabefeld, nicht in den Behälter.
 
         Ein Zahlenfeld des Operationsdialogs (``ValueField``) ist breiter als
         sein Kästchen; die Mitte des Behälters lag am echten Schirm im leeren Teil
         daneben, und der Fokus blieb im Rollbereich des Dialogs (Probelauf F-34).
+        Ist ein Knopf die einzige Eingabe des Felds, gilt der Klick ihm: Im Feld
+        *Dichtweg* traf die Mitte den Satz daneben, und der Dialog öffnete nie
+        (FD-101).
         """
         from PySide6.QtCore import QPoint, QRect
-        from PySide6.QtWidgets import QAbstractSpinBox, QComboBox, QLineEdit
+        from PySide6.QtWidgets import (
+            QAbstractButton,
+            QAbstractItemView,
+            QAbstractSpinBox,
+            QComboBox,
+            QLineEdit,
+        )
 
         from app.ui import guide_targets
 
@@ -866,9 +985,16 @@ class QtPorts:
         except LookupError:
             return point
         kinds = (QAbstractSpinBox, QComboBox, QLineEdit)
-        if isinstance(holder, kinds):
+        if isinstance(holder, (*kinds, QAbstractButton)):
             return point
         boxes = [box for kind in kinds for box in holder.findChildren(kind) if box.isVisible()]
+        if not boxes and not any(
+            view.isVisible() for view in holder.findChildren(QAbstractItemView)
+        ):
+            buttons = [
+                button for button in holder.findChildren(QAbstractButton) if button.isVisible()
+            ]
+            boxes = buttons if len(buttons) == 1 else []
         hit = self.widget_under(point)
         if not boxes or any(hit is box or box.isAncestorOf(hit) for box in boxes):
             return point
@@ -904,19 +1030,65 @@ def _carries_line(widget: Any, rect: Any) -> bool:
 
 
 def _shown(widget: Any) -> Any:
-    """Der sichtbare Teil eines Widgets, global — so nennt W die Fläche zum Rollen."""
-    from PySide6.QtCore import QRect
+    """Der sichtbare Teil eines Widgets, global — so nennt W die Fläche zum Rollen.
 
-    visible = widget.visibleRegion().boundingRect()
-    return QRect(widget.mapToGlobal(visible.topLeft()), visible.size())
+    Dieselbe Rechnung wie W (``guide_targets.unclipped``): was die Eltern nicht
+    abschneiden. ``visibleRegion`` zog den Inhalt der Rollfläche ab, und der füllt
+    ihre Sichtfläche — der Teil war leer oder ein Randstreifen.
+    """
+    from app.ui import guide_targets
+
+    return guide_targets.unclipped(widget)
+
+
+#: Wie lange ein Klick ins Feld seinen Fokus nachreichen darf, bevor
+#: :func:`focus_check` den Halter nennt. Unter Windows kommt der Fokus eines
+#: Felds über der nativen Fläche der Ansicht (die Maßgruppe im Bild) als
+#: Fenstermeldung nach; am CI-Runner 44 ms nach der festen Ruhe (Probe
+#: 38847967414, ``fokus.log``).
+FOCUS_GRACE_S: Final = 2.0
+
+
+def focus_inside(field: Any) -> bool:
+    """Ob der Fokus im Feld liegt: das Feld, ein Kind davon oder sein Fokusvertreter."""
+    from PySide6.QtWidgets import QApplication
+
+    focus = QApplication.focusWidget()
+    return (
+        field is not None
+        and focus is not None
+        and (focus is field or field.isAncestorOf(focus) or field.focusProxy() is focus)
+    )
+
+
+def focus_arrived(
+    inside: Callable[[], bool],
+    clock: Callable[[], float] = time.monotonic,
+    grace_s: float | None = None,
+) -> Callable[[], bool]:
+    """Die Bereitschaft des Schritts nach einem Klick ins Feld: Fokus da oder Frist um.
+
+    Nach der Frist handelt der Schritt trotzdem, und :func:`focus_check` nennt,
+    wer den Fokus hält — gewartet wird auf eine Meldung, nicht auf ein Wunder.
+    Ohne ``grace_s`` gilt :data:`FOCUS_GRACE_S`, gelesen beim Bau des Schritts.
+    """
+    grace = FOCUS_GRACE_S if grace_s is None else grace_s
+    began: list[float] = []
+
+    def ready() -> bool:
+        now = clock()
+        if not began:
+            began.append(now)
+        return inside() or now - began[0] > grace
+
+    return ready
 
 
 def focus_check(field: Any, target: str) -> None:
     """Ob der Fokus im Feld des Ziels liegt — sonst wird nicht getippt (Review M13).
 
-    Im Feld heißt: das Feld selbst, ein Kind davon (die Textzeile eines
-    Zahlenfelds) oder sein Fokusvertreter. Sonst ein Fehler mit dem Namen des
-    Widgets, das den Fokus hat.
+    Im Feld heißt es nach :func:`focus_inside`. Sonst ein Fehler mit dem Namen
+    des Widgets, das den Fokus hat.
     """
     from PySide6.QtWidgets import QApplication
 
@@ -925,9 +1097,6 @@ def focus_check(field: Any, target: str) -> None:
     focus = QApplication.focusWidget()
     if field is None:
         raise RuntimeError(f"{target}: kein Feld hinter dem Namen — nicht getippt")
-    inside = focus is not None and (
-        focus is field or field.isAncestorOf(focus) or field.focusProxy() is focus
-    )
-    if not inside:
+    if not focus_inside(field):
         holder = f"{type(focus).__name__} „{name_of(focus)}“" if focus is not None else "nichts"
         raise RuntimeError(f"{target}: der Fokus liegt auf {holder}, nicht im Feld — nicht getippt")

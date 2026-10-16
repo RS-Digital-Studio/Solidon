@@ -2,7 +2,8 @@
 
 Die Fläche einer Zeile folgt der Art ihres Ziels (:func:`surface_for`): der
 offene Dialog, sonst bei einer Befundhandlung und beim Bericht der Prüfbericht,
-bei einem Werkzeug seine Leiste über der Ansicht, sonst die Karte der Auswahl.
+bei einem Werkzeug seine Leiste über der Ansicht, sonst die Seite oder der
+Abschnitt der Karte, in der das Ziel steht (FD-130).
 Vorher war es für jede Zeile ohne Dialog die Karte der Auswahl oder das ganze
 Hauptfenster (Probelauf F-30). Ein Bild nimmt jedes sichtbare Fenster der Zeile
 auf, auch den nichtmodalen Operationsdialog (:func:`windows_to_picture`, F-31).
@@ -69,6 +70,31 @@ def immediate_feature(window: Any, target: str) -> bool:
     return heading is not None and not heading.isCheckable()
 
 
+#: Ziele ohne Art, deren Klick schon die Handlung ist: die erste Handlung des
+#: Prüfberichts zum gewählten Befund (``guide_targets._report_action``).
+AT_ONCE_TARGETS: Final[frozenset[str]] = frozenset({"report.action"})
+
+
+def acts_at_once(window: Any, target: str) -> bool:
+    """Ob der Klick auf das Ziel schon die Handlung ausführt, statt eine Fläche zu öffnen.
+
+    Dann steht ihre Fläche **vor** dem Klick (FD-37, FD-115): Befundhandlungen
+    und die erste Handlung des Berichts wirken mit dem Klick, eine Operation
+    ohne Werte ebenso — ``MainWindow.run_operation`` fragt dann nichts —, eine
+    Merkmalshandlung, deren Kopf nicht aufklappt (:func:`immediate_feature`).
+    Entschieden an der Art der Handlung; vorher am Präfix des Ziels, und
+    *Objekt entfernen* wurde nach seiner Wirkung gemessen.
+    """
+    from app.core.registry import REGISTRY
+
+    kind, _separator, rest = target.partition(":")
+    if kind == "feature":
+        return immediate_feature(window, target)
+    if kind == "operation":
+        return REGISTRY.has(rest) and not REGISTRY.get(rest).params.spec()
+    return kind == "finding.action" or target in AT_ONCE_TARGETS
+
+
 def feature_in_view(window: Any, target: str) -> bool:
     """Die Zielhandlung steht sichtbar im Bild, auch ohne Eingaben in der Sprachspezifikation."""
     return (
@@ -84,8 +110,11 @@ def surface_for(window: Any, target: str) -> Any:
     Ein offener Dialog geht vor — ihn hat die Zeile geöffnet. Ein Ziel
     ``dialog:<klasse>`` ist das Fenster dieser Klasse. Sonst nach der Zielart:
     Befund, Befundhandlung und ``report*`` der Prüfbericht, ``tool:<name>`` die
-    Leiste des Werkzeugs (``handle:bar.<name>``), sonst die Karte der Auswahl
-    und zuletzt das Fenster.
+    Leiste des Werkzeugs (``handle:bar.<name>``), eine Merkmalshandlung ihre
+    Zeile oder Maßgruppe; jedes andere Ziel die Fläche um den Ort, an dem es
+    steht (:func:`place_of`, :func:`surface_around`). Die Karte der Auswahl ist
+    es nur, wenn das Ziel dort steht: Vorher fiel jedes andere Ziel auf sie
+    zurück, und die Parameterleiste wurde an der Auswahlkarte gemessen (FD-130).
     """
     kind, _separator, rest = target.partition(":")
     if kind == "dialog":
@@ -113,7 +142,90 @@ def surface_for(window: Any, target: str) -> Any:
         heading = _shown(window, target)
         if heading is not None:
             return heading.parentWidget()
-    return _shown(window, "selection") or window
+    if kind in SELECTION_KINDS:
+        # Steht ihr Kopf gerade nicht da, bleibt ihr Ort das Merkmalfenster.
+        return _shown(window, "selection") or window
+    place = place_of(window, target)
+    return window if place is None else surface_around(window, place)
+
+
+#: Zielarten, die im Merkmalfenster der Auswahlkarte stehen.
+SELECTION_KINDS: Final[frozenset[str]] = frozenset({"feature", "edge", "feature.field"})
+
+#: Wo ein Ziel ohne eigenes Widget steht: Art → Ziel, dessen Widget der Ort ist.
+#: Eine Zeile steht in ihrer Liste, ein Eintrag im Kontextmenü des Verlaufs am
+#: Verlauf, eine Stelle im Bild in der Ansicht (FD-130).
+TARGET_PLACES: Final[dict[str, str]] = {
+    "tree.row": "tree",
+    "history.row": "history",
+    "history": "history",
+    "history.last": "history",
+    "finding": "report",
+    "view": "viewport",
+    "view.edge": "viewport",
+    "handle": "viewport",
+}
+
+
+def place_of(window: Any, target: str) -> Any | None:
+    """Das Widget, an dem das Ziel steht: sein eigenes, seine Liste, die Leiste seiner Zeile.
+
+    Eine Operation oder ein Befehl steht als Knopf in der Auswahlkarte
+    (``SelectionOperationsPanel.button_for``) oder, ohne sichtbaren Knopf, als
+    Zeile der Menüleiste — wie ``guide_targets.next_click`` sie sucht. ``None``,
+    wenn das Ziel gerade nirgends steht.
+    """
+    kind, _separator, rest = target.partition(":")
+    if kind in ("command", "operation"):
+        button = window.selection_operations.button_for(rest)
+        return button if button is not None and button.isVisible() else window.menuBar()
+    if kind == "menu":
+        return window.menuBar()
+    own = _shown(window, target)
+    home = TARGET_PLACES.get(kind) or TARGET_PLACES.get(target)
+    return own if own is not None or home is None else _shown(window, home)
+
+
+def surface_around(window: Any, widget: Any) -> Any:
+    """Die Fläche um ein Widget: die Seite oder der Abschnitt seiner Karte, sonst seine Leiste.
+
+    Eine Karte (``overlay.CARD``) trägt Reiter — dann ist es die Seite, auf der
+    das Widget steht (Auswahl, Prüfbericht, Chat) — oder Abschnitte (Objekte,
+    Parameter, Verlauf), dann dieser Abschnitt samt Kopf. Außerhalb einer
+    Karte die Werkzeug-, Menü- oder Statusleiste um das Widget, auf dem
+    Startbildschirm dieser, sonst das Widget selbst.
+    """
+    from PySide6.QtWidgets import QMenuBar, QStatusBar, QTabWidget, QToolBar
+
+    from app.ui.overlay import CARD
+
+    chain: list[Any] = []
+    node = widget
+    while node is not None and node is not window:
+        if node.objectName() == CARD:
+            if not chain:
+                return node
+            top = chain[-1]
+            if isinstance(top, QTabWidget):
+                # Die Seite, wie die Reiter sie führen (``DetachableTabs`` hüllt sie ein).
+                pages = (top.widget(index) for index in range(top.count()))
+                return next(
+                    (
+                        page
+                        for page in pages
+                        if page is not None and (page is widget or page.isAncestorOf(widget))
+                    ),
+                    top,
+                )
+            return top
+        if isinstance(node, (QToolBar, QMenuBar, QStatusBar)):
+            return node
+        chain.append(node)
+        node = node.parentWidget()
+    start = getattr(window, "start_screen", None)
+    if start is not None and (widget is start or start.isAncestorOf(widget)):
+        return start
+    return widget
 
 
 def surface_parts(window: Any, target: str, root: Any) -> tuple[Any, ...]:
@@ -151,15 +263,18 @@ def own_surface(row: Mapping[str, Any], widget: Any) -> bool:
     (``dialog:<klasse>``). Sonst hieße die Fehlermeldung nach dem Klick „eigene
     Fläche“, und Z2, Z5 und E6 sähen sie nicht.
     """
+    from app.core.guides import dialog_name
     from tools.function_capture import message_window
 
     if not message_window(widget):
         return True
     target = str(row.get("target") or "")
     kind, _separator, rest = target.partition(":")
+    # Die Zeile nennt den Dialog wie der Wortschatz (``dialog:ask_dialog``), nicht
+    # mit dem Klassennamen — vorher galt die eigene Rückfrage als fremd (FD-175).
     return (
         kind == "message"
-        or (kind == "dialog" and rest in classes_of(widget))
+        or (kind == "dialog" and rest in {dialog_name(name) for name in classes_of(widget)})
         or row.get("source") in MESSAGE_SOURCES
     )
 
@@ -216,6 +331,18 @@ def require_full_export_scope(window: Any) -> None:
 def classes_of(widget: Any) -> set[str]:
     """Die Klassennamen eines Fensters samt Basisklassen."""
     return {cls.__name__ for cls in type(widget).__mro__}
+
+
+#: Fenster, die der Kunde als Fenster seines Systems sieht. Der Fallprozess zeigt
+#: Qts eigenen Dialog (``file_acceptance.no_native_dialogs``): Gemessen würde ein
+#: Fenster, das der Kunde nie sieht (FD-122). Den echten prüft Stufe C am System.
+SYSTEM_SURFACES: Final[tuple[str, ...]] = ("QFileDialog",)
+
+
+def system_surface(widget: Any) -> str:
+    """Welche Systemfläche ``widget`` vertritt — leer, wenn es ein Fenster der Anwendung ist."""
+    names = classes_of(widget)
+    return next((name for name in SYSTEM_SURFACES if name in names), "")
 
 
 def grey_reason(window: Any, target: str) -> str | None:
@@ -329,13 +456,33 @@ def pending(window: Any) -> bool:
     Das Merkmalfenster zeigt :data:`PENDING_NOTE`, solange es seine Zeilen im
     Arbeiter rechnet (RM-232); die Sitzung rechnet, und ein Dialog nach der
     Rechnung kommt danach. Solange gilt ein fehlendes Ziel nicht als „nicht
-    auffindbar“.
+    auffindbar“. Ebenso ein Balken ohne Ende oder ein Wartezeiger im Fenster, in
+    dem der Kunde gerade arbeitet: *Wählen …* im Fenster einer neuen Spule liest
+    die Profile des Slicers im Arbeiter, und die Auswahl kam nach der Frist
+    (FD-101); das Filamentlager liegt als Seite im Hauptfenster, zeigt beim Lesen
+    der Slicerfilamente sofort den Wartezeiger und den Balken erst nach zwei
+    Sekunden (FD-175).
     """
-    from PySide6.QtWidgets import QLabel
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QLabel, QProgressBar, QWidget
 
     from app.i18n import tr
 
     if bool(getattr(window.session, "busy", False)):
+        return True
+    front = QApplication.activeModalWidget() or window
+    if any(
+        bar.isVisible() and bar.minimum() == bar.maximum() == 0
+        for bar in front.findChildren(QProgressBar)
+    ):
+        return True
+    waiting = (Qt.CursorShape.BusyCursor, Qt.CursorShape.WaitCursor)
+    if any(
+        widget.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+        and widget.cursor().shape() in waiting
+        and widget.isVisible()
+        for widget in front.findChildren(QWidget)
+    ):
         return True
     note = tr(PENDING_NOTE)
     return any(
@@ -491,7 +638,16 @@ def without_way(row: Mapping[str, Any]) -> str:
     Ohne Startszene steht der Befund nicht da, dessen Handlung die Zeile ist; ein
     Dialog einer Klasse und ein Meldungsfenster gehen nur über einen benannten
     Weg auf (``spec.route``). Solche Zeilen sind nicht gelaufen, kein Fund (F-32).
+    Ebenso ein Weg über einen Befund oder eine Befundhandlung, die die Startszene
+    nicht zusagt (``promises``): Er hieße „nicht auffindbar“ gegen die Anwendung,
+    wo die Szene fehlt (FD-101). Die Zeile des Startablaufs erreicht je Sprache
+    ihr Startfall (``function_cases.language_cases``, FD-175).
     """
+    from tools.function_cases import walked_in_language
+    from tools.function_scenes import load_scenes
+
+    if not walked_in_language(row):
+        return ""
     spec = row.get("spec") or {}
     scene = str(spec.get("start_scene") or row.get("start_scene") or "")
     if not scene:
@@ -499,4 +655,40 @@ def without_way(row: Mapping[str, Any]) -> str:
     kind = str(row.get("target") or "").partition(":")[0]
     if kind in OPENED_ELSEWHERE and not spec.get("route"):
         return f"Zeile ohne Weg zu ihrem Fenster ({kind}:, keine route in der Spezifikation)"
+    promises = getattr(load_scenes().get(scene), "promises", None)
+    if promises is None:
+        return f"Startszene {scene} steht nicht im Szenenkatalog"
+    steps = [*(row.get("route") or ()), *(spec.get("route") or ()), {"target": row.get("target")}]
+    for step in steps:
+        name = str(step.get("target") or "")
+        if name.startswith("finding:") and name[8:] not in promises.get("findings", ()):
+            return f"Startszene {scene} sagt den Befund {name[8:]} nicht zu"
+        if name.startswith("finding.action:") and name[15:] not in promises.get("actions", {}):
+            return f"Startszene {scene} sagt die Handlung {name[15:]} nicht zu"
     return ""
+
+
+#: Wegziele, die die Szene trägt und nicht die Oberfläche: Körper und Merkmale im
+#: Baum und im Bild, Befunde im Bericht. Fehlen sie, fehlt der Stand, nicht der Weg.
+SCENE_KINDS: Final[frozenset[str]] = frozenset({"tree.row", "view", "view.edge", "finding"})
+
+
+def absent_on_the_way(window: Any, names: Iterable[str]) -> list[str]:
+    """Die Wegziele aus der Szene, die am gezeigten Stand fehlen (Prüfpunkt 15).
+
+    Vor dem letzten Schritt der Startszene gibt es oft noch nicht, worüber der
+    Weg einer Zeile führt — die Bohrung, an der *Bohrung ändern* steht, den
+    Befund des Körpers unter dem Bett. Der Kunde hätte dort nichts zu wählen; das
+    ist kein Fund gegen die Anwendung.
+    """
+    from app.ui import guide_targets
+
+    absent: list[str] = []
+    for name in names:
+        if name.partition(":")[0] not in SCENE_KINDS:
+            continue
+        try:
+            guide_targets.next_click(window, name)
+        except LookupError:
+            absent.append(name)
+    return absent

@@ -116,6 +116,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Varias traducciones se leen con más claridad, entre ellas la introducción de *Crear parámetro …*. La espiga empieza con mayúscula en todos los idiomas.
 - Las explicaciones de las tarjetas ocupan solo las líneas de su texto, también en una tarjeta ancha. La versión 0.6.0 dejaba líneas vacías en algunos idiomas, como bajo dos caras seleccionadas.
 - Un campo de selección nombra un valor que su lista no ofrece, como «Cara 1 · no sirve aquí», y una arista por orientación y posición. La versión 0.6.0 mostraba un código interno.
+- En la ventana *Desbloquear Solidon …*, *Comprar Solidon* sigue disponible en un ordenador activado. Los botones en gris indican su motivo, y *Comprobar clave* también el camino a una clave nueva.
+- En francés, el primer día del mes se escribe ahora «1er», por ejemplo «1er décembre 2026».
+- Sin controlador gráfico, por ejemplo en una máquina virtual, Solidon termina ahora de forma fiable al cerrarlo. En la versión 0.6.0 el programa podía seguir ejecutándose allí sin verse.
 
 ### Imprimir y entregar al slicer
 
@@ -152,6 +155,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una característica seleccionada no sirve, por ejemplo un taladro, una rosca, una cámara o un cierre, el mensaje ofrece *Elegir otra característica*.
 - Los botones *Elegir otras aristas*, *Elegir otras caras* y *Elegir otra característica* abren el paso con el cursor en el campo correspondiente, también tras *Más ajustes*.
 - Si un mensaje no pertenece a ningún paso, como con *Contraparte de la rosca*, indica su camino con una frase, por ejemplo *Elegir otra característica*, y solo muestra botones que allí hacen algo.
+- Pulsar *Aplicar* en una característica durante un cálculo conserva el cambio, aunque la vista previa tarde más. En la versión 0.6.0 se perdía sin aviso en modelos grandes.
+- Una textura mostrada ya no calcula una vista previa sin cambios ni ofrece *Cancelar*.
 
 ## 0.6.0
 

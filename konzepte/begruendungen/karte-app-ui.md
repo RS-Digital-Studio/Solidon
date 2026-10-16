@@ -101,6 +101,7 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 | `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export samt `_warm_the_slicer`, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
 | `action_notice.py` | `ActionNotice`, die Quittung über der Ansicht, und `free_spot`, ihre Stelle ohne Fenster gerechnet; Regel im Absatz zu `announce` unten (FD-108, FD-162) |
 | `status_line.py` | `StatusLine`, die Meldung der Statusleiste: `text()` bleibt der ganze Satz, gezeichnet wird gekürzt, gekürzt steht er in der Kurzhilfe. Sie gibt als Erste nach; die Zahlenzeile (`facts.PrintFacts`) ist nie schmaler als ihre zwei Zeilen (FD-90) |
+| `waiting_click.py` | Ein Neuaufbau ohne Eingabe hält die Freigabe, an der ein Klick wartet (`kept_through_rebuild`, `waiting_approval`) |
 
 *Früher unter „Die Karte › Rahmen und Einstieg“, HEAD-Fassung.*
 
@@ -223,6 +224,16 @@ für neue Projekte sind ein eigener Weg in den Einstellungen.
 
 `session.py` (§7, §15.6) · `leash.py` (die Halteleine für Arbeiter-Threads — und für Ereignisfilter,
 die ihr überwachtes Objekt überleben: `stop_watching_the_dying`)
+
+*Aus `app/ui/CLAUDE.md` beim Merge von welle5 (16.10.2026), wegen der Ladelast.*
+
+`session.py` kennt außerdem die Einfügemarke, `one_step` (mehrere `apply` als
+eine Transaktion), `evaluation_profile` (Profil der Auswertung samt
+Stützschwelle, `druckrat.md`) und `evaluation_follows` (spät gelesene
+Grundlage wertet neu aus). `leash.py` führt dazu `wait_for_all`,
+`collect_in_main_thread` mit GC-Zähler und Zustandswahrung,
+`configure_gil_switching` mit dem 1-ms-Takt in `Worker.run` und `RightOfWay`,
+den Vortritt fürs Bild.
 
 *Früher unter „Kopf der Karte“.*
 
@@ -2370,8 +2381,13 @@ Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.
 ### Hilfe und Bedienung
 
 `guide_targets` teilt `widget_under`, `zone_of`, `search_hits`,
-`menubar_entries`, `point_for` und `next_click` zwischen Tour, Bildanleitungen
-und Prüfstand. `area_for` deckt die Zielfläche einschließlich verschachtelter
+`menubar_entries`, `point_for`, `next_click` und `unclipped` (der sichtbare,
+von keinem Elternteil abgeschnittene Teil eines Widgets; `function_walk._shown`
+misst damit Rollflächen) zwischen Tour, Bildanleitungen und Prüfstand. Den
+Wrapper des zuletzt geholten modalen Dialogs und des zuletzt getroffenen
+Fensters hält es (`_HELD`, `_PROBED`), damit die Wrapper ihrer Kinder nicht
+verfallen; `release_held` gibt beide frei, am Ende jeder Fläche und jedes
+Falls des Prüfstands. `area_for` deckt die Zielfläche einschließlich verschachtelter
 Rollbereiche auf; `next_click` geht den tatsächlichen Kundenweg ohne solches
 Aufdecken. Es rollt mit Radereignissen am tatsächlichen Rollbereich, bis ein
 Feld, das hineinpasst, mit beiden Kanten frei steht; ein kurzer Restschritt
@@ -2387,7 +2403,7 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 
 | Ort / Frage | Vertrag |
 |---|---|
-| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError` |
+| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError`. Was die Größengrenze nicht mehr fasst, steht in `guide_wheel.py` (`takes_wheel`: nimmt ein Rollbereich das Rad selbst, oder reicht er es am Anschlag weiter) und `guide_finders.py` (Finder fester Namen wie `parameters.first.label`, `parameters.bind`; die Kennzeichen `MARKED`/`MARKED_KINDS`; Orte, die ihren Weg selbst kennen, über `place_click`: `filament.spool`, `filaments.first`, `sketch.new_plane`, `sketch.point:N`, `sketch.at:X_Y`, `sketch.constraint:<art>`; `active_sketch_panel` für Skizzeneditor und Zeichenmodus) |
 
 Die ausführlichen Zuordnungen der kompakten Karte:
 
@@ -2488,6 +2504,13 @@ leere Vorschau — ihr Befund ist die Auskunft, kein Grund
 endgültigen Platzierungswerten geprüft. Ein früher Klick wartet auf das Bild
 seiner eigenen Freigabe — nie auf ein älteres: eine geänderte Zahl, ein
 geändertes Dokument oder ein Projektwechsel entwerten die Freigabe samt Klick.
+Ein Neuaufbau ohne Eingabe des Kunden entwertet sie nicht: Während
+`waiting_click.kept_through_rebuild` (Merkmalswahl, Bohrung mit Senkung,
+Antwort des Merkmalsarbeiters) und bei `_set_preview_order(..., rebuilt=True)`
+(Maßgruppe vor ihrem ersten Zug) bleibt eine noch gültige Freigabe mit
+wartendem Klick stehen — samt laufender Vorschau —, und Maßgruppe und
+Merkmalfenster zeigen danach seine Werte. Ein anderer Wert verwirft ihn mit
+Satz. Begründung in `regel-wartezeit.md`.
 Identische Platzierungswerte lösen keine erneute Änderung aus. Die Revision
 und der geprüfte Auftrag gehören dem Hauptfenster, die Träger halten keine
 zweite Vorschauverwaltung. Auch Chat-Übernehmen und die Rückkehr zu einem

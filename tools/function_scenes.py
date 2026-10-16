@@ -22,7 +22,7 @@ Register stehen hier, damit ``function_list`` darauf aufbaut und kein Kreis ents
 from __future__ import annotations
 
 import tomllib
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -143,6 +143,21 @@ class Scene:
     """Die Einfügemarke der Sitzung vor diesem Schritt (sichtbare Nummer), sonst 0."""
     cause: Mapping[str, str] = field(default_factory=dict)
     """Was vor der Zeile ausgelöst wird (:data:`CAUSE_KEYS`)."""
+    built: Mapping[str, str] = field(default_factory=dict)
+    """Quellkennung → Generator aus :data:`GENERATORS`: Die Datei entsteht
+    beim Bau der Szene, zu groß für ``tests/data``."""
+    recognition: str = ""
+    """``declined``: Die Frage nach der vollständigen Merkmalserkennung (§21.1) ist im
+    Ladeschritt abgelehnt gespeichert, wie nach einem Import, der sofort lud."""
+    spools: tuple[Mapping[str, str], ...] = ()
+    """Spulen, die vor dem Start im Filamentlager des Falls liegen (:data:`SPOOL_KEYS`)."""
+
+
+#: Die Antworten einer Szene auf die Frage vor der langen Vollerkennung.
+RECOGNITION_ANSWERS: Final[tuple[str, ...]] = ("", "declined")
+
+#: Was eine Spule im Lager einer Szene trägt: Name und Farbe, dazu die Materialart.
+SPOOL_KEYS: Final[frozenset[str]] = frozenset({"name", "colour", "material_type"})
 
 
 SCENE_KEYS: Final[frozenset[str]] = frozenset(
@@ -167,6 +182,9 @@ SCENE_KEYS: Final[frozenset[str]] = frozenset(
         "preconditions",
         "insert_before",
         "cause",
+        "built",
+        "recognition",
+        "spools",
     }
 )
 PARAMETER_KEYS: Final[frozenset[str]] = frozenset({"value", "unit", "title"})
@@ -221,6 +239,9 @@ def load_scenes(path: Path = SCENES) -> dict[str, Scene]:
             preconditions=dict(entry.get("preconditions", {})),
             insert_before=int(entry.get("insert_before", 0)),
             cause=dict(entry.get("cause", {})),
+            built=dict(entry.get("built", {})),
+            recognition=str(entry.get("recognition", "")),
+            spools=tuple(dict(spool) for spool in entry.get("spools", ())),
         )
     if problems:
         raise FunctionListError(problems)
@@ -299,6 +320,7 @@ def validate_scenes(scenes: Mapping[str, Scene]) -> list[str]:
         for name, relative in sources.items():
             if not (DATA / relative).is_file():
                 issues.append(f"Szene {key}: Quelle {name} → {relative} fehlt in tests/data")
+        issues += [f"Szene {key}: {issue}" for issue in _built_problems(scene, sources, steps)]
         parameters = parameters_of(key, scenes)
         for name, values in parameters.items():
             if set(values) - PARAMETER_KEYS or not isinstance(values.get("value"), int | float):
@@ -332,6 +354,30 @@ def validate_scenes(scenes: Mapping[str, Scene]) -> list[str]:
             if code not in scene.promises.get("findings", ()):
                 issues.append(f"Szene {key}: Handlung {action} an {code}, der nicht zugesagt ist")
         issues += [f"Szene {key}: {issue}" for issue in _setting_problems(scene, sources, steps)]
+    return issues
+
+
+def _built_problems(
+    scene: Scene, sources: Mapping[str, str], steps: Sequence[SceneStep]
+) -> list[str]:
+    """Erzeugte Quellen und die gespeicherte Erkennungsantwort (``built``, ``recognition``)."""
+    issues = [
+        f"Quelle {name}: Generator {generator!r} gibt es nicht"
+        for name, generator in scene.built.items()
+        if generator not in GENERATORS
+    ]
+    issues += [
+        f"Quelle {name} steht in sources und built" for name in set(scene.built) & set(sources)
+    ]
+    if scene.recognition not in RECOGNITION_ANSWERS:
+        issues.append(f"Erkennungsantwort {scene.recognition!r} unbekannt")
+    elif scene.recognition and not any(step.op == "load" for step in steps):
+        issues.append("Erkennungsantwort ohne Ladeschritt, an dem sie stehen könnte")
+    issues += [
+        f"Spule {dict(spool)}: braucht name und colour, kennt nur {sorted(SPOOL_KEYS)}"
+        for spool in scene.spools
+        if set(spool) - SPOOL_KEYS or not {"name", "colour"} <= set(spool)
+    ]
     return issues
 
 
@@ -395,7 +441,9 @@ def build_scene(key: str, scenes: Mapping[str, Scene] | None = None) -> Project:
 
     Jeder Schritt ist eine Transaktion über ``History.apply`` — derselbe Weg wie
     ``tools/make_examples.py``; ``apply`` prüft Kennungen und Parameternamen,
-    Wertebereiche prüft :func:`validate_scenes`. Gerechnet wird hier nicht.
+    Wertebereiche prüft :func:`validate_scenes`. Gerechnet wird hier nur für eine
+    gespeicherte Erkennungsantwort (``recognition``): Ihr Netzabdruck entsteht
+    erst beim Laden.
     """
     from app.core.scene import History, OperationDraft
     from app.core.scene.project import load, new_project
@@ -424,6 +472,12 @@ def build_scene(key: str, scenes: Mapping[str, Scene] | None = None) -> Project:
             sha256="",
         )
         project.sources[name] = (DATA / relative).read_bytes()
+    for name, generator in scene.built.items():
+        payload, suffix = GENERATORS[generator]()
+        project.document.sources[name] = Source(
+            id=name, kind="import", path=f"sources/{generator}{suffix}", sha256=""
+        )
+        project.sources[name] = payload
     for name, values in parameters_of(key, catalogue).items():
         project.document.parameters[name] = Parameter(
             name=name,
@@ -448,7 +502,136 @@ def build_scene(key: str, scenes: Mapping[str, Scene] | None = None) -> Project:
         for entry in document.ops
     ]
     document.protected = {name: tuple(found) for name, found in scene.protected.items()}
+    if scene.recognition:
+        _store_recognition_answers(project, allowed=False)
     return project
+
+
+def _store_recognition_answers(project: Project, *, allowed: bool) -> None:
+    """Die Antwort auf die Frage vor der langen Vollerkennung, in ihren Ladeschritten.
+
+    So wie die Anwendung sie festhält, wenn der Kunde beim Import wählt
+    (``evaluate.on_recognition_answer`` → ``Operation.matches``): mit dem
+    Netzabdruck, den erst das Laden ergibt. Ohne sie fragte das Fenster beim
+    Öffnen der Szene, und *Alle Merkmale erkennen* fände keine Wahl, die sich
+    nachholen ließe (``history.recognition_reopenable``).
+    """
+    from app.core.knowledge import profiles
+    from app.core.scene import evaluate
+    from app.core.scene.project import ProjectSources
+
+    document = project.document
+    answers: list[tuple[int, str, Mapping[str, Any]]] = []
+
+    def answer(question: str, choices: Sequence[str]) -> str:
+        return choices[1] if allowed else choices[0]
+
+    evaluate(
+        document,
+        profiles.scene_profile(document.printer, document.material),
+        sources=ProjectSources(project),
+        ask=answer,
+        on_recognition_answer=lambda op_id, key, record: answers.append((op_id, key, record)),
+    )
+    stored: dict[int, dict[str, Any]] = {}
+    for op_id, key, record in answers:
+        stored.setdefault(op_id, {})[key] = dict(record)
+    document.ops = [
+        replace(entry, matches={**entry.matches, **stored[entry.id]})
+        if entry.id in stored
+        else entry
+        for entry in document.ops
+    ]
+
+
+# --- Quellen, die beim Bau entstehen (``built``, FD-101) ---------------------------
+#
+# Ein Netz über der automatischen Erkennungsgrenze (anderthalb Millionen Dreiecke,
+# ``perceive.local.FEATURE_LIMIT_TRIANGLES``) wäre als Datei zig Megabyte groß und
+# gehört nicht in tests/data. Erzeugt wird es aus einer festen Vorschrift ohne
+# Zufall — gleiche Eingabe, gleiche Bytes. Hier und nicht in einem eigenen Modul:
+# Die Funktionsliste importiert nur ``function_scan`` und ``function_scenes``
+# (``test_function_report``), damit kein Kreis zu den Urteilsmodulen entsteht.
+
+#: Kanten der Oberseite und der Unterseite der dichten Platte. 4 · n² + 8 · n
+#: Dreiecke: bei 620 sind es 1 542 560 — über der automatischen Grenze von
+#: 1 500 000 und unter der bestätigbaren von 5 000 000 (§21.1).
+DENSE_PLATE_CELLS: Final = 620
+
+
+def dense_plate() -> tuple[bytes, str]:
+    """Eine geschlossene Platte 200 x 200 x 10 mm, Ober- und Unterseite fein gerastert.
+
+    Gibt die Datei als binäres PLY und ihre Endung zurück. Die Seiten verbinden
+    die Randpunkte beider Raster; alle Dreiecke zeigen nach außen.
+    """
+    import io
+
+    import numpy as np
+    import trimesh
+
+    cells = DENSE_PLATE_CELLS
+    side = cells + 1
+    axis = np.linspace(-100.0, 100.0, side)
+    xs, ys = np.meshgrid(axis, axis, indexing="xy")
+    flat = np.column_stack([xs.ravel(), ys.ravel()])
+    top = np.column_stack([flat, np.full(len(flat), 10.0)])
+    bottom = np.column_stack([flat, np.zeros(len(flat))])
+    vertices = np.vstack([top, bottom])
+    offset = side * side
+
+    rows, columns = np.meshgrid(np.arange(cells), np.arange(cells), indexing="ij")
+    a = (rows * side + columns).ravel()
+    b = a + 1
+    c = a + side
+    d = c + 1
+    top_faces = np.vstack([np.column_stack([a, b, d]), np.column_stack([a, d, c])])
+    bottom_faces = np.vstack([np.column_stack([a, d, b]), np.column_stack([a, c, d])]) + offset
+
+    # Der Rand im Umlauf gegen den Uhrzeigersinn, von oben gesehen.
+    steps = np.arange(cells)
+    ring = np.concatenate(
+        [
+            steps,  # unten: y = -100, x wächst
+            cells + steps * side,  # rechts: x = +100, y wächst
+            side * side - 1 - steps,  # oben: y = +100, x fällt
+            (cells - steps) * side,  # links: x = -100, y fällt
+        ]
+    )
+    following = np.roll(ring, -1)
+    upper, upper_next = ring, following
+    lower, lower_next = ring + offset, following + offset
+    side_faces = np.vstack(
+        [
+            np.column_stack([lower, lower_next, upper_next]),
+            np.column_stack([lower, upper_next, upper]),
+        ]
+    )
+    faces = np.vstack([top_faces, bottom_faces, side_faces]).astype(np.int64)
+    body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    payload = io.BytesIO()
+    body.export(payload, file_type="ply", encoding="binary")
+    return payload.getvalue(), ".ply"
+
+
+def outline_drawing() -> tuple[bytes, str]:
+    """Eine SVG-Zeichnung mit zwei Konturen: ein Rahmen 40 x 20 mm mit Fenster und ein
+    Steg daneben — genug, damit *Konturen wählen …* etwas zu wählen hat (FD-175)."""
+    drawing = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="80mm" height="30mm"'
+        ' viewBox="0 0 80 30">'
+        '<path d="M0 0 H40 V20 H0 Z M10 5 H30 V15 H10 Z"/>'
+        '<rect x="55" y="0" width="12" height="20"/>'
+        "</svg>"
+    )
+    return drawing.encode("utf-8"), ".svg"
+
+
+#: Name → Generator; :func:`build_scene` ruft ihn beim Bau der Szene.
+GENERATORS: Final[dict[str, Callable[[], tuple[bytes, str]]]] = {
+    "dichte_platte": dense_plate,
+    "zeichnung_svg": outline_drawing,
+}
 
 
 def _carried_printer(like: str) -> dict[str, Any]:

@@ -852,7 +852,11 @@ def test_a_step_taller_than_the_card_shows_its_beginning(
     longest = max(range(len(tour.steps)), key=lambda at: len(str(tour.steps[at].text)))
     panel = TourPanel(session)
     try:
-        panel.resize(220, 200)
+        # Wie hoch der längste Schritt ist, hängt an der Schrift: Unter Windows
+        # ist er bei 240 höher als der Ausschnitt, mit DejaVu (Linux) nicht.
+        # Die Karte wird so lange flacher, bis er es ist.
+        small = 240
+        panel.resize(220, small)
         panel.show()
         panel.start(example, tour)
         panel._current = longest
@@ -861,6 +865,17 @@ def test_a_step_taller_than_the_card_shows_its_beginning(
             QApplication.processEvents()
         host = panel._row_hosts[longest]
         viewport = panel._scroll.viewport()
+        if host.height() <= viewport.height():
+            while host.height() <= viewport.height() and small > 120:
+                small -= 10
+                panel.resize(220, small)
+                for _ in range(6):
+                    QApplication.processEvents()
+            # Gezeigt wird der Schritt erst jetzt, in der flacheren Karte — wie
+            # unter Windows bei 240 gleich beim Start.
+            panel._update_marks()
+            for _ in range(6):
+                QApplication.processEvents()
         assert host.height() > viewport.height(), (
             f"premise: der Schritt ({host.height()}) ist höher als der Ausschnitt "
             f"({viewport.height()})"
@@ -872,7 +887,7 @@ def test_a_step_taller_than_the_card_shows_its_beginning(
         panel.resize(220, 2000)
         for _ in range(6):
             QApplication.processEvents()
-        panel.resize(220, 200)
+        panel.resize(220, small)
         for _ in range(6):
             QApplication.processEvents()
         assert host.mapTo(viewport, QPoint(0, 0)).y() == 0, "nach dem Verkleinern steht er oben"

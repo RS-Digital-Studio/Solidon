@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import subprocess
 import zipfile
@@ -6791,6 +6792,11 @@ def test_a_slicer_that_cannot_start_is_an_answer(tmp_path: Path, way: str) -> No
     sagen jetzt dasselbe in eigenen Worten und bieten einen anderen Slicer an."""
     fake = tmp_path / "elegoo-slicer.exe"
     fake.write_text("kein programm", encoding="utf-8")
+    # Unter POSIX scheitert eine Datei ohne Ausführungsrecht schon an EACCES,
+    # und das ist eine andere Absage (``test_discover``). „Kein Programm“
+    # (ENOEXEC) entsteht erst, wenn das Recht da ist und der Inhalt nicht.
+    fake.chmod(0o755)
+    assert os.name == "nt" or os.access(fake, os.X_OK), "premise: die Datei ist ausführbar"
     setup = handover.SlicerSetup(executable=fake, flavour="orca")
     model = tmp_path / "teil.3mf"
     model.write_bytes(b"PK")
