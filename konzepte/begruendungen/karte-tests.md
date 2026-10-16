@@ -35,9 +35,9 @@ Hier statt in der Karte, weil sie an ihrem Budget steht.
 | Bietet eine Kanten- oder Rundungsabsage *Andere Kanten wählen* statt *Andere Objekte wählen*? | `test_edge_refusal_ways.py` |
 | Bietet eine Flächenabsage (Formschräge, Fläche versetzen, Aushöhlen, Dichtnut, Muster bis zum Rand) *Andere Flächen wählen* statt *Andere Objekte wählen*, in beiden Kernen? | `test_face_refusal_ways.py` |
 | Bietet eine Absage an einem gewählten Merkmal (Bohrung, Gewinde, Kammer, Verschluss, Ring, Merkmalsoperationen) *Anderes Merkmal wählen* statt *Andere Objekte wählen*? | `test_feature_refusal_ways.py` |
-| Richtet sich eine Auswahlhandlung nach dem Schritt, der die Absage auslöst, mit einem Feld aus seinem Schema, im ganzen Register; gehen Halt und Ausgabebefund beide durch die Anpassung? | `test_choice_ways.py` |
-| Öffnet *Anderes Merkmal/Andere Kanten/Andere Flächen wählen* den Schritt mit dem Feld sichtbar und im Fokus, *Eingabe korrigieren* daneben den Wert? (Fenster) | `test_choice_ways_ui.py` |
-| Nennt eine Absage ohne Schrittkennung (*Gegenstück zum Gewinde*, nichts zum Slicen) ihren Weg als Satz statt eines Knopfs ohne Wirkung? | `test_stepless_advice.py` |
+| Richtet sich eine Auswahlhandlung nach dem Schritt, der die Absage auslöst, mit einem Feld aus seinem Schema, im ganzen Register, bei einzeln gewählten Kanten die gewählten; gehen Halt und Ausgabebefund (*Aushöhlen* ohne Hohlraum) beide durch die Anpassung? | `test_choice_ways.py` |
+| Öffnet *Anderes Merkmal/Andere Kanten/Andere Flächen wählen* den Schritt mit dem Feld sichtbar und im Fokus, auch *Einzelne Kanten*, *Eingabe korrigieren* daneben den Wert? (Fenster) | `test_choice_ways_ui.py` |
+| Nennt eine Absage ohne Schrittkennung (*Gegenstück zum Gewinde*, nichts zum Slicen) ihren Weg als Satz statt eines Knopfs ohne Wirkung, und nicht noch einmal neben seinem Knopf (`left_out`)? Stehen Merkmal und Längen lesbar darunter? | `test_stepless_advice.py` |
 | Nennt *In Einzelteile aufteilen* Splitter und bietet *Splitter behalten* an? | `test_split_splinters.py` |
 | Nennen die Zusatzwerkzeuge des Agenten ihren Fensterort, und steht er in der gebauten Menüleiste? | `test_agent_tool_places.py` |
 
