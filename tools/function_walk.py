@@ -956,20 +956,22 @@ def focus_inside(field: Any) -> bool:
 def focus_arrived(
     inside: Callable[[], bool],
     clock: Callable[[], float] = time.monotonic,
-    grace_s: float = FOCUS_GRACE_S,
+    grace_s: float | None = None,
 ) -> Callable[[], bool]:
     """Die Bereitschaft des Schritts nach einem Klick ins Feld: Fokus da oder Frist um.
 
     Nach der Frist handelt der Schritt trotzdem, und :func:`focus_check` nennt,
     wer den Fokus hält — gewartet wird auf eine Meldung, nicht auf ein Wunder.
+    Ohne ``grace_s`` gilt :data:`FOCUS_GRACE_S`, gelesen beim Bau des Schritts.
     """
+    grace = FOCUS_GRACE_S if grace_s is None else grace_s
     began: list[float] = []
 
     def ready() -> bool:
         now = clock()
         if not began:
             began.append(now)
-        return inside() or now - began[0] > grace_s
+        return inside() or now - began[0] > grace
 
     return ready
 

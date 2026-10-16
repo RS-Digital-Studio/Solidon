@@ -784,9 +784,8 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase):
         """Alles markieren im Feld des Ziels — erst, wenn der Fokus dort liegt (Review M13)."""
         from PySide6.QtGui import QKeySequence
 
-        keys = QKeySequence(QKeySequence.StandardKey.SelectAll)
-
         def act(machine: StepMachine) -> None:
+            keys = QKeySequence(QKeySequence.StandardKey.SelectAll)
             focus_check(self.widget(target), target)
             self.walker.record(
                 {"target": "alles markieren", "key": keys.toString(), "button": None}
