@@ -582,11 +582,17 @@ def feature_title_of(feature_id: str) -> str:
     wie sie ist — dann ist sie ein Name, den jemand vergeben hat.
     """
     bare = feature_id.rsplit(":", 1)[-1]
-    kind, _sep, number = bare.rpartition("_")
+    # Ein Muster zählt seine Glieder mit Punkt: „pattern_1.2“ ist Glied 2
+    # des ersten Musters (Review 2 F2a/D, D3 — dieselbe Regel wie im Feld).
+    parts = bare.split(".")
+    kind, _sep, first = parts[0].rpartition("_")
+    numbers = [first, *(part.rsplit("_", 1)[-1] for part in parts[1:])]
     title = FEATURE_TITLES.get(kind)
     if title is None:
         return feature_id
-    return f"{title} {number}" if number.isdigit() else str(title)
+    if all(number.isdigit() for number in numbers):
+        return f"{title} {'.'.join(numbers)}"
+    return str(title)
 
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")

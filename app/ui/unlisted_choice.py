@@ -96,11 +96,12 @@ def unlisted_text(identifier: str, kind: UnlistedKind) -> str:
         return _edge_text(identifier)
     number = _number(identifier)
     if kind == "feature":
-        from app.core.registry.registry import FEATURE_TITLES
+        # Eine Quelle mit den Meldungen (``registry.feature_title_of``, FD-186):
+        # „obj_2:face_9“ an einem Zielfeld heißt „Fläche 9“ (D3).
+        from app.core.registry.registry import feature_title_of
 
-        family = identifier.split(".")[0].rsplit("_", 1)[0]
-        title = FEATURE_TITLES.get(family)
-        name = f"{title} {number}" if title is not None and number else tr("Merkmal")
+        named = feature_title_of(identifier)
+        name = named if named != identifier and named[-1:].isdigit() else tr("Merkmal")
         return tr("{name} · passt hier nicht", name=name)
     word = str(_WORDS[kind])
     name = f"{word} {number}" if number else word

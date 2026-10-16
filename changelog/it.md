@@ -113,7 +113,7 @@ scrive in `website/version.json`.
 - In spagnolo e portoghese menu, ricerca e finestra di dialogo mostrano di nuovo solo la prima frase di *Perno per foro* e *Orienta per la stampa*.
 - Diverse traduzioni si leggono con più chiarezza, tra cui l'introduzione di *Crea parametro …*. Il perno inizia con la maiuscola in tutte le lingue.
 - Le spiegazioni nelle schede sono alte quanto il loro testo, anche in una scheda larga. Nella versione 0.6.0 in alcune lingue restavano righe vuote, per esempio sotto due facce selezionate.
-- Un campo di scelta chiama per nome un valore assente dal suo elenco, come «Faccia 1 · qui non è adatto», e uno spigolo per orientamento e posizione. La versione 0.6.0 mostrava un codice interno.
+- Un campo di scelta chiama per nome un valore assente dal suo elenco, come «Faccia 1 · non va bene qui», e uno spigolo per orientamento e posizione. La versione 0.6.0 mostrava un codice interno.
 
 ### Stampare e passare allo slicer
 

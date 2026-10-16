@@ -6,8 +6,10 @@ nichts geändert ist, gibt es nichts zu übernehmen. Der Knopf ist grau, und
 grau trägt einen Grund, der den Weg nennt (``oberflaeche.md``, Regel 18) —
 hier das erste offene Feld derselben Fläche. Der Funktionsdurchgang zählt genau diesen Feldtitel als
 Ausweg (``tools/function_capture.surface_field_titles``); der Satz nennt
-deshalb nur ein Feld, das offen auf der Fläche steht, und zwar so, wie der
-Kunde es liest.
+deshalb ein Feld so, wie der Kunde es liest: eines, das offen auf der
+Fläche steht, und sonst das erste hinter einer zugeklappten Klappe samt der
+Klappe als Weg dorthin (Review F2a, R4). Als Feld zählen auch Haken und
+Listen (:data:`FIELD_KINDS`).
 
 Der Aufrufer entscheidet, ob schon etwas geändert ist, setzt den Satz wie
 jeden Sperrgrund in Kurzhilfe und Beschreibung (``change_lock.say_refusal``)
