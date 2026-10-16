@@ -11,6 +11,7 @@ Fenster; die Fälle mit ``qt_app`` laufen offscreen.
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -382,3 +383,70 @@ def test_a_way_in_two_steps_is_walked_to_its_end(qt_app: Any) -> None:
     single = [{"text": "Mit „Abbrechen“ zurück.", "actions": [], "way_out": True}]
     flow.walk_ways(single)
     assert "way" not in single[0]
+
+
+# --- Werkzeug 6: Gesamtfrist und Siegel im Lauf ---------------------------------------
+
+
+def test_the_run_guard_keeps_a_total_deadline_and_the_seal(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tools import acceptance_guard, native_binding
+
+    now = {"t": 0.0}
+    guard = acceptance_guard.RunGuard(total_s=1000.0, clock=lambda: now["t"])
+    assert guard.stop_reason() == "" and guard.case_limit(1800.0) == 1000.0
+    now["t"] = 950.0
+    assert guard.case_limit(1800.0) == 50.0
+    reason = guard.stop_reason()
+    assert "Gesamtfrist 1000 s abgelaufen" in reason and "Handlungsvorschlag" in reason
+    with pytest.raises(ValueError):
+        acceptance_guard.RunGuard(total_s=0.0)
+    # Das Siegel: vor jedem Fall gegen die Bindung, ein Bruch ist der Grund.
+    checks: list[str] = []
+    monkeypatch.setattr(native_binding, "read_binding", lambda path: {"runner": {}})
+
+    def verify(binding: Any, root: Any) -> dict[str, str]:
+        checks.append("geprüft")
+        if len(checks) > 1:
+            raise native_binding.SealError("Siegel gebrochen: tools/x.py", "neu binden")
+        return {}
+
+    monkeypatch.setattr(native_binding, "verify", verify)
+    sealed = acceptance_guard.RunGuard(binding=Path("bindung.json"))
+    assert sealed.stop_reason() == ""
+    assert "Siegel gebrochen" in sealed.stop_reason()
+
+
+def test_the_run_stops_before_the_next_case_and_caps_its_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``run`` fragt die Wache vor jedem Fall und gibt dem Fall höchstens ihre Restzeit."""
+    import subprocess
+
+    from tools import file_acceptance as acceptance
+
+    waited: list[float] = []
+
+    class Process:
+        pid = 4711
+
+        def __init__(self, *args: Any, **named: Any) -> None:
+            pass
+
+        def wait(self, timeout: float | None = None) -> int:
+            waited.append(float(timeout or 0.0))
+            return 0
+
+    cases = [acceptance.Case(1, "eins", "", ""), acceptance.Case(2, "zwei", "", "")]
+    monkeypatch.setattr(acceptance, "read_cases", lambda out: cases)
+    monkeypatch.setattr(acceptance, "summary", lambda *args: {})
+    monkeypatch.setattr(
+        acceptance,
+        "subprocess",
+        SimpleNamespace(Popen=Process, TimeoutExpired=subprocess.TimeoutExpired),
+    )
+    reasons = iter(["", "Siegel gebrochen: tools/x.py weicht ab"])
+    guard = SimpleNamespace(stop_reason=lambda: next(reasons), case_limit=lambda wanted: 123.0)
+    assert acceptance.run(tmp_path, 1, 9, False, 10.0, "", guard) == 1
+    assert waited == [123.0]
+    out = capsys.readouterr().out
+    assert "HALT vor [002]: Siegel gebrochen" in out and "START [002]" not in out

@@ -6,7 +6,7 @@
         [--package D4] [--rows <kennung>,…] [--phases main,escape]
         [--variants basis,sprachen,…,vorhersage,schrift,schriftwechsel] (function_setup.PHASES)
     .venv\\Scripts\\python.exe tools/file_acceptance.py run --out <ordner> [--first 1] [--last 9]
-        [--again] [--timeout <s>] [--screen <name oder nummer>]
+        [--again] [--timeout <s>] [--screen <name oder nummer>] [--total <s>] [--binding <json>]
     .venv\\Scripts\\python.exe tools/file_acceptance.py report --out <ordner>
         [--package D4] [--verdicts <toml>] [--checklist <md>] [--runs <ablage>]
 
@@ -885,6 +885,8 @@ def summary(out: Path, cases: Sequence[Case]) -> dict[str, Any]:
         "functions": functions,
     }
     write_json(out / "summary.json", data)
+    from tools.acceptance_summary import markdown
+
     (out / "summary.md").write_text(markdown(data), encoding="utf-8")
     return data
 
@@ -895,84 +897,6 @@ def _read(path: Path) -> dict[str, Any]:
     except OSError, ValueError:
         return {}
     return loaded if isinstance(loaded, dict) else {}
-
-
-def markdown(data: Mapping[str, Any]) -> str:
-    """Der Bericht als Tabelle, ein Fall je Zeile."""
-    lines = [
-        "# Native Einzeldateiabnahme",
-        "",
-        f"Fälle: {data['cases']} · gelaufen: {data['ran']} · bestanden: {data['passed']}"
-        f" · Bohrungen: {data['bores_passed']} von {data['bores']}",
-        "",
-        "| Nr. | Datei | Stufe | Exit | Sekunden | Körper | Merkmale | Gruppen | Merkmal"
-        " | Geändert | Undo | Redo | Vorschau | Bestanden |",
-        "|---:|---|---|---:|---:|---:|---:|---:|---|---|---|---|---|---|",
-    ]
-
-    def mark(value: object) -> str:
-        return "ja" if value is True else "nein" if value is False else "-"
-
-    for row in data["rows"]:
-        checks = row.get("checks", {})
-        seconds = row.get("seconds")
-        cells = [
-            row["number"],
-            str(row["relative"]).replace("|", "/"),
-            row["stage"],
-            "-" if row["exit_code"] is None else row["exit_code"],
-            "-" if seconds is None else f"{float(seconds):.1f}",
-            row["objects"],
-            row["features"],
-            row["groups"],
-            row["feature"] or "-",
-            mark(checks.get("changed")),
-            mark(checks.get("undo_restores_import")),
-            mark(checks.get("redo_restores_applied")),
-            mark(checks.get("preview_shows_result")),
-            mark(row["passed"]),
-        ]
-        lines.append("| " + " | ".join(str(cell) for cell in cells) + " |")
-    bores = [(row, bore) for row in data["rows"] for bore in row["bores"]]
-    if bores:
-        lines += ["", "## Jede Bohrung", "", "| Nr. | Bohrung | Bestanden |", "|---:|---|---|"]
-        lines += [
-            f"| {row['number']} | {bore['feature']} | {mark(bore['passed'])} |"
-            for row, bore in bores
-        ]
-    functions = data.get("functions") or []
-    if functions:
-        lines += [
-            "",
-            "## Funktions- und Sprachfälle",
-            "",
-            f"Fälle: {data['function_cases']} · gelaufen: {data['function_ran']}"
-            f" · durchgekommen: {data['function_complete']}",
-            "",
-            "| Nr. | Zeile | Art | Variante | Stufe | Exit | Sekunden | Funde | Ungemessen |",
-            "|---:|---|---|---|---|---:|---:|---:|---:|",
-        ]
-        for row in functions:
-            seconds = row.get("seconds")
-            cells = [
-                row["number"],
-                str(row["relative"]).replace("|", "/"),
-                row["kind"],
-                row["variant"] or "-",
-                row["stage"],
-                "-" if row["exit_code"] is None else row["exit_code"],
-                "-" if seconds is None else f"{float(seconds):.1f}",
-                row["findings"],
-                row["unmeasured"],
-            ]
-            lines.append("| " + " | ".join(str(cell) for cell in cells) + " |")
-    failures = [row for row in [*data["rows"], *functions] if row["errors"]]
-    if failures:
-        lines += ["", "## Fehler", ""]
-        for row in failures:
-            first = str(row["errors"][0]).strip().splitlines()
-            lines.append(f"- {row['number']} {row['relative']}: {first[-1] if first else ''}")
-    return "\n".join(lines) + "\n"
 
 
 # --- Lauf --------------------------------------------------------------------------
@@ -1001,13 +925,23 @@ def case_timeout(case: Case, timeout: float) -> float:
     return timeout
 
 
-def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: str = "") -> int:
+def run(
+    out: Path,
+    first: int,
+    last: int,
+    again: bool,
+    timeout: float,
+    screen: str = "",
+    guard: Any = None,
+) -> int:
     """Je Fall ein frischer Prozess mit eigenem Profil — wie im Audit.
 
     ``screen`` legt das Fenster auf einen Schirm (Nummer oder Name); ohne Angabe
     nimmt der Fall den ersten, der nicht der Hauptschirm ist. Mit Funktionsfällen
     misst der Lauf zuerst einmal den Referenzfaktor (§31, Entscheidung
     Koordinator 12.10.); alle Fälle dieses Laufs lesen ihn aus ``reference.json``.
+    ``guard`` (``acceptance_guard.RunGuard``) hält Gesamtfrist und Siegel: vor
+    jedem Fall geprüft, die Frist des Falls höchstens die verbleibende Zeit.
     """
     sys.path.insert(0, str(ROOT))
     from app.core.paths import ISOLATED_KEYRING as KEYRING
@@ -1027,6 +961,10 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
         status = folder / "process.json"
         if status.exists() and not again and not resumes(case, _read(status)):
             continue
+        if guard is not None and (stop := guard.stop_reason()):
+            print(f"HALT vor [{case.number:03d}]: {stop}", flush=True)
+            failures += 1
+            break
         folder.mkdir(parents=True, exist_ok=True)
         print(f"START [{case.number:03d}] {case.relative}", flush=True)
         began = time.perf_counter()
@@ -1065,7 +1003,8 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
                     **process_group_options(no_window=True),
                 )
                 try:
-                    code = process.wait(timeout=case_timeout(case, timeout) + waiting)
+                    wanted = case_timeout(case, timeout) + waiting
+                    code = process.wait(timeout=guard.case_limit(wanted) if guard else wanted)
                     timed_out = False
                 except subprocess.TimeoutExpired:
                     terminate_process_tree(process)
@@ -1906,6 +1845,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     running.add_argument("--again", action="store_true")
     running.add_argument("--timeout", type=float, default=CASE_TIMEOUT)
     running.add_argument("--screen", default="")
+    running.add_argument("--total", type=float, default=None)
+    running.add_argument("--binding", type=Path, default=None)
     one = commands.add_parser("child")
     one.add_argument("--out", required=True, type=Path)
     one.add_argument("--case", required=True, type=int)
@@ -1967,6 +1908,13 @@ def main(argv: Iterable[str] | None = None) -> int:
         )
         return 0
     if arguments.command == "run":
+        from tools.acceptance_guard import RunGuard
+
+        try:
+            guard = RunGuard(arguments.total, arguments.binding)
+        except (ValueError, RuntimeError) as problem:
+            print(problem, file=sys.stderr, flush=True)
+            return 2
         return run(
             out,
             arguments.first,
@@ -1974,6 +1922,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             arguments.again,
             arguments.timeout,
             arguments.screen,
+            guard,
         )
     if arguments.command == "child":
         return child(out, arguments.case, arguments.screen)

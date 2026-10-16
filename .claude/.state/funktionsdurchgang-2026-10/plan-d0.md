@@ -409,7 +409,7 @@ Jedes Skill erhält eine Tabelle mit den Spalten `Kennung | Zählgröße | Schwe
 | Befehl | Wirkung |
 |---|---|
 | `inventory --functions --out <ordner> [--package D4] [--rows …] [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel,bewegung,vorhersage,schrift,schriftwechsel]` | Fälle aus Funktionsliste und Spezifikationen, Szenen nach `<out>/scenes/`, Menüleiste nach `<out>/menubar.json`; `vorhersage` hält vor dem Handlungsklick am Vorhersagetor an, auch die Sprachfälle daneben (§2.9); `skalierung` fährt 1920 × 1009 und 125, 150, 200 % (unter 1920 × 1080 logisch kein Fall); `schrift` setzt die Inhaltsschrift 14 und 18 pt vor dem Fenster, `schriftwechsel` wechselt an der offenen Fläche 9 → 14 → 9 pt, schmal und groß im Wechsel (`tools/function_fonts.py`) |
-| `run --out … [--first --last --again --timeout] [--screen <name oder index>]` | je Fall ein Prozess mit eigenem Profil; wieder aufnehmbar |
+| `run --out … [--first --last --again --timeout] [--screen <name oder index>] [--total <s>] [--binding <bindung.json>]` | je Fall ein Prozess mit eigenem Profil; wieder aufnehmbar; `--total` ist die Gesamtfrist (kein Fall beginnt mit weniger als 60 s Rest, jeder höchstens mit der Restzeit), `--binding` prüft vor jedem Fall das Siegel (`tools/acceptance_guard.py`) — bricht eins, endet der Lauf mit Grund und Ausgang 1 |
 | `report --out … [--package] [--verdicts <pfad>] [--checklist <pfad>] [--runs <ablage>]` | Zusammenfassung, Ergebnisse je Prüfpunkt, Abhakliste; `--runs` ist die Ablage der Läufe (Siegeldateien der Vorhersagen, §2.9); Ausgang 1 nur bei ungültigen Eingaben |
 
 ## 3 Prüfpunkte und Kriterien: wer misst, welche Gegenprobe
