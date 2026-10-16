@@ -375,7 +375,8 @@ die Aufnahme nicht mitmisst. Jede aufgenommene Fläche nimmt die Kurzhilfe an
 ihrem grauen Hauptknopf auf (`function_tooltips.grey_apply_pictures`,
 Protokollfeld `grey_apply`), der Hauptweg dazu die Tastenkette ab
 der Reiterleiste (`function_capture.bar_chain`, `tab_from_bar`); der Fehlfall
-geht den Weg einer Meldung mit mehreren genannten Knöpfen zu Ende
+geht den Weg einer Meldung mit mehreren genannten Knöpfen zu Ende, die Knöpfe zuerst
+im Fenster der Meldung, ohne zu raten; ein grauer oder fehlender steht als `reason` da
 (`function_way.py`, `messages[].way`). `run --total` und `--binding` halten
 Gesamtfrist und Siegel vor jedem Fall und nach dem letzten
 (`acceptance_guard.py`), die Tabelle des Berichts steht in

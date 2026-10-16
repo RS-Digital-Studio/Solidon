@@ -669,6 +669,148 @@ def test_a_way_in_two_steps_is_walked_to_its_end(qt_app: Any) -> None:
     assert "way" not in single[0]
 
 
+_WAY_TEXT = (
+    "0,10 mm liegt unter der Grenze. "
+    "Zum Entfernen zuerst „Abbrechen“ wählen, danach „Merkmal entfernen“."
+)
+
+
+def _way_surface(qt_app: Any, enable_second: bool, clicked: list[str], label: str) -> Any:
+    """Die Fläche der Meldung: *Abbrechen* und das graue *Merkmal entfernen* daneben."""
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    window = QWidget()
+    cancel = QPushButton("Abbrechen", window)
+    remove = QPushButton("Merkmal entfernen", window)
+    remove.setEnabled(False)
+
+    def cancelled() -> None:
+        clicked.append(f"{label}: Abbrechen")
+        cancel.hide()
+        remove.setEnabled(enable_second)
+
+    cancel.clicked.connect(cancelled)
+    remove.clicked.connect(lambda: (clicked.append(f"{label}: Merkmal entfernen"), remove.hide()))
+    layout = QVBoxLayout(window)
+    layout.addWidget(cancel)
+    layout.addWidget(remove)
+    window._op_dialog = None  # wie am Hauptfenster: kein Operationsdialog offen
+    window.resize(300, 120)
+    window.show()
+    qt_app.processEvents()
+    return window
+
+
+def _way_flow(qt_app: Any, window: Any) -> Any:
+    """Ein Fehlfall mit dem echten Automaten (``run_steps``) und seiner Frist."""
+    import time
+
+    from tools import function_bench
+    from tools.function_walk import QtPorts, Walk
+
+    flow = object.__new__(function_bench.FunctionFlow)
+    flow.window = window
+    flow.ports = QtPorts(window, time.perf_counter())
+    flow.walker = Walk(flow.ports, [], time.perf_counter())
+    flow.scene_now = dict
+    flow.pump = qt_app.processEvents
+    flow.variant = function_setup.Variant.of({"set": "basis"})
+    flow.data = {"findings": [], "errors": [], "closed_by_escape": [], "steps": []}
+    flow.persist = lambda: None
+    return flow
+
+
+def test_a_way_step_that_stays_grey_is_a_measurement(
+    qt_app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RC2-6: Bleibt *Merkmal entfernen* grau — die Lage von FD-36 —, sagt es der Weg.
+
+    Vorher lief der Schritt in die Frist des Automaten, und der Fall stand unter
+    „Fehler“ des Prüfstands statt mit einer Messung.
+    """
+    from tools import function_way
+
+    monkeypatch.setattr(function_way, "WAY_STEP_S", 0.3)
+    clicked: list[str] = []
+    window = _way_surface(qt_app, False, clicked, "Fläche")
+    flow = _way_flow(qt_app, window)
+    messages = [{"text": _WAY_TEXT, "actions": [], "kind": "grenzablehnung", "way_out": True}]
+    try:
+        flow.walk_ways(messages)
+    finally:
+        window.close()
+    assert messages[0]["way"] == [
+        {"title": "Abbrechen", "clicked": True, "effect": True},
+        {
+            "title": "Merkmal entfernen",
+            "clicked": False,
+            "effect": None,
+            "reason": f"nach 0.3 s {function_way.STILL_GREY}",
+        },
+    ]
+    assert flow.data["errors"] == [] and clicked == ["Fläche: Abbrechen"]
+
+
+def test_the_way_takes_the_button_of_the_message_window_and_does_not_guess(
+    qt_app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RC2-6: Ein fremdes *Abbrechen* in einem anderen Fenster wird nicht geklickt.
+
+    Vorher nahm der Weg den ersten Treffer über alle Fenster, je nach deren
+    Reihenfolge das fremde. Zwei gleiche Knöpfe im selben Fenster: nicht raten.
+    """
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from tools import function_way
+
+    monkeypatch.setattr(function_way, "WAY_STEP_S", 0.3)
+    for foreign_first in (True, False):
+        clicked: list[str] = []
+        shown: list[Any] = []
+
+        def foreign(clicked: list[str] = clicked, shown: list[Any] = shown) -> None:
+            other = QWidget()
+            button = QPushButton("Abbrechen", other)
+            button.clicked.connect(lambda: clicked.append("fremd: Abbrechen"))
+            QVBoxLayout(other).addWidget(button)
+            other.show()
+            shown.append(other)
+
+        if foreign_first:
+            foreign()
+        window = _way_surface(qt_app, True, clicked, "Fläche")
+        if not foreign_first:
+            foreign()
+        qt_app.processEvents()
+        flow = _way_flow(qt_app, window)
+        messages = [{"text": _WAY_TEXT, "actions": [], "kind": "grenzablehnung", "way_out": True}]
+        try:
+            flow.walk_ways(messages)
+        finally:
+            for each in (window, *shown):
+                each.close()
+            qt_app.processEvents()
+        assert clicked == ["Fläche: Abbrechen", "Fläche: Merkmal entfernen"], clicked
+        assert [entry["effect"] for entry in messages[0]["way"]] == [True, True]
+    # Zwei *Abbrechen* in der Fläche der Meldung: welcher gemeint ist, sagt sie nicht.
+    clicked = []
+    window = _way_surface(qt_app, True, clicked, "Fläche")
+    twin = QPushButton("Abbrechen", window)
+    window.layout().addWidget(twin)
+    twin.show()
+    qt_app.processEvents()
+    flow = _way_flow(qt_app, window)
+    messages = [{"text": _WAY_TEXT, "actions": [], "kind": "grenzablehnung", "way_out": True}]
+    try:
+        flow.walk_ways(messages)
+    finally:
+        window.close()
+    first, second = messages[0]["way"]
+    assert first["clicked"] is False and first["reason"].startswith(function_way.AMBIGUOUS)
+    assert second["reason"] == function_way.AFTER_MISSED and clicked == []
+    assert flow.data["errors"] == []
+
+
 # --- Werkzeug 6: Gesamtfrist und Siegel im Lauf ---------------------------------------
 
 
