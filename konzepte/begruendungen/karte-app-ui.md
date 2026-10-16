@@ -2309,8 +2309,9 @@ Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.
 ### Hilfe und Bedienung
 
 `guide_targets` teilt `widget_under`, `zone_of`, `search_hits`,
-`menubar_entries`, `point_for` und `next_click` zwischen Tour, Bildanleitungen
-und Prüfstand. `area_for` deckt die Zielfläche einschließlich verschachtelter
+`menubar_entries`, `point_for`, `next_click` und `unclipped` (der sichtbare,
+von keinem Elternteil abgeschnittene Teil eines Widgets; `function_walk._shown`
+misst damit Rollflächen) zwischen Tour, Bildanleitungen und Prüfstand. `area_for` deckt die Zielfläche einschließlich verschachtelter
 Rollbereiche auf; `next_click` geht den tatsächlichen Kundenweg ohne solches
 Aufdecken. Es rollt mit Radereignissen am tatsächlichen Rollbereich, bis ein
 Feld, das hineinpasst, mit beiden Kanten frei steht; ein kurzer Restschritt
