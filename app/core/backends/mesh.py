@@ -121,13 +121,6 @@ POLL_SECONDS = 1.0
 #: :data:`TIMEOUT_SECONDS` da.
 STUCK_SECONDS = 3600.0
 
-#: Wie viel von einer Antwort überhaupt gelesen wird.
-#:
-#: Dieselbe Zahl, die die Eingangsstufe für eine Datei setzt — derselbe Weg
-#: holt schließlich das fertige Modell aus ``/view``, und zwei Grenzen für
-#: dieselbe Frage widersprechen sich früher oder später.
-MAX_ANSWER_BYTES: Final = MAX_FILE_BYTES
-
 #: Wie viel davon eine **JSON**-Antwort sein darf. Auskünfte über Knoten,
 #: Aufträge und Warteschlange sind Kilobytes; ein Megabyte ist bereits eine
 #: Antwort, die niemand erwartet.
@@ -493,9 +486,11 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
     Arbeitsspeicher, während der Nutzer auf sein Modell wartet — und dass es
     lokal läuft, macht es nicht zu einem Teil dieser Anwendung (§32).
 
-    Der Deckel ist :data:`MAX_ANSWER_BYTES` und damit großzügig, weil derselbe
-    Weg auch das fertige Modell aus ``/view`` holt. Er ist die Grenze, die die
-    Eingangsstufe für eine Datei setzt, und keine zweite Zahl daneben.
+    Der Deckel ist :data:`app.core.ingest.loader.MAX_FILE_BYTES` und damit
+    großzügig, weil derselbe Weg auch das fertige Modell aus ``/view`` holt. Er
+    ist die Grenze, die die Eingangsstufe für eine Datei setzt, und keine zweite
+    Zahl daneben — gelesen zur Aufrufzeit, nicht als Kopie unter eigenem Namen:
+    Zwei Grenzen für dieselbe Frage widersprechen sich früher oder später.
     """
     request = urllib.request.Request(url, data=body, headers=headers or {})
     deadline = deadline_after(TIMEOUT_SECONDS)
@@ -505,7 +500,7 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
         with opener.open(request, timeout=TIMEOUT_SECONDS) as answer:
             return read_limited(
                 answer,
-                limit=MAX_ANSWER_BYTES,
+                limit=MAX_FILE_BYTES,
                 deadline=deadline,
                 # Wie im Update-Weg: Der Vertrag über das Nachsetzen des
                 # Zeitlimits gilt der echten Antwort. Steht eine Attrappe an
