@@ -571,11 +571,12 @@
        (`style.css`). Das Seitenende lässt sich über die Karte hinausrollen,
        und was den Fokus bekommt, rollt über ihr in den Blick. Steht sie bei
        wenig Höhe im Fluss, braucht sie keinen.
-       Ein eigener Block und kein Polster an `body`: Den Polster rechnete
-       Chromium nach dem Setzen manchmal nicht nach — gesetzt 162px,
-       berechnet 0px, bis sich am Baum etwas änderte —, und am Seitenende
-       lagen die Fußverweise unter der Karte (QtWebEngine, lokal 2 von 6
-       Aufrufen). Ein neu eingefügter Block steht sofort in seiner Höhe. */
+       Ein eigener Block und kein Polster an `body`: Ein Polster, gesetzt
+       während die Seite lädt, rechnet Chromium erst mit dem nächsten Bild
+       nach — bis dahin lagen die Fußverweise am Seitenende unter der Karte,
+       in QtWebEngine ohne Bild (Prüfstand) dauerhaft. Ein neu eingefügter
+       Block steht sofort in seiner Höhe; spätere Höhenwechsel gehen über
+       sein Stilattribut und brauchen wieder ein Bild. */
     const root = document.documentElement;
     const spacer = document.createElement("div");
     spacer.className = "language-hint-space";

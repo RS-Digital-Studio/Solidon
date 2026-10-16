@@ -257,6 +257,7 @@ def test_closing_is_remembered_and_frees_the_space(outcomes: dict[str, list], ca
     Fokus am Zeichen der Kopfzeile statt im Nichts."""
     _done, closed, reloaded = outcomes[case]
     assert (closed["hint"], closed["stored"], closed["space"]) == ("", "closed", "0px")
+    assert closed["reserved"] == 0, "der Block am Seitenende geht mit der Karte"
     if case == "escape":
         assert closed["focus"] == "brand"
     assert reloaded["hint"] == ""
