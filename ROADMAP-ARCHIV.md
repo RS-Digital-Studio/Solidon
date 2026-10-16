@@ -443,6 +443,7 @@ entfernt hat.
 | 2026-10-12 | [RM-788: Ein Slicertest wartete auf ein Windows-Fenster, das niemand sah (12.10.2026)](#rm-788-ein-slicertest-wartete-auf-ein-windows-fenster-das-niemand-sah-12102026) |
 | 2026-10-12 | [RM-789: Die Einrichtung von ComfyUI startet hinter der gemeinsamen Prozessgrenze (12.10.2026)](#rm-789-die-einrichtung-von-comfyui-startet-hinter-der-gemeinsamen-prozessgrenze-12102026) |
 | 2026-10-16 | [FD-212: Der Abdruck eines eigenen Bausteins übersteht eine Formaterhöhung (16.10.2026)](#fd-212-der-abdruck-eines-eigenen-bausteins-übersteht-eine-formaterhöhung-16102026) |
+| 2026-10-16 | [RM-723 bis RM-727, RM-729, RM-730: Codestruktur Schritt 0 behebt die Funde vor dem ersten Schnitt (16.10.2026)](#rm-723-bis-rm-727-rm-729-rm-730-codestruktur-schritt-0-behebt-die-funde-vor-dem-ersten-schnitt-16102026) |
 | ohne Datum | [Gegen echte Modelle geprüft](#gegen-echte-modelle-geprüft) |
 | ohne Datum | [Referenzkorpus und Passungen vervollständigt](#referenzkorpus-und-passungen-vervollständigt) |
 | ohne Datum | [Durchsicht nach P12 — was noch offen ist](#durchsicht-nach-p12--was-noch-offen-ist) |
@@ -48563,3 +48564,77 @@ ihm bleibt sie es ab 0.6.1 über jede weitere. Buchungen ohne eigenes Rezept ble
 geändertem Baustein, Abdruck von heute gegen ein späteres Format, Abdruck aus Format 46), am
 Stand davor rot; `test_function_list.py::test_a_light_mesh_scene_keeps_its_promises[baustein_geaendert.netz]`
 wieder grün.
+
+## RM-723 bis RM-727, RM-729, RM-730: Codestruktur Schritt 0 behebt die Funde vor dem ersten Schnitt (16.10.2026)
+
+<a id="rm-723-bis-rm-727-rm-729-rm-730-codestruktur-schritt-0-behebt-die-funde-vor-dem-ersten-schnitt-16102026"></a>
+<a id="rm-723"></a>
+<a id="rm-724"></a>
+<a id="rm-725"></a>
+<a id="rm-726"></a>
+<a id="rm-727"></a>
+<a id="rm-729"></a>
+<a id="rm-730"></a>
+
+Die vom Programm unabhängigen Funde des [Konzepts
+Codestruktur](konzepte/konzept-codestruktur-2026-10.md), die Schritt 0 vor dem ersten Schnitt
+behebt ([RM-722](ROADMAP.md#rm-722)). Gebaut in den Paketen Q, P1, P2, R und R2, integriert
+über `welle5` (Stand `a25ac8cb2`); Ursache, Beleg und alle Commits je Fund in der
+[Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md). Offen bleiben CS-11
+([RM-728](ROADMAP.md#rm-728), Paket K) und Schritt 1 ([RM-813](ROADMAP.md#rm-813)).
+
+**RM-723 (CS-2) — Quelltextprüfungen lasen `app/ui/` flach und übersahen `render/`.**
+**Behoben (Q):** Alle 26 flachen Leser — die 17 des Funds, `test_translations`, `activation`,
+der Bauordner des Lizenzmoduls und `test_style.py`
+`test_every_layout_of_a_dialog_keeps_the_grid` — lesen über `tests/source_tree.python_files`
+rekursiv (`d6b9ee31c`); das Prüfmodul bleibt flach, ein Modul im Unterordner hält den Bau an
+(`1d5c77c74`). **Nachweis:** W4 `tests/test_source_readers.py` (`63d399303`, Auflöser
+`tools/tree_reads.py` seit `1c1bd1313`) verbietet flaches `glob` über ein Paket in `tests/` und
+`tools/` und legt jeder umgestellten Prüfung einen Verstoß in ein Unterpaket einer Kopie des
+Baums; am Stand davor 26 rot, danach 0. Zwei reine Quelltextprüfungen forderten `qt_app` an und
+liefen nie im Tor; sie laufen jetzt dort (`9af771975`).
+
+**RM-724 (CS-3) — Späte Importe in `tools/` prüfte niemand.** **Behoben (R):** W5
+`tests/test_import_resolution.py` löst jeden Import und jeden Modulalias in `app/`, `tools/` und
+`tests/` statisch auf, auch in Funktionen und unter `TYPE_CHECKING` (`51672538f`, scharf seit
+`f65d9b925`). `_feature_item` bleibt privat; es wird im Verschiebeschritt von `panels.py`
+öffentlich (Konzept 3.1, Regel 5). **Nachweis:** wie RM-730 unten.
+
+**RM-725 (CS-6) — `affected_tests` erkannte `glob(` nicht als Baumleser.** **Behoben (Q):**
+`glob` zählt, auch über den lesenden Helfer (`3b327c94c`); seit `02532e1f1` wählt die Auswahl
+nach dem aufgelösten Lesebereich, und eine reine Teständerung wählt nur die Leser von `tests/`.
+**Nachweis:** `test_affected_tests.py::test_a_flat_glob_reads_the_tree_too` und
+`test_a_test_reading_through_a_source_helper_is_a_tree_reader`, je mit Gegenprobe.
+
+**RM-726 (CS-9) — Zwei Patches waren wirkungslos.** **Behoben:** a) (P1) Das Spulenverbot der
+Ersteinrichtung steht auf der Bindung, die das Lager liest
+(`filament_inventory.configured_spools`, `3cb4f8d8e`); b) (P2) `_cost_matrix` ist wieder der
+Eintritt in den dichten Solverweg, `_assignment` liest sie über das Modul (`4c915e009`),
+96 von 96 Zuordnungsfällen bytegleich. **Nachweis:** `tests/test_first_run_spools.py`
+(ohne Patch genau ein Aufruf), `test_spatial_matching.py::test_the_forbidden_quadratic_stages_are_reached_where_the_solver_is_needed`
+(Spion); statisch W2 d) — die verbotene Bindung hat zur Aufrufzeit einen Leser
+(`6948c76e3`, Entscheidung E8).
+
+**RM-727 (CS-10) — Namenslisten übersprangen fehlende Module stumm.** **Behoben:** (P2)
+`_step_ways` bricht bei einem fehlenden Modul mit `ModuleNotFoundError`, bei einem ohne eigene
+Funktion mit `InternalError` ab, auch aus `evaluate()` (`ff37fc086`); (P1) der Lebensdauer-Pin
+ordnet über `UI_PINS` Modul und Klasse zu und bricht bei fehlender Klasse den Import ab
+(`01a6db635`). **Nachweis:** W6 `tests/test_name_lists.py` (je Liste ein fehlender und ein
+leerer Eintrag rot, `test_c_the_evaluation_itself_stops_on_a_missing_step_way_module`) und
+`tests/test_suite_pin.py` (`test_a_module_without_its_class_stops_the_import`).
+
+**RM-729 (CS-12) — Gegenproben der Oberflächensuche zählten nur Dateien.** **Behoben (Q):**
+Die Gegenproben verlangen die Definitionsdateien von `MainWindow`, `Viewport`, `Renderer`,
+`detect` und `make_primary` statt einer Mindestzahl (`d6b9ee31c`), die dritte Stelle in
+`test_print_disclosure.py` die Datei mit `is_utc_timestamp` (`890a12512`). **Nachweis:**
+`test_source_readers.py::test_the_sweeps_follow_a_definition_into_a_package` schneidet
+`main_window.py` und `features.py` zum Paket, `test_a_flat_sweep_is_red`.
+
+**RM-730 (CS-13) — `tools/matrix_unit.py` lief angeblich in keiner Suite.** Am Belegstand
+schon falsch: `tests/test_delivery_matrix_review.py` und `tests/test_delivery_tools.py` laden
+das Modul über seinen Pfad, ohne Marker, also im Tor. Seine Aliaszugriffe in Funktionen, die
+diese Tests nicht rufen (`handover.detect`, `handover.standard_choice`,
+`handover.slice_model`), löst W5 statisch auf. **Nachweis (Paket U, Wegwerfbaum an
+`a25ac8cb2`, gepinnt):** `handover.detect` in Zeile 370 umbenannt →
+`test_import_resolution.py::test_every_attribute_of_an_own_module_resolves` rot mit
+`tools/matrix_unit.py:370`, 1 failed, 4 passed, EXIT=1; unverändert 5 passed, EXIT=0.

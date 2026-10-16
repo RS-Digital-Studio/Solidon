@@ -217,15 +217,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft](#rm-755) | Tests und Entwicklungswerkzeuge | Gefunden in SK: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` einzeln 1 von 2 rot; Ursache klären wie bei der Formsitzung (Zeitgeber beim Zustellen) |
 | [RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot](#rm-779) | Tests und Entwicklungswerkzeuge | Den Vorgänger finden, der Zustand hinterlässt, und ihn aufräumen |
 | [RM-719 — Ein Fenstertest wackelt mit vier Arbeitern](#rm-719) | Tests und Entwicklungswerkzeuge | Ursache des Wettlaufs finden |
-| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | Pakete R, W13, P1, P2, Plattform fertig und geprüft, M und Q in der Fixrunde; Integration über `welle5`, dann der erzeugte Schnitt K, Unterlagen, Tor — vor 0.6.1 |
-| [RM-723 — Quelltextprüfungen lesen `app/ui/` flach und übersehen `render/`](#rm-723) | Tests und Entwicklungswerkzeuge | Je Stelle rekursiv lesen oder den Geltungsbereich mit Grund nennen |
-| [RM-724 — Späte Importe in `tools/` prüft niemand](#rm-724) | Tests und Entwicklungswerkzeuge | Statische Importprüfung (W5) vorziehen, `_feature_item` öffentlich machen |
-| [RM-725 — `affected_tests` erkennt `glob(` nicht als Baumleser](#rm-725) | Tests und Entwicklungswerkzeuge | `glob` in `_TREE_READERS` aufnehmen, mit Test |
-| [RM-726 — Zwei Patches in der Suite sind wirkungslos](#rm-726) | Tests und Entwicklungswerkzeuge | Patch auf das lesende Modul mit Gegenprobe; `_cost_matrix` entfernen oder benutzen |
-| [RM-727 — Namenslisten überspringen fehlende Module stumm](#rm-727) | Tests und Entwicklungswerkzeuge | Jeder Name löst auf und trägt bei, sonst Fehler (W6 vorziehen) |
-| [RM-728 — Kopfkopien entziehen sich Patches](#rm-728) | Tests und Entwicklungswerkzeuge | Je Paar prüfen, über das Modul zugreifen oder den Patch umsetzen |
-| [RM-729 — Gegenproben der Oberflächensuche zählen nur Dateien](#rm-729) | Tests und Entwicklungswerkzeuge | Gegenproben verlangen die Definitionsmodule von `MainWindow`, `Viewport` und der Merkmalserkennung |
-| [RM-730 — `tools/matrix_unit.py` läuft in keiner Suite](#rm-730) | Tests und Entwicklungswerkzeuge | Rauchtest, der das Modul importiert und seine Aliaszugriffe auflöst |
+| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | Wächter, Auflöser und Werkzeug in `welle5`; offen der erzeugte Schnitt K (W2 c) scharf), Review der Merge-Auflösungen und Tor — vor 0.6.1 |
+| [RM-728 — Kopfkopien entziehen sich Patches](#rm-728) | Tests und Entwicklungswerkzeuge | 226 Kopfkopien über `move_names copies` aufs Original umstellen (Paket K), dann W2 c) scharf |
+| [RM-813 — Codestruktur Schritt 1 und die offenen Punkte aus Schritt 0](#rm-813) | Tests und Entwicklungswerkzeuge | Phase 3 nach 0.6.1: Schritt 1 (`geom/prepare_ops.py`); CS-28, CS-29 und die Handfixe aus Paket M an ihrem Schritt |
 | [RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat](#rm-786) | Tests und Entwicklungswerkzeuge | Am Tag die Suite auslassen, wenn der main-Lauf zum Tag-Commit grün ist; Vertrag und Wächter nachziehen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -6580,94 +6574,52 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Dateigrößen (die Zahl der Definitionen einer gelisteten Datei steigt nie), W2 Patch-Ziele, W3
   Registerabzug, W4 rekursive Quelltextprüfungen, W5 statisch auflösbare Importe in `app/`,
   `tools/` und `tests/`, W6 Namenslisten lösen auf; dazu das Verschiebewerkzeug
-  `tools/move_names.py` mit `ast`-Beweis. Die Ausnahme „Fenstertests lokal vor
-  Oberflächenschritten“ (Konzept 7, Punkt 2) kommt mit D0 (RM-737) in den gemeinsamen Satz in
-  `AGENTS.md`; Schritt 0 zieht nur noch `/liefern` nach.
-  **Nächster Schritt:** CS-2, CS-9, CS-10, CS-11 und CS-12 (RM-723, RM-726 bis RM-729) und die
-  12 `raising=False` auf `app.*` beheben, dann W1 bis W6 und das Werkzeug mit Test an einer
-  Paket-Attrappe.
+  `tools/move_names.py` mit `ast`-Beweis.
+  **Stand (welle5 `a25ac8cb2`):** gebaut, geprüft und integriert — der Auflöser
+  `tools/code_*.py` (Pakete R, R2), W1 und W3 (W13; Liste `625733390` mit 134 Dateien), W4 und
+  die Auswahl über Lesestellen (Q), W6 (P1, P2), W5 und W2 a), b), d), e) scharf, das Werkzeug
+  mit Modul-, Kopien- und Komponentenmodus (M). Behoben sind CS-2, CS-9, CS-10, CS-12 und die
+  13 `raising=False` auf `app.*` ([RM-723](ROADMAP-ARCHIV.md#rm-723) bis
+  [RM-727](ROADMAP-ARCHIV.md#rm-727), [RM-729](ROADMAP-ARCHIV.md#rm-729)), dazu CS-17 bis
+  CS-40 bis auf CS-26, CS-28 und CS-29 ([Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md),
+  „Schritt 0“). Karten, Regel 6 in `AGENTS.md` und `/liefern` sind nachgezogen.
+  **Nächster Schritt:** Paket K — der erzeugte Schnitt `move_names copies` für CS-11
+  ([RM-728](#rm-728)) samt den Handstellen aus CS-26, danach W2 c) scharf; dann
+  Bereichsnachweis, Review der Merge-Auflösungen und Tor auf `welle5`, mit D0 nach main.
   **Abnahme:** alle sechs Wächter grün über dem Bestand, je Wächter eine Gegenprobe rot; das
   Werkzeug verschiebt an der Attrappe mit Beweis; Review. Erst danach Schritt 1
-  (`geom/prepare_ops.py`).
-
-<a id="rm-723"></a>
-
-- [ ] **RM-723 — Quelltextprüfungen lesen `app/ui/` flach und übersehen `render/`.**
-  17 Stellen in sieben Testdateien lesen `app/ui/*.py` oder `perceive/*.py` über `glob("*.py")`;
-  die über `app/ui/` sehen `app/ui/render/` (11 Dateien) nicht, fast alle sind Verbotsprüfungen
-  (`assert not culprits`). Stellen und Beleg:
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-2.
-  **Nächster Schritt:** je Stelle entscheiden, ob `render/` absichtlich fehlt; sonst rekursiv
-  lesen.
-  **Abnahme:** kein flaches `glob` über `app/` in `tests/` und `tools/`; eine Gegenprobe mit
-  einem Verstoß unter `render/` ist rot.
-
-<a id="rm-724"></a>
-
-- [ ] **RM-724 — Späte Importe in `tools/` prüft niemand.**
-  mypy prüft nur `app`; späte Importe in Erzeugern brechen erst beim Release in `/erzeugen`.
-  `make_video.py` und `make_workshop_videos.py` holen das private `app.ui.panels._feature_item`,
-  mindestens neun Werkzeuge holen `MainWindow` in Funktionen.
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-3.
-  **Abnahme:** ein umbenannter Name, den nur ein später Import in `tools/` liest, macht einen
-  Test rot.
-
-<a id="rm-725"></a>
-
-- [ ] **RM-725 — `affected_tests` erkennt `glob(` nicht als Baumleser.**
-  `tools/affected_tests.py` kennt `rglob`, `walk_packages`, `iterdir` und `iter_modules`, aber
-  nicht `glob(`. Eine Testdatei, die den Baum über `glob` liest, wird bei einer Änderung nur
-  gewählt, wenn sie das Modul auch importiert.
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-6.
-  **Abnahme:** eine Testdatei, die `app/` nur über `glob` liest, wird bei einer Änderung
-  darunter gewählt; Gegenprobe rot.
-
-<a id="rm-726"></a>
-
-- [ ] **RM-726 — Zwei Patches in der Suite sind wirkungslos.**
-  `tests/test_first_run.py` ersetzt `filament_picker.configured_spools` und sichert
-  `assert_not_called()` zu; der einzige Aufrufer hält eine Kopfkopie
-  (`app/ui/filament_inventory.py`), die Zusicherung ist immer grün.
-  `tests/test_spatial_matching.py` verbietet `matching._cost_matrix`, die niemand ruft.
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-9.
-  **Abnahme:** beide Prüfungen sind rot, wenn der verbotene Aufruf erreicht wird; eine
-  Gegenprobe belegt, dass er ohne Patch erreicht wird.
-
-<a id="rm-727"></a>
-
-- [ ] **RM-727 — Namenslisten überspringen fehlende Module stumm.**
-  `scene/evaluate.py` `_step_ways` überspringt ein fehlendes Modul aus `_STEP_WAY_MODULES` ohne
-  Meldung, der Merkschlüssel eines Schritts verlöre still Funktionen. `tests/conftest.py`
-  `_pin_ui_widgets` überspringt ein Modul ohne `MainWindow`; ohne Pin droht der native Abriss.
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-10.
-  **Abnahme:** ein fehlender oder leerer Eintrag in jeder dieser Listen ist ein Fehler, mit
-  Test.
+  ([RM-813](#rm-813)).
 
 <a id="rm-728"></a>
 
 - [ ] **RM-728 — Kopfkopien entziehen sich Patches.**
-  In 54 Fällen hält ein Modul per `from M import N` eine eigene Kopie eines Namens, den Tests an
-  `M` patchen, etwa `features.detect` in `scene/evaluate.py`; der Patch erreicht die Kopie
-  nicht. [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-11.
-  **Abnahme:** keine Kopfkopie eines gepatchten Namens mehr; W2 (RM-722) macht neue Fälle rot.
+  Module halten per `from M import N` eine eigene Kopie eines Namens, den Tests am Original
+  patchen, etwa `features.detect` in `scene/evaluate.py`; der Patch erreicht die Kopie nicht.
+  Der Plan zu Schritt 0 zählte 226 Kopien (182 in 99 Modulen unter `app/`, 44 in 25
+  Werkzeugen; die erste Fassung nannte 54), die heutige Zahl nennt das Inventar des Auflösers
+  (`tools/code_index.py --inventory`, W2 c).
+  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-11.
+  **Nächster Schritt:** Paket K: erzeugter Schnitt `move_names copies` (Entscheidung E1: alle
+  gepatchten Namen über Modulzugriff, Patches auf Kopien aufs Original), die Handstellen aus
+  CS-26 vorher in eigenen Commits; danach W2 c) ohne `xfail`.
+  **Abnahme:** keine Kopfkopie eines gepatchten Namens mehr; W2 c) (RM-722) macht neue Fälle rot.
 
-<a id="rm-729"></a>
+<a id="rm-813"></a>
 
-- [ ] **RM-729 — Gegenproben der Oberflächensuche zählen nur Dateien.**
-  `tests/test_leash.py` `test_the_sweep_over_the_surface_finds_files_to_read` verlangt 20 oder
-  mehr Dateien unter `app/ui/` (der Kommentar nennt 52, heute 86), `test_features.py` zehn unter
-  `perceive/`. Wird `main_window.py` ein Paket, bleiben beide grün, obwohl die größte Datei
-  fehlt. [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-12.
-  **Abnahme:** fehlt eines der Definitionsmodule in der Suche, sind die Gegenproben rot.
-
-<a id="rm-730"></a>
-
-- [ ] **RM-730 — `tools/matrix_unit.py` läuft in keiner Suite.**
-  Das Werkzeug greift über Modulaliasse zu (`handover.detect` und weitere); bräche ein Name,
-  fiele es erst beim nächsten Matrixlauf auf.
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-13.
-  **Abnahme:** ein Test importiert das Modul und löst seine Aliaszugriffe auf; ein umbenannter
-  Name macht ihn rot.
+- [ ] **RM-813 — Codestruktur Schritt 1 und die offenen Punkte aus Schritt 0.**
+  In Phase 3 nach 0.6.1 (Programm, Robert 12. und 13.10.): Schritt 1 teilt `geom/prepare_ops.py`
+  nach Konzept 4.2 und 4.3. Aus Schritt 0 offen und an ihrem Schritt zu behandeln
+  ([Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), „Schritt 0“): CS-28 (das Modul
+  `scene/evaluate.py` hinter dem gleichnamigen trägen Export ist als Pfad nicht patchbar; das
+  Werkzeug fängt es ab), CS-29 (ein Fake auf dem Wirt bekommt nach einem Komponentenschnitt
+  die Komponente, Schritt 4d) und die Punkte 8, 9, 12 und 13 aus Paket M
+  (`importlib.reload` und `dir()` auf `slicer_keys` und `advise`, Aufruftexte in `tools/`,
+  Methoden mit `self.sender()`, `getattr` und Namensraumlesungen über offene Namen in
+  `main_window.py`).
+  **Nächster Schritt:** die Zuschnittliste für `geom/prepare_ops.py` messen (Konzept 4.2,
+  Punkt 1).
+  **Abnahme:** Schritt 1 nach Konzept 4.5 abgenommen; jeder genannte Punkt hat beim Schnitt
+  seiner Datei einen Commit oder eine Entscheidung in der Funddatei.
 
 <a id="rm-786"></a>
 
