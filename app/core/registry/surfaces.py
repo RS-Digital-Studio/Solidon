@@ -947,6 +947,13 @@ ABBREVIATIONS: Final = (
 
 _SENTENCE_GAP: Final = re.compile(r"(?<=[.!?])\s+")
 
+#: Eine Abkürzung aus :data:`ABBREVIATIONS` nur als ganzes Wort: Davor steht
+#: kein Buchstabe und keine Ziffer. Als Teilzeichenkette traf „ca.“ das
+#: Wortende von „rosca.“ und „placa.“, und der Satz endete dort nicht (FD-97).
+_ABBREVIATION: Final = re.compile(
+    r"(?<!\w)(?:" + "|".join(re.escape(short) for short in ABBREVIATIONS) + ")"
+)
+
 
 def sentences(text: str) -> list[str]:
     """Die Sätze eines Kundentexts, wie ein Leser sie zählt (RM-509).
@@ -957,9 +964,7 @@ def sentences(text: str) -> list[str]:
     Längenwächter schneiden mit dieser einen Regel — zwei Regeln hießen, der
     Wächter misst etwas anderes, als der Kunde liest.
     """
-    masked = text.strip()
-    for short in ABBREVIATIONS:
-        masked = masked.replace(short, short.replace(".", "\x00"))
+    masked = _ABBREVIATION.sub(lambda found: found.group(0).replace(".", "\x00"), text.strip())
     found: list[str] = []
     for piece in _SENTENCE_GAP.split(masked):
         if not piece:

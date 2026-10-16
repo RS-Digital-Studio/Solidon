@@ -601,6 +601,7 @@ def _commit_hook_with(
     hier zählt, wann der Hook sie aufruft und welchen Ausgang er übernimmt.
     """
     from tests.helpers import bash_executable
+    from tests.process_helpers import run_bounded
 
     bash = bash_executable()
     if bash is None:
@@ -665,7 +666,7 @@ source "$HOOK_FILE"
         HOOK_CATALOG_EXIT=str(catalog_exit),
         HOOK_GIT_EXIT=str(git_exit),
     )
-    result = subprocess.run(
+    result = run_bounded(
         [str(bash), str(runner)],
         capture_output=True,
         text=True,

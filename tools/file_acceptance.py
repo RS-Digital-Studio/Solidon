@@ -4,11 +4,12 @@
     .venv\\Scripts\\python.exe tools/file_acceptance.py inventory --source <bestand> --out <ordner>
     .venv\\Scripts\\python.exe tools/file_acceptance.py inventory --functions --out <ordner>
         [--package D4] [--rows <kennung>,…] [--phases main,escape]
-        [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel]
+        [--variants basis,sprachen,…,vorhersage,schrift,schriftwechsel] (function_setup.PHASES)
     .venv\\Scripts\\python.exe tools/file_acceptance.py run --out <ordner> [--first 1] [--last 9]
-        [--again] [--timeout <s>] [--screen <name oder nummer>]
+        [--again] [--timeout <s>] [--screen <name oder nummer>] [--total <s>] [--binding <json>]
+    .venv\\Scripts\\python.exe tools/file_acceptance.py seal --out <ordner>
     .venv\\Scripts\\python.exe tools/file_acceptance.py report --out <ordner>
-        [--package D4] [--verdicts <toml>] [--checklist <md>]
+        [--package D4] [--verdicts <toml>] [--checklist <md>] [--runs <ablage>]
 
 ``--manifest`` nimmt das Manifest des Dateiaudits
 (``ui-audit/2026-09-15-files/manifest.json``: 187 Fälle in seiner Zählung),
@@ -335,26 +336,19 @@ def read_cases(out: Path) -> list[Case]:
     return [Case(**entry) for entry in json.loads((out / "cases.json").read_text(encoding="utf-8"))]
 
 
-#: Die Nutzerordner, die ein Fall auf sein Profil legt; ``HOME`` nur unter macOS (:func:`isolate`).
-#: Unter Windows hängen Grafiktreiber und ihre Zwischenspeicher an ``HOME`` und
-#: ``USERPROFILE``, und die Adapterfrage der Ansicht hing dann (Erinnerung „sonden-bauen“).
-PROFILE_VARIABLES: tuple[str, ...] = (
-    "APPDATA",
-    "LOCALAPPDATA",
-    "XDG_CONFIG_HOME",
-    "XDG_DATA_HOME",
-    "XDG_CACHE_HOME",
-)
-
-
 def isolate(profile: Path) -> None:
-    """Legt die Nutzerordner dieses Prozesses auf ``profile``, vor dem ersten ``import app``."""
+    """Nutzerordner auf ``profile``, Schlüsselbund auf die Attrappe — vor ``import app``.
+
+    Welche Ordner, sagt ``app.core.paths.drawing_profile_variables``: ``HOME`` nur
+    unter macOS (RCI-10).
+    """
     profile.mkdir(parents=True, exist_ok=True)
-    for key in PROFILE_VARIABLES:
-        os.environ[key] = str(profile)
-    if sys.platform == "darwin":
-        # macOS liest die Nutzerordner über ``Path.home()``, sonst schrieb der Fall ins Profil.
-        os.environ["HOME"] = str(profile)
+    # ``app.core.paths`` liest die Ordner beim Aufruf, nicht beim Import
+    # (``test_the_user_folders_are_read_when_asked_not_when_imported``).
+    from app.core.paths import drawing_profile_variables, isolate_secrets
+
+    os.environ.update(dict.fromkeys(drawing_profile_variables(), str(profile)))
+    isolate_secrets(os.environ)
 
 
 # --- Funktionsfälle (RM-737) -----------------------------------------------------
@@ -376,8 +370,9 @@ def function_cases(
     ``packages`` und ``row_ids`` schränken ein; eine Kennung, die keine Zeile
     trifft, ist ein Fehler — ein Lauf, der still nichts prüft, sähe aus wie einer,
     der nichts fand. ``sprachen`` faltet nicht je Zeile aus: Ein Prozess je
-    Sprache und Paket geht die Flächen aller Zeilen ab (``tools/CLAUDE.md``,
-    sechs Sprachen in einem Prozess brechen ab). ``phases`` beschränkt jeden
+    Sprache, Paket und Einrichtung der Startszenen geht die Flächen seiner Zeilen
+    ab (``tools/CLAUDE.md``, sechs Sprachen in einem Prozess brechen ab;
+    ``function_cases``, FD-101). ``phases`` beschränkt jeden
     Funktionsfall auf diese Phasen (``function_setup.PHASES``) — für die
     Nachprüfung einer Zeile nach einem Fix.
 
@@ -390,12 +385,14 @@ def function_cases(
     Startablaufs (:data:`STARTUP_SOURCE`) wird im Satz ``basis`` ein Startfall
     im Zustand „Demo abgelaufen“ und in keinem anderen Satz gefahren — sie hat
     kein Fenster, an dem eine Phase liefe. ``phases`` gilt nur für Sätze, die
-    sie haben; ein Satz ohne eine davon fällt weg.
+    sie haben; ein Satz ohne eine davon fällt weg. Schrift und Schriftwechsel
+    (``function_setup.LANGUAGE_SETS``) laufen je Sprache: FD-57 und FD-58 waren
+    spanisch, französisch, italienisch und portugiesisch rot (RC2-4).
     """
     from app.i18n.catalog import available_languages
     from tools.function_list import STARTUP_LICENCE
     from tools.function_scenes import row_scenes
-    from tools.function_setup import PHASES, Variant, scene_setup, spec_variants
+    from tools.function_setup import LANGUAGE_SETS, PHASES, Variant, scene_setup, spec_variants
     from tools.function_setup import variant_sets as known_sets
 
     sets = known_sets()
@@ -421,6 +418,7 @@ def function_cases(
     ]
     cases: list[Case] = []
     number = first_number
+    spoken = tuple(languages) if languages is not None else available_languages()
     for name in variant_sets:
         own = tuple(phase for phase in phases if phase in PHASES[name])
         if phases and not own:
@@ -453,6 +451,8 @@ def function_cases(
             if needed:
                 base = {**base, "preconditions": {**base.get("preconditions", {}), **needed}}
             entries = [{**base, **entry, "phases": own} for entry in sets[name]]
+            if name in LANGUAGE_SETS:
+                entries = [{**entry, "language": code} for entry in entries for code in spoken]
             if name == "basis" and not phases:
                 entries += [{**base, "set": "basis", **other} for other in others]
             for entry in entries:
@@ -475,22 +475,10 @@ def function_cases(
                 )
                 number += 1
     if "sprachen" in variant_sets:
-        spoken = tuple(languages) if languages is not None else available_languages()
-        for package in sorted({str(row.get("package")) for row in chosen}):
-            for language in spoken:
-                variant = Variant.of({"set": "sprachen", "language": language})
-                cases.append(
-                    Case(
-                        number,
-                        f"{package} [{language}]",
-                        "",
-                        "",
-                        kind="language",
-                        row=package,
-                        variant=variant.as_dict(),
-                    )
-                )
-                number += 1
+        from tools.function_cases import language_cases
+
+        packages = {str(row.get("package")) for row in chosen}
+        cases += language_cases(rows, packages, spoken, number, "vorhersage" in variant_sets)
     return cases
 
 
@@ -532,8 +520,10 @@ def function_inventory(
     cases = function_cases(
         rows, packages=packages, row_ids=row_ids, variant_sets=variant_sets, phases=phases
     )
+    from tools.function_cases import package_of
+
     chosen = {case.row for case in cases if case.kind in ("function", "start")}
-    languages = {case.row for case in cases if case.kind == "language"}
+    languages = {package_of(case.row) for case in cases if case.kind == "language"}
     kept = [row for row in rows if str(row["id"]) in chosen or row.get("package") in languages]
     write_json(out / "rows.json", kept)
     catalogue = function_scenes.load_scenes()
@@ -552,12 +542,15 @@ def menubar(out: Path) -> Path:
     Ein eigener Prozess, weil das Inventar selbst kein Fenster baut und ein
     Fenster im selben Prozess die Fälle danach nicht stören soll.
     """
+    from app.core.paths import isolate_secrets
+
+    out.mkdir(parents=True, exist_ok=True)  # cwd des Kindes (RC-10)
     target = out / "menubar.json"
     try:
         finished = subprocess.run(
             [sys.executable, str(Path(__file__).resolve()), "menubar", "--out", str(out)],
-            cwd=ROOT,
-            env={**os.environ, "PYTHONUTF8": "1", "QT_QPA_PLATFORM": "offscreen"},
+            cwd=out,
+            env=isolate_secrets({**os.environ, "PYTHONUTF8": "1", "QT_QPA_PLATFORM": "offscreen"}),
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -891,6 +884,8 @@ def summary(out: Path, cases: Sequence[Case]) -> dict[str, Any]:
         "functions": functions,
     }
     write_json(out / "summary.json", data)
+    from tools.acceptance_summary import markdown
+
     (out / "summary.md").write_text(markdown(data), encoding="utf-8")
     return data
 
@@ -901,84 +896,6 @@ def _read(path: Path) -> dict[str, Any]:
     except OSError, ValueError:
         return {}
     return loaded if isinstance(loaded, dict) else {}
-
-
-def markdown(data: Mapping[str, Any]) -> str:
-    """Der Bericht als Tabelle, ein Fall je Zeile."""
-    lines = [
-        "# Native Einzeldateiabnahme",
-        "",
-        f"Fälle: {data['cases']} · gelaufen: {data['ran']} · bestanden: {data['passed']}"
-        f" · Bohrungen: {data['bores_passed']} von {data['bores']}",
-        "",
-        "| Nr. | Datei | Stufe | Exit | Sekunden | Körper | Merkmale | Gruppen | Merkmal"
-        " | Geändert | Undo | Redo | Vorschau | Bestanden |",
-        "|---:|---|---|---:|---:|---:|---:|---:|---|---|---|---|---|---|",
-    ]
-
-    def mark(value: object) -> str:
-        return "ja" if value is True else "nein" if value is False else "-"
-
-    for row in data["rows"]:
-        checks = row.get("checks", {})
-        seconds = row.get("seconds")
-        cells = [
-            row["number"],
-            str(row["relative"]).replace("|", "/"),
-            row["stage"],
-            "-" if row["exit_code"] is None else row["exit_code"],
-            "-" if seconds is None else f"{float(seconds):.1f}",
-            row["objects"],
-            row["features"],
-            row["groups"],
-            row["feature"] or "-",
-            mark(checks.get("changed")),
-            mark(checks.get("undo_restores_import")),
-            mark(checks.get("redo_restores_applied")),
-            mark(checks.get("preview_shows_result")),
-            mark(row["passed"]),
-        ]
-        lines.append("| " + " | ".join(str(cell) for cell in cells) + " |")
-    bores = [(row, bore) for row in data["rows"] for bore in row["bores"]]
-    if bores:
-        lines += ["", "## Jede Bohrung", "", "| Nr. | Bohrung | Bestanden |", "|---:|---|---|"]
-        lines += [
-            f"| {row['number']} | {bore['feature']} | {mark(bore['passed'])} |"
-            for row, bore in bores
-        ]
-    functions = data.get("functions") or []
-    if functions:
-        lines += [
-            "",
-            "## Funktions- und Sprachfälle",
-            "",
-            f"Fälle: {data['function_cases']} · gelaufen: {data['function_ran']}"
-            f" · durchgekommen: {data['function_complete']}",
-            "",
-            "| Nr. | Zeile | Art | Variante | Stufe | Exit | Sekunden | Funde | Ungemessen |",
-            "|---:|---|---|---|---|---:|---:|---:|---:|",
-        ]
-        for row in functions:
-            seconds = row.get("seconds")
-            cells = [
-                row["number"],
-                str(row["relative"]).replace("|", "/"),
-                row["kind"],
-                row["variant"] or "-",
-                row["stage"],
-                "-" if row["exit_code"] is None else row["exit_code"],
-                "-" if seconds is None else f"{float(seconds):.1f}",
-                row["findings"],
-                row["unmeasured"],
-            ]
-            lines.append("| " + " | ".join(str(cell) for cell in cells) + " |")
-    failures = [row for row in [*data["rows"], *functions] if row["errors"]]
-    if failures:
-        lines += ["", "## Fehler", ""]
-        for row in failures:
-            first = str(row["errors"][0]).strip().splitlines()
-            lines.append(f"- {row['number']} {row['relative']}: {first[-1] if first else ''}")
-    return "\n".join(lines) + "\n"
 
 
 # --- Lauf --------------------------------------------------------------------------
@@ -1007,16 +924,28 @@ def case_timeout(case: Case, timeout: float) -> float:
     return timeout
 
 
-def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: str = "") -> int:
+def run(
+    out: Path,
+    first: int,
+    last: int,
+    again: bool,
+    timeout: float,
+    screen: str = "",
+    guard: Any = None,
+) -> int:
     """Je Fall ein frischer Prozess mit eigenem Profil — wie im Audit.
 
     ``screen`` legt das Fenster auf einen Schirm (Nummer oder Name); ohne Angabe
     nimmt der Fall den ersten, der nicht der Hauptschirm ist. Mit Funktionsfällen
     misst der Lauf zuerst einmal den Referenzfaktor (§31, Entscheidung
     Koordinator 12.10.); alle Fälle dieses Laufs lesen ihn aus ``reference.json``.
+    ``guard`` (``acceptance_guard.RunGuard``) hält Gesamtfrist und Siegel: vor
+    jedem Fall geprüft, die Frist des Falls höchstens die verbleibende Zeit.
     """
     sys.path.insert(0, str(ROOT))
+    from app.core.paths import isolate_secrets
     from app.core.process import no_error_dialogs, process_group_options, terminate_process_tree
+    from tools.function_cases import RESTART_EXIT, most_restarts, prediction_wait_s
 
     cases = read_cases(out)
     if any(case.kind in ("function", "language") for case in cases):
@@ -1024,6 +953,7 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
 
         print(f"Referenzfaktor {measure_reference(out):.3f}", flush=True)
     failures = 0
+    ran: int | None = None  # der zuletzt gelaufene Fall — ihn trifft ein Siegelbruch (RC2-7)
     for case in cases:
         if not first <= case.number <= last:
             continue
@@ -1031,6 +961,12 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
         status = folder / "process.json"
         if status.exists() and not again and not resumes(case, _read(status)):
             continue
+        if guard is not None and (stop := guard.stop_reason()):
+            print(f"HALT vor [{case.number:03d}]: {stop}", flush=True)
+            if getattr(guard, "broken", False) and ran is not None:
+                print(f"Fall {ran:03d} lief unter geändertem Stand; seine Belege gelten nicht.")
+            failures, ran = failures + 1, None  # gesagt; nach der Schleife nicht noch einmal
+            break
         folder.mkdir(parents=True, exist_ok=True)
         print(f"START [{case.number:03d}] {case.relative}", flush=True)
         began = time.perf_counter()
@@ -1045,29 +981,43 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
         ]
         if screen:
             command += ["--screen", screen]
-        with (
-            (folder / "stdout.log").open("w", encoding="utf-8") as stdout,
-            (folder / "stderr.log").open("w", encoding="utf-8") as stderr,
-            no_error_dialogs(),
-        ):
-            process = subprocess.Popen(
-                command,
-                stdout=stdout,
-                stderr=stderr,
-                cwd=ROOT,
-                env={**os.environ, "PYTHONUTF8": "1"},
-                **process_group_options(no_window=True),
-            )
-            try:
-                code = process.wait(timeout=case_timeout(case, timeout))
-                timed_out = False
-            except subprocess.TimeoutExpired:
-                terminate_process_tree(process)
-                code = process.wait()
-                timed_out = True
-            except BaseException:
-                terminate_process_tree(process)
-                raise
+        # Ein Sprachfall, der vor einer Fläche einen frischen Prozess braucht, läuft
+        # gleich weiter — höchstens einmal je Zeile (FD-132).
+        restarts = (
+            most_restarts(read_rows(out).values(), case.row) if case.kind == "language" else 0
+        )
+        waiting = prediction_wait_s(case, read_rows(out).values())  # Vorhersagetor (V4)
+        mode = "w"
+        while True:
+            with (
+                (folder / "stdout.log").open(mode, encoding="utf-8") as stdout,
+                (folder / "stderr.log").open(mode, encoding="utf-8") as stderr,
+                no_error_dialogs(),
+            ):
+                # Im Fallordner, nie im Baum: Ein Speicherdialog, der nur einen
+                # Dateinamen vorschlägt, schreibt in den Arbeitsordner (RC-10).
+                process = subprocess.Popen(
+                    command,
+                    stdout=stdout,
+                    stderr=stderr,
+                    cwd=folder,
+                    env=isolate_secrets({**os.environ, "PYTHONUTF8": "1"}),
+                    **process_group_options(no_window=True),
+                )
+                try:
+                    wanted = case_timeout(case, timeout) + waiting
+                    code = process.wait(timeout=guard.case_limit(wanted) if guard else wanted)
+                    timed_out = False
+                except subprocess.TimeoutExpired:
+                    terminate_process_tree(process)
+                    code = process.wait()
+                    timed_out = True
+                except BaseException:
+                    terminate_process_tree(process)
+                    raise
+            if code != RESTART_EXIT or timed_out or restarts <= 0:
+                break
+            restarts, mode = restarts - 1, "a"
         write_json(
             status,
             {
@@ -1081,6 +1031,10 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
         failures += int(code != 0 or timed_out)
         wall = time.perf_counter() - began
         print(f"END [{case.number:03d}] exit={code} timeout={timed_out} {wall:.1f}s", flush=True)
+        ran = case.number
+    if guard is not None and ran is not None and (broken := guard.seal_reason()):
+        print(f"HALT nach [{ran:03d}]: Fall {ran:03d} lief unter geändertem Stand. {broken}")
+        failures += 1
     summary(out, cases)
     return 1 if failures else 0
 
@@ -1094,6 +1048,13 @@ def child(out: Path, number: int, screen: str = "") -> int:
     isolate(folder / "profile")
     sys.path.insert(0, str(ROOT))
     crash_records(folder)
+    # Dasselbe Dateiprotokoll wie ``app.main``, im Profil des Falls (FD-163):
+    # Ohne es stand die Wartezeile des Abbaus (FD-154) in keinem Protokoll. Unter
+    # macOS liegt ``~/Library/Logs`` im Profil, seit ``HOME`` dorthin zeigt.
+    from app.core.log import configure
+    from app.core.paths import user_log_dir
+
+    configure(to_console=False, directory=user_log_dir())
     if case.kind == "start":
         return start_child(out, case, folder)
     if case.kind != "file":
@@ -1232,6 +1193,7 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     sondern je Fläche ein Protokoll unter ``surfaces/``.
     """
     from tools import function_bench, function_language, function_protocol, function_setup
+    from tools.function_cases import RESTART_EXIT, install_user_data, rows_of, setup_of_case
     from tools.function_scenes import row_scenes
 
     variant = function_setup.Variant.of({**case.variant, **({"screen": screen} if screen else {})})
@@ -1264,7 +1226,7 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         keep()
 
     persist()
-    from app.core.bootstrap import load_operations
+    from app.core.bootstrap import load_operations, load_user_parts
     from app.ui.app import build_application
     from tools.function_capture import run_reference_factor
     from tools.window_bench import record_shutdown, shutdown_window
@@ -1277,24 +1239,30 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         # Vorbedingung, steht der Grund in ``bench.json`` und in der Übersicht.
         second = function_setup.case_scene(folder, scenes, function_setup.SECOND_SCENE)
         function_setup.write_profile(variant, recent=[second] if second is not None else [])
-        if data is not None:
-            # Eigene Bausteine der Startszene und der Szene des Fehlfalls liegen
-            # im Nutzerordner, bevor die Anwendung ihn liest
-            # (``function_setup.install_own_parts``, C-L4).
-            state["own_parts"] = [
-                str(path)
-                for key in row_scenes(row)
-                for path in function_setup.install_own_parts(function_setup.scene_setup(key))
-            ]
+        # Eigene Bausteine und Spulen der Startszene und der Szene des Fehlfalls
+        # liegen im Nutzerordner, bevor die Anwendung ihn liest (C-L4); im
+        # Sprachfall die seiner Einrichtung (FD-101).
+        owners = (
+            row_scenes(row)
+            if data is not None
+            else setup_of_case(rows.values(), case.row).user_data
+        )
+        state["user_data"] = [path for key in owners for path in install_user_data(key)]
         load_operations()
+        # Wie ``app.main``: die eigenen Bausteine aus dem Nutzerordner, ihre
+        # Ladebefunde in den Bericht. Ohne sie lag ein Baustein im Ordner und
+        # stand nie im Register (FD-101, *Gespeicherte Bausteine behalten*).
+        user_findings = load_user_parts()
         no_native_dialogs()
         function_setup.apply_licence(variant.licence)
         state["preconditions_applied"] = function_setup.apply_preconditions(variant.preconditions)
         state["reference_factor"] = run_reference_factor(out)
         application, window = build_application([])
+        if user_findings:
+            window.report.add_findings(list(user_findings))
         flow: Any
         if data is None:
-            package_rows = [row for row in rows.values() if row.get("package") == case.row]
+            package_rows = rows_of(rows.values(), case.row)
             flow = function_language.LanguageFlow(
                 application, window, folder, state, keep, package_rows, variant, scenes, version
             )
@@ -1303,8 +1271,12 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
                 application, window, folder, data, persist, row, variant, scenes, state, out
             )
             flow.prepare()
-        flow.run()
-        state["stage"] = "done"
+        if flow.run() is False:
+            # Vor einer Fläche braucht der Sprachfall einen neuen Prozess (FD-132).
+            state["stage"] = "neustart"
+            exit_code = RESTART_EXIT
+        else:
+            state["stage"] = "done"
     except Exception:
         state["harness_exception"] = traceback.format_exc()
         persist()
@@ -1416,15 +1388,18 @@ class WindowFlow:
         raise TimeoutError(label)
 
     def drive(self, label: str, steps: Sequence[Any], timeout: float = STEP_TIMEOUT) -> None:
-        """Fährt Schritte über den Automaten; ein Fund oder Fehler bricht den Fall ab."""
+        """Fährt Schritte über den Automaten; ein Fund oder Fehler bricht den Fall ab.
+
+        Ein Fenster aus ``pump`` schließt er wie eins seiner Schritte (FD-173)."""
         self.walker.phase = label
-        from tools.function_machine import StepMachine, drive, qt_schedule
+        from tools.function_machine import StepMachine, drive, nested_since_now, qt_schedule
 
         machine = StepMachine(
             qt_schedule,
             time.perf_counter,
             unstick=self._escape,
             on_stuck=lambda: self._stuck(label),
+            nested=nested_since_now(),
         )
         drive(machine, steps, lambda: self.pump(0.005), time.perf_counter, timeout)
         if machine.finding is not None:
@@ -1876,17 +1851,22 @@ def main(argv: Iterable[str] | None = None) -> int:
     running.add_argument("--again", action="store_true")
     running.add_argument("--timeout", type=float, default=CASE_TIMEOUT)
     running.add_argument("--screen", default="")
+    running.add_argument("--total", type=float, default=None)
+    running.add_argument("--binding", type=Path, default=None)
     one = commands.add_parser("child")
     one.add_argument("--out", required=True, type=Path)
     one.add_argument("--case", required=True, type=int)
     one.add_argument("--screen", default="")
     bar = commands.add_parser("menubar")
     bar.add_argument("--out", required=True, type=Path)
+    sealing = commands.add_parser("seal")
+    sealing.add_argument("--out", required=True, type=Path)
     reporting = commands.add_parser("report")
     reporting.add_argument("--out", required=True, type=Path)
     reporting.add_argument("--package", action="append", default=[])
     reporting.add_argument("--verdicts", type=Path, default=None)
     reporting.add_argument("--checklist", type=Path, default=None)
+    reporting.add_argument("--runs", type=Path, default=None)
     arguments = parser.parse_args(list(argv) if argv is not None else None)
     # Dieser Baum vorn: Als Skript steht sonst ``tools/`` an erster Stelle, und
     # ``import app`` träfe die Installation der ``.venv`` — womöglich ein
@@ -1936,6 +1916,13 @@ def main(argv: Iterable[str] | None = None) -> int:
         )
         return 0
     if arguments.command == "run":
+        from tools.acceptance_guard import RunGuard
+
+        try:
+            guard = RunGuard(arguments.total, arguments.binding)
+        except (ValueError, RuntimeError) as problem:
+            print(problem, file=sys.stderr, flush=True)
+            return 2
         return run(
             out,
             arguments.first,
@@ -1943,11 +1930,22 @@ def main(argv: Iterable[str] | None = None) -> int:
             arguments.again,
             arguments.timeout,
             arguments.screen,
+            guard,
         )
     if arguments.command == "child":
         return child(out, arguments.case, arguments.screen)
     if arguments.command == "menubar":
         return menubar_child(out)
+    if arguments.command == "seal":
+        # Das Siegel des Laufs für ``[[run]].seal`` der Urteile (RC2-1).
+        from tools.function_verdict_rules import seal_run
+
+        try:
+            print(seal_run(out), flush=True)
+        except OSError as problem:
+            print(problem, file=sys.stderr, flush=True)
+            return 2
+        return 0
     cases = read_cases(out)
     data = summary(out, cases)
     print(f"{data['passed']} von {data['cases']} Dateifällen bestanden", flush=True)
@@ -1955,21 +1953,13 @@ def main(argv: Iterable[str] | None = None) -> int:
         return 0
     from tools import function_report
 
-    # Ausgang 1 nur bei ungültigen Eingaben (Plan D0, Abschnitt 2.13) — ein
-    # Urteil ohne Bild, ein fremder Grund, ein ungültiges Protokoll; Funde
-    # nicht. write sagt es über seinen Rückgabewert, je Paket oder für alle.
-    if (arguments.verdicts or arguments.checklist) and len(arguments.package) != 1:
-        print(
-            "--verdicts und --checklist verlangen genau ein --package.", file=sys.stderr, flush=True
-        )
-        return 1
-    codes = [
-        function_report.write(
-            out, package=package, verdicts=arguments.verdicts, checklist=arguments.checklist
-        )
-        for package in (arguments.package or [None])
-    ]
-    return 1 if any(codes) else 0
+    return function_report.write_all(
+        out,
+        packages=arguments.package,
+        verdicts=arguments.verdicts,
+        checklist=arguments.checklist,
+        runs=arguments.runs,
+    )
 
 
 if __name__ == "__main__":

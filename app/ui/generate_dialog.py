@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import guides
 from app.core.backends import comfy_setup, mesh
 from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import (
@@ -432,6 +433,7 @@ class GenerateDialog(QDialog):
         self.setMinimumWidth(480)
 
         self.prompt = QLineEdit(self)
+        self.prompt.setProperty(guides.TARGET_PROPERTY, "generate.prompt")
         self.prompt.setPlaceholderText(tr("Was soll entstehen?"))
 
         self.seed = QSpinBox(self)
@@ -529,6 +531,9 @@ class GenerateDialog(QDialog):
         assert button_layout is not None
         button_layout.setSpacing(SPACE)
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Erzeugen"))
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setProperty(
+            guides.TARGET_PROPERTY, "generate.start"
+        )
         # „Erzeugen" trug den Akzent schon, nur hatte ihn niemand gesetzt: Qt
         # vergibt beim ersten ``show()`` den Default an den ersten
         # autoDefault-Knopf. Die Farbe war damit da, die halbfette Schrift

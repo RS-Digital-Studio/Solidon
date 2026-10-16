@@ -660,10 +660,16 @@ def test_a_case_profile_covers_the_user_folders_of_its_platform(
     """
     import os
 
+    from app.core.paths import ISOLATED_KEYRING, PROFILE_VARIABLES
     from tools import file_acceptance
 
-    for variable in {*file_acceptance.PROFILE_VARIABLES, "HOME"}:
+    for variable in PROFILE_VARIABLES:
         monkeypatch.setenv(variable, "vorher")
+    # ``isolate`` nimmt auch die Schlüssel (RC-12, RC2-10) — mit Rückgabe nach dem Fall.
+    for variable, value in ISOLATED_KEYRING.items():
+        monkeypatch.setenv(variable, value)
+    for variable in [name for name in os.environ if name.startswith("SOLIDON3D_LLM_KEY")]:
+        monkeypatch.delenv(variable)
     monkeypatch.setattr(file_acceptance.sys, "platform", platform)
 
     file_acceptance.isolate(tmp_path)
@@ -673,3 +679,40 @@ def test_a_case_profile_covers_the_user_folders_of_its_platform(
     )
     if platform != "darwin":
         assert os.environ["HOME"] == "vorher"
+
+
+def test_the_user_folders_are_read_when_asked_not_when_imported(tmp_path: Path) -> None:
+    """``isolate`` importiert ``app.core.paths`` vor dem Umbiegen; das trägt nur so.
+
+    Im frischen Prozess: ``app.core.paths`` laden, dann die Ordner umbiegen —
+    jeder Nutzerordner liegt danach im neuen Profil (RCI-5).
+    """
+    import os
+    import subprocess
+    import sys
+
+    from tools import file_acceptance
+
+    script = (
+        "import os, sys\n"
+        "from pathlib import Path\n"
+        "from app.core import paths\n"
+        "profile = Path(sys.argv[1])\n"
+        "for name in paths.PROFILE_VARIABLES:\n"
+        "    os.environ[name] = str(profile)\n"
+        "dirs = [paths.user_data_dir(), paths.user_config_dir(), paths.user_log_dir()]\n"
+        "print(all(path.is_relative_to(profile) for path in dirs), *dirs)\n"
+    )
+    answer = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path / "profil")],
+        cwd=file_acceptance.ROOT,
+        env={**os.environ, "PYTHONUTF8": "1"},
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert answer.returncode == 0 and answer.stdout.startswith("True"), (
+        answer.stdout,
+        answer.stderr,
+    )

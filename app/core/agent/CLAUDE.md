@@ -39,7 +39,7 @@ apply.py      annehmen oder verwerfen — beides vollständig
 | `session.py` | Ein Zug, von der Anfrage zum Vorschlag (§26.5) |
 | `context.py` | Was der Agent zu sehen bekommt (§26.1) |
 | `prompt.py` | Der Systemprompt (§26.1, §39) |
-| `tools.py` | Was er tun kann (§26.2) — aus `registry.tool_schemas()`, **derselben Quelle** wie Menü und Kommandozeile |
+| `tools.py` | Was er tun kann (§26.2) — aus `registry.tool_schemas()`, **derselben Quelle** wie Menü und Kommandozeile; die Zusatzwerkzeuge nennen ihren Fensterort aus `EXTRA_TOOL_PLACES` (`extra_tool_place`, `extra_tool_rows` für Prüfpunkt 17) |
 | `offer.py` | Was ein lokales Modell davon je Schritt ausführlich sieht — jedes Werkzeug bleibt aufrufbar |
 | `analysis.py` | Analysen als Werkzeugantwort |
 | `checks.py` | Die Prüfung nach jeder Operation eines Vorschlags (§26.5) |

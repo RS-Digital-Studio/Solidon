@@ -1,0 +1,45 @@
+# Zeilenspezifikationen für D1 — Start, Öffnen, Speichern, Einfügen, Export.
+# Format: Bauplan D0 §2.4. Eine Zeile ohne Eintrag hier ist „ungeprüft“.
+
+# *Modell aus dem Netz …* fragt die Adresse; ins Netz geht erst *Herunterladen*
+# (FD-175).
+[row."meldung:action_import_url"]
+route = [{ target = "menu:menubar.modell_aus_dem_netz" }]
+
+# Die Frage vor dem Export trotz Befund: Netz und exakter Körper zusammen gewählt,
+# *Exportieren …*, der vorgeschlagene Name wird übernommen (*Speichern* im Dialog
+# von Qt); der Netzkörper bringt den Befund ``export.needs_solid`` (FD-175).
+[row."meldung:_go_on_despite"]
+start_scene = "export_gemischt"
+route = [
+  { target = "tree.row:obj_2", modifier = "ctrl" },
+  { target = "menu:menubar.exportieren" },
+  { target = "dialog.accept" },
+]
+
+# Die Konturen einer Zeichnung und die Körper einer STEP-Baugruppe wählt der
+# Kunde am Ladeschritt: Doppelklick im Verlauf, dann der Knopf des Felds.
+[row."dialog:outline_dialog"]
+start_scene = "zeichnung.netz"
+route = [{ target = "history.row:1", button = "double" }, { target = "field:contours" }]
+
+[row."dialog:step_bodies_dialog"]
+start_scene = "step_baugruppe.exakt"
+route = [{ target = "history.row:1", button = "double" }, { target = "field:bodies" }]
+
+# Die Speicherfrage: Eine Änderung (*Löschen* wirkt ohne Werte), dann *Neu* und
+# auf dem Startbildschirm *Leeres Projekt*. *Datei → Neu* selbst fragt nicht,
+# erst der Wechsel zum neuen Projekt.
+[row."meldung:confirm_unsaved"]
+route = [
+  { target = "operation:delete_object" },
+  { target = "menu:menubar.neu" },
+  { target = "start.new" },
+]
+
+# Die Frage nach der Sicherung: Neben dem zuletzt geöffneten Projekt liegt eine,
+# jünger als die Datei (Naht ``sicherung``); der erste Eintrag unter *Zuletzt
+# geöffnet* öffnet es (FD-175).
+[row."meldung:_ask_recovery"]
+preconditions = { sicherung = "neben_projekt" }
+route = [{ target = "start.recent:1" }]

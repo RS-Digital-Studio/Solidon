@@ -794,6 +794,36 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "feature.every",
         "measure.reference",
         "measure.apply",
+        # Ohne Parameter keine Zeile; Katalog, Filamentlager und das Fenster einer
+        # neuen Spule sind am frischen Fenster nicht offen (FD-101)
+        "parameters.first.label",
+        "parts.save",
+        "filament.add",
+        "filament.profile",
+        "filament.colour",
+        "filament.spool",
+        # Die Wege zu Meldungen ohne Browser, die Fenster der Zusatzprogramme, das
+        # Filamentlager, die Liste unter *Filamente* und ein Reiter in eigenem
+        # Fenster sind am frischen Fenster nicht offen (FD-175)
+        "donation.paypal",
+        "update.page",
+        "install.action",
+        "install.details",
+        "install.follow.comfyui",
+        "install.locate",
+        "filament.import",
+        "filaments.first",
+        "tabs.return",
+        # Der KI-Hinweis, das Freischalten und *Modell erzeugen* sind am frischen
+        # Fenster nicht offen
+        "disclosure.privacy",
+        "disclosure.continue",
+        "activation.offline",
+        "generate.prompt",
+        "generate.start",
+        # Der Skizzeneditor ist am frischen Fenster nicht offen
+        "sketch.coordinates",
+        "sketch.new_plane",
         *printing,
     }
     window = MainWindow(Session(), UiSettings())
@@ -807,12 +837,19 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
             "dialog.naming",
             "dialog.more",
             "parameters.first",
+            "parameters.first.label",
+            "parts.save",
+            "filament.add",
+            "filament.profile",
+            "filament.colour",
             *printing,
         ):
             with pytest.raises(guide_targets.MissingTargetError):
                 guide_targets.widget_for(window, name)
         with pytest.raises(guide_targets.MissingTargetError):
             guide_targets.area_for(window, "history.last")
+        with pytest.raises(guide_targets.MissingTargetError):
+            guide_targets.next_click(window, "filament.spool")
     finally:
         window.close()
         window.deleteLater()

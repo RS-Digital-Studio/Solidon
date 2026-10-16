@@ -73,9 +73,10 @@ def _isolate(parent: Path | None = None) -> Iterator[Path]:
     das Aufräumen übersteht einen schon verschwundenen Ordner.
     """
     _this_tree()
-    from app.core.paths import PROFILE_VARIABLES
+    from app.core.paths import PROFILE_VARIABLES, isolate_secrets
 
-    before = {variable: os.environ.get(variable) for variable in PROFILE_VARIABLES}
+    # Danach wie vorher, samt Schlüsselbund und Chat-Schlüssel (RC2-10).
+    before = dict(os.environ)
     if parent is not None:
         parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
@@ -84,13 +85,11 @@ def _isolate(parent: Path | None = None) -> Iterator[Path]:
         try:
             for variable in PROFILE_VARIABLES:
                 os.environ[variable] = isolated
+            isolate_secrets(os.environ)
             yield Path(isolated)
         finally:
-            for variable, value in before.items():
-                if value is None:
-                    os.environ.pop(variable, None)
-                else:
-                    os.environ[variable] = value
+            os.environ.clear()
+            os.environ.update(before)
 
 
 def _registry() -> Any:

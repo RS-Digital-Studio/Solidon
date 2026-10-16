@@ -25,6 +25,17 @@ und von zwei Fassungen desselben Satzes veraltet immer eine (RM-098).
 
 ## Was wo geprüft wird
 
+### Begriffe, Absagewege und Agentenorte
+
+Hier statt in der Karte, weil sie an ihrem Budget steht.
+
+| Vertrag | Zuständige Testdatei |
+|---|---|
+| Beginnt jede Merkmalsart groß, und fallen *Überstand* und *Überhang* in keiner Sprache zusammen? | `test_catalog_terms.py` |
+| Bietet eine Kantenabsage *Andere Kanten wählen* statt *Andere Objekte wählen*? | `test_edge_refusal_ways.py` |
+| Nennt *In Einzelteile aufteilen* Splitter und bietet *Splitter behalten* an? | `test_split_splinters.py` |
+| Nennen die Zusatzwerkzeuge des Agenten ihren Fensterort, und steht er in der gebauten Menüleiste? | `test_agent_tool_places.py` |
+
 ### Dialog-, Karten- und Vorschaugrößen
 
 | Vertrag | Zuständige Testdatei |
@@ -373,6 +384,13 @@ Starter von WSL) und `posix_shell` für das Linux-Installationsskript, beide mit
 Rückfall neben Git, unter `ProgramFiles` und in der Installation je Nutzer. Es
 lädt nur die Standardbibliothek. Dass keine Testdatei selbst per `which` sucht,
 hält `test_packaging_platform.py::test_only_the_shell_helpers_look_for_bash_or_sh`.
+
+`process_helpers.py` trägt `run_bounded`: wie `subprocess.run`, aber die
+Zeitgrenze beendet den ganzen Prozessbaum (`process.start_bounded`,
+`terminate_process_tree`). Wer die bash aus Git mit Zeitgrenze fährt, nimmt es
+— der Starter `Git\bin\bash.exe` hat die Shell als Kind, und `kill()` ließ sie
+weiterlaufen; mit `capture_output` wartete `subprocess.run` danach bis zu ihrem
+Ende (CS-35).
 
 `guide_window.py` gehört allein `test_guide_targets.py`: die Fixture
 `prepared_window` für den Wortschatz des Funktionsdurchgangs (Quader mit

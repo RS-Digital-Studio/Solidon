@@ -80,14 +80,33 @@ Prüfpunkt 17, Vorschlag ist bei I6 nur die Suche mit Frageformen.
 | Z3 | Am Objekt: Handlung ohne Menü und Suche nach dem Klick auf die Stelle | ja je Zeile mit Merkmals- oder Körperbezug | A misst, B urteilt | `steps` |
 | Z4 | Leere Zustände führen weiter | Knopf zur nächsten Handlung | B, A listet | `empty_states` |
 | Z5 | Rohe Qt-Fenster im Kundenweg | 0, außer `QFileDialog` und den Ausnahmen aus Z2 | A | `raw_windows` |
-| Z6 | Größen und Skalierungen | maximiert auf 1920 × 1080 logisch, Taskleiste und Titelleiste ab (`SMALLEST_WINDOW`), ohne Rollleiste vorn; Symbole scharf bei 100, 150, 200 %, solange ≥ 1920 × 1080 logisch; hell und dunkel gleiche Flächen und Akzente | A | `scrollbars`, `icons` |
+| Z6 | Größen und Skalierungen | maximiert auf 1920 × 1080 logisch, Taskleiste und Titelleiste ab (`SMALLEST_WINDOW`), ohne Rollleiste vorn; Symbole scharf bei 100, 125, 150, 200 %, solange ≥ 1920 × 1080 logisch; hell und dunkel gleiche Flächen und Akzente | A | `scrollbars`, `icons` |
 | Z7 | Die ersten fünf Minuten | Schritte und Fehlklicks, jeder Fehlklick ein Fund | C | Protokoll der Stufe C |
-| I1 | Merkmal statt Dreieck: Name und Maß beim Überfahren | ja an jeder erkannten Art | A misst, B urteilt | `hover_labels` |
+| I1 | Merkmal statt Dreieck: Name und Maß beim Überfahren | ja an jeder erkannten Art | A misst, B urteilt | `hover_labels` gegen `recognized_kinds` |
 | I2 | Druckfolge im Vorschauband | ja an jeder Zeile mit gerechneter Vorschau | A misst, B urteilt | `preview.banner_text` |
 | I3 | Vorschlag statt Suche | ≥ 80 % der häufigsten Kundenziele | A | `steps` gegen `tests/data/common_goals.toml` |
 | I4 | Befund mit Lösung | Zahl genannt; jede Art ohne Handlung ist ein Vorschlag | A | Befundarten und ihre Handlungen |
 | I5 | Vorher und nachher mit einem Klick | ja an der Zeile Vorher/Nachher | A misst, B urteilt | `steps` |
 | I6 | Sagen statt suchen: Suchproben als Frage | Treffer unter den ersten drei | A | `search` |
+
+Auslegung nach der Zweitprüfung am finalen Lauf, für Stufe B und Zweitprüfer
+gleich:
+
+- **Z3:** „Merkmals- oder Körperbezug“ heißt: Der Weg der Zeile beginnt mit der
+  Auswahl eines Körpers, Merkmals oder einer Kante (Route mit Baumzeile oder
+  Bildstelle, Anforderung `koerper:`, `merkmal:` oder Kante — wie
+  `function_judges._has_selection_relation`). Befundhandlungen, Bericht,
+  Ansichten und Fensterbefehle ohne solche Auswahl: *entfällt*,
+  `ohne_auswahlbezug`. Ob eine Befundhandlung zusätzlich nach dem Klick auf den
+  Körper stehen sollte, ist ein I3-Vorschlag, kein Z3-Urteil.
+- **I1:** „jede Art“ ist jede, die die Erkennung an der Szene liefert; eine
+  erkannte Art, die nicht überfahren wurde, ist nicht gemessen.
+- **I4:** Paketwert. Je Zeile nur an Befundhandlungszeilen
+  (`finding.action:*`): *gut*, wenn ihre Befundart eine Handlung trägt, die
+  nach Prüfpunkt 7 wirkt, sonst *offen*. An anderen Zeilen kein I4-Urteil.
+
+*Gut nach Fix* und die Zuordnung eines Funds zu seiner Zelle regelt Konzept §4
+(„Urteil und Schwere“).
 
 ## Umsetzung und Sichtprüfung
 

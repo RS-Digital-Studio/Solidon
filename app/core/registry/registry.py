@@ -25,10 +25,11 @@ FEATURE_KINDS: Final[tuple[str, ...]] = get_args(FeatureKind)
 #: Zustände, die eine Operation vom Körper verlangen kann (``requires_body``).
 #: ``open`` heißt nicht wasserdicht, ``parts`` mehr als ein zusammenhängendes
 #: Stück, ``cavity`` ein Hohlraum — als Merkmal ``void`` erkannt oder von
-#: *Aushöhlen* eingetragen. Was hier nicht steht, prüft die Operation selbst
-#: beim Rechnen; die Oberfläche fragt nur nach diesen dreien, weil sie sich
-#: ohne Rechnung beantworten lassen.
-BODY_REQUIREMENTS: Final[tuple[str, ...]] = ("open", "parts", "cavity")
+#: *Aushöhlen* eingetragen, ``colour`` Farbinformation — Textur, Flächen- oder
+#: Eckfarben (``texture.carries_colour``). Was hier nicht steht, prüft die
+#: Operation selbst beim Rechnen; die Oberfläche fragt nur nach diesen, weil
+#: sie sich ohne Rechnung beantworten lassen.
+BODY_REQUIREMENTS: Final[tuple[str, ...]] = ("open", "parts", "cavity", "colour")
 
 #: Kategorien aus dem Operationskatalog (§25). Sie ordnen das Menü.
 #: Der Katalog aus §25, in der Reihenfolge, in der er im Menü erscheint. Vier

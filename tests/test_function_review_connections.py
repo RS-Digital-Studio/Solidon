@@ -171,6 +171,7 @@ def test_finding_click_opens_and_measures_its_dialog_separately(monkeypatch, tmp
     flow.surface = lambda: dialog if visible else action
     flow.claim_surface = lambda root: None
     flow.capture_surface = lambda root: flow.data.update(texts=[{"text": root.name}])
+    flow.widget = lambda name: None  # kein Hauptknopf der Fläche (FD-99)
     flow.picture = lambda name: flow.data["images"].append(name)
     flow.still_step = lambda name, root: Step(name, lambda machine: None)
     monkeypatch.setattr(function_surface, "open_dialog", lambda window: dialog if visible else None)

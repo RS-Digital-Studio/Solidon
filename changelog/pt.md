@@ -67,6 +67,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O painel de seleção segue conteúdo e letra, mantendo texto e colunas. Os separadores destacados conservam o tamanho. Se houver uma alteração proposta, «Aplicar» é a ação principal.
 - Os elementos correspondentes pedem par e tamanho e explicam ambas as metades. Forma e ajuste ficam em «Mais definições». A altura inicial do diálogo adapta-se ao conteúdo.
 - Após a recusa de uma pré-visualização, os textos da seguinte continuam totalmente legíveis.
+- Para parâmetros, ajustes, impressora, material e desfazer, o chat indica o lugar da janela onde se faz o mesmo à mão.
+- O relatório de verificação nomeia os corpos de um ajuste em vez de mostrar um identificador interno.
+- O inglês e o português distinguem agora o ressalto de um gancho, ou de um corpo abaixo da placa, da saliência na impressão.
+- Em espanhol e português, o menu, a pesquisa e o diálogo voltam a mostrar só a primeira frase de *Pino para furo* e *Orientar para impressão*.
+- Várias traduções leem-se com mais clareza, entre elas a introdução de *Criar parâmetro …*. O pino começa com maiúscula em todas as línguas.
+- Na janela *Desbloquear o Solidon …*, *Comprar o Solidon* continua disponível num computador ativado. Os botões a cinzento indicam o motivo, e *Verificar chave* também o caminho para uma chave nova.
+- Em francês, o primeiro dia do mês escreve-se agora «1er», por exemplo «1er décembre 2026».
 - Sem controlador gráfico, por exemplo numa máquina virtual, o Solidon termina agora de forma fiável ao fechar. Na versão 0.6.0 o programa podia continuar a correr aí sem ser visto.
 
 ### Imprimir e entregar ao slicer
@@ -82,6 +89,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
 - Nos furos, vista e *Seleção* mostram a mesma alteração. Dimensão, profundidade e entrada associada ficam à frente; compensação de impressão e ajustes finos, em «Mais valores».
 - Os campos do furo e a caixa para alterar elementos iguais em conjunto explicam o seu efeito. «Compensar desvios de impressão» esclarece a correção do perfil do material.
+- Se junto a uma peça imprimível só restarem lascas, *Dividir em peças soltas* nomeia-as e oferece *Manter as lascas*. Antes dizia que o corpo era de uma só peça.
+- Se o raio de um arredondamento ou a largura de um chanfro for grande demais para as arestas, a mensagem oferece *Escolher outras arestas*.
 - Um clique em *Aplicar* numa característica durante um cálculo mantém a alteração, mesmo que a pré-visualização demore mais. Na versão 0.6.0 perdia-se sem aviso em modelos maiores.
 - Uma textura apresentada já não calcula uma pré-visualização sem alterações nem oferece *Cancelar*.
 

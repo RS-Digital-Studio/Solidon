@@ -89,7 +89,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import tools
+from app.core import guides, tools
 from app.core.errors import AppError, InternalError
 from app.core.export import slicer_keys, slicer_profiles, threemf
 from app.core.export.handover import detect
@@ -823,6 +823,7 @@ class NewFilamentDialog(QDialog):
         self.slicer_profile.setReadOnly(True)
         self.slicer_profile.setPlaceholderText(tr("kein Profil aus dem Slicer"))
         self.choose_profile = QPushButton(tr("Wählen …"), self)
+        self.choose_profile.setProperty(guides.TARGET_PROPERTY, "filament.profile")
         self.choose_profile.clicked.connect(self._choose_slicer_profile)
         self.clear_profile = QPushButton(tr("Entfernen"), self)
         self.clear_profile.clicked.connect(self._clear_slicer_profile)
@@ -1231,6 +1232,7 @@ class NewFilamentDialog(QDialog):
         for number, one in enumerate(self._colours):
             if number == len(self.colour_buttons):
                 button = QPushButton(self)
+                button.setProperty(guides.TARGET_PROPERTY, "filament.colour")
                 button.clicked.connect(weak_slot(self, NewFilamentDialog._pick_colour, number))
                 self._colour_row.addWidget(button, number // 2, number % 2)
                 self.colour_buttons.append(button)

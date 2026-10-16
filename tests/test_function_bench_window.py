@@ -127,8 +127,12 @@ def test_a_drag_counts_only_if_the_view_noticed_the_grip(qt_app: Any) -> None:
         flow.spec = {"criteria": ["Z1"]}
         flow.data = {"unmeasured": {}}
         flow.frames_wrapped = True
-        flow.frames = SimpleNamespace(latencies=latencies)
+        # Das Bild der letzten Bewegung ist da: Das Bild im gehaltenen Zug wartet nicht.
+        flow.frames = SimpleNamespace(latencies=latencies, first_after=lambda moment: moment)
         flow.reference_factor = 1.5
+        # Im Satz ``basis`` zieht jede Zeile mit Griff; vor dem Loslassen ein Bild (FD-73).
+        flow.variant = function_setup.Variant.of({"set": "basis"})
+        flow.picture = lambda label: None  # type: ignore[method-assign]
         flow.application = QApplication.instance()
         flow.window = SimpleNamespace(viewport=view)
         flow.ports = SimpleNamespace(

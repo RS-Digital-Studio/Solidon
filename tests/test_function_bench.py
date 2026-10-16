@@ -629,6 +629,8 @@ def test_the_surface_of_a_surface_set_counts_as_the_rows_own_window() -> None:
     flow.surface = ParameterDialog  # type: ignore[method-assign]
     flow.capture_surface = lambda root: None  # type: ignore[method-assign]
     flow.picture = pictures.append  # type: ignore[method-assign]
+    flow.data = {}
+    flow.widget = lambda name: None  # type: ignore[method-assign]
     flow.path_steps = list  # type: ignore[method-assign]
     flow.still_step = lambda name, root: function_machine.Step(name, lambda machine: None)  # type: ignore[method-assign]
     flow.run_steps = lambda label, steps: all(  # type: ignore[method-assign]

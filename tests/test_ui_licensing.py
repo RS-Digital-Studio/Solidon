@@ -466,6 +466,73 @@ def test_an_active_key_cannot_be_overwritten_before_deactivation(
     activation.forget_cache()
 
 
+def test_an_activated_computer_can_still_buy_and_says_why_the_rest_is_closed(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """*Solidon kaufen* öffnet nur die Website und bleibt deshalb greifbar (FD-180).
+
+    Auf einem freigeschalteten Rechner stand er grau, ohne Kurzhilfe und ohne
+    Beschreibung — wer für ein zweites Gerät kauft, fand weder Grund noch Weg.
+    Dieselbe Lage ließ *Schlüssel prüfen*, *Online aktivieren* und *Offline
+    aktivieren …* stumm grau (Regel 18): Jeder sagt jetzt, warum.
+    """
+    from datetime import date
+
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core import activation
+    from app.core.activation import certificate, key, store
+    from app.ui import dialogs
+
+    monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path)
+    store.write_key("SOLIDON3D-1-BEREITS-AKTIV")
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 11, 1),
+        order="A-1",
+        holder="kundin@beispiel.de",
+    )
+    active = certificate.ActivationCertificate(
+        licence_digest="0" * 64,
+        device_public=b"x" * 32,
+        device_name="Werkstatt-PC",
+        activation_id="0" * 32,
+        issued_on=date(2026, 11, 1),
+    )
+    monkeypatch.setattr(
+        activation, "_cached", activation.Activation(licence=licence, certificate=active)
+    )
+    opened: list[str] = []
+    monkeypatch.setattr(dialogs, "open_link", opened.append)
+    dialog = dialogs.ActivationDialog()
+    try:
+        dialog.show()
+        qt_app.processEvents()
+        assert dialog.buy_button.isEnabled(), "kaufen öffnet nur die Website"
+        dialog.buy_button.click()
+        assert opened == [dialogs.WEBSITE_URL]
+        silent = [
+            button.text()
+            for button in dialog.findChildren(QPushButton)
+            if button.isVisibleTo(dialog)
+            and button.text()
+            and not button.isEnabled()
+            and not all(text.strip() for text in (button.toolTip(), button.accessibleDescription()))
+        ]
+        assert silent == [], f"gesperrt und ohne Grund: {silent}"
+        # Der Grund an *Schlüssel prüfen* nennt auch den Ausweg, mit dem Namen des
+        # offenen Knopfs daneben (RC-5, Kriterium V5).
+        way_out = dialog.forget_button
+        assert way_out.isEnabled() and way_out.text() == "Diesen Rechner deaktivieren"
+        dialog.field.setPlainText("SOLIDON3D-1-NEUER-SCHLUESSEL")
+        for told in (dialog.check_button.toolTip(), dialog.check_button.accessibleDescription()):
+            assert f"„{way_out.text()}“" in told, told
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        activation.forget_cache()
+
+
 def test_an_unclear_deactivation_answer_never_restores_the_certificate(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

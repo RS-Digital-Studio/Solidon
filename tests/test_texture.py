@@ -300,6 +300,32 @@ def run(op: str, entry: SceneObject, profile: Profile, seed: int | None = None, 
     )
 
 
+def test_whether_a_body_carries_colour_is_known_before_the_dialog() -> None:
+    """FD-135: *Textur in Filamente umrechnen* stand am Quader ohne Textur
+    bedienbar da, und erst die Vorschau sagte „Dieses Objekt trägt keine
+    Farbinformation.“ Die Voraussetzung steht im Register, und die Antwort
+    darauf kostet nichts — dieselbe Frage, mit der ``face_colours`` beginnt.
+    """
+    from app.core.geom.colour_ops import NO_COLOUR
+    from app.core.registry.registry import BODY_REQUIREMENTS
+
+    assert "colour" in BODY_REQUIREMENTS
+    image = Image.new("RGB", (2, 1))
+    for body in (plate(), painted([(255, 0, 0), (0, 0, 255)]), textured(image)):
+        assert texture.carries_colour(body) is (texture.face_colours(body) is not None)
+    assert not texture.carries_colour(plate())
+    assert str(NO_COLOUR) == "Dieses Objekt trägt keine Farbinformation."
+
+
+def test_texture_conversion_says_the_same_sentence_as_the_menu(profile: Profile) -> None:
+    """Der Befund am Netz ohne Farbe ist der Satz, den das Menü am Eintrag zeigt."""
+    from app.core.geom.colour_ops import NO_COLOUR
+
+    entry = SceneObject(id="obj_1", name="Quader", mesh=MeshData.of(plate()))
+    result = run("slots_from_texture", entry, profile, seed=1, filaments=2)
+    assert [finding.message for finding in result.findings] == [NO_COLOUR]
+
+
 def test_assign_slot_paints_the_whole_object(profile: Profile) -> None:
     entry = SceneObject(id="obj_1", name="Deckel", mesh=MeshData.of(plate()))
 

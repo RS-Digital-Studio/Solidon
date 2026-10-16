@@ -2312,7 +2312,11 @@ Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.
 `guide_targets` teilt `widget_under`, `zone_of`, `search_hits`,
 `menubar_entries`, `point_for`, `next_click` und `unclipped` (der sichtbare,
 von keinem Elternteil abgeschnittene Teil eines Widgets; `function_walk._shown`
-misst damit Rollflächen) zwischen Tour, Bildanleitungen und Prüfstand. `area_for` deckt die Zielfläche einschließlich verschachtelter
+misst damit Rollflächen) zwischen Tour, Bildanleitungen und Prüfstand. Den
+Wrapper des zuletzt geholten modalen Dialogs und des zuletzt getroffenen
+Fensters hält es (`_HELD`, `_PROBED`), damit die Wrapper ihrer Kinder nicht
+verfallen; `release_held` gibt beide frei, am Ende jeder Fläche und jedes
+Falls des Prüfstands. `area_for` deckt die Zielfläche einschließlich verschachtelter
 Rollbereiche auf; `next_click` geht den tatsächlichen Kundenweg ohne solches
 Aufdecken. Es rollt mit Radereignissen am tatsächlichen Rollbereich, bis ein
 Feld, das hineinpasst, mit beiden Kanten frei steht; ein kurzer Restschritt
@@ -2328,7 +2332,7 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 
 | Ort / Frage | Vertrag |
 |---|---|
-| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError` |
+| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError`. Was die Größengrenze nicht mehr fasst, steht in `guide_wheel.py` (`takes_wheel`: nimmt ein Rollbereich das Rad selbst, oder reicht er es am Anschlag weiter) und `guide_finders.py` (Finder fester Namen wie `parameters.first.label`, `parameters.bind`; die Kennzeichen `MARKED`/`MARKED_KINDS`; Orte, die ihren Weg selbst kennen, über `place_click`: `filament.spool`, `filaments.first`, `sketch.new_plane`, `sketch.point:N`, `sketch.at:X_Y`, `sketch.constraint:<art>`; `active_sketch_panel` für Skizzeneditor und Zeichenmodus) |
 
 Die ausführlichen Zuordnungen der kompakten Karte:
 

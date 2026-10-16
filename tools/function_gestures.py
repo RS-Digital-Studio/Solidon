@@ -34,6 +34,16 @@ DRAG_MOVES: Final = 20
 
 DRAG_TICK_S: Final = 1 / 60
 
+#: Das Bild im gehaltenen Zug, vor dem Loslassen (FD-73): Griffmaß und Geist,
+#: wie der Kunde sie sieht, solange er die Taste hält.
+HELD_PICTURE: Final = "05-zug-gehalten"
+
+#: Wie lange der Zug vor :data:`HELD_PICTURE` auf das Bild der letzten Bewegung
+#: wartet (Sekunden): Die Aufnahme hält den Hauptfaden an und fiele sonst in die
+#: Zeit bis zum nächsten Bild, die Z1 misst (RC2-2). Kommt bis dahin keins, ist
+#: das selbst ein Fund an Z1.
+HELD_FRAME_WAIT_S: Final = 0.5
+
 #: Die Meldungen der Ansicht während eines Zugs am Griff: Geist, Zahl am Zeiger,
 #: verschobener Körper. Kommt keine, hat der Zug den Griff nicht gefasst.
 DRAG_SIGNALS: Final[tuple[str, ...]] = (
@@ -87,6 +97,7 @@ class _Flow(Protocol):
     frames: Any
     frames_wrapped: bool
     reference_factor: float
+    variant: Any
 
     def run_steps(self, label: str, steps: Sequence[Step], timeout_s: float = ...) -> bool: ...
     def until_step(
@@ -94,6 +105,7 @@ class _Flow(Protocol):
     ) -> Step: ...
     def path_steps(self) -> list[Step]: ...
     def away_point(self) -> Any: ...
+    def picture(self, label: str) -> None: ...
 
 
 class GesturePhases:
@@ -117,14 +129,17 @@ class GesturePhases:
         if result is None or not any(entry.features for entry in result.scene.objects.values()):
             unmeasured(self.data, "hover_labels", "die Startszene trägt kein Merkmal")
             return
-        view = self.window.viewport
-        if getattr(view, "renderer", None) is None:
-            unmeasured(self.data, "hover_labels", "kein Renderer — die Ansicht sucht nichts")
-            return
         kinds: dict[str, list[str]] = {}
         for key, entry in result.scene.objects.items():
             for name, feature in entry.features.items():
                 kinds.setdefault(feature.kind, []).append(f"view:{key}.{name}")
+        # Was die Erkennung an der Szene liefert, neben dem, was überfahren
+        # wurde: Erst so ist „jede Art“ prüfbar (FD-152).
+        self.data["recognized_kinds"] = sorted(kinds)
+        view = self.window.viewport
+        if getattr(view, "renderer", None) is None:
+            unmeasured(self.data, "hover_labels", "kein Renderer — die Ansicht sucht nichts")
+            return
         labels: list[dict[str, Any]] = []
         missed: list[str] = []
         for kind, targets in kinds.items():
@@ -163,11 +178,23 @@ class GesturePhases:
         return self.window.mapToGlobal(QPoint(2, 2))
 
     def phase_drag(self: _Flow) -> None:
-        """Z1: ein Zug am Griff der Zeile, je Bewegung die rohe Zeit bis zum nächsten Bild."""
+        """Z1: ein Zug am Griff der Zeile, je Bewegung die rohe Zeit bis zum nächsten Bild.
+
+        Der Griff ist das Ziel der Zeile — oder ``spec.drag``, wenn erst die
+        Handlung der Zeile ihn zeigt (*Zum Langloch ziehen*: ``handle:slot.end``);
+        dann geht der Weg bis zur Handlung, und der Zug folgt. Vor dem Loslassen
+        nimmt der Fall das Fenster auf (:data:`HELD_PICTURE`, FD-73), nach dem
+        Bild der letzten Bewegung (:data:`HELD_FRAME_WAIT_S`). Außer im
+        Satz ``basis`` zieht nur eine Zeile mit ``spec.drag`` (``dunkel``: das
+        Griffmaß im dunklen Thema).
+        """
         from PySide6.QtCore import QPoint, Qt
         from PySide6.QtTest import QTest
 
-        target = walk_target(self.row)
+        named = str(self.spec.get("drag") or "")
+        target = named or walk_target(self.row)
+        if not named and self.variant.set != "basis":
+            return
         if not target.startswith("handle:") and "Z1" not in (self.spec.get("criteria") or ()):
             unmeasured(self.data, "frames.raw_drag_ms", "kein Griff an dieser Zeile")
             return
@@ -205,14 +232,19 @@ class GesturePhases:
                 until = time.perf_counter() + DRAG_TICK_S
                 while time.perf_counter() < until:
                     self.application.processEvents()
+            # Gehalten, noch nicht losgelassen: Griffmaß und Geist im Bild (FD-73) —
+            # erst nach dem Bild der letzten Bewegung, sonst misst Z1 die Aufnahme.
+            until = time.perf_counter() + HELD_FRAME_WAIT_S
+            while self.frames.first_after(moves[-1]) is None and time.perf_counter() < until:
+                self.application.processEvents()
+            self.picture(HELD_PICTURE)
             QTest.mouseRelease(
                 hit, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, local
             )
 
         try:
-            self.run_steps(
-                "zug", [*self.path_steps()[:-1], Step("ziehen", pull, settle_ms=SETTLE_MS)]
-            )
+            path = self.path_steps() if named else self.path_steps()[:-1]
+            self.run_steps("zug", [*path, Step("ziehen", pull, settle_ms=SETTLE_MS)])
         finally:
             for signal in listened:
                 signal.disconnect(noticed)

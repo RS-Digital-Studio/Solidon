@@ -30,14 +30,25 @@ def test_every_checked_in_verdict_file_holds_its_form_on_any_machine() -> None:
 
     Die Dateien sind aus dem Dateisystem erhoben: Ohne sie wäre der Wächter grün,
     weil er nichts prüft (``tests.md``, Verbotstest über eine leere Menge).
+
+    **Ohne die Regeln der Runde** (``round_rules=False``): Bindung der Vorhersage
+    und Kennzeichnung nach dem Stand der Funddatei gelten zur Zeit der Runde und
+    prüft ``report`` (``check_verdicts``); die Funddatei wächst und wird behoben,
+    die Urteile einer Runde bleiben, was sie waren (RC-2). Die Form prüft der
+    Wächter weiter — die Gegenprobe unten weist ein verdorbenes Urteil ab.
     """
     findings, _problems = function_report.read_findings(STATE / "funde.md")
     paths = sorted(STATE.glob("urteile-*.toml"))
     assert {path.name for path in paths} >= {f"urteile-d{n:02}.toml" for n in (4, 8, 10)}
     for path in paths:
         entries, runs = function_report.read_verdict_file(path)
-        assert check_verdicts(entries, findings=findings).rejected == (), path.name
+        checked = check_verdicts(entries, findings=findings, round_rules=False)
+        assert checked.rejected == (), path.name
         assert function_report.check_runs(runs, entries) == [], path.name
+        # Gegenprobe: Ohne die Regeln der Runde bleibt die Form scharf.
+        spoiled = [{**entries[0], "verdict": "vielleicht"}, *entries[1:]]
+        refused = check_verdicts(spoiled, findings=findings, round_rules=False).rejected
+        assert [entry["verdict"] for entry, _problems in refused] == ["vielleicht"], path.name
 
 
 FINDING = """### FD-{number} Ein Fund

@@ -67,6 +67,13 @@ it into `website/version.json`.
 - The selection card follows content and font, preserving text and action columns. Detached tabs keep their size. When a feature edit is offered, “Apply” is the primary action.
 - Counterparts ask for pair and size first and explain both halves. Shape and fit are under “More settings”. The initial dialog height fits its content.
 - After a preview is refused, the next preview's text remains fully readable.
+- For parameters, fits, printer, material and undo, the chat names the place in the window where you can do the same yourself.
+- The check report names the bodies of a fit instead of showing an internal identifier.
+- English and Portuguese now tell the protrusion of a hook, or of a body below the plate, apart from an overhang in printing.
+- In Spanish and Portuguese, menu, search and dialog show only the first sentence again for *Pin for hole* and *Orient for printing*.
+- Several translations read more clearly, among them the introduction of *Create parameter …*. The peg starts with a capital in every language.
+- In the *Unlock Solidon …* window, *Buy Solidon* stays available on an activated computer. Greyed-out buttons state their reason, and *Check key* also the way to a new key.
+- In French, the first day of a month now reads “1er”, as in “1er décembre 2026”.
 - Without a graphics driver, for example in a virtual machine, Solidon now reliably exits after closing. In version 0.6.0 the program could keep running there invisibly.
 
 ### Printing and slicer handover
@@ -82,6 +89,8 @@ it into `website/version.json`.
 - If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
 - For holes, the view and *Selection* show the same edit. Size, depth and a linked entrance stay in front; print compensation and fine settings are under “More values”.
 - Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
+- If only slivers remain beside one printable part, *Split into separate parts* names them and offers *Keep slivers*. Before, it said the body was all one piece.
+- If a fillet radius or chamfer width is too large for the edges, the message offers *Pick different edges*.
 - Clicking *Apply* on a feature during a calculation keeps the change, even when the preview takes longer. In version 0.6.0 it was silently lost on larger models.
 - A displayed texture no longer computes a preview without a change and no longer offers *Cancel*.
 

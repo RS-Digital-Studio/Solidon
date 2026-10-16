@@ -20,9 +20,9 @@ import time
 from pathlib import Path
 from typing import Any, Final
 
-from app.branding import ENVIRONMENT_PREFIX
 from app.core.keyring_backend import find_backend_once
 from app.core.log import get_logger
+from app.core.paths import LLM_KEY_VARIABLE
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -31,7 +31,7 @@ _log = get_logger(__name__)
 SERVICE = "solidon-llm"
 
 #: Rückfall für Rechner ohne Schlüsselbund, etwa einen Bauserver.
-ENVIRONMENT_VARIABLE = f"{ENVIRONMENT_PREFIX}_LLM_KEY"
+ENVIRONMENT_VARIABLE = LLM_KEY_VARIABLE  # eine Quelle mit der Isolation der Fälle (RC2-10)
 
 
 def _keyring() -> Any | None:
