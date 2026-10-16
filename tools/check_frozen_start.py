@@ -214,10 +214,9 @@ def judge(
         return problems
     if report.get("format") != FORMAT:
         problems.append(f"Bericht in Fassung {report.get('format')!r}, erwartet {FORMAT}.")
-    if report.get("version") != APP_VERSION:
-        problems.append(
-            f"Gestartet wurde {report.get('version')!r}, erwartet {APP_VERSION}: falsches Paket."
-        )
+    started = report.get("version")
+    if started != APP_VERSION:
+        problems.append(f"Gestartet wurde {started!r}, erwartet {APP_VERSION}: falsches Paket.")
     if not report.get("window", {}).get("visible"):
         problems.append("Das Hauptfenster war nicht sichtbar.")
     renderer = report.get("renderer", {})
