@@ -159,7 +159,10 @@ die lokale Fassung für den KI-Hinweis, ohne Webabruf gelesen.
 
 ## Prüfen
 
-`tests/test_packaging.py` prüft, was sich ohne Bau prüfen lässt. Die CI fährt
+`tests/test_packaging.py` prüft, was sich ohne Bau prüfen lässt;
+`tests/test_packaging_platform.py`, was Linux- und Mac-Pakete zusätzlich halten
+(Linux-Grenze, Fenstererprobung am Intel-Mac, früh endende Leser hinter Pipes,
+Flatpak ohne Pakete, 3D-Maus-Modul, macOS-Paket). Die CI fährt
 die Fensterdateien je Prozess als Tor auf allen Plattformen; fehlende Sammlung
 oder ein roter Prozess sperren die Paketierung, ein fehlender wgpu-Adapter ist
 dort ein Fehler (lokal ein Skip mit Grund), und Linux installiert Vulkan-Loader

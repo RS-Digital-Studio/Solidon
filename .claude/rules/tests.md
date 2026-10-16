@@ -58,12 +58,8 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
   Läufer-VM schon daran in `processEvents` hängt — überall sonst ist es rot,
   weil ein Skip dort verdeckte, dass die Fälle nicht mehr laufen.
 - **CI-Aufteilung** nach dem Vertrag CI-01 bis CI-09 (`AGENTS.md`; Wächter
-  `test_packaging.py` für Jobs, Plattformen, Releasegrenze und Berichte,
-  `test_ci_runner.py` für vollständige Partitionen und echte
-  Prozessausgänge). `--ci-shard I/N` teilt die Kernsuite je Datei nach der
-  Markerwahl, eine Laufzeittabelle verteilt nur die gesammelte Menge, neue
-  Dateien kommen von selbst dazu; Tabellen erzeugt `tools/ci_shards.py` aus
-  JUnit-Berichten mit Herkunftsvermerk — keine Zahl von Hand.
+  `test_packaging.py`, `test_ci_runner.py`); Laufzeittabellen erzeugt
+  `tools/ci_shards.py` aus JUnit-Berichten — keine Zahl von Hand.
 - **Betroffene Tests folgen auch impliziten Paketimporten.** Eine Änderung an
   `__init__.py` betrifft die Importeure seiner Untermodule; gelöschte Module
   und Testhelfer behalten ihre Nutzer. Ein Test, der ein Werkzeug über den
@@ -97,10 +93,14 @@ Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
 - **Ein PHP-Prüfserver startet über `php_command`** (`tests/php_probe.py`), der
   OPcache abschaltet: Unter Windows teilen sich alle PHP-Prozesse den
   Opcode-Speicher, und parallele Server mit anderen Erweiterungen stürzten ab.
-- **Ein `pytest.main` im Prozess der Suite gibt `sys.modules` und `sys.path`
-  zurück, wie es sie fand** (`tools/list_windowed_tests._collect`): Eine
-  `conftest.py` ohne Paket verdrängt dort das Modul `conftest` der Suite, und
-  spätere Tests im selben Arbeiter finden das fremde.
+- **Ein `pytest.main` im Prozess der Suite gibt `sys.modules`, `sys.path`,
+  `sys.meta_path` und `os.environ` zurück, wie es sie fand**
+  (`tools/list_windowed_tests._collect`): Eine `conftest.py` ohne Paket
+  verdrängt dort das Modul `conftest` der Suite, und ein zweiter Lauf von
+  `tests/conftest.py` ließ Haken und Profilvariablen zurück.
+- **Wer genau die echte Programmsuche oder Backend-Liste prüft, fordert
+  `unpatched_*` an**, nie ein Attribut am Produktmodul: Ein Name, den die
+  Suite dort anlegt, kennt kein Code und kein Wächter (W2).
 - **Das Torskript entfernt seine temporäre Skriptkopie und sein Protokoll bei
   jedem Ende**, auch beim Scheitern der Vorbereitung. Beim Laden der Funktionen
   über `source` bleiben Protokolle des Aufrufers unangetastet.
@@ -324,12 +324,8 @@ Das ist der einzige Teil des Tors, dessen Rot nicht „nicht fertig“ bedeutet.
 ### Wenn ein Lauf steht: py-spy
 
 `py-spy dump --pid N --native` liest den Stapel eines laufenden Prozesses,
-ohne ihn anzufassen; erst `--native` zeigt, was hinter der Python-Grenze
-wartet. `faulthandler` hilft nur einem Faden, der stürzt. Ein Stapel in
-`MessageBoxW` ist ein unsichtbares Systemfenster; `Get-Process` nennt seinen
-Titel (`MainWindowTitle`). py-spy liegt in der
-Nutzer-Umgebung (`%APPDATA%\Python\Python313\Scripts\py-spy.exe`), **nicht**
-in der `.venv` oder `constraints.txt` — es gehört nicht zum Produkt.
+ohne ihn anzufassen; es liegt in der Nutzer-Umgebung, nicht in der `.venv`.
+Wie man den Stapel liest: `regel-tests.md`.
 
 ### Wie viele Läufe trägt eine Aussage?
 
@@ -434,7 +430,7 @@ bald niemand mehr von den tragenden.
 
 | Herkunft der Menge | Beispiel | zusichern |
 |---|---|---|
-| Dateisystem | `UI.glob("*.py")`, `rglob` | **ja** |
+| Dateisystem | `source_tree.python_files("app/ui")`, `rglob` | **ja** |
 | Ladevorgang | `rules.load()`, `manual.pages()`, `REGISTRY.all()` | **ja** |
 | Gebaute Oberfläche | `findChildren(...)`, `panel._buttons.values()` | **ja** |
 | Rechenergebnis | `result.layers`, `island_layers(result)` | **ja** |
@@ -496,8 +492,18 @@ ins Tor:
 
 **`ruff check .` ohne Pfad** — auch eine Testdatei ist Code. Die übrigen
 betroffenen Tests nennt `tools/affected_tests.py` aus dem Importgraphen, samt
-Baumlesern (`rglob`, `walk_packages`) und Nennung beim Namen (`--why`,
-`--split`, `--run`; beim Release `--release`).
+Lesern des geänderten Ordners (`glob`, `rglob`, `walk`, `git ls-files`, auch
+über Helfer), Op-Namen und Nennung beim Namen (`--why`, `--split`, `--run`;
+beim Release `--release`). Eine reine Teständerung wählt die Leser von
+`tests/`; eine Datendatei zählt wie ihr Leser, darum wählt `knowledge/data`,
+ein Katalog oder ein Beispielprojekt fast die Suite; was eine `conftest.py` je
+Test ausführt, wählt jede Testdatei darunter (CS-38).
+
+- **Ein Test fragt den Index des echten Baums nur über `code_index.shared()`**,
+  nie über `Index.build()` — sonst baut jeder Arbeiter selbst; wer daneben die
+  Platte liest, vergleicht mit `index.digests`.
+- **Eine neue Namensliste im Code** (Modul- oder Funktionsnamen als Text)
+  bekommt ihre Prüfung in `test_name_lists.py` (W6).
 
 ## Eine Fremdmeldung ist ein Zeitpunkt, keine Ursache
 
@@ -530,7 +536,4 @@ geschrieben wurde — **gemessen wird ein Zeitpunkt, nie ein Baum.**
 
 `gh run view --log-failed` schweigt bis zum Ende des ganzen Laufs; einen
 fertigen Job liest `gh api repos/<eigner>/<repo>/actions/jobs/<job-id>/logs`
-(ohne führenden Schrägstrich, sonst macht Git Bash einen Dateipfad daraus).
-Ein laufender Job antwortet 404, ein rot gewordener ist fertig. Vorher die
-neueste `ruff` in einer eigenen Umgebung gegen das Projekt fahren, nicht in
-der `.venv`.
+(ohne führenden Schrägstrich). Grenzen und Handgriff davor: `regel-tests.md`.

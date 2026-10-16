@@ -86,7 +86,8 @@ Python-Zustand (Treiber) zählt als Absturz.
   der Dienst per `launchctl bootout` ausgehängt ist; der Schritt darf rot
   werden, bis zwei Läufe grün waren, dann fällt die Ausnahme. In einem
   Pflichtjob mit Rendererfällen ist ein solcher Schritt nicht zulässig.
-- `tests/test_packaging.py` hält die Schritte samt Gegenproben; ein neues
+- `tests/test_packaging.py` und `tests/test_packaging_platform.py` (Linux-
+  und Mac-Pakete) halten die Schritte samt Gegenproben; ein neues
   Paketformat bekommt seinen Start, bevor es ausgeliefert wird.
 - **Das Windows-Setup wird bei jedem Release über die veröffentlichte Version
   aktualisiert und deinstalliert** (`tools/check_windows_update.py`, Entscheidung
