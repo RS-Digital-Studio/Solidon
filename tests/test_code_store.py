@@ -16,6 +16,7 @@ erst geladen, wenn eine Frage ihn braucht. Geprüft wird an der Attrappe aus
 from __future__ import annotations
 
 import gc
+import importlib
 import marshal
 import shutil
 import subprocess
@@ -349,9 +350,14 @@ def test_a_process_writes_under_the_stamp_of_the_code_it_loaded(
 
 
 def test_the_stamp_covers_every_source_of_the_resolver() -> None:
-    """Jede Datei, die rechnet, geht mit der beim Import gelesenen Quelle in den Stand ein."""
+    """Jede Datei, die rechnet, geht mit der beim Import gelesenen Quelle in den Stand ein —
+    jeder Eintrag ist ``_SOURCE`` seines Moduls, nicht eine eigene Lesung der Platte, die beim
+    Import von ``code_store`` schon eine andere sein kann (RR2-12)."""
     on_disk = sorted(path.name for path in (code_index.ROOT / "tools").glob("code_*.py"))
     assert sorted(code_store.SOURCES) == on_disk
+    for name, source in code_store.SOURCES.items():
+        module = importlib.import_module(f"tools.{name.removesuffix('.py')}")
+        assert source is module._SOURCE, f"{name}: nicht die Quelle, die das Modul geladen hat"
 
 
 def _damaged(root: Path, how: str) -> bytes:

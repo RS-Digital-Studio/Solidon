@@ -50,7 +50,7 @@ WAIT_SECONDS = 600.0
 #: der Platte liegt. ``code_index`` lädt die Sammlung, dieses Modul erst das erste ``shared()``;
 #: ändert sich dazwischen eine Datei, schriebe der Prozess sonst die Antworten des alten Codes
 #: unter dem Stand des neuen (RR2-1). ``tests/test_code_store.py`` hält die Liste gleich mit
-#: ``tools/code_*.py``.
+#: ``tools/code_*.py`` und jeden Eintrag gleich ``_SOURCE`` seines Moduls (RR2-12).
 SOURCES: dict[str, bytes] = {
     "code_cache.py": code_cache._SOURCE,
     "code_facts.py": code_facts._SOURCE,
