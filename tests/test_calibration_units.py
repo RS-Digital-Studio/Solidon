@@ -125,3 +125,30 @@ def test_both_fine_fields_take_their_extra_place_from_one_source(
             field.deleteLater()
         finally:
             set_display_unit("mm")
+
+
+def test_the_print_conditions_speak_the_display_unit(in_inches: None) -> None:
+    """Düse, Schichthöhe und Bahnbreite unter den Feldern stehen in Zoll wie die
+    Felder darüber — gemessen an der Zeile, die der Kunde liest (Review F2a, R3)."""
+    from PySide6.QtWidgets import QLabel
+
+    from app.i18n import tr
+    from app.ui.labels import length
+
+    process = profiles.make_profile("centauri-carbon-2", "petg")
+    dialog = _dialog()
+    try:
+        printer = process.printer
+        notes = [
+            label.text()
+            for label in dialog.findChildren(QLabel)  # type: ignore[attr-defined]
+            if tr("Düse") in label.text() and tr("Bahnbreite") in label.text()
+        ]
+        assert len(notes) == 1, notes
+        note = notes[0]
+        for value in (printer.nozzle_diameter, printer.layer_height, printer.extrusion_width):
+            assert f" {length(value)}" in note, (length(value), note)
+            assert length(value).endswith(" in"), length(value)
+        assert " mm" not in note, note
+    finally:
+        dialog.deleteLater()  # type: ignore[attr-defined]

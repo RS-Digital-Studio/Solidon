@@ -168,7 +168,9 @@ Rückseite; eine ausdrückliche Feldübergabe öffnet sie vor dem Fokuswechsel.
   `COMPUTED_PLACES` (FD-184, R2).
 - **Eine umgebrochene Beschriftung zeigt jede Zeile** (FD-183):
   `align_to_the_front` hält ihre Breite fest, `wrapped_caption.keep_whole_lines`
-  die Höhe des Textes in dieser Breite, auch nach einem Schriftwechsel.
+  die Höhe des Textes in dieser Breite, auch nach einem Schriftwechsel in
+  beide Richtungen — gemessen ohne die gepinnte Mindesthöhe, sonst bliebe die
+  große Schrift stehen (R3).
 - **Gemessen wird in der endgültigen Breite** (FD-45): Vor Anfangs- und
   Klappenmessung zieht der Dialog auf seine Breite, der vorläufige senkrechte
   Rollbalken ist für die Messung aus, und jede Merkmalsliste setzt ihre Höhe

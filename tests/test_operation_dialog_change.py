@@ -47,6 +47,17 @@ def _changing(operation: str, values: dict[str, Any], **extra: Any) -> Iterator[
         dialog.deleteLater()
 
 
+def _type_into(spin: Any, text: str) -> None:
+    """Ersetzt den Inhalt eines Zahlenfelds über die Tastatur und bestätigt."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    spin.setFocus(Qt.FocusReason.TabFocusReason)
+    spin.lineEdit().selectAll()
+    QTest.keyClicks(spin.lineEdit(), text)
+    QTest.keyClick(spin.lineEdit(), Qt.Key.Key_Return)
+
+
 def test_a_part_changed_in_its_step_says_apply(qt_app: QApplication) -> None:
     """Beim Anlegen „Einsetzen“, im Änderungsweg „Übernehmen“."""
     from app.ui.op_dialog import OperationDialog, accept_text
@@ -89,16 +100,15 @@ def test_before_the_first_change_the_button_names_the_field(qt_app: QApplication
         qt_app.processEvents()
         assert not button.isEnabled(), "dieselbe Zahl ist keine Änderung"
 
-        field.set_value(3.0)
-        dialog.valuesChanged.emit()
+        # Über die Tastatur, nicht über ein Signal von Hand: So zählt auch der
+        # Anschluss des Feldes an den Dialog (Review F2a, R3).
+        _type_into(field.spin, "3")
         wait_until(qt_app, button.isEnabled)
         assert tr("Länge") not in button.toolTip()
 
         # Zurück auf den alten Wert: wieder nichts zu übernehmen.
-        field.set_value(2.0)
-        dialog.valuesChanged.emit()
-        qt_app.processEvents()
-        assert not button.isEnabled()
+        _type_into(field.spin, "2")
+        wait_until(qt_app, lambda: not button.isEnabled())
 
 
 def test_an_unchanged_step_is_not_applied_by_the_keyboard(qt_app: QApplication) -> None:
