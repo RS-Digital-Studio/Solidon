@@ -565,16 +565,21 @@
 
     const hint = variants.get(choice).cloneNode(true);
 
-    /* Solange die Karte unten steht, hält die Seite ihren Platz frei
-       (`--language-hint-space` in `style.css`): Das Seitenende lässt sich
-       über sie hinausrollen, und was den Fokus bekommt, rollt über ihr in den
-       Blick. Steht sie bei wenig Höhe im Fluss, braucht sie keinen. */
-    /* Der Wert steht als Variable an der Wurzel und **unmittelbar** als
-       Polster von `body` und `scroll-padding` der Wurzel. Über `var()`
-       allein rechnete Chromium unter macOS den Polster nicht nach: Die
-       Variable sagte 162px — auch an `body` selbst gesetzt —, der Polster
-       blieb 0, und am Seitenende lagen die Fußverweise unter der Karte. */
+    /* Solange die Karte unten steht, hält die Seite ihren Platz frei: ein
+       leerer Block in ihrer Höhe am Ende der Seite, und
+       `--language-hint-space` an der Wurzel für `scroll-padding-bottom`
+       (`style.css`). Das Seitenende lässt sich über die Karte hinausrollen,
+       und was den Fokus bekommt, rollt über ihr in den Blick. Steht sie bei
+       wenig Höhe im Fluss, braucht sie keinen.
+       Ein eigener Block und kein Polster an `body`: Den Polster rechnete
+       Chromium nach dem Setzen manchmal nicht nach — gesetzt 162px,
+       berechnet 0px, bis sich am Baum etwas änderte —, und am Seitenende
+       lagen die Fußverweise unter der Karte (QtWebEngine, lokal 2 von 6
+       Aufrufen). Ein neu eingefügter Block steht sofort in seiner Höhe. */
     const root = document.documentElement;
+    const spacer = document.createElement("div");
+    spacer.className = "language-hint-space";
+    spacer.setAttribute("aria-hidden", "true");
     const reserve = () => {
       const style = getComputedStyle(hint);
       const space = style.position === "fixed"
@@ -582,8 +587,7 @@
         : 0;
       const value = `${Math.ceil(space)}px`;
       root.style.setProperty("--language-hint-space", value);
-      root.style.scrollPaddingBottom = value;
-      document.body.style.paddingBottom = value;
+      spacer.style.height = value;
     };
     const watch = window.ResizeObserver ? new ResizeObserver(reserve) : null;
 
@@ -592,8 +596,7 @@
       watch?.disconnect();
       window.removeEventListener("resize", reserve);
       root.style.removeProperty("--language-hint-space");
-      root.style.removeProperty("scroll-padding-bottom");
-      document.body.style.removeProperty("padding-bottom");
+      spacer.remove();
       hint.remove();
       remember("closed");
       /* Der Fokus darf nicht mit der Karte verschwinden: Er geht an das
@@ -606,6 +609,7 @@
     });
     template.before(hint);
     reserve();
+    document.body.append(spacer);
     watch?.observe(hint);
     window.addEventListener("resize", reserve);
   } catch (problem) {

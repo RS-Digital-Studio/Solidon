@@ -61,7 +61,7 @@ STATE = """JSON.stringify((() => {
     above_header: hint ? hint.offsetTop + hint.offsetHeight <= header.offsetTop : null,
     height: hint ? hint.offsetHeight : 0,
     space: root.getPropertyValue("--language-hint-space").trim(),
-    padding: getComputedStyle(document.body).paddingBottom,
+    reserved: document.querySelector("body > .language-hint-space")?.offsetHeight ?? 0,
     stored,
     focus: document.activeElement ? document.activeElement.className : "",
   };
@@ -270,9 +270,9 @@ def test_the_fixed_card_keeps_its_space_free(outcomes: dict[str, list], case: st
     state = outcomes[case][0]
     assert state["position"] == "fixed"
     assert int(state["space"].removesuffix("px")) >= state["height"] > 0
-    # Der Polster selbst, nicht nur die Variable: Unter Chromium auf macOS
-    # blieb er über ``var()`` bei 0px stehen (CI-Probe 38855455034).
-    assert state["padding"] == state["space"], state
+    # Der Block am Seitenende selbst, nicht nur die Variable: Ein Polster an
+    # ``body`` blieb unter Chromium manchmal bei 0px stehen (CI-Probe 38861197337).
+    assert f"{state['reserved']}px" == state["space"], state
     if case == "telefon":
         _state, under_hint, focused_above = outcomes[case]
         assert under_hint == 0, "Fußverweise am Seitenende unter der Karte"
