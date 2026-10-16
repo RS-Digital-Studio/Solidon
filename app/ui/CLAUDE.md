@@ -215,7 +215,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `window_chrome.py` | Windows malt die Titelleiste mit Anwendungsfarben; idempotenter Ereigniswächter |
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |
 | `scroll_areas.py` | Rollbereich ohne Tab-Halt oder als Lesebereich |
-| `wrapped_height.py` | Höhe umbrochener Sätze (`fit_wrapped`) an echter Breite, Text und Schrift |
+| `wrapped_height.py` | Höhe umbrochener Sätze (`fit_wrapped`, Mindest- und Höchsthöhe) an echter Breite, Text und Schrift |
 | `icons.py` | Symbole als themenabhängige SVGs (§19.3, Regel 18); `svg_pixmap` rastert scharf auf HiDPI |
 | `motion.py` | Bewegung an einer Stelle, nicht an zwanzig |
 | `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht; Zuordnungen folgen `tabMoved`; Tab geht in die vordere Seite |

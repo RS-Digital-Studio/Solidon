@@ -471,7 +471,9 @@ wartet, bis die Karte nach ihrer Öffnungsbewegung steht
 9 → 14 → 9 pt. `test_font_height_window.py` (FD-195): Dialoge mit
 `ContentHeight` passen ihre Höhe dem Wechsel an, eine Größe des Kunden bleibt.
 `test_header_font_window.py` (L1): Kopfzeile und Hauptleiste wählen ihre Form
-nach dem Wechsel neu.
+nach dem Wechsel neu. `test_left_card_empty_sentences_window.py` (D1): Im neuen
+Projekt sind die leeren Sätze der linken Karte in jeder Sprache so hoch wie ihr
+Text, gemessen am Hauptfenster.
 
 `window_leftovers.py` gehört dem Wächter `_no_window_outlives_its_test` in
 `conftest.py` (FD-191): Ein Fall mit `qt_app`, der ein sichtbares Fenster

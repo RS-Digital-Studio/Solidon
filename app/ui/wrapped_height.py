@@ -18,23 +18,37 @@ Folger ihm zuvor und das Signal bliebe aus.
 
 from __future__ import annotations
 
+from typing import Final
+
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtWidgets import QLabel
 
 from app.ui.leash import stop_watching_the_dying
 from app.ui.style import WrappedNote
 
+#: Was Qt als „keine Obergrenze“ kennt (``QWIDGETSIZE_MAX``).
+_UNBOUNDED: Final = 16_777_215
+
 
 def claim_wrapped_height(label: QLabel, width: int) -> None:
-    """Die Mindesthöhe auf das setzen, was der Text in ``width`` braucht.
+    """Mindest- und Höchsthöhe auf das setzen, was der Text in ``width`` braucht.
 
-    **Gemessen ohne die gepinnte Höhe:** ``QLabel.heightForWidth`` meldet nie
+    **Gemessen ohne die gepinnten Höhen:** ``QLabel.heightForWidth`` meldet nie
     weniger als die eigene Mindesthöhe, ein kürzerer Text gäbe sonst keine
-    Zeile zurück. Ein Satz ohne Umbruch meldet -1; er bekommt keine
-    Untergrenze, wie Qt eine negative ohnehin auf null setzt.
+    Zeile zurück. Ein Satz ohne Umbruch meldet -1; er bekommt keine Grenzen.
+
+    **Auch die Höchsthöhe** (D1 zu FD-133): Eine Karte misst ihre Panels nach
+    dem Größenwunsch, und ``QLabel.sizeHint`` rechnet an Qts Schätzbreite. Mit
+    der Mindesthöhe allein stand der leere Satz im neuen Projekt eine Zeile
+    höher als sein Text; die Höchsthöhe begrenzt den Wunsch auf den Bedarf.
     """
     label.setMinimumHeight(0)
-    label.setMinimumHeight(max(label.heightForWidth(width), 0))
+    label.setMaximumHeight(_UNBOUNDED)
+    needed = label.heightForWidth(width)
+    if needed < 0:
+        return
+    label.setMinimumHeight(needed)
+    label.setMaximumHeight(needed)
 
 
 def _shape(label: QLabel) -> tuple[int, str, str]:
