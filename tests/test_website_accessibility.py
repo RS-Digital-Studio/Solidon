@@ -66,6 +66,7 @@ def test_interactive_components_use_shared_target_height() -> None:
         ".boerse-suche input",
         ".boerse-suche select",
         ".boerse-hochladen input",
+        ".language-hint-close",
     )
     for selector in selectors:
         assert rules[selector]["min-block-size"] == TARGET_SIZE, selector
@@ -82,6 +83,7 @@ def test_compact_header_and_footer_targets_have_minimum_width() -> None:
         "nav.lang .menu > summary",
         ".tab",
         "footer.site a",
+        ".language-hint-close",
     )
     for selector in selectors:
         assert rules[selector]["min-inline-size"] == TARGET_SIZE, selector

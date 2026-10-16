@@ -30,7 +30,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=dabe8f88">
+<link rel="stylesheet" href="style.css?v=9c0a7bf3">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -177,6 +177,38 @@
 </head>
 <body data-release="2026-08-20T18:00:00+02:00" data-demo-until="2026-11-30">
 <a class="skip" href="#content">Zum Inhalt springen</a>
+
+<!-- Der Sprachhinweis, nur auf dieser Seite: Sie ist x-default, und fast jeder
+     Leser der fremdsprachigen Presse landet hier. `site.js` setzt die Fassung
+     ein, die zur Browsersprache passt — ohne Skript bleibt die Vorlage
+     unsichtbar, und es wird nie umgeleitet. -->
+<template data-language-hint>
+  <section class="language-hint" lang="en" aria-label="Language" data-nosnippet>
+    <p><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" stroke-linejoin="round"/></svg>This page is in German.</p>
+    <a class="btn" href="/en/" hreflang="en">Solidon3D in English</a>
+    <button type="button" class="language-hint-close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke-linecap="round"/></svg></button>
+  </section>
+  <section class="language-hint" lang="es" aria-label="Idioma" data-nosnippet>
+    <p><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" stroke-linejoin="round"/></svg>Esta página está en alemán.</p>
+    <a class="btn" href="/es/" hreflang="es">Solidon3D en español</a>
+    <button type="button" class="language-hint-close" aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke-linecap="round"/></svg></button>
+  </section>
+  <section class="language-hint" lang="fr" aria-label="Langue" data-nosnippet>
+    <p><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" stroke-linejoin="round"/></svg>Cette page est en allemand.</p>
+    <a class="btn" href="/fr/" hreflang="fr">Solidon3D en français</a>
+    <button type="button" class="language-hint-close" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke-linecap="round"/></svg></button>
+  </section>
+  <section class="language-hint" lang="it" aria-label="Lingua" data-nosnippet>
+    <p><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" stroke-linejoin="round"/></svg>Questa pagina è in tedesco.</p>
+    <a class="btn" href="/it/" hreflang="it">Solidon3D in italiano</a>
+    <button type="button" class="language-hint-close" aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke-linecap="round"/></svg></button>
+  </section>
+  <section class="language-hint" lang="pt" aria-label="Idioma" data-nosnippet>
+    <p><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" stroke-linejoin="round"/></svg>Esta página está em alemão.</p>
+    <a class="btn" href="/pt/" hreflang="pt">Solidon3D em português</a>
+    <button type="button" class="language-hint-close" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke-linecap="round"/></svg></button>
+  </section>
+</template>
 
 <header class="site">
   <div class="wrap">
@@ -1120,7 +1152,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=f1d3e795" defer></script>
+<script src="/site.js?v=6e2902b8" defer></script>
 
 </body>
 </html>

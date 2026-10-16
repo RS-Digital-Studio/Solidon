@@ -448,6 +448,128 @@ nav.lang a.cta:hover {
   nav.lang details.langs ul { left: 0; right: auto; }
 }
 
+/* ── Sprachhinweis der deutschen Startseite ────────────────────────────── */
+
+/* **Eine Karte am unteren Rand, kein Band über der Kopfzeile.** `site.js`
+   setzt den Hinweis beim Lesen des Dokuments ein, bei langsamem Netz auch
+   erst nach dem ersten Bild; ein Band oben schöbe dann die ganze Seite nach
+   unten, mitten in den ersten Blick. Fest gestellt verschiebt die Karte
+   nichts. Nur bei wenig Höhe steht sie im Fluss (unten). Sie liegt unter der
+   Kopfzeile (z-index 10), damit deren Menüs über ihr aufgehen. */
+.language-hint {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 9;
+  width: min(24rem, calc(100vw - 2rem));
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.6rem 0.5rem;
+  padding: 0.55rem 0.55rem 1rem 1.1rem;
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lift);
+  animation: language-hint-in 0.35s cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+/* Der Globus sagt „Sprache" auch dem, der den englischen Rückfall kaum
+   liest — er ist das Zeichen, das Sprachwahlen überall tragen. */
+.language-hint p {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.language-hint p svg {
+  flex: none;
+  width: 1.3rem;
+  height: 1.3rem;
+  color: var(--accent);
+}
+
+.language-hint .btn {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: 0;
+}
+
+/* Das Kreuz steht oben rechts, in der Tabulatorfolge aber hinter dem
+   Verweis: erst das Angebot, dann das Ablehnen. */
+.language-hint-close {
+  grid-column: 2;
+  grid-row: 1;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  transition: color var(--step), background-color var(--step);
+}
+
+.language-hint-close:hover {
+  color: var(--fg);
+  background: var(--accent-soft);
+}
+
+.language-hint-close svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* Nur das Hereinkommen bewegt sich, und ohne die Animation steht die Karte
+   in ihrem Endzustand da — `prefers-reduced-motion` schaltet sie unten ab. */
+@keyframes language-hint-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+}
+
+/* Auf dem Telefon über die volle Breite, mit demselben Rand wie die Seite. */
+@media (max-width: 30rem) {
+  .language-hint {
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    width: auto;
+  }
+}
+
+/* **Wo die Karte steht, hält die Seite unten ihren Platz frei** — das
+   Gegenstück zu `scroll-padding-top` für die Kopfzeile. Ohne ihn lagen auf
+   dem Telefon die Rechtsverweise der Fußzeile für immer unter der Karte,
+   und dreizehn Ziele verschwanden beim Fokus dahinter (WCAG 2.4.11). Die
+   Höhe setzt `site.js` am Wurzelelement, solange die Karte da ist. */
+:root { --language-hint-space: 0px; }
+html { scroll-padding-bottom: var(--language-hint-space); }
+body { padding-bottom: var(--language-hint-space); }
+
+/* **Bei wenig Höhe steht die Karte im Fluss über der Kopfzeile** und rollt
+   mit der Seite weg. Fest gestellt ließ sie bei 400 % Vergrößerung neben der
+   zweizeiligen Kopfzeile keinen Platz für die Seite, und mit großer Schrift
+   lag ihr Kreuz außerhalb des Fensters. 30rem Höhe trifft auch ein Telefon
+   quer und 200 % auf einem kleinen Laptop. */
+@media (max-height: 30rem) {
+  .language-hint {
+    position: static;
+    width: auto;
+    margin: 0.75rem 1rem 0;
+  }
+}
+
+@media print {
+  .language-hint { display: none; }
+}
+
 /* ── Aufmacher ─────────────────────────────────────────────────────────── */
 
 .hero {
@@ -3997,7 +4119,8 @@ footer.site a,
 .activation-paste summary,
 .boerse-suche input,
 .boerse-suche select,
-.boerse-hochladen input {
+.boerse-hochladen input,
+.language-hint-close {
   min-block-size: var(--target-min);
 }
 
@@ -4009,7 +4132,8 @@ nav.lang a,
 nav.lang details.langs summary,
 nav.lang .menu > summary,
 .tab,
-footer.site a {
+footer.site a,
+.language-hint-close {
   min-inline-size: var(--target-min);
 }
 

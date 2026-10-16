@@ -848,7 +848,9 @@ function visits_of(array $rows): array
     return $found;
 }
 
-/** Je Tag: Aufrufe, Downloads, Update-Prüfungen und Besuche — aufsteigend. */
+/** Je Tag: Aufrufe, Downloads, Update-Prüfungen und Besuche — aufsteigend.
+ *  Dazu die Besuche, die auf der deutschen Startseite beginnen (`home`), und
+ *  wie viele davon in eine andere Sprachfassung wechseln (`switched`). */
 function per_day(array $rows, array $visits): array
 {
     $days = [];
@@ -857,6 +859,13 @@ function per_day(array $rows, array $visits): array
     }
     foreach ($visits as $visit) {
         $days[$visit['day']]['visits'] = ($days[$visit['day']]['visits'] ?? 0) + 1;
+        $switch = language_switch($visit);
+        if ($switch !== null) {
+            $days[$visit['day']]['home'] = ($days[$visit['day']]['home'] ?? 0) + 1;
+            if ($switch !== '') {
+                $days[$visit['day']]['switched'] = ($days[$visit['day']]['switched'] ?? 0) + 1;
+            }
+        }
     }
     foreach ($days as &$counts) {
         $counts = [
@@ -864,6 +873,8 @@ function per_day(array $rows, array $visits): array
             'd' => (int) ($counts['d'] ?? 0),
             'u' => (int) ($counts['u'] ?? 0),
             'visits' => (int) ($counts['visits'] ?? 0),
+            'home' => (int) ($counts['home'] ?? 0),
+            'switched' => (int) ($counts['switched'] ?? 0),
         ];
     }
     unset($counts);
@@ -874,7 +885,7 @@ function per_day(array $rows, array $visits): array
 /** Die Summe der Tageswerte zwischen zwei Tagen, beide einschließlich. */
 function window_sum(array $days, string $from, string $to): array
 {
-    $sum = ['p' => 0, 'd' => 0, 'u' => 0, 'visits' => 0];
+    $sum = ['p' => 0, 'd' => 0, 'u' => 0, 'visits' => 0, 'home' => 0, 'switched' => 0];
     foreach ($days as $day => $counts) {
         if ($day < $from || $day > $to) {
             continue;
@@ -927,6 +938,31 @@ function language_of(string $path): string
         }
     }
     return 'de';
+}
+
+/**
+ * Wohin ein Besuch von der deutschen Startseite aus wechselt.
+ *
+ * `null`, wenn er nicht auf `/` beginnt — nur dort steht der Sprachhinweis
+ * aus `site.js`; `''`, wenn er bei Deutsch bleibt; sonst das Kürzel der
+ * ersten anderen Fassung, die er öffnet. Ob der Wechsel über den Hinweis oder
+ * die Sprachverweise in Kopf- und Fußzeile kam, trennt der Zähler nicht: Alle
+ * führen auf dieselbe Adresse, und im Browser wird für die Statistik nichts
+ * abgelegt.
+ * Die Wirkung des Hinweises zeigt der Vergleich mit der Zeit davor.
+ */
+function language_switch(array $visit): ?string
+{
+    if (($visit['pages'][0] ?? '') !== '/') {
+        return null;
+    }
+    foreach ($visit['pages'] as $page) {
+        $code = language_of($page);
+        if ($code !== 'de') {
+            return $code;
+        }
+    }
+    return '';
 }
 
 /**
@@ -1367,7 +1403,8 @@ foreach ($spans as $span) {
         'before' => $comparable ? window_sum($recentDays, $beforeFrom, $beforeTo) : null,
     ];
 }
-$todayCounts = $recentDays[$today] ?? ['p' => 0, 'd' => 0, 'u' => 0, 'visits' => 0];
+$todayCounts = $recentDays[$today]
+    ?? ['p' => 0, 'd' => 0, 'u' => 0, 'visits' => 0, 'home' => 0, 'switched' => 0];
 
 // -- Der gewählte Monat -------------------------------------------------------
 
@@ -1397,6 +1434,8 @@ $entryPages = [];
 $exitPages = [];
 $sources = [];
 $languages = [];
+$homeVisits = 0;
+$switches = [];
 $visitsWithDownload = 0;
 $downloadsWithoutPage = 0;
 $beforeDownload = [];
@@ -1440,6 +1479,15 @@ foreach ($visits as $visit) {
     $languages[$code]['pages'] += count($visit['pages']);
     $languages[$code]['downloaded'] += $downloaded ? 1 : 0;
     $languages[$code]['downloads'] += count($visit['downloads']);
+
+    // Der Wechsel von der deutschen Startseite: `''` heißt geblieben.
+    $switch = language_switch($visit);
+    if ($switch !== null) {
+        $homeVisits++;
+        $switches[$switch] = $switches[$switch] ?? ['visits' => 0, 'downloaded' => 0];
+        $switches[$switch]['visits']++;
+        $switches[$switch]['downloaded'] += $downloaded ? 1 : 0;
+    }
 }
 $direct = $sources[''] ?? ['visits' => 0, 'pages' => 0, 'downloaded' => 0, 'downloads' => 0];
 unset($sources['']);
@@ -1447,6 +1495,9 @@ uasort($sources, static fn (array $a, array $b): int => $b['visits'] <=> $a['vis
 $withoutPage = $languages[''] ?? null;
 unset($languages['']);
 uasort($languages, static fn (array $a, array $b): int => $b['visits'] <=> $a['visits']);
+$stayed = $switches[''] ?? ['visits' => 0, 'downloaded' => 0];
+unset($switches['']);
+uasort($switches, static fn (array $a, array $b): int => $b['visits'] <=> $a['visits']);
 arsort($entryPages);
 arsort($exitPages);
 arsort($beforeDownload);
@@ -1694,6 +1745,23 @@ if ($languageVisits > 0) {
     }
 }
 
+// Der Sprachhinweis der deutschen Startseite: wie viele Besuche, die dort
+// beginnen, in eine andere Fassung wechseln — rollend, damit der Tag, an dem
+// der Hinweis online geht, nach einer Woche seinen Vorher-Vergleich hat.
+// Unter 20 Besuchen je Fenster schweigt der Satz; ein Anteil aus weniger
+// schwankt mit jedem einzelnen Besuch um mehr als fünf Punkte.
+[$homeNow, $homeBefore] = [$windows[0]['now'], $windows[0]['before']];
+if ($homeNow['home'] >= 20) {
+    $text = 'Von der deutschen Startseite in eine andere Sprachfassung gewechselt: '
+        . n($homeNow['switched']) . ' von ' . n($homeNow['home']) . ' Besuchen der letzten 7 Tage ('
+        . n(percent($homeNow['switched'], $homeNow['home']), 0) . ' %)';
+    if ($homeBefore !== null && $homeBefore['home'] >= 20) {
+        $text .= ', in den 7 Tagen davor ' . n($homeBefore['switched']) . ' von ' . n($homeBefore['home'])
+            . ' (' . n(percent($homeBefore['switched'], $homeBefore['home']), 0) . ' %)';
+    }
+    $say('info', $text . '.');
+}
+
 if ($monthSum['d'] > 0) {
     $shares = array_filter($platformTotals, static fn (int $count): bool => $count > 0);
     arsort($shares);
@@ -1799,6 +1867,11 @@ $report = [
         'direct' => $direct,
         'sources' => array_slice($sources, 0, TOP, true),
         'languages' => $languages,
+        'language_switches' => [
+            'home_visits' => $homeVisits,
+            'stayed' => $stayed,
+            'languages' => $switches,
+        ],
         'without_page' => $withoutPage,
         'paths' => listed($paths, TOP),
         'unread' => $unread,
@@ -2344,6 +2417,33 @@ ohne Seite haben keine Sprache und stehen in der letzten Zeile.</p>
       <td class="n"><?= n($withoutPage['downloads']) ?></td>
     </tr>
   <?php endif; ?>
+</table>
+</article>
+<?php endif; ?>
+
+<?php if ($homeVisits > 0): ?>
+<article class="kachel">
+<h3>Wechsel von der deutschen Startseite</h3>
+<p class="sub">Von <?= n($homeVisits) ?> Besuchen, die auf <code>/</code> beginnen:
+die erste andere Sprachfassung, die sie danach öffnen — über den Sprachhinweis
+oder die Sprachverweise in Kopf- und Fußzeile, alle führen auf dieselbe Adresse.
+Die Wirkung des Hinweises zeigt der Vergleich mit der Zeit davor.</p>
+<table>
+  <tr><th>Wechsel nach</th><th class="n">Besuche</th><th class="n">Anteil</th><th class="n">mit Download</th></tr>
+  <?php foreach ($switches as $code => $counts): ?>
+    <tr>
+      <td><?= e($languageNames[$code] ?? (string) $code) ?></td>
+      <td class="n"><?= n($counts['visits']) ?></td>
+      <td class="n"><?= n(percent($counts['visits'], $homeVisits), 1) ?> %</td>
+      <td class="n"><?= n($counts['downloaded']) ?></td>
+    </tr>
+  <?php endforeach; ?>
+    <tr>
+      <td class="leer">blieben auf Deutsch</td>
+      <td class="n"><?= n($stayed['visits']) ?></td>
+      <td class="n"><?= n(percent($stayed['visits'], $homeVisits), 1) ?> %</td>
+      <td class="n"><?= n($stayed['downloaded']) ?></td>
+    </tr>
 </table>
 </article>
 <?php endif; ?>
