@@ -348,15 +348,16 @@ def test_a_reference_in_a_script_names_the_script_text(
     assert fx.tree_bytes(root) == {p: fx.text_of(t).encode("utf-8") for p, t in files.items()}
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "from app.core import legacy\n\n\ndef test_get():\n    assert getattr(legacy, 'bump')\n",
-        "from app.core import legacy\n\nlook = getattr\n\n\ndef test_get():\n"
-        "    assert look(legacy, 'bump')\n",
-    ],
-    ids=["eingebaut", "alias"],
-)
+#: ``getattr(M, "N")`` ohne Vorgabe, über den eingebauten Namen und über einen Alias derselben
+#: Datei: Bezug oder W5-Fund entscheidet der Auflöser (CS-27, RR2-8).
+GETATTR_WITHOUT_DEFAULT = [
+    "from app.core import legacy\n\n\ndef test_get():\n    assert getattr(legacy, 'bump')\n",
+    "from app.core import legacy\n\nlook = getattr\n\n\ndef test_get():\n"
+    "    assert look(legacy, 'bump')\n",
+]
+
+
+@pytest.mark.parametrize("text", GETATTR_WITHOUT_DEFAULT, ids=["eingebaut", "alias"])
 def test_a_getattr_without_default_left_standing_is_reported_once(
     tmp_path: Path, text: str
 ) -> None:
@@ -368,3 +369,33 @@ def test_a_getattr_without_default_left_standing_is_reported_once(
     found = [error for error in proof.errors if QUERY in error]
     assert len(found) == 1, found
     assert "getattr-Bezug app.core.legacy.bump" in found[0] and "(W5)" in found[0], found
+
+
+@pytest.mark.parametrize(
+    ("text", "counted"),
+    [
+        *((text, 0) for text in GETATTR_WITHOUT_DEFAULT),
+        (
+            "from app.core import legacy\n\n\ndef test_get():\n"
+            "    assert getattr(legacy, 'bump', None)\n",
+            1,
+        ),
+        (
+            "from app.core import legacy\n\n\ndef test_has():\n"
+            "    assert hasattr(legacy, 'bump')\n",
+            1,
+        ),
+    ],
+    ids=["eingebaut", "alias", "mit-vorgabe", "hasattr"],
+)
+def test_the_query_ground_set_leaves_a_getattr_without_default_to_the_resolver(
+    tmp_path: Path, text: str, counted: int
+) -> None:
+    """RR2-8, RR2-15: Nach dem Schnitt gibt es ``state.bump``; ein ``getattr`` ohne Vorgabe darauf
+    führt der Auflöser als Bezug, auch über einen Alias — die Grundmenge ``queries`` des
+    Beweises zählt es nicht ein zweites Mal. Gegenprobe: ``getattr`` mit Vorgabe und ``hasattr``
+    zählt sie, deren Leere meldet der Auflöser nicht."""
+    _root, result = _run(tmp_path, fx.MODULE_OLD | {QUERY: text}, fx.MODULE_CUT)
+    assert result.status == "written", result.problems
+    assert result.proof is not None and result.proof.ok, result.proof and result.proof.text()
+    assert result.proof.counts["queries"] == counted, result.proof.text()
