@@ -129,6 +129,8 @@ def test_the_click_waits_until_a_prediction_that_belongs_to_the_picture_is_seale
     ("wrong", "problem"),
     [
         ({"nonce": "falsch"}, "nonce gehört nicht zu diesem Bild"),
+        ({"commit": "fremd123"}, "commit gehört nicht zu diesem Bild"),
+        ({"row": "drill_hole"}, "row gehört nicht zu diesem Bild"),
         ({"before_sha256": "0" * 64}, "before_sha256 gehört nicht zu diesem Bild"),
         ({"prediction": " "}, "prediction ist leer"),
     ],
