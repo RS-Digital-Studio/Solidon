@@ -222,7 +222,10 @@ Rundungsmerkmale, während echte regelmäßige Vielecke Bezugskanten behalten.
 Der CI-Prüfvertrag steht in `konzepte/konzept-ci-testlaufzeiten-2026-09.md`.
 `test_ci_runner.py` prüft Partitionen, Sammlung, Prozessisolation und Berichte
 des isolierten Läufers ohne echte Fenster. `test_packaging.py` prüft die
-ausgeführten Workflowblöcke und die Paketfreigabe; `workflow_helpers.py`
+ausgeführten Workflowblöcke und die Paketfreigabe, `test_packaging_platform.py`
+was die Linux- und Mac-Pakete zusätzlich halten (Linux-Grenze, Erprobung des
+Fensterstarts am Intel-Mac, früh endende Leser hinter Pipes, Flatpak ohne
+installierte Pakete, 3D-Maus-Modul der Spec, macOS-Paket); `workflow_helpers.py`
 grenzt dafür Jobs und Schritte eindeutig ab, ohne ein allgemeiner YAML-Parser
 zu sein. `data/ci_window_durations.json` und `data/ci_core_durations.json`
 tragen historische Gewichte mit Herkunft; die aktuelle Sammlung bestimmt
@@ -333,7 +336,7 @@ von weiterhin zwei unabhängigen Bauten für den Determinismusvergleich.
 | Importiert jede Schicht nur nach unten — `core` nie `ui`/`cli`, `i18n` gar nichts? | `test_layer_direction.py` |
 | Und eine Ebene tiefer: welches Kernpaket importiert welches, eifrig oder träge? | `test_core_package_direction.py` — jede eifrige und jede träge Kante eingefroren, dazu der Kreis aus acht Paketen; eine neue Kante ist eine Entscheidung, eine abgebaute verschwindet aus der Liste |
 | Stimmen `_EXPORTS`, `__all__` und `TYPE_CHECKING` der Lazy-Pakete überein, und löst jeder Eintrag auf? | `test_lazy_exports.py` |
-| Wählt `tools/affected_tests.py` die richtigen Tests aus dem Importgraphen? | `test_affected_tests.py` |
+| Wählt `tools/affected_tests.py` die richtigen Tests aus dem Importgraphen? | `test_affected_tests.py`; die Kanten ohne Import (Tupel mit `*`, Muster aus Daten, Lesen über einen Pfad, verzögerter Export, was eine `conftest.py` lädt oder je Test ausführt, Leser eines Projektordners) je mit Attrappe und Fall am echten Baum in `test_affected_edges.py`; Bäume aus `selection_trees.py` |
 | Verwenden die gemeinsamen Hooks das unterstützte Protokoll und richtige Patchpfade? | `test_solidon3d_hooks.py`; echte Event-Auslösung im Editor ist zusätzlich zu prüfen |
 | Stehen Codex-Agenten, Skills, Referenzen und Aufrufregeln auf dem Stand ihrer Claude-Quelle — auch im frischen Klon? | `test_agent_mirror.py`; prüft Generator, Drift und Quellenfehler sowie die erzeugten TOML-Dateien mit `tomllib` |
 | Zeichnet der Renderer, was der Vertrag verspricht — Bildpunkte, Picks, Kamera, Griffe? | `test_render_contract.py`, `test_render_gizmo.py` und `test_render_gfx_regressions.py` am pygfx-Renderer ohne Fenster (ohne wgpu-Adapter ein Skip mit Grund); `test_render_factory.py` der Aufbau über `factory.py`; `test_render_shapes.py` und `test_navigator.py` ganz ohne Renderer |
@@ -370,6 +373,12 @@ von weiterhin zwei unabhängigen Bauten für den Determinismusvergleich.
 | Stehen Merkmalfenster und Auswahlkarte, wo das Auge sie sucht? | `test_feature_footer.py` (Knopfzeile unter der scharfen Handlung), `test_footer_in_sight.py` (im Bild mit wenig Rollweg, auch wenn die Karte danach wächst), `test_feature_footer_window.py` (dasselbe im Fenster, Kopf der Wahl sichtbar), `test_feature_footer_low_window.py` (unterste Handlung in niedriger Karte, Mutation an `keep_in_sight` rot), `test_feature_first_change.py` (*Übernehmen* wartet beim heutigen Stand auf die erste Änderung), `test_offered_unchanged.py` (ohne Fenster: welche Handlung beim heutigen Stand angeboten wird), `test_selection_card_room.py` (kein Leerraum über „Filament und Druck“), `test_print_section_place.py` (Filament oben, mit Farbfeld), `test_refusal_line.py` (Sperrzeile „Hier nicht möglich“ in sechs Sprachen), `test_info_dot.py` (Symbol statt „i“), `test_lock_reason_once.py` (Sperrgrund einmal, Gegenprobe vor `4170f587b` rot) |
 | Zeigen Objektbaum, Bericht und Leisten ihre Werte ganz? | `test_object_tree_columns.py` (Maßspalte und Mindestbreite des Baums), `test_left_card_width_window.py` (die linke Karte bekommt sie im Fenster, Mutation an `_card_width` rot), `test_report_rows.py` (Messreserve der Befundzeilen), `test_finding_line_names.py` (Körper einmal), `test_split_bar_spacing.py`, `test_analysis_offer_accent.py`, `test_bar_field_sentences.py`, `test_halted_report_offers.py` (FD-104 aus F3) |
 | Spricht die Parameterleiste die Anzeigeeinheit und ihr Wertfeld das Menü der Zeile? | `test_parameter_panel_units.py` (Zoll gezeigt, mm gespeichert, ohne Rundungsrest), `test_parameter_row_menu.py` (Rechtsklick → *Ändern …*), `test_parameter_empty_note.py` (Satz misst sich je Breite) |
+| Trifft jeder Patch in `tests/`, was er meint (W2: Kopfkopien, ungelesene Namen, `raising=False`, Verbotspatches mit Leser)? Löst jeder Bezug auf ein eigenes Modul auf, auch spät und unter `TYPE_CHECKING` (W5)? | `test_patch_targets.py` · `test_import_resolution.py`, beide über `tools/code_index.py` |
+| Fragt der Auflöser richtig? | `test_code_index.py`, `test_code_index_regressions.py`, `test_code_index_followups.py` (Bekanntfälle an Attrappen aus `code_index_helpers.py`) · `test_code_cache.py` (Datenrahmen) · `test_code_store.py` (Ergebnisspeicher je Baumstand, Stempel des geladenen Codes) · `test_code_scripts.py` (Skripte für `python -c`) · `test_code_queries.py` (`hasattr`/`getattr` mit Vorgabe, Wächter gegen Aliasse aus anderen Modulen, CS-34) |
+| Liest jede Quelltextprüfung Unterpakete mit, und erreicht jede ihren Verstoß im Unterpaket (W4)? Bleibt das Prüfmodul flach? | `test_source_readers.py` (Helfer `source_tree.py`) · `test_licence_build.py` |
+| Halten Dateien über 2 000 Zeilen ihre Zahl an Definitionen (W1)? Bleibt der Registerabzug gleich, und behält ein Rezeptwechsel die Folge der übrigen Einträge (W3, CS-17)? | `test_size_ratchet.py` · `test_registry_dump.py`, `test_recipe_registration_order.py` |
+| Lösen Namenslisten im Code auf und trägt jeder Eintrag bei (W6 a–e, g, h; e) liest auch Skripte in Zeichenketten)? Greift der Lebensdauer-Pin nach dem Import für jede Klasse (W6 f)? Trifft das Spulenverbot der Ersteinrichtung den echten Aufruf (CS-9a)? | `test_name_lists.py` · `test_suite_pin.py` · `test_first_run_spools.py` |
+| Verschiebt das Werkzeug nur, und ist jeder Mutant des Beweises rot? | `test_move_names.py`, `test_move_names_forms.py`, `test_move_names_comments.py`, `test_move_names_queries.py`, `test_move_proof.py`, `test_move_copies.py`, `test_move_component.py`, `test_move_component_qt.py`, `test_move_component_receivers.py` — an Attrappen aus `move_fixtures.py` mit Sollbäumen von Hand; die zwei Komponentendateien prüfen Lebensdauer und Qt-Verhalten in eigenem Prozess mit QtCore, ohne Fenster |
 
 ## Helfer
 
@@ -516,7 +525,61 @@ Skizzenoperation für `test_plane_refusal_field.py` und
 `test_refusal_field_ways_window.py` (FD-182), statt eines privaten Helfers aus
 `test_sketch_planes.py`.
 
+`source_tree.py` liest Quelltext für die Quelltextprüfungen rekursiv, sortiert
+und nie leer (`python_files("app/ui")`), meldet Pfade über `relative` und
+findet die Datei einer Definition statisch (`definition_file`). Ordner stehen
+relativ zu `ROOT`, und aufgerufen wird über das Modul
+(`source_tree.python_files`): Die Gegenproben von W4 setzen `ROOT` auf eine
+Kopie des Baums und müssen den Helfer selbst verfälschen können. Er steht
+nicht in `helpers.py`, weil diese Datei selbst in der Sperrklinke steht.
+
+`selection_trees.py` ist die eine Quelle der kleinen Bäume für
+`test_affected_tests.py` und `test_affected_edges.py`: `write`, `names` und
+`small_tree` (fünf Testdateien mit bekanntem Ausgang).
+
+`packaging_helpers.py` hält, was beide Pakettests lesen: die Orte (`ROOT`,
+`SPEC`, `WORKFLOW`), `workflow_shell` und `start_report`. Jede Testdatei
+bindet die Orte per Import an ihr eigenes Modul, damit ein Patch über
+`sys.modules[__name__]` genau ihre Wächter trifft. Dazu, was nur
+`test_packaging.py` braucht und die Sperrklinke dort nicht mehr aufnimmt:
+`as_tested` mit den Linux-Läufern und `stays_in_linux_bundle` — solange die
+Datei gelistet ist, gehören sie nicht zurück.
+
+`code_index_helpers.py` baut die Attrappen der Auflöser-Gegenproben
+(`build_index`, `stored_index` über einem kleinen Grundbaum); `move_fixtures.py`
+die des Verschiebewerkzeugs: je Modus ein Baum mit echten Paketformen, der
+Zuschnitt und der von Hand geschriebene Sollbaum, den der Beweis annehmen und
+jede gezielte Abweichung davon ablehnen muss.
+
+`conftest.py` reicht die echten Fassungen der Attrappen als Fixtures weiter
+(`unpatched_find_program`, `unpatched_find_programs`, `unpatched_backends`):
+Wer genau die echte Programmsuche oder Backend-Liste prüft, fordert sie an,
+nie ein Attribut am Produktmodul. Der Lebensdauer-Pin hängt beim Import an die
+Klasse, die `UI_PINS` dem Modul zuordnet; fehlt sie, bricht der Import ab
+(`test_suite_pin.py`). Die Datei ist zugleich `tests.conftest`.
+
 ## Stolperfallen
+
+*Früher in der Karte unter „Stolperfallen“; dort stehen seither Kurzfassungen.*
+
+- **Ungebundene Platzierungsdialoge und Viewport-Attrappen gehören der Fixture.**
+  Nach `PlacementFlow.dispose()` und `Session.release()` schließt sie beide
+  Qt-Wurzeln, meldet `deleteLater` an und stellt `DeferredDelete` zu, während
+  die Python-Hüllen noch gehalten werden. `close()` allein zerstört sie nicht;
+  ihr nativer Abbau darf nicht dem späteren zyklischen Sammler überlassen bleiben.
+- **`tests.helpers.exact_kernel()` steht vor jedem `OCP`-Import**, auch am
+  Modulanfang: Lokal wird ein fehlender Kern so ein Skip, unter `CI` hält
+  `conftest.py` in `pytest_sessionstart` an, statt dass sich die Dateien des exakten Kerns still
+  überspringen. Es importiert das eigene Kernelmodul regulär, damit dessen
+  Importfehler nicht als fehlendes Extra verschwinden;
+  `test_toolchain.py` prüft beides und, dass jeder `OCP`-Import in einer
+  Testdatei oder `helpers.py` lexikalisch hinter einem Aufruf steht, auch
+  in Helfern, die bisher nur geschützte Tests rufen.
+- **Testdateien importieren keine privaten Namen voneinander.** Gemeinsame
+  Daten und Konstruktoren liegen unter öffentlichen Namen in `helpers.py`
+  oder passenden kleinen Helfermodulen; der AST-Wächter samt Gegenprobe steht in
+  `test_toolchain.py` und prüft auch eingebettete Python-Skripte für
+  Kindprozesse.
 
 *Früher unter „Die Fahrweise steht einmal — in `CLAUDE.md`“.*
 

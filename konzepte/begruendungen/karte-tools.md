@@ -398,6 +398,72 @@ Gesamtfrist und Siegel vor jedem Fall und nach dem letzten
 `report` rechnet das Siegel nach, bevor ein Urteil an V4 gilt
 (`function_verdict_rules.run_seal_problems`).
 
+## Codestruktur: Auflöser, Wächter, Verschiebewerkzeug
+
+Gebaut in Schritt 0 der Codestruktur (`konzept-codestruktur-2026-10.md`, 4.1;
+Funde in `konzept-codestruktur-funde-2026-10.md`).
+
+**Der Auflöser** (`code_*.py`) liest nur Quelltext und importiert nichts aus
+dem Baum. Die Rollen: `code_index` die Abfragen und `shared()`, `code_facts`
+den Auszug je Datei (Bindungen, Bezüge, Patch-Stellen, belegte Typen und
+Kontrollfluss), `code_values` die öffentlichen Werttypen und die exakte
+Faltung (Konstanten, Pfade, Folgen, Schlüsselwörter), `code_cache` den
+Datenrahmen des Zwischenspeichers (Marshal ohne Codeobjekte, Stempel vor dem
+Inhalt, jede Form geprüft), `code_store` den Ergebnisspeicher je Baumstand
+(Sperre, ein Bau, danach von der Platte; CS-23), `code_scripts` die Skripte für
+`python -c` (CS-18), `code_report` Inventar und Lesermengen als Text. Die
+Zählung der nicht faltbaren Skripte steht im Inventar, nicht hier — sie altert.
+Ein gelesener Index nennt die Inhaltshashes seines Stands (`index.digests`);
+wer daneben die Platte liest, vergleicht damit. Beide Speicher tragen den
+Stand der geladenen Quellen (`_SOURCE` je Modul), nie den der Platte (RR2-1).
+
+**`tree_reads`** liest und parst jede Datei einmal, auch für den Graphen;
+Lesestellen sind `glob`, `rglob`, `iterdir`, `walk`, `os.walk`,
+`walk_packages`, `copytree` und `git ls-files`, auch über einen Helfer;
+`*`-Elemente in Tupeln zählen, ein offenes Muster liest jede Tiefe.
+**`data_reads`** nennt je Einheit (Funktion, Methode, Klasse, Zuweisung auf
+Modulebene) unter `tests/`, wer eine Datei außerhalb des Codes erreicht:
+über ihren Namen, einen Pfad, eine Lesestelle, eine angeforderte Fixture, die
+Modulebene beim Import oder eine autouse-Fixture. Daraus wählt
+`affected_tests` nur die Testdateien, deren Einheit die Datei erreicht, nicht
+jeden Importeur von `tests/helpers.py`.
+
+**`affected_tests`** wählt zusätzlich über Kanten ohne Import: den aufgelösten
+Lesebereich, Op- und Bausteinnamen (auch `insert_<baustein>`), einen Schritt,
+den ein importiertes Modul anlegt, eine Projektdatei, die die Testdatei
+rechnet, und jede Prüfung über das ganze Register (`REGISTRY.all()`) oder die
+Beispielprojekte. Verzögerte Importe (`install`, `import_module`) sind Kanten;
+eine Python-Datei, die ein Modul über seinen Pfad liest, zählt wie eine
+Datendatei. Was eine `conftest.py` je Test ausführt (Haken, autouse-Fixtures,
+Modulebene), wählt jede Testdatei darunter; was sie nur lädt, nur seine
+Importeure (CS-37, CS-38). Ein Docstring oder Kommentar nennt nichts.
+`selection()` liefert die lesenden Einheiten mit; als Skript läuft es ohne
+zyklische Bereinigung.
+
+**Das Verschiebewerkzeug** besteht aus `move_names` (Ablauf und Ausgänge) und
+den Geschwistern: `move_cut` (Zuschnitt aus TOML), `move_source` (Lage,
+Spannen, `symtable`), `move_edits` (Tabelle der Änderungen), `move_refs`
+(Umschreiben in Lesern), `move_module`/`move_copies`/`move_component` (Planer
+je Modus), `move_qt` (was Qt nach einem Komponentenschnitt anders sähe),
+`move_receivers` (ob ein Empfänger nachweislich der Wirt ist; `[[accesses]]`
+entscheidet nur, was der Nachweis offen lässt), `move_forms` (je eine Quelle
+für Annotationen als Zeichenkette und Aufrufe mit Attributnamen;
+`reported_calls`: was der Auflöser als `getattr`/`hasattr`-Bezug nennt, stellt
+die Bezugsschleife um, die Aufrufsuche nur den Rest, und der Beweis
+(`move_proof._queries`) nimmt es aus), `move_proof*`/`move_compare`/
+`move_trees` (Beweis). Eine Zuschnittliste erklärt jede Abweichung
+(`[[open_names]]` für Zugriffe mit offenem Namen); einen Schalter, der einen
+Fund übergeht, gibt es nicht, und eine Erklärung, die nichts trifft, ist
+selbst ein Fund.
+
+**W1 und W3.** `size_ratchet --lower` senkt die Liste nach einer gelöschten
+oder herausgelösten Definition im selben Commit; `--move ALT NEU …` trägt den
+Umzug einer gelisteten Datei vor dem Commit ein; `--raise` gehört nur
+Ordnungsschritten und vergleicht gegen HEAD. Bei einem Konflikt in der Liste
+wird eine Fassung aus Git genommen und gesenkt, nie neu angelegt.
+`registry_dump` schreibt das Register in Registrierungsreihenfolge
+(`in_registration_order()`, CS-17); `Registry.all()` sortiert nach Namen.
+
 ## Erzeugen
 
 *HEAD-Fassung, früher unter „Die Familien“.*
@@ -677,6 +743,45 @@ Freeze wird jedes davon entfernt oder bewusst aufgenommen.
 
 *Früher in der Karte unter „Fallen, die man einmal falsch macht“; dort steht
 seither die Kurzfassung.*
+
+**Rohaufnahme und Schnitt sind getrennt.** Ein vollständiger `capture.json`
+ist Voraussetzung für Sprache und Export. Szenen verweisen auf echte
+Bildbereiche und Bildindizes; kurze Fassungen dürfen eigene Ausschnitte
+verwenden. `minimum_seconds` schützt die Lesedauer von Dialogen auch bei
+kurzem Sprechertext. Dateiauswahl, Einheitenfrage und Hinweise bekommen
+eigene Abschnitte. Das Setup speichert die Druckerkennung als `printer_id`,
+getrennt von der gleichnamigen Szene `printer`.
+
+**Die Aufnahme greift nur das eigene Fenster ab.** Nach Kamerabewegungen
+wird der Renderer vor dem Bild ausgerechnet; ein offener Dialog wird über
+sein eigenes Widget ergänzt. Die Rohaufnahme aktiviert das Hauptfenster
+nicht zwischen modalen Schritten. Lokale Dateipfade werden beim Schnitt
+verdeckt, der gewählte Dateiname und die Handlung bleiben sichtbar.
+`--screen-model` und `--screen-serial` wählen den Bildschirm anhand seiner
+Identität. `--native-resolution` nimmt dessen volle Pixelgröße im eigenen
+Vollbildfenster auf; `screen-evidence.json` belegt Bildschirm, Fenster und
+Rohbildgröße. Der Recorder verwendet den Bildschirm des Fensters, nie
+stillschweigend den Hauptbildschirm. Bereits sichtbare Kundendialoge werden
+nur positioniert; ihre Modalität, Fensterflags und Größe bleiben erhalten.
+
+**Eine Bedienhandlung ist kein Ergebnisstandbild.** `interaction.json`
+hält echte Mauswege, Auswahl, Tasteneingabe und Übernehmen in getrennten
+Bildbereichen fest. Der geführte Schnitt erklärt vor der Handlung und
+spricht das neue Maß erst auf dem passenden Zustand. Die Gesten werden
+nicht an kurze Sprachdateien angepasst. Vorher/Nachher verwendet dieselbe
+native Kamera und Schattierung und trägt eindeutige Beschriftungen.
+Der gemeinsame Szenenschnitt hält Ansage, Handlung und Ergebnis getrennt;
+deren echte Ausschnitte dürfen sich pro Phase unterscheiden. Ein geöffnetes
+Dropdown gehört vollständig in den Aktionsausschnitt. Tutorials entstehen
+direkt in 2560 × 1440, Shorts in 1080 × 1920; der Exportbeleg nennt Quell-
+und Ausgabegröße getrennt.
+`hold_frames` kürzt nur ausdrücklich belegte Einzelbildhaltungen mit
+Begründung; die umgebenden Maus- und Tastaturbilder behalten ihre Rohdauer.
+Lange native Hinweiszeilen dürfen mit `wide_focus` mehr Bildbreite erhalten,
+während die vollständige Karte daneben als Kontext sichtbar bleibt.
+
+*Früher in der Karte unter „Fallen, die man einmal falsch macht“; dort steht
+seither ein Satz mit Verweis hierher.*
 
 **Sprache und Musik bleiben nachprüfbar.** Satzzeiten stammen aus den
 tatsächlich erzeugten WAV-Dateien. Shorts erhalten dieselben Zeiten als

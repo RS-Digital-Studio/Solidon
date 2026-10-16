@@ -471,6 +471,14 @@ ihren alten Dreiecken wieder; bewegt reist sie deshalb nicht mit und heißt neu.
 
 ## Cache und Hashes
 
+`_STEP_WAY_MODULES` in `evaluate.py` nennt die Module, an deren Funktionen die
+Antwort eines gemerkten Schritts hängt. Jedes muss importierbar sein und
+mindestens eine eigene Funktion beitragen, sonst bricht `_step_ways` und damit
+`evaluate` ab (`ModuleNotFoundError` bzw. `InternalError`; CS-10, W6 in
+`tests/test_name_lists.py`) — übersprungen verlöre der Merker still Rechenwege.
+Wer ein Modul der Erkennung teilt, zieht die Liste im selben Commit nach
+(Konzept Codestruktur 4.2, Punkt 3).
+
 *Früher unter „Der Kreislauf“.*
 
 Aus der Karte verschoben, als dort das Urteil der vollen Kette (RM-534)

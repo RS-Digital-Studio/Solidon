@@ -9,6 +9,9 @@ von main `ee6b810fe` (dort 895 Methoden an `MainWindow`). Geprüft von
 `konzept`- und `solidon3d-review`-Agenten in fünf Runden; ihre Funde sind
 eingearbeitet, die Berichte liegen unter
 `.claude/.state/drache-2026-10-08/berichte-2026-10-10/codestruktur-*.md`.
+Die Zahlen in 2.3, 2.4, 4.1 und 4.3 sind nach der Messung des Plans zu
+Schritt 0 berichtigt (Kopfkopien, `raising=False`, Liste der Sperrklinke, Ort
+des Helfers); die Funde stehen in `konzept-codestruktur-funde-2026-10.md`.
 
 ## 1 Ergebnis
 
@@ -174,11 +177,15 @@ Zählt man, wie Codex liest, alle Karten auf dem Weg mit (dazu `app/CLAUDE.md`,
   meisten Patches auf UI-Module treffen Namen, die das Modul selbst nur
   importiert: bei `main_window` 158 der 166 (`show_error` 45,
   `confirm_unsaved` 14, `check_before_export` 12), bei
-  `print_settings_dialog` 54 der 72. 25 Patches nutzen `raising=False`.
-- **Kopfkopien:** In 54 Fällen hält ein anderes Modul per
-  `from M import N` eine eigene Kopie eines Namens, etwa `features.detect` in
-  `scene/evaluate.py`. Ein Patch auf `M.N` erreicht diese Kopie nicht — heute
-  schon, und nach jeder Teilung öfter.
+  `print_settings_dialog` 54 der 72. 25 Patches nutzen `raising=False`, davon
+  12 auf `app.*`; die übrigen zielen auf `sys`, `ctypes`, `subprocess` und
+  `HTTPError`. Schritt 0 fand einen dreizehnten auf `app.*` (CS-24).
+- **Kopfkopien:** 226 Kopien hält ein anderes Modul per `from M import N` von
+  einem Namen, den Tests am Original patchen — 182 in 99 Modulen unter `app/`,
+  44 in 25 Werkzeugen —, etwa `features.detect` in `scene/evaluate.py`. Ein
+  Patch auf `M.N` erreicht diese Kopie nicht — heute schon, und nach jeder
+  Teilung öfter. (Gezählt im Plan zu Schritt 0 mit Alias je Funktion; die
+  54 der ersten Fassung stammten aus einem Prüfbericht ohne Zählweg.)
 - **Quelltextprüfungen in Tests** lesen Code als Text: 17 Stellen in sieben
   Dateien lesen `app/ui/*.py` oder `perceive/*.py` flach über `glob("*.py")`,
   eine weitere `agent/`, mindestens acht weitere lesen über
@@ -196,8 +203,8 @@ Verschiebens (Abschnitt 4.1). Zwei Patches sind schon heute wirkungslos
 | `app/core/bootstrap.py`, `_OPERATION_MODULES` | Modulnamen; ihre Reihenfolge ist die Registerreihenfolge; Register füllen nur hier, nie als Nebenwirkung eines Paketimports | an die Stelle eines geteilten Moduls treten seine Teile in heutiger Reihenfolge |
 | Träge Pakete: `app/core/lazy.py`, `core/CLAUDE.md` Muster 1, Wettlauftest in `tests/test_core_isolation.py` | Paket-`__init__` laden nichts | das `__init__` eines neuen Pakets ist ein Docstring |
 | Lazy-Exporte `scene/__init__.py` („evaluate“), `agent/__init__.py` | Modulnamen als Text | nachziehen, wenn `evaluate` geteilt wird |
-| Merkschlüssel im Lauf: `scene/evaluate.py` `_STEP_WAY_MODULES`, `perceive/matching.py` `_MATCH_WAYS` | Modulnamen und Funktionsnamen als Text; `_step_ways` überspringt ein fehlendes Modul stumm | nach der Teilung von `features` stünde keine Erkennungsfunktion mehr im Schlüssel — W6 |
-| `tests/conftest.py`, Lebensdauer-Pin `_PinOnImport` / `_pin_ui_widgets` | `app.ui.main_window`, `app.ui.viewport`; fehlt `MainWindow` am Modul, wird stumm nichts gepinnt | nativer Abriss 0xc0000374 in der Suite — W6, im selben Commit nachziehen |
+| Merkschlüssel im Lauf: `scene/evaluate.py` `_STEP_WAY_MODULES`, `perceive/matching.py` `_MATCH_WAYS` | Modulnamen und Funktionsnamen als Text; `_step_ways` übersprang ein fehlendes Modul stumm (seit Schritt 0: Abbruch, CS-10) | nach der Teilung von `features` stünde keine Erkennungsfunktion mehr im Schlüssel — W6 |
+| `tests/conftest.py`, Lebensdauer-Pin `_PinOnImport` über `UI_PINS` (bis Schritt 0 `_pin_ui_widgets`) | Modul → Klasse, etwa `app.ui.main_window` → `MainWindow`; fehlte die Klasse, wurde stumm nichts gepinnt (seit Schritt 0 bricht der Import ab) | nativer Abriss 0xc0000374 in der Suite — W6, im selben Commit nachziehen |
 | `pyproject.toml`, mypy-Ausnahmen je Modul | `perceive.features`, `geom.repair`, `geom.prepare` namentlich; Untermodule erben sie nicht | im selben Commit auf die Teilmodule |
 | `tests/test_registry_consistency.py` | wählt Module über ihre Op (`inspect.getmodule(spec.fn)`) | ein Helfermodul ohne Op (`shared.py`) fiele heraus; die Prüfung nimmt das ganze Paket |
 | `.claude/rules/*.md`, `paths:` | Dateipfade, 18 Nennungen großer Dateien | im selben Commit auf `<paket>/**/*.py` |
@@ -209,7 +216,7 @@ Verschiebens (Abschnitt 4.1). Zwei Patches sind schon heute wirkungslos
 | CI-Aufteilung: Laufzeittabellen `tests/data/ci_*_durations.json` (`tools/ci_shards.py`), Pfadfilter in `build.yml` | Testdateinamen und Pfade | nur bei Testaufteilung; `test_ci_runner` und `test_packaging` melden es |
 | `tests/test_core_package_direction.py`, `PACKAGES` | dritte Pfadstufe unter `app/core/` | Unterpakete frei; ein neues Kernpaket braucht einen Eintrag |
 | Quelltextprüfungen in Tests (2.3) | flaches `glob("*.py")`, `Path(modul.__file__)` | sehen verschobenen Code nicht mehr und bleiben grün — W4 |
-| `tools/affected_tests.py` | Importgraph; `glob(` ist nicht als Baumleser erkannt | folgt dem Importgraphen von selbst, Baumleser über W4 |
+| `tools/affected_tests.py` | Importgraph; `glob(` war nicht als Baumleser erkannt (seit Schritt 0 löst `tools/tree_reads.py` jede Lesestelle auf, auch über Helfer) | folgt dem Importgraphen von selbst, Baumleser über W4 |
 | Späte Importe und Modulaliasse in `tools/` | mindestens neun Werkzeuge holen `MainWindow`, etwa `make_figures.py`, `make_guides.py`, `make_gallery.py`, `make_web_images.py`, `run_ui_audit.py`, `window_bench.py`; `make_video.py` und `make_workshop_videos.py` holen das private `_feature_item`; `matrix_unit.py` greift über `handover.detect` zu und läuft in keiner Suite; mypy prüft nur `app` | brächen erst beim Release in `/erzeugen` — W5 |
 | Wörtliche Pfade und Dateinamen in Tests | `main_window.py` mindestens 15 Stellen, `viewport.py` 11; `Path(main_window.__file__).parent` liegt nach der Teilung eine Ebene tiefer; Verbotstests über einen Dateipfad (`test_shared_hosting_removed.py`) | im selben Commit; ein Pfad zeigt danach auf alle Dateien des Pakets, nicht auf `__init__.py` — W4 |
 | Bauplan | `ui/viewport`, `ui/sketch_editor`, `ui/panels` als Modulnamen; §11.3 nennt `app/core/slice/analysis.py` mit Endung | Modulnamen bleiben gültig; `analysis.py` zu teilen braucht eine Bauplanänderung mit Ansage |
@@ -456,7 +463,9 @@ Commit. Neue Tests zu einer gelisteten Datei kommen in
 ### 4.1 Schritt 0: Wächter und Werkzeug, bevor eine Zeile wandert
 
 **W1 Sperrklinke für Dateigrößen.** Keine Datei unter `app/`, `tools/` und
-`tests/` überschreitet 2 000 Zeilen, außer den 131 heutigen (58 + 3 + 70). Für
+`tests/` überschreitet 2 000 Zeilen, außer den gelisteten — bei der Messung
+131 (58 + 3 + 70), beim Anlegen der Liste 134 (59 + 3 + 72, `625733390`); den
+Stand trägt `tests/data/size_ratchet.toml`. Für
 diese steht in einer Liste die Zahl ihrer Definitionen — Funktionen, Methoden
 und Klassen, auch geschachtelte. Die Zahl steigt nie: Eine gelistete Datei
 bekommt keine neue Definition, neuer Code geht in ein neues Modul (Regel 6).
@@ -465,7 +474,7 @@ wird damit genau, was Regel 6 verlangt, ohne Streuzahl als Puffer. Die Liste
 ändern nur Schritte dieses Programms: Ein Ordnungsschritt (4c, CS-1) hebt die
 Zahl seiner Datei um genau die Abschnitte, die er im Commit benennt; jeder
 Verschiebe- und Komponentenschritt senkt sie. Sonst steigt sie nie, und sie
-verdeckt keinen Fehler. Eine sofort harte Zeilengrenze würde 131 Dateien rot
+verdeckt keinen Fehler. Eine sofort harte Zeilengrenze würde 134 Dateien rot
 machen, eine Zeilenklinke jeden Fix an `main_window.py`, wo rund zehn Commits
 am Tag landen.
 
@@ -476,7 +485,8 @@ die Globals von `M` lesen, und Module in `app/` und `tools/`, die ihn als `M.N`,
 über `getattr` oder per spätem Import holen. Diese Menge ist vor und nach einem
 Schritt gleich. Eine Kopfkopie `from M import N` eines gepatchten Namens und
 jedes `raising=False` auf `app.*` sind rot, nicht nur gemeldet; Schritt 0
-behebt die heutigen vorher (12 `raising=False` auf `app.*`, die Kopfkopien aus CS-11).
+behebt die heutigen vorher (13 `raising=False` auf `app.*` — 12 aus der
+Messung, einer aus CS-24 —, die 226 Kopfkopien aus CS-11).
 Aliasse löst er je Funktion auf, nicht je Datei — derselbe Name meint in einer
 Testdatei mal ein Modul, mal ein Fenster. Lesen nach einem Schnitt mehrere
 Module denselben gepatchten Namen, wird nicht der Patch vervielfacht: Der
@@ -484,8 +494,11 @@ Zugriff wird an der Wurzel auf eine Stelle zusammengeführt (über das Modul
 oder den Wirt der Komponente), in eigenem Commit **vor** dem Schnitt, und der
 Patch zielt auf diese Stelle. Patches, die etwas
 verbieten („darf nicht gerufen werden“), bekommen eine Gegenprobe, dass der
-Aufruf ohne Patch erreicht wird. Ein Ziel, das sich statisch nicht auflösen
-lässt, ist selbst ein Fund: Der Test wird so geschrieben, dass es sich
+Aufruf ohne Patch erreicht wird — statisch (Entscheidung E8 zu Schritt 0):
+Die gepatchte Bindung hat zur Aufrufzeit einen Leser (W2 d). Eine
+Laufzeitprobe je Patch müsste das Verbotene echt ausführen; die statische
+fängt beide gemessenen Fälle (CS-9a, CS-9b). Ein Ziel, das sich statisch
+nicht auflösen lässt, ist selbst ein Fund: Der Test wird so geschrieben, dass es sich
 auflöst; eine Ausnahmeliste gibt es nicht. Der erste Lauf über den heutigen
 Bestand findet schon wirkungslose Patches (CS-9); die werden zuerst behoben.
 
@@ -495,7 +508,9 @@ die `tr()`-Schlüssel, in eine Textdatei. Vor und nach jedem Kernschritt ist der
 Abzug byte-gleich.
 
 **W4 Quelltextprüfungen lesen rekursiv.** Quelltextsuchen über `app/` laufen
-über einen gemeinsamen rekursiven Helfer in `tests/helpers.py`; ein flaches
+über einen gemeinsamen rekursiven Helfer in `tests/source_tree.py` (nicht in
+`tests/helpers.py`, das selbst in der Sperrklinke steht; Entscheidung E4), die
+Lesestellen löst `tools/tree_reads.py` statisch auf; ein flaches
 `glob("*.py")` über `app/` ist in `tests/` und `tools/` verboten, ohne
 Ausnahme. Für das flache Paket `activation` liefert der Helfer dieselbe Menge;
 dass es flach bleiben muss, sichert ab W4 eine neue Zusicherung „keine
@@ -504,7 +519,7 @@ die Definitionsmodule von `MainWindow`, `Viewport` und der Merkmalserkennung
 findet — nicht nur eine Mindestzahl Dateien wie heute in `test_leash.py`.
 Prüfungen über `Path(modul.__file__)` nennen das Modul, das die gesuchte
 Definition trägt; das Werkzeug zieht sie mit. `affected_tests` lernt `glob(`
-als Baumleser.
+als Baumleser und erkennt Baumleser transitiv, auch über Helfer (E5).
 
 **W5 Importe überall auflösbar.** Jedes `from app.… import N` und jeder
 Zugriff `alias.N` auf ein Modul aus `app/` in `app/`, `tools/` und `tests/`,
@@ -517,10 +532,13 @@ Werkzeuge am Fenster vorbeigreifen: 2 246 Zugriffe auf Methoden, die nur
 `MainWindow` hat, in 70 Testdateien, 149 `monkeypatch.setattr(window,
 "<methode>")`, 152 Zuweisungen `window.<member> = …` (die nach einem Schnitt
 still ein Attribut anlegten, das niemand liest), in `tools/` 52 Zugriffe in
-13 Werkzeugen und 5 `getattr(window, "…")`. Eindeutig genug ist es: 866 der
-889 eigenen Methodennamen kommen sonst in `app/` nicht vor; die übrigen 23
-stehen mit ihrer Entscheidung in der Zuschnittliste; fehlt eine, bricht das
-Werkzeug ab.
+13 Werkzeugen und 5 `getattr(window, "…")`. Eindeutigkeit eines Namens ist
+dabei kein Nachweis (Schritt 0, RM-M18): Umgeschrieben wird nur, wo Auflöser
+oder Annotation den Empfänger als den Wirt nachweisen
+(`tools/move_receivers.py`); was offen bleibt, entscheidet die Zuschnittliste
+(`[[accesses]]`, für Zugriffe mit offenem Namen `[[open_names]]`). Fehlt eine
+Entscheidung, bricht das Werkzeug ab; eine Erklärung, die nichts trifft oder
+dem Nachweis widerspricht, ist selbst ein Fund.
 
 **W6 Namenslisten lösen auf.** Wo Code Modul- oder Funktionsnamen als Text
 hält — `bootstrap._OPERATION_MODULES`, `_STEP_WAY_MODULES`, `_MATCH_WAYS`,
@@ -604,7 +622,7 @@ beginnt Schritt 1.
 
 | Schritt | Datei | warum an dieser Stelle |
 |---|---|---|
-| 0 | W1 bis W6, Verschiebewerkzeug; vorher behoben: CS-2, CS-9, CS-10, CS-11, CS-12 und die 12 `raising=False` auf `app.*` | ohne sie ist jeder spätere Schritt Handarbeit mit stillen Fehlern, und rote Wächter fänden zuerst den Bestand |
+| 0 | W1 bis W6, Verschiebewerkzeug; vorher behoben: CS-2, CS-9, CS-10, CS-11, CS-12 und die 13 `raising=False` auf `app.*` | ohne sie ist jeder spätere Schritt Handarbeit mit stillen Fehlern, und rote Wächter fänden zuerst den Bestand |
 | 1 | `geom/prepare_ops.py` | zweitgrößter Brennpunkt (267 Commits), Kern ohne Qt, klare Op-Blöcke, 32 private Testimporte; Probe für Bootstrap-Liste und W3 |
 | 2 | `ui/panels.py` | 24 Klassen, schon getrennt, keine Komponente nötig; Probe für ein UI-Paket |
 | 3 | `perceive/features.py` | höchste Kopplung, deshalb erst mit erprobtem Werkzeug |
@@ -713,7 +731,7 @@ Sperrklinke kürzer als heute.
 - **Eine Dateisperre während eines Schritts.** Robert hat Sperren zwischen
   Sitzungen ausgeschlossen; der wiederholbare Schnitt (4.2, Punkt 2) macht sie
   unnötig.
-- **Eine sofort harte Grenze.** 131 Dateien wären rot; die Sperrklinke
+- **Eine sofort harte Grenze.** 134 Dateien wären rot; die Sperrklinke
   erreicht dasselbe Ziel, ohne die Arbeit anzuhalten.
 - **Ein Refactoring-Werkzeug als Abhängigkeit** (`rope`, `libcst`). Für die
   Patch-Ziele der Tests ohnehin zu ergänzen, und jedes bringt einen

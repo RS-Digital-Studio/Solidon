@@ -82,6 +82,20 @@ ein neues Bild wird nach einer Korrektur erneut tatsächlich gelesen.
 
 ## Verlauf
 
+- 16.10.2026, Welle 5 vollständig: `welle5` steht auf `a25ac8cb2` mit
+  Codestruktur Schritt 0 (Pakete R, R2, M, Q, P1, P2, W13, Plattform,
+  Restpaket CS0 und die Wächterfixe), dem CI-Fix, den Restpaketen A (mit B, D,
+  F2a) und C, FD-135, FD-188, FD-197/203, FD-201/202, FD-212, den
+  Beispielprojekten in Format 53 und main `fd7952a92`. Robert 15:50: Umfang
+  eingefroren — fertig wird, was bis FD-203 und CS-40 vergeben ist; neue Funde
+  stehen in RM-812 und kommen nach 0.6.1. Robert 16:05: der native Schlusslauf
+  darf nachts laufen, wenn er nicht am Rechner ist. Unterlagen zu Schritt 0
+  (Paket U): Karten, Regel 6 in `AGENTS.md`, `/liefern`, Funddatei bis CS-40,
+  RM-723 bis RM-727, RM-729 und RM-730 im Archiv, Schritt 1 als RM-813.
+  **Als Nächstes:** Funddatei-Nachtrag, Paket K (CS-11), Bereichsnachweis,
+  Review der Merge-Auflösungen, nativer Schlusslauf, Nachurteilsrunde, Tor,
+  Bescheid an Robert, main, CI; danach Release 0.6.1.
+
 - 15.10.2026, D0 vor der Landung: Robert verlangt Phase 2 vollständig, nichts
   offen — auch die leichten Funde werden vor 0.6.1 behoben; gearbeitet wird
   nur noch auf einem Rechner. Auf `welle4` neu: Statusnachzug von 28 Funden am

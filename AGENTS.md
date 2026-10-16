@@ -204,8 +204,8 @@ Dialoge.
   Hooks, Plugins und Umgebung sind auf beiden Seiten dieselben, und jede
   Änderung geht auf beide. `tests/test_agent_mirror.py` hält es fest.
 - **Neue Fehlerbilder werden Testdateien**, keine Sonderfälle im Code.
-- **Bestehende Struktur nutzen.** Vor einer neuen Datei prüfen, ob die Sache in
-  ein vorhandenes Modul gehört.
+- **Bestehende Struktur nutzen:** Neues gehört ins Modul seiner Sache; an
+  einer Datei der Sperrklinke (W1) in ein neues (Codestruktur 3.1, Regel 6).
 
 ---
 

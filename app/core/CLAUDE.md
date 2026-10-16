@@ -179,13 +179,14 @@ Rechenschritt aus dem Kundenstart heraus.
 
 ## Zwei Muster, die überall wiederkehren
 
-**1. Lazy-Import in den Paket-`__init__.py`.** `scene`, `registry`, `agent`,
+**1. Lazy-Import in den Paket-`__init__.py`.** `scene`, `registry`,
 `brep`, `sketch`, `activation` und `knowledge/parts` exportieren über
 `_EXPORTS` und `app.core.lazy.install()` — gegen einen
 Deadlock: Zwei Threads, die gleichzeitig importieren, verklemmen sich sonst
 über die Modul-Locks. Ein neuer Name steht an **drei** Stellen
 (`TYPE_CHECKING`-Block, `_EXPORTS`, `__all__`); `tests/test_lazy_exports.py`
-hält sie zusammen. Der Grund des Deadlocks: **Acht Unterpakete hängen über
+hält sie zusammen. Ein Export, den niemand über das Paket bezieht, wird
+gestrichen (W6 e, `tests/test_name_lists.py`); `agent` exportiert nichts. Der Grund des Deadlocks: **Acht Unterpakete hängen über
 eifrige Importe im Kreis** — `brep`, `geom`, `ingest`, `knowledge`,
 `perceive`, `scene`, `sketch`, `slice`, mit `geom` als Nabe; weitere Kanten
 sind bewusst träge. `tests/test_core_package_direction.py` friert jede Kante

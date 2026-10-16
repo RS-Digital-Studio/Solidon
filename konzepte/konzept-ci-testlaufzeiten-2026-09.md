@@ -105,8 +105,8 @@ Die Paketplattform Linux x86_64 hat zwei Läufer: Gebaut wird auf
 `ubuntu-22.04`, dem ältesten unterstützten System, weil das Paket dessen
 glibc als Untergrenze erbt (`tools/check_glibc_floor.py`); geprüft werden
 Suite, Fensterverträge und Auswahlen weiter auf `ubuntu-24.04`. Die Wächter
-vergleichen deshalb Plattformen, nicht Läuferlabels (`_as_tested` in
-`tests/test_packaging.py`). Zwei Jobs hängen nur am Paket und halten die
+vergleichen deshalb Plattformen, nicht Läuferlabels (`as_tested` in
+`tests/packaging_helpers.py`). Zwei Jobs hängen nur am Paket und halten die
 Linux-Releaseakte an: `linux-flatpak` baut und startet das Flatpak aus dem
 Archiv des Paketjobs auf 24.04, `linux-release-start` startet das AppImage
 auf frischen Läufern mit 22.04 und 24.04. Beide laufen nur am Tag und beim
