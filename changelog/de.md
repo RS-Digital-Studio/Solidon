@@ -132,6 +132,7 @@ Nutzen da und sonst nichts.
 - Ändert sich die Schriftgröße des Systems, folgt Solidon sofort, auch in offenen Dialogen. Version 0.6.0 übernahm sie erst nach einem Neustart.
 - Eine Sammelzeile im Prüfbericht nennt in der Kurzhilfe höchstens fünfzehn Betroffene mit Art und Körper. In Version 0.6.0 las ein Bildschirmleser dort jeden Satz einzeln.
 - Die Legende *Hinzugefügt* und *Entfernt* steht im Vorschauband nur, wenn die Vorschau Material hinzufügt oder entfernt. Bei *Objekt umbenennen* fehlt sie deshalb.
+- An einem Körper ohne Farbe steht *Textur in Filamente umrechnen* grau und nennt den Grund, statt erst in der Vorschau abzusagen.
 - Der Chat nennt bei Parametern, Passungen, Drucker, Material und Rückgängig den Ort im Fenster, an dem man dasselbe selbst tut.
 - Der Prüfbericht und die Prüfung vor dem Export nennen die Körper einer Passung beim Namen statt mit einer internen Kennung, auch einen inzwischen entfernten Körper.
 - Meldungen nennen ein Merkmal mit Art und Nummer, etwa „Bohrung 2“, statt mit einer internen Kennung.
@@ -186,6 +187,7 @@ Nutzen da und sonst nichts.
 - Gehört eine Meldung zu keinem Schritt, etwa bei *Gegenstück zum Gewinde*, nennt sie ihren Weg als Satz, zum Beispiel *Anderes Merkmal wählen*, und zeigt nur Knöpfe, die dort etwas bewirken.
 - Ein Klick auf *Übernehmen* an einem Merkmal während einer Berechnung behält die Änderung, auch wenn die Vorschau länger braucht. In Version 0.6.0 ging sie an größeren Modellen still verloren.
 - Eine angezeigte Textur rechnet ohne Änderung keine Vorschau mehr und bietet kein *Abbrechen* an.
+- Ein Projekt mit eigenem Baustein aus einer früheren Version meldet keine falsche Änderung und bietet *Gespeicherten Stand verwenden* weiter an. In Version 0.6.0 fehlte das bei Projekten aus 0.5.
 
 ## 0.6.0
 

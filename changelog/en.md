@@ -107,6 +107,7 @@ it into `website/version.json`.
 - When the system font size changes, Solidon follows at once, open dialogs included. Version 0.6.0 only picked it up after a restart.
 - A combined line in the check report names at most fifteen of those affected, by kind and body, in its tooltip. In version 0.6.0 a screen reader read every sentence there.
 - The *Added* and *Removed* legend appears in the preview bar only when the preview adds or removes material. *Rename object* therefore shows none.
+- On a body without colour, *Convert texture to filaments* is greyed out and gives the reason, instead of refusing only in the preview.
 - For parameters, fits, printer, material and undo, the chat names the place in the window where you can do the same yourself.
 - The check report and the check before export name the bodies of a fit instead of showing an internal identifier, including a body that has since been removed.
 - Messages name a feature by kind and number, such as “Hole 2”, instead of an internal identifier.
@@ -161,6 +162,7 @@ it into `website/version.json`.
 - If a message belongs to no step, as with *Counterpart to the thread*, it gives its way as a sentence, for example *Pick a different feature*, and shows only buttons that do something there.
 - Clicking *Apply* on a feature during a calculation keeps the change, even when the preview takes longer. In version 0.6.0 it was silently lost on larger models.
 - A displayed texture no longer computes a preview without a change and no longer offers *Cancel*.
+- A project with your own part from an earlier version no longer reports a false change and still offers *Use the saved version*. In version 0.6.0 this was missing for projects from 0.5.
 
 ## 0.6.0
 

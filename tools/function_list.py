@@ -46,6 +46,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from app.core.registry.registry import BODY_REQUIREMENTS  # noqa: E402
 from tools.function_scan import UiScan, scan_ui, statements  # noqa: E402
 from tools.function_scenes import (  # noqa: E402
     DATA,
@@ -431,6 +432,7 @@ REQUIREMENT_SCENES: Final[dict[str, str]] = {
     "zustand:open": "offen.netz",
     "zustand:parts": "mehrteilig.netz",
     "zustand:cavity": "hohlraum.{kernel}",
+    "zustand:colour": "farbig.netz",
     "baustein": "baustein.{kernel}",
     "befund": "unter_dem_bett.netz",
     # Netzoperationen (Glätten, Ausdünnen, Formen, Skelett) an einem fein vernetzten
@@ -1369,8 +1371,9 @@ FEATURE_SELECTIONS: Final[frozenset[str]] = frozenset({"baustein", "textur", "gl
 #: Die Anforderung, deren Auswahl eine Kante ist: erst der Körper, dann ein Klick ins Bild.
 EDGE_SELECTION: Final = "kante"
 #: Anforderungen, deren Auswahl der erste Körper ist — bei der Kante als erster Klick.
+#: Jeder Körperzustand aus dem Register gehört dazu, auch ein neuer (FD-135: ``colour``).
 BODY_SELECTIONS: Final[frozenset[str]] = frozenset(
-    {EDGE_SELECTION, "zustand:open", "zustand:parts", "zustand:cavity", "netzkoerper"}
+    {EDGE_SELECTION, "netzkoerper", *(f"zustand:{state}" for state in BODY_REQUIREMENTS)}
 )
 
 

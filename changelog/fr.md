@@ -108,6 +108,7 @@ dans `website/version.json`.
 - Quand la taille de police du système change, Solidon suit aussitôt, y compris dans les dialogues ouverts. La version 0.6.0 ne la reprenait qu'après un redémarrage.
 - Une ligne regroupée du rapport de contrôle nomme dans son info-bulle au plus quinze éléments, avec type et corps. Dans la version 0.6.0, un lecteur d'écran y lisait chaque phrase.
 - La légende *Ajouté* et *Retiré* n'apparaît dans le bandeau d'aperçu que si l'aperçu ajoute ou retire de la matière. *Renommer l'objet* ne l'affiche donc pas.
+- Sur un corps sans couleur, *Convertir la texture en filaments* est grisé et en donne la raison, au lieu de refuser seulement dans l'aperçu.
 - Pour les paramètres, les ajustements, l'imprimante, le matériau et l'annulation, le chat indique l'endroit de la fenêtre où faire de même soi-même.
 - Le rapport de contrôle et le contrôle avant l'export nomment les corps d'un ajustement au lieu d'afficher un identifiant interne, y compris un corps supprimé entre-temps.
 - Les messages nomment une caractéristique par type et numéro, comme « Perçage 2 », au lieu d'un identifiant interne.
@@ -162,6 +163,7 @@ dans `website/version.json`.
 - Un message sans étape, comme avec *Contrepartie du filetage*, donne la marche à suivre en une phrase, par exemple *Choisir une autre caractéristique*, et n'affiche que des boutons qui agissent.
 - Un clic sur *Appliquer* d'un élément pendant un calcul garde la modification, même si l'aperçu prend plus de temps. En version 0.6.0, elle se perdait sans avertissement sur les gros modèles.
 - Une texture affichée ne calcule plus d'aperçu sans modification et ne propose plus *Annuler*.
+- Un projet avec une pièce personnelle d'une version antérieure ne signale plus de fausse modification et propose *Utiliser l'état enregistré*. En 0.6.0, cela manquait pour les projets de 0.5.
 
 ## 0.6.0
 

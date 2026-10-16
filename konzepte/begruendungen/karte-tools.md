@@ -135,8 +135,10 @@ Pakete mit demselben Laufordner), Zellen ohne Gegenurteil weist es aus.
 `function_verdict_rules` hält, was ein Urteil zur Zeit seiner Runde gegen
 Funddatei und Vorhersage einhalten muss: *gut nach Fix* genau dort, wo ein
 behobener Fund an der Zelle steht (ein Prüfpunkt umfasst seine Kriterien), und
-V4 nur mit vor dem Klick gebundener Vorhersage. `report` prüft das, der
-Wächter über die versionierten Urteile nur ihre Form. `function_promises`
+V4 nur mit vor dem Klick gebundener Vorhersage; dazu, dass die Funddatei
+nachgezogen ist (`stale_findings`, FD-153: kein offener Fund nennt einen
+Commit im Laufkopf, außer mit „Rest:“). `report` prüft das, der Wächter über
+die versionierten Urteile nur ihre Form. `function_promises`
 findet die Fundstellen von Prüfpunkt 11 außerhalb des Registers über die
 Zeilenspezifikation (`manual`, `website`, die Übersetzungen an derselben Stelle
 der Gliederung) und liest Seiten samt Bildtexten und Titeln.

@@ -122,7 +122,8 @@ Prozentwerts als Anteil in die Datei für Orca und Prusa und den Formatschritt
 52 → 53 samt Hinweis beim Öffnen (FD-197); `test_bridge_flow_dialog.py` dasselbe am
 Druckdialog und im Prüfbericht. `test_vendor_field_values.py` hält die Feldgrenzen gegen die
 Herstellerwerte aus `data/vendor_print_values.json` und zeigt sie am gebauten Feld
-ungekürzt (FD-203).
+ungekürzt (FD-203). `test_part_stamps.py` hält, dass der Abdruck eines eigenen Bausteins eine
+Formaterhöhung übersteht, auch für Abdrücke aus 0.6.0 und 0.5.3 (FD-212).
 
 `test_boolean_stage3.py` bindet den Jitter der dritten Stufe an die Zugabe,
 axial und schräg; `test_boolean_empty_result.py` prüft leere Ergebnisse und

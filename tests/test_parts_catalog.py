@@ -636,7 +636,7 @@ def test_saving_a_project_really_records_the_own_parts(
 
     abdruck = wieder.document.libs.get(f"{user.FINGERPRINT_KEY}eigenbau")
     assert abdruck, "die gespeicherte Datei hält den Stand des eigenen Bausteins"
-    assert abdruck == user.fingerprint("eigenbau", registry)
+    assert abdruck == f"{part_check.CONTENT_STAMP}{user.fingerprint('eigenbau', registry)}"
 
     # Und die Kette bis zum Befund: geänderte Datei, geöffnetes Projekt.
     (tmp_path / "eigenbau.py").write_text(

@@ -108,6 +108,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si cambia el tamaño de letra del sistema, Solidon lo sigue al instante, también en los diálogos abiertos. La versión 0.6.0 solo lo aplicaba tras reiniciar.
 - Una línea agrupada del informe de comprobación nombra en su sugerencia como máximo quince afectados, con tipo y cuerpo. En la versión 0.6.0 un lector de pantalla leía cada frase.
 - La leyenda *Añadido* y *Eliminados* aparece en la barra de vista previa solo cuando la vista previa añade o quita material. Por eso *Renombrar objeto* no la muestra.
+- En un cuerpo sin color, *Convertir la textura en filamentos* aparece en gris e indica el motivo, en lugar de rechazarse solo en la vista previa.
 - Para parámetros, ajustes, impresora, material y deshacer, el chat indica el lugar de la ventana donde se hace lo mismo a mano.
 - El informe de comprobación y la comprobación antes de exportar nombran los cuerpos de un ajuste en lugar de mostrar un identificador interno, también un cuerpo ya eliminado.
 - Los mensajes nombran una característica por tipo y número, como «Taladro 2», en lugar de un identificador interno.
@@ -162,6 +163,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un mensaje no pertenece a ningún paso, como con *Contraparte de la rosca*, indica su camino con una frase, por ejemplo *Elegir otra característica*, y solo muestra botones que allí hacen algo.
 - Pulsar *Aplicar* en una característica durante un cálculo conserva el cambio, aunque la vista previa tarde más. En la versión 0.6.0 se perdía sin aviso en modelos grandes.
 - Una textura mostrada ya no calcula una vista previa sin cambios ni ofrece *Cancelar*.
+- Un proyecto con una pieza propia de una versión anterior no avisa de un falso cambio y sigue ofreciendo *Usar el estado guardado*. En la versión 0.6.0 faltaba en proyectos de 0.5.
 
 ## 0.6.0
 

@@ -8,9 +8,14 @@ Zeilen steht; geprüft wird dasselbe Werkzeug, ``tools/function_report.py``.
 
 from __future__ import annotations
 
+import json
+import subprocess
+from pathlib import Path
 from typing import Any
 
-from tools import function_report
+import pytest
+
+from tools import function_report, function_verdict_rules
 from tools.function_list import rows as function_rows
 from tools.function_points import judge_case
 from tools.function_report import (
@@ -221,3 +226,99 @@ def test_every_finding_names_the_rows_it_means() -> None:
     known = {row.id for row in function_rows(with_specs=False)} | listed
     assert len(known) > 300 and any("/" in row for row in listed)
     assert check_finding_rows(found.values(), known) == []
+
+
+# --- Der Stand der Funde vor einer Urteilsrunde (FD-153) ---------------------------
+
+PLANTED = """### FD-1 Ein Fund, dessen Fix im Laufkopf liegt
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `drill_hole`
+- Prüfpunkt: 9
+- Beleg: gepflanzt.
+- Ursache: Ein Satz.
+- Vorschlag: Ein Satz.
+- Wirkung beim Kunden: Ein Satz.
+- Stand: offen RM-737; Fix `{commit}`, integriert{rest}
+"""
+
+
+def _head() -> str:
+    """Der Kopf dieses Baums — als Laufkopf und als Fix, der in ihm liegt."""
+    finished = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=function_report.ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    head = finished.stdout.strip()
+    if finished.returncode != 0 or not head:
+        pytest.skip("kein Git-Baum: der Laufkopf lässt sich nicht lesen")
+    return head
+
+
+def test_the_report_refuses_an_open_finding_whose_fix_lies_in_the_run_head(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """FD-153: Beim gemeinsamen Lauf standen sechs Funde offen, obwohl ihre Fixe Vorfahren
+    des Laufkopfs waren, und die Prüfer lasen *gut nach Fix* aus dem Text statt aus der
+    Datei. ``report`` verlangt deshalb vor jeder Abhakliste, dass ein offener Fund keinen
+    Commit nennt, der im Laufkopf liegt — es sei denn, sein Stand sagt mit „Rest:“, was
+    trotzdem offen bleibt. Der Kopf dieses Baums ist sein eigener Vorfahr; so trägt der
+    Fall auch in einem flachen Klon."""
+    head = _head()
+    protocol = sample_protocol()
+    protocol["version"]["commit"] = head
+    case = tmp_path / "lauf" / "cases" / "1"
+    case.mkdir(parents=True)
+    (case / "function.json").write_text(json.dumps(protocol, ensure_ascii=False), "utf-8")
+    findings = tmp_path / "funde.md"
+
+    def report(rest: str) -> int:
+        findings.write_text(PLANTED.format(commit=head[:9], rest=rest), encoding="utf-8")
+        return function_report.write(
+            tmp_path / "lauf",
+            state=tmp_path / "state",
+            findings=findings,
+            date="2026-10-16",
+            context=sample_context(),
+            solutions={},
+            common_goals={},
+        )
+
+    assert report("") == 1
+    said = capsys.readouterr().out
+    assert f"funde.md: FD-1: steht offen, obwohl `{head[:9]}` im Laufkopf" in said, said
+    assert report("; Rest: die Lage am echten Fenster") == 0, capsys.readouterr().out
+
+
+def test_an_open_stand_is_stale_only_with_a_fix_inside_the_head_and_no_rest() -> None:
+    """Die Regel ohne Git: Ein Commit außerhalb des Kopfs, ein behobener Fund und ein
+    benannter Rest sind kein Befund; ein unbekannter Commit oder ein Lauf ohne Kopf
+    machen den Stand nicht prüfbar, statt still durchzugehen."""
+    inside, outside, head = "1111111aa", "2222222bb", "3333333cc"
+
+    def ancestry(commit: str, of: str) -> bool | None:
+        assert of == head
+        return {inside: True, outside: False}.get(commit)
+
+    found = _findings(
+        (1, "`drill_hole`", "9", f"offen RM-737; Fix `{inside}`"),
+        (2, "`drill_hole`", "9", f"offen RM-737; Fix `{outside}` auf einem Zweig"),
+        (3, "`drill_hole`", "9", f"behoben `{inside}`"),
+        (4, "`drill_hole`", "9", f"offen RM-737; Teil `{inside}`; Rest: am Fenster"),
+        (5, "`drill_hole`", "9", "offen RM-737; in Arbeit"),
+        (6, "`drill_hole`", "9", "offen RM-737; Fix `4444444dd`"),
+    ).values()
+    stale = function_verdict_rules.stale_findings
+    problems = stale(found, [head, "unbekannt"], ancestry)
+    assert [problem.split(":")[0] for problem in problems] == ["FD-1", "FD-6"], problems
+    assert "im Laufkopf" in problems[0] and "nicht prüfbar" in problems[1]
+    alone = [f for f in found if f.key == "FD-1"]
+    assert stale(alone, ["None"], ancestry) == [
+        "FD-1: nennt `1111111aa` in einem offenen Stand, doch der Lauf trägt keinen Kopf"
+        " — der Stand ist nicht prüfbar (FD-153)"
+    ]

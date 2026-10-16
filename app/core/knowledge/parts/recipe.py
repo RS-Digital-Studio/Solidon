@@ -632,15 +632,34 @@ def _report_from(data: Any) -> Any:
     )
 
 
-def fingerprint(recipe: Recipe) -> str:
+def fingerprint(recipe: Recipe, *, as_format: int | None = None) -> str:
     """Der Hash über die kanonischen Daten — er **ist** die Version (§24.4).
 
     Kanonisch heißt: sortierte Schlüssel, keine Zeitstempel, nichts
     Maschinenabhängiges. Zwei gleiche Rezepte geben denselben Wert, jede
     Änderung einen anderen — und der Vergleich beim Öffnen eines Projekts ist
     damit derselbe wie für jeden anderen Baustein.
+
+    **Und keine Formatversion** (FD-212). Ein Rezept wird beim Lesen migriert;
+    stand die Formatversion seines Dokuments im Hash, war nach jeder
+    Formaterhöhung jedes Rezept ein anderes: Ein Projekt aus 0.6.0 meldete
+    seinen unveränderten eigenen Baustein als geändert und fand den
+    mitgereisten gespeicherten Stand nicht mehr. ``as_format`` rechnet die
+    Formel bis Format 53 nach — mit der Formatversion, die das Dokument beim
+    Speichern hatte —, damit ein so gespeicherter Abdruck gültig bleibt
+    (``check.stamp_means``).
     """
-    canon = json.dumps(to_data(recipe), sort_keys=True, ensure_ascii=False)
+    data = to_data(recipe)
+    pending = [data]
+    while pending:
+        current = pending.pop()
+        if as_format is None:
+            current.pop("format_version", None)
+            current["document"].pop("format_version", None)
+        else:
+            current["document"]["format_version"] = as_format
+        pending.extend(current["dependencies"].values())
+    canon = json.dumps(data, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()
 
 
