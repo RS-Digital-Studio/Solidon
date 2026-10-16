@@ -75,6 +75,34 @@ def test_the_font_sets_exist_and_only_carry_fonts_there() -> None:
             function_setup.Variant.of(broken)
 
 
+def test_the_font_sets_run_in_every_language() -> None:
+    """RC2-4: FD-57 war spanisch, FD-58 spanisch, französisch, italienisch, portugiesisch rot.
+
+    Ein deutscher Fall stellt die Lage nicht her; je Sprache ein Fall, je Schrift.
+    """
+    from app.i18n.catalog import available_languages
+    from tests.bench_fakes import ROWS
+    from tools.file_acceptance import function_cases
+
+    spoken = available_languages()
+    assert len(spoken) == 6
+    change = function_cases(ROWS, row_ids=["resize_hole"], variant_sets=["schriftwechsel"])
+    assert [case.variant["language"] for case in change] == list(spoken)
+    assert {tuple(case.variant["font_change"]) for case in change} == {(9.0, 14.0, 9.0)}
+    fonts = function_cases(ROWS, row_ids=["resize_hole"], variant_sets=["schrift"])
+    assert sorted((case.variant["font"], case.variant["language"]) for case in fonts) == sorted(
+        (points, code) for points in (14.0, 18.0) for code in spoken
+    )
+    assert all("language=" in case.relative for case in (*change, *fonts))
+    # Eine Einschränkung der Sprachen gilt auch hier; eine fremde Sprache gibt es nicht.
+    only = function_cases(
+        ROWS, row_ids=["resize_hole"], variant_sets=["schriftwechsel"], languages=("es",)
+    )
+    assert [case.variant["language"] for case in only] == ["es"]
+    with pytest.raises(ValueError, match="Sprache"):
+        function_setup.Variant.of({"set": "schrift", "font": 14.0, "language": "xx"})
+
+
 def test_the_content_font_goes_through_the_style_of_the_application(qt_app: Any) -> None:
     """Wie ein Wechsel der Systemschrift: Schrift der Anwendung und ihr Stylesheet folgen."""
     from tools.function_fonts import set_content_font

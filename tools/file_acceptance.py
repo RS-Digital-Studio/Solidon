@@ -391,12 +391,14 @@ def function_cases(
     Startablaufs (:data:`STARTUP_SOURCE`) wird im Satz ``basis`` ein Startfall
     im Zustand „Demo abgelaufen“ und in keinem anderen Satz gefahren — sie hat
     kein Fenster, an dem eine Phase liefe. ``phases`` gilt nur für Sätze, die
-    sie haben; ein Satz ohne eine davon fällt weg.
+    sie haben; ein Satz ohne eine davon fällt weg. Schrift und Schriftwechsel
+    (``function_setup.LANGUAGE_SETS``) laufen je Sprache: FD-57 und FD-58 waren
+    spanisch, französisch, italienisch und portugiesisch rot (RC2-4).
     """
     from app.i18n.catalog import available_languages
     from tools.function_list import STARTUP_LICENCE
     from tools.function_scenes import row_scenes
-    from tools.function_setup import PHASES, Variant, scene_setup, spec_variants
+    from tools.function_setup import LANGUAGE_SETS, PHASES, Variant, scene_setup, spec_variants
     from tools.function_setup import variant_sets as known_sets
 
     sets = known_sets()
@@ -422,6 +424,7 @@ def function_cases(
     ]
     cases: list[Case] = []
     number = first_number
+    spoken = tuple(languages) if languages is not None else available_languages()
     for name in variant_sets:
         own = tuple(phase for phase in phases if phase in PHASES[name])
         if phases and not own:
@@ -454,6 +457,8 @@ def function_cases(
             if needed:
                 base = {**base, "preconditions": {**base.get("preconditions", {}), **needed}}
             entries = [{**base, **entry, "phases": own} for entry in sets[name]]
+            if name in LANGUAGE_SETS:
+                entries = [{**entry, "language": code} for entry in entries for code in spoken]
             if name == "basis" and not phases:
                 entries += [{**base, "set": "basis", **other} for other in others]
             for entry in entries:
@@ -478,7 +483,6 @@ def function_cases(
     if "sprachen" in variant_sets:
         from tools.function_cases import language_cases
 
-        spoken = tuple(languages) if languages is not None else available_languages()
         packages = {str(row.get("package")) for row in chosen}
         cases += language_cases(rows, packages, spoken, number, "vorhersage" in variant_sets)
     return cases

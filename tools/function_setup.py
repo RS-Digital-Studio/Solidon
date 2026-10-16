@@ -206,6 +206,10 @@ class Variant:
             raise ValueError(f"Anzeigeeinheit {self.unit!r} ist keine aus {DISPLAY_UNITS}")
         if self.theme not in ("light", "dark"):
             raise ValueError(f"Thema {self.theme!r} gibt es nicht")
+        from app.i18n.catalog import available_languages
+
+        if self.language not in available_languages():
+            raise ValueError(f"Sprache {self.language!r} gibt es nicht")
         if self.window_size and parse_size(self.window_size) is None:
             raise ValueError(f"Fenstergröße {self.window_size!r} ist nicht BREITExHÖHE")
         if not self.scale > 0:
@@ -238,6 +242,10 @@ FIXED_VARIANT_SETS: Final[dict[str, tuple[dict[str, Any], ...]]] = {
     "schriftwechsel": ({"set": "schriftwechsel", "font_change": [9.0, 14.0, 9.0]},),
     "sprachen": (),
 }
+
+#: Sätze, die je Sprache einen Fall bekommen (``file_acceptance.function_cases``):
+#: Die Schrift bricht in jeder Sprache anders um (FD-54, 57, 58; RC2-4).
+LANGUAGE_SETS: Final = frozenset({"schrift", "schriftwechsel"})
 
 
 def variant_sets() -> dict[str, tuple[dict[str, Any], ...]]:
