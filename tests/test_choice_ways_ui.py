@@ -133,6 +133,33 @@ def test_other_edges_open_the_edges_not_the_radius(qt_app: QApplication, opened:
     _opens(qt_app, window, "fillet_edges", CORRECT_INPUT, "radius")
 
 
+def test_other_edges_at_named_edges_open_the_single_edges(
+    qt_app: QApplication, opened: Any
+) -> None:
+    """*Verrunden* an einer einzeln gewählten Kante: die Liste hinten geht auf (RB2-3)."""
+    from app.core.errors import CHANGE_EDGES
+    from app.core.geom.edges import edge_key, edges_of
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene import OperationDraft
+    from tools import function_scenes
+
+    window = opened(function_scenes.build_scene("quader.netz"))
+    body = window.session.last_result.scene.objects["obj_1"]
+    key = edge_key(edges_of(as_mesh_data(body.mesh))[0])
+    window.session.apply(
+        "Verrunden",
+        [
+            OperationDraft(
+                op="fillet_edges",
+                inputs=("obj_1",),
+                params={"radius": 40.0, "edges": "named", "edge_keys": key},
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(120_000)
+    _opens(qt_app, window, "fillet_edges", CHANGE_EDGES, "edge_keys")
+
+
 def test_other_faces_open_the_face_field(qt_app: QApplication, opened: Any) -> None:
     """*Fläche versetzen* an einer Rundung: keine ebene Fläche gewählt."""
     from app.core.errors import CHANGE_FACES

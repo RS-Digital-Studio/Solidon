@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Final, Literal
 
 from app.core.errors import (
@@ -51,8 +51,9 @@ CHOICE_ACTIONS: Final[dict[Action, Choice]] = {
 #: *Fläche versetzen*, *Textur aufbringen*, *Aushöhlen*, *Dichtnut*.
 FACE_FIELDS: Final = frozenset({"face", "faces", "openings", "support_feature"})
 
-#: Die Kantengruppe vor den einzelnen Kanten: *Kanten* (``edges``) steht
-#: vorn, *Einzelne Kanten* (``edge_keys``) nur bei „benannt“.
+#: Die Kantengruppe: *Kanten* (``edges``) ist ein Auswahlwert, kein
+#: Kantenfeld, und wählt trotzdem Kanten; *Einzelne Kanten* (``edge_keys``)
+#: wirkt nur bei „Einzeln gewählt“ (:func:`choice_fields`).
 EDGE_GROUP: Final = "edges"
 
 #: Handlungen, die ``values["field"]`` als den Wert lesen, der nicht ging.
@@ -76,25 +77,50 @@ def _choice_of(entry: ParamSpec) -> Choice | None:
     return "feature"
 
 
-def choice_fields(params: Sequence[ParamSpec]) -> dict[Choice, list[str]]:
-    """Je Auswahl die Felder eines Schritts, in der Reihenfolge des Schemas."""
+def choice_fields(
+    params: Sequence[ParamSpec], values: Mapping[str, object] | None = None
+) -> dict[Choice, list[str]]:
+    """Je Auswahl die Felder eines Schritts, das gemeinte zuerst.
+
+    Gemeint ist ein Feld, das bei den Werten des Schritts wirkt
+    (``ParamSpec.depends_on``), und von zweien das, welches erst durch das
+    andere wirkt: Bei *Kanten* „Einzeln gewählt“ stehen die gewählten Kanten
+    in *Einzelne Kanten*, die Gruppe davor sagt nur „Einzeln gewählt“
+    (RB2-3). Ein Feld, das nicht wirkt, kommt zuletzt. Sonst gilt die
+    Reihenfolge des Schemas; ohne Werte die Vorgaben.
+    """
+    given: dict[str, object] = {entry.name: entry.default for entry in params}
+    given.update(values or {})
     found: dict[Choice, list[str]] = {"edges": [], "faces": [], "feature": []}
+    depends = {entry.name: entry.depends_on for entry in params}
     for entry in params:
         choice = _choice_of(entry)
         if choice is not None:
             found[choice].append(entry.name)
+
+    def rank(name: str, siblings: list[str]) -> int:
+        condition = depends[name]
+        if condition is None:
+            return 1
+        (source, wanted) = condition
+        if given.get(source) not in wanted:
+            return 2
+        return 0 if source in siblings else 1
+
     for names in found.values():
-        if EDGE_GROUP in names:
-            names.remove(EDGE_GROUP)
-            names.insert(0, EDGE_GROUP)
+        ranks = {name: rank(name, names) for name in names}
+        names.sort(key=ranks.__getitem__)
     return found
 
 
-def fitted_to_step(finding: Finding, op: str) -> Finding:
+def fitted_to_step(
+    finding: Finding, op: str, params: Mapping[str, object] | None = None
+) -> Finding:
     """Die Auswahlhandlungen eines Befunds auf die Felder seines Schritts.
 
-    Ohne bekannte Operation (eine Datei aus einer späteren Fassung) bleibt
-    der Befund, wie er ist.
+    ``params`` sind die Werte des Schritts: Welches Feld eine Handlung meint,
+    hängt an ihnen (:func:`choice_fields`). Ohne bekannte Operation (eine
+    Datei aus einer späteren Fassung) bleibt der Befund, wie er ist.
     """
     if not any(action in CHOICE_ACTIONS for action in finding.suggestions):
         return finding
@@ -102,7 +128,7 @@ def fitted_to_step(finding: Finding, op: str) -> Finding:
 
     if not REGISTRY.has(op):
         return finding
-    fields = choice_fields(REGISTRY.get(op).params.spec())
+    fields = choice_fields(REGISTRY.get(op).params.spec(), params)
     values = dict(finding.values)
     stated = str(values.get("choice_field", ""))
     # ``field`` gehört dem Wert, wo die Absage ihn korrigieren lässt: Ohne

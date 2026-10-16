@@ -1647,6 +1647,7 @@ def _evaluate(
                     ),
                 ),
                 operation.op,
+                operation.params,
             )
             for entry in result.findings
             # Der direkte Op-Aufruf erhält weiter seinen Befund. Im Stapel
@@ -7428,4 +7429,5 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
             suggestions=tuple(error.suggestions),
         ),
         operation.op,
+        operation.params,
     )

@@ -80,6 +80,40 @@ def test_a_value_field_of_the_same_refusal_stays_for_correct_input() -> None:
     assert unnamed.values["choice_field"] == "edges"
 
 
+@pytest.mark.parametrize("op", ["fillet_edges", "chamfer_edges", "bead_edges"])
+def test_named_edges_open_the_chosen_edges_not_the_group(op: str) -> None:
+    """Bei *Kanten* „Einzeln gewählt“ meint die Handlung die gewählten Kanten (RB2-3).
+
+    Sie stehen in *Einzelne Kanten* hinten; die Gruppe davor sagt nur
+    „Einzeln gewählt“. Mit einer Gruppe bleibt es die Gruppe — dann wirkt
+    *Einzelne Kanten* nicht.
+    """
+    finding = Finding(
+        code="op.test", severity="error", message="nein", suggestions=(CHANGE_EDGES, CANCEL)
+    )
+    named = fitted_to_step(finding, op, {"edges": "named", "edge_keys": "e1 e2"})
+    assert named.suggestions == (CHANGE_EDGES, CANCEL)
+    assert named.values["choice_field"] == "edge_keys"
+    assert named.values["field"] == "edge_keys"
+    grouped = fitted_to_step(finding, op, {"edges": "top", "edge_keys": "e1"})
+    assert grouped.values["choice_field"] == "edges"
+
+
+def test_the_evaluation_hands_the_values_of_the_step_over() -> None:
+    """Ein Halt an benannten Kanten öffnet sie — die Auswertung reicht die Werte weiter."""
+    from app.core.scene.evaluate import _finding_from
+
+    error = GeometryError(detail="zu groß", suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL))
+    operation = Operation(
+        id=2,
+        op="fillet_edges",
+        inputs=("obj_1",),
+        params={"radius": 40.0, "edges": "named", "edge_keys": "e1"},
+    )
+    finding = _finding_from(error, operation)
+    assert finding.values["choice_field"] == "edge_keys"
+
+
 def test_a_step_without_any_choice_field_offers_the_step_itself() -> None:
     """Ohne passendes Feld bleibt *Diesen Schritt ändern*, kein leeres Versprechen."""
     fitted = _fitted("create_box", CHANGE_FEATURE, CANCEL)
