@@ -6117,7 +6117,7 @@ def test_removing_or_plugging_a_wall_with_material_inside_says_so(
         )
 
     assert problem.value.detail is HOLE_IS_NOT_EMPTY
-    assert [action.id for action in problem.value.suggestions] == ["change_selection", "cancel"]
+    assert [action.id for action in problem.value.suggestions] == ["change_step", "cancel"]
 
 
 def test_a_pocket_over_a_small_hole_in_its_floor_is_not_through() -> None:

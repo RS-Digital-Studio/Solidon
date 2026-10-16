@@ -25,10 +25,11 @@ FEATURE_KINDS: Final[tuple[str, ...]] = get_args(FeatureKind)
 #: Zustände, die eine Operation vom Körper verlangen kann (``requires_body``).
 #: ``open`` heißt nicht wasserdicht, ``parts`` mehr als ein zusammenhängendes
 #: Stück, ``cavity`` ein Hohlraum — als Merkmal ``void`` erkannt oder von
-#: *Aushöhlen* eingetragen. Was hier nicht steht, prüft die Operation selbst
-#: beim Rechnen; die Oberfläche fragt nur nach diesen dreien, weil sie sich
-#: ohne Rechnung beantworten lassen.
-BODY_REQUIREMENTS: Final[tuple[str, ...]] = ("open", "parts", "cavity")
+#: *Aushöhlen* eingetragen, ``colour`` Farbinformation — Textur, Flächen- oder
+#: Eckfarben (``texture.carries_colour``). Was hier nicht steht, prüft die
+#: Operation selbst beim Rechnen; die Oberfläche fragt nur nach diesen, weil
+#: sie sich ohne Rechnung beantworten lassen.
+BODY_REQUIREMENTS: Final[tuple[str, ...]] = ("open", "parts", "cavity", "colour")
 
 #: Kategorien aus dem Operationskatalog (§25). Sie ordnen das Menü.
 #: Der Katalog aus §25, in der Reihenfolge, in der er im Menü erscheint. Vier
@@ -569,6 +570,24 @@ FEATURE_TITLES: Final[dict[str, TranslatableText]] = {
     # „…, torus, …" in einen deutschen Satz.
     "torus": _("Ringfläche"),
 }
+
+
+def feature_title_of(feature_id: str) -> str:
+    """Eine Merkmalskennung, wie der Kunde sie liest: „hole_2“ ist „Bohrung 2“ (FD-186).
+
+    Absagen und Befunde legen die Kennung in ``values["feature"]`` ab, denn
+    Agent und Handler lesen sie dort; im Fenster stand sie roh („Merkmal:
+    thread_1“). Die Art steht vorn in der Kennung (``<art>_<nummer>``), ein
+    Körper davor (``obj_1:``) fällt weg. Eine Kennung ohne bekannte Art bleibt,
+    wie sie ist — dann ist sie ein Name, den jemand vergeben hat.
+    """
+    bare = feature_id.rsplit(":", 1)[-1]
+    kind, _sep, number = bare.rpartition("_")
+    title = FEATURE_TITLES.get(kind)
+    if title is None:
+        return feature_id
+    return f"{title} {number}" if number.isdigit() else str(title)
+
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 

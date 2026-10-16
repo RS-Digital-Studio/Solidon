@@ -53,6 +53,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois de uma ação no *Relatório de verificação*, o relatório fica à frente e Ctrl+Z desfá-la logo. Até agora, o separador *Seleção* passava para a frente.
 - Os avisos de plataforma e adesão usam a unidade escolhida. Mudar mm/polegadas mantém a observação escolhida, detalhes abertos, separador e estado expandido dos corpos.
 - Os números ao longo da plataforma seguem a unidade escolhida e indicam-na. A versão 0.6.0 mostrava milímetros mesmo com polegadas definidas.
+- A grelha da plataforma conta a partir do centro da plataforma, a cada 10 mm em milímetros e a cada meia polegada em polegadas. Cada número fica numa linha mais forte.
 - Na vista *Ortográfica*, um clique numa observação mostra o local num tamanho adequado. Até agora ficava o zoom anterior.
 - Um clique numa observação sem local próprio mostra o corpo inteiro, e um projeto aberto fica todo à vista.
 - Um furo selecionado fica visível, com a borda. As pegas ficam por fora da borda e as setas começam depois delas.
@@ -102,6 +103,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O diálogo *Calibrar material* mostra folga, interferência, compensação de furos, pé de elefante e parede na unidade escolhida, também em polegadas, e mantém a 3.ª casa decimal.
 - Um botão longo por baixo de uma recusa quebra a linha com letra grande, em vez de alargar o diálogo.
 - Os botões já não ficam esmagados com letra grande. Na versão 0.6.0, as ações de uma constatação no relatório de verificação ficavam cortadas em cima e em baixo.
+- A legenda *Acrescentado* e *Removido* só aparece na barra de pré-visualização quando a pré-visualização acrescenta ou retira material. Por isso, *Mudar o nome do objeto* não a mostra.
+- Para parâmetros, ajustes, impressora, material e desfazer, o chat indica o lugar da janela onde se faz o mesmo à mão.
+- O relatório de verificação e a verificação antes da exportação nomeiam os corpos de um ajuste em vez de mostrar um identificador interno, também um corpo entretanto removido.
+- As mensagens indicam uma característica por tipo e número, como «Furo 2», em vez de um identificador interno. Na contraparte de uma rosca, diâmetro e passo aparecem na unidade escolhida.
+- O inglês e o português distinguem agora o ressalto de um gancho, ou de um corpo abaixo da placa, da saliência na impressão.
+- Em espanhol e português, o menu, a pesquisa e o diálogo voltam a mostrar só a primeira frase de *Pino para furo* e *Orientar para impressão*.
+- Várias traduções leem-se com mais clareza, entre elas a introdução de *Criar parâmetro …*. O pino começa com maiúscula em todas as línguas.
 
 ### Imprimir e entregar ao slicer
 
@@ -131,6 +139,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Furar, tapar, furos oblongos e campos de furos chamam ao ajuste «Compensar desvios de impressão», como o grupo de cotas, e acrescentam a compensação de furos.
 - Ao abrir um passo existente, o botão diz *Aplicar* em vez de *Inserir*. Fica cinzento até mudar um valor e indica o campo.
 - Após um plano de desenho ilegível, *Escolher outro plano* abre o passo com o cursor no seu esboço.
+- Se junto a uma peça imprimível só restarem lascas, *Dividir em peças soltas* nomeia-as e oferece *Manter as lascas*. Antes dizia que o corpo era de uma só peça.
+- Se o raio de um arredondamento ou a largura de um chanfro for grande demais para as arestas, a mensagem oferece *Escolher outras arestas*.
+- Se uma face selecionada não servir para *Aplicar o ângulo de saída* ou *Deslocar a face*, a mensagem oferece *Escolher outras faces*.
+- O mesmo vale para *Esvaziar*, *Ranhura com vedação* e *Aplicar textura*. Se um arredondamento não puder ser reduzido a uma aresta, a mensagem oferece *Escolher outra característica*.
+- Se uma característica selecionada não servir, por exemplo um furo, uma rosca, uma câmara ou um fecho, a mensagem oferece *Escolher outra característica*.
+- Os botões *Escolher outras arestas*, *Escolher outras faces* e *Escolher outra característica* abrem o passo com o cursor no campo correspondente, também atrás de *Mais definições*.
+- Se uma mensagem não pertence a nenhum passo, como em *Contraparte da rosca*, indica o caminho numa frase, por exemplo *Escolher outra característica*, e só mostra botões que ali têm efeito.
 
 ## 0.6.0
 

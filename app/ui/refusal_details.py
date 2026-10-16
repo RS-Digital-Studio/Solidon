@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.errors import CORRECT_INPUT, PICK_PLANE, AppError
+from app.core.errors import CORRECT_INPUT, FIELD_WAYS, AppError
 from app.core.registry import REGISTRY
 from app.core.units import DEGREE_UNIT
 from app.i18n import tr
@@ -52,11 +52,6 @@ from app.ui.style import NORMAL, SPACE, WIDE, make_primary, set_level
 
 #: Ein Zeilenumbruch als Name, wie in ``dialogs``.
 newline = chr(10)
-
-#: Wege, die im offenen Eingabedialog nur eines heißen können: den Cursor in
-#: das Feld setzen, das der Kern nennt (``values["field"]``). *Eine andere
-#: Ebene wählen* ist am Skizzenschritt derselbe Weg zum Ebenenfeld.
-FIELD_WAYS: Final = frozenset({CORRECT_INPUT.id, PICK_PLANE.id})
 
 #: Was davon ohne erreichbares Feld wegfällt, statt als Rat zu stehen.
 QUIET_WITHOUT_FIELD: Final = frozenset({CORRECT_INPUT.id})

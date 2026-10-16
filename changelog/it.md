@@ -53,6 +53,7 @@ scrive in `website/version.json`.
 - Dopo un'azione nel *Rapporto di verifica* il rapporto resta in primo piano e Ctrl+Z la annulla subito. Finora passava davanti la scheda *Selezione*.
 - Gli avvisi su piano e adesione usano l’unità scelta. Il cambio mm/pollici conserva segnalazione scelta, dettagli aperti, scheda e stato espanso dei corpi.
 - I numeri lungo il piano di stampa seguono l’unità scelta e la indicano. La versione 0.6.0 mostrava millimetri anche con i pollici impostati.
+- La griglia del piano parte dal centro del piano, ogni 10 mm in millimetri e ogni mezzo pollice in pollici. Ogni numero cade su una linea marcata.
 - Nella vista *Ortografica*, un clic su una segnalazione mostra il punto a una dimensione adatta. Finora restava lo zoom precedente.
 - Un clic su una segnalazione senza un punto proprio mostra l'intero corpo, e un progetto aperto sta tutto nella vista.
 - Un foro selezionato resta visibile insieme al bordo. Le maniglie stanno fuori dal bordo e le frecce partono oltre.
@@ -102,6 +103,13 @@ scrive in `website/version.json`.
 - La finestra *Calibra il materiale* mostra gioco, interferenza, compensazione dei fori, piede d'elefante e parete nell'unità scelta, anche in pollici, e conserva la terza decimale.
 - Un pulsante lungo sotto un rifiuto va a capo con caratteri grandi, invece di allargare la finestra.
 - I pulsanti non vengono più schiacciati con caratteri grandi. Nella versione 0.6.0 le azioni di un rilievo nel rapporto di verifica erano tagliate in alto e in basso.
+- La legenda *Aggiunto* e *Rimosso* compare nella barra dell'anteprima solo quando l'anteprima aggiunge o toglie materiale. Per questo *Rinomina oggetto* non la mostra.
+- Per parametri, accoppiamenti, stampante, materiale e annulla, la chat indica il punto della finestra in cui fare lo stesso da sé.
+- Il rapporto di verifica e il controllo prima dell'esportazione nominano i corpi di un accoppiamento invece di mostrare un identificativo interno, anche un corpo nel frattempo rimosso.
+- I messaggi indicano una caratteristica con tipo e numero, come «Foro 2», invece di un identificativo interno. Per la controparte di una filettatura, diametro e passo sono nell'unità scelta.
+- L'inglese e il portoghese distinguono ora la sporgenza di un gancio, o di un corpo sotto il piatto, dallo sbalzo in stampa.
+- In spagnolo e portoghese menu, ricerca e finestra di dialogo mostrano di nuovo solo la prima frase di *Perno per foro* e *Orienta per la stampa*.
+- Diverse traduzioni si leggono con più chiarezza, tra cui l'introduzione di *Crea parametro …*. Il perno inizia con la maiuscola in tutte le lingue.
 
 ### Stampare e passare allo slicer
 
@@ -131,6 +139,13 @@ scrive in `website/version.json`.
 - Foratura, chiusura, asole e campi di fori chiamano la correzione «Compensare gli scostamenti di stampa», come il gruppo di quote, e aggiungono la compensazione dei fori.
 - Aprendo un passaggio esistente, il pulsante dice *Applica* invece di *Inserisci*. Resta grigio finché non cambia un valore e indica il campo.
 - Dopo un piano di disegno illeggibile, *Scegli un altro piano* apre il passaggio con il cursore nel suo schizzo.
+- Se accanto a un pezzo stampabile restano solo schegge, *Dividi in pezzi distinti* le nomina e offre *Tieni le schegge*. Prima diceva che il corpo era di un solo pezzo.
+- Se il raggio di un raccordo o la larghezza di uno smusso è troppo grande per gli spigoli, il messaggio offre *Scegli altri spigoli*.
+- Se una faccia selezionata non va bene per *Applica l'angolo di sformo* o *Scosta la faccia*, il messaggio offre *Scegli altre facce*.
+- Lo stesso vale per *Svuota*, *Scanalatura con guarnizione* e *Applica texture*. Se un raccordo non si può ricondurre a uno spigolo, il messaggio offre *Scegli un'altra caratteristica*.
+- Se una caratteristica selezionata non va bene, per esempio un foro, una filettatura, una camera o una chiusura, il messaggio offre *Scegli un'altra caratteristica*.
+- I pulsanti *Scegli altri spigoli*, *Scegli altre facce* e *Scegli un'altra caratteristica* aprono il passaggio con il cursore nel campo corrispondente, anche dietro *Altre impostazioni*.
+- Un messaggio senza passaggio, come con *Controparte della filettatura*, indica la via in una frase, ad esempio *Scegli un'altra caratteristica*, e mostra solo pulsanti che lì hanno effetto.
 
 ## 0.6.0
 

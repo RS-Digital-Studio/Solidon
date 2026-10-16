@@ -90,7 +90,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `viewport.py` | Szene/Picks/Merkmale; Griffe (`_dispatch_pointer`), Vorschau/Differenz (`_cover_body`), Analyse/Schnitt/`PreviewBanner`; Zuordnung mit Kandidat/Vorbezug |
-| `bed_scale.py` | Bettmaßzahlen (§19.3), Farbe `_sketch_label_colour` |
+| `bed_scale.py` | Bettzahlen und -raster (§19.3) |
 | `render/` | der Renderer hinter der Ansicht — eigene Karte |
 | `overlay.py` | Zonen über der Ansicht (§2.5): `OverlayHost`, `CardColumn`, `CardGrip`, `is_room_taker`, `FittedScroller`; natives Fenster nur für direkte Kinder (`keep_widgets_alien`, `hold_above_the_view`) |
 | `cursors.py` | Mauszeiger (§19.3, Regel 18) |

@@ -536,7 +536,7 @@ def test_a_drafted_body_of_splines_names_the_free_corner() -> None:
 
     from app.core.brep.canonical import ConeSurface
     from app.core.brep.features import features_of
-    from app.core.errors import CHANGE_SELECTION
+    from app.core.errors import CHANGE_FACES
     from app.core.geom.faces import DRAFT_BESIDE_A_FREE_FACE
 
     once = run(rounded_body("brep"), angle=3.0).outputs[0].mesh
@@ -552,7 +552,7 @@ def test_a_drafted_body_of_splines_names_the_free_corner() -> None:
     )
     refused = refusal_of(again, angle=2.0)
     assert refused.detail is DRAFT_BESIDE_A_FREE_FACE
-    assert CHANGE_SELECTION in refused.suggestions
+    assert CHANGE_FACES in refused.suggestions
 
 
 def test_a_drafted_housing_takes_a_second_draft_like_the_upright_one() -> None:
@@ -677,7 +677,7 @@ def test_a_wall_beside_a_round_names_the_round_on_both_kernels(
     refused = refusal_of(footed_body(kind, "fillet", where), angle=angle)
 
     assert refused.detail is DRAFT_BESIDE_A_ROUND
-    assert [action.id for action in refused.suggestions] == ["change_selection", "cancel"]
+    assert [action.id for action in refused.suggestions] == ["change_step", "cancel"]
 
 
 @pytest.mark.parametrize("angle", [2.0, 5.0])
@@ -910,7 +910,7 @@ def test_a_free_form_upright_corner_is_refused_instead_of_left_upright() -> None
     refused = refusal_of(exact_entry_as("brep", spline_corner_block()), angle=2.0)
 
     assert refused.detail is DRAFT_BESIDE_A_FREE_FACE
-    assert [action.id for action in refused.suggestions] == ["change_selection", "cancel"]
+    assert [action.id for action in refused.suggestions] == ["change_step", "cancel"]
 
 
 def rounded_outline(width: float, depth: float, radius: float, height: float) -> Any:

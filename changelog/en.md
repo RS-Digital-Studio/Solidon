@@ -53,6 +53,7 @@ it into `website/version.json`.
 - After an action in the *Report*, the report stays in front, and Ctrl+Z takes it back straight away. Until now the *Selection* tab jumped to the front.
 - Bed and adhesion messages use the chosen unit. Switching mm/in keeps the selected finding, open details, tab and body expansion state.
 - The numbers along the print bed follow the chosen unit and name it. Version 0.6.0 showed millimetres there even when inches were set.
+- The bed grid counts from the centre of the bed, every 10 mm in millimetres and every half inch in inches. Every number sits at a bold line.
 - In *Orthographic* view, clicking a finding shows its location at a suitable size. Until now the previous zoom stayed.
 - Clicking a finding without a location of its own shows the whole body, and an opened project fits entirely in the view.
 - A selected hole stays visible, rim included. The pull knobs sit outside the rim, and the arrows start beyond them.
@@ -102,6 +103,13 @@ it into `website/version.json`.
 - The *Calibrate material* dialog shows clearance, interference, hole compensation, elephant foot and wall in the chosen unit, inches included, and keeps the third decimal place.
 - A long button under a refusal wraps at large font sizes instead of widening the dialog.
 - Buttons are no longer squashed at large font sizes. In version 0.6.0 the actions of a finding in the check report were cut off at the top and bottom.
+- The *Added* and *Removed* legend appears in the preview bar only when the preview adds or removes material. *Rename object* therefore shows none.
+- For parameters, fits, printer, material and undo, the chat names the place in the window where you can do the same yourself.
+- The check report and the check before export name the bodies of a fit instead of showing an internal identifier, including a body that has since been removed.
+- Messages name a feature by kind and number, such as “Hole 2”, instead of an internal identifier. For the counterpart to a thread, diameter and pitch are given in the chosen unit.
+- English and Portuguese now tell the protrusion of a hook, or of a body below the plate, apart from an overhang in printing.
+- In Spanish and Portuguese, menu, search and dialog show only the first sentence again for *Pin for hole* and *Orient for printing*.
+- Several translations read more clearly, among them the introduction of *Create parameter …*. The peg starts with a capital in every language.
 
 ### Printing and slicer handover
 
@@ -131,6 +139,13 @@ it into `website/version.json`.
 - Drilling, filling, slots and hole fields call the adjustment “Compensate for printing deviations” as the dimension group does, and it adds the material's hole compensation.
 - Opening an existing step offers *Apply* instead of *Insert*. The button stays grey until a value changes and names the field.
 - After an unreadable drawing plane, *Pick a different plane* opens the step with the cursor in its sketch.
+- If only slivers remain beside one printable part, *Split into separate parts* names them and offers *Keep slivers*. Before, it said the body was all one piece.
+- If a fillet radius or chamfer width is too large for the edges, the message offers *Pick different edges*.
+- If a selected face does not suit *Apply draft angle* or *Offset face*, the message offers *Pick different faces*.
+- The same applies to *Hollow out*, *Seal groove with gasket* and *Apply texture*. If a fillet cannot be traced back to an edge, the message offers *Pick a different feature*.
+- If a selected feature does not fit, such as a hole, a thread, a chamber or a closure, the message offers *Pick a different feature*.
+- The buttons *Pick different edges*, *Pick different faces* and *Pick a different feature* open the step with the cursor in the matching field, also behind *More settings*.
+- If a message belongs to no step, as with *Counterpart to the thread*, it gives its way as a sentence, for example *Pick a different feature*, and shows only buttons that do something there.
 
 ## 0.6.0
 

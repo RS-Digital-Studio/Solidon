@@ -25,6 +25,22 @@ und von zwei Fassungen desselben Satzes veraltet immer eine (RM-098).
 
 ## Was wo geprüft wird
 
+### Begriffe, Absagewege und Agentenorte
+
+Hier statt in der Karte, weil sie an ihrem Budget steht.
+
+| Vertrag | Zuständige Testdatei |
+|---|---|
+| Beginnt jede Merkmalsart groß, und fallen *Überstand* und *Überhang* in keiner Sprache zusammen? | `test_catalog_terms.py` |
+| Bietet eine Kanten- oder Rundungsabsage *Andere Kanten wählen* statt *Andere Objekte wählen*? | `test_edge_refusal_ways.py` |
+| Bietet eine Flächenabsage (Formschräge, Fläche versetzen, Aushöhlen, Dichtnut, Muster bis zum Rand) *Andere Flächen wählen* statt *Andere Objekte wählen*, in beiden Kernen? | `test_face_refusal_ways.py` |
+| Bietet eine Absage an einem gewählten Merkmal (Bohrung, Gewinde, Kammer, Verschluss, Ring, Merkmalsoperationen) *Anderes Merkmal wählen* statt *Andere Objekte wählen*? | `test_feature_refusal_ways.py` |
+| Richtet sich eine Auswahlhandlung nach dem Schritt, der die Absage auslöst, mit einem Feld aus seinem Schema, im ganzen Register, bei einzeln gewählten Kanten die gewählten; gehen Halt und Ausgabebefund (*Aushöhlen* ohne Hohlraum) beide durch die Anpassung? | `test_choice_ways.py` |
+| Öffnet *Anderes Merkmal/Andere Kanten/Andere Flächen wählen* den Schritt mit dem Feld sichtbar und im Fokus, auch *Einzelne Kanten*, *Eingabe korrigieren* daneben den Wert? (Fenster) | `test_choice_ways_ui.py` |
+| Nennt eine Absage ohne Schrittkennung (*Gegenstück zum Gewinde*, nichts zum Slicen) ihren Weg als Satz statt eines Knopfs ohne Wirkung, und nicht noch einmal neben seinem Knopf (`left_out`)? Stehen Merkmal und Längen lesbar darunter? | `test_stepless_advice.py` |
+| Nennt *In Einzelteile aufteilen* Splitter und bietet *Splitter behalten* an? | `test_split_splinters.py` |
+| Nennen die Zusatzwerkzeuge des Agenten ihren Fensterort, und steht er in der gebauten Menüleiste? | `test_agent_tool_places.py` |
+
 ### Dialog-, Karten- und Vorschaugrößen
 
 | Vertrag | Zuständige Testdatei |
@@ -41,10 +57,12 @@ und von zwei Fassungen desselben Satzes veraltet immer eine (RM-098).
 | Layoutitem-Hüllen vor verzögertem Widgetabbau entwerten, verschachtelte Layouts und externe Hosts; Nachbarn und zurückgegebene Maßfelder erhalten | `test_feature_layout_lifetime.py` |
 | Echte Lage-/Abstandsbefunde und warme Daten bei mm/in/mm, sechs Sprachen, Auswahl/Einzelheiten/Nachschub, rohe Gruppenidentität samt vorigem Stand, gelesener Reiter und offene/geschlossene Körperknoten; Slicerwerte und Freitext als Gegenfälle | `test_finding_display_units.py` |
 | Nach Absage wieder sichtbare Vorschaulegende, kurze und lange Texte in sechs Sprachen und zwei tatsächlichen Anwendungsschriften | `test_preview_banner_layout.py` |
+| Vorschaulegende nur über einer Differenz, die Volumen oder Körper hinzufügt oder wegnimmt (nicht beim Umbenennen, nicht vor der Differenz) | `test_preview_legend.py` |
 | Maßgruppe nach Auf-/Zuklappen neu bemessen, ohne Layoutschleife; vorgemerkte Antwort bei Gruppentausch und Abschluss | `test_measure_group_layout.py` |
 | Maßkarte an Titel/freiem Grund ziehen; Felder, Knöpfe und Klappen bedienbar; Nutzerort bei Größenwechsel, Grenzen, Abbruch und Rückrufabbau; am gemeinsamen Verteiler (`app_events`) nur während des Zugs angemeldet, QWindow-Maustransport durchgelassen, damit Qt beim Release seinen impliziten Druckempfänger löst; Bewegungszeiger am Druckempfänger, dessen eigener oder geerbter Zeiger auf jedem Ausgang zurück (Escape, Verbergen, Reset, Abbau, Fokus- und Fensterverlust, erster Bewegungsfehler); ein fremder Override bleibt unberührt, auch im Fehlerweg; Verlust des Druckempfängers (gelöscht, umgehängt) und Abbau des Helfers beenden die Anmeldung | `test_measure_card_drag_ui.py` |
 | Echter Maßfluss: Nutzerort bei Klappen, Werten und fehlender Fläche; Gruppenwechsel/Abbruch, Seiten-/Bodenkarten und freie Maßfelder auch im Rückfall | `test_measure_card_placement.py` |
-| Bettrasterfarbe und Hauptlinien getrennt von Bauraum/Zeichnung; unveränderte Linienpositionen/Tiefe, Themenwechsel und Sichtbarkeit; Bettmaßzahlen aus der Textrolle, Bauraumfarbe unverändert | `test_bed_grid_visibility.py` |
+| Bettrasterfarbe und Hauptlinien getrennt von Bauraum/Zeichnung; Hauptlinien an den gezeichneten Maßzahlen auf jeder Platte, mm und Zoll, Tiefe, Themenwechsel und Sichtbarkeit; Bettmaßzahlen aus der Textrolle, Bauraumfarbe unverändert | `test_bed_grid_visibility.py` |
+| Bettraster ohne Fenster: Hauptlinien genau an den Zahlen von `bed_scale`, Nebenschritt ab der Mitte (10 mm, halber Zoll), Rand schließt ohne Doppelstrich | `test_bed_grid_at_scale.py` |
 | Nur direkte gewöhnliche Werkzeugknöpfe in Ruhe ohne Rahmenfarbe; Geometrie und Hover/Fokus/Wahl sowie fremde Eingaben und Hauptaktion erhalten | `test_toolbar_rest_style.py` |
 | Ruhende Knöpfe durchscheinend, geschlossene Hilfsflächen verborgen; bestehendes Neuzeichnen wertet Vorschlag/held/waiting aus (held-Fall ruft es selbst auf); bewegter Zug/Feldentwurf und wartender Entwurf sichtbar, Abbruch/Wiederaufbau ohne Entwurf verborgen; Hover, Halten, Leave/Release und direkter Lochdruck bei gleichen Bounds/Geometrie/Picks; Griffbuchstaben/Maße: Text/Fensterpaar, Anker, Schrift und Pickauftrag bei Themenwechsel, Update/Neuaufbau; L-Felder außerhalb projizierter Knopfhüllen bei Aufbau, Kamera/Zoom, DPR und Maßänderung; vollständige endliche Anker ohne Projektion/Nahplatz, kein Update bei gleichen Punkten/Texten und kein Rücksetzen der Gizmo-Zugmatrix durch den Kameratimer | `test_feature_grip_readability.py` |
 | Raum-/Vordergrundmischung bei Erstellung und set_opacity für Vorder-/Rückseite/Kanten, wirksame Deckkraft 0/1/teiltransparent und force_opaque, Tiefentest/Queue; leere Beschriftungsfelder bei Textwechsel, Sichtbarkeit, _wake und adopt/build mit erhaltenen Nachbarpaaren/Listenplätzen; Materialzustände ohne Qt/GPU | `test_front_overlay_alpha.py` |

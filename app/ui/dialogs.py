@@ -2633,6 +2633,9 @@ NEEDS_OP: Final = frozenset(
         "mesh_and_retry",
         # Öffnet den Schritt, den ein Befund meint (RM-374, *Größe ändern*).
         "change_step",
+        # Gibt dem Schritt andere Objekte (``_change_selection_after_error``);
+        # ohne Schritt kehrt der Handler sofort zurück, der Knopf täte nichts.
+        "change_selection",
     }
 )
 
@@ -2725,11 +2728,24 @@ def unhandled_advice(
     **Und außer dem, was der Ort selbst ist** (``left_out``, FD-95): Im offenen
     Operationsdialog ist *Eingabe korrigieren* ohne genanntes Feld kein Rat —
     die Eingabe steht darüber (``refusal_details.silent_ways``).
+
+    **Und was nur am fehlenden Schritt scheitert, steht hier auch** (RB-3):
+    Eine Absage ohne Schrittkennung — *Gegenstück zum Gewinde* ist ein Ablauf
+    vor jedem Schritt — verlor *Anderes Merkmal wählen* als Knopf
+    (:data:`NEEDS_OP`) und übersprang es als Satz, weil es einen Handler gibt.
+    Der Dialog endete dann mit *Schließen* und ohne Weg (Regel 17).
+
+    **Als Rat zählt nur, was nicht als Knopf steht** (``left_out``, RB2-2):
+    Der Hinweis im Operationsdialog löst einen Weg ohne Schritt über seinen
+    eigenen Handler ein (*Die kleinste Kantenlänge nehmen*) und nennt seine
+    Knöpfe hier, sonst stünde der Satz über seinem Knopf.
     """
     return [
         str(action.label)
         for action in error.suggestions
-        if action.id not in handlers and action.id != CANCEL.id and action.id not in left_out
+        if action.id != CANCEL.id
+        and action.id not in left_out
+        and (action.id not in handlers or (action.id in NEEDS_OP and error.op_id is None))
     ]
 
 
@@ -2781,7 +2797,8 @@ def spoken_values(error: AppError) -> list[str]:
 
 #: Werte einer ``ValidationError``, die dem Code gelten und nicht dem Kunden —
 #: auch im Hinweis einer Befundzeile (``panels._value_lines``), wo ein
-#: Befund mit ``field`` den Cursor seines Schritts setzt (RM-374). Dazu
+#: Befund mit ``field`` den Cursor seines Schritts setzt (RM-374), eine
+#: Auswahlhandlung mit ``choice_field`` (``scene.choice_ways``). Dazu
 #: ``action`` der Freischaltungsfehler (``change``, ``export``, ``slicer``,
 #: ``chat``): eine Kennung fürs Protokoll, die als „Handlung: change“ unter der
 #: Lizenzabsage stand — der Titel sagt schon, was fehlt (RM-456). Und die
@@ -2791,6 +2808,7 @@ def spoken_values(error: AppError) -> list[str]:
 ADDRESS_VALUES: Final = frozenset(
     {
         "field",
+        "choice_field",
         "constraint",
         "feature_ids",
         "action",
@@ -2878,13 +2896,16 @@ class ErrorNotice(QWidget):
         }
         known.update(handlers or {})
         # Im Dialog, der selbst die Eingabe ist, heißt *Eingabe korrigieren*:
-        # Cursor ins genannte Feld — ohne Feld ist es kein Rat (FD-95).
+        # Cursor ins genannte Feld — ohne Feld ist es kein Rat (FD-95, FD-182).
         owner = input_dialog_of(self)
         for name, way in field_ways(problem, owner).items():
             known.setdefault(name, way)
-        self.setText(problem_text(problem, known, silent_ways(problem, owner)))
         actions = [action for action in problem.suggestions if action.id in known]
         actions = actions or offered_actions(problem, known)
+        # Was hier Knopf ist, steht nicht noch einmal als Satz (RB2-2), und ein
+        # Feldweg ohne Feld im Dialog ist kein Rat (FD-95).
+        left_out = silent_ways(problem, owner) | {action.id for action in actions}
+        self.setText(problem_text(problem, known, left_out))
         if not actions:
             return
         # Der Fehlerrahmen kann seinen Qt-Besitzer halten; gespeichert werden

@@ -41,7 +41,7 @@ from typing import Any, Final
 import numpy as np
 from numpy.typing import NDArray
 
-from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, ValidationError
+from app.core.errors import CANCEL, CHANGE_FEATURE, CORRECT_INPUT, ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData, as_mesh_data, ray_hit_distances, stable_arctan2
 from app.core.types import Feature, FeatureId, Finding, is_a_cavity
@@ -217,7 +217,7 @@ class Cavity:
 
 
 #: Die Auswege jeder Absage über die Kette: anders wählen, die Form ändern, lassen.
-_WAYS: Final = (CORRECT_INPUT, CHANGE_SELECTION, CANCEL)
+_WAYS: Final = (CORRECT_INPUT, CHANGE_FEATURE, CANCEL)
 
 #: Wenn an der Stelle eines Abschnitts kein Hohlraum im Körper ist (Review G, F2): Ein
 #: Baustein erklärt seine Bohrungen aus seinen Parametern, und eine falsch
@@ -298,7 +298,7 @@ def _not_in_the_body(feature: str, value: str) -> ValidationError:
         value=value,
         values={"feature": feature},
         constraint="not_in_the_body",
-        suggestions=(CHANGE_SELECTION, CANCEL),
+        suggestions=(CHANGE_FEATURE, CANCEL),
     )
 
 
@@ -686,7 +686,7 @@ def refuse_thread(feature: Feature) -> None:
             detail=NOT_AN_INNER_THREAD,
             value=feature.id,
             constraint="not_a_bore",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
 
 

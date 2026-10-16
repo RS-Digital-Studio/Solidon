@@ -21,7 +21,7 @@ from app.core.brep.canonical import PlaneSurface
 from app.core.brep.kernel import DEFLECTION, Solid, boolean_builder, box_limits, require
 from app.core.errors import (
     CANCEL,
-    CHANGE_SELECTION,
+    CHANGE_FACES,
     CORRECT_INPUT,
     PROGRAMMING_ERRORS,
     Action,
@@ -827,7 +827,7 @@ def draft_faces(
                     "Dieser Körper hat keine Flächen, die in Entformungsrichtung stehen. "
                     "Wählen Sie eine andere Richtung oder einzelne Flächen."
                 ),
-                suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+                suggestions=(CORRECT_INPUT, CHANGE_FACES, CANCEL),
             )
     else:
         chosen = list(selected_faces)
@@ -839,7 +839,7 @@ def draft_faces(
                         "Angestellt werden ebene Flächen. Wählen Sie eine ebene Seitenwand, "
                         "oder lassen Sie die Auswahl leer für alle Wände."
                     ),
-                    suggestions=(CHANGE_SELECTION, CANCEL),
+                    suggestions=(CHANGE_FACES, CANCEL),
                 )
             if abs(sum(a * b for a, b in zip(normal, pull, strict=True))) > UPRIGHT_ENOUGH:
                 raise _across_the_pull()
@@ -850,7 +850,7 @@ def draft_faces(
         # stehende freie Fläche bliebe still senkrecht.
         raise GeometryError(
             detail=DRAFT_BESIDE_A_ROUND if beside == "round" else DRAFT_BESIDE_A_FREE_FACE,
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FACES, CANCEL),
             values={"angle_deg": round(angle_deg, 2)},
         )
     added = len(grown) - len(set(chosen))
@@ -882,12 +882,10 @@ def draft_faces(
             raise
         except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
             raise GeometryError(
-                detail=refusal, suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL)
+                detail=refusal, suggestions=(CORRECT_INPUT, CHANGE_FACES, CANCEL)
             ) from problem
         if not done:
-            raise GeometryError(
-                detail=refusal, suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL)
-            )
+            raise GeometryError(detail=refusal, suggestions=(CORRECT_INPUT, CHANGE_FACES, CANCEL))
     result = _finished(builder, refusal, working, cancelled=cancelled)
     if (
         not BRepCheck_Analyzer(result.shape).IsValid()
@@ -897,7 +895,7 @@ def draft_faces(
     ):
         raise GeometryError(
             detail=DRAFT_CUTS_THROUGH,
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_FACES, CANCEL),
             values={"angle_deg": round(angle_deg, 2)},
         )
     return result, added

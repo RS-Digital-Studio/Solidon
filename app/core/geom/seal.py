@@ -194,7 +194,7 @@ def support_geometry(
     """
     from shapely.ops import unary_union
 
-    from app.core.errors import CANCEL, CHANGE_SELECTION, GeometryError
+    from app.core.errors import CANCEL, CHANGE_FACES, GeometryError
     from app.core.geom.faces import (
         FLAT_ENOUGH_FOR_A_TOOL,
         _must_be_flat,
@@ -240,7 +240,7 @@ def support_geometry(
         # lesbar", auch beim ersten Klick, als es noch keine gab.
         raise GeometryError(
             detail=_("Für eine Dichtnut wählen Sie eine ebene Trägerfläche."),
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FACES, CANCEL),
         )
     projected = unary_union([_polygon(triangle[:, :2]) for triangle in local]).simplify(
         EPS_GEOM,

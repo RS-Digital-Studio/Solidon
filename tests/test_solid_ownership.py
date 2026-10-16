@@ -1381,7 +1381,7 @@ def test_reround_refuses_a_rounding_without_two_walls_instead_of_guessing_an_edg
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
     from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
 
-    from app.core.errors import CHANGE_SELECTION, GeometryError
+    from app.core.errors import CHANGE_FEATURE, GeometryError
     from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
 
     lying = Solid(
@@ -1411,7 +1411,7 @@ def test_reround_refuses_a_rounding_without_two_walls_instead_of_guessing_an_edg
     with pytest.raises(GeometryError) as refused:
         edit.reround(source, fillet.params["centre"], 2.0, 1.0, selected_faces=faces)
     assert refused.value.detail == NOT_BETWEEN_TWO_PLANES
-    assert refused.value.suggestions[0] is CHANGE_SELECTION
+    assert refused.value.suggestions[0] is CHANGE_FEATURE
     assert _native_selection_state(source) == before
 
 

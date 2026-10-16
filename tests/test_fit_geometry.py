@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import replace
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -896,3 +899,216 @@ def test_flush_document_movement_cache_reopen_and_undo_preserve_both_checks(
             [entry], profile, {}, scene=redone.scene, document=opened.document
         )
         assert [finding for finding in exported if finding.code.startswith("fit.")] == current
+
+
+def test_the_bodies_of_a_collision_are_named_not_numbered(profile: Profile) -> None:
+    """FD-105: Die Berichtszeile hieß „— Quader · obj_1 · obj_2“.
+
+    ``a`` und ``b`` stehen als Namen in der Zeile (``panels._NAMES_IN_THE_LINE``);
+    der Befund legte dort die Kennungen ab. Jetzt die Namen der Körper.
+    """
+    scene = pair(profile)
+    names = {"socket": "Platte", "pin": "Stift"}
+    scene = replace(
+        scene,
+        objects={key: replace(entry, name=names[key]) for key, entry in scene.objects.items()},
+    )
+    finding = geometry_finding(scene)
+    assert finding is not None and finding.code == "fit.collision"
+    assert {finding.values["a"], finding.values["b"]} == {"Platte", "Stift"}
+
+
+def test_a_fit_names_its_partners_by_body_and_kind(profile: Profile) -> None:
+    """FD-105, die Zwillinge: „obj_1:hole_1“ und „hole“ standen ebenso in der Zeile."""
+    scene = pair(profile)
+    scene = replace(
+        scene,
+        objects={
+            key: replace(entry, name={"socket": "Platte", "pin": "Stift"}[key])
+            for key, entry in scene.objects.items()
+        },
+        fits=[
+            Fit("pair", FeatureRef("socket", "gone"), FeatureRef("pin", "mating"), "clearance", 0.4)
+        ],
+    )
+    (missing,) = [
+        finding for finding in check(scene, profile) if finding.code == "fit.missing_feature"
+    ]
+    assert str(missing.values["a"]) == "Platte", "ohne Merkmal bleibt der Körper"
+    assert str(missing.values["b"]) == "Stift: Zapfen"
+
+
+def _without_a_partner(profile: Profile) -> tuple[Any, Any, str, str]:
+    """``passung.netz`` nach *Objekt entfernen* auf einem Partner.
+
+    Projekt, Auswertung danach, Kennung und letzter Name des Entfernten.
+    """
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from tools import function_scenes
+
+    project = function_scenes.build_scene("passung.netz")
+    document = project.document
+    gone = document.fits[0].a.object_id
+    last_name = evaluate(document, profile).object_names[gone]
+    History(document).apply("weg", [OperationDraft(op="delete_object", inputs=(gone,), params={})])
+    return project, evaluate(document, profile), gone, last_name
+
+
+def _named_like_the_report(findings: Sequence[Any], gone: str, last_name: str) -> None:
+    missing = [finding for finding in findings if finding.code == "fit.missing_feature"]
+    assert missing, "ohne Partner kein Befund"
+    for finding in missing:
+        assert str(finding.values["a"]) == last_name
+        assert gone not in str(finding.values["a"])
+
+
+def test_a_removed_partner_keeps_its_last_name(profile: Profile) -> None:
+    """RB-6: Nach *Objekt entfernen* stand der Partner als „obj_2:dowel_pin_1“ da.
+
+    Der Befund, der sagt, dass ein Partner fehlt, nennt ihn mit dem Namen, den
+    der Körper zuletzt trug (``EvaluationResult.object_names``), am echten
+    Projekt mit Passung.
+    """
+    _project, after, gone, last_name = _without_a_partner(profile)
+    _named_like_the_report(after.scene.report.findings, gone, last_name)
+
+
+def test_the_export_check_names_a_removed_partner_like_the_report(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """RB2-5, Zwilling zu RB-6: Die Prüfung vor dem Export fragt die Passungen neu.
+
+    Ohne die Namen der Auswertung schrieb sie „ein entferntes Objekt“, wo der
+    Prüfbericht daneben „Deckel“ sagte — zwei Antworten auf dieselbe Frage.
+    Geprüft an allen drei Einstiegen: Prüfung, Dateiplan und Baugruppe (die
+    Übergabe an den Slicer).
+    """
+    from app.core.export.writer import check_before_export, plan_export, write_assembly
+
+    project, after, gone, last_name = _without_a_partner(profile)
+    objects = list(after.scene.objects.values())
+    found = check_before_export(
+        objects,
+        profile,
+        {},
+        scene=after.scene,
+        document=project.document,
+        names=after.object_names,
+    )
+    _named_like_the_report(found, gone, last_name)
+    plan = plan_export(
+        objects,
+        project_name="passung",
+        profile=profile,
+        scene=after.scene,
+        document=project.document,
+        names=after.object_names,
+    )
+    _named_like_the_report(plan.findings, gone, last_name)
+    _written, assembled = write_assembly(
+        objects,
+        tmp_path,
+        project_name="passung",
+        profile=profile,
+        for_slicer=False,
+        scene=after.scene,
+        document=project.document,
+        names=after.object_names,
+    )
+    _named_like_the_report(assembled, gone, last_name)
+
+
+def test_the_command_line_export_names_a_removed_partner(
+    profile: Profile, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Und die Kommandozeile reicht die Namen ihrer Auswertung an den Export (RB2-5)."""
+    from app.cli import main as cli
+    from app.core.scene.project import save
+
+    project, _after, gone, last_name = _without_a_partner(profile)
+    path = tmp_path / "passung.p3d"
+    save(project, path)
+    reported: list[Any] = []
+    monkeypatch.setattr(
+        cli, "print_findings", lambda findings, names=None: reported.extend(findings)
+    )
+    cli.main(["export", str(path), str(tmp_path / "out")])
+    _named_like_the_report(reported, gone, last_name)
+
+
+def test_the_slicer_handover_names_a_removed_partner(
+    profile: Profile, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Übergabe aus dem Druckdialog nimmt die Namen in ihren Auftrag (RB2-5).
+
+    Echte Methoden ohne Fenster: ``_plate_job`` liest das Ergebnis der Sitzung,
+    ``_prepare_plate`` schreibt die Platte und prüft dabei.
+    """
+    from types import SimpleNamespace
+
+    from app.core.export import handover, slicer_profiles
+    from app.core.knowledge import print_settings
+    from app.ui.print_settings_dialog import PrintSettingsDialog, _prepare_plate
+
+    project, after, gone, last_name = _without_a_partner(profile)
+    settings = print_settings.resolve(profile)
+    host = SimpleNamespace(
+        settings=settings,
+        session=SimpleNamespace(project=project, profile=profile, last_result=after, base_dir=None),
+        _opened_with=settings,
+        _handover_project_id="passung",
+        _plate_slots=lambda **_kwargs: (),
+        _profiles_for=lambda _slots: (),
+    )
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_args, **_kwargs: [])
+    objects = tuple(after.scene.objects.values())
+    plate = objects[0].plate
+    setup = handover.SlicerSetup(tmp_path / "orca.exe", "orca")
+    job = PrintSettingsDialog._plate_job(host, objects, (plate,), tmp_path, "passung", setup)
+    _named_like_the_report(_prepare_plate(job, plate).findings, gone, last_name)
+
+
+def test_the_export_window_names_a_removed_partner(
+    qt_app: Any, profile: Profile, tmp_path: Path
+) -> None:
+    """Der Exportarbeiter des Fensters fragt mit den Namen der Auswertung (RB2-5)."""
+    from app.ui import main_window
+    from app.ui.settings import UiSettings
+
+    project, after, gone, last_name = _without_a_partner(profile)
+    worker = main_window._ExportWorker(
+        list(after.scene.objects.values()),
+        tmp_path / "passung.stl",
+        "stl",
+        profile=profile,
+        sources={},
+        settings=None,
+        ui_settings=UiSettings(),
+        material=profile.material.id,
+        scene=after.scene,
+        document=project.document,
+        names=after.object_names,
+    )
+    shown: list[list[Any]] = []
+    worker.checked.connect(shown.append)
+    worker.work()
+    assert shown, "ein fehlender Partner ist ein Fehler, der vor dem Schreiben gezeigt wird"
+    _named_like_the_report(shown[0], gone, last_name)
+
+
+def test_a_partner_never_seen_is_named_as_removed(profile: Profile) -> None:
+    """Ohne bekannten Namen eine Beschreibung, keine Kennung."""
+    scene = pair(profile)
+    scene = replace(
+        scene,
+        fits=[
+            Fit(
+                "pair", FeatureRef("obj_9", "hole_1"), FeatureRef("pin", "mating"), "clearance", 0.4
+            )
+        ],
+    )
+    found = [finding for finding in check(scene, profile) if finding.code.startswith("fit.")]
+    assert found
+    assert all("obj_9" not in str(finding.values["a"]) for finding in found)
+    assert str(found[0].values["a"]) == "ein entferntes Objekt"

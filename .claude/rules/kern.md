@@ -278,6 +278,8 @@ diesen Schritt** (RM-374): `suggestions=(errors.CHANGE_…,)` mit der Kennung
 Schema der Operation, sonst führt der Weg ins Leere (Skizzenebene: `sketch`,
 FD-182). Ändert sich ein Befund einer Operation, steigt ihre `cache_version`
 — der Plattencache gäbe ihn sonst alt zurück.
+Auswahlhandlungen (`CHANGE_EDGES`/`FACES`/`FEATURE`) passt die Auswertung an
+den auslösenden Schritt an (`scene.choice_ways`).
 
 Ins Protokoll gehen Kennzahlen, nie Geometriedaten; hinaus nur, wenn der
 Nutzer es selbst anhängt (§33.2) — sonst wäre es Telemetrie. **Der einzige Weg

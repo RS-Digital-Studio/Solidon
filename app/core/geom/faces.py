@@ -31,7 +31,7 @@ import numpy as np
 from app.core import units
 from app.core.errors import (
     CANCEL,
-    CHANGE_SELECTION,
+    CHANGE_FACES,
     CORRECT_INPUT,
     REPAIR_AND_RETRY,
     GeometryError,
@@ -186,7 +186,7 @@ def face_normal(feature: Feature) -> Vec3:
     if length <= EPS_GEOM:
         raise GeometryError(
             detail=_("Zu dieser Fläche ist keine Richtung bekannt. Wählen Sie sie im Bild erneut."),
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FACES, CANCEL),
         )
     return tuple(float(value) for value in raw / length)  # type: ignore[return-value]
 
@@ -459,7 +459,7 @@ def gone_face_error(values: Mapping[str, Any] | None = None) -> GeometryError:
             "hat ihn verändert. Wählen Sie sie neu."
         ),
         values=dict(values or {}),
-        suggestions=(CHANGE_SELECTION, CANCEL),
+        suggestions=(CHANGE_FACES, CANCEL),
     )
 
 
@@ -473,7 +473,7 @@ def _must_be_flat(mesh: MeshData, triangles: list[int], normal: np.ndarray) -> N
                 "Wählen Sie eine ebene Fläche, oder ändern Sie das Merkmal über "
                 "seine Maße."
             ),
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FACES, CANCEL),
         )
 
 
@@ -549,7 +549,7 @@ def draft_walls(
                 "Dieser Körper hat keine Flächen, die in Entformungsrichtung stehen. Wählen "
                 "Sie eine andere Richtung oder einzelne Flächen."
             ),
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_FACES, CANCEL),
         )
     from app.core.perceive.features import _one_body
 
@@ -558,7 +558,7 @@ def draft_walls(
     if _round_beside_the_walls(body, chosen, pull):
         raise GeometryError(
             detail=DRAFT_BESIDE_A_ROUND,
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FACES, CANCEL),
             values={"angle_deg": round(angle_deg, 2)},
         )
     heights = np.asarray(body.vertices, dtype=float) @ pull
@@ -868,7 +868,7 @@ def _checked_tools(
     def refused() -> GeometryError:
         return GeometryError(
             detail=DRAFT_CUTS_THROUGH,
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_FACES, CANCEL),
             values={"angle_deg": round(angle_deg, 2)},
         )
 
@@ -920,7 +920,7 @@ def _chosen_wall(
                 "Angestellt werden ebene Flächen. Wählen Sie eine ebene Seitenwand, "
                 "oder lassen Sie die Auswahl leer für alle Wände."
             ),
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FACES, CANCEL),
         )
     triangles = _triangles_of(mesh, feature)
     normal = np.asarray(face_normal(feature), dtype=float)
@@ -937,7 +937,7 @@ def _across_the_pull() -> GeometryError:
             "die in diese Richtung verlaufen. Wählen Sie eine Seitenwand oder eine andere "
             "Entformungsrichtung."
         ),
-        suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+        suggestions=(CORRECT_INPUT, CHANGE_FACES, CANCEL),
     )
 
 
@@ -1061,7 +1061,7 @@ def _moved_corners(
                     "verschwände — so weit reicht dieser Weg am Netz nicht. Stellen Sie einen "
                     "kleineren Winkel ein, oder wählen Sie weniger Flächen."
                 ),
-                suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+                suggestions=(CORRECT_INPUT, CHANGE_FACES, CANCEL),
                 values={"corner": [round(float(value), 3) for value in point]},
             )
         if float(np.linalg.norm(step)) > units.GRAZING_SLIDE * free + slack:
@@ -1071,7 +1071,7 @@ def _moved_corners(
                     "etwa eine Rundung — dort gibt es keine eindeutige neue Kante. Lassen Sie "
                     "diese Fläche aus, oder wählen Sie die angrenzende mit, wenn sie eben ist."
                 ),
-                suggestions=(CHANGE_SELECTION, CORRECT_INPUT, CANCEL),
+                suggestions=(CHANGE_FACES, CORRECT_INPUT, CANCEL),
                 values={"corner": [round(float(value), 3) for value in point]},
             )
         shift[vertex] = step

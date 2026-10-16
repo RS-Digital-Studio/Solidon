@@ -35,7 +35,7 @@ from app.core.brep.kernel import (
 from app.core.errors import (
     BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
     CANCEL,
-    CHANGE_SELECTION,
+    CHANGE_EDGES,
     CORRECT_INPUT,
     PROGRAMMING_ERRORS,
     GeometryError,
@@ -1952,7 +1952,7 @@ def _chamfer_sides_unknown() -> GeometryError:
             "An dieser Kante lassen sich die beiden Flächen der Fase nicht bestimmen. "
             "Wählen Sie gleiche Breiten oder eine andere Kante."
         ),
-        suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+        suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
     )
 
 
@@ -4060,7 +4060,7 @@ def _reround(
     Ohne ausdrückliche Auswahl bleibt der ältere Suchmodus über Lage und
     Radius bestehen.
     """
-    from app.core.errors import CHANGE_SELECTION
+    from app.core.errors import CHANGE_FEATURE
     from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
 
     if collect_triangles:
@@ -4078,7 +4078,7 @@ def _reround(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     if edge is None:
-        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_FEATURE, CANCEL))
     if collect_triangles:
         checked = sharp.checked_edge_indices((edge,))
         working = replace(sharp)

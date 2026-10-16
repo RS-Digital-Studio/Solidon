@@ -10,7 +10,8 @@ from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
 from app.core.types import Profile
-from app.ui.render import shapes
+from app.core.units import LengthUnit
+from app.ui.labels import display_unit, set_display_unit
 from app.ui.render.api import rgb
 from app.ui.theme import THEMES, Theme, contrast_ratio
 from app.ui.viewport import BED_FRAME, BED_SURFACE_DROP, Viewport
@@ -69,24 +70,40 @@ def test_bed_has_distinct_major_lines_without_changing_volume_or_sketch_colours(
     assert view._grid_minor_colour == view._grid_major_colour == THEMES[theme]["grid_major"]
 
 
+@pytest.mark.parametrize("unit", ["mm", "in"])
 @pytest.mark.parametrize("shift,width,depth", [(0.0, 256.0, 192.0), (306.0, 256.0, 256.0)])
-def test_grid_hierarchy_preserves_every_existing_line_and_its_depth(
-    bed_view: tuple[Viewport, RecordingRenderer], shift: float, width: float, depth: float
+def test_grid_major_lines_lie_at_the_scale_numbers_on_every_plate(
+    bed_view: tuple[Viewport, RecordingRenderer],
+    shift: float,
+    width: float,
+    depth: float,
+    unit: LengthUnit,
 ) -> None:
+    """Die Hauptlinien stehen an den Maßzahlen, auch auf Platte 2 und in Zoll (FD-170)."""
     view, renderer = bed_view
-    view._draw_one_bed(1, shift, width, depth, 250.0)
+    before = display_unit()
+    set_display_unit(unit)
+    try:
+        view._draw_one_bed(1, shift, width, depth, 250.0)
+    finally:
+        set_display_unit(before)
     minor = renderer.item_of("bed_1").points.reshape(-1, 2, 3)
     major = renderer.item_of("bed_major_1").points.reshape(-1, 2, 3)
-    original, _spans = shapes.grid_lines((shift, 0.0, 0.0), width, depth, 10.0)
-    expected = {tuple(pair.ravel()) for pair in original.reshape(-1, 2, 3)}
     first = {tuple(pair.ravel()) for pair in minor}
     second = {tuple(pair.ravel()) for pair in major}
-    assert first | second == expected
     assert not first & second, "Hauptlinien dürfen nicht doppelt übereinander gemischt werden"
     np.testing.assert_allclose(major[:, :, 2], 0.0)
     np.testing.assert_allclose(renderer.item_of("bed_surface_1").points[:, 2], -BED_SURFACE_DROP)
-    # Jede fünfte Linie beider Richtungen, ab demselben Bettursprung.
-    assert len(major) == (round(width / 10.0) // 5 + 1) + (round(depth / 10.0) // 5 + 1)
+    numbers = renderer.item_of("bed_scale_1").points
+    front = np.sort(numbers[numbers[:, 1] < -depth / 2.0, 0])
+    left = np.sort(numbers[numbers[:, 0] < shift - width / 2.0, 1])
+    across = np.isclose(major[:, 0, 0], major[:, 1, 0])
+    np.testing.assert_allclose(np.sort(major[across, 0, 0]), front)
+    np.testing.assert_allclose(np.sort(major[~across, 0, 1]), left)
+    # Der Rand schließt das Raster, auch wo keine Zahl steht.
+    every_x = np.concatenate((minor[:, 0, 0], major[:, 0, 0]))
+    assert every_x.min() == pytest.approx(shift - width / 2.0)
+    assert every_x.max() == pytest.approx(shift + width / 2.0)
 
 
 def test_theme_switch_rebuilds_both_grid_levels_and_keeps_bed_visibility(

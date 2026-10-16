@@ -225,6 +225,7 @@ from app.core.scene import (
 )
 from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
+from app.core.scene.choice_ways import for_the_choice
 from app.core.scene.evaluate import size_set_by
 from app.core.scene.history import change_for, repair_is_available, step_titles
 from app.core.scene.parameter_usage import bounds_refusal
@@ -1898,6 +1899,7 @@ class _ExportWorker(Worker):
         evaluated: Sequence[Finding] = (),
         chosen: _ChosenSetup | None = None,
         inputs: StoredInputs | None = None,
+        names: Mapping[str, str] | None = None,
     ) -> None:
         super().__init__()
         self._objects = objects
@@ -1920,6 +1922,8 @@ class _ExportWorker(Worker):
         self._document = document
         self._evaluated = tuple(evaluated)
         """Die Befunde der Auswertung, aus der die Körper stammen (RM-419)."""
+        self._names = dict(names or {})
+        """Die Namen derselben Auswertung — für einen entfernten Passungspartner (RB2-5)."""
         #: Ein schon erhobener Bericht — dann wurde die Frage bereits gestellt
         #: und beantwortet. ``None`` heißt „noch nicht geprüft"; eine **leere**
         #: Liste ist eine Antwort und keine fehlende.
@@ -1970,6 +1974,7 @@ class _ExportWorker(Worker):
             evaluated=self._evaluated,
             chosen=self._chosen,
             inputs=self._inputs,
+            names=self._names,
         )
 
     def work(self) -> None:
@@ -1985,6 +1990,7 @@ class _ExportWorker(Worker):
                     document=self._document,
                     cancelled=self.cancelled,
                     evaluated=self._evaluated,
+                    names=self._names,
                 )
                 self.cancelled.raise_if_cancelled()
                 if any(entry.severity in ("warning", "error") for entry in found):
@@ -10534,6 +10540,7 @@ class MainWindow(QMainWindow):
             # Und was die Auswertung schon fand: Ein durchstochener Formzug
             # stand im Prüfbericht und nicht vor dem Schreiben (RM-419).
             evaluated=result.scene.report.findings,
+            names=result.object_names,
             # Dieselbe Slicerwahl wie die Zahlenzeile, ohne den Bestand ein
             # zweites Mal zu lesen (RM-623).
             chosen=self._chosen_setup_now(),
@@ -27662,7 +27669,8 @@ class MainWindow(QMainWindow):
             # Derselbe Weg an einem Befund, der sagt, was ein Schritt getan hat
             # (RM-374): *Größe ändern* öffnet ``fit_to_size`` mit dem Cursor im
             # Maß — der Wert ist danach ein gewöhnlicher Parameter.
-            "change_step": self._correct_after_error,
+            # Und an einer Auswahlabsage das Feld, das sie nennt (RB-2, ``choice_ways``).
+            "change_step": lambda error: self._correct_after_error(for_the_choice(error)),
             # **Eine unlesbare Zeichenebene** (``sketch.planes._unreadable``):
             # Der Schritt geht mit dem Cursor im Ebenenfeld auf, das der Kern
             # nennt — dort wird die andere Ebene gewählt. Bis zum 22.09.2026

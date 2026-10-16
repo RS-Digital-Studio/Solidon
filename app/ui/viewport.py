@@ -123,7 +123,7 @@ from app.core.units import (
 )
 from app.i18n import tr
 from app.ui import app_events, cursors
-from app.ui.bed_scale import bed_scale
+from app.ui.bed_scale import bed_grid, bed_scale
 from app.ui.change_lock import change_refusal
 from app.ui.icons import icon
 from app.ui.labels import (
@@ -8942,7 +8942,10 @@ class Viewport(QWidget):
         self._bed_surfaces.append(surface)
         self._frame_actors.append(surface)
         self._ground_actors.append(surface)
-        minor, major = shapes.grid_line_levels((shift, 0.0, 0.0), width, depth, 10.0)
+        # Die Hauptlinien liegen an den Maßzahlen darunter (FD-170).
+        minor, major = bed_grid(width, depth)
+        minor[:, 0] += shift
+        major[:, 0] += shift
         # Das Raster liegt auf der beleuchteten Fläche, der Bauraum dagegen
         # vor dem Hintergrund. Ihre Farben sind deshalb getrennte Rollen.
         for points, name, opacity in (
@@ -13719,6 +13722,9 @@ class Viewport(QWidget):
             self._difference_key = None
             self._difference_display_cache.clear()
         self._difference = difference
+        if self._preview_note:
+            # Ob die Legende steht, hängt an der Differenz (FD-116).
+            self._refresh_preview_banner()
         # Die Differenz besitzt die Modellfarben, solange sie sichtbar ist.
         # Auswahl und Hover bleiben in Baum, Text und Zeiger erhalten, färben
         # aber nicht über „hinzugefügt/entfernt" hinweg.
@@ -13810,8 +13816,16 @@ class Viewport(QWidget):
                     filter(None, (note, tr("Der Ansichtsschnitt ist stellenweise offen.")))
                 )
         if note:
+            # **Die Legende erklärt Farben, die im Bild stehen** (FD-116): erst
+            # mit einer Differenz, und nur wenn sie Volumen oder Körper hinzufügt
+            # oder wegnimmt. *Objekt umbenennen* und *Material setzen* zeigten
+            # „Hinzugefügt · Entfernt“ über einer Vorschau ohne beides. Eine
+            # Differenz, die nicht sagt, ob sie etwas ändert, gilt wie bisher
+            # als Änderung (wie ``entries`` und ``findings`` im Fenster).
             self.banner.legend.setVisible(
                 self._preview_changes
+                and self._difference is not None
+                and bool(getattr(self._difference, "changed", True))
                 and not self._difference_pending
                 and not self._difference_failed
             )

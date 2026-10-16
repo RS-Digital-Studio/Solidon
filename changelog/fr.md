@@ -54,6 +54,7 @@ dans `website/version.json`.
 - Après une action dans le *Rapport de contrôle*, le rapport reste au premier plan, et Ctrl+Z l'annule aussitôt. Jusqu'ici, l'onglet *Sélection* passait devant.
 - Les avis de plateau et d’adhérence suivent l’unité choisie. Passer de mm à pouces conserve constat sélectionné, détails ouverts, onglet et état déplié des corps.
 - Les cotes au bord du plateau suivent l’unité choisie et l’indiquent. La version 0.6.0 y affichait des millimètres même en pouces.
+- La grille du plateau part du centre du plateau, tous les 10 mm en millimètres et tous les demi-pouces en pouces. Chaque cote tombe sur une ligne appuyée.
 - En vue *Orthographique*, un clic sur un constat montre l’endroit à une taille adaptée. Jusqu’ici, le zoom précédent restait.
 - Un clic sur un constat sans emplacement propre montre le corps entier, et un projet ouvert tient entièrement dans la vue.
 - Un perçage sélectionné reste visible, bord compris. Les poignées se placent à l’extérieur du bord et les flèches commencent au-delà.
@@ -103,6 +104,13 @@ dans `website/version.json`.
 - Le dialogue *Calibrer le matériau* affiche jeu, serrage, compensation des trous, patte d'éléphant et paroi dans l'unité choisie, pouces compris, et garde la troisième décimale.
 - Un bouton long sous un refus passe à la ligne en grande police, au lieu d'élargir le dialogue.
 - Les boutons ne sont plus écrasés en grande police. Dans la version 0.6.0, les actions d'un constat du rapport de contrôle étaient coupées en haut et en bas.
+- La légende *Ajouté* et *Retiré* n'apparaît dans le bandeau d'aperçu que si l'aperçu ajoute ou retire de la matière. *Renommer l'objet* ne l'affiche donc pas.
+- Pour les paramètres, les ajustements, l'imprimante, le matériau et l'annulation, le chat indique l'endroit de la fenêtre où faire de même soi-même.
+- Le rapport de contrôle et le contrôle avant l'export nomment les corps d'un ajustement au lieu d'afficher un identifiant interne, y compris un corps supprimé entre-temps.
+- Les messages nomment une caractéristique par type et numéro, comme « Perçage 2 », au lieu d'un identifiant interne. Pour la contrepartie d'un filetage, diamètre et pas sont dans l'unité choisie.
+- L'anglais et le portugais distinguent désormais le dépassement d'un crochet, ou d'un corps sous le plateau, du surplomb à l'impression.
+- En espagnol et en portugais, le menu, la recherche et la boîte de dialogue n'affichent de nouveau que la première phrase de *Goupille pour perçage* et *Orienter pour l'impression*.
+- Plusieurs traductions se lisent plus clairement, dont l'introduction de *Créer un paramètre …*. Le tenon commence par une majuscule dans toutes les langues.
 
 ### Imprimer et transmettre au slicer
 
@@ -132,6 +140,13 @@ dans `website/version.json`.
 - Perçage, rebouchage, trous oblongs et champs de trous nomment le réglage « Compenser les écarts d'impression », comme le groupe de cotes. Il ajoute la compensation des trous.
 - À l'ouverture d'une étape existante, le bouton dit *Appliquer* au lieu d'*Insérer*. Il reste grisé tant qu'aucune valeur ne change, et indique le champ.
 - Après un plan de dessin illisible, *Choisir un autre plan* ouvre l'étape avec le curseur dans son esquisse.
+- S'il ne reste que des éclats à côté d'une pièce imprimable, *Diviser en pièces distinctes* les nomme et propose *Garder les éclats*. Avant, le corps était dit d'un seul tenant.
+- Si le rayon d'un congé ou la largeur d'un chanfrein est trop grand pour les arêtes, le message propose *Choisir d'autres arêtes*.
+- Si une face sélectionnée ne convient pas à *Appliquer une dépouille* ou *Décaler la face*, le message propose *Choisir d'autres faces*.
+- Il en va de même pour *Évidement*, *Rainure avec joint* et *Appliquer une texture*. Si un congé ne peut pas être ramené à une arête, le message propose *Choisir une autre caractéristique*.
+- Si une caractéristique sélectionnée ne convient pas, par exemple un perçage, un filetage, une chambre ou une fermeture, le message propose *Choisir une autre caractéristique*.
+- Les boutons *Choisir d'autres arêtes*, *Choisir d'autres faces* et *Choisir une autre caractéristique* ouvrent l'étape avec le curseur dans le champ concerné, même derrière *Autres réglages*.
+- Un message sans étape, comme avec *Contrepartie du filetage*, donne la marche à suivre en une phrase, par exemple *Choisir une autre caractéristique*, et n'affiche que des boutons qui agissent.
 
 ## 0.6.0
 

@@ -54,6 +54,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras una acción en el *Informe de comprobación*, el informe sigue delante y Ctrl+Z la deshace al momento. Hasta ahora saltaba al frente la pestaña *Selección*.
 - Los avisos de cama y adhesión usan la unidad elegida. Al cambiar mm/pulgadas se conservan aviso seleccionado, detalles abiertos, pestaña y estado desplegado de los cuerpos.
 - Los números a lo largo de la cama siguen la unidad elegida y la indican. La versión 0.6.0 mostraba milímetros aunque se hubieran elegido pulgadas.
+- La cuadrícula de la cama cuenta desde el centro de la cama, cada 10 mm en milímetros y cada media pulgada en pulgadas. Cada número está en una línea marcada.
 - En la vista *Ortográfica*, un clic en un aviso muestra el lugar a un tamaño adecuado. Hasta ahora se mantenía el zoom anterior.
 - Un clic en un aviso sin lugar propio muestra el cuerpo entero, y un proyecto abierto se ve completo.
 - Un taladro seleccionado se ve entero, con su borde. Los tiradores quedan fuera del borde y las flechas empiezan detrás de ellos.
@@ -103,6 +104,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El diálogo *Calibrar material* muestra holgura, apriete, compensación de agujeros, pie de elefante y pared en la unidad elegida, también en pulgadas, y conserva el tercer decimal.
 - Un botón largo bajo un rechazo se divide en varias líneas con letra grande, en lugar de ensanchar el diálogo.
 - Los botones ya no se aplastan con letra grande. En la versión 0.6.0, las acciones de un hallazgo en el informe de comprobación quedaban cortadas por arriba y por abajo.
+- La leyenda *Añadido* y *Eliminados* aparece en la barra de vista previa solo cuando la vista previa añade o quita material. Por eso *Renombrar objeto* no la muestra.
+- Para parámetros, ajustes, impresora, material y deshacer, el chat indica el lugar de la ventana donde se hace lo mismo a mano.
+- El informe de comprobación y la comprobación antes de exportar nombran los cuerpos de un ajuste en lugar de mostrar un identificador interno, también un cuerpo ya eliminado.
+- Los mensajes nombran una característica por tipo y número, como «Taladro 2», en lugar de un identificador interno. En la contraparte de una rosca, diámetro y paso aparecen en la unidad elegida.
+- El inglés y el portugués distinguen ahora el saliente de un gancho, o de un cuerpo bajo la placa, del voladizo al imprimir.
+- En español y portugués, el menú, la búsqueda y el diálogo vuelven a mostrar solo la primera frase de *Pasador para taladro* y *Orientar para imprimir*.
+- Varias traducciones se leen con más claridad, entre ellas la introducción de *Crear parámetro …*. La espiga empieza con mayúscula en todos los idiomas.
 
 ### Imprimir y entregar al slicer
 
@@ -132,6 +140,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al taladrar, tapar, en ranuras y en campos de agujeros, el ajuste se llama «Compensar desviaciones de impresión», como en el grupo de cotas, y suma la compensación de agujeros.
 - Al abrir un paso existente, el botón dice *Aplicar* en lugar de *Insertar*. Sigue en gris hasta que cambia un valor e indica el campo.
 - Tras un plano de dibujo ilegible, *Elegir otro plano* abre el paso con el cursor en su boceto.
+- Si junto a una pieza imprimible solo quedan astillas, *Dividir en piezas sueltas* las nombra y ofrece *Conservar las astillas*. Antes decía que el cuerpo era de una sola pieza.
+- Si el radio de un redondeo o el ancho de un chaflán es demasiado grande para las aristas, el mensaje ofrece *Elegir otras aristas*.
+- Si una cara seleccionada no sirve para *Aplicar ángulo de desmoldeo* o *Desplazar cara*, el mensaje ofrece *Elegir otras caras*.
+- Lo mismo vale para *Vaciar*, *Ranura de sellado con junta* y *Aplicar textura*. Si un redondeo no puede reducirse a una arista, el mensaje ofrece *Elegir otra característica*.
+- Si una característica seleccionada no sirve, por ejemplo un taladro, una rosca, una cámara o un cierre, el mensaje ofrece *Elegir otra característica*.
+- Los botones *Elegir otras aristas*, *Elegir otras caras* y *Elegir otra característica* abren el paso con el cursor en el campo correspondiente, también tras *Más ajustes*.
+- Si un mensaje no pertenece a ningún paso, como con *Contraparte de la rosca*, indica su camino con una frase, por ejemplo *Elegir otra característica*, y solo muestra botones que allí hacen algo.
 
 ## 0.6.0
 

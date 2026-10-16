@@ -16,13 +16,13 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
 from app.core.bootstrap import load_operations
-from app.core.errors import CORRECT_INPUT, PICK_PLANE, ValidationError
+from app.core.errors import CORRECT_INPUT, FIELD_WAYS, PICK_PLANE, ValidationError
 from app.core.registry import REGISTRY
 from app.core.sketch.planes import frame_for_sketch
 from app.i18n import set_language
 from app.i18n.catalog import install_language
 from app.ui.op_dialog import _SEAL_PATH_COMPANIONS, OperationDialog
-from app.ui.refusal_details import FIELD_WAYS, QUIET_WITHOUT_FIELD, field_ways, silent_ways
+from app.ui.refusal_details import QUIET_WITHOUT_FIELD, field_ways, silent_ways
 from app.ui.style import apply_style
 from app.ui.theme import apply_theme
 from app.ui.wrapping_button import WrappingButton

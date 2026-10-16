@@ -15,11 +15,13 @@ from app.core.scene.cancel import NeverCancelled
 from app.core.sketch.serialize import sketch_to_text
 from app.core.types import OpContext, Scene, Sketch, SketchElement
 
+#: Drei Punkte auf einer Geraden: eine Ebene, die sich nicht lesen lässt.
+UNREADABLE_PLANE = "through:0,0,20;10,0,20;20,0,20"
 
-def sketch_plane_refusal(plane: str) -> ValidationError:
-    """Was *Skizze extrudieren* auf ``plane`` absagt — ein Quadrat, vier Millimeter hoch."""
-    load_operations()
-    sketch = sketch_to_text(
+
+def square_on(plane: str) -> str:
+    """Ein Quadrat von zehn Millimetern als Skizzentext auf ``plane``."""
+    return sketch_to_text(
         Sketch(
             plane=plane,
             elements=(
@@ -31,6 +33,12 @@ def sketch_plane_refusal(plane: str) -> ValidationError:
             constraints=(),
         )
     )
+
+
+def sketch_plane_refusal(plane: str) -> ValidationError:
+    """Was *Skizze extrudieren* auf ``plane`` absagt — ein Quadrat, vier Millimeter hoch."""
+    load_operations()
+    sketch = square_on(plane)
     spec = REGISTRY.get("sketch_extrude")
     try:
         spec.fn(
