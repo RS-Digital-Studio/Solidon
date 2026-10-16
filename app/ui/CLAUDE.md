@@ -81,7 +81,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `session.py` | die Brücke (§7, §15.6): Stapel, Auswertung, Vorschau, Import, Fragen des Kerns (`AskRequest`); mehr: `karte-app-ui.md` |
 | `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `weak_slot`, `stop_watching_the_dying`; mehr: `karte-app-ui.md` |
 | `app_events.py` | der eine Ereignisfilter an der Anwendung; Zuhörer melden dort ihre Ereignisarten an (`listen`), wer es tut, sagt der Modul-Docstring |
-| `layout_lifetime.py` | `detach_from_layout`: Widget aus seinem haltenden Layout lösen, auch verschachtelt oder an externem Host; Elternschaft und wiederverwendete Widgets bleiben erhalten |
+| `layout_lifetime.py` | `detach_from_layout`: Widget aus seinem haltenden Layout lösen, auch verschachtelt oder an externem Host; Elternschaft und wiederverwendete Widgets bleiben erhalten · `borrowed_items`/`layout_parts`: Layoutelemente lesen, ohne ihre Hüllen zu behalten |
 | `change_lock.py` | ob geändert werden darf, für jeden Zugang |
 | `loading.py` | Ladeanzeige über der Ansicht (§2.8); `ProgressTiming` führt je Auswertung eine Uhr und einen Zeittext für Statuszeile und Schleier |
 

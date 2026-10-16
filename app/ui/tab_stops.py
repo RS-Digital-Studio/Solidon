@@ -16,7 +16,9 @@ from itertools import pairwise
 from typing import cast
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFormLayout, QGridLayout, QLayout, QLayoutItem, QScrollArea, QWidget
+from PySide6.QtWidgets import QFormLayout, QGridLayout, QLayout, QScrollArea, QWidget
+
+from app.ui.layout_lifetime import borrowed_items
 
 #: Die Rollen einer Formularzeile in Lesereihenfolge.
 _ROW_ROLES = (
@@ -61,12 +63,10 @@ def tab_stops(root: QWidget) -> list[QWidget]:
             walk(layout)
 
     def walk(layout: QLayout) -> None:
-        for item in _items_in_reading_order(layout):
-            inner = item.layout()
+        for widget, inner in _parts_in_reading_order(layout):
             if inner is not None:
                 walk(inner)
                 continue
-            widget = item.widget()
             if widget is not None:
                 visit(widget)
 
@@ -76,11 +76,15 @@ def tab_stops(root: QWidget) -> list[QWidget]:
     return stops
 
 
-def _items_in_reading_order(layout: QLayout) -> list[QLayoutItem]:
-    """Die Elemente eines Layouts, wie das Auge sie liest — Zeile für Zeile."""
+def _parts_in_reading_order(layout: QLayout) -> list[tuple[QWidget | None, QLayout | None]]:
+    """Widget oder inneres Layout je Element, wie das Auge sie liest — Zeile für Zeile.
+
+    Gelesen wird über :func:`layout_lifetime.borrowed_items`: Eine gehaltene
+    Elementhülle überlebt ihr Element, wenn Qt es löscht (FD-201).
+    """
     if isinstance(layout, QFormLayout):
         return [
-            item
+            (item.widget(), item.layout())
             for row in range(layout.rowCount())
             for role in _ROW_ROLES
             if (item := layout.itemAt(row, role)) is not None
@@ -94,7 +98,13 @@ def _items_in_reading_order(layout: QLayout) -> list[QLayoutItem]:
         order = [index for _cell, index in cells]
     else:
         order = list(range(count))
-    return [item for index in order if (item := layout.itemAt(index)) is not None]
+    with borrowed_items(layout) as items:
+        by_index = dict(items)
+        return [
+            (by_index[index].widget(), by_index[index].layout())
+            for index in order
+            if index in by_index
+        ]
 
 
 def chain_after(anchor: QWidget, root: QWidget) -> None:

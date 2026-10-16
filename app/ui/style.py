@@ -52,6 +52,7 @@ from PySide6.QtWidgets import (
 from app.core.log import get_logger
 from app.core.types import Action
 from app.ui import app_events, style_follow
+from app.ui.layout_lifetime import borrowed_items, layout_parts
 from app.ui.scroll_areas import PassingScrollArea
 from app.ui.theme import THEMES, Theme
 
@@ -413,18 +414,16 @@ def form_natural_width(form: QFormLayout) -> int:
     label_width = 0
     field_width = 0
     spanning_width = 0
-    for index in range(form.count()):
-        item = form.itemAt(index)
-        if item is None:
-            continue
-        _, role = cast(tuple[int, QFormLayout.ItemRole], form.getItemPosition(index))
-        width = _natural_item_width(item)
-        if role == QFormLayout.ItemRole.LabelRole:
-            label_width = max(label_width, width)
-        elif role == QFormLayout.ItemRole.FieldRole:
-            field_width = max(field_width, width)
-        elif role == QFormLayout.ItemRole.SpanningRole:
-            spanning_width = max(spanning_width, width)
+    with borrowed_items(form) as items:
+        for index, item in items:
+            _, role = cast(tuple[int, QFormLayout.ItemRole], form.getItemPosition(index))
+            width = _natural_item_width(item)
+            if role == QFormLayout.ItemRole.LabelRole:
+                label_width = max(label_width, width)
+            elif role == QFormLayout.ItemRole.FieldRole:
+                field_width = max(field_width, width)
+            elif role == QFormLayout.ItemRole.SpanningRole:
+                spanning_width = max(spanning_width, width)
     spacing = form.horizontalSpacing()
     if spacing < 0:
         spacing = max(0, form.spacing())
@@ -441,13 +440,9 @@ def _side_margins(owner: QLayout | QWidget) -> int:
 
 def _layout_holding(layout: QLayout, widget: QWidget) -> QLayout | None:
     """Das Layout, in dem ``widget`` unmittelbar steht — auch verschachtelt."""
-    for index in range(layout.count()):
-        item = layout.itemAt(index)
-        if item is None:
-            continue
-        if item.widget() is widget:
+    for held, inner in layout_parts(layout):
+        if held is widget:
             return layout
-        inner = item.layout()
         if inner is not None and (found := _layout_holding(inner, widget)) is not None:
             return found
     return None

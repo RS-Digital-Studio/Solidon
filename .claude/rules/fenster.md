@@ -426,7 +426,11 @@ Für Druckerwahl und Druckdialog gilt `druckerwahl.md`.
 ## `setParent(None)` macht ein Kind zum Fenster
 
 Vor Einzelabbau aus weiterlebendem Layout löst `layout_lifetime.detach_from_layout`
-das Widget; `removeWidget` entwertet gehaltene Itemhüllen. Weggeräumt wird mit
+das Widget; `removeWidget` entwertet gehaltene Itemhüllen. Gelesen werden
+Layoutelemente über `layout_lifetime.borrowed_items` oder `layout_parts`, nie
+über `itemAt(index)`: Die Hülle hängt am Layout und überlebt ein Element, das
+Qt löscht, bis ein neues `QObject` an derselben Adresse abreißt (FD-201,
+`test_layout_item_wrappers.py`). Weggeräumt wird mit
 `hide()` und `deleteLater()`, nie über den Elternteil.
 Nach `exec` Rückgabewerte im `try` lesen, den Dialog im `finally` freigeben.
 Nichtmodale Dialoge geben sich am `finished`, über `WA_DeleteOnClose` oder

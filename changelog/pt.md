@@ -20,7 +20,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Utilização e sistema
 
 - Os painéis de medidas movem-se e crescem com campos abertos. Títulos e cotas da mesa mais claros, barras e manípulos mais discretos e grelha mais visível no tema claro facilitam a vista do modelo.
-- Corrigido um possível encerramento inesperado ao mudar de característica ou de projeto.
+- Corrigido um possível encerramento inesperado ao mudar de característica ou de projeto, ou ao abrir uma caixa de diálogo.
 - A explicação de «Pousar na mesa» também se aplica a corpos que se encontram abaixo da mesa.
 - As listas de ações sobre características usam inteiramente o idioma escolhido.
 - No Mac, o Solidon pode agora carregar o controlador da 3Dconnexion (3DxWare) para o rato 3D. Da versão 0.4.1 à 0.6.0, o macOS não o permitia.
