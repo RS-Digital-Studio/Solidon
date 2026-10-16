@@ -1661,7 +1661,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: Der Registereintrag trägt kein `requires_body` (`colour_ops.py:314–330`); `grenzen.md` verlangt, dass am Menüeintrag steht, was am gewählten Körper nie etwas tun kann.
 - Vorschlag: Die Bedingung „trägt Farbinformation“ als `requires_body` mit demselben Satz; der Eintrag steht grau mit Grund.
 - Wirkung beim Kunden: Er öffnet eine Handlung, die an seinem Teil nie etwas tun kann.
-- Stand: offen RM-737; Kern vorbereitet `7938175dc`, `cac627d7e` (`BODY_REQUIREMENTS` mit `colour`, `NO_COLOUR`). Rest: Die Sperre am Menüeintrag entsteht erst mit `fix-f6-fd135-aktivierung.patch` (`requires_body="colour"`, `labels.body_requirement`, Startszene `farbig.netz`), der in welle5 `1f8346073` nicht angewandt ist.
+- Stand: behoben `a1a9306fd` (Kern vorbereitet `7938175dc`, `cac627d7e`); vier Tests in `test_texture.py` und `test_operation_ui.py` am Stand davor rot (Eintrag frei, kein Satz), danach grün: *Textur in Filamente umrechnen* steht an einem Körper ohne Farbe grau mit dem Satz des Befunds (`colour.no_texture`), frei an einem farbigen, beide Kerne; Startszene `farbig.netz` mit Korpus `painted_cube.ply`; Changelog 0.6.1 in sechs Sprachen.
 
 ### FD-136 Der Übernehmen-Fuß steht weit unter seinem Feld
 
@@ -2607,10 +2607,10 @@ eingefroren“).
 - Funktion: `finding.action:keep_saved_parts`
 - Prüfpunkt: 7, V5
 - Beleg: `tests/test_function_list.py::test_a_light_mesh_scene_keeps_its_promises[baustein_geaendert.netz]` und `::test_a_scene_leaves_nothing_behind` mit „Handlung keep_saved_parts fehlt an parts.own_changed, angeboten []“, gepinnt rot (EXIT=1) an welle5 `1f8346073`, `3f84a4c3c`, `780ea7dd7` und auf dem FD-197-Zweig an `b736da48f` und `5212ca45f`, grün (EXIT=0) an `364367294` (Elter von `5212ca45f`), `b8f8296a1` und `068ebf2b7` (`output/konsolidierung-2026-10-12/funde-w5-claude.md`). Regression aus FD-197 (Formatschritt 52 → 53).
-- Ursache: offen; am Code gelesen, nicht per Sonde belegt: `knowledge/parts/check.saved_states` vergleicht den beim Speichern abgelegten Abdruck mit `recipe.fingerprint` des mitgereisten Rezepts, und dieser hasht `to_data` samt `document_to_data` mit `document.format_version` (`scene/serialise.py:1075`); nach jeder Formaterhöhung trägt das mitgereiste Rezept die neue Version, der Abdruck passt nicht, und `kept` bleibt leer.
+- Ursache: Der Abdruck eines eigenen Rezept-Bausteins (`recipe.fingerprint`, zugleich `PartSpec.version`) hashte die Formatversion des Rezeptdokuments mit; beim Lesen wird das Rezept migriert, also passte nach jeder Formaterhöhung kein gespeicherter Abdruck mehr (Sonde an `own_part_v52.p3d`: gespeichert `1ac66d32c23d`, heute `fdf886e56582`, mit Format 52 nachgerechnet wieder `1ac66d32c23d`). In 0.6.0 traf es ebenso Projekte aus 0.5.3 (Format 46).
 - Vorschlag: den Abdruck unabhängig von der Formatversion des Dokuments rechnen oder das mitgereiste Rezept in der Version vergleichen, in der es gespeichert wurde; Test mit einem Projekt der Vorversion und geändertem eigenem Baustein.
 - Wirkung beim Kunden: Für jedes Projekt aus 0.6.0 mit geändertem eigenem Baustein sagt der Prüfbericht „ihr alter Stand liegt nicht mehr vor“, obwohl er mitgereist ist, und *Gespeicherten Stand verwenden* fehlt.
-- Stand: offen RM-737; in Arbeit
+- Stand: behoben `f470cd0e5`: Der Abdruck eines eigenen Bausteins rechnet ohne Formatversion (`recipe.fingerprint`, gespeichert mit `c:`); ein Abdruck aus einer älteren Datei bekommt beim Öffnen deren Formatversion und wird mit ihr nachgerechnet (`check.mark_stamp_formats`, `check.stamp_means`); `tests/test_part_stamps.py` mit dem Prüfstandsfall am Stand davor 7 von 7 rot, nachher 8 von 8 grün, Gegenprobe einer späteren Formatversion dabei; Zwilling Buchungsabdruck mitbehoben, sein einmaliger Bruch steht im Archiv; Changelog 0.6.1 in sechs Sprachen.
 
 ## Nachgetragene Funde aus CI-Fix und Prüfstand (ab FD-213)
 
