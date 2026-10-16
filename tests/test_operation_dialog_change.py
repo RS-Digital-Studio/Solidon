@@ -204,6 +204,38 @@ def test_a_preset_naming_hook_is_already_a_change(qt_app: QApplication) -> None:
         assert dialog._accept_button.isEnabled()
 
 
+def test_a_refused_preview_does_not_hide_the_way(qt_app: QApplication) -> None:
+    """Sagt die Vorschau des ungeänderten Schritts ab, nennt der Knopf trotzdem den Weg.
+
+    Szene ``gewinde_zu_kurz``: Der spätere Stift sagt ab, solange das Gewinde
+    zu kurz ist, und das Fenster sperrt den Knopf mit dieser Absage
+    (``block_apply``). Der Sperrgrund der Felder geht dem Satz zur ersten
+    Änderung vor (D2), die Absage der Vorschau nicht — sie gilt den Werten,
+    die schon stehen, und steht im Band. Nach einer Änderung, die weiter
+    abgesagt wird, trägt der Knopf die Absage.
+    """
+    refused = "Für einen gedruckten Stift ist das Gewinde zu kurz."
+    with _changing("insert_printed_thread", THREAD) as dialog:
+        button = dialog._accept_button
+        dialog.show()
+        qt_app.processEvents()
+        assert dialog.focus_field("length")
+        waiting = tr("Erst „{field}“ ändern, dann übernehmen.", field=tr("Länge"))
+        dialog.block_apply(refused)
+        qt_app.processEvents()
+        assert not button.isEnabled()
+        assert button.toolTip() == waiting
+        assert button.accessibleDescription() == waiting
+
+        _type_into(dialog._editors["length"].spin, "3")
+        wait_until(qt_app, lambda: button.toolTip() == refused)
+        assert not button.isEnabled()
+        assert button.accessibleDescription() == refused
+
+        dialog.block_apply(None)
+        wait_until(qt_app, button.isEnabled)
+
+
 #: Vorn nur Haken oder eine Liste — dort war *Übernehmen* sofort frei (Review F2a, R4).
 TICKS_AND_LISTS = ("repair", "orient_for_print", "clear_filament", "pose_armature")
 
