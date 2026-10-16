@@ -256,6 +256,7 @@ from app.ui.style import (
     SPACE,
     TARGET_SIZE,
     TIGHT,
+    UNBOUNDED,
     WrappedNote,
     leading_action,
     make_primary,
@@ -267,6 +268,10 @@ from app.ui.theme import THEMES, UNDONE_COLOUR, current_theme
 from app.ui.wrapped_height import follow_wrapped_height
 
 _log = get_logger(__name__)
+
+#: So viele Mitglieder nennt eine Sammelzeile des Prüfberichts, in der Zeile
+#: wie in der Kurzhilfe; der Rest steht als „… (+N)“ (FD-196).
+NAMED_MEMBERS: Final = 15
 
 #: Zeichen je Schweregrad, aus der gemeinsamen Kodierung — Farbe steht nie
 #: allein (§19.1).
@@ -7579,9 +7584,9 @@ class ReportPanel(QWidget):
             ).items()
         )
         if members:
-            names = ", ".join(self._member_label(one) for one in members[:15])
-            if len(members) > 15:
-                names += f" … (+{len(members) - 15})"
+            names = ", ".join(self._member_label(one) for one in members[:NAMED_MEMBERS])
+            if len(members) > NAMED_MEMBERS:
+                names += f" … (+{len(members) - NAMED_MEMBERS})"
             # **Die Zahl steht davor, in Klammern** (Robert, 11.09.2026:
             # „anzahl dann davor in Klammer anzeigen"), der Satz einmal — die
             # Liste der Betroffenen wäre in der Zeile die nächste Flut und
@@ -7774,7 +7779,7 @@ class ReportPanel(QWidget):
         details.extend(_value_lines(finding))
         if members:
             # **Je Mitglied, wen es betrifft — nicht noch einmal der Satz**, und
-            # höchstens fünfzehn wie in der Zeile (FD-196): 118 Waisen ergaben
+            # höchstens ``NAMED_MEMBERS`` (FD-196): 118 Waisen ergaben
             # 20 179 Zeichen, und ein Bildschirmleser las den Satz 118-mal.
             one_step = all(one.op_id == members[0].op_id for one in members)
             details.extend(
@@ -7787,10 +7792,10 @@ class ReportPanel(QWidget):
                         ),
                     )
                 )
-                for one in members[:15]
+                for one in members[:NAMED_MEMBERS]
             )
-            if len(members) > 15:
-                details.append(f"… (+{len(members) - 15})")
+            if len(members) > NAMED_MEMBERS:
+                details.append(f"… (+{len(members) - NAMED_MEMBERS})")
         detail_text = " · ".join(details)
         item.setToolTip(detail_text)
         # Tastatur und Bildschirmleser bekommen dieselbe Diagnose wie die
@@ -12794,8 +12799,6 @@ def even_fields(dialog: QWidget) -> None:
     """
     from PySide6.QtWidgets import QAbstractSpinBox, QComboBox
 
-    unbounded = 16777215
-
     def editor_of(widget: QWidget | None) -> QWidget | None:
         # Das Feld selbst oder das erste Feld seiner Zeile — die
         # Druckeinstellungen tragen Feld, *Zurücksetzen* und Hinweis in einem
@@ -12812,7 +12815,7 @@ def even_fields(dialog: QWidget) -> None:
         for row in range(form.rowCount()):
             item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
             editor = editor_of(item.widget() if item is not None else None)
-            if editor is not None and editor.maximumWidth() < unbounded:
+            if editor is not None and editor.maximumWidth() < UNBOUNDED:
                 editors.append(editor)
         if len(editors) < 2:
             continue

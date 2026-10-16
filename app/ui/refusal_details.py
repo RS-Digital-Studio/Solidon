@@ -48,7 +48,7 @@ from app.ui.labels import (
     step_number,
     value_label,
 )
-from app.ui.style import NORMAL, SPACE, WIDE, make_primary, set_level
+from app.ui.style import NORMAL, SPACE, UNBOUNDED, WIDE, make_primary, set_level
 
 #: Ein Zeilenumbruch als Name, wie in ``dialogs``.
 newline = chr(10)
@@ -374,7 +374,7 @@ class StepValuesDialog(QDialog):
         self.adjustSize()
         # Danach darf der Kunde größer ziehen; der Text nimmt den Platz.
         self.text.setMinimumHeight(self.text.fontMetrics().lineSpacing() * 3)
-        self.text.setMaximumHeight(16_777_215)
+        self.text.setMaximumHeight(UNBOUNDED)
 
     def _copy(self) -> None:
         clipboard = QApplication.clipboard()
