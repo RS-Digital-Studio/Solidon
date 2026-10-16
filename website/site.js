@@ -569,13 +569,19 @@
        (`--language-hint-space` in `style.css`): Das Seitenende lässt sich
        über sie hinausrollen, und was den Fokus bekommt, rollt über ihr in den
        Blick. Steht sie bei wenig Höhe im Fluss, braucht sie keinen. */
-    const root = document.documentElement;
+    /* Gesetzt an Wurzel **und** Seitenkörper: Chromium unter macOS gab den
+       neuen Wert der Wurzel nicht immer an `body` weiter — die Wurzel
+       sagte 162px, der Polster unten blieb 0, und die Fußverweise lagen
+       unter der Karte, bis ein Schriftwechsel neu rechnete. */
+    const holders = [document.documentElement, document.body];
     const reserve = () => {
       const style = getComputedStyle(hint);
       const space = style.position === "fixed"
         ? hint.offsetHeight + 2 * parseFloat(style.bottom)
         : 0;
-      root.style.setProperty("--language-hint-space", `${Math.ceil(space)}px`);
+      for (const holder of holders) {
+        holder.style.setProperty("--language-hint-space", `${Math.ceil(space)}px`);
+      }
     };
     const watch = window.ResizeObserver ? new ResizeObserver(reserve) : null;
 
@@ -583,7 +589,7 @@
       const focused = hint.contains(document.activeElement);
       watch?.disconnect();
       window.removeEventListener("resize", reserve);
-      root.style.removeProperty("--language-hint-space");
+      for (const holder of holders) holder.style.removeProperty("--language-hint-space");
       hint.remove();
       remember("closed");
       /* Der Fokus darf nicht mit der Karte verschwinden: Er geht an das
