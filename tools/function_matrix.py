@@ -14,6 +14,11 @@ an allen Stufen „fehlt“, weil der Befund nie gewählt war, und *Bohrung änd
 am Merkmal „steht nicht da“, weil sie im Bild stand. Der Gegenfall bleibt: Wo
 die Handlung an einer Stufe nicht gilt, fehlt sie. ``FunctionFlow`` erbt die
 Phase.
+
+**Ein Fenster als Ziel wird gelesen, solange es steht** (RC-4,
+:meth:`MatrixPhase.window_step`): Der Automat räumt ein modales Fenster am Ende
+des Laufs mit Escape ab, danach gefragt hieß jede Fensterzeile „fehlt“. Auch
+der Lizenzlauf (Prüfpunkt 18) liest so.
 """
 
 from __future__ import annotations
@@ -33,6 +38,11 @@ if TYPE_CHECKING:
 #: Die Klicks, mit denen ein Weg auswählt: Baumzeile, Stelle und Kante im Bild.
 #: Die Matrix ersetzt sie durch die Auswahl ihrer Stufe.
 SELECTION_PREFIXES: Final[tuple[str, ...]] = ("tree.row:", "view:", "view.edge:")
+
+
+def is_window(target: str) -> bool:
+    """Ob das Ziel ein Fenster ist, das ein anderer Klick öffnet (Rückfrage, Meldung)."""
+    return target.partition(":")[0] in surfaces.OPENED_ELSEWHERE
 
 
 def way_of(row: Mapping[str, Any]) -> list[tuple[str, str]]:
@@ -142,6 +152,9 @@ class MatrixPhase:
                     ready=lambda settled=settled: self.in_view_now(target) or settled(),
                 )
             )
+            read: dict[str, Any] = {}
+            if is_window(target):
+                selection.append(self.window_step(target, read))
             if not self.run_steps(f"matrix {stage} auswahl", selection):
                 matrix[stage] = {
                     "state": MATRIX_UNREACHABLE,
@@ -149,8 +162,57 @@ class MatrixPhase:
                     "effective": None,
                 }
                 continue
-            matrix[stage] = self.offer_state(target, f"matrix {stage}")
+            matrix[stage] = (
+                read if is_window(target) else self.offer_state(target, f"matrix {stage}")
+            )
         self.data["matrix"] = matrix
+
+    def licence_state(
+        self: FunctionFlow, target: str, inputs: list[str], read: Mapping[str, Any]
+    ) -> tuple[str, str]:
+        """Wie das Ziel im Lizenzlauf dasteht (Prüfpunkt 18): Zustand und Grund.
+
+        Ein Fenster als Ziel hat sein Lauf schon gelesen, solange es stand
+        (``read``, :meth:`window_step`). Mit Bild steht eine Handlung am Merkmal in
+        der Maßgruppe; ihr Feld ist dann, was offen oder grau dasteht, der Kopf im
+        Merkmalfenster ist verborgen (F-20: vorher „fehlt“ in jedem Lizenzzustand,
+        auch „licensed“). Der Grund kommt nur aus dem grauen Ziel; fehlt es, ist das
+        kein Grund, sondern ein eigener Zustand (Durchsicht welle4 C-S1).
+        """
+        if read:
+            return str(read["state"]), str(read["reason"]) if read["state"] == "grau" else ""
+        probe = (
+            surfaces.field_name(self.window, inputs[0])
+            if target.startswith("feature:") and surfaces.in_view(self.window, inputs)
+            else target
+        )
+        grey = surfaces.grey_reason(self.window, probe)
+        try:
+            self.ports.next_click(probe)
+        except LookupError:
+            return "fehlt", ""
+        return ("grau", grey) if grey is not None else ("angeboten", "")
+
+    def window_step(self: FunctionFlow, target: str, into: dict[str, Any]) -> Step:
+        """Ein Fenster als Ziel lesen, solange es steht — ohne Klick in seine Mitte (RC-4).
+
+        Erreicht ist es, sobald es dasteht (FD-101, ``path_steps``): angeboten und
+        wirksam, denn der Weg hat es geöffnet. Steht es nicht, nennt der Öffner der
+        Zeile seinen Grund, wenn er grau ist; sonst fehlt es.
+        """
+        openers = [name for name, _button in route_of(self.row) if name != target]
+
+        def read(machine: StepMachine) -> None:
+            try:
+                self.ports.next_click(target)
+            except LookupError as error:
+                grey = surfaces.grey_reason(self.window, openers[-1]) if openers else None
+                state = "grau" if grey is not None else "fehlt"
+                into.update(state=state, reason=grey or str(error), effective=None)
+            else:
+                into.update(state="angeboten", reason="", effective=True)
+
+        return Step(f"{target} lesen", read, ready=self.walker.stable(target))
 
     def in_view_now(self: FunctionFlow, target: str) -> bool:
         """Ob die Handlung der Zeile gerade in der Maßgruppe im Bild steht (F-20, FD-100)."""

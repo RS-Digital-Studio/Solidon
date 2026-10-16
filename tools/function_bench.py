@@ -56,7 +56,7 @@ from tools.function_machine import (
     qt_schedule,
     until_step,
 )
-from tools.function_matrix import MatrixPhase
+from tools.function_matrix import MatrixPhase, is_window
 from tools.function_protocol import (
     abort_entry,
     bodies_digest,
@@ -1830,6 +1830,9 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
         selection = [
             self.walker.step(name, button) for name, button in route_of(self.row) if name != target
         ]
+        read: dict[str, Any] = {}  # Ein Fenster als Ziel: gelesen, solange es steht (RC-4).
+        if is_window(target):
+            selection.append(self.window_step(target, read))
         if target.startswith("feature:"):
             # Die Handlung am Merkmal steht nach der Auswahl erst im Fenster oder
             # im Bild — gefragt wird danach, nicht im selben Augenblick (F-20).
@@ -1841,26 +1844,8 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
                     self.data, f"licence_runs.{self.variant.licence}", "Auswahlweg abgebrochen"
                 )
                 return
-            # Mit Bild steht die Handlung in der Maßgruppe; ihr Feld ist dann, was
-            # offen oder grau dasteht, der Kopf im Merkmalfenster ist verborgen
-            # (F-20: vorher „fehlt“ in jedem Lizenzzustand, auch „licensed“).
-            probe = (
-                surfaces.field_name(self.window, inputs[0])
-                if target.startswith("feature:") and surfaces.in_view(self.window, inputs)
-                else target
-            )
-            # Der Grund kommt nur aus dem grauen Ziel. Fehlt es, ist das kein Grund,
-            # sondern ein eigener Zustand: Der Text der eigenen ``LookupError`` als
-            # Grund machte aus einem versteckten Ziel „grau mit Grund“ (Durchsicht
-            # welle4 C-S1).
-            grey = surfaces.grey_reason(self.window, probe)
-            try:
-                self.ports.next_click(probe)
-            except LookupError:
-                state, reason = "fehlt", ""
-            else:
-                state, reason = ("grau", grey) if grey is not None else ("angeboten", "")
-            if state == "angeboten":
+            state, reason = self.licence_state(target, inputs, read)
+            if state == "angeboten" and not read:
                 acting = [
                     self.action_step(target)
                     if target.startswith("feature:")
