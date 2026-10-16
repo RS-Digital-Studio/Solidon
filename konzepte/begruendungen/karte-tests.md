@@ -258,7 +258,12 @@ umbrechende Knopf) und `test_plane_refusal_field.py`
 (die Ebenenabsage einer Skizzenoperation nennt `sketch`). Zu FD-185:
 `test_report_offer_height_window.py` (Handlungsknöpfe im Prüfbericht eines
 niedrigen Fensters bei 11 und 18 pt nie unter ihrer Mindesthöhe; ein Knopf
-folgt dem Schriftwechsel in beide Richtungen).
+folgt dem Schriftwechsel in beide Richtungen). Zu FD-190:
+`test_sketch_way_focus_window.py` (Knopf im Bericht → Skizzenmodus: Tastatur
+in *Zeichenebene* bei unlesbarer Ebene, in der Ansicht bei einer kaputten
+Zeichnung). Nach dem Merge A/B: `test_field_ways_source.py` (eine Quelle
+`errors.FIELD_WAYS`) und `test_field_ways_both_paths_window.py` (FD-95,
+FD-182, RB2-2 im Dialog, Ebenenweg im Fenster).
 
 Der Operationsdialog hat je Fund eine eigene Datei:
 `test_operation_dialog_names.py` öffnet jede registrierte Operation und

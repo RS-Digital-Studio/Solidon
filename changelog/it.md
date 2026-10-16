@@ -140,6 +140,7 @@ scrive in `website/version.json`.
 - Foratura, chiusura, asole e campi di fori chiamano la correzione «Compensare gli scostamenti di stampa», come il gruppo di quote, e aggiungono la compensazione dei fori.
 - Aprendo un passaggio esistente, il pulsante dice *Applica* invece di *Inserisci*. Resta grigio finché non cambia un valore e indica il campo.
 - Dopo un piano di disegno illeggibile, *Scegli un altro piano* apre il passaggio con il cursore nel suo schizzo.
+- Quando un pulsante del rapporto di verifica porta alla modalità schizzo, la tastiera si trova dove si prosegue: nel campo *Piano di disegno* se il piano manca, altrimenti nella vista.
 - Se accanto a un pezzo stampabile restano solo schegge, *Dividi in pezzi distinti* le nomina e offre *Tieni le schegge*. Prima diceva che il corpo era di un solo pezzo.
 - Se il raggio di un raccordo o la larghezza di uno smusso è troppo grande per gli spigoli, il messaggio offre *Scegli altri spigoli*.
 - Se una faccia selezionata non va bene per *Applica l'angolo di sformo* o *Scosta la faccia*, il messaggio offre *Scegli altre facce*.

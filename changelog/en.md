@@ -140,6 +140,7 @@ it into `website/version.json`.
 - Drilling, filling, slots and hole fields call the adjustment “Compensate for printing deviations” as the dimension group does, and it adds the material's hole compensation.
 - Opening an existing step offers *Apply* instead of *Insert*. The button stays grey until a value changes and names the field.
 - After an unreadable drawing plane, *Pick a different plane* opens the step with the cursor in its sketch.
+- When a button in the check report leads into sketch mode, the keyboard lands where the work continues: in the *Drawing plane* field if the plane is missing, otherwise in the view.
 - If only slivers remain beside one printable part, *Split into separate parts* names them and offers *Keep slivers*. Before, it said the body was all one piece.
 - If a fillet radius or chamfer width is too large for the edges, the message offers *Pick different edges*.
 - If a selected face does not suit *Apply draft angle* or *Offset face*, the message offers *Pick different faces*.

@@ -141,6 +141,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al taladrar, tapar, en ranuras y en campos de agujeros, el ajuste se llama «Compensar desviaciones de impresión», como en el grupo de cotas, y suma la compensación de agujeros.
 - Al abrir un paso existente, el botón dice *Aplicar* en lugar de *Insertar*. Sigue en gris hasta que cambia un valor e indica el campo.
 - Tras un plano de dibujo ilegible, *Elegir otro plano* abre el paso con el cursor en su boceto.
+- Cuando un botón del informe de comprobación lleva al modo de boceto, el teclado queda donde sigue el trabajo: en el campo *Plano de dibujo* si falta el plano y, si no, en la vista.
 - Si junto a una pieza imprimible solo quedan astillas, *Dividir en piezas sueltas* las nombra y ofrece *Conservar las astillas*. Antes decía que el cuerpo era de una sola pieza.
 - Si el radio de un redondeo o el ancho de un chaflán es demasiado grande para las aristas, el mensaje ofrece *Elegir otras aristas*.
 - Si una cara seleccionada no sirve para *Aplicar ángulo de desmoldeo* o *Desplazar cara*, el mensaje ofrece *Elegir otras caras*.

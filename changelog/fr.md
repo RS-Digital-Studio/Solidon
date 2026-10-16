@@ -141,6 +141,7 @@ dans `website/version.json`.
 - Perçage, rebouchage, trous oblongs et champs de trous nomment le réglage « Compenser les écarts d'impression », comme le groupe de cotes. Il ajoute la compensation des trous.
 - À l'ouverture d'une étape existante, le bouton dit *Appliquer* au lieu d'*Insérer*. Il reste grisé tant qu'aucune valeur ne change, et indique le champ.
 - Après un plan de dessin illisible, *Choisir un autre plan* ouvre l'étape avec le curseur dans son esquisse.
+- Quand un bouton du rapport de contrôle mène au mode esquisse, le clavier arrive là où le travail continue : dans le champ *Plan de dessin* si le plan manque, sinon dans la vue.
 - S'il ne reste que des éclats à côté d'une pièce imprimable, *Diviser en pièces distinctes* les nomme et propose *Garder les éclats*. Avant, le corps était dit d'un seul tenant.
 - Si le rayon d'un congé ou la largeur d'un chanfrein est trop grand pour les arêtes, le message propose *Choisir d'autres arêtes*.
 - Si une face sélectionnée ne convient pas à *Appliquer une dépouille* ou *Décaler la face*, le message propose *Choisir d'autres faces*.

@@ -464,6 +464,7 @@ from app.ui.sketch_editor import (
     grid_step_for,
     plane_where,
 )
+from app.ui.sketch_focus import focus_the_sketch
 from app.ui.spacemouse import SpaceMouseController
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_paths, accepted_url, dropped_file
@@ -13313,6 +13314,8 @@ class MainWindow(QMainWindow):
         self.toolbar.setVisible(False)
         self.sketch_bar.setVisible(True)
         self._update_actions()
+        # Die Tastatur ins Ziel: Ebenenwahl ohne lesbare Ebene, sonst die Ansicht (FD-190).
+        focus_the_sketch(panel, self.viewport, frame)
         # Beide Texte sagten „die Operation", auch wenn es noch keine gab: der
         # Zeichnen-Knopf startet ohne festgelegte Op, und was aus der Skizze
         # wird, entscheidet der Dialog bei „Fertig". Ein Hinweis, der auf eine

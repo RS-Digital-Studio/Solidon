@@ -140,6 +140,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Furar, tapar, furos oblongos e campos de furos chamam ao ajuste «Compensar desvios de impressão», como o grupo de cotas, e acrescentam a compensação de furos.
 - Ao abrir um passo existente, o botão diz *Aplicar* em vez de *Inserir*. Fica cinzento até mudar um valor e indica o campo.
 - Após um plano de desenho ilegível, *Escolher outro plano* abre o passo com o cursor no seu esboço.
+- Quando um botão do relatório de verificação leva ao modo de esboço, o teclado fica onde o trabalho continua: no campo *Plano de desenho* se o plano faltar e, caso contrário, na vista.
 - Se junto a uma peça imprimível só restarem lascas, *Dividir em peças soltas* nomeia-as e oferece *Manter as lascas*. Antes dizia que o corpo era de uma só peça.
 - Se o raio de um arredondamento ou a largura de um chanfro for grande demais para as arestas, a mensagem oferece *Escolher outras arestas*.
 - Se uma face selecionada não servir para *Aplicar o ângulo de saída* ou *Deslocar a face*, a mensagem oferece *Escolher outras faces*.

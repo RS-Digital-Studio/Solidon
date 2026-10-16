@@ -2224,7 +2224,9 @@ den Eintrag stünde sie an keiner der beiden Stellen.
 
 *Früher unter „Die Karte › Editor“, HEAD-Fassung.*
 
-`sketch_editor.py` (§30.1, Stufe zwei)
+`sketch_editor.py` (§30.1, Stufe zwei) · `sketch_focus.py` (wohin die
+Tastatur beim Betreten geht: ohne auflösbare Ebene in *Zeichenebene*, sonst
+in die Ansicht; aufgerufen am Ende von `MainWindow.start_sketch`, FD-190)
 
 *Früher unter „Vorschau und Auswahl“.*
 

@@ -165,6 +165,7 @@ Nutzen da und sonst nichts.
 - Beim Bohren, Verschließen, Langloch und Lochfeld heißt der Ausgleich „Druckabweichung ausgleichen“ wie in der Maßgruppe und gibt die Lochkorrektur des Materials zu.
 - Wer einen vorhandenen Schritt öffnet, übernimmt mit *Übernehmen* statt *Einsetzen*. Der Knopf bleibt grau, bis sich ein Wert ändert, und nennt das Feld.
 - Nach einer unlesbaren Zeichenebene öffnet *Eine andere Ebene wählen* den Schritt mit dem Cursor in seiner Skizze.
+- Führt ein Knopf im Prüfbericht in den Skizzenmodus, steht die Tastatur dort, wo es weitergeht: im Feld *Zeichenebene*, wenn die Ebene fehlt, sonst in der Ansicht.
 - Bleiben neben einem druckbaren Teil nur Splitter, nennt *In Einzelteile aufteilen* sie und bietet *Splitter behalten* an. Bisher hieß es, der Körper bestehe aus einem Stück.
 - Ist der Radius einer Rundung oder die Breite einer Fase für die Kanten zu groß, bietet die Meldung *Andere Kanten wählen* an.
 - Passt eine gewählte Fläche nicht zu *Formschräge anstellen* oder *Fläche versetzen*, bietet die Meldung *Andere Flächen wählen* an.
