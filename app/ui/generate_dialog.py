@@ -37,7 +37,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSpacerItem,
-    QSpinBox,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -60,6 +59,7 @@ from app.i18n import format_decimal, tr
 from app.ui.ai_disclosure import DisclosureResult, ensure_ai_disclosure
 from app.ui.dialogs import align_to_the_front, show_error, spoken_values
 from app.ui.form_fields import explain_row
+from app.ui.grouped_spin import IdentifierIntSpin
 from app.ui.labels import UNEXPECTED_CRASH, volume, wheel_needs_focus
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
@@ -460,7 +460,8 @@ class GenerateDialog(QDialog):
             )
         )
 
-        self.seed = QSpinBox(self)
+        # Eine Kennung zum Abschreiben, auch in die Kommandozeile: ohne Gruppen.
+        self.seed = IdentifierIntSpin(self)
         self.seed.setRange(0, MAX_SEED)
         self.seed.setToolTip(
             tr(

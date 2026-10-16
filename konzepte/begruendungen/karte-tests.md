@@ -270,12 +270,18 @@ Der Operationsdialog hat je Fund eine eigene Datei:
 verlangt je Eingabefeld einen Namen, keinen doppelt;
 `test_operation_dialog_first_focus.py` den markierten Vorgabetext;
 `test_required_text_field.py` den leeren Pflichttext ohne Vorschau;
-`test_operation_dialog_height.py` die Anfangshöhe ohne Leerstreifen;
+`test_operation_dialog_height.py` die Anfangshöhe ohne Leerstreifen,
+`test_operation_dialog_flap_height.py` dasselbe für jede Operation in jeder
+Sprache beim Öffnen und nach dem Aufklappen;
 `test_grouped_count_field.py` Dreiergruppen im Ganzzahlfeld;
 `test_operation_dialog_change.py` den Änderungsweg (*Übernehmen*, grau bis zur
-ersten Änderung). Ohne Fenster: `test_hole_compensation_words.py` (der Name des
+ersten Änderung); `test_unlisted_choices.py` Namen statt Kennungen für Werte,
+die eine Liste nicht führt. Ohne Fenster: `test_hole_compensation_words.py` (der Name des
 Ausgleichs an jeder Bohrung, in jeder Sprache). `test_calibration_units.py`
-prüft *Material kalibrieren* in Zoll.
+prüft *Material kalibrieren* in Zoll. `test_wrapped_captions.py` verlangt jede
+Zeile jeder umgebrochenen Beschriftung bei Grund- und großer Schrift,
+`test_grouped_count_fields.py` liest den Quelltext auf Ganzzahlfelder ohne
+Dreiergruppen.
 
 Statische Quellprüfungen teilen die Vorbereitung innerhalb eines Testfalls:
 `test_language_rules.py` prüft je Datei denselben AST auf alle Sprachregeln;

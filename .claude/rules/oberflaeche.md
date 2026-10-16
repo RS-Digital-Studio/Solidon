@@ -192,7 +192,7 @@ eine Zeile nicht in Zoll sprechen.
 nacktes `QDoubleSpinBox`** — Qt liest den Punkt in deutscher Anzeigesprache als
 Tausendertrennung, aus „12.5“ wird still 125. Leseregel: **das letzte
 Trennzeichen ist das Dezimaltrennzeichen**, alle davor trennen Tausender (ein
-Ganzzahlfeld liest Dreiergruppen, `grouped_spin`); nur
+Feld ohne Nachkomma liest Dreiergruppen, `grouped_spin`); nur
 „1.000“ ohne Nachkomma bleibt zweideutig (eins), und was gelesen wurde, steht
 danach im Feld. **Der getippte Text bleibt unangetastet:** `validate` prüft
 beide Lesarten und gibt ihn unverändert zurück, gelesen wird in

@@ -82,3 +82,21 @@ def test_the_drilling_sentence_names_the_hole_compensation(language: str) -> Non
         assert tr("Lochkorrektur").casefold() in str(REGISTRY.get("drill_hole").doc).casefold()
     finally:
         set_language("de")
+
+
+def test_no_code_names_the_tick_by_its_old_title() -> None:
+    """Auch kein Kommentar und kein Werkzeug nennt den alten Titel (Review F2a, R8).
+
+    ``scene/fits.py`` beschrieb den Haken als *Materialtoleranz berücksichtigen*,
+    nachdem er in der Oberfläche schon „Druckabweichung ausgleichen“ hieß.
+    """
+    root = Path(__file__).resolve().parent.parent
+    old = "Materialtoleranz berücksichtigen"
+    hits = [
+        f"{path.relative_to(root).as_posix()}:{number}"
+        for folder in ("app", "tools")
+        for path in sorted((root / folder).rglob("*.py"))
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if old in line
+    ]
+    assert not hits, hits

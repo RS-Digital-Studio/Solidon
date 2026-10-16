@@ -57,7 +57,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListView,
     QPushButton,
-    QSpinBox,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -77,6 +76,7 @@ from app.core.units import SMALLEST_NOZZLE
 from app.i18n import _, format_decimal, language_name, set_language, tr
 from app.i18n.catalog import available_languages, install_language
 from app.ui.dialogs import show_error
+from app.ui.grouped_spin import GroupedIntSpin
 from app.ui.icons import icon
 from app.ui.labels import (
     NumberSpin,
@@ -490,7 +490,7 @@ class FirstRunDialog(QDialog):
         # Wie viele davon: Eine Düse mit Wechselstation spült bei jedem
         # Filamentwechsel, und danach richtet sich, ob Filamente auf eigene
         # Platten kommen. Der Druckdialog führt dasselbe Feld.
-        self.printer_nozzles = QSpinBox(self.custom_printer)
+        self.printer_nozzles = GroupedIntSpin(self.custom_printer)
         self.printer_nozzles.setRange(1, 8)
         self.printer_nozzles.setValue(template.nozzles)
         self.printer_nozzles.setToolTip(

@@ -95,10 +95,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los campos de las barras *Análisis* y *Dividir*, la descripción en *Generar modelo*, la elección *Tipo* y la casilla «Incluir valores» se explican en la ayuda emergente y al lector de pantalla.
 - Desde una pestaña de la tarjeta de la derecha, la tecla Tab entra en la página visible y la recorre de arriba abajo.
 - Una medida del proyecto sin unidad sigue siendo un número en el historial y en la barra de parámetros, también en pulgadas. La versión 0.6.0 le añadía «mm» en el historial.
-- Un lector de pantalla nombra cada campo de cada diálogo de función, también listas desplegables, casillas y listas de características.
+- Un lector de pantalla nombra cada campo de cada diálogo de operación, también listas desplegables, casillas y listas de características.
 - Un texto que el diálogo ya trae, como un nombre, aparece seleccionado al abrir. Al escribir se sustituye.
-- Las cantidades grandes aparecen también en los campos en grupos de tres cifras, por ejemplo 1 051 736 triángulos. Se escriben con o sin separadores.
-- Los diálogos de función se abren tan altos como su contenido. En la versión 0.6.0, *Repetir característica*, por ejemplo, dejaba una franja vacía sobre los botones.
+- Los números enteros grandes aparecen también en los campos en grupos de tres cifras, como 1 051 736 triángulos o 10 000 mm/s² de *Aceleración*. Se escriben con o sin separadores.
+- Los nombres largos de campos en *Más ajustes* muestran todas sus líneas, también con letra grande. En la versión 0.6.0, *Hacer un taladro* perdía la última palabra de uno.
+- Los diálogos de operación tienen la altura de su contenido, también al desplegar *Más ajustes*. En la versión 0.6.0, *Repetir característica* dejaba una franja vacía sobre los botones.
 - Si un campo obligatorio como el texto de *Rótulo como cuerpo* está vacío, el campo dice qué va dentro y el botón espera. La versión 0.6.0 mostraba ahí un error al abrir.
 - Quien cambia un paso confirma con *Aplicar*. El botón sigue gris hasta que algo cambia y nombra el campo que hay que cambiar.
 - El diálogo *Calibrar material* muestra holgura, apriete, compensación de agujeros, pie de elefante y pared en la unidad elegida, también en pulgadas, y conserva el tercer decimal.
@@ -112,6 +113,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En español y portugués, el menú, la búsqueda y el diálogo vuelven a mostrar solo la primera frase de *Pasador para taladro* y *Orientar para imprimir*.
 - Varias traducciones se leen con más claridad, entre ellas la introducción de *Crear parámetro …*. La espiga empieza con mayúscula en todos los idiomas.
 - Las explicaciones de las tarjetas ocupan solo las líneas de su texto, también en una tarjeta ancha. La versión 0.6.0 dejaba líneas vacías en algunos idiomas, como bajo dos caras seleccionadas.
+- Un campo de selección nombra un valor que su lista no ofrece, como «Cara 1 · no sirve aquí», y una arista por orientación y posición. La versión 0.6.0 mostraba un código interno.
 
 ### Imprimir y entregar al slicer
 

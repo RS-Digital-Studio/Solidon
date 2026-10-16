@@ -20,23 +20,38 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from PySide6.QtCore import QObject
-from PySide6.QtWidgets import QAbstractSpinBox, QComboBox, QFormLayout, QLabel, QLineEdit, QWidget
+from PySide6.QtWidgets import (
+    QAbstractButton,
+    QAbstractItemView,
+    QAbstractSpinBox,
+    QCheckBox,
+    QComboBox,
+    QFormLayout,
+    QLabel,
+    QLineEdit,
+    QWidget,
+)
 
 from app.core.errors import AppError
 from app.i18n import tr
 
-#: Was als Feld zählt — dieselben Arten, die der Funktionsdurchgang liest.
-_FIELDS = (QAbstractSpinBox, QComboBox, QLineEdit)
+#: Was als Feld zählt — auch ein Haken und eine Liste (Review F2a, R4): Wo vorn
+#: nur sie standen, war *Übernehmen* vor jeder Änderung frei. Der
+#: Funktionsdurchgang liest dieselben Arten (:func:`is_field`).
+FIELD_KINDS = (QAbstractSpinBox, QComboBox, QLineEdit, QCheckBox, QAbstractItemView)
 
 
-def _is_field(widget: QObject) -> bool:
-    """Ein Eingabefeld — das Textfeld in einem Dreh- oder Auswahlfeld zählt nicht extra."""
-    if not isinstance(widget, _FIELDS):
+def is_field(widget: QObject) -> bool:
+    """Ein Eingabefeld — Textfeld und Liste in einem Dreh- oder Auswahlfeld zählen nicht extra."""
+    if not isinstance(widget, FIELD_KINDS):
         return False
-    if isinstance(widget, QLineEdit):
-        return not widget.isReadOnly() and not isinstance(
-            widget.parentWidget(), QAbstractSpinBox | QComboBox
-        )
+    if isinstance(widget, QLineEdit) and widget.isReadOnly():
+        return False
+    parent = widget.parentWidget() if isinstance(widget, QWidget) else None
+    while parent is not None:
+        if isinstance(parent, QAbstractSpinBox | QComboBox):
+            return False
+        parent = parent.parentWidget()
     return True
 
 
@@ -74,10 +89,10 @@ def first_field(fields: Iterable[QObject], surface: QWidget) -> QWidget | None:
     for widget in fields:
         if not isinstance(widget, QWidget):
             continue
-        candidates = [widget] if _is_field(widget) else widget.findChildren(QWidget)
+        candidates = [widget] if is_field(widget) else widget.findChildren(QWidget)
         for candidate in candidates:
             if (
-                _is_field(candidate)
+                is_field(candidate)
                 and (candidate is surface or surface.isAncestorOf(candidate))
                 and candidate.isVisibleTo(surface)
                 and candidate.isEnabled()
@@ -87,12 +102,35 @@ def first_field(fields: Iterable[QObject], surface: QWidget) -> QWidget | None:
     return None
 
 
-def first_change_sentence(fields: Iterable[QObject], surface: QWidget) -> str:
-    """Der Satz am grauen *Übernehmen* vor der ersten Änderung — leer ohne offenes Feld."""
+def first_change_sentence(
+    fields: Iterable[QObject],
+    surface: QWidget,
+    flap: QAbstractButton | None = None,
+    behind: QWidget | None = None,
+) -> str:
+    """Der Satz am grauen *Übernehmen* vor der ersten Änderung — leer ohne Feld.
+
+    Steht kein Feld offen auf der Fläche, aber hinter der zugeklappten Klappe
+    ``flap`` (Inhalt ``behind``), nennt der Satz das erste Feld dort und die
+    Klappe als Weg dahin. Sonst hinge, ob der Knopf wartet, daran, ob die
+    Klappe offen ist (*Skelett stellen*, Review F2a, R4).
+    """
+    fields = list(fields)
     field = first_field(fields, surface)
-    if field is None:
+    if field is not None:
+        return str(tr("Erst „{field}“ ändern, dann übernehmen.", field=field_title(field, surface)))
+    if flap is None or behind is None or not flap.isVisibleTo(surface):
         return ""
-    return str(tr("Erst „{field}“ ändern, dann übernehmen.", field=field_title(field, surface)))
+    hidden = first_field(fields, behind)
+    if hidden is None:
+        return ""
+    return str(
+        tr(
+            "Erst „{field}“ unter „{flap}“ ändern, dann übernehmen.",
+            field=field_title(hidden, behind),
+            flap=flap.text().replace("&", "").strip(),
+        )
+    )
 
 
 #: Feldarten, die einen Stand tragen. Eine Wahl oder ein Haken ist eine
@@ -167,9 +205,11 @@ def waits_for_change(
 
 
 __all__ = [
+    "FIELD_KINDS",
     "field_title",
     "first_change_sentence",
     "first_field",
+    "is_field",
     "offered_unchanged",
     "offered_values",
     "typed",

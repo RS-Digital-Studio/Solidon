@@ -95,10 +95,11 @@ dans `website/version.json`.
 - Les champs des barres *Analyse* et *Diviser*, la description dans *Générer un modèle*, le choix *Type* et la case « Inclure les valeurs » s'expliquent dans l'infobulle et au lecteur d'écran.
 - Depuis un onglet de la carte de droite, la touche Tab entre dans la page affichée et la parcourt de haut en bas.
 - Une cote de projet sans unité reste un nombre dans l'historique et la barre des paramètres, même en pouces. La version 0.6.0 y ajoutait « mm » dans l'historique.
-- Un lecteur d'écran nomme chaque champ de chaque dialogue de fonction, y compris les listes déroulantes, les cases à cocher et les listes de caractéristiques.
+- Un lecteur d'écran nomme chaque champ de chaque dialogue d'opération, y compris les listes déroulantes, les cases à cocher et les listes de caractéristiques.
 - Un texte déjà rempli par un dialogue, comme un nom, est sélectionné à l'ouverture. La frappe le remplace.
-- Les grands nombres s'affichent aussi dans les champs par groupes de trois chiffres, par exemple 1 051 736 triangles. On les saisit avec ou sans séparateurs.
-- Les dialogues de fonction s'ouvrent à la hauteur de leur contenu. Dans la version 0.6.0, *Répéter la caractéristique* par exemple laissait une bande vide au-dessus des boutons.
+- Les grands nombres entiers s'affichent aussi dans les champs par groupes de trois chiffres, comme 1 051 736 triangles ou 10 000 mm/s² d'*Accélération*. On les saisit avec ou sans séparateurs.
+- Les noms de champs longs sous *Autres réglages* affichent chaque ligne, même en grande police. Dans la version 0.6.0, *Percer un trou* en perdait le dernier mot.
+- Les dialogues d'opération ont la hauteur de leur contenu, même après avoir déplié *Autres réglages*. En version 0.6.0, *Répéter la caractéristique* laissait une bande vide au-dessus des boutons.
 - Si un champ obligatoire comme le texte de *Inscription comme corps* est vide, le champ indique ce qu'il attend et le bouton patiente. La version 0.6.0 y affichait une erreur à l'ouverture.
 - Pour modifier une étape, on confirme avec *Appliquer*. Le bouton reste grisé tant que rien n'a changé et nomme le champ à modifier.
 - Le dialogue *Calibrer le matériau* affiche jeu, serrage, compensation des trous, patte d'éléphant et paroi dans l'unité choisie, pouces compris, et garde la troisième décimale.
@@ -112,6 +113,7 @@ dans `website/version.json`.
 - En espagnol et en portugais, le menu, la recherche et la boîte de dialogue n'affichent de nouveau que la première phrase de *Goupille pour perçage* et *Orienter pour l'impression*.
 - Plusieurs traductions se lisent plus clairement, dont l'introduction de *Créer un paramètre …*. Le tenon commence par une majuscule dans toutes les langues.
 - Les explications des cartes sont aussi hautes que leur texte, même dans une carte large. La version 0.6.0 laissait des lignes vides dans certaines langues, comme sous deux faces sélectionnées.
+- Un champ de sélection nomme une valeur absente de sa liste, comme « Face 1 · ne convient pas ici », et une arête par orientation et position. La version 0.6.0 affichait un code interne.
 
 ### Imprimer et transmettre au slicer
 

@@ -147,6 +147,7 @@ from app.ui.first_run import (
     printers_on_offer,
     valid_printer_choice,
 )
+from app.ui.grouped_spin import GroupedSpin
 from app.ui.header import filament_names
 from app.ui.icons import icon
 from app.ui.labels import (
@@ -565,10 +566,16 @@ def _make_setting_editor(
         button.changed.connect(changed)
         editor = button
     else:
-        number = BoundedSpin(parent)
+        # Eine Anzahl und jedes Maß ohne Nachkomma stehen in Dreiergruppen wie
+        # jede andere Zahl (FD-184), und „1.000“ heißt dort tausend: Die
+        # *Beschleunigung* stand als „10000 mm/s²“ da, und „1.000“ in
+        # *Leerfahrt* wurde still 1 mm/s (Review F2a, R2).
+        whole = field.kind == "int" or field.decimals == 0
+        number = GroupedSpin(parent) if whole else BoundedSpin(parent)
+        if not whole:
+            number.setDecimals(field.decimals)
         number.setRange(field.minimum, field.maximum)
         number.setSingleStep(1 if field.kind == "int" else field.step)
-        number.setDecimals(0 if field.kind == "int" else field.decimals)
         if field.path == "adhesion.raft_gap":
             # Wie optionale Op-Felder: Sondertext eine Anzeigestufe unter null.
             number.setMinimum(field.minimum - 10.0**-field.decimals)
@@ -3402,10 +3409,8 @@ class PrintSettingsDialog(QDialog):
         # zwei Filamente ohne Spülgang (Entscheidung Robert, 19.09.2026). Sie
         # gehört wie der Durchmesser zum Drucker und wird in dessen Profil
         # abgelegt; die Tabelle führt jedes Gerät mit einer.
-        self.nozzle_count = BoundedSpin(self)
+        self.nozzle_count = GroupedSpin(self)
         self.nozzle_count.setRange(1, 8)
-        self.nozzle_count.setSingleStep(1)
-        self.nozzle_count.setDecimals(0)
         self.nozzle_count.setKeyboardTracking(False)
         self.nozzle_count.setAccessibleName(tr("Düsenzahl"))
         self.nozzle_count.setToolTip(

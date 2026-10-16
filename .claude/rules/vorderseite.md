@@ -147,19 +147,40 @@ Rückseite; eine ausdrückliche Feldübergabe öffnet sie vor dem Fokuswechsel.
   Benennungshaken ein Maß benennt; nicht nach einer Geste (`given`) und nicht
   am Schritt, der die Kette anhält (`wait_for_change=False`).
   Der Satz nennt das Feld, über das der Kunde kam (`focus_field`), sonst das
-  erste offene (`first_change`). Ein Fokus oder dieselbe Zahl ist keine
-  Änderung, und die Eingabetaste wartet dann auf keine Vorschau.
+  erste offene (`first_change`); Haken und Listen sind Felder wie Zahlen. Steht
+  vorn keines, nennt er das erste hinter der Klappe samt Klappe, damit das
+  Warten nicht am Klappzustand hängt (R4). Ein Fokus oder dieselbe Zahl ist
+  keine Änderung, und die Eingabetaste wartet dann auf keine Vorschau.
 - **Ein leerer Pflichttext ist ein Hinweis, keine Absage** (FD-134): Im Feld
   steht der erste Satz seiner `doc`, es rechnet keine Vorschau, der Knopf sagt
   „Erst „Text“ ausfüllen, dann übernehmen.“ (`required_inputs.missing_input`).
 - **Ein vorgegebener Text ist beim ersten Fokus markiert** (`first_focus`,
   FD-114); `focus_field` markiert ein Textfeld wie ein Zahlenfeld.
 - **Ganzzahlen ab vier Stellen stehen in Dreiergruppen** wie jeder Satz
-  (`grouped_spin`, `count_text`, FD-124); Felder mit Nachkomma nie.
+  (`count_text`, FD-124); Felder mit Nachkomma nie. Jedes Feld ohne Nachkomma
+  der Oberfläche, Anzahl wie Maß, entsteht über `grouped_spin` (`GroupedSpin`,
+  `GroupedNumberSpin`, `GroupedIntSpin`), nie als nacktes `QSpinBox` oder über
+  `setDecimals(0)`. Eine Kennung (Dreiecksnummer, Startwert, Port) ist keine
+  Menge und steht ohne Gruppen, damit man sie abschreiben kann: am Parameter
+  `param(identifier=True)`, sonst `IdentifierIntSpin` — entschieden am Schema,
+  nie am Feldnamen (R5). Der Wächter `tests/test_grouped_count_fields.py`
+  prüft den wirksamen Wert: Eine berechnete Stellenzahl trägt ihren Ort in
+  `COMPUTED_PLACES` (FD-184, R2).
+- **Eine umgebrochene Beschriftung zeigt jede Zeile** (FD-183):
+  `align_to_the_front` hält ihre Breite fest, `wrapped_caption.keep_whole_lines`
+  die Höhe des Textes in dieser Breite, auch nach einem Schriftwechsel in
+  beide Richtungen — gemessen ohne die gepinnte Mindesthöhe, sonst bliebe die
+  große Schrift stehen (R3).
 - **Gemessen wird in der endgültigen Breite** (FD-45): Vor Anfangs- und
-  Klappenmessung zieht der Dialog auf seine Breite, und jede Merkmalsliste setzt
-  ihre Höhe (`FeatureList.fit_now`) — sonst bliebe über den Knöpfen ein
-  Streifen, den das passive Nachmessen nie zurückgibt.
+  Klappenmessung zieht der Dialog auf seine Breite, der vorläufige senkrechte
+  Rollbalken ist für die Messung aus, und jede Merkmalsliste setzt ihre Höhe
+  (`FeatureList.fit_now`) — sonst bliebe über den Knöpfen ein Streifen, den
+  das passive Nachmessen nie zurückgibt. Wächter für jede Operation in jeder
+  Sprache: `tests/test_operation_dialog_flap_height.py`.
+- **Ein Wert, den die Liste nicht führt, steht mit Namen da** (FD-187, FD-189):
+  Merkmal, Objekt, Datei, Bild und Kante gehen über
+  `unlisted_choice.unlisted_text` — „Fläche 1 · passt hier nicht“, eine Kante
+  mit Lage und Ort wie `labels.edge_label` —, nie als Kennung; der Wert bleibt.
 - **Jede Zeile trägt ihren Namen** (FD-94): `name_rows` nach jedem Aufbau, das
   Ausdrucksfeld heißt „{Zeile} · Ausdruck“; Wächter
   `tests/test_operation_dialog_names.py` öffnet jede Operation.

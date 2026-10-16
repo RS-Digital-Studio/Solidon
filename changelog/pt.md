@@ -94,10 +94,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os campos das barras *Análise* e *Dividir*, a descrição em *Gerar modelo*, a escolha *Tipo* e a caixa «Incluir valores» explicam-se na dica e ao leitor de ecrã.
 - A partir de um separador do cartão da direita, a tecla Tab entra na página da frente e percorre-a de cima para baixo.
 - Uma medida do projeto sem unidade continua a ser um número no histórico e na barra de parâmetros, também em polegadas. A versão 0.6.0 acrescentava «mm» no histórico.
-- Um leitor de ecrã nomeia cada campo de cada diálogo de função, incluindo listas pendentes, caixas de seleção e listas de características.
+- Um leitor de ecrã nomeia cada campo de cada diálogo de operação, incluindo listas pendentes, caixas de seleção e listas de características.
 - Um texto que o diálogo já preenche, como um nome, fica selecionado ao abrir. Escrever substitui-o.
-- Os números grandes aparecem também nos campos em grupos de três algarismos, por exemplo 1 051 736 triângulos. Escrevem-se com ou sem separadores.
-- Os diálogos de função abrem com a altura do seu conteúdo. Na versão 0.6.0, *Repetir característica*, por exemplo, deixava uma faixa vazia por cima dos botões.
+- Os números inteiros grandes aparecem também nos campos em grupos de três algarismos, como 1 051 736 triângulos ou 10 000 mm/s² de *Aceleração*. Escrevem-se com ou sem separadores.
+- Os nomes longos de campos em *Mais definições* mostram todas as linhas, também com letra grande. Na versão 0.6.0, *Abrir furo* perdia a última palavra de um deles.
+- Os diálogos de operação têm a altura do conteúdo, também depois de expandir *Mais definições*. Na versão 0.6.0, *Repetir característica* deixava uma faixa vazia por cima dos botões.
 - Se um campo obrigatório como o texto de *Inscrição como corpo* estiver vazio, o campo diz o que lá vai e o botão espera. A versão 0.6.0 mostrava ali um erro ao abrir.
 - Quem altera um passo confirma com *Aplicar*. O botão fica cinzento até algo mudar e indica o campo a alterar.
 - O diálogo *Calibrar material* mostra folga, interferência, compensação de furos, pé de elefante e parede na unidade escolhida, também em polegadas, e mantém a 3.ª casa decimal.
@@ -111,6 +112,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Em espanhol e português, o menu, a pesquisa e o diálogo voltam a mostrar só a primeira frase de *Pino para furo* e *Orientar para impressão*.
 - Várias traduções leem-se com mais clareza, entre elas a introdução de *Criar parâmetro …*. O pino começa com maiúscula em todas as línguas.
 - As explicações nos painéis ocupam só as linhas de que o texto precisa, também num painel largo. Na versão 0.6.0 ficavam linhas vazias em algumas línguas, por exemplo sob duas faces selecionadas.
+- Um campo de seleção nomeia um valor que a sua lista não oferece, como «Face 1 · não serve aqui», e uma aresta pela orientação e posição. A versão 0.6.0 mostrava um código interno.
 
 ### Imprimir e entregar ao slicer
 

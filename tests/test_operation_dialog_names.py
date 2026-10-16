@@ -90,3 +90,66 @@ def test_a_reason_replaces_the_sentence_inside_the_field_too(qt_app: QApplicatio
     assert number.toolTip() == "Wirkt nur, wenn „Durchgehend“ nicht angehakt ist."
     assert number.accessibleDescription() == number.toolTip()
     host.deleteLater()
+
+
+def _unbound_captions(dialog: QWidget) -> tuple[int, list[str]]:
+    """Beschriftungen, deren Kürzel nicht im ersten Eingabefeld ihrer Zeile landet.
+
+    Das ist, was ``form_fields.name_rows`` über ``explain`` hinaus leistet:
+    ``addRow(text, field)`` setzt den Behälter als Partner, und Alt+Kürzel
+    landete vor dem Feld statt darin (Review F2a, R3).
+    """
+    from PySide6.QtWidgets import QFormLayout
+
+    checked = 0
+    wrong: list[str] = []
+    for form in (dialog._front, dialog._advanced_form):  # type: ignore[attr-defined]
+        for row in range(form.rowCount()):
+            label_item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            field_item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+            caption = label_item.widget() if label_item is not None else None
+            field = field_item.widget() if field_item is not None else None
+            if not isinstance(caption, QLabel) or field is None or not caption.text().strip():
+                continue
+            inputs = inputs_of(field)
+            if not inputs:
+                continue
+            checked += 1
+            if caption.buddy() is not inputs[0]:
+                partner = type(caption.buddy()).__name__ if caption.buddy() else "keiner"
+                wrong.append(f"„{caption.text()}“ → {partner}")
+    return checked, wrong
+
+
+def test_every_caption_hands_its_shortcut_to_the_first_input(qt_app: QApplication) -> None:
+    from app.ui.op_dialog import OperationDialog
+
+    bootstrap.load_operations()
+    checked = 0
+    found: list[str] = []
+    for spec in REGISTRY.all():
+        dialog = OperationDialog(spec, {"obj_1": "Quader"}, None, features=FEATURES)
+        try:
+            count, wrong = _unbound_captions(dialog)
+            checked += count
+            found += [f"{spec.name}: {entry}" for entry in wrong]
+        finally:
+            dialog.deleteLater()
+    assert checked > 500, f"nur {checked} Zeilen geprüft"
+    assert not found, f"{len(found)} Zeilen:\n" + "\n".join(found)
+
+
+def test_a_variant_switch_binds_its_new_rows_too(qt_app: QApplication) -> None:
+    """Ein Variantenwechsel baut die Zeilen neu; auch sie bekommen ihren Partner."""
+    from app.ui.op_dialog import OperationDialog
+
+    bootstrap.load_operations()
+    dialog = OperationDialog(REGISTRY.get("sketch_extrude"), {})
+    try:
+        dialog.switch_variant(REGISTRY.get("sketch_revolve"))
+        assert "angle" in dialog._editors
+        checked, wrong = _unbound_captions(dialog)
+        assert checked > 0
+        assert not wrong, wrong
+    finally:
+        dialog.deleteLater()

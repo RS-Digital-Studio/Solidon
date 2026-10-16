@@ -21,11 +21,20 @@ _RECOUNT_ON = frozenset(
 
 
 def _hold(label: QLabel) -> None:
-    """Die Untergrenze der Höhe auf die Höhe des Textes in der festen Breite setzen."""
+    """Die Untergrenze der Höhe auf die Höhe des Textes in der festen Breite setzen.
+
+    **Gemessen ohne die gepinnte Höhe**, wie ``style.WrappedNote.claim_height``:
+    ``QLabel.heightForWidth`` meldet nie weniger als die Mindesthöhe, und nach
+    einer kleineren Schrift hielt „Durchmesser der Aufweitung“ die 84 Punkte der
+    großen statt 48 (Review F2a, R3).
+    """
     width = label.maximumWidth() if label.maximumWidth() < 16_000 else label.width()
-    need = label.heightForWidth(width) if width > 0 else -1
-    if need > 0 and need != label.minimumHeight():
-        label.setMinimumHeight(need)
+    if width <= 0:
+        return
+    pinned = label.minimumHeight()
+    label.setMinimumHeight(0)
+    need = label.heightForWidth(width)
+    label.setMinimumHeight(need if need > 0 else pinned)
 
 
 class _KeepsLines(QObject):

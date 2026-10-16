@@ -94,10 +94,11 @@ it into `website/version.json`.
 - The fields of the *Analysis* and *Split* bars, the description in *Generate model*, the *Type* choice and the “Include values” checkbox explain themselves in tooltips and to screen readers.
 - From a tab of the card on the right, the Tab key goes into the page in front and moves through it from top to bottom.
 - A project dimension without a unit stays a plain number in the history and the parameter bar, also in inches. Version 0.6.0 added “mm” to it in the history.
-- A screen reader names every field of every function dialog, including drop-down lists, checkboxes and feature lists.
+- A screen reader names every field of every operation dialog, including drop-down lists, checkboxes and feature lists.
 - Text that a dialog fills in, such as a name, is selected when it opens. Typing replaces it.
-- Large counts appear in groups of three in input fields too, such as 1 051 736 triangles. You can type them with or without separators.
-- Function dialogs open as tall as their content. In version 0.6.0, *Repeat feature* for example left an empty strip above the buttons.
+- Large whole numbers appear in groups of three in input fields too, such as 1 051 736 triangles or 10 000 mm/s² *Acceleration*. You can type them with or without separators.
+- Long field names under *More settings* show every line, even with a large font. In version 0.6.0, *Drill a bore* for example lost the last word of a wrapped field name.
+- Operation dialogs are as tall as their content, also after expanding *More settings*. In version 0.6.0, *Repeat feature* for example left an empty strip above the buttons.
 - If a required field such as the text of *Lettering as a body* is empty, the field says what goes in and the button waits. Version 0.6.0 showed an error there on opening.
 - When you change a step, you confirm with *Apply*. The button stays grey until something has changed and names the field to change.
 - The *Calibrate material* dialog shows clearance, interference, hole compensation, elephant foot and wall in the chosen unit, inches included, and keeps the third decimal place.
@@ -111,6 +112,7 @@ it into `website/version.json`.
 - In Spanish and Portuguese, menu, search and dialog show only the first sentence again for *Pin for hole* and *Orient for printing*.
 - Several translations read more clearly, among them the introduction of *Create parameter …*. The peg starts with a capital in every language.
 - Explanations in the panels are as tall as their text, also in a wide panel. In version 0.6.0 some languages left empty lines there, for example below two selected faces.
+- A selection field names a value its list does not offer, such as “Face 1 · not suitable here”, and an edge by direction and position. Version 0.6.0 showed an internal identifier.
 
 ### Printing and slicer handover
 

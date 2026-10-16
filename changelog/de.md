@@ -119,10 +119,11 @@ Nutzen da und sonst nichts.
 - Die Felder der Leisten *Analyse* und *Teilen*, die Beschreibung in *Modell erzeugen*, die Wahl *Typ* und der Haken „Werte mitgeben“ sagen in der Kurzhilfe und dem Bildschirmleser, was sie bewirken.
 - Von einem Reiter der rechten Karte führt die Tabulatortaste in die Seite, die vorn steht, und geht sie von oben nach unten durch.
 - Ein Projektmaß ohne Einheit bleibt im Verlauf und in der Parameterleiste eine Zahl, auch bei Zoll. Version 0.6.0 schrieb im Verlauf „mm“ dazu.
-- Ein Bildschirmleser nennt in jedem Funktionsdialog jedes Feld beim Namen, auch Auswahllisten, Haken und Merkmalslisten.
+- Ein Bildschirmleser nennt in jedem Operationsdialog jedes Feld beim Namen, auch Auswahllisten, Haken und Merkmalslisten.
 - Ein vorgegebener Text in einem Dialog, etwa ein Name, ist beim Öffnen markiert. Tippen ersetzt ihn.
-- Große Anzahlen stehen auch in Eingabefeldern in Dreiergruppen, etwa 1 051 736 Dreiecke. Getippt werden sie mit oder ohne Trennzeichen.
-- Funktionsdialoge öffnen so hoch wie ihr Inhalt. In Version 0.6.0 blieb etwa bei *Merkmal vervielfachen* ein leerer Streifen über den Knöpfen.
+- Große ganze Zahlen stehen auch in Eingabefeldern in Dreiergruppen, etwa 1 051 736 Dreiecke oder 10 000 mm/s² *Beschleunigung*. Getippt werden sie mit oder ohne Trennzeichen.
+- Lange Feldnamen unter *Weitere Einstellungen* zeigen jede Zeile, auch bei großer Schrift. In Version 0.6.0 fehlte etwa bei *Bohrung setzen* das letzte Wort von „Durchmesser der Aufweitung“.
+- Operationsdialoge sind so hoch wie ihr Inhalt, auch nach dem Aufklappen von *Weitere Einstellungen*. In Version 0.6.0 blieb etwa bei *Merkmal vervielfachen* ein Streifen über den Knöpfen leer.
 - Ist ein Pflichtfeld wie der Text von *Schriftzug als Körper* leer, sagt das Feld, was hineingehört, und der Knopf wartet. Version 0.6.0 zeigte dort beim Öffnen einen Fehler.
 - Wer einen Schritt ändert, bestätigt mit *Übernehmen*. Der Knopf bleibt grau, bis sich etwas geändert hat, und nennt das Feld dafür.
 - Der Dialog *Material kalibrieren* zeigt Spiel, Übermaß, Lochkorrektur, Elefantenfuß und Wand in der gewählten Einheit, auch in Zoll, und behält die dritte Nachkommastelle.
@@ -136,6 +137,7 @@ Nutzen da und sonst nichts.
 - Auf Spanisch und Portugiesisch zeigen Menü, Suche und Dialog bei *Stift für Bohrung* und *Druckoptimal ausrichten* wieder nur den ersten Satz.
 - Einige Übersetzungen lesen sich klarer, darunter die Einleitung von *Parameter anlegen …*. Der Zapfen beginnt in allen Sprachen groß.
 - Erklärungen in den Karten sind so hoch wie ihr Text, auch in einer breiten Karte. In Version 0.6.0 standen dort je nach Sprache leere Zeilen, etwa unter zwei gewählten Flächen.
+- Ein Auswahlfeld nennt einen Wert, den seine Liste nicht anbietet, beim Namen, etwa „Fläche 1 · passt hier nicht“, eine Kante mit Lage und Ort. Version 0.6.0 zeigte eine interne Kennung.
 
 ### Drucken und Übergabe an den Slicer
 

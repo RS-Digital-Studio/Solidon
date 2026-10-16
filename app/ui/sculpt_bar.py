@@ -25,7 +25,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSpinBox,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -34,6 +33,7 @@ from PySide6.QtWidgets import (
 from app.core.geom.sculpt import BRUSH, LEVEL_DEFAULT, LEVEL_RANGE
 from app.i18n import TranslatableText, _, tr
 from app.ui.analysis_bar import GestureAnalysis
+from app.ui.grouped_spin import GroupedIntSpin
 from app.ui.labels import LengthSpin
 from app.ui.style import NORMAL, TIGHT, make_primary
 
@@ -117,7 +117,7 @@ class SculptBar(QWidget):
         # **Eine Stufe, keine Länge** (H3): In Millimetern hieß dieselbe Zahl
         # je Werkzeug etwas anderes, und Glätten schoss ab 2 über. Die Stufe
         # bildet der Kern je Werkzeug auf eine Wirkung ab, die nie überschießt.
-        self.strength = QSpinBox(self)
+        self.strength = GroupedIntSpin(self)
         self.strength.setRange(*LEVEL_RANGE)
         self.strength.setValue(LEVEL_DEFAULT)
         self.strength.setToolTip(tr("Wie stark ein Zug wirkt, von 1 bis 10."))

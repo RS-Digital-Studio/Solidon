@@ -390,7 +390,7 @@ def _producing(document: Document, object_ids: Collection[str]) -> tuple[set[str
 
 
 #: Schritte, die ein Loch um die Lochkorrektur des Materials weiten, wenn ihr
-#: Haken *Materialtoleranz berücksichtigen* steht (``compensate``). Gefragt
+#: Haken *Druckabweichung ausgleichen* steht (``compensate``). Gefragt
 #: wird am Merkmal des fertigen Körpers: Ein gestopftes Loch ist fort, und ein
 #: ohne Haken nachgebohrtes nennt seinen letzten Schritt.
 COMPENSATING_HOLE_OPS: frozenset[str] = frozenset(

@@ -65,8 +65,9 @@ from app.ui.filament_picker import (
     stock_label,
     swatch,
 )
+from app.ui.grouped_spin import GroupedNumberSpin
 from app.ui.icons import icon
-from app.ui.labels import NumberSpin, calendar_day, local_timestamp, localised
+from app.ui.labels import calendar_day, local_timestamp, localised
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying, weak_slot
 from app.ui.panels import collapsible
 from app.ui.scroll_areas import PassingScrollArea
@@ -516,9 +517,8 @@ class InventoryView(QWidget):
         )
         self.booking_mode.currentIndexChanged.connect(self._booking_mode_changed)
         settings_layout.addWidget(self.booking_mode)
-        self.low_stock_threshold = NumberSpin(shelf)
+        self.low_stock_threshold = GroupedNumberSpin(shelf)
         self.low_stock_threshold.setRange(0, 100)
-        self.low_stock_threshold.setDecimals(0)
         self.low_stock_threshold.setSuffix(f" {tr('%')}")
         self.low_stock_threshold.setValue(self._low_stock_percent)
         self.low_stock_threshold.setAccessibleName(tr("Warnschwelle für niedrigen Bestand"))

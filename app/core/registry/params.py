@@ -135,6 +135,7 @@ def param(
     dropped_on_change: bool | tuple[str, ...] = False,
     zero_text: TranslatableText | str | None = None,
     least: float | None = None,
+    identifier: bool = False,
 ) -> Any:
     """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt
     an einer Stelle.
@@ -172,6 +173,9 @@ def param(
 
     ``least`` ist der kleinste Wert außer der Null an einem Feld, dessen Null
     etwas anderes heißt — siehe :attr:`app.core.types.ParamSpec.least`.
+
+    ``identifier`` markiert eine ganze Zahl als Kennung, die ohne
+    Dreiergruppen steht — siehe :attr:`app.core.types.ParamSpec.identifier`.
     """
     metadata = {
         _METADATA_KEY: {
@@ -196,6 +200,7 @@ def param(
             "dropped_on_change": dropped_on_change,
             "zero_text": zero_text,
             "least": least,
+            "identifier": identifier,
         }
     }
     if default is MISSING:
@@ -296,6 +301,7 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
                 # Rezept baut seine Metadaten selbst — kennen den Schlüssel nicht.
                 zero_text=metadata.get("zero_text"),
                 least=metadata.get("least"),
+                identifier=metadata.get("identifier", False),
             )
         )
     data_class.__param_spec__ = tuple(specs)  # type: ignore[attr-defined]

@@ -53,19 +53,48 @@ def _open_every_flap(dialog: QDialog) -> None:
             heading.setChecked(True)
 
 
-def _cut_captions(dialog: QDialog) -> list[str]:
-    """Jede sichtbare umbrechende Beschriftung, die niedriger ist als ihr Text."""
-    cut: list[str] = []
+def _captions(dialog: QDialog) -> list[QLabel]:
+    """Jede sichtbare umbrechende Beschriftung eines Formulars im Dialog."""
+    found: list[QLabel] = []
     for form in dialog.findChildren(QFormLayout):
         for row in range(form.rowCount()):
             item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
             label = item.widget() if item is not None else None
-            if not isinstance(label, QLabel) or not label.wordWrap() or not label.isVisible():
-                continue
-            need = label.heightForWidth(label.width())
-            if label.height() < need:
-                cut.append(f"„{label.text()}“ {label.height()} statt {need} Punkte")
-    return cut
+            if isinstance(label, QLabel) and label.wordWrap() and label.isVisible():
+                found.append(label)
+    return found
+
+
+def _need(label: QLabel) -> int:
+    """Die Höhe des Textes in der Breite des Labels — ohne seine gepinnte Mindesthöhe.
+
+    ``QLabel.heightForWidth`` meldet nie weniger als die Mindesthöhe; gemessen
+    mit ihr sähe der Test eine stehengebliebene Höhe als Bedarf.
+    """
+    pinned = label.minimumHeight()
+    label.setMinimumHeight(0)
+    try:
+        return label.heightForWidth(label.width())
+    finally:
+        label.setMinimumHeight(pinned)
+
+
+def _cut_captions(dialog: QDialog) -> list[str]:
+    """Jede sichtbare umbrechende Beschriftung, die niedriger ist als ihr Text."""
+    return [
+        f"„{label.text()}“ {label.height()} statt {_need(label)} Punkte"
+        for label in _captions(dialog)
+        if label.height() < _need(label)
+    ]
+
+
+def _stale_captions(dialog: QDialog) -> list[str]:
+    """Jede Beschriftung, die eine Mindesthöhe über ihrem Text hält — leere Zeilen."""
+    return [
+        f"„{label.text()}“ hält {label.minimumHeight()} statt {_need(label)} Punkte"
+        for label in _captions(dialog)
+        if label.minimumHeight() > _need(label)
+    ]
 
 
 @pytest.mark.parametrize("points", POINTS)
@@ -76,6 +105,7 @@ def test_every_caption_of_an_operation_dialog_shows_all_its_lines(
 
     bootstrap.load_operations()
     found: list[str] = []
+    seen = 0
     with _font(qt_app, points):
         for spec in REGISTRY.all():
             dialog = OperationDialog(spec, {"obj_1": "Quader"}, None)
@@ -84,10 +114,13 @@ def test_every_caption_of_an_operation_dialog_shows_all_its_lines(
                 _settle(qt_app)
                 _open_every_flap(dialog)
                 _settle(qt_app)
+                seen += len(_captions(dialog))
                 found += [f"{spec.name}: {entry}" for entry in _cut_captions(dialog)]
             finally:
                 dialog.reject()
                 dialog.deleteLater()
+    # Über eine leere Menge wäre das Verbot immer grün (``tests.md``).
+    assert seen > 500, f"nur {seen} umbrechende Beschriftungen geprüft"
     assert not found, f"{len(found)} Beschriftungen abgeschnitten:\n" + "\n".join(found)
 
 
@@ -106,14 +139,24 @@ def test_the_drill_back_names_the_widening_in_full(qt_app: QApplication, points:
             _settle(qt_app)
             label = dialog._advanced_form.labelForField(dialog._editors["widening_diameter"])
             assert isinstance(label, QLabel)
-            assert label.height() >= label.heightForWidth(label.width()), label.height()
+            # Sie bricht wirklich um — ohne Umbruch wäre die Zusicherung darunter leer.
+            lines = _need(label) // label.fontMetrics().lineSpacing()
+            assert label.wordWrap() and lines >= 2, (label.text(), lines)
+            assert label.height() >= _need(label), label.height()
         finally:
             dialog.reject()
             dialog.deleteLater()
 
 
 def test_a_font_change_keeps_every_line(qt_app: QApplication) -> None:
-    """Wird die Schrift im offenen Dialog größer, wachsen die Beschriftungen mit."""
+    """Wird die Schrift im offenen Dialog größer, wachsen die Beschriftungen mit;
+    wird sie wieder kleiner, geben sie die Höhe zurück.
+
+    Den kleineren Weg hält allein der Filter in ``keep_whole_lines``: Größer
+    rechnet Qt die Wunschgröße ohnehin neu, die gepinnte Mindesthöhe der
+    großen Schrift aber bliebe stehen — „Durchmesser der Aufweitung“ hielt
+    nach 16 → 9 pt 84 statt 48 Punkte (Review F2a, R3).
+    """
     from app.ui.op_dialog import OperationDialog
 
     bootstrap.load_operations()
@@ -124,15 +167,51 @@ def test_a_font_change_keeps_every_line(qt_app: QApplication) -> None:
             _settle(qt_app)
             dialog.advanced.setChecked(True)
             _settle(qt_app)
-            bigger = QFont(qt_app.font())
-            bigger.setPointSize(POINTS[1])
-            qt_app.setFont(bigger)
-            apply_style(qt_app, "light")
-            _settle(qt_app)
-            assert not _cut_captions(dialog)
+            small = {label.text(): _need(label) for label in _captions(dialog)}
+            assert small, "keine umbrechende Beschriftung — dann prüft das nichts"
+            for points in (POINTS[1], POINTS[0]):
+                font = QFont(qt_app.font())
+                font.setPointSize(points)
+                qt_app.setFont(font)
+                apply_style(qt_app, "light")
+                _settle(qt_app)
+                assert not _cut_captions(dialog), points
+                assert not _stale_captions(dialog), points
+            grown = {label.text(): _need(label) for label in _captions(dialog)}
+            assert grown == small, "zurück bei derselben Schrift, dieselben Höhen"
         finally:
             dialog.reject()
             dialog.deleteLater()
+
+
+def test_a_caption_follows_its_own_font_both_ways(qt_app: QApplication) -> None:
+    """Ein Label mit fester Breite, dessen eigene Schrift wechselt: Ohne den Filter
+    bliebe es bei der Höhe der ersten Schrift — größer abgeschnitten, kleiner leer."""
+    from PySide6.QtWidgets import QVBoxLayout, QWidget
+
+    from app.ui.wrapped_caption import keep_whole_lines
+
+    host = QWidget()
+    try:
+        layout = QVBoxLayout(host)
+        label = QLabel("Durchmesser der Aufweitung am Grund der Bohrung", host)
+        label.setWordWrap(True)
+        label.setFixedWidth(90)
+        layout.addWidget(label)
+        keep_whole_lines(label)
+        host.show()
+        _settle(qt_app)
+        first = _need(label)
+        assert first > label.fontMetrics().lineSpacing(), "bricht nicht um"
+        for points in (POINTS[1] * 2, POINTS[0]):
+            font = QFont(label.font())
+            font.setPointSize(points)
+            label.setFont(font)
+            _settle(qt_app)
+            assert label.minimumHeight() == _need(label), (points, label.minimumHeight())
+        assert label.minimumHeight() <= first + 1
+    finally:
+        host.deleteLater()
 
 
 @contextmanager
@@ -169,5 +248,7 @@ def test_the_other_dialogs_with_a_back_show_every_line(
         _settle(qt_app)
         _open_every_flap(dialog)
         _settle(qt_app)
+        assert _captions(dialog), "keine umbrechende Beschriftung — dann prüft das nichts"
         assert not _cut_captions(dialog)
+        assert not _stale_captions(dialog)
         dialog.reject()

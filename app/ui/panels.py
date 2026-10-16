@@ -189,6 +189,7 @@ from app.ui.dialogs import ADDRESS_VALUES, NEEDS_OP, handlers_of, unhandled_advi
 from app.ui.feature_editing import advanced_fields, configure_scope, explain_value_help
 from app.ui.feature_footer import keep_in_sight, place_below
 from app.ui.first_change import first_change_sentence, offered_values, typed, waits_for_change
+from app.ui.grouped_spin import GroupedSpin
 from app.ui.icons import icon, icon_name_for, svg_pixmap
 from app.ui.labels import (
     BoundedLengthSpin,
@@ -8457,9 +8458,8 @@ def feature_field(
         # Eine ganze Zahl ohne Einheit — die Haken eines Einhängers, die
         # Löcher einer Halterung. Kein Längenfeld: Das trüge „mm" und
         # rechnete in Zoll um (`_kind_of` in ``perceive.actions``).
-        editor = BoundedSpin(parent)
-        editor.setDecimals(0)
-        editor.setSingleStep(1.0)
+        # In Dreiergruppen wie jede Anzahl (FD-184, ``grouped_spin``).
+        editor = GroupedSpin(parent)
     else:
         editor = BoundedSpin(parent)
     configure_feature_field(editor, field)

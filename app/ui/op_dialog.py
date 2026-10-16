@@ -66,10 +66,11 @@ from app.ui.dialog_footer import DialogFooter
 from app.ui.dialogs import ErrorNotice, align_to_the_front
 from app.ui.feature_list import FeatureList
 from app.ui.feature_set_field import FeatureSetField
+from app.ui.fine_length_spin import finer
 from app.ui.first_change import first_change_sentence
 from app.ui.first_focus import select_on_first_focus
 from app.ui.form_fields import explain, name_rows
-from app.ui.grouped_spin import GroupedSpin
+from app.ui.grouped_spin import GroupedSpin, IdentifierSpin
 from app.ui.labels import (
     BoundedSpin,
     LengthSpin,
@@ -105,6 +106,7 @@ from app.ui.style import (
     make_primary,
     set_level,
 )
+from app.ui.unlisted_choice import UnlistedKind, unlisted_text
 
 if TYPE_CHECKING:
     from app.core.types import SceneObject
@@ -191,7 +193,8 @@ def _decimals_for(entry: ParamSpec, unit: LengthUnit | None = None) -> int:
     """
     base = decimals_for(unit) if unit else 2
     if entry.maximum is not None and abs(entry.maximum) <= _FINE_BELOW:
-        return base + 1
+        # Wie viel feiner, sagt dieselbe Quelle wie *Material kalibrieren* (R6).
+        return finer(base)
     return base
 
 
@@ -402,12 +405,18 @@ class ValueField(QWidget):
         eine Bestätigung im Dialog schöbe jedes Loch in den Ursprung."""
 
         # Eine Anzahl steht ab vier Stellen in Dreiergruppen wie in jedem Satz
-        # (FD-124, ``grouped_spin``); eine Zahl mit Nachkomma bleibt, wie sie ist.
-        self.spin = GroupedSpin(self) if entry.kind == "int" else BoundedSpin(self)
+        # (FD-124, ``grouped_spin``); eine Zahl mit Nachkomma bleibt, wie sie ist,
+        # und eine Kennung, die das Schema so nennt, auch (R5).
+        self.spin = (
+            (IdentifierSpin(self) if entry.identifier else GroupedSpin(self))
+            if entry.kind == "int"
+            else BoundedSpin(self)
+        )
         # Fokussiert wird das Drehfeld, nicht der Behälter: Es trägt den Namen
         # der Zeile (FD-12), den Satz gibt ``form_fields.explain`` dazu.
         self.spin.setAccessibleName(self.caption())
-        self.spin.setDecimals(0 if entry.kind == "int" else _decimals_for(entry, self._shown))
+        if entry.kind != "int":
+            self.spin.setDecimals(_decimals_for(entry, self._shown))
         self.spin.setMinimum(
             self._as_shown(entry.minimum) if entry.minimum is not None else -1_000_000.0
         )
@@ -1244,6 +1253,7 @@ class ImageSourceField(QWidget):
         start: str = "",
         parent: QWidget | None = None,
         button_text: str | None = None,
+        unlisted: UnlistedKind = "image",
     ) -> None:
         super().__init__(parent)
         self._pending = False
@@ -1254,8 +1264,9 @@ class ImageSourceField(QWidget):
             index = self.combo.findData(str(start))
             if index < 0:
                 # Ein Wert, den die Liste nicht kennt, wird gezeigt statt
-                # ersetzt — wie beim Quellenwähler darunter.
-                self.combo.addItem(str(start), str(start))
+                # ersetzt — wie beim Quellenwähler darunter, mit Namen statt
+                # Kennung (FD-187).
+                self.combo.addItem(unlisted_text(str(start), unlisted), str(start))
                 index = self.combo.count() - 1
             self.combo.setCurrentIndex(index)
         self.button = QPushButton(button_text or tr("Bild wählen …"), self)
@@ -1602,7 +1613,10 @@ class EdgeSetField(QWidget):
         # verschwände die Wahl eines gespeicherten Schritts beim Öffnen, ohne
         # dass jemand sie zurückgenommen hätte (§15.4).
         for identifier in dict.fromkeys((*choices, *chosen)):
-            item = QListWidgetItem(choices.get(identifier, identifier), self.list)
+            # Eine Kante ohne Eintrag (an einem Netz nur die markierten) heißt
+            # nach Lage und Ort, nicht nach ihrem Schlüssel (FD-189).
+            shown = choices.get(identifier) or unlisted_text(identifier, "edges")
+            item = QListWidgetItem(shown, self.list)
             item.setData(Qt.ItemDataRole.UserRole, identifier)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(
@@ -2631,7 +2645,10 @@ class OperationDialog(QDialog):
         asked = self._editors.get(self._asked_field)
         first = (
             first_change_sentence(
-                [*([asked] if asked is not None else []), *self._editors.values()], self
+                [*([asked] if asked is not None else []), *self._editors.values()],
+                self,
+                getattr(self, "advanced", None),
+                self._advanced_form.parentWidget(),
             )
             if unchanged
             else ""
@@ -4104,7 +4121,9 @@ class OperationDialog(QDialog):
             if start:
                 index = combo.findData(str(start))
                 if index < 0:
-                    combo.addItem(str(start), str(start))
+                    # Der abgelehnte Wert nach *Anderes Merkmal wählen* steht
+                    # mit Namen da, nicht als „face_1“ (FD-187).
+                    combo.addItem(unlisted_text(str(start), "feature"), str(start))
                     index = combo.count() - 1
                 combo.setCurrentIndex(index)
             return combo
@@ -4138,6 +4157,7 @@ class OperationDialog(QDialog):
                 str(start or ""),
                 self,
                 button_text=tr("Datei wählen …"),
+                unlisted="source",
             )
         if entry.kind in ("object", "source"):
             # Der Name steht da, die Kennung reist mit. Ein frei beschreibbares
@@ -4153,8 +4173,9 @@ class OperationDialog(QDialog):
                     # Ein Wert, den die Liste nicht kennt, wird gezeigt statt
                     # ersetzt: eine Datei aus einem Projekt, dessen Quellen
                     # hier gerade nicht vorliegen, darf nicht stillschweigend
-                    # zu einer anderen werden.
-                    combo.addItem(str(start), str(start))
+                    # zu einer anderen werden. Mit Namen statt Kennung (FD-187).
+                    unlisted: UnlistedKind = "source" if entry.kind == "source" else "object"
+                    combo.addItem(unlisted_text(str(start), unlisted), str(start))
                     index = combo.count() - 1
                 combo.setCurrentIndex(index)
             return combo
@@ -4583,8 +4604,15 @@ class OperationDialog(QDialog):
             self.advanced.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _advanced_toggled(self, _open_now: bool) -> None:
-        """Ausdrücklich auf- oder zugeklappt: die Höhe folgt (``fenster.md``)."""
+        """Ausdrücklich auf- oder zugeklappt: die Höhe folgt (``fenster.md``).
+
+        Im Änderungsweg zeigt die Klappe andere Felder; der wartende Knopf nennt
+        danach eines, das dasteht, statt bis zur nächsten Änderung den alten
+        Satz zu tragen (Review F2a, R4).
+        """
         self._queue_refit("explicit")
+        if self._opened_with is not None:
+            self._follow_source_pending()
 
     def _advanced_titles(self) -> list[str]:
         """Die Beschriftungen der sichtbaren Zeilen hinter der Klappe, in ihrer Reihenfolge.
@@ -4654,9 +4682,20 @@ class OperationDialog(QDialog):
         if layout is None:
             return
         content = self._scroll.widget()
+        content_layout = content.layout() if content is not None else None
+        measuring = intent != "passive" and content is not None and content_layout is not None
+        bar = self._scroll.verticalScrollBarPolicy()
+        if measuring:
+            # **Gemessen in der Breite ohne vorläufigen Rollbalken.** Beim
+            # Aufklappen steht der senkrechte Balken für einen Umlauf, bis der
+            # Dialog gewachsen ist. In seiner Enge brach der Beschreibungssatz
+            # eine Zeile mehr um, eine Merkmalsliste behielt ihre Querleiste,
+            # und über den Knöpfen blieben bis zu 28 Punkte leer (R1 zu FD-45).
+            # Bleibt der Inhalt am Bildschirmrand länger, kommt der Balken
+            # danach zurück, und das passive Nachmessen wächst um den Rest.
+            self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         if isinstance(self._description, WrappedNote):
             self._description.claim_height()
-        content_layout = content.layout() if content is not None else None
         if content_layout is not None:
             content_layout.activate()
         self._scroll.updateGeometry()
@@ -4665,7 +4704,8 @@ class OperationDialog(QDialog):
             expanded_width(self._scroll, self._advanced_form),
             self._footer.natural_width + 2 * WIDE,
         )
-        if intent != "passive" and content is not None and content_layout is not None:
+        if measuring:
+            assert content is not None and content_layout is not None
             # **Erst in der Breite legen, dann messen** (FD-45): Eine Merkmalsliste
             # setzt ihre Höhe einen Umlauf später, und in der endgültigen Breite
             # verliert sie die Querleiste; ein Formular mit umbrochenem Satz meldet
@@ -4691,6 +4731,8 @@ class OperationDialog(QDialog):
                 natural_width if intent == "initial" else self._footer.natural_width + 2 * WIDE
             ),
         )
+        if measuring:
+            self._scroll.setVerticalScrollBarPolicy(bar)
 
     def _fill_filament_fields(
         self,
