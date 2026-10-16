@@ -111,3 +111,53 @@ def test_the_next_case_finds_the_look_its_predecessor_found(qt_app: Any) -> None
     names = ("Stil", "Palette", "Stylesheet", "Schrift", "Themenmerker", "Thema")
     left = [name for name, now, then in zip(names, found, _FOUND[0], strict=True) if now != then]
     assert not left, f"Vom Vorgänger stehen geblieben: {left}"
+
+
+def test_no_case_reaches_the_keyring_of_the_user() -> None:
+    """Die Suite fragt nie den Schlüsselbund des Systems (§38).
+
+    Wer über den Kern liest oder schreibt — LLM-Schlüssel und Gerätekennung —,
+    landet im Speicher der Suite, und der nächste Fall findet ihn leer.
+    """
+    import keyring
+
+    from app.core.activation import device
+    from app.core.backends import keys
+
+    suite = keyring.get_keyring()
+    assert type(suite).__name__ == "SuiteKeyring", type(suite)
+    assert device._load_keyring().get_keyring() is suite, "auch die Gerätekennung"
+    assert not suite.values, "jeder Fall beginnt leer"
+    assert keys.store("anthropic", "sk-probe")
+    assert suite.values == {(keys.SERVICE, "anthropic"): "sk-probe"}
+    assert keys.read("anthropic") == "sk-probe"
+
+
+_KEYRING_LEFT: list[object] = []
+
+
+def test_a_case_may_leave_a_key_and_a_foreign_keyring_behind() -> None:
+    """Erster Teil: ein Schlüssel im Speicher der Suite und ein fremder Schlüsselbund.
+
+    Ohne Rückgabe — wie ein Fall, der ``keyring.set_keyring`` selbst ruft und
+    vergisst. Der Nachfolger darf davon nichts finden (Review 1, RCI-3).
+    """
+    import keyring
+    from keyring.backends import null
+
+    from app.core.backends import keys
+
+    assert keys.store("anthropic", "sk-vorgaenger")
+    _KEYRING_LEFT[:] = [keyring.get_keyring()]
+    keyring.set_keyring(null.Keyring())
+
+
+def test_the_next_case_finds_the_empty_keyring_of_the_suite() -> None:
+    """Zweiter Teil: wieder der Schlüsselbund der Suite, und er ist leer."""
+    if not _KEYRING_LEFT:
+        pytest.skip("aussagekräftig nur nach dem ersten Teil im selben Prozess")
+    import keyring
+
+    suite = keyring.get_keyring()
+    assert suite is _KEYRING_LEFT[0], type(suite)
+    assert not suite.values, suite.values

@@ -67,6 +67,7 @@ it into `website/version.json`.
 - The selection card follows content and font, preserving text and action columns. Detached tabs keep their size. When a feature edit is offered, “Apply” is the primary action.
 - Counterparts ask for pair and size first and explain both halves. Shape and fit are under “More settings”. The initial dialog height fits its content.
 - After a preview is refused, the next preview's text remains fully readable.
+- Without a graphics driver, for example in a virtual machine, Solidon now reliably exits after closing. In version 0.6.0 the program could keep running there invisibly.
 
 ### Printing and slicer handover
 
@@ -81,6 +82,8 @@ it into `website/version.json`.
 - If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
 - For holes, the view and *Selection* show the same edit. Size, depth and a linked entrance stay in front; print compensation and fine settings are under “More values”.
 - Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
+- Clicking *Apply* on a feature during a calculation keeps the change, even when the preview takes longer. In version 0.6.0 it was silently lost on larger models.
+- A displayed texture no longer computes a preview without a change and no longer offers *Cancel*.
 
 ## 0.6.0
 

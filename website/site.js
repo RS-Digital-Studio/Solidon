@@ -4,7 +4,8 @@
  * Wahl wieder frei, die Sprungliste der Funktionsseite markiert den Block, der
  * gerade gelesen wird, der Download-Kasten der Startseite zählt die Zeit bis
  * zur Demo herunter, der Changelog zeigt die gewählte Version einzeln, die
- * Schrittmarken unter dem Bedienloop laufen mit, und der Stand der
+ * Schrittmarken unter dem Bedienloop laufen mit, die deutsche Startseite
+ * nennt Lesern mit anderer Browsersprache ihre Fassung, und der Stand der
  * GoFundMe-Kampagne wird erst auf ausdrücklichen Klick geladen. Eine Zeile
  * meldet dem eigenen Server, dass diese Seite geöffnet wurde. Alles
  * andere bleibt CSS: die Bewegung der Zeichnungen läuft über scroll-gesteuerte
@@ -479,6 +480,141 @@
   } catch (problem) {
     /* Ein Fehler hier darf die folgenden Bloecke nicht mitnehmen. */
     console.warn("site.js: Block ab Zeile 292 ausgefallen —", problem);
+  }
+})();
+
+/* Der Sprachhinweis der deutschen Startseite.
+ *
+ * Die deutsche Startseite ist `x-default`, und wer aus der fremdsprachigen
+ * Presse kommt, landet fast immer hier. Steht unter den angebotenen Sprachen
+ * eine andere als Deutsch vorn in `navigator.languages`, setzt dieser Block
+ * die passende Fassung aus der Vorlage ein; spricht der Browser keine davon,
+ * die englische. **Umgeleitet wird nie**: Suchmaschinen und `hreflang`
+ * brauchen die deutsche Seite unter ihrer Adresse, und wer Deutsch lesen
+ * will, soll es können.
+ *
+ * Gelesen wird die Liste in der Reihenfolge des Browsers, wie ein Server
+ * `Accept-Language` liest: Wer „en-US, de" eingestellt hat, bekommt den
+ * Hinweis, wer „ja, de" eingestellt hat, nicht — Deutsch steht bei ihm vor
+ * jeder anderen Fassung, die es hier gibt.
+ *
+ * Kein Hinweis mehr, nachdem der Besucher ihn geschlossen hat oder aus einer
+ * anderen Sprachfassung herübergewechselt ist — beides ist eine Wahl für
+ * Deutsch. Das merkt sich `localStorage` als festen Wert, kein Kennzeichen,
+ * und nur für diese Wahl; ist der Speicher gesperrt, kommt der Hinweis beim
+ * nächsten Aufruf eben wieder.
+ *
+ * Gemeldet wird von hier nichts. Ob der Hinweis wirkt, zeigt `stats.php` aus
+ * den Seitenaufrufen, die ohnehin gezählt werden: Besuche, die auf `/`
+ * beginnen und danach eine andere Fassung öffnen.
+ */
+(() => {
+  "use strict";
+  try {
+
+    const template = document.querySelector("template[data-language-hint]");
+    if (!template) return;
+
+    const KEY = "solidon3d.language-hint";
+    const remember = (value) => {
+      try {
+        localStorage.setItem(KEY, value);
+      } catch (blocked) {
+        /* Dann gilt die Wahl eben nur für diesen Aufruf. */
+      }
+    };
+    try {
+      if (localStorage.getItem(KEY)) return;
+    } catch (blocked) {
+      /* Gesperrter Speicher heißt nur: Die Wahl wird nicht gemerkt. */
+    }
+
+    const variants = new Map();
+    for (const hint of template.content.querySelectorAll(".language-hint[lang]")) {
+      variants.set(hint.lang, hint);
+    }
+
+    const wanted = navigator.languages && navigator.languages.length
+      ? navigator.languages
+      : [navigator.language || ""];
+    let choice = "en";
+    for (const tag of wanted) {
+      const code = String(tag).toLowerCase().split("-")[0];
+      if (code === "de") return;
+      if (variants.has(code)) {
+        choice = code;
+        break;
+      }
+    }
+    if (!variants.has(choice)) return;
+
+    let from = null;
+    try {
+      from = new URL(document.referrer);
+    } catch (direct) {
+      /* Ohne Verweis aufgerufen — kein Wechsel, nach dem zu fragen wäre. */
+    }
+    if (from && from.origin === location.origin) {
+      for (const code of variants.keys()) {
+        if (from.pathname === `/${code}` || from.pathname.startsWith(`/${code}/`)) {
+          remember("de");
+          return;
+        }
+      }
+    }
+
+    const hint = variants.get(choice).cloneNode(true);
+
+    /* Solange die Karte unten steht, hält die Seite ihren Platz frei: ein
+       leerer Block in ihrer Höhe am Ende der Seite, und
+       `--language-hint-space` an der Wurzel für `scroll-padding-bottom`
+       (`style.css`). Das Seitenende lässt sich über die Karte hinausrollen,
+       und was den Fokus bekommt, rollt über ihr in den Blick. Steht sie bei
+       wenig Höhe im Fluss, braucht sie keinen.
+       Ein eigener Block und kein Polster an `body`: Ein Polster, gesetzt
+       während die Seite lädt, rechnet Chromium erst mit dem nächsten Bild
+       nach — bis dahin lagen die Fußverweise am Seitenende unter der Karte,
+       in QtWebEngine ohne Bild (Prüfstand) dauerhaft. Ein neu eingefügter
+       Block steht sofort in seiner Höhe; spätere Höhenwechsel gehen über
+       sein Stilattribut und brauchen wieder ein Bild. */
+    const root = document.documentElement;
+    const spacer = document.createElement("div");
+    spacer.className = "language-hint-space";
+    spacer.setAttribute("aria-hidden", "true");
+    const reserve = () => {
+      const style = getComputedStyle(hint);
+      const space = style.position === "fixed"
+        ? hint.offsetHeight + 2 * parseFloat(style.bottom)
+        : 0;
+      const value = `${Math.ceil(space)}px`;
+      root.style.setProperty("--language-hint-space", value);
+      spacer.style.height = value;
+    };
+    const watch = window.ResizeObserver ? new ResizeObserver(reserve) : null;
+
+    const close = () => {
+      const focused = hint.contains(document.activeElement);
+      watch?.disconnect();
+      window.removeEventListener("resize", reserve);
+      root.style.removeProperty("--language-hint-space");
+      spacer.remove();
+      hint.remove();
+      remember("closed");
+      /* Der Fokus darf nicht mit der Karte verschwinden: Er geht an das
+         nächste Element der Seite, das Zeichen in der Kopfzeile. */
+      if (focused) document.querySelector("header.site a")?.focus();
+    };
+    hint.querySelector(".language-hint-close").addEventListener("click", close);
+    hint.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") close();
+    });
+    template.before(hint);
+    reserve();
+    document.body.append(spacer);
+    watch?.observe(hint);
+    window.addEventListener("resize", reserve);
+  } catch (problem) {
+    console.warn("site.js: Sprachhinweis ausgefallen —", problem);
   }
 })();
 

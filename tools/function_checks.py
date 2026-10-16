@@ -344,7 +344,7 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         "liste",
         _keys(
             "target", "why", "button", "rect", "point", "widget_at", "hit", "zone", "typed",
-            "key", "decision", "t", "phase", "finding", "detail",
+            "key", "decision", "t", "phase", "finding", "detail", "wheel_angle",
         ),
         {"why": WHY, "zone": ZONES, "finding": BENCH_FINDINGS},
         needs=_keys("phase"),

@@ -310,6 +310,13 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 - Es biegt **die Nutzerverzeichnisse in einen Temp-Ordner** um (§38), `HOME`
   eingeschlossen. Läuft ein Test außerhalb der Suite, fehlt ihm das, und er
   liest in Roberts echtem Profil.
+  Je Prozess ein `solidon-tests-*`, beim Ende abgeräumt; Reste über einen
+  Tag räumt der nächste Start.
+- Es setzt **einen Schlüsselbund im Speicher** (`SuiteKeyring`) vor jedem
+  Fall leer ein; ein Fall, der einen bestimmten braucht, ersetzt
+  `keys._keyring` oder `device._load_keyring` per `monkeypatch`.
+  Kindprozesse erreicht er nicht (eigene Isolierung mit `isolate_secrets`,
+  Restpaket C).
 - Unter `CI` beendet es den Lauf, wenn der exakte Kern fehlt
   (`pytest_sessionstart`, Muster `php_probe.py`): `build.yml` installiert das
   Extra `brep` in jedem Testlauf, und ohne den Kern übersprängen sich die

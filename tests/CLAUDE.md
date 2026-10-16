@@ -102,7 +102,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Größenwechsel: Inhalt und Abschluss erreichbar, Nutzergröße erhalten? | `test_dialog_layout.py`, `test_dialog_layout_regressions.py`, `test_ui_settings.py`, `test_counterpart_initial_height_ui.py`, ohne Fenster `test_style_dialog_size.py`; Zusatzfälle in `karte-tests.md` |
 | Steht im Register jeder Umschalter vor den Feldern, die er schaltet, und nie hinter der Klappe eines Vorderfelds? | `test_dependency_order.py`; die Folge des Druckdialogs in `test_print_settings_ui.py` |
 | Bleiben Käuferzuordnung und Betreiberzugang aus dem Server? Halten die PHP-Endpunkte ihre Missbrauchsgrenzen? | `test_licence_admin.py`, `test_activation_server.py` · `test_public_php_security.py`; ohne PHP ein Skip, in der Linux-CI ein Fehler (`php_probe.py`) |
-| Website: tote Verweise, Stempel, Paketgrößen, „nichts von außen“, Sprachfassungen | `test_website.py` — Außenlinks getrennt von eingebundenen Ressourcen |
+| Website: tote Verweise, Stempel, Paketgrößen, „nichts von außen“, Sprachfassungen | `test_website.py` — Außenlinks getrennt von eingebundenen Ressourcen; Sprachhinweis im Browser: `test_website_browser.py` |
 | CI: vollständige Partitionen, Fenster-/Renderergrenze, adapterfreie Sammlung, Prozessisolation, Berichte · Workflowblöcke und Paketfreigabe · Abwicklungskorrektur · Linux-Grenze | `test_ci_runner.py` · `test_packaging.py` mit `workflow_helpers.py` · `test_fix_unwind_info.py` · `test_check_glibc_floor.py` |
 | Wählt `tools/affected_tests.py` richtig? Findet `tools/twin_scan.py` seine Zwillinge? | `test_affected_tests.py` · `test_twin_scan.py` |
 | Zählt die Einzeldateiabnahme wie das Audit, wählt sie dasselbe Merkmal, geht sie über eine abgesagte Zahl hinweg, liest sie die Abdrücke richtig — und gehen ihre Fensterwege an Lochplatte und dünnwandigem Kasten durch? | `test_file_acceptance.py` (die Fensterwege offscreen, also beim Release) |
@@ -119,7 +119,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 
 | Datei | Rolle |
 |---|---|
-| `conftest.py` | Einstellungen, Profile, eigene Bausteine und Aussehen der Anwendung je Test zurückstellen (`test_suite_isolation.py`); Abbaufehler sind rot. Befunddaten über `record_trace`. Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38) — je Prozess ein `solidon-tests-*`, beim Ende abgeräumt, Reste über einen Tag beim nächsten Start, Marker `windowed` für jeden `qt_app`- und `native_window_platform`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`) |
+| `conftest.py` | Einstellungen, Profile, eigene Bausteine, Aussehen und Schlüsselbund je Test zurückstellen (`test_suite_isolation.py`, Regel in `tests.md`); Abbaufehler sind rot. Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38, Abräumen in `karte-tests.md`), Marker `windowed` für jeden `qt_app`- und `native_window_platform`-Test, `--ci-shard I/N` (`tools/ci_shards.py`) |
 | `helpers.py` | Öffentliche Helfer ohne Fenster und Fixture `project`; Namen/Zwecke in `karte-tests.md`, „Helfer“. Keine privaten Querimporte aus `test_*.py` oder `conftest` |
 | `ui_helpers.py` | Fenster und Sitzung je Test frisch; Fixtures über `from tests.ui_helpers import window as window`. Weitere Helfer in `karte-tests.md`, „Helfer“ |
 | `cura_fakes.py` | Nachgebaute Cura 5.13 (`cura_installation`), ihr AppDir, Flatpak-Starter und AppImage als Abbild des AppDir mit nachgestelltem Einhängen für den Lauf — für `test_cura_machine.py` und die Cura-Fälle des Druckdialogs |

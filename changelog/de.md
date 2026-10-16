@@ -92,6 +92,7 @@ Nutzen da und sonst nichts.
 - Die Auswahlkarte folgt Inhalt und Schrift; Text und Handlungsspalten bleiben erhalten. Freie Reiterfenster behalten ihre Größe. Bei angebotener Merkmaländerung ist „Übernehmen“ die Hauptaktion.
 - Gegenstücke fragen zuerst nach Paar und Größe; die Auswahl erklärt beide Hälften. Form und Passung stehen unter „Weitere Einstellungen“. Die Anfangshöhe passt zum Inhalt.
 - Nach einer Vorschauabsage bleiben die Texte der nächsten Vorschau vollständig lesbar.
+- Ohne Grafiktreiber, etwa in einer virtuellen Maschine, endet Solidon nach dem Schließen jetzt zuverlässig. In Version 0.6.0 konnte das Programm dort unsichtbar weiterlaufen.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -106,6 +107,8 @@ Nutzen da und sonst nichts.
 - Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
 - Bei Bohrungen zeigen Bild und *Auswahl* dieselbe Änderung. Zielmaß, Tiefe und mitgehender Einlauf stehen vorn; Druckkorrektur und Feinwerte unter „Weitere Werte“.
 - Bohrungsfelder und der Haken zum gemeinsamen Ändern gleichartiger Merkmale erklären ihre Wirkung. „Druckabweichung ausgleichen“ beschreibt die Korrektur aus dem Materialprofil verständlicher.
+- Ein Klick auf *Übernehmen* an einem Merkmal während einer Berechnung behält die Änderung, auch wenn die Vorschau länger braucht. In Version 0.6.0 ging sie an größeren Modellen still verloren.
+- Eine angezeigte Textur rechnet ohne Änderung keine Vorschau mehr und bietet kein *Abbrechen* an.
 
 ## 0.6.0
 

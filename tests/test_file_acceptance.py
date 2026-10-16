@@ -637,3 +637,39 @@ def test_the_scene_of_the_fault_case_brings_its_preconditions_to_the_case() -> N
     assert cases and all(
         case.variant["preconditions"] == {"opencascade": "fehlt"} for case in cases
     ), [case.variant for case in cases]
+
+
+@pytest.mark.parametrize(
+    ("platform", "read"),
+    [
+        ("win32", ("APPDATA", "LOCALAPPDATA")),
+        ("linux", ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME")),
+        ("darwin", ("HOME",)),
+    ],
+)
+def test_a_case_profile_covers_the_user_folders_of_its_platform(
+    platform: str, read: tuple[str, ...], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Fall legt jeden Nutzerordner seiner Plattform auf sein Profil.
+
+    Unter macOS liest ``app.core.paths`` alles über ``Path.home()``, und der
+    Fall bog nur die Windows- und XDG-Variablen um: Er schrieb in das echte
+    Profil des Rechners, und sein eigenes blieb leer (CI-Lauf 38781742486,
+    ``settings.json`` fehlte). ``HOME`` bleibt auf den anderen Plattformen,
+    wie es ist — Grafiktreiber hängen dort daran.
+    """
+    import os
+
+    from tools import file_acceptance
+
+    for variable in {*file_acceptance.PROFILE_VARIABLES, "HOME"}:
+        monkeypatch.setenv(variable, "vorher")
+    monkeypatch.setattr(file_acceptance.sys, "platform", platform)
+
+    file_acceptance.isolate(tmp_path)
+
+    assert {variable: os.environ[variable] for variable in read} == dict.fromkeys(
+        read, str(tmp_path)
+    )
+    if platform != "darwin":
+        assert os.environ["HOME"] == "vorher"

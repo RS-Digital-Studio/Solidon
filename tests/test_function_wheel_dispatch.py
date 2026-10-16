@@ -502,6 +502,28 @@ def test_fake_walk_preserves_the_positive_wheel_amount(angle: int) -> None:
     assert ports.pressed[0][2] == "wheel_down"
 
 
+def test_a_rolled_step_is_a_valid_protocol_step() -> None:
+    """Was der Walk zu einem Rollschritt schreibt, nimmt das Protokollschema an.
+
+    Der Walk vermerkt die Radmenge (``wheel_angle``), das Schema der Schritte
+    kannte den Schlüssel nicht: Jeder Fall, der auf dem Weg rollen musste, war
+    ein ungültiges Protokoll (macOS, CI-Lauf 38781742486, ``steps[8]``).
+    """
+    from tests.bench_fakes import FakeClick, FakePorts, FakeTimer, FakeWidget
+    from tools.function_checks import validate_protocol
+    from tools.function_samples import sample_protocol
+    from tools.function_walk import Walk
+
+    click = FakeClick((0, 0, 20, 20), "left", "rollen", FakeWidget("rolle"), 1, 30)
+    rows: list[dict[str, Any]] = []
+    assert Walk(FakePorts(FakeTimer(), {"probe": [click]}), rows, 0.0).click_once("probe")
+    assert "wheel_angle" in rows[0], "premise: der Schritt trägt die Radmenge"
+    protocol = sample_protocol()
+    protocol["steps"] = [*protocol["steps"], {**rows[0], "phase": "weg"}]
+
+    assert validate_protocol(protocol) == []
+
+
 @pytest.mark.parametrize("kind", ["field", "feature.field", "measure.field"])
 def test_scrolling_a_value_field_keeps_the_scrollbar_receiver(
     wheel_scene: WheelScene, kind: str, record_trace: Any

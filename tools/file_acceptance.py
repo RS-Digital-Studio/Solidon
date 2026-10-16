@@ -335,9 +335,9 @@ def read_cases(out: Path) -> list[Case]:
     return [Case(**entry) for entry in json.loads((out / "cases.json").read_text(encoding="utf-8"))]
 
 
-#: Die Nutzerordner, die ein Fall auf sein Profil legt. Nie ``HOME`` oder
-#: ``USERPROFILE``: Grafiktreiber und ihre Zwischenspeicher hängen daran, und die
-#: Adapterfrage der Ansicht hing dann (Erinnerung „sonden-bauen“).
+#: Die Nutzerordner, die ein Fall auf sein Profil legt; ``HOME`` nur unter macOS (:func:`isolate`).
+#: Unter Windows hängen Grafiktreiber und ihre Zwischenspeicher an ``HOME`` und
+#: ``USERPROFILE``, und die Adapterfrage der Ansicht hing dann (Erinnerung „sonden-bauen“).
 PROFILE_VARIABLES: tuple[str, ...] = (
     "APPDATA",
     "LOCALAPPDATA",
@@ -352,6 +352,9 @@ def isolate(profile: Path) -> None:
     profile.mkdir(parents=True, exist_ok=True)
     for key in PROFILE_VARIABLES:
         os.environ[key] = str(profile)
+    if sys.platform == "darwin":
+        # macOS liest die Nutzerordner über ``Path.home()``, sonst schrieb der Fall ins Profil.
+        os.environ["HOME"] = str(profile)
 
 
 # --- Funktionsfälle (RM-737) -----------------------------------------------------
@@ -1770,7 +1773,7 @@ class WindowFlow:
         from app.ui import guide_targets
         from app.ui.labels import display_unit
         from tools.function_machine import SETTLE_MS, Step
-        from tools.function_walk import focus_check, typed_number
+        from tools.function_walk import focus_arrived, focus_check, focus_inside, typed_number
 
         text = typed_number(value, display_unit())
 
@@ -1791,9 +1794,10 @@ class WindowFlow:
             self.walker.record({"target": target, "typed": text})
             self.ports.type_text(text)
 
+        arrived = focus_arrived(lambda: focus_inside(field()))
         return [
             self.walker.step(target),
-            Step("alles markieren", mark, settle_ms=SETTLE_MS),
+            Step("alles markieren", mark, ready=arrived, settle_ms=SETTLE_MS),
             Step(f"tippen {text}", type_it, settle_ms=SETTLE_MS),
         ]
 

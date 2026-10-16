@@ -67,6 +67,7 @@ scrive in `website/version.json`.
 - La scheda di selezione segue contenuto e carattere, mantenendo testo e colonne. Le schede separate mantengono le dimensioni. Se è proposta una modifica, «Applica» è l’azione principale.
 - Le controparti chiedono coppia e dimensioni e spiegano entrambe le metà. Forma e accoppiamento sono in «Altre impostazioni». L’altezza iniziale del dialogo segue il contenuto.
 - Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
+- Senza driver grafico, ad esempio in una macchina virtuale, Solidon ora termina in modo affidabile alla chiusura. Nella versione 0.6.0 il programma poteva continuare a girare lì senza essere visto.
 
 ### Stampare e passare allo slicer
 
@@ -81,6 +82,8 @@ scrive in `website/version.json`.
 - Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
 - Per i fori, vista e *Selezione* mostrano la stessa modifica. Misura, profondità e imbocco collegato sono davanti; compensazione di stampa e regolazioni fini, in «Altri valori».
 - I campi del foro e la casella per modificare insieme elementi uguali spiegano il loro effetto. «Compensare gli scostamenti di stampa» chiarisce la correzione del profilo del materiale.
+- Un clic su *Applica* su un elemento durante un calcolo mantiene la modifica, anche se l'anteprima richiede più tempo. Nella versione 0.6.0 andava persa senza avviso sui modelli grandi.
+- Una texture visualizzata non calcola più un'anteprima senza modifiche e non offre più *Annulla*.
 
 ## 0.6.0
 
