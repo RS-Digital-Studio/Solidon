@@ -60,7 +60,7 @@ from app.core.log import get_logger
 from app.core.paths import ensure_dir, lock_file, opened_path, user_data_dir
 from app.core.perceive.match_records import validate_matches
 from app.core.scene.gathered import GATHERED_DIR, externalise, gathered_path, inline, references
-from app.core.scene.migrations import FORMAT_VERSION, migrate
+from app.core.scene.migrations import FORMAT_VERSION, migrate, notes_as_findings
 from app.core.scene.serialise import (
     document_from_data,
     document_to_data,
@@ -141,6 +141,9 @@ class Project:
     ``document.sources``."""
     report: Report = field(default_factory=Report)
     thumbnail: bytes | None = None
+    notices: tuple[Finding, ...] = ()
+    """Was die Umstellung beim Öffnen sagen muss — einmal im Prüfbericht nach dem
+    Öffnen, nicht gespeichert (``migrations.notes_as_findings``, FD-197)."""
 
 
 @dataclass(slots=True)
@@ -1661,7 +1664,8 @@ def load(path: Path) -> Project:
             if has_lone_surrogate(data):
                 raise ValueError("unicode_scalar")
             data = _validate_project_schema(data)
-            data = migrate(data)
+            notes: list[dict[str, Any]] = []
+            data = migrate(data, notes=notes)
             # Die ausgelagerten Sammelwerte zurück ins Dokument, bevor daraus
             # eines wird: Ein Verweis, den niemand auflöst, wäre für jede
             # Operation dahinter ein Text ohne Inhalt und ein leeres Ergebnis
@@ -1849,7 +1853,13 @@ def load(path: Path) -> Project:
         ) from problem
 
     _log.info("opened project %s", path.name)
-    return Project(document=document, sources=payloads, report=report, thumbnail=thumbnail)
+    return Project(
+        document=document,
+        sources=payloads,
+        report=report,
+        thumbnail=thumbnail,
+        notices=notes_as_findings(notes),
+    )
 
 
 # --- Autosave und Absturz-Wiederherstellung (§38) --------------------------------

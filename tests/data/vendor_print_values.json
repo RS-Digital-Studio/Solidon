@@ -1,0 +1,357 @@
+{
+ "generated_by": "tools/scan_vendor_values.py",
+ "programs": [
+  "orcaslicer",
+  "crealityprint",
+  "elegooslicer",
+  "anycubicslicernext",
+  "bambustudio",
+  "prusaslicer"
+ ],
+ "files": 46225,
+ "values": 304225,
+ "paths": {
+  "adhesion.brim_gap": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Artillery/process/0.08mm High Quality @Artillery M1 Pro 0.2 nozzle.json",
+   "max": 1.1,
+   "max_from": "orcaslicer/WEMAKE3D/process/fdm_process_common.json"
+  },
+  "adhesion.brim_width": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Anycubic/process/0.15mm Optimal @Anycubic 4MaxPro2.json",
+   "max": 40.0,
+   "max_from": "orcaslicer/Ginger Additive/process/4.00mm Standard.json"
+  },
+  "adhesion.raft_gap": {
+   "min": 0.0,
+   "min_from": "prusaslicer/PrusaResearch.ini[print:0.15mm SOLUBLE FULL @0.25 nozzle]",
+   "max": 0.35,
+   "max_from": "prusaslicer/HartSmartProducts.ini[print:*1.0n Support*]"
+  },
+  "adhesion.raft_layers": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Afinia/process/fdm_process_common.json",
+   "max": 0.0,
+   "max_from": "orcaslicer/Afinia/process/fdm_process_common.json"
+  },
+  "adhesion.skirt_distance": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Artillery/process/0.20mm Standard @Artillery M1 Pro 0.4 nozzle.json",
+   "max": 15.0,
+   "max_from": "prusaslicer/INAT.ini[print:*common*]"
+  },
+  "adhesion.skirt_loops": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Afinia/process/fdm_process_afinia_common.json",
+   "max": 7.0,
+   "max_from": "orcaslicer/Dremel/process/.05mm Super Detail @Dremel 3D40 0.4.json"
+  },
+  "cooling.bridge_fan_speed": {
+   "min": 0.0,
+   "min_from": "prusaslicer/Anycubic.ini[filament:Generic TPU @4Max Pro 2.0]",
+   "max": 1.0,
+   "max_from": "orcaslicer/Afinia/filament/fdm_filament_common.json"
+  },
+  "cooling.disable_first_layers": {
+   "min": 0.0,
+   "min_from": "anycubicslicernext/Anycubic/filament/Anycubic ABS @Anycubic Kobra S1 0.4 nozzle.json",
+   "max": 1000.0,
+   "max_from": "orcaslicer/iQ/filament/Material4Print ABS Natur P1 @iQ TiQ8 0.4 Nozzle.json"
+  },
+  "cooling.fan_below_layer_time": {
+   "min": 0.0,
+   "min_from": "prusaslicer/PrusaResearch.ini[filament:Prusament PP Carbon Fiber @COREONE]",
+   "max": 600.0,
+   "max_from": "prusaslicer/Jubilee.ini[filament:*common*]"
+  },
+  "cooling.fan_speed": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Artillery/filament/Artillery PC @Artillery M1 Pro 0.4 nozzle.json",
+   "max": 10.0,
+   "max_from": "orcaslicer/RH3D/filament/fdm_filament_tpu.json"
+  },
+  "cooling.minimum_fan_speed": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Anker/filament/fdm_filament_pa.json",
+   "max": 1.0,
+   "max_from": "orcaslicer/Afinia/filament/fdm_filament_pla.json"
+  },
+  "cooling.minimum_layer_time": {
+   "min": 0.0,
+   "min_from": "orcaslicer/iQ/filament/Material4Print ABS Natur P1 @iQ TiQ8 0.4 Nozzle.json",
+   "max": 50.0,
+   "max_from": "orcaslicer/Ginger Additive/filament/Ginger Generic PLA.json"
+  },
+  "cooling.minimum_speed": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Artillery/filament/Artillery PC @Artillery M1 Pro 0.4 nozzle.json",
+   "max": 211.0,
+   "max_from": "prusaslicer/Geeetech.ini[filament:*HS-PLA*]"
+  },
+  "filament.density": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Afinia/filament/fdm_filament_common.json",
+   "max": 4.5,
+   "max_from": "prusaslicer/PrusaResearch.ini[filament:Ultrafuse Metal]"
+  },
+  "filament.diameter": {
+   "min": 1.12838,
+   "min_from": "orcaslicer/Ginger Additive/filament/fdm_filament_common.json",
+   "max": 22.66,
+   "max_from": "prusaslicer/CocoaPress.ini[filament:*common*]"
+  },
+  "filament.flow_ratio": {
+   "min": 0.1,
+   "min_from": "orcaslicer/Volumic/filament/desactive.json",
+   "max": 1.366,
+   "max_from": "orcaslicer/Flashforge/filament/Generic TPU @Flashforge AD4.json"
+  },
+  "filament.max_flow": {
+   "min": 0.5,
+   "min_from": "orcaslicer/Artillery/filament/Artillery PET @Artillery M1 Pro 0.2 nozzle.json",
+   "max": 300.0,
+   "max_from": "orcaslicer/Ginger Additive/filament/fdm_filament_common.json"
+  },
+  "infill.angle": {
+   "min": 45.0,
+   "min_from": "orcaslicer/Afinia/process/fdm_process_common.json",
+   "max": 90.0,
+   "max_from": "orcaslicer/Snapmaker/process/0.25 Benchy @Snapmaker Artisan (0.4 nozzle).json"
+  },
+  "infill.density": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Ginger Additive/process/0.60mm Standard.json",
+   "max": 1.0,
+   "max_from": "orcaslicer/Creality/process/0.08mm HueForge @Creality Hi 0.4 nozzle.json"
+  },
+  "layers.elephant_foot": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Afinia/process/fdm_process_afinia_common.json",
+   "max": 1.0,
+   "max_from": "orcaslicer/WEMAKE3D/process/fdm_process_common.json"
+  },
+  "layers.first_layer_height": {
+   "min": 0.05,
+   "min_from": "orcaslicer/Dremel/process/.05mm Super Detail @Dremel 3D40 0.4.json",
+   "max": 1.5,
+   "max_from": "orcaslicer/Ginger Additive/process/fdm_process_common.json"
+  },
+  "layers.first_layer_line_width": {
+   "min": 0.2,
+   "min_from": "orcaslicer/Creality/process/0.08mm SuperDetail @Creality CR-6 0.2.json",
+   "max": 9.5,
+   "max_from": "orcaslicer/Ginger Additive/process/4.00mm Standard.json"
+  },
+  "layers.layer_height": {
+   "min": 0.05,
+   "min_from": "orcaslicer/Anker/process/0.05mm Optimal 0.2 nozzle @Anker.json",
+   "max": 4.0,
+   "max_from": "orcaslicer/Ginger Additive/process/4.00mm Standard.json"
+  },
+  "layers.line_width": {
+   "min": 0.17,
+   "min_from": "orcaslicer/Voron/process/fdm_process_voron_common_0_1_5.json",
+   "max": 9.5,
+   "max_from": "orcaslicer/Ginger Additive/process/4.00mm Standard.json"
+  },
+  "printer.nozzle_diameter": {
+   "min": 0.15,
+   "min_from": "orcaslicer/Voron/machine/Voron 0.1 0.15 nozzle.json",
+   "max": 8.0,
+   "max_from": "orcaslicer/Ginger Additive/machine/Ginger G1 8.0 nozzle.json"
+  },
+  "retraction.length": {
+   "min": 0.0,
+   "min_from": "orcaslicer/OrcaFilamentLibrary/filament/COEX/COEX TPU 60A @base.json",
+   "max": 20.0,
+   "max_from": "orcaslicer/Ginger Additive/machine/Ginger_G1_common.json"
+  },
+  "retraction.speed": {
+   "min": 0.4,
+   "min_from": "orcaslicer/BBL/filament/Bambu ASA @BBL X1 0.6 nozzle.json",
+   "max": 200.0,
+   "max_from": "orcaslicer/BBL/filament/Bambu TPU 85A @BBL X2D.json"
+  },
+  "retraction.z_hop": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Afinia/machine/fdm_machine_common.json",
+   "max": 1.5,
+   "max_from": "orcaslicer/Ginger Additive/machine/Ginger_G1_common.json"
+  },
+  "shell.bottom_layers": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Ginger Additive/process/0.60mm Standard.json",
+   "max": 999.0,
+   "max_from": "orcaslicer/LH/process/0.10mm HueForge @LH Stinger.json"
+  },
+  "shell.bridge_flow": {
+   "min": 0.5,
+   "min_from": "prusaslicer/Voron.ini[print:*0.05mm*]",
+   "max": 1.8,
+   "max_from": "orcaslicer/Creality/process/0.08mm HueForge @Creality Hi 0.4 nozzle.json"
+  },
+  "shell.hole_offset": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Afinia/process/fdm_process_common.json",
+   "max": 0.25,
+   "max_from": "orcaslicer/CoLiDo/process/fdm_process_colidosr1_common.json"
+  },
+  "shell.top_layers": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Ginger Additive/process/0.60mm Standard.json",
+   "max": 20.0,
+   "max_from": "orcaslicer/Dremel/process/.05mm Super Detail @Dremel 3D45 0.4.json"
+  },
+  "shell.top_thickness": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Anker/process/fdm_process_anker_fast_common.json",
+   "max": 1.28,
+   "max_from": "crealityprint/Creality/process/0.32mm Standard @Creality Ender-3 V3 Plus 0.4 nozzle.json"
+  },
+  "shell.wall_count": {
+   "min": 1.0,
+   "min_from": "orcaslicer/Creality/process/0.08mm HueForge @Creality Hi 0.4 nozzle.json",
+   "max": 6.0,
+   "max_from": "orcaslicer/Artillery/process/0.20mm Strength @Artillery M1 Pro 0.4 nozzle.json"
+  },
+  "speed.acceleration": {
+   "min": 150.0,
+   "min_from": "orcaslicer/Flashforge/process/0.20mm Standard @Flashforge AD3 0.4 Nozzle.json",
+   "max": 100000.0,
+   "max_from": "orcaslicer/MagicMaker/process/0.12mm Fine BestFast @MM BoneKing.json"
+  },
+  "speed.bridge": {
+   "min": 10.0,
+   "min_from": "orcaslicer/Creality/process/0.08mm HueForge @Creality K2 0.4 nozzle.json",
+   "max": 180.0,
+   "max_from": "orcaslicer/Snapmaker/process/0.25 Benchy @Snapmaker J1 (0.4 nozzle).json"
+  },
+  "speed.first_layer": {
+   "min": 10.0,
+   "min_from": "orcaslicer/Flashforge/process/0.12mm Detail @Flashforge Guider 2s 0.4 nozzle.json",
+   "max": 220.0,
+   "max_from": "orcaslicer/Volumic/process/Full performance - 0.10mm.json"
+  },
+  "speed.infill": {
+   "min": 20.0,
+   "min_from": "prusaslicer/PrusaResearch.ini[print:0.05mm ULTRADETAIL @0.25 nozzle]",
+   "max": 1000.0,
+   "max_from": "orcaslicer/MagicMaker/process/0.12mm Fine BestFast @MM BoneKing.json"
+  },
+  "speed.inner_wall": {
+   "min": 20.0,
+   "min_from": "orcaslicer/Raise3D/process/0.10mm Fine @Raise3D Pro3.json",
+   "max": 800.0,
+   "max_from": "orcaslicer/MagicMaker/process/0.12mm Fine BestFast @MM BoneKing.json"
+  },
+  "speed.outer_wall": {
+   "min": 15.0,
+   "min_from": "orcaslicer/CoLiDo/process/fdm_process_colidox16_common.json",
+   "max": 600.0,
+   "max_from": "orcaslicer/LH/process/0.20mm Speed @LH Stinger.json"
+  },
+  "speed.outer_wall_acceleration": {
+   "min": 100.0,
+   "min_from": "orcaslicer/Flashforge/process/0.20mm Standard @Flashforge AD3 0.4 Nozzle.json",
+   "max": 50000.0,
+   "max_from": "orcaslicer/MagicMaker/process/0.12mm Fine BestFast @MM BoneKing.json"
+  },
+  "speed.top_surface": {
+   "min": 10.0,
+   "min_from": "prusaslicer/Geeetech.ini[print:*common*]",
+   "max": 2000.0,
+   "max_from": "orcaslicer/Prusa/process/0.30mm DETAIL @CORE One L 0.8.json"
+  },
+  "speed.travel": {
+   "min": 60.0,
+   "min_from": "orcaslicer/Anycubic/process/0.15mm Optimal @Anycubic 4MaxPro2.json",
+   "max": 1500.0,
+   "max_from": "orcaslicer/MagicMaker/process/0.12mm Fine BestFast @MM BoneKing.json"
+  },
+  "support.bottom_interface_layers": {
+   "min": 0.0,
+   "min_from": "orcaslicer/DeltaMaker/process/fdm_process_common.json",
+   "max": 5.0,
+   "max_from": "orcaslicer/Sovol/process/0.20mm Standard @Sovol Zero 0.4 nozzle.json"
+  },
+  "support.density": {
+   "min": 0.03575389151524216,
+   "min_from": "prusaslicer/CocoaPress.ini[print:Cocoa Press (1.0mm layerheight)]",
+   "max": 0.85809962148284,
+   "max_from": "orcaslicer/FLSun/process/0.08mm Fine @FLSun Q5.json"
+  },
+  "support.interface_layers": {
+   "min": 0.0,
+   "min_from": "prusaslicer/Anker.ini[print:*common-M5C*]",
+   "max": 5.0,
+   "max_from": "orcaslicer/Prusa/process/0.05mm Detail @Prusa XL 0.25.json"
+  },
+  "support.interface_spacing": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Afinia/process/fdm_process_common.json",
+   "max": 2.0,
+   "max_from": "orcaslicer/Creality/process/0.16mm Optimal @Creality Sermoon V1.json"
+  },
+  "support.threshold_angle": {
+   "min": 10.0,
+   "min_from": "prusaslicer/BIBO.ini[print:*soluble_support*]",
+   "max": 80.0,
+   "max_from": "orcaslicer/Sovol/process/0.18mm Optimal @Sovol SV08.json"
+  },
+  "support.tip_diameter": {
+   "min": 0.6,
+   "min_from": "orcaslicer/Prusa/process/process_common_mk3.json",
+   "max": 2.0,
+   "max_from": "orcaslicer/Elegoo/process/fdm_process_common.json"
+  },
+  "support.tree_walls": {
+   "min": 1.0,
+   "min_from": "orcaslicer/Afinia/process/fdm_process_afinia_common.json",
+   "max": 2.0,
+   "max_from": "orcaslicer/Co Print/process/fdm_process_coprint_common.json"
+  },
+  "support.xy_gap": {
+   "min": 0.0,
+   "min_from": "prusaslicer/gCreate.ini[print:0.20mm - Dual 2in1 PLA with PVA Support @GCREATE]",
+   "max": 2.5,
+   "max_from": "orcaslicer/Eryone/process/fdm_process_common.json"
+  },
+  "support.z_gap": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Prusa/process/0.20mm SOLUBLE FULL @MK4S 0.4.json",
+   "max": 1.0,
+   "max_from": "crealityprint/Creality/process/0.20mm Standard @Creality CR-30 0.4 nozzle.json"
+  },
+  "temperature.bed": {
+   "min": 0.0,
+   "min_from": "orcaslicer/DeltaMaker/filament/fdm_filament_common.json",
+   "max": 150.0,
+   "max_from": "prusaslicer/INAT.ini[filament:*common PEEK @INAT*]"
+  },
+  "temperature.bed_first_layer": {
+   "min": 0.0,
+   "min_from": "orcaslicer/DeltaMaker/filament/fdm_filament_common.json",
+   "max": 150.0,
+   "max_from": "prusaslicer/INAT.ini[filament:*common PEEK @INAT*]"
+  },
+  "temperature.chamber": {
+   "min": 0.0,
+   "min_from": "orcaslicer/Afinia/filament/fdm_filament_common.json",
+   "max": 80.0,
+   "max_from": "orcaslicer/Z-Bolt/filament/Generic PA @Z-Bolt Base.json"
+  },
+  "temperature.nozzle": {
+   "min": 0.0,
+   "min_from": "orcaslicer/re3D/filament/re3D Greengate rPETG @0.8 nozzle.json",
+   "max": 440.0,
+   "max_from": "prusaslicer/INAT.ini[filament:*common PEEK @INAT*]"
+  },
+  "temperature.nozzle_first_layer": {
+   "min": 0.0,
+   "min_from": "orcaslicer/re3D/filament/re3D Greengate rPETG @0.8 nozzle.json",
+   "max": 440.0,
+   "max_from": "prusaslicer/INAT.ini[filament:*common PEEK @INAT*]"
+  }
+ }
+}

@@ -31,8 +31,15 @@ class Field:
     kind: FieldKind = "float"
     unit: str = ""
     minimum: float = 0.0
+    """Untergrenze **in Anzeigeeinheit**, wie das Feld sie zeigt — bei einem
+    Prozentfeld 50, nicht 0,5. Der Dialog setzt sie unverändert als Spanne; ein
+    Anteil hier stand in 0.6.0 als „2 %“ im Brückenfluss (FD-197).
+    ``tests/test_print_field_units.py`` hält Grenzen, Schritt und Vorgabe
+    jeder Zeile zusammen."""
     maximum: float = 1000.0
+    """Obergrenze in Anzeigeeinheit, wie ``minimum``."""
     step: float = 0.1
+    """Pfeilschritt in Anzeigeeinheit, wie ``minimum``."""
     decimals: int = 2
     choices: tuple[str, ...] = ()
     front: bool = False
@@ -102,7 +109,7 @@ FIELDS: tuple[Field, ...] = (
         "layers",
         unit="mm",
         minimum=0.02,
-        maximum=1.2,
+        maximum=4.0,
         step=0.02,
         decimals=3,
         note=_(
@@ -116,7 +123,7 @@ FIELDS: tuple[Field, ...] = (
         "layers",
         unit="mm",
         minimum=0.02,
-        maximum=1.2,
+        maximum=4.0,
         step=0.02,
         decimals=3,
         note=_(
@@ -130,7 +137,7 @@ FIELDS: tuple[Field, ...] = (
         "layers",
         unit="mm",
         minimum=0.1,
-        maximum=2.0,
+        maximum=10.0,
         step=0.02,
         decimals=3,
         note=_(
@@ -144,7 +151,7 @@ FIELDS: tuple[Field, ...] = (
         "layers",
         unit="mm",
         minimum=0.1,
-        maximum=2.0,
+        maximum=10.0,
         step=0.02,
         decimals=3,
         note=_("Breiter als die übrigen Bahnen — mehr Material auf dem Bett heißt mehr Haftung."),
@@ -329,9 +336,9 @@ FIELDS: tuple[Field, ...] = (
         _("Fluss bei Brücken"),
         "shell",
         unit="%",
-        minimum=0.5,
-        maximum=1.5,
-        step=0.05,
+        minimum=50.0,
+        maximum=200.0,
+        step=5.0,
         decimals=0,
         factor=100.0,
         note=_(
@@ -410,7 +417,7 @@ FIELDS: tuple[Field, ...] = (
         kind="int",
         unit="°C",
         minimum=0,
-        maximum=400,
+        maximum=500,
         note=_(
             "Wie heiß die Düse ist. Zu kalt heißt schwache Schichtbindung, zu heiß bringt Fäden "
             "und weiche Überhänge."
@@ -423,7 +430,7 @@ FIELDS: tuple[Field, ...] = (
         kind="int",
         unit="°C",
         minimum=0,
-        maximum=400,
+        maximum=500,
         note=_("Meist etwas heißer als der Rest: Die erste Schicht soll auf dem Bett kleben."),
     ),
     Field(
@@ -503,7 +510,7 @@ FIELDS: tuple[Field, ...] = (
         "cooling",
         unit="s",
         minimum=0.0,
-        maximum=300.0,
+        maximum=600.0,
         step=5.0,
         decimals=0,
         note=_(
@@ -557,8 +564,8 @@ FIELDS: tuple[Field, ...] = (
         _("Mindesttempo beim Bremsen"),
         "cooling",
         unit="mm/s",
-        minimum=1.0,
-        maximum=100.0,
+        minimum=0.0,
+        maximum=300.0,
         step=1.0,
         decimals=0,
         note=_(
@@ -583,7 +590,7 @@ FIELDS: tuple[Field, ...] = (
         "speed",
         unit="mm/s",
         minimum=1.0,
-        maximum=1000.0,
+        maximum=2000.0,
         step=5.0,
         decimals=1,
         note=_("Tempo der sichtbaren Außenbahn. Langsamer heißt glatter und maßgenauer."),
@@ -594,7 +601,7 @@ FIELDS: tuple[Field, ...] = (
         "speed",
         unit="mm/s",
         minimum=1.0,
-        maximum=1000.0,
+        maximum=2000.0,
         step=5.0,
         decimals=1,
         note=_("Tempo der inneren Bahnen. Sie sieht niemand — hier darf es schneller sein."),
@@ -605,7 +612,7 @@ FIELDS: tuple[Field, ...] = (
         "speed",
         unit="mm/s",
         minimum=1.0,
-        maximum=1000.0,
+        maximum=2000.0,
         step=5.0,
         decimals=1,
         note=_("Tempo der Füllung. Nach oben begrenzt sie ohnehin der höchste Volumenstrom."),
@@ -616,7 +623,7 @@ FIELDS: tuple[Field, ...] = (
         "speed",
         unit="mm/s",
         minimum=1.0,
-        maximum=1000.0,
+        maximum=2000.0,
         step=5.0,
         decimals=1,
         note=_("Tempo der Deckschichten. Langsam macht die Oberseite gleichmäßig."),
@@ -627,7 +634,7 @@ FIELDS: tuple[Field, ...] = (
         "speed",
         unit="mm/s",
         minimum=1.0,
-        maximum=1000.0,
+        maximum=2000.0,
         step=5.0,
         decimals=1,
         note=_("Tempo der ersten Schicht. Langsam heißt haften."),
@@ -638,7 +645,7 @@ FIELDS: tuple[Field, ...] = (
         "speed",
         unit="mm/s",
         minimum=1.0,
-        maximum=1000.0,
+        maximum=2000.0,
         step=10.0,
         decimals=0,
         note=_("Tempo ohne Material. Schnell spart Zeit und schüttelt den Drucker mehr."),
@@ -660,7 +667,7 @@ FIELDS: tuple[Field, ...] = (
         "speed",
         unit="mm/s²",
         minimum=100.0,
-        maximum=30000.0,
+        maximum=100000.0,
         step=500.0,
         decimals=0,
         note=_("Wie hart der Drucker beschleunigt. Weniger heißt sauberere Ecken und mehr Zeit."),
@@ -671,7 +678,7 @@ FIELDS: tuple[Field, ...] = (
         "speed",
         unit="mm/s²",
         minimum=100.0,
-        maximum=30000.0,
+        maximum=100000.0,
         step=500.0,
         decimals=0,
         note=_(
@@ -950,7 +957,7 @@ FIELDS: tuple[Field, ...] = (
         "retraction",
         unit="mm",
         minimum=0.0,
-        maximum=10.0,
+        maximum=20.0,
         step=0.1,
         decimals=2,
         note=_(
@@ -966,7 +973,7 @@ FIELDS: tuple[Field, ...] = (
         minimum=1.0,
         maximum=200.0,
         step=5.0,
-        decimals=0,
+        decimals=1,
         note=_(
             "Wie schnell zurückgezogen wird. Zu schnell mahlt das Antriebsrad ins Filament, zu "
             "langsam zieht Fäden."
@@ -1027,7 +1034,7 @@ FIELDS: tuple[Field, ...] = (
         "filament",
         unit="mm",
         minimum=1.0,
-        maximum=4.0,
+        maximum=25.0,
         step=0.05,
         decimals=2,
         note=_("Der Durchmesser des Filaments, wie die Rolle ihn angibt — 1,75 mm oder 2,85 mm."),
@@ -1038,7 +1045,7 @@ FIELDS: tuple[Field, ...] = (
         "filament",
         unit="g/cm³",
         minimum=0.5,
-        maximum=3.0,
+        maximum=10.0,
         step=0.01,
         decimals=2,
         note=_("Dichte des Materials. Daraus rechnet die Schätzung das Gewicht."),
@@ -1062,7 +1069,7 @@ FIELDS: tuple[Field, ...] = (
         "filament",
         unit="mm³/s",
         minimum=0.5,
-        maximum=60.0,
+        maximum=300.0,
         step=0.5,
         decimals=1,
         note=_(
@@ -1091,6 +1098,24 @@ _FIELD_OF: Final[dict[str, Field]] = {field.path: field for field in FIELDS}
 def field_of(path: str) -> Field | None:
     """Das Feld zu einem Punktpfad — ``None``, wo der Dialog keines zeigt."""
     return _FIELD_OF.get(path)
+
+
+def shown_range(field: Field, value: object) -> tuple[float, float]:
+    """Die Spanne des Felds in Anzeigeeinheit, um einen geladenen Wert erweitert.
+
+    Ein Wert, den das Profil des Herstellers mitbringt, steht so im Feld, wie er
+    gedruckt wird: Qt klemmte ihn sonst still auf die Grenze, das Feld zeigte
+    30000 mm/s², wo der Sovol Zero mit 40 000 druckt, und ein Pfeil machte die
+    gekürzte Zahl zur eigenen Wahl (FD-203). Getippt wird gegen diese Spanne —
+    die Grenzen des Felds, erweitert nur bis zu dem Wert, der dasteht.
+    ``tests/data/vendor_print_values.json`` nennt, was die Hersteller tragen;
+    ``tests/test_vendor_field_values.py`` hält die Grenzen darum herum.
+    """
+    low, high = field.minimum, field.maximum
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        shown = float(value) * field.factor
+        low, high = min(low, shown), max(high, shown)
+    return low, high
 
 
 def setting_title(path: str) -> str:

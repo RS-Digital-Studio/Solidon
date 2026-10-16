@@ -79,6 +79,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Imprimir e entregar ao slicer
 
 - Se o slicer escolhido não for um programa, o Solidon diz-o agora de imediato e propõe escolher outro. Na versão 0.6.0, o fatiamento esperava que alguém fechasse uma mensagem do Windows.
+- O campo *Fluxo em pontes* mostra o valor em percentagem e aceita de 50 a 200 %. Na versão 0.6.0, mostrava 2 %, e alterá-lo enviava ao slicer 1 ou 2 %.
+- Um projeto da versão 0.6.0 com um fluxo em pontes de 1 ou 2 % abre com o valor sem definição própria, e o relatório indica-o.
+- As definições de impressão mostram por inteiro os valores do perfil do slicer, como 40 000 mm/s² de aceleração. Na versão 0.6.0, o campo mostrava o seu limite.
+- Uma largura de linha acima do dobro do bico, como 4 em vez de 0,4 mm, dá um aviso e propõe a linha limpa mais larga.
 
 ### Editar e esboçar
 

@@ -36,6 +36,7 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 | `check_message.py` | `commit-msg`-Hook: Ersatzschreibung statt Umlaut |
 | `check_new_texts.py` | `pre-commit`-Hook: Stehen die **neuen** `tr()`-Texte des Commits in jedem Katalog? Liest Quelltext, Sprachliste und Kataloge aus dem Index; bei Umbenennungen vergleicht es den alten HEAD-Pfad mit dem neuen Indexpfad |
 | `check_part_ranges.py` | Bereichsnachweis der Bausteine (§24.3): je Baustein ein frischer Prozess; temporäre Nutzerprofile werden nach dem Lauf entfernt. Schreibt `app/core/knowledge/data/part_ranges.toml`; `--check` vergleicht nur |
+| `scan_vendor_values.py` | Herstellerwerte der Slicer je Druckfeld → `tests/data/vendor_print_values.json` |
 
 ## Prüfen und messen — keines davon ist ein Testlauf
 

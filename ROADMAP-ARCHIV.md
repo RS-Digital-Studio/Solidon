@@ -48350,6 +48350,19 @@ Würfel 10 × 10 × 10: „oberste Fläche“ bügelt in allen acht Programmen n
 Oberseiten“ z 10 und 20 (Orca-Familie 594–614 gegen 5 732–5 789 mm Bahn, Anycubic, Prusa
 und SuperSlicer 912–922 gegen 8 644–8 706 mm, Cura 863 gegen 8 297 mm).
 
+**Format 53 (FD-197, 16.10.2026):** *Fluss bei Brücken* trug in 0.6.0 seine Grenzen als
+Anteil in einem Prozentfeld; wer es anfasste, speicherte 0,01 oder 0,02. Migration 52 → 53
+nimmt eine eigene Wahl oder Wahl der Platte unter 0,5 zurück, es gilt der Wert ohne eigene
+Einstellung, und der Prüfbericht nach dem Öffnen sagt es (`project.bridge_flow_reset`,
+`Project.notices`, nicht gespeichert). Beispieldatei `bridge_flow_v52.p3d` (im Dialog von
+0.6.0 geschrieben), `example_v53.p3d`. **Der Abdruck einer Buchung kippt für genau diese
+Projekte:** Was dem Projekt gehört (`filament_usage._owned_settings`), trug
+`["shell.bridge_flow", 0.01]` und trägt ihn danach nicht mehr (Review 1, Sonde
+`sonde_abdruck.py`, Prüfsummen `836301b9…` gegen `d0024469…`). Gewollt: Mit 1 % druckte
+die Brücke ohne Material, nach dem Update ist es ein anderer Druck, und eine Buchung aus 0.6.0
+für ein solches Projekt wird nicht wiedererkannt. Jedes andere Projekt behält seinen Abdruck,
+der Schritt ändert nichts sonst.
+
 ## RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)
 
 <a id="rm-771-den-fehlerbericht-als-rückfall-bekommt-nur-ein-programmfehler-11102026"></a>

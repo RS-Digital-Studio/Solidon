@@ -1793,10 +1793,10 @@ def test_filament_override_refuses_a_number_until_it_is_corrected(
         line = editor.lineEdit()
         line.setFocus()
         line.selectAll()
-        QTest.keyClicks(line, "401")
+        QTest.keyClicks(line, "501")
         refusal = editor.refusal()
-        assert editor.refused_value() == pytest.approx(401)
-        assert "Obergrenze" in refusal and "400" in refusal
+        assert editor.refused_value() == pytest.approx(501)
+        assert "Obergrenze" in refusal and "500" in refusal
         assert dialog._refusals["temperature.nozzle"].isVisibleTo(dialog)
         ok = dialog._ok_button
         assert ok is not None
@@ -1913,7 +1913,7 @@ def test_the_printer_header_refuses_out_of_range_numbers(
 @pytest.mark.parametrize(
     ("path", "invalid", "boundary", "bound_word"),
     [
-        ("layers.layer_height", 1.5, 1.2, "Obergrenze"),
+        ("layers.layer_height", 4.5, 4.0, "Obergrenze"),
         ("shell.wall_count", 21, 20, "Obergrenze"),
         ("shell.wall_count", 0, 1, "Untergrenze"),
     ],
@@ -9880,8 +9880,15 @@ def test_empty_print_dialog_explains_an_impossible_flow_and_recovers(qt_app, whe
 
     Vor dem Öffnen gesetzt heißt: früher selbst gewählt. Ohne Herkunft wären
     die Werte seit Stufe A Grundlage und kämen beim Öffnen aus dem Profil.
+
+    An einer 1-mm-Düse: An der 0,4er bringt der Rat Schicht und Bahn auf
+    höchstens 0,3 × 0,8 mm, und unter 0,5 mm³/s Volumenstrom geht das noch
+    (``advise.WIDE_LINE_SHARE``, Nachprüfung FD-197 NP-3).
     """
+    printer = profiles.printer(profiles.DEFAULT_PRINTER)
+    profiles.save_printer(replace(printer, nozzle_diameter=1.0, extrusion_width=1.05))
     session = Session()
+    assert session.profile.printer.nozzle_diameter == pytest.approx(1.0)
     settings = print_settings.resolve(session.profile)
     invalid = settings
     for path, value in (

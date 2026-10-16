@@ -124,7 +124,7 @@ from app.core.types import (
     SlotOverride,
     SlotProfileBinding,
 )
-from app.core.units import EPS_DISPLAY, SMALLEST_NOZZLE, is_close
+from app.core.units import EPS_DISPLAY, LARGEST_NOZZLE, SMALLEST_NOZZLE, is_close
 from app.i18n import TranslatableText, _, format_decimal, source_text, tr
 from app.ui.dialogs import (
     confirm_handover,
@@ -264,7 +264,7 @@ def _offer_choices(combo: QComboBox, path: str, program: str) -> None:
 
 #: Die eigene Beschreibung eines Zahlenfelds, bevor Grenzhinweise dazukommen.
 _REFUSAL_BASE_DESCRIPTION: Final = "solidonRefusalBaseDescription"
-_NOZZLE_RANGE_MM: Final[tuple[float, float]] = (SMALLEST_NOZZLE, 2.0)
+_NOZZLE_RANGE_MM: Final[tuple[float, float]] = (SMALLEST_NOZZLE, LARGEST_NOZZLE)
 
 #: Wie weit der Dialog beim Wachsen vom Rand der nutzbaren Bildschirmfläche
 #: bleibt, in Punkten — Platz für Rahmen und Titelleiste des Fensters.
@@ -655,6 +655,12 @@ def _set_setting_editor(editor: QWidget, field: Field, value: object) -> None:
     elif isinstance(editor, _ColourButton):
         editor.set_value(str(value))
     elif isinstance(editor, QDoubleSpinBox):
+        # Ein geladener Wert jenseits der Grenzen bleibt, wie er ist (FD-203);
+        # die Spanne geht bei jedem Setzen von den Grenzen des Felds aus.
+        low, high = print_fields.shown_range(field, value)
+        if field.path == "adhesion.raft_gap":
+            low -= 10.0**-field.decimals
+        editor.setRange(low, high)
         editor.setValue(
             editor.minimum()
             if value is None and field.path == "adhesion.raft_gap"

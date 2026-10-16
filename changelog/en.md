@@ -79,6 +79,10 @@ it into `website/version.json`.
 ### Printing and slicer handover
 
 - If the chosen slicer is a file that is not a program, Solidon now says so at once and offers to choose another slicer. In version 0.6.0 slicing waited until someone closed a Windows message.
+- The *Flow on bridges* field shows its value in percent and accepts 50 to 200 %. In version 0.6.0 it showed 2 %, and changing it sent 1 or 2 % bridge flow to the slicer.
+- A project from version 0.6.0 with 1 or 2 % bridge flow opens with the value without your own setting, and the report says so.
+- Print settings show values from the slicer profile in full, such as 40,000 mm/s² acceleration. In version 0.6.0 the field showed its upper limit instead.
+- A line width above twice the nozzle, such as 4 instead of 0.4 mm, now gets a warning and a suggestion for the widest clean line.
 
 ### Editing and sketching
 
