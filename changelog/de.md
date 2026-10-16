@@ -129,6 +129,7 @@ Nutzen da und sonst nichts.
 - Der Dialog *Material kalibrieren* zeigt Spiel, Übermaß, Lochkorrektur, Elefantenfuß und Wand in der gewählten Einheit, auch in Zoll, und behält die dritte Nachkommastelle.
 - Ein langer Knopf unter einer Absage bricht bei großer Schrift um, statt den Dialog zu verbreitern.
 - Knöpfe werden bei großer Schrift nicht mehr gestaucht. Im Prüfbericht waren die Handlungen eines Befunds in Version 0.6.0 oben und unten abgeschnitten.
+- Ändert sich die Schriftgröße des Systems, folgt Solidon sofort, auch in offenen Dialogen. Version 0.6.0 übernahm sie erst nach einem Neustart.
 - Die Legende *Hinzugefügt* und *Entfernt* steht im Vorschauband nur, wenn die Vorschau Material hinzufügt oder entfernt. Bei *Objekt umbenennen* fehlt sie deshalb.
 - Der Chat nennt bei Parametern, Passungen, Drucker, Material und Rückgängig den Ort im Fenster, an dem man dasselbe selbst tut.
 - Der Prüfbericht und die Prüfung vor dem Export nennen die Körper einer Passung beim Namen statt mit einer internen Kennung, auch einen inzwischen entfernten Körper.

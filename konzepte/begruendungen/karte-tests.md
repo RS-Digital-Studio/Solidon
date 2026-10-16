@@ -462,6 +462,10 @@ wartet, bis die Karte nach ihrer Öffnungsbewegung steht
 (`test_feature_footer_window.py`, `test_feature_footer_low_window.py`,
 `test_card_tab_chain.py`).
 
+`test_font_follow_window.py` (FD-194): Ein Wechsel der Anwendungsschrift ohne
+`apply_style` erreicht Stufen, Knöpfe und einen offenen Operationsdialog,
+9 → 14 → 9 pt.
+
 `window_leftovers.py` gehört dem Wächter `_no_window_outlives_its_test` in
 `conftest.py` (FD-191): Ein Fall mit `qt_app`, der ein sichtbares Fenster
 offen lässt, wird an sich selbst rot, nicht am nächsten im selben Arbeiter;

@@ -104,6 +104,7 @@ scrive in `website/version.json`.
 - La finestra *Calibra il materiale* mostra gioco, interferenza, compensazione dei fori, piede d'elefante e parete nell'unità scelta, anche in pollici, e conserva la terza decimale.
 - Un pulsante lungo sotto un rifiuto va a capo con caratteri grandi, invece di allargare la finestra.
 - I pulsanti non vengono più schiacciati con caratteri grandi. Nella versione 0.6.0 le azioni di un rilievo nel rapporto di verifica erano tagliate in alto e in basso.
+- Se cambia la dimensione dei caratteri di sistema, Solidon la segue subito, anche nelle finestre aperte. La versione 0.6.0 la applicava solo dopo un riavvio.
 - La legenda *Aggiunto* e *Rimosso* compare nella barra dell'anteprima solo quando l'anteprima aggiunge o toglie materiale. Per questo *Rinomina oggetto* non la mostra.
 - Per parametri, accoppiamenti, stampante, materiale e annulla, la chat indica il punto della finestra in cui fare lo stesso da sé.
 - Il rapporto di verifica e il controllo prima dell'esportazione nominano i corpi di un accoppiamento invece di mostrare un identificativo interno, anche un corpo nel frattempo rimosso.

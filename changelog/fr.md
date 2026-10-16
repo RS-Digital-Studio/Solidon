@@ -105,6 +105,7 @@ dans `website/version.json`.
 - Le dialogue *Calibrer le matériau* affiche jeu, serrage, compensation des trous, patte d'éléphant et paroi dans l'unité choisie, pouces compris, et garde la troisième décimale.
 - Un bouton long sous un refus passe à la ligne en grande police, au lieu d'élargir le dialogue.
 - Les boutons ne sont plus écrasés en grande police. Dans la version 0.6.0, les actions d'un constat du rapport de contrôle étaient coupées en haut et en bas.
+- Quand la taille de police du système change, Solidon suit aussitôt, y compris dans les dialogues ouverts. La version 0.6.0 ne la reprenait qu'après un redémarrage.
 - La légende *Ajouté* et *Retiré* n'apparaît dans le bandeau d'aperçu que si l'aperçu ajoute ou retire de la matière. *Renommer l'objet* ne l'affiche donc pas.
 - Pour les paramètres, les ajustements, l'imprimante, le matériau et l'annulation, le chat indique l'endroit de la fenêtre où faire de même soi-même.
 - Le rapport de contrôle et le contrôle avant l'export nomment les corps d'un ajustement au lieu d'afficher un identifiant interne, y compris un corps supprimé entre-temps.

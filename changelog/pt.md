@@ -104,6 +104,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O diálogo *Calibrar material* mostra folga, interferência, compensação de furos, pé de elefante e parede na unidade escolhida, também em polegadas, e mantém a 3.ª casa decimal.
 - Um botão longo por baixo de uma recusa quebra a linha com letra grande, em vez de alargar o diálogo.
 - Os botões já não ficam esmagados com letra grande. Na versão 0.6.0, as ações de uma constatação no relatório de verificação ficavam cortadas em cima e em baixo.
+- Quando o tamanho de letra do sistema muda, o Solidon acompanha de imediato, também nos diálogos abertos. A versão 0.6.0 só o aplicava depois de reiniciar.
 - A legenda *Acrescentado* e *Removido* só aparece na barra de pré-visualização quando a pré-visualização acrescenta ou retira material. Por isso, *Mudar o nome do objeto* não a mostra.
 - Para parâmetros, ajustes, impressora, material e desfazer, o chat indica o lugar da janela onde se faz o mesmo à mão.
 - O relatório de verificação e a verificação antes da exportação nomeiam os corpos de um ajuste em vez de mostrar um identificador interno, também um corpo entretanto removido.

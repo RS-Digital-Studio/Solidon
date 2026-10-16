@@ -104,6 +104,7 @@ it into `website/version.json`.
 - The *Calibrate material* dialog shows clearance, interference, hole compensation, elephant foot and wall in the chosen unit, inches included, and keeps the third decimal place.
 - A long button under a refusal wraps at large font sizes instead of widening the dialog.
 - Buttons are no longer squashed at large font sizes. In version 0.6.0 the actions of a finding in the check report were cut off at the top and bottom.
+- When the system font size changes, Solidon follows at once, open dialogs included. Version 0.6.0 only picked it up after a restart.
 - The *Added* and *Removed* legend appears in the preview bar only when the preview adds or removes material. *Rename object* therefore shows none.
 - For parameters, fits, printer, material and undo, the chat names the place in the window where you can do the same yourself.
 - The check report and the check before export name the bodies of a fit instead of showing an internal identifier, including a body that has since been removed.

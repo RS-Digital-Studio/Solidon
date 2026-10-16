@@ -105,6 +105,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El diálogo *Calibrar material* muestra holgura, apriete, compensación de agujeros, pie de elefante y pared en la unidad elegida, también en pulgadas, y conserva el tercer decimal.
 - Un botón largo bajo un rechazo se divide en varias líneas con letra grande, en lugar de ensanchar el diálogo.
 - Los botones ya no se aplastan con letra grande. En la versión 0.6.0, las acciones de un hallazgo en el informe de comprobación quedaban cortadas por arriba y por abajo.
+- Si cambia el tamaño de letra del sistema, Solidon lo sigue al instante, también en los diálogos abiertos. La versión 0.6.0 solo lo aplicaba tras reiniciar.
 - La leyenda *Añadido* y *Eliminados* aparece en la barra de vista previa solo cuando la vista previa añade o quita material. Por eso *Renombrar objeto* no la muestra.
 - Para parámetros, ajustes, impresora, material y deshacer, el chat indica el lugar de la ventana donde se hace lo mismo a mano.
 - El informe de comprobación y la comprobación antes de exportar nombran los cuerpos de un ajuste en lugar de mostrar un identificador interno, también un cuerpo ya eliminado.

@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
 
 from app.core.log import get_logger
 from app.core.types import Action
-from app.ui import app_events, button_floor
+from app.ui import app_events, style_follow
 from app.ui.scroll_areas import PassingScrollArea
 from app.ui.theme import THEMES, Theme
 
@@ -2148,10 +2148,12 @@ QProgressBar::chunk:disabled {{ background: {disabled}; }}
 
 def apply_style(application: QApplication, theme: Theme) -> None:
     """Legt das Stylesheet über die Anwendung. Wirkt sofort und überall."""
-    # Die ``min-height`` der Knöpfe wird zur ausdrücklichen Mindesthöhe; ohne
-    # den Zuhörer staucht ein enges Layout die Beschriftung (FD-185).
-    button_floor.install()
+    # Ein Zuhörer folgt danach jedem Schriftwechsel (FD-194) und hebt die
+    # Knöpfe auf ihre Beschriftung (FD-185) — ``style_follow``.
+    style_follow.install()
     font = application.font()
-    application.setStyleSheet(
-        stylesheet(theme, max(font.pointSize(), 1), arrow_files(theme), check_files(theme))
-    )
+    sheet = stylesheet(theme, max(font.pointSize(), 1), arrow_files(theme), check_files(theme))
+    # Derselbe Text noch einmal hieße, jedes Widget neu zu polieren — für nichts.
+    if sheet != application.styleSheet():
+        application.setStyleSheet(sheet)
+    style_follow.remember(application)
