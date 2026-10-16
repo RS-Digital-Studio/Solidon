@@ -99,6 +99,7 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 | Ort / Frage | Vertrag |
 |---|---|
 | `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export samt `_warm_the_slicer`, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
+| `waiting_click.py` | Ein Neuaufbau ohne Eingabe hält die Freigabe, an der ein Klick wartet (`kept_through_rebuild`, `waiting_approval`) |
 
 *Früher unter „Die Karte › Rahmen und Einstieg“, HEAD-Fassung.*
 
@@ -2428,6 +2429,11 @@ leere Vorschau — ihr Befund ist die Auskunft, kein Grund
 endgültigen Platzierungswerten geprüft. Ein früher Klick wartet auf das Bild
 seiner eigenen Freigabe — nie auf ein älteres: eine geänderte Zahl, ein
 geändertes Dokument oder ein Projektwechsel entwerten die Freigabe samt Klick.
+Ein Neuaufbau ohne Eingabe des Kunden entwertet sie nicht: Während
+`waiting_click.kept_through_rebuild` (Merkmalswahl, Antwort des
+Merkmalsarbeiters) und bei `_set_preview_order(..., rebuilt=True)` (Bindung
+der Schrittwerte, Maßgruppe vor ihrem ersten Zug) bleibt eine noch gültige
+Freigabe mit wartendem Klick stehen — samt laufender Vorschau.
 Identische Platzierungswerte lösen keine erneute Änderung aus. Die Revision
 und der geprüfte Auftrag gehören dem Hauptfenster, die Träger halten keine
 zweite Vorschauverwaltung. Auch Chat-Übernehmen und die Rückkehr zu einem

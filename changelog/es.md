@@ -83,7 +83,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro o un recipiente solo sale adelante moviendo las esquinas una cantidad mínima, la abertura queda libre. En la versión 0.6.0 podía quedar encima una piel finísima.
 - En agujeros, vista y *Selección* muestran el mismo cambio. Medida, profundidad y entrada vinculada están delante; compensación de impresión y ajustes finos, en «Más valores».
 - Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
-- Pulsar *Aplicar* en una textura durante un cálculo conserva ahora el cambio aunque la vista previa sea lenta. En la versión 0.6.0 podía perderse sin aviso en modelos grandes.
+- Pulsar *Aplicar* en una característica durante un cálculo conserva el cambio, aunque la vista previa tarde o la selección se reconstruya. En la versión 0.6.0 se perdía sin aviso.
+- Una textura mostrada ya no calcula una vista previa sin cambios ni ofrece *Cancelar*.
 
 ## 0.6.0
 

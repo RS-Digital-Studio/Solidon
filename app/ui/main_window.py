@@ -480,6 +480,7 @@ from app.ui.transform_bar import TransformBar
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
 from app.ui.viewport import DisplayMode, Projection, SketchSelectionBadge, Viewport
+from app.ui.waiting_click import kept_through_rebuild, waiting_approval
 
 _log = get_logger(__name__)
 
@@ -3663,6 +3664,9 @@ class MainWindow(QMainWindow):
         """Ob die Statuszeile gerade die zwei Flächen einer Fase nennt
         (:meth:`_follow_chamfer_sides`) — nur dann gibt es sie wegzunehmen."""
         self._preview_approval: _PreviewApproval | None = None
+        self._kept_through_rebuild: _PreviewApproval | None = None
+        """Die Freigabe mit wartendem Klick, die ein laufender Neuaufbau stehen lässt
+        (``app.ui.waiting_click``)."""
         self._click_after_evaluation: _WaitingClick | None = None
         """Ein Übernehmen-Klick, der auf das Ende einer Auswertung wartet
         (:meth:`_click_after`, :meth:`_run_click_after_evaluation`)."""
@@ -19856,8 +19860,10 @@ class MainWindow(QMainWindow):
             self.viewport.select_feature(feature_id)
         # Eine Vorschau, die zum vorigen Merkmal gehört, hat hier nichts mehr
         # zu suchen — sie zeigte eine Änderung an etwas, das nicht mehr gewählt
-        # ist.
-        self._drop_feature_preview()
+        # ist. Bleibt es dasselbe Merkmal, bleibt ein wartender Klick stehen
+        # (``app.ui.waiting_click``).
+        with kept_through_rebuild(self):
+            self._drop_feature_preview()
         # Merkmalsabhängige Operationen und der getrennte Merkmalsknopf müssen
         # denselben Auswahlstand sehen wie das Dock. Vorher wurde die
         # Menüfreigabe erst beim nächsten Körperklick nachgeführt.
@@ -19881,7 +19887,8 @@ class MainWindow(QMainWindow):
             # Funktion (:meth:`selection_label`): „Halter · Oberseite" stand
             # sonst an zwei Stellen mit je eigener Rechnung, und die driften.
             self.measurements.setText(self.selection_label())
-            self._show_feature_fields(feature_id, entry, result)
+            with kept_through_rebuild(self):
+                self._show_feature_fields(feature_id, entry, result)
             self._fields_this_round = (feature_id, self.feature_panel.serial)
         else:
             self.feature_panel.clear()
@@ -20087,7 +20094,8 @@ class MainWindow(QMainWindow):
             or self.object_tree.selected_feature() != feature_id
         ):
             return
-        self._show_feature_fields(feature_id, entry, result, allow_worker=False)
+        with kept_through_rebuild(self):
+            self._show_feature_fields(feature_id, entry, result, allow_worker=False)
 
     def _answers_failed(self, worker: _FeatureAnswersWorker, detail: str) -> None:
         """Ein Programmfehler im Arbeiter ist einer — mit Fehlerbericht, ohne Wartezustand."""
@@ -20441,7 +20449,8 @@ class MainWindow(QMainWindow):
             # Steht es schon — aus ``featureSelected`` derselben Runde, und
             # seither unverändert —, bleibt es stehen, samt Maßgruppe.
             if shown_this_round != (chosen_id, self.feature_panel.serial):
-                self._show_feature_fields(chosen_id, entry, result)
+                with kept_through_rebuild(self):
+                    self._show_feature_fields(chosen_id, entry, result)
             return
         self.feature_panel.show_pair(first_id, first, second_id, second)
         self.feature_dock.reveal()
@@ -20700,7 +20709,7 @@ class MainWindow(QMainWindow):
         op, params = entered
         order = self._prepare_feature_order(op, params)
         if order is not None:
-            self._set_preview_order(self._quiet_host or self.feature_panel, order)
+            self._set_preview_order(self._quiet_host or self.feature_panel, order, rebuilt=True)
 
     def _feature_dock_closed(self) -> None:
         """Eine Maßgruppe im Bild behält ihre Vorschau auch hinter einem anderen Reiter."""
@@ -20741,6 +20750,12 @@ class MainWindow(QMainWindow):
         # Gebunden, aber weder angefordert noch gezeigt noch mit wartendem
         # Klick, heißt: vergessen genügt, und das kostet kein Bild.
         approval = self._preview_approval
+        if approval is not None and approval is self._kept_through_rebuild:
+            # Ein Neuaufbau räumt die Vorschau eines wartenden Klicks nicht ab
+            # (``app.ui.waiting_click``); was er selbst gestellt hätte, fällt.
+            self._feature_pending = None
+            self._feature_preview.stop()
+            return
         idle = approval is None or (
             approval.owner in (self.feature_panel, self._quiet_host)
             and not approval.requested
@@ -21626,7 +21641,7 @@ class MainWindow(QMainWindow):
             if not reading["fields"]:
                 window.feature_panel.take_values(op, host.values(), arm=False)
             previous = window._preview_approval
-            approval = window._set_preview_order(host, order)
+            approval = window._set_preview_order(host, order, rebuilt=not host.begun)
             if not host.begun:
                 # **Gebunden, nicht gerechnet.** Beim Aufbau der Maßgruppe
                 # stehen die gemessenen Werte im Träger, und eine Vorschau
@@ -23531,9 +23546,27 @@ class MainWindow(QMainWindow):
         changed_kind = order.change_name is not None and order.change_name != operation.op
         return order.change_op + int(changed_kind)
 
-    def _set_preview_order(self, owner: Any, order: _PreviewOrder) -> _PreviewApproval:
-        """Schon beim Wertwechsel sperren; identische Werte behalten ihre Freigabe."""
+    def _set_preview_order(
+        self, owner: Any, order: _PreviewOrder, *, rebuilt: bool = False
+    ) -> _PreviewApproval:
+        """Schon beim Wertwechsel sperren; identische Werte behalten ihre Freigabe.
+
+        ``rebuilt``: Gebunden wird ohne Eingabe des Kunden — ein Neuaufbau des
+        Merkmalfensters oder der Maßgruppe bindet die Werte des Schritts.
+        **Er ersetzt keine Freigabe, an der ein Klick wartet**: Er verlor ihn
+        still, ohne Schritt und ohne Satz — nach dem Neuaufbau einer Textur
+        und an Körpern ab ``ANSWERS_IN_WORKER_FROM`` Dreiecken, wenn die
+        Antwort des Merkmalsarbeiters nach dem Klick kam (Review 1, RCI-2).
+        Eine Eingabe des Kunden bindet ohne ``rebuilt`` und ersetzt wie bisher.
+        Während eines Neuaufbaus (``app.ui.waiting_click``) gilt dasselbe für
+        jede Bindung.
+        """
         previous = self._preview_approval
+        if previous is not None and (
+            previous is self._kept_through_rebuild
+            or (rebuilt and previous is waiting_approval(self))
+        ):
+            return previous
         if (
             previous is not None
             and previous.owner is owner
@@ -24091,6 +24124,9 @@ class MainWindow(QMainWindow):
 
     def _forget_preview_approval(self) -> None:
         """Eine verschwundene Vorschau kann keinen späteren Auftrag mehr freigeben."""
+        kept = self._kept_through_rebuild
+        if kept is not None and self._preview_approval is kept:
+            return
         approval, self._preview_approval = self._preview_approval, None
         self._preview_revision += 1
         self._preview_block_reason = None
@@ -24682,8 +24718,12 @@ class MainWindow(QMainWindow):
 
         Geschrieben für den geschlossenen Dialog, gilt aber für jeden Weg, an
         dessen Ende keine Vorschau mehr stehen darf; :meth:`_drop_feature_preview`
-        ruft sie ebenfalls.
+        ruft sie ebenfalls. Nicht während eines Neuaufbaus, der eine Freigabe mit
+        wartendem Klick hält (``app.ui.waiting_click``): Ihre Rechnung läuft weiter.
         """
+        kept = self._kept_through_rebuild
+        if kept is not None and self._preview_approval is kept:
+            return
         self._forget_preview_approval()
         self._preview_prefix = None
         self._preview_prefix_result = None

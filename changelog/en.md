@@ -82,7 +82,8 @@ it into `website/version.json`.
 - If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
 - For holes, the view and *Selection* show the same edit. Size, depth and a linked entrance stay in front; print compensation and fine settings are under “More values”.
 - Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
-- Clicking *Apply* on a texture during a calculation now keeps the change even when the preview is slow. In version 0.6.0 it could be lost without notice on larger models.
+- Clicking *Apply* on a feature during a calculation now keeps the change, even when the preview takes longer or the selection rebuilds. In version 0.6.0 it was silently lost.
+- A displayed texture no longer computes a preview without a change and no longer offers *Cancel*.
 
 ## 0.6.0
 
