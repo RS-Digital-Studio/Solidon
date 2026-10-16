@@ -277,6 +277,7 @@ def test_the_language_pass_binds_before_the_click_of_an_action_that_acts_at_once
     flow.folder, flow.out = tmp_path / "cases" / "040", tmp_path
     flow.data = {"images": [], "steps": [], "unmeasured": {}}
     flow.window = object()
+    flow.widget = lambda name: None  # kein Hauptknopf der Fläche (FD-99)
     flow.surface = lambda: None
     flow.claim_surface = lambda root: None
     flow.capture_surface = lambda root: None

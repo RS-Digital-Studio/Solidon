@@ -301,40 +301,226 @@ def test_the_drawing_mode_is_reached_from_the_history() -> None:
 # --- Werkzeug 5: Kurzhilfe am grauen Übernehmen, Tab ab der Reiterleiste, Weg in Schritten -
 
 
-def test_the_reason_of_a_grey_apply_is_pictured_on_the_main_path(
-    qt_app: Any, tmp_path: Any
-) -> None:
-    """FD-99: Der Grund stand nur im Protokoll; das Bild entstand nur im Fehlfall."""
-    import inspect
+class _StopError(Exception):
+    """Hält den nachgestellten Hauptweg nach seinem Lauf an — das Danach misst hier nichts."""
 
+
+def _grey(qt_app: Any, text: str = "Übernehmen") -> Any:
     from PySide6.QtWidgets import QPushButton
 
-    from tools import function_bench, function_tooltips
-
-    apply = QPushButton("Übernehmen")
-    apply.setToolTip("Erst „Durchmesser“ ändern, dann übernehmen.")
-    apply.setEnabled(False)
-    apply.show()
+    button = QPushButton(text)
+    button.setToolTip("Erst „Durchmesser“ ändern, dann übernehmen.")
+    button.setEnabled(False)
+    button.show()
     qt_app.processEvents()
+    return button
+
+
+def _main_flow(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    row: dict[str, Any],
+    widgets: dict[str, Any],
+    *,
+    opened: dict[str, Any] | None = None,
+) -> Any:
+    """``phase_main`` mit nachgestelltem Fluss: echte Schrittfolge, Schritte ohne Fenster.
+
+    Jeder Schritt läuft der Reihe nach; ``fläche aufnehmen`` ist der echte, mit
+    nachgestellter Erfassung. ``opened`` erscheint unter ``widgets``, sobald der
+    Klick auf das Ziel lief (Änderungsweg). Nach dem Lauf hält :class:`_StopError` an.
+    """
+    from tools import function_bench, function_capture, function_surface
+    from tools.function_machine import Step
+    from tools.function_protocol import empty_protocol
+    from tools.function_setup import default_apply_target
+
+    folder = tmp_path / "cases" / "001"
+    folder.mkdir(parents=True, exist_ok=True)
+    flow = object.__new__(function_bench.FunctionFlow)
+    flow.row = row
+    flow.spec = row.get("spec") or {}
+    flow.data = empty_protocol(row, {}, {})
+    flow.folder, flow.out = folder, tmp_path
+    flow.window = object()
+    flow.walker = SimpleNamespace(before_target=None)
+    flow.variant = SimpleNamespace(predict=False, set="basis")
+    flow.apply_target = default_apply_target(row)
+    flow.widget = widgets.get
+    flow.snapshot = lambda name: None
+    flow.picture = lambda label: flow.data["images"].append(f"cases/001/{label}.png")
+    flow.surface = lambda: "fläche"
+    flow.claim_surface = flow.capture_surface = lambda root: None
+    flow.spot = dict
+    flow.expects_preview = lambda: False
+    flow.idle = lambda: True
+    flow.wait_step = flow.still_step = lambda name, check: Step(name, lambda machine: None)
+    flow.preview_steps = list
+    flow.ports = SimpleNamespace(keys=lambda sequence: None)
+
+    def click(machine: Any) -> None:
+        widgets.update(opened or {})
+
+    flow.path_steps = lambda: [Step(f"weg zu {row['target']}", click)]
+    flow.input_steps = lambda inputs: [Step(f"eingabe {name}", lambda m: None) for name in inputs]
+    flow.apply_step = lambda: Step("übernehmen", lambda machine: None)
+    flow.apply_steps = lambda acting: ([acting] if acting else [], lambda: None)
+    names: list[str] = []
+
+    def run_steps(label: str, steps: list[Any], timeout_s: float | None = None) -> bool:
+        for step in steps:
+            names.append(step.name)
+            step.act(SimpleNamespace(insert=lambda more: None))
+        raise _StopError
+
+    flow.run_steps = run_steps
+    flow.names = names
+    monkeypatch.setattr(function_surface, "open_dialog", lambda window: None)
+    monkeypatch.setattr(function_capture, "message_entries", lambda window: [])
+    monkeypatch.setattr(function_capture, "tab_chain", lambda root, press, on_focus: [])
+    monkeypatch.setattr(function_capture, "state_images", lambda widget, focus=None: {})
+    bar = [{"name": "Prüfbericht", "rect": [0, 0, 1, 1], "inside": False, "class": "QTabBar"}]
+    monkeypatch.setattr(function_capture, "bar_chain", lambda root, press: list(bar))
+    return flow
+
+
+def _drive(flow: Any) -> Any:
+    with pytest.raises(_StopError):
+        flow.phase_main()
+    return flow
+
+
+def test_the_reason_of_a_grey_apply_is_pictured_on_the_main_path(
+    qt_app: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FD-99: Der Grund stand nur im Protokoll; das Bild entstand nur im Fehlfall.
+
+    Am nachgestellten Hauptweg (RC2-5): Der Schritt steht vor den Eingaben und
+    nimmt die Kurzhilfe auf, auch an einer Zeile ohne Eingaben (RC2-3,
+    ``resize_feature``); ein offener Knopf hat kein Grundbild.
+    """
+    from tools import function_tooltips
+
+    apply = _grey(qt_app)
+    try:
+        for inputs, row_id in (
+            ({"feature.field:resize_hole.diameter": 8.0}, "resize_hole"),
+            ({}, "resize_feature"),
+        ):
+            row = {
+                "id": row_id,
+                "target": f"feature:{row_id}",
+                "kind": "operation",
+                "spec": {"inputs": inputs},
+            }
+            flow = _drive(_main_flow(monkeypatch, tmp_path / row_id, row, {"feature.apply": apply}))
+            step = flow.names.index("grund am grauen übernehmen")
+            assert all(step < flow.names.index(f"eingabe {name}") for name in inputs), flow.names
+            assert "cases/001/02-uebernehmen-grund-1.png" in flow.data["images"], flow.data
+            assert flow.data["grey_apply"] == [
+                {
+                    "where": function_tooltips.GREY_APPLY_PICTURE,
+                    "target": "feature.apply",
+                    "grey": True,
+                    "image": "cases/001/02-uebernehmen-grund-1.png",
+                }
+            ]
+        apply.setEnabled(True)
+        row = {"id": "resize_hole", "target": "feature:resize_hole", "kind": "operation"}
+        flow = _drive(_main_flow(monkeypatch, tmp_path / "frei", row, {"feature.apply": apply}))
+        assert flow.data["grey_apply"][0]["grey"] is False
+        assert not [image for image in flow.data["images"] if "grund" in image]
+    finally:
+        apply.close()
+
+
+def test_the_reason_of_a_grey_apply_is_pictured_where_the_click_opens_the_surface(
+    qt_app: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RC2-3: Im Änderungsweg öffnet erst der Klick die Fläche — dort, danach, das Bild.
+
+    ``finding.action:change_creating_step`` hat kein Ziel des Übernehmens und
+    keine Eingaben; das Formular des erzeugenden Schritts steht mit grauem
+    Hauptknopf da. Vorher entstand an dieser Zeile kein Bild, und das Protokoll
+    schwieg darüber.
+    """
+    from tools import function_tooltips
+
+    accept = _grey(qt_app)
+    row = {
+        "id": "finding.action:change_creating_step",
+        "target": "finding.action:change_creating_step",
+        "kind": "bedienflaeche",
+    }
+    try:
+        flow = _drive(_main_flow(monkeypatch, tmp_path, row, {}, opened={"dialog.accept": accept}))
+    finally:
+        accept.close()
+    assert flow.names.index("grund am grauen übernehmen") > flow.names.index(
+        "weg zu finding.action:change_creating_step"
+    ), flow.names
+    picture = f"cases/001/{function_tooltips.OPENED_APPLY_PICTURE}-1.png"
+    assert picture in flow.data["images"], flow.data["images"]
+    assert flow.data["grey_apply"][0]["target"] == "dialog.accept"
+    # Steht kein Hauptknopf da, sagt es das Protokoll.
+    empty = _drive(_main_flow(monkeypatch, tmp_path / "leer", row, {}))
+    assert empty.data["grey_apply"] == [
+        {
+            "where": function_tooltips.OPENED_APPLY_PICTURE,
+            "target": None,
+            "reason": function_tooltips.NO_APPLY_TARGET,
+        }
+    ]
+
+
+def test_grey_without_a_tooltip_is_named_in_the_protocol(qt_app: Any, tmp_path: Path) -> None:
+    """Grau ohne Kurzhilfe: kein Bild, aber ``unmeasured`` sagt warum (RC2-3)."""
+    from tools import function_tooltips
+
+    silent = _grey(qt_app)
+    silent.setToolTip("")
     folder = tmp_path / "cases" / "001"
     folder.mkdir(parents=True)
     flow = SimpleNamespace(
-        widget={"feature.apply": apply}.get,
+        widget={"dialog.accept": silent}.get,
         folder=folder,
         out=tmp_path,
-        data={"images": []},
+        data={"images": [], "unmeasured": {}, "grey_apply": None},
+        apply_target=None,
     )
     try:
-        function_tooltips.grey_apply_step(flow, "feature.apply").act(None)
-        assert flow.data["images"] == ["cases/001/02-uebernehmen-grund-1.png"]
-        apply.setEnabled(True)
-        function_tooltips.grey_apply_step(flow, "feature.apply").act(None)
-        assert len(flow.data["images"]) == 1, "ein offener Knopf hat kein Grundbild"
+        function_tooltips.grey_apply_step(flow, function_tooltips.main_buttons(None)).act(None)
+    finally:
+        silent.close()
+    assert flow.data["images"] == []
+    assert flow.data["unmeasured"] == {
+        "sperrgrund:dialog.accept": function_tooltips.NO_VISIBLE_REASON
+    }
+    assert flow.data["grey_apply"][0]["grey"] is True
+
+
+def test_the_language_case_pictures_the_reason_of_its_surface(
+    qt_app: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RC2-3: Im Sprachfall entsteht das Bild an jeder aufgenommenen Fläche, je Sprache."""
+    from tools import function_surface
+
+    apply = _grey(qt_app)
+    row = {"id": "resize_hole", "target": "feature:resize_hole", "kind": "operation"}
+    flow = _main_flow(monkeypatch, tmp_path, row, {"feature.apply": apply})
+    flow.variant = SimpleNamespace(predict=False, set="sprachen", language="es")
+    flow.path_steps = list
+    monkeypatch.setattr(function_surface, "acts_at_once", lambda window, target: False)
+    try:
+        with pytest.raises(_StopError):
+            flow.phase_surface()
     finally:
         apply.close()
-    # Angeschlossen: Der Hauptweg nimmt den Schritt vor den Eingaben.
-    source = inspect.getsource(function_bench.FunctionFlow.phase_main)
-    assert source.index("grey_apply_step") < source.index("self.input_steps(inputs)")
+    from tools.function_tooltips import GREY_APPLY_PICTURE
+
+    label = function_surface.picture_label(flow.variant, "resize_hole", GREY_APPLY_PICTURE)
+    assert label.startswith(f"{GREY_APPLY_PICTURE}-es-")
+    assert f"cases/001/{label}-1.png" in flow.data["images"], flow.data["images"]
 
 
 def test_the_keyboard_way_starts_at_the_tab_bar(qt_app: Any) -> None:
@@ -347,7 +533,7 @@ def test_the_keyboard_way_starts_at_the_tab_bar(qt_app: Any) -> None:
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QLineEdit, QTabWidget, QVBoxLayout, QWidget
 
-    from tools import function_bench, function_capture
+    from tools import function_capture
 
     tabs = QTabWidget()
     page = QWidget()
@@ -376,9 +562,21 @@ def test_the_keyboard_way_starts_at_the_tab_bar(qt_app: Any) -> None:
         assert function_capture.bar_chain(QLineEdit(), press) == []
     finally:
         tabs.close()
-    import inspect
 
-    assert "bar_chain" in inspect.getsource(function_bench.FunctionFlow.phase_main)
+
+def test_the_main_path_writes_the_keyboard_way_from_the_tab_bar(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RC2-5: Die Fläche des Hauptwegs schreibt ``tab_from_bar`` — die Anwendung tut es.
+
+    Vorher prüfte der Test nur, dass ``bar_chain`` im Quelltext steht; ein Weg,
+    der die Kette nie ging, blieb grün.
+    """
+    row = {"id": "resize_hole", "target": "feature:resize_hole", "kind": "operation"}
+    flow = _drive(_main_flow(monkeypatch, tmp_path, row, {}))
+    assert flow.data["tab_from_bar"] == [
+        {"name": "Prüfbericht", "rect": [0, 0, 1, 1], "inside": False, "class": "QTabBar"}
+    ]
 
 
 def test_a_way_in_two_steps_is_walked_to_its_end(qt_app: Any) -> None:

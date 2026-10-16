@@ -284,6 +284,15 @@ def sample_protocol() -> dict[str, Any]:
         ],
         # Ab der Reiterleiste über der Fläche (FD-177): leer, wenn keine darüber steht.
         "tab_from_bar": [],
+        # Grau, bis ein Maß sich ändert; die Kurzhilfe als Bild (FD-99).
+        "grey_apply": [
+            {
+                "where": "02-uebernehmen-grund",
+                "target": "feature.apply",
+                "grey": True,
+                "image": "cases/1/02-uebernehmen-grund-1.png",
+            }
+        ],
         "names": ["Durchmesser", "Tiefe", "Übernehmen"],
         "focus_return": True,
         "matrix": {
@@ -460,7 +469,7 @@ def sample_protocol() -> dict[str, Any]:
         "findings": [],
         "closed_by_escape": [],
         "unmeasured": {},
-        "images": ["cases/1/01-vorher.png"],
+        "images": ["cases/1/01-vorher.png", "cases/1/02-uebernehmen-grund-1.png"],
         "errors": [],
     }
 

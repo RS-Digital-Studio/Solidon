@@ -89,6 +89,8 @@ from tools.function_setup import (
 )
 from tools.function_spot import body_spot
 from tools.function_switch import LATE_WINDOW_S, SwitchPhase
+from tools.function_tooltips import GREY_APPLY_PICTURE as GREY_APPLY
+from tools.function_tooltips import OPENED_APPLY_PICTURE as OPENED_APPLY
 from tools.function_walk import (
     APPLY_PHASE,
     PATH_PHASE,
@@ -1128,6 +1130,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
                 unmeasured(self.data, "preview", "die Zeile zeigt keine Vorschau")
 
         applying, finish = self.apply_steps(acting)
+        offered = tooltips.main_buttons(self.apply_target)
         # V4: vor dem Klick, der übernimmt, eine Vorhersage binden (FD-168).
         gate = (
             prediction.gate_for(self, self.apply_target or target, folder=self.folder / "v4")
@@ -1140,11 +1143,8 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
                 PATH_PHASE,
                 [
                     *route,
-                    *(
-                        [tooltips.grey_apply_step(self, self.apply_target)]
-                        if self.apply_target and inputs
-                        else []
-                    ),
+                    # FD-99: der Grund am grauen Hauptknopf, bevor eine Eingabe ihn aufhebt.
+                    *([] if direct else [tooltips.grey_apply_step(self, offered)]),
                     *self.input_steps(inputs),
                     *(self.preview_steps() if inputs else [self.wait_step("ruhe", self.idle)]),
                     self.still_step("fläche steht still", self.surface),
@@ -1152,6 +1152,8 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
                     Step("vor dem übernehmen", before_apply),
                     *(gate.before_steps() if gate is not None else ()),
                     *applying,
+                    # Öffnet erst der Klick die Fläche (Änderungsweg), dann danach.
+                    *([tooltips.grey_apply_step(self, offered, OPENED_APPLY)] if direct else []),
                     *(gate.after_steps() if gate is not None else ()),
                 ],
             )
@@ -1912,6 +1914,9 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
             self.picture(
                 surfaces.picture_label(self.variant, str(self.row.get("id") or ""), "flaeche")
             )
+            label = surfaces.picture_label(self.variant, str(self.row.get("id")), GREY_APPLY)
+            offered = tooltips.main_buttons(default_apply_target(self.row))
+            tooltips.grey_apply_pictures(self, offered, label)
             if decided["at_once"]:
                 before.update(deepcopy(self.data))
                 # V4 auch im Sprachfall: vor dem Klick der Soforthandlung (FD-168).
@@ -1952,6 +1957,8 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
             self.picture(
                 surfaces.picture_label(self.variant, str(self.row["id"]), "flaeche-geoeffnet")
             )
+            label = surfaces.picture_label(self.variant, str(self.row["id"]), "geoeffnet-grund")
+            tooltips.grey_apply_pictures(self, ["dialog.accept"], label)
 
         target = walk_target(self.row)
         route = self.path_steps()

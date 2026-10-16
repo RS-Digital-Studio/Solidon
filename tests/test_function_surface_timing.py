@@ -60,6 +60,7 @@ def test_a_finding_surface_is_measured_before_its_action(monkeypatch) -> None:
     flow.variant = Variant.of({"set": "dunkel"})
     flow.data = {}
     flow.window = object()
+    flow.widget = lambda name: None  # kein Hauptknopf der Fläche (FD-99)
     monkeypatch.setattr(function_surface, "open_dialog", lambda window: None)
     flow.walker = Walk(ports, [], 0)
     flow.surface = lambda: widgets[-1]

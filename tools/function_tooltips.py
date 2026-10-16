@@ -9,8 +9,11 @@ angezeigtes Bild: :func:`reason_picture` zeigt die Kurzhilfe, wie Qt sie beim
 Überfahren zeigt, und nimmt sie auf.
 
 Aufgerufen aus dem Fehlfall des Prüfstands (``function_bench``) neben dem Bild
-``04-fehlfall`` über :func:`reason_pictures`, und auf dem Hauptweg vor den
-Eingaben am grauen *Übernehmen* (:func:`grey_apply_step`, FD-99).
+``04-fehlfall`` über :func:`reason_pictures`, und überall, wo eine Fläche mit
+ihrem *Übernehmen* aufgenommen wird, am grauen Hauptknopf (FD-99,
+:func:`grey_apply_pictures`): auf dem Hauptweg vor den Eingaben oder, wenn erst
+der Klick auf das Ziel die Fläche öffnet, danach; im Sprachfall an jeder
+aufgenommenen Fläche.
 """
 
 from __future__ import annotations
@@ -27,6 +30,15 @@ TIP_CLASS: Final = "QTipLabel"
 NO_VISIBLE_REASON: Final = "kein sichtbarer Sperrgrund: grau ohne Kurzhilfe"
 #: Das Bild der Kurzhilfe am grauen *Übernehmen*, bevor der Kunde etwas ändert (FD-99).
 GREY_APPLY_PICTURE: Final = "02-uebernehmen-grund"
+#: Dasselbe Bild, wenn erst der Klick auf das Ziel die Fläche öffnete (Änderungsweg).
+OPENED_APPLY_PICTURE: Final = "03-uebernehmen-grund"
+#: Der Hauptknopf einer Fläche, wenn die Zeile kein Ziel des Übernehmens nennt:
+#: der eines geöffneten Dialogs, *Übernehmen* des Merkmalfensters.
+APPLY_TARGETS: Final = ("dialog.accept", "feature.apply")
+#: Grund in ``grey_apply``: Kein Hauptknopf stand sichtbar da — kein Bild, kein Fund.
+NO_APPLY_TARGET: Final = "kein Hauptknopf der Fläche sichtbar"
+#: Grund in ``unmeasured``: grau mit Kurzhilfe, aber Qt zeigte sie nicht.
+SHOWN_NOT: Final = "Kurzhilfe gesetzt, aber nicht gezeigt"
 
 
 def _shown_tip() -> Any | None:
@@ -95,25 +107,51 @@ def reason_pictures(
     return images
 
 
-def grey_apply_step(flow: Any, target: str) -> Step:
-    """FD-99: der Grund am grauen *Übernehmen*, bevor eine Eingabe ihn aufhebt.
+def grey_apply_pictures(flow: Any, targets: Sequence[str], prefix: str) -> None:
+    """FD-99: der Grund an jedem grauen Hauptknopf der aufgenommenen Fläche, als Bild.
+
+    ``flow`` ist ein ``FunctionFlow`` (``widget``, ``folder``, ``out``, ``data``).
+    Je sichtbarem Ziel ein Eintrag in ``data["grey_apply"]``: wo, welches Ziel,
+    grau oder frei, das Bild der Kurzhilfe. Grau ohne Kurzhilfe ist
+    ``unmeasured`` (:data:`NO_VISIBLE_REASON`); steht kein Ziel da, sagt es der
+    Eintrag (:data:`NO_APPLY_TARGET`) — ein fehlendes Bild bleibt nie stumm.
+    """
+    from tools.function_protocol import unmeasured
+
+    entries = flow.data["grey_apply"] = flow.data.get("grey_apply") or []
+    shown = [
+        (target, widget)
+        for target in targets
+        if (widget := flow.widget(target)) is not None and widget.isVisible()
+    ]
+    for number, (target, widget) in enumerate(shown, 1):
+        path = flow.folder / f"{prefix}-{number}.png"
+        image = path.relative_to(flow.out).as_posix() if reason_picture(widget, path) else None
+        grey = not widget.isEnabled()
+        if image is not None:
+            flow.data["images"].append(image)
+        elif grey:
+            said = str(widget.toolTip() or "").strip()
+            unmeasured(flow.data, f"sperrgrund:{target}", SHOWN_NOT if said else NO_VISIBLE_REASON)
+        entries.append({"where": prefix, "target": target, "grey": grey, "image": image})
+    if not shown:
+        entries.append({"where": prefix, "target": None, "reason": NO_APPLY_TARGET})
+
+
+def main_buttons(target: str | None) -> tuple[str, ...]:
+    """Die Hauptknöpfe einer Fläche: das Ziel des Übernehmens, ohne eines :data:`APPLY_TARGETS`."""
+    return (target,) if target else APPLY_TARGETS
+
+
+def grey_apply_step(flow: Any, targets: Sequence[str], prefix: str = GREY_APPLY_PICTURE) -> Step:
+    """FD-99: :func:`grey_apply_pictures` als Schritt des Hauptwegs.
 
     Ein Änderungsweg öffnet sein Formular mit grauem *Übernehmen* („Erst
     „{Feld}“ ändern, dann übernehmen.“); die Kurzhilfe sah bisher nur der
-    Fehlfall. Der Schritt nimmt sie auf dem Hauptweg auf, solange der Knopf
-    grau steht — sonst kein Bild. ``flow`` ist ein ``FunctionFlow``, ``target`` sein
-    Übernehmen.
+    Fehlfall. ``targets`` meist aus :func:`main_buttons`.
     """
 
     def act(machine: StepMachine) -> None:
-        flow.data["images"].extend(
-            reason_pictures(
-                flow.widget,
-                [target],
-                flow.folder,
-                flow.out,
-                prefix=GREY_APPLY_PICTURE,
-            )
-        )
+        grey_apply_pictures(flow, targets, prefix)
 
     return Step("grund am grauen übernehmen", act)

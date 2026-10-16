@@ -423,6 +423,14 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         _keys("name", "rect", "inside", "class", "mark", "primary"),
         types={"primary": bool, "class": str, "mark": str},
     ),
+    # FD-99: je aufgenommener Fläche ihr Hauptknopf, grau oder frei, mit dem Bild
+    # seiner Kurzhilfe; ``reason``, wenn keiner dastand (``function_tooltips``).
+    "grey_apply": ProtocolField(
+        "liste",
+        _keys("where", "target", "grey", "image", "reason"),
+        needs=_keys("where"),
+        types={"grey": bool},
+    ),
     "names": ProtocolField("texte"),
     "focus_return": ProtocolField("wahr"),
     "matrix": ProtocolField("tabelle", frozenset(SELECTION_STAGES)),
