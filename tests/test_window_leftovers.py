@@ -6,6 +6,10 @@ er fragt (``tests/window_leftovers.py``), an einem gepflanzten Dialog.
 
 from __future__ import annotations
 
+import subprocess
+import sys
+from pathlib import Path
+
 from PySide6.QtWidgets import QApplication, QDialog, QMenu
 
 from tests import window_leftovers
@@ -37,3 +41,54 @@ def test_a_menu_is_no_window_of_the_test(qt_app: QApplication) -> None:
     finally:
         menu.close()
         menu.deleteLater()
+
+
+#: Ein Fall, der einen Dialog zeigt und festhält — gepflanzt in einen eigenen Lauf.
+PLANTED = """
+from PySide6.QtWidgets import QDialog
+
+KEEP = []
+
+
+def test_leaves_a_dialog_open(qt_app):
+    dialog = QDialog()
+    dialog.setWindowTitle("Gepflanzt")
+    dialog.show()
+    qt_app.processEvents()
+    KEEP.append(dialog)
+"""
+
+
+def test_the_guard_reds_the_case_that_leaves_a_window_open(tmp_path: Path) -> None:
+    """Die Verdrahtung des Wächters in ``conftest.py``: ein eigener Lauf mit
+    gepflanztem Fall endet mit „ERROR at teardown“ und der Meldung FD-191
+    (Review 2 Restpaket A, L3c)."""
+    planted = tmp_path / "test_planted_leftover.py"
+    planted.write_text(PLANTED, encoding="utf-8")
+    root = Path(__file__).resolve().parents[1]
+    finished = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "-p",
+            "tests.conftest",
+            "--rootdir",
+            str(tmp_path),
+            str(planted),
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=300,
+        check=False,
+    )
+    output = finished.stdout + finished.stderr
+    assert finished.returncode == 1, output
+    assert "ERROR at teardown of test_leaves_a_dialog_open" in output, output
+    assert "Gepflanzt" in output and "FD-191" in output, output

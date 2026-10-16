@@ -17,13 +17,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from PySide6.QtWidgets import QApplication, QPushButton
+from PySide6.QtWidgets import QApplication, QMenu, QPushButton
 
 from app.core.errors import REACTIVATE_STEP, SUPPRESS_STEP
 from app.core.scene import OperationDraft
 from app.core.scene.project import save
 from app.core.types import Suppression
 from app.ui import main_window as main_window_module
+from app.ui import panels
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -128,6 +129,24 @@ def test_the_ways_of_the_resting_step_halt_are_open(
     for action in (REACTIVATE_STEP, SUPPRESS_STEP):
         button = _offer(window, qt_app, "ausgeschalteten Schritt", str(action.label))
         assert button.isEnabled(), (action.id, button.toolTip())
+
+    # **Dasselbe im Kontextmenü am haltenden Befund** (Review 2 Restpaket A,
+    # L3a): Es fragt ``action_refusal(…, at_halt=)`` an eigener Stelle.
+    # ``QMenu.exec`` wartet offscreen; das Menü liest seine Einträge und wählt nichts.
+    entries: dict[str, bool] = {}
+
+    class ReadingMenu(QMenu):
+        def exec(self, *_args: Any) -> None:  # type: ignore[override]
+            entries.update({entry.text(): entry.isEnabled() for entry in self.actions()})
+
+    report = window.report
+    target = report.list.currentItem()
+    assert target is not None and "ausgeschalteten Schritt" in target.text()
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(panels, "QMenu", ReadingMenu)
+        report._on_menu(report.list.visualItemRect(target).center())
+    for action in (REACTIVATE_STEP, SUPPRESS_STEP):
+        assert entries.get(str(action.label)) is True, entries
 
     button = _offer(window, qt_app, "ausgeschalteten Schritt", str(SUPPRESS_STEP.label))
     button.click()

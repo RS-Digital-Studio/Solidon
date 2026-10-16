@@ -55,5 +55,45 @@ def test_a_double_click_on_a_parameter_row_opens_its_dialog(
 
     assert opened == ["breite"], opened
 
-    # Drucker- und Materialänderungen öffnen die Druckeinstellungen (RA-6).
-    assert window.history_panel.receivers("2printSettingsActivated()") == 1
+
+def test_a_double_click_on_a_printer_change_opens_the_print_settings(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Drucker- und Materialänderungen öffnen die Druckeinstellungen (RA-6).
+
+    Am echten Draht: Zeile doppelklicken, und der Dialog des Fensters geht auf.
+    """
+    from app.core.types import DocumentChange, DocumentState, Transaction
+    from app.ui import main_window
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    shown: list[str] = []
+
+    def opened(dialog: PrintSettingsDialog) -> int:
+        shown.append(type(dialog).__name__)
+        return int(PrintSettingsDialog.DialogCode.Rejected)
+
+    monkeypatch.setattr(PrintSettingsDialog, "exec", opened)
+    monkeypatch.setattr(main_window, "ensure_print_disclosure", lambda *args: None)
+    document = window.session.project.document
+    document.transactions.append(
+        Transaction(
+            id="drucker",
+            title="Drucker wechseln",
+            ops=(),
+            changes=DocumentChange(
+                before=DocumentState(printer="alt"), after=DocumentState(printer="neu")
+            ),
+        )
+    )
+    panel = window.history_panel
+    panel.show_document(document)
+    row = next(
+        panel.list.item(index)
+        for index in range(panel.list.count())
+        if "Drucker" in panel.list.item(index).text()
+    )
+
+    panel.list.itemDoubleClicked.emit(row)
+
+    assert shown == ["PrintSettingsDialog"], shown
