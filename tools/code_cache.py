@@ -257,8 +257,21 @@ def _unpack(
     return result
 
 
-#: Was ein unlesbarer Speicher werfen kann; er ist eine Ableitung und wird neu gebaut.
-UNREADABLE = (OSError, ValueError, TypeError, EOFError, KeyError, RecursionError, SyntaxError)
+#: Was ein unlesbarer Speicher werfen kann; er ist eine Ableitung und wird neu gebaut. Ein
+#: beschädigter Zähler in einem Datensatz lässt ``marshal`` erst Speicher für so viele Elemente
+#: anfordern (``MemoryError``), eine beschädigte Länge sprengt den Zahlbereich
+#: (``OverflowError``, RR2-14).
+UNREADABLE = (
+    OSError,
+    ValueError,
+    TypeError,
+    EOFError,
+    KeyError,
+    RecursionError,
+    SyntaxError,
+    MemoryError,
+    OverflowError,
+)
 
 #: Länge der Längenangabe des Verzeichnisses hinter dem Kopf.
 _SIZE = 8

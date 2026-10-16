@@ -6,13 +6,15 @@ import ast
 import dataclasses
 import hashlib
 import marshal
+import subprocess
+import sys
 from pathlib import Path
 from typing import cast
 
 import pytest
 
 from tests.code_index_helpers import stored_index
-from tools import code_cache, code_facts
+from tools import code_cache, code_facts, code_store
 from tools.code_index import CACHE, Index
 
 SOURCE = b"""from app import mod
@@ -262,6 +264,145 @@ def test_a_directory_length_past_the_end_is_a_cache_miss(tmp_path: Path, size: i
     cache.write_bytes(data[:start] + wrong.to_bytes(8, "little") + data[start + 8 :])
     assert code_cache.decode(cache, current) == {}
     assert code_cache.decode_one(cache, current, name, digest) is None
+
+
+#: Ein Prozess unter einer Speichergrenze von 512 MB liest einen Zwischenspeicher (zwei
+#: Auszüge) und einen Ergebnisspeicher, deren erster Datensatz mit einer Liste von 2^30
+#: Elementen beginnt — fünf Bytes geändert, alle Längen stimmen. ``marshal`` fordert dafür 8 GB
+#: an, bevor es an das Ende der Daten stößt; die Grenze lässt die Anforderung scheitern, ohne
+#: den Rechner zu belasten. ``argv[1]``: der Baum mit ``tools``, ``argv[2]``: Arbeitsordner.
+DAMAGED_COUNT = """
+import ctypes
+import marshal
+import sys
+from pathlib import Path
+
+LIMIT = 512 * 1024 * 1024
+if sys.platform == "win32":
+    from ctypes import wintypes
+
+    class Basic(ctypes.Structure):
+        _fields_ = [
+            ("process_time", ctypes.c_int64),
+            ("job_time", ctypes.c_int64),
+            ("flags", wintypes.DWORD),
+            ("minimum_set", ctypes.c_size_t),
+            ("maximum_set", ctypes.c_size_t),
+            ("processes", wintypes.DWORD),
+            ("affinity", ctypes.c_size_t),
+            ("priority", wintypes.DWORD),
+            ("scheduling", wintypes.DWORD),
+        ]
+
+    class Extended(ctypes.Structure):
+        _fields_ = [
+            ("basic", Basic),
+            ("io", ctypes.c_uint64 * 6),
+            ("process_memory", ctypes.c_size_t),
+            ("job_memory", ctypes.c_size_t),
+            ("peak_process_memory", ctypes.c_size_t),
+            ("peak_job_memory", ctypes.c_size_t),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.SetInformationJobObject.argtypes = [
+        wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD
+    ]
+    kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    job = kernel32.CreateJobObjectW(None, None)
+    limit = Extended()
+    limit.basic.flags = 0x100  # JOB_OBJECT_LIMIT_PROCESS_MEMORY
+    limit.process_memory = LIMIT
+    assert kernel32.SetInformationJobObject(job, 9, ctypes.byref(limit), ctypes.sizeof(limit))
+    assert kernel32.AssignProcessToJobObject(job, kernel32.GetCurrentProcess())
+else:
+    import resource
+
+    hard = resource.getrlimit(resource.RLIMIT_AS)[1]
+    soft = LIMIT if hard == resource.RLIM_INFINITY else min(LIMIT, hard)
+    resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
+
+sys.path.insert(0, sys.argv[1])
+from tools import code_cache, code_facts, code_store
+
+count = b"[" + (2**30).to_bytes(4, "little")
+try:
+    marshal.loads(count + bytes(16))
+except MemoryError:
+    print("Grenze greift")
+work = Path(sys.argv[2])
+current = code_facts.stamp()
+files = {
+    path: (path, code_facts.extract(path, source))
+    for path, source in (("app/a.py", b"X = 1\\n"), ("app/b.py", b"Y = 2\\n"))
+}
+data = code_cache.encode(current, files)
+start = len(code_cache.MAGIC + current.encode("ascii") + b"\\n") + 8
+base = start + int.from_bytes(data[start - 8 : start], "little")
+cache = work / "code_index.data"
+cache.write_bytes(data[:base] + count + data[base + len(count) :])
+tree = "0" * 64
+store = work / "code_index.result"
+head = code_store.MAGIC + code_store.stamp().encode("ascii") + b"\\n" + tree.encode() + b"\\n"
+store.write_bytes(head + count + bytes(16))
+print(
+    code_cache.decode(cache, current),
+    code_cache.decode_one(cache, current, "app/a.py", "app/a.py"),
+    code_store.read(store, tree),
+)
+"""
+
+
+@pytest.mark.skipif(
+    sys.platform == "darwin",
+    reason="macOS setzt keine Speichergrenze je Prozess durch; ohne sie belegte der Fall 8 GB",
+)
+def test_a_damaged_count_in_a_record_is_a_miss_not_a_memory_error(tmp_path: Path) -> None:
+    """RR2-14: Ein beschädigter Zähler in einem Datensatz ist ein Fehlschlag wie jeder andere
+    Schaden — für beide Wege des Zwischenspeichers und den Ergebnisspeicher —, kein
+    ``MemoryError``, der den Lauf abbricht. RR2-5 prüfte nur die Länge des Verzeichnisses."""
+    tree = Path(code_cache.__file__).parents[1]
+    done = subprocess.run(
+        [sys.executable, "-I", "-c", DAMAGED_COUNT, str(tree), str(tmp_path)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=120,
+        cwd=tmp_path,
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["Grenze greift", "{} None None"]
+
+
+@pytest.mark.parametrize("error", [MemoryError, OverflowError])
+def test_a_record_beyond_memory_or_range_is_a_miss(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: type[Exception]
+) -> None:
+    """RR2-14 auf jeder Plattform: Wirft das Lesen eines Datensatzes ``MemoryError`` (ein Zähler)
+    oder ``OverflowError`` (eine Länge), ist das ein Fehlschlag — in ``decode``, ``decode_one``
+    und im Ergebnisspeicher. Gegenprobe: vorher liest derselbe Speicher."""
+    files = _stored()
+    ((name, (digest, _facts)),) = files.items()
+    current = code_facts.stamp()
+    cache = tmp_path / "cache.data"
+    cache.write_bytes(code_cache.encode(current, files))
+    assert code_cache.decode_one(cache, current, name, digest) is not None
+    tree = "0" * 64
+    store = tmp_path / "code_index.result"
+    head = code_store.MAGIC + code_store.stamp().encode("ascii") + b"\n" + tree.encode() + b"\n"
+    store.write_bytes(head + code_cache.dumps(None))
+
+    def beyond(*_args: object) -> object:
+        raise error
+
+    monkeypatch.setattr(code_cache, "_record", beyond)
+    monkeypatch.setattr(code_cache, "loads", beyond)
+    assert code_cache.decode(cache, current) == {}
+    assert code_cache.decode_one(cache, current, name, digest) is None
+    assert code_store.read(store, tree) is None
 
 
 def test_roundtrip_preserves_typed_constants_and_reads_fresh_bytes(tmp_path: Path) -> None:
