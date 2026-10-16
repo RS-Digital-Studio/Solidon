@@ -222,8 +222,10 @@ Fund führt (Stand „behoben `<commit>`“, der Commit im Laufkopf; Zuordnung �
 7 die V5, 8 die V1–V6, 19 die G, Z und I), und der eigene Befund am Lauf
 positiv ist. Ein offener Fund an der Zelle hält sie offen. Vor jeder
 Urteilsrunde zieht der Koordinator den Stand der Funde nach, deren Fix im
-Laufkopf liegt; `report` weist ein Urteil ab, das dem Stand der Funddatei
-widerspricht (`tools/function_verdict_rules.py`). Wie Stufe B und Zweitprüfer
+Laufkopf liegt; `report` endet mit Ausgang 1, solange ein offener Fund einen
+Commit im Laufkopf nennt, ohne mit „Rest:“ zu sagen, was offen bleibt (FD-153),
+und weist ein Urteil ab, das dem Stand der Funddatei widerspricht
+(`tools/function_verdict_rules.py`). Wie Stufe B und Zweitprüfer
 E1–E4, V1, V4, Z3, I1 und I4 auslegen, steht unter den Kriterientabellen der
 Skills `ux-review` und `ui-design`.
 
