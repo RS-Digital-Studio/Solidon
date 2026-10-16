@@ -2014,7 +2014,12 @@ def test_the_register_says_what_a_body_must_bring() -> None:
     from app.core.registry.registry import BODY_REQUIREMENTS
 
     declared = {spec.name: spec.requires_body for spec in REGISTRY.all() if spec.requires_body}
-    assert declared == {"thicken": "open", "split_bodies": "parts", "lattice_fill": "cavity"}
+    assert declared == {
+        "thicken": "open",
+        "split_bodies": "parts",
+        "lattice_fill": "cavity",
+        "slots_from_texture": "colour",
+    }
     assert set(declared.values()) <= set(BODY_REQUIREMENTS)
 
 
@@ -2025,6 +2030,7 @@ def test_a_dead_end_is_greyed_out_with_the_sentence_the_operation_would_say(
     öffneten *Offene Fläche schließen*, *In Einzelteile zerlegen* und *Gitter
     füllen* einen Dialog, dessen Vorschau nur „Keine Vorschau: …" sagen
     konnte. Jetzt steht der Eintrag ausgegraut da — mit demselben Satz."""
+    from app.core.geom.colour_ops import NO_COLOUR
     from app.core.geom.lattice import NO_CAVITY
     from app.core.geom.mesh_ops import ALREADY_CLOSED
     from app.core.geom.prepare_ops import ONE_PIECE
@@ -2036,6 +2042,7 @@ def test_a_dead_end_is_greyed_out_with_the_sentence_the_operation_would_say(
         ("thicken", ALREADY_CLOSED),
         ("split_bodies", ONE_PIECE),
         ("lattice_fill", NO_CAVITY),
+        ("slots_from_texture", NO_COLOUR),
     ):
         action = window._op_actions[name]
         assert not action.isEnabled(), name

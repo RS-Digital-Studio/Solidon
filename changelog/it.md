@@ -107,6 +107,7 @@ scrive in `website/version.json`.
 - Se cambia la dimensione dei caratteri di sistema, Solidon la segue subito, anche nelle finestre aperte. La versione 0.6.0 la applicava solo dopo un riavvio.
 - Una riga raggruppata del rapporto di verifica nomina nel suggerimento al massimo quindici elementi, con tipo e corpo. Nella versione 0.6.0 un lettore di schermo vi leggeva ogni frase.
 - La legenda *Aggiunto* e *Rimosso* compare nella barra dell'anteprima solo quando l'anteprima aggiunge o toglie materiale. Per questo *Rinomina oggetto* non la mostra.
+- Su un corpo senza colore, *Converti la texture in filamenti* è grigio e ne indica il motivo, invece di rifiutare solo nell'anteprima.
 - Per parametri, accoppiamenti, stampante, materiale e annulla, la chat indica il punto della finestra in cui fare lo stesso da sé.
 - Il rapporto di verifica e il controllo prima dell'esportazione nominano i corpi di un accoppiamento invece di mostrare un identificativo interno, anche un corpo nel frattempo rimosso.
 - I messaggi indicano una caratteristica con tipo e numero, come «Foro 2», invece di un identificativo interno. Per la controparte di una filettatura, diametro e passo sono nell'unità scelta.

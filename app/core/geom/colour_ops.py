@@ -312,8 +312,8 @@ class SlotsFromTextureParams(BaseParams):
 
 
 #: Warum *Textur in Filamente umrechnen* an einem Körper nichts tun kann —
-#: derselbe Satz im Befund und, sobald der Eintrag ``requires_body="colour"``
-#: trägt, am Menüeintrag (``labels.body_requirement``, FD-135).
+#: derselbe Satz im Befund und am Menüeintrag (``requires_body="colour"``,
+#: ``labels.body_requirement``, FD-135).
 NO_COLOUR: Final = _("Dieses Objekt trägt keine Farbinformation.")
 
 
@@ -328,6 +328,7 @@ NO_COLOUR: Final = _("Dieses Objekt trägt keine Farbinformation.")
     params=SlotsFromTextureParams,
     consumes=1,
     produces=1,
+    requires_body="colour",
     deterministic=False,
     doc=_(
         "Rechnet die Textur eines Objekts auf die Anzahl eingelegter Filamente um "

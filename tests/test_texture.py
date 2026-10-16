@@ -309,6 +309,7 @@ def test_whether_a_body_carries_colour_is_known_before_the_dialog() -> None:
     from app.core.geom.colour_ops import NO_COLOUR
     from app.core.registry.registry import BODY_REQUIREMENTS
 
+    assert REGISTRY.get("slots_from_texture").requires_body == "colour"
     assert "colour" in BODY_REQUIREMENTS
     image = Image.new("RGB", (2, 1))
     for body in (plate(), painted([(255, 0, 0), (0, 0, 255)]), textured(image)):
@@ -324,6 +325,25 @@ def test_texture_conversion_says_the_same_sentence_as_the_menu(profile: Profile)
     entry = SceneObject(id="obj_1", name="Quader", mesh=MeshData.of(plate()))
     result = run("slots_from_texture", entry, profile, seed=1, filaments=2)
     assert [finding.message for finding in result.findings] == [NO_COLOUR]
+
+
+def test_the_menu_greys_out_texture_conversion_on_a_body_without_colour() -> None:
+    """FD-135 am Menü: grau mit dem Satz des Befunds, frei an einem farbigen Körper."""
+    from app.core.geom.colour_ops import NO_COLOUR
+    from app.ui.labels import BODY_FACTS_LIMIT, body_facts, body_requirement
+
+    spec = REGISTRY.get("slots_from_texture")
+    grey = SceneObject(id="obj_1", name="Quader", mesh=MeshData.of(plate()))
+    image = Image.new("RGB", (2, 1))
+    for coloured in (painted([(255, 0, 0), (0, 0, 255)]), textured(image)):
+        entry = SceneObject(id="obj_2", name="Figur", mesh=MeshData.of(coloured))
+        assert body_requirement(spec, body_facts(entry)) is None
+    assert body_requirement(spec, body_facts(grey)) == str(NO_COLOUR)
+    # Über der Grenze der Körperfakten bleibt die Frage beantwortet: Sie kostet nichts.
+    dense = trimesh.creation.icosphere(subdivisions=7)
+    assert len(dense.faces) > BODY_FACTS_LIMIT
+    big = SceneObject(id="obj_3", name="Kugel", mesh=MeshData.of(dense))
+    assert body_requirement(spec, body_facts(big)) == str(NO_COLOUR)
 
 
 def test_assign_slot_paints_the_whole_object(profile: Profile) -> None:

@@ -1148,6 +1148,23 @@ def own_part_projects() -> None:
     print(f"{target.name} und {changed.name}: ein Rezept, zwei Stände")
 
 
+def painted_cube() -> None:
+    """Ein Würfel 20 mm mit Eckfarben: die untere Hälfte rot, die obere blau (FD-135).
+
+    Die einzige Korpusdatei mit Farbinformation — die Startszene von *Textur in
+    Filamente umrechnen*. PLY, weil es Eckfarben ohne Textur trägt.
+    """
+    body = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    body.apply_translation((0.0, 0.0, 10.0))
+    colours = np.where(body.vertices[:, 2:3] > 10.0, [[0, 0, 255, 255]], [[255, 0, 0, 255]])
+    body.visual = trimesh.visual.ColorVisuals(body, vertex_colors=colours.astype(np.uint8))
+    MESHES.mkdir(parents=True, exist_ok=True)
+    (MESHES / "painted_cube.ply").write_bytes(
+        trimesh.exchange.ply.export_ply(body, encoding="ascii")
+    )
+    print(f"painted_cube.ply: {len(body.faces)} triangles")
+
+
 if __name__ == "__main__":
     cube_clean()
     dense_cylinder()
@@ -1193,3 +1210,4 @@ if __name__ == "__main__":
     no_geometry_step()
     missing_part_project()
     own_part_projects()
+    painted_cube()
