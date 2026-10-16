@@ -444,6 +444,12 @@ _LINE_ROLE = int(Qt.ItemDataRole.UserRole) + 7
 #: Sammelwerte enthalten dagegen bereits übersetzte und umgerechnete Anzeigen.
 _IDENTITY_ROLE = int(Qt.ItemDataRole.UserRole) + 8
 
+#: Die Einzelheiten einer Zeile vollständig, für das Feld, das man aufklappt.
+#: Kurzhilfe und Vorlesetext nennen höchstens :data:`NAMED_MEMBERS` Mitglieder
+#: (FD-196); wer die Einzelheiten öffnet, will jedes sehen — 17 Körper eines
+#: Stapelimports standen dort sonst als fünfzehn und „… (+2)“.
+_DETAILS_ROLE = int(Qt.ItemDataRole.UserRole) + 11
+
 
 def headline(message: str) -> str:
     """Der erste Satz einer Meldung — die Zeile, die man beim Überfliegen liest.
@@ -6894,7 +6900,11 @@ class ReportPanel(QWidget):
         self.finding_consequence.setText(consequence)
         # Die Folge eines Befunds vom vorigen Stand ist keine (RM-534).
         self.finding_consequence.setVisible(bool(consequence) and not self._previous(item))
-        self.finding_details.setPlainText(item.toolTip().replace(" · ", "\n"))
+        # Vollständig, nicht die gekürzte Kurzhilfe (``_DETAILS_ROLE``).
+        full = item.data(_DETAILS_ROLE)
+        self.finding_details.setPlainText(
+            (full if isinstance(full, str) else item.toolTip()).replace(" · ", "\n")
+        )
 
     def _show_offers(self) -> None:
         """Die Handlungen zum gewählten Befund als Knöpfe (§2.7).
@@ -7781,7 +7791,7 @@ class ReportPanel(QWidget):
             # höchstens ``NAMED_MEMBERS`` (FD-196): 118 Waisen ergaben
             # 20 179 Zeichen, und ein Bildschirmleser las den Satz 118-mal.
             one_step = all(one.op_id == members[0].op_id for one in members)
-            details.extend(
+            member_lines = [
                 " · ".join(
                     filter(
                         None,
@@ -7791,8 +7801,10 @@ class ReportPanel(QWidget):
                         ),
                     )
                 )
-                for one in members[:NAMED_MEMBERS]
-            )
+                for one in members
+            ]
+            item.setData(_DETAILS_ROLE, " · ".join([*details, *member_lines]))
+            details.extend(member_lines[:NAMED_MEMBERS])
             if len(members) > NAMED_MEMBERS:
                 details.append(f"… (+{len(members) - NAMED_MEMBERS})")
         detail_text = " · ".join(details)
