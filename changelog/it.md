@@ -82,7 +82,7 @@ scrive in `website/version.json`.
 - Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
 - Per i fori, vista e *Selezione* mostrano la stessa modifica. Misura, profondità e imbocco collegato sono davanti; compensazione di stampa e regolazioni fini, in «Altri valori».
 - I campi del foro e la casella per modificare insieme elementi uguali spiegano il loro effetto. «Compensare gli scostamenti di stampa» chiarisce la correzione del profilo del materiale.
-- Un clic su *Applica* su un elemento durante un calcolo mantiene la modifica, anche se l'anteprima tarda o la selezione si ricostruisce. Nella versione 0.6.0 andava persa senza avviso.
+- Un clic su *Applica* su un elemento durante un calcolo mantiene la modifica, anche se l'anteprima richiede più tempo. Nella versione 0.6.0 andava persa senza avviso sui modelli grandi.
 - Una texture visualizzata non calcola più un'anteprima senza modifiche e non offre più *Annulla*.
 
 ## 0.6.0

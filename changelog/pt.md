@@ -82,7 +82,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
 - Nos furos, vista e *Seleção* mostram a mesma alteração. Dimensão, profundidade e entrada associada ficam à frente; compensação de impressão e ajustes finos, em «Mais valores».
 - Os campos do furo e a caixa para alterar elementos iguais em conjunto explicam o seu efeito. «Compensar desvios de impressão» esclarece a correção do perfil do material.
-- Um clique em *Aplicar* numa característica durante um cálculo mantém a alteração, mesmo que a pré-visualização demore ou a seleção se reconstrua. Na versão 0.6.0 perdia-se sem aviso.
+- Um clique em *Aplicar* numa característica durante um cálculo mantém a alteração, mesmo que a pré-visualização demore mais. Na versão 0.6.0 perdia-se sem aviso em modelos maiores.
 - Uma textura apresentada já não calcula uma pré-visualização sem alterações nem oferece *Cancelar*.
 
 ## 0.6.0
