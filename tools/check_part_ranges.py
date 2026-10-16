@@ -73,9 +73,11 @@ def _isolate(parent: Path | None = None) -> Iterator[Path]:
     das Aufräumen übersteht einen schon verschwundenen Ordner.
     """
     _this_tree()
-    from app.core.paths import PROFILE_VARIABLES
+    from app.core.paths import ISOLATED_KEYRING, PROFILE_VARIABLES
 
-    before = {variable: os.environ.get(variable) for variable in PROFILE_VARIABLES}
+    before = {
+        variable: os.environ.get(variable) for variable in (*PROFILE_VARIABLES, *ISOLATED_KEYRING)
+    }
     if parent is not None:
         parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
@@ -84,6 +86,7 @@ def _isolate(parent: Path | None = None) -> Iterator[Path]:
         try:
             for variable in PROFILE_VARIABLES:
                 os.environ[variable] = isolated
+            os.environ.update(ISOLATED_KEYRING)
             yield Path(isolated)
         finally:
             for variable, value in before.items():

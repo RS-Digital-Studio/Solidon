@@ -58,9 +58,6 @@ EVENT_DRAIN_ROUNDS = 20
 
 def isolate(profile: Path) -> None:
     """Nutzerverzeichnisse ins Messprofil (§38), Schlüsselbund auf die Attrappe (RC-12)."""
-    from tools.native_binding import ISOLATED_KEYRING
-
-    os.environ.update(ISOLATED_KEYRING)
     profile.mkdir(parents=True, exist_ok=True)
     for variable in (
         "APPDATA",
@@ -71,6 +68,9 @@ def isolate(profile: Path) -> None:
         "XDG_CACHE_HOME",
     ):
         os.environ[variable] = str(profile)
+    from app.core.paths import ISOLATED_KEYRING
+
+    os.environ.update(ISOLATED_KEYRING)
 
 
 def working_set_mb() -> float:

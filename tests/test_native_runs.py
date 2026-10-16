@@ -25,6 +25,7 @@ from typing import Any
 
 import pytest
 
+from app.core.paths import ISOLATED_KEYRING
 from tools import native_binding, native_runs
 from tools.native_binding import RUNNER_FILES, SealError
 from tools.native_runs import (
@@ -76,6 +77,12 @@ def tree(tmp_path: Path) -> Path:
         'import os\n\nos.environ.setdefault("PYSIDE6_OPTION_LAZY", "0")\n', encoding="utf-8"
     )
     (root / "app" / "data.json").write_text("{}\n", encoding="utf-8")
+    # Die Quelle des Schlüsselbunds eines Falls, wie in der echten Anwendung (CS-36).
+    (root / "app" / "core").mkdir()
+    (root / "app" / "core" / "__init__.py").write_text("", encoding="utf-8")
+    (root / "app" / "core" / "paths.py").write_text(
+        f"ISOLATED_KEYRING = {ISOLATED_KEYRING!r}\n", encoding="utf-8"
+    )
     (root / "tests").mkdir()
     (root / "tests" / "test_x.py").write_text("X = 1\n", encoding="utf-8")
     git(root, "init", "-q")
@@ -96,6 +103,8 @@ def test_a_binding_pins_head_tree_every_file_and_the_runners(tree: Path) -> None
     assert binding["tree"] == git(tree, "rev-parse", "HEAD^{tree}").strip()
     assert set(binding["files"]) == {
         "app/__init__.py",
+        "app/core/__init__.py",
+        "app/core/paths.py",
         "app/data.json",
         "app/ui/__init__.py",
         *RUNNER_FILES,
@@ -271,7 +280,7 @@ def test_the_child_checks_seal_and_profile_before_qt(tree: Path, tmp_path: Path)
     profile = {
         name: str(evidence / "profile" / name.lower()) for name in native_binding.PROFILE_VARIABLES
     }
-    allowed = {**profile, **native_binding.ISOLATED_KEYRING}
+    allowed = {**profile, **ISOLATED_KEYRING}
     # Gegenprobe Schlüsselbund: ein fremdes Backend — kein Start, kein Beleg (RC-12).
     foreign = run_tool(
         tree,

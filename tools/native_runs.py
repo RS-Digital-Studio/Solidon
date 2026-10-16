@@ -454,7 +454,9 @@ def profile_environment(base: Mapping[str, str], profile: Path) -> dict[str, str
     )
     for name in THREAD_VARIABLES:
         env[name] = "1"
-    env.update(native_binding.ISOLATED_KEYRING)
+    from app.core.paths import ISOLATED_KEYRING
+
+    env.update(ISOLATED_KEYRING)
     return env
 
 
@@ -464,6 +466,9 @@ def isolate_supervisor(profile: Path) -> None:
         folder = profile / name.lower()
         folder.mkdir(parents=True, exist_ok=True)
         os.environ[name] = str(folder)
+    from app.core.paths import ISOLATED_KEYRING
+
+    os.environ.update(ISOLATED_KEYRING)
 
 
 def real_profile(environment: Mapping[str, str]) -> list[Path]:

@@ -93,10 +93,11 @@ def _model(path: Path) -> Any:
 
 def _isolated(folder: str) -> None:
     """Die Nutzerverzeichnisse des rechnenden Baums in einen Temp-Ordner (§38)."""
-    from app.core.paths import PROFILE_VARIABLES
+    from app.core.paths import ISOLATED_KEYRING, PROFILE_VARIABLES
 
     for variable in PROFILE_VARIABLES:
         os.environ[variable] = folder
+    os.environ.update(ISOLATED_KEYRING)
 
 
 def shoot(arguments: argparse.Namespace, folder: str) -> int:

@@ -3867,6 +3867,9 @@ def main() -> int:
     os.environ.pop("QT_QPA_PLATFORM", None)
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
+    from app.core.paths import ISOLATED_KEYRING
+
+    os.environ.update(ISOLATED_KEYRING)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     if args.inputs_only:

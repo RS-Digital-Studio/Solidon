@@ -247,14 +247,16 @@ def _this_tree() -> None:
 @contextmanager
 def _own_profile() -> Iterator[None]:
     """Leere Nutzerordner für die Dauer des Abzugs (§38), danach wie vorher."""
-    from app.core.paths import PROFILE_VARIABLES
+    from app.core.paths import ISOLATED_KEYRING, PROFILE_VARIABLES
 
-    before = {variable: os.environ.get(variable) for variable in PROFILE_VARIABLES}
+    before = {
+        variable: os.environ.get(variable) for variable in (*PROFILE_VARIABLES, *ISOLATED_KEYRING)
+    }
     with tempfile.TemporaryDirectory(
         prefix="solidon-registry-dump-", ignore_cleanup_errors=True
     ) as folder:
         try:
-            os.environ.update(dict.fromkeys(PROFILE_VARIABLES, folder))
+            os.environ.update({**dict.fromkeys(PROFILE_VARIABLES, folder), **ISOLATED_KEYRING})
             yield
         finally:
             for variable, value in before.items():

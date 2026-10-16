@@ -266,6 +266,9 @@ def main() -> int:
             target = Path(directory) / child
             target.mkdir()
             os.environ[name] = str(target)
+        from app.core.paths import ISOLATED_KEYRING
+
+        os.environ.update(ISOLATED_KEYRING)
         os.environ.pop("QT_QPA_PLATFORM", None)
         render(args.motif, args.output.resolve())
     return 0

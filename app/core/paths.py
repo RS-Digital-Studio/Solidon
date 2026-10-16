@@ -32,6 +32,14 @@ PROFILE_VARIABLES: Final = (
     "XDG_CACHE_HOME",
 )
 
+#: Der Schlüsselbund eines frischen Profils. Er liegt in keinem der Ordner oben
+#: (Windows-Tresor, macOS-Schlüsselbund, Secret Service); ``keyring`` wählt sein
+#: Backend für einen Prozess und jedes Kind aus dieser Variable, und die
+#: Attrappe antwortet auf jede Frage mit nichts. Wer die Nutzerordner umbiegt,
+#: setzt sie mit — sonst fragte ein Fall, eine Aufnahme oder ein Prüflauf die
+#: Schlüssel des Nutzers (``tests/test_keyring_isolation.py``).
+ISOLATED_KEYRING: Final = {"PYTHON_KEYRING_BACKEND": "keyring.backends.null.Keyring"}
+
 _windows_ctypes: Any = None
 _windows_msvcrt: Any = None
 if os.name == "nt":
