@@ -293,7 +293,8 @@ class Index:
         self.packages = packages
         #: Je Modul die Namen zur Laufzeit und für die Typprüfung und ob es ein Paket ist.
         self.module_names = _name_table(modules) if names is None else names
-        #: Inhaltshash je Pfad, wie :meth:`build` ihn las (leer bei einem Index aus Auszügen).
+        #: Inhaltshash je Pfad, wie :meth:`build` ihn las oder der Ergebnisspeicher ihn hält
+        #: (leer bei einem Index aus Auszügen).
         self.digests: dict[str, str] = {}
         #: Die Lazy-Exporte je Paket aus dem Ergebnisspeicher; ``None``: aus den Auszügen.
         self._exports: dict[str, dict[str, tuple[str, str]]] | None = None

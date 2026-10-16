@@ -202,13 +202,15 @@ class LazyFacts(Mapping[str, Facts]):
 
 
 def restore(root: Path, stored: Stored) -> Index:
-    """Ein Index aus dem Speicher: Antworten sofort, Auszüge bei Bedarf."""
-    loader = _Loader(root, {path: digest for path, (digest, _module) in stored.files.items()})
+    """Ein Index aus dem Speicher: Antworten sofort, Auszüge bei Bedarf. ``digests`` nennt den
+    Inhalt, für den er antwortet — wer daneben die Platte liest, vergleicht damit (RCS-3)."""
+    digests = {path: digest for path, (digest, _module) in stored.files.items()}
     names: dict[str, Names] = {
         module: (frozenset(runtime), frozenset(typing), package)
         for module, (runtime, typing, package) in stored.names.items()
     }
-    return Index.restored(
+    loader = _Loader(root, digests)
+    index = Index.restored(
         root,
         LazyFacts({path: path for path in stored.files}, loader),
         LazyFacts(stored.modules, loader),
@@ -217,6 +219,8 @@ def restore(root: Path, stored: Stored) -> Index:
         stored.results,
         stored.exports,
     )
+    index.digests = dict(digests)
+    return index
 
 
 if sys.platform == "win32":

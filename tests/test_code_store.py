@@ -198,6 +198,8 @@ def test_stored_answers_equal_a_freshly_built_index_cold_and_warm(
     assert builds == [root.resolve()], "warm darf nicht neu bauen"
     assert _answers(warm) == expected
     assert loads == [], "eine Antwort aus dem Speicher hat einen Auszug geladen"
+    # Der Inhalt, für den er antwortet: Wer daneben die Platte liest, vergleicht damit (RCS-3).
+    assert cold.digests == warm.digests == fresh.digests
 
 
 def test_a_stored_index_loads_an_extract_only_where_a_question_needs_one(
