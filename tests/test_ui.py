@@ -16042,12 +16042,13 @@ def test_no_worker_hands_its_field_to_a_blind_lambda() -> None:
     """
     import re
 
-    ui = Path(__file__).parent.parent / "app" / "ui"
+    from tests import source_tree
+
     pattern = re.compile(r"finished\.connect\(\s*lambda[^)]*setattr", re.MULTILINE)
 
     culprits = [
-        path.relative_to(ui.parent.parent)
-        for path in sorted(ui.glob("*.py"))
+        source_tree.relative(path)
+        for path in source_tree.python_files("app/ui")
         if pattern.search(path.read_text(encoding="utf-8"))
     ]
 
@@ -16920,12 +16921,13 @@ def test_no_window_overrides_the_application_icon() -> None:
     """
     import re
 
-    ui = Path(__file__).parent.parent / "app" / "ui"
+    from tests import source_tree
+
     pattern = re.compile(r"^\s*(?!application\b)\w+\.setWindowIcon\(", re.MULTILINE)
 
     culprits = [
-        path.relative_to(ui.parent.parent)
-        for path in sorted(ui.glob("*.py"))
+        source_tree.relative(path)
+        for path in source_tree.python_files("app/ui")
         if pattern.search(path.read_text(encoding="utf-8"))
     ]
 

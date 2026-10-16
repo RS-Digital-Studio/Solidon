@@ -17,7 +17,14 @@ import pytest
 
 from app.core import activation
 from app.core.activation import integrity, store
-from tools.build_licence_module import PLACEHOLDER, stage_sources, write_manifest
+from tests import source_tree
+from tools.build_licence_module import (
+    PLACEHOLDER,
+    extension_modules,
+    nested_modules,
+    stage_sources,
+    write_manifest,
+)
 from tools.make_licence_keys import public_key
 
 ROOT = Path(__file__).parent.parent
@@ -100,9 +107,11 @@ def test_staging_sets_the_build_key_and_refuses_without_the_placeholder(
     text = (staging / "integrity.py").read_text(encoding="utf-8")
     assert PLACEHOLDER not in text
     assert manifest_public.hex() in text
-    assert sorted(entry.name for entry in staging.glob("*.py")) == sorted(
-        entry.name for entry in (ROOT / "app" / "core" / "activation").glob("*.py")
-    ), "jedes Modul des Prüfpakets reist mit — ein vergessenes bliebe Bytecode"
+    package = source_tree.ROOT / "app" / "core" / "activation"
+    assert sorted(entry.relative_to(staging).as_posix() for entry in staging.rglob("*.py")) == [
+        entry.relative_to(package).as_posix()
+        for entry in source_tree.python_files("app/core/activation")
+    ], "jedes Modul des Prüfpakets reist mit — ein vergessenes bliebe Bytecode"
 
     # Verliert die Quelle die Platzhalter-Zeile, bricht der Bau ab — ein
     # Manifest, das niemand prüft, wäre schlimmer als keins. Nachgestellt an
@@ -110,6 +119,51 @@ def test_staging_sets_the_build_key_and_refuses_without_the_placeholder(
     # von eben ist genau das.
     with pytest.raises(SystemExit):
         stage_sources(tmp_path / "second", manifest_public, source_dir=staging)
+
+
+def _activation_subfolders() -> list[str]:
+    """Die Unterordner des Prüfpakets außer dem Bytecode-Zwischenspeicher."""
+    package = source_tree.ROOT / "app" / "core" / "activation"
+    return sorted(
+        source_tree.relative(entry)
+        for entry in package.iterdir()
+        if entry.is_dir() and entry.name != "__pycache__"
+    )
+
+
+def test_the_licence_module_has_no_subfolder() -> None:
+    """Das Prüfmodul bleibt flach (Codestruktur W4).
+
+    Drei Stellen hängen daran: Die Spec legt jede gebaute Erweiterung direkt
+    nach ``app/core/activation``, ``tools/build_licence_module.py`` hält bei
+    einem Modul im Unterordner an, und ``pyproject.toml`` gibt nur
+    ``app/core/activation/*.py`` die Python-Version, die Cython versteht. Die
+    Quelltextprüfungen lesen das Paket trotzdem rekursiv; dass es flach ist,
+    steht hier.
+    """
+    assert not _activation_subfolders(), (
+        f"Unterordner im Prüfmodul: {_activation_subfolders()} — Spec, Bau und "
+        "pyproject.toml legen es flach ab"
+    )
+
+
+def test_a_subfolder_in_the_licence_module_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gegenprobe: Ein Modul im Unterordner macht die Zusicherung rot und hält den Bau an,
+    statt still übergangen zu werden."""
+    package = tmp_path / "app" / "core" / "activation"
+    (package / "inner").mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "inner" / "extra.py").write_text("VALUE = 1\n", encoding="utf-8")
+
+    assert nested_modules(package) == [package / "inner" / "extra.py"]
+    with pytest.raises(SystemExit, match=r"inner/extra\.py"):
+        stage_sources(tmp_path / "staging", public_key(TEST_SEED), source_dir=package)
+    assert not (tmp_path / "staging").exists(), "angehalten wird vor dem ersten Kopieren"
+
+    monkeypatch.setattr(source_tree, "ROOT", tmp_path)
+    assert _activation_subfolders() == ["app/core/activation/inner"]
 
 
 def test_the_spec_ships_the_boundary_files_as_source() -> None:
@@ -150,17 +204,15 @@ def test_every_activation_module_translates_to_c(tmp_path: Path) -> None:
 
     staging = tmp_path / "activation"
     stage_sources(staging, public_key(TEST_SEED))
-    extensions = []
-    for source in sorted(staging.glob("*.py")):
-        stem = source.stem
-        name = "app.core.activation" if stem == "__init__" else f"app.core.activation.{stem}"
-        extensions.append(Extension(name, [str(source)]))
+    modules = extension_modules(staging)
+    extensions = [Extension(name, [str(source)]) for name, source in modules]
 
     cythonize(extensions, language_level=3, build_dir=str(tmp_path / "c"), quiet=True)
 
     translated = sorted(entry.name for entry in (tmp_path / "c").rglob("*.c"))
-    expected = sorted(entry.name.replace(".py", ".c") for entry in staging.glob("*.py"))
+    expected = sorted(source.with_suffix(".c").name for _name, source in modules)
     assert translated == expected
+    assert ("app.core.activation", staging / "__init__.py") in modules, "das Paket heißt wie es"
 
 
 def test_nothing_may_shadow_a_boundary_file(

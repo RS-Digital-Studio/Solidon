@@ -526,6 +526,18 @@ dahinter: Auf einer anderen Maschine ist `auto` etwas anderes, und ein Tor,
 das je nach Kernzahl anders misst, hat eine stille Variable. Dieselbe
 Begründung wie bei `.performance.json`.
 
+**`affected_tests.py --run` ab acht Dateien mit vier Arbeitern.** Die Gruppe
+ohne Fenster lief in einem Prozess; eine Auswahl über `viewport` und
+`main_window` brauchte so 1 bis 1,5 Stunden, das Tor dieselbe Menge mit
+Arbeitern 18 Minuten. Im Wechsel gemessen an Teilen der Auswahl für
+`chamber_ops` (Wanduhr / CPU-Zeit des Prozessbaums): zwei Dateien 27–37 s /
+26–34 s seriell gegen 16–17 s / 49–53 s mit `-n 4`, vier Dateien 87–106 s /
+86–98 s gegen 43–49 s / 132–135 s, acht Dateien 381–401 s / 329–339 s gegen
+139–144 s / 379–389 s, sechzehn 728 s / 770 s gegen 228 s / 887 s. Jeder
+Arbeiter startet und sammelt alle Dateien selbst; ab acht Dateien kostet das
+15 % mehr CPU-Zeit für ein Drittel der Wartezeit, darunter 40 bis 100 %. Vier
+statt mehr, weil Agenten nebeneinander laufen; `--workers 0` fährt seriell.
+
 **Zweimal fahren und die Mengen vergleichen, nicht die Zahlen.** Ein Test, der
 von einem Vorgänger abhängt, wird bei paralleler Ausführung nicht rot — er wird
 *manchmal* rot. Zwei gleiche Läufe sind kein Beweis, zwei ungleiche sind sofort
@@ -1115,6 +1127,25 @@ Die Auswahl ist das Werkzeug *zwischen* den Schritten und auf Paket- und
 Fixzweigen mit ruff, format und mypy auch vor dem Commit; das Entwicklungstor
 vor jedem Stand, der nach main geht, bleibt `/pruefen`. Eine Änderung an `types.py` oder `errors.py`
 berührt über den Graphen fast alles, und das Werkzeug sagt das dann auch.
+
+**Was eine `conftest.py` je Test ausführt, wählt jede Testdatei unter ihr;
+was sie nur lädt, nicht** (Entscheidung Koordinator, CS-38). Je Test laufen
+ihre Haken und autouse-Fixtures und die Modulebene; deren Module ermittelt die
+Auswahl aus der Datei selbst, ein neuer Haken zieht sein Modul also mit. Der
+übrige Ladeabschluss sind über 200 Module, schon eine leere Testdatei lädt 208
+— als „jede Testdatei“ wäre die Auswahl für die meiste Kernarbeit die Suite,
+ohne einen Test mehr zu fangen: Ein Ladefehler macht jeden Test rot, auch jeden
+gewählten, und ein geändertes Verhalten wirkt nur, wo es gerufen wird. Wählt
+sonst nichts ein solches Modul, läuft die Gruppe der `conftest.py` doch.
+
+**Eine Datei, die kein Python ist, lesen Module unter `tests/` je Einheit**
+(Entscheidung Koordinator, Review 2 Q): `tests/helpers.py` nennt den Ordner
+`tests/data/meshes` und liest `plate_holes.stl` in einer Funktion — als ganzes
+Modul hingen daran 188 direkte und alle mittelbaren Importeure, 289
+Testdateien. `tools/data_reads.py` verfolgt die Funktion, die Konstante, die
+Fixture, die die Datei erreicht, mit den Werten an der Aufrufstelle: 157. Gegen
+die Ausführung von 20 Testdateien, elf davon mit 325 Fensterfällen, verfehlte
+das keine Datei.
 
 ## Eine Fremdmeldung ist ein Zeitpunkt, keine Ursache
 

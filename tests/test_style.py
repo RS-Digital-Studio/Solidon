@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.ui.style import LEVELS, NORMAL, ROOMY, SPACE, TIGHT, WIDE, stylesheet, type_scale
 from app.ui.theme import THEMES
+from tests import source_tree
 
 UI = Path(__file__).parent.parent / "app" / "ui"
 
@@ -67,14 +68,14 @@ def test_no_layout_invents_its_own_distance() -> None:
     eine Aussage, kein Zwischenwert.
     """
     off: dict[str, list[str]] = {}
-    for path in sorted(UI.glob("*.py")):
+    for path in source_tree.python_files("app/ui"):
         for match in _SPACING.finditer(path.read_text(encoding="utf-8")):
             for part in match.group(1).split(","):
                 value = part.strip()
                 if not value.isdigit() or int(value) == 0:
                     continue
                 if int(value) % SPACE:
-                    off.setdefault(path.name, []).append(match.group(0))
+                    off.setdefault(source_tree.relative(path), []).append(match.group(0))
 
     assert not off, (
         f"Diese Abstände liegen nicht auf dem Raster von {SPACE} px: {off}. "
@@ -478,7 +479,7 @@ def test_a_primary_button_carries_the_font_it_is_drawn_with(qt_app: QApplication
     )
 
 
-def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: object) -> None:
+def test_every_default_button_of_the_surface_goes_through_make_primary() -> None:
     """``setDefault(True)`` allein genügt nicht mehr, und das darf niemand
     wieder vergessen.
 
@@ -492,19 +493,21 @@ def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: o
     von selbst. ``test_no_window_wears_an_accent_it_never_asked_for`` weiter
     unten misst deshalb am **angezeigten** Fenster. Die beiden gehören
     zusammen gelesen; getrennt ist jeder von beiden blind für das, was der
-    andere sieht.
+    andere sieht. Gelesen wird nur Quelltext; der Fall braucht keine Anwendung
+    und läuft im Kernlauf.
     """
-    # Der Glob ist die Grundmenge, und ein umbenannter Ordner macht ihn leer,
-    # ohne dass jemand etwas merkt: Der Test bliebe grün und prüfte nichts.
-    dateien = sorted(UI.glob("*.py"))
-    assert len(dateien) > 20, f"nur {len(dateien)} Dateien unter {UI} — falscher Pfad?"
+    # Die Grundmenge ist der ganze Baum unter app/ui. Die Datei mit
+    # ``make_primary`` ist die eine Stelle, an der der Aufruf stehen darf —
+    # sie muss darin liegen, sonst nimmt die Ausnahme nichts mehr aus.
+    dateien = source_tree.python_files("app/ui")
+    primary = source_tree.definition_file("make_primary", "app/ui")
+    assert primary in dateien, f"{source_tree.relative(primary)} fehlt in der Grundmenge"
+    assert len(dateien) > 20, f"nur {len(dateien)} Dateien unter app/ui — falscher Pfad?"
 
     offenders = [
-        path.name
-        for path in sorted(UI.glob("*.py"))
-        # ``style.py`` selbst ist die eine Stelle, an der der Aufruf stehen
-        # darf — dort steht er in ``make_primary``.
-        if path.name != "style.py" and "setDefault(True)" in path.read_text(encoding="utf-8")
+        source_tree.relative(path)
+        for path in dateien
+        if path != primary and "setDefault(True)" in path.read_text(encoding="utf-8")
     ]
 
     assert not offenders, (
@@ -784,14 +787,14 @@ def test_no_multiline_field_swallows_the_tab_key() -> None:
     bauen hieße, ein Sprachmodell und einen Lizenzserver zu brauchen.
     """
     offenders = []
-    for path in sorted(UI.glob("*.py")):
+    for path in source_tree.python_files("app/ui"):
         source = path.read_text(encoding="utf-8")
         for match in re.finditer(r"(\w+)\s*=\s*QPlainTextEdit\(", source):
             feld = match.group(1)
             if f"{feld}.setReadOnly(True)" in source:
                 continue
             if f"{feld}.setTabChangesFocus(True)" not in source:
-                offenders.append(f"{path.name}:{feld}")
+                offenders.append(f"{source_tree.relative(path)}:{feld}")
 
     assert not offenders, (
         f"Diese Felder schlucken den Tabulator: {offenders}. "
@@ -954,12 +957,12 @@ def test_no_progress_bar_prints_its_number_over_the_moving_edge() -> None:
     ein neuer sonst stillschweigend wieder eine Zahl mitbringt.
     """
     offenders = []
-    for path in sorted(UI.glob("*.py")):
+    for path in source_tree.python_files("app/ui"):
         source = path.read_text(encoding="utf-8")
         if "QProgressBar(" not in source:
             continue
         if "setTextVisible(False)" not in source:
-            offenders.append(path.name)
+            offenders.append(source_tree.relative(path))
 
     assert not offenders, (
         f"Diese Balken schreiben ihre Zahl über die Füllung: {offenders}. "
@@ -2260,14 +2263,14 @@ def test_every_layout_of_a_dialog_keeps_the_grid() -> None:
     """
     modules = [
         path
-        for path in sorted(UI.glob("*.py"))
+        for path in source_tree.python_files("app/ui")
         if path.name in _CARD_MODULES
         or re.search(r"^class \w+\(.*QDialog\b", path.read_text(encoding="utf-8"), re.MULTILINE)
     ]
     assert len(modules) > 20, f"nur {len(modules)} Dialogmodule — die Suche greift nicht"
     assert {path.name for path in modules} >= _CARD_MODULES, "die Karten fehlen in der Prüfung"
     missing = [
-        f"{path.name}:{entry}"
+        f"{source_tree.relative(path)}:{entry}"
         for path in modules
         for entry in _layouts_without_spacing(path.read_text(encoding="utf-8"))
     ]

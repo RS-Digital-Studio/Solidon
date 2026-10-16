@@ -16,7 +16,7 @@ die Basis (:func:`checked_base`). Nicht die ganze Fenstergruppe — das Konto ha
 fünf macOS-Plätze. Lokal zeigt es vor dem Merge, was der Push fahren wird.
 
 Die betroffenen Testdateien kommen aus demselben Importgraphen wie
-``affected_tests.py``. Zwei Dinge sind anders:
+``affected_tests.py``. Drei Dinge sind anders:
 
 1. **Unterlagen zählen nicht — der Kosten wegen.** Markdown außerhalb von
    ``changelog/``, ``konzepte/`` und die Sprachkataloge lösen keine Auswahl
@@ -31,6 +31,11 @@ Die betroffenen Testdateien kommen aus demselben Importgraphen wie
 2. **Ausgegeben wird je Datei eine Auswahl**, im Eingabeformat der Workflows:
    Semikolon zwischen den Auswahlen, je Auswahl ein Prozess. Fenster laufen
    über die Fenstergruppe des Laufplugins, Slicertests über ``-m slicer``.
+3. **Was allein eine Lesestelle gewählt hat, fährt seine Fenster und Slicer nur,
+   wenn einer dieser Fälle die lesende Einheit erreicht** — Test, Klasse oder
+   Fixture beim Namen, oder die Modulebene (:class:`affected_tests.Selection`). Eine
+   reine Teständerung wählt die Wächter über ``tests/``; ihre Fenster lesen den Baum
+   nicht und fuhren doch je Plattform einen Prozess (F-11).
 
 ``--programs`` liest eine Slicerauswahl zurück und nennt die Programme, die
 ihre Fälle über ``pytest.mark.slicer`` verlangen — der Workflow installiert
@@ -40,6 +45,7 @@ genau diese.
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import os
 import shlex
@@ -122,15 +128,35 @@ def select(
     relevant = [path for path in changed if not is_documentation(_relative(path, root))]
     if not relevant:
         return [], []
-    files, _reasons = affected_tests.affected(relevant, graph or affected_tests.ImportGraph(root))
-    if not files:
+    found = affected_tests.selection(relevant, graph or affected_tests.ImportGraph(root))
+    if not found.reasons:
         return [], []
-    ordered = sorted(files)
-    windowed, slicers = list_windowed_tests.collect_ci_selection(ordered, confcutdir=root)
+    windowed, slicers = list_windowed_tests.collect_ci_units(sorted(found.reasons), confcutdir=root)
+    reading = {path.resolve(): units for path, units in found.units.items()}
     return (
-        [_selection(path, root, WINDOW_ARGUMENTS) for path in windowed],
-        [_selection(path, root, SLICER_ARGUMENTS) for path in slicers],
+        [
+            _selection(path, root, WINDOW_ARGUMENTS)
+            for path, keys in windowed.items()
+            if _reaches(reading.get(path.resolve()), keys)
+        ],
+        [
+            _selection(path, root, SLICER_ARGUMENTS)
+            for path, keys in slicers.items()
+            if _reaches(reading.get(path.resolve()), keys)
+        ],
     )
+
+
+def _reaches(reading: frozenset[str] | None, keys: frozenset[str]) -> bool:
+    """Ob ein Fenster- oder Slicerfall der Datei die Änderung erreicht: immer, wenn die Datei
+    nicht allein über eine Lesestelle gewählt ist; sonst, wenn die Modulebene liest oder einer
+    der Fälle eine lesende Einheit beim Namen erreicht (Test, Klasse, Fixture). Eine reine
+    Teständerung wählt die Wächter über ``tests/`` — ihre Fenster lesen den Baum nicht und
+    fuhren doch auf Linux und macOS (F-11). ``reading`` sind die lesenden Einheiten der Datei
+    (:class:`tools.affected_tests.Selection`), ``keys`` die Einheiten ihrer Fälle."""
+    if reading is None:
+        return True
+    return "" in reading or bool(reading & keys)
 
 
 def _selection(path: Path, root: Path, arguments: Sequence[str]) -> str:
@@ -272,4 +298,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # Nur als Skript: Ein kurzer Lauf, dessen Syntaxbäume bis zum Ende leben — die Bereinigung
+    # von Zyklen ging immer wieder über jeden Baum und kostete ein Drittel der CPU-Zeit,
+    # freigeben konnte sie nichts (gemessen im Wechsel, F-6). Ein Testprozess, der ``main``
+    # ruft, behält sie.
+    gc.disable()
     raise SystemExit(main())

@@ -2993,16 +2993,21 @@ def test_recognition_selects_triangles_and_corners_through_plain_arrays() -> Non
     """
     import ast
 
-    root = Path(__file__).resolve().parents[1] / "app" / "core" / "perceive"
+    from tests import source_tree
+
+    # Die Grundmenge muss die Erkennung selbst enthalten, wo immer ``detect``
+    # nach einem Schnitt liegt (CS-12); die Zahl ist nur ein zusätzlicher Beleg.
+    files = source_tree.python_files("app/core/perceive")
+    assert source_tree.definition_file("detect", "app/core/perceive") in files
+    assert len(files) >= 10, "die Suche findet die Erkennung"
     found = [
-        f"{path.name}:{node.lineno}: {ast.unparse(node)}"
-        for path in sorted(root.glob("*.py"))
+        f"{source_tree.relative(path)}:{node.lineno}: {ast.unparse(node)}"
+        for path in files
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
         if isinstance(node, ast.Subscript)
         and isinstance(node.value, ast.Attribute)
         and node.value.attr in ("faces", "vertices")
     ]
-    assert len(list(root.glob("*.py"))) >= 10, "die Suche findet die Erkennung"
     assert found == [], found
 
 
@@ -4200,8 +4205,8 @@ def test_the_tangential_search_gives_up_on_a_skin_without_rounds(
         return _band_seed(*args, **kwargs)
 
     monkeypatch.setattr(features_module, "_band_seed", counted)
-    monkeypatch.setattr(features_module, "TANGENTIAL_FIRST_SEEDS", 64, raising=False)
-    monkeypatch.setattr(features_module, "TANGENTIAL_FUTILE_SEEDS", 128, raising=False)
+    monkeypatch.setattr(features_module, "TANGENTIAL_FIRST_SEEDS", 64)
+    monkeypatch.setattr(features_module, "TANGENTIAL_FUTILE_SEEDS", 128)
     forget_cache()
     solid = trimesh.creation.icosphere(subdivisions=5, radius=10.0)
     solid.apply_scale((1.0, 1.3, 0.7))
