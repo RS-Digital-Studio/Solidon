@@ -101,6 +101,60 @@ def test_the_scan_sees_an_isolation_without_the_keyring() -> None:
     ]
 
 
+#: Die Ordnervariablen, die ``app.core.paths`` liest — als Text in einer Liste
+#: eines Werkzeugs ein Zeichen dafür, dass es die Ordner selbst aufzählt.
+FOLDER_LITERAL = re.compile(
+    r"""['"](APPDATA|LOCALAPPDATA|XDG_CONFIG_HOME|XDG_DATA_HOME|XDG_CACHE_HOME|HOME)['"]"""
+)
+
+
+def own_folder_lists(source: str) -> list[str]:
+    """Funktionen, die Nutzerordner aus einer eigenen Liste in eine Umgebung schreiben."""
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            text = _own_source(source, node)
+            if len(set(FOLDER_LITERAL.findall(text))) >= 2 and WRITES.search(text):
+                found.append(node.name)
+    return found
+
+
+def test_no_tool_keeps_its_own_list_of_user_folders() -> None:
+    """Review I C-1: Eine eigene Liste vergaß ``XDG_DATA_HOME``, und unter Linux
+    schrieb ein Erzeuger ins echte Datenverzeichnis. Welche Ordner ein Profil hat,
+    sagt ``app.core.paths`` (``PROFILE_VARIABLES``, ``drawing_profile_variables``).
+    """
+    lists = sorted(
+        (path.relative_to(ROOT).as_posix(), name)
+        for path in sorted((ROOT / "tools").glob("*.py"))
+        for name in own_folder_lists(path.read_text(encoding="utf-8"))
+    )
+    assert [where for where in lists if where not in NOT_AN_ISOLATION] == []
+    # Gegenprobe: jede Bauart einer eigenen Liste fällt auf, die Quelle nicht.
+    planted = (
+        "def a(p):\n    for v in ('APPDATA', 'XDG_CONFIG_HOME'):\n        os.environ[v] = p\n"
+        "def b(p):\n    for n, c in (('APPDATA', 'r'), ('LOCALAPPDATA', 'l')):\n"
+        "        os.environ[n] = c\n"
+        "def c(p):\n    os.environ.update(dict.fromkeys(('HOME', 'APPDATA'), p))\n"
+        "def d(p):\n    os.environ.update(dict.fromkeys(drawing_profile_variables(), p))\n"
+        "def e():\n    return os.environ['APPDATA'], os.environ['LOCALAPPDATA']\n"
+    )
+    assert own_folder_lists(planted) == ["a", "b", "c"]
+
+
+def test_a_drawing_profile_covers_the_user_folders_of_its_platform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die eine Quelle: alle Ordner, ``HOME`` nur unter macOS — auch ``XDG_DATA_HOME``."""
+    from app.core import paths
+
+    for platform, home in (("win32", False), ("linux", False), ("darwin", True)):
+        monkeypatch.setattr(paths.sys, "platform", platform)
+        chosen = paths.drawing_profile_variables()
+        assert set(chosen) == set(paths.PROFILE_VARIABLES) - (set() if home else {"HOME"})
+        assert "XDG_DATA_HOME" in chosen
+
+
 def test_the_keyring_of_a_fresh_profile_has_one_source() -> None:
     """``app.core.paths`` trägt sie; kein Werkzeug führt eine eigene Fassung."""
     from app.core.paths import ISOLATED_KEYRING

@@ -3853,16 +3853,10 @@ def main() -> int:
         sys.path.insert(0, str(ROOT))
     from app.core.paths import drawing_profile_variables, isolate_secrets
 
-    # ``HOME`` nur unter macOS (RCI-10), wie jeder Fall des Prüfstands.
-    home = (("HOME", "home"),) if "HOME" in drawing_profile_variables() else ()
-    for name, child in (
-        ("APPDATA", "roaming"),
-        ("LOCALAPPDATA", "local"),
-        ("XDG_CONFIG_HOME", "config"),
-        ("XDG_CACHE_HOME", "cache"),
-        *home,
-    ):
-        target = profile / child
+    # Jeder Nutzerordner eines zeichnenden Profils, je einer für sich
+    # (``HOME`` nur unter macOS); eine Quelle mit dem Prüfstand (C-1).
+    for name in drawing_profile_variables():
+        target = profile / name.lower()
         target.mkdir(parents=True, exist_ok=True)
         os.environ[name] = str(target)
     os.environ.pop("QT_QPA_PLATFORM", None)
