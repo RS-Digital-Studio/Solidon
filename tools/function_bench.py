@@ -89,7 +89,9 @@ from tools.function_walk import (
     QtPorts,
     Walk,
     click_button,
+    focus_arrived,
     focus_check,
+    focus_inside,
     place_of,
     typed_number,
     with_modifier,
@@ -791,7 +793,8 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase):
             )
             self.ports.keys(keys)
 
-        return Step(f"alles markieren {target}", act, settle_ms=SETTLE_MS)
+        arrived = focus_arrived(lambda: focus_inside(self.widget(target)))
+        return Step(f"alles markieren {target}", act, ready=arrived, settle_ms=SETTLE_MS)
 
     def _type(self, target: str, text: str, *, decision: bool = False) -> None:
         """Tippt ins Feld des Ziels; eines, das erst beim Verlassen übernimmt, bekommt Tab.

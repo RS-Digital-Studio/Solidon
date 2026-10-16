@@ -933,12 +933,52 @@ def _shown(widget: Any) -> Any:
     return guide_targets.unclipped(widget)
 
 
+#: Wie lange ein Klick ins Feld seinen Fokus nachreichen darf, bevor
+#: :func:`focus_check` den Halter nennt. Unter Windows kommt der Fokus eines
+#: Felds über der nativen Fläche der Ansicht (die Maßgruppe im Bild) als
+#: Fenstermeldung nach; am CI-Runner 44 ms nach der festen Ruhe (Probe
+#: 38847967414, ``fokus.log``).
+FOCUS_GRACE_S: Final = 2.0
+
+
+def focus_inside(field: Any) -> bool:
+    """Ob der Fokus im Feld liegt: das Feld, ein Kind davon oder sein Fokusvertreter."""
+    from PySide6.QtWidgets import QApplication
+
+    focus = QApplication.focusWidget()
+    return (
+        field is not None
+        and focus is not None
+        and (focus is field or field.isAncestorOf(focus) or field.focusProxy() is focus)
+    )
+
+
+def focus_arrived(
+    inside: Callable[[], bool],
+    clock: Callable[[], float] = time.monotonic,
+    grace_s: float = FOCUS_GRACE_S,
+) -> Callable[[], bool]:
+    """Die Bereitschaft des Schritts nach einem Klick ins Feld: Fokus da oder Frist um.
+
+    Nach der Frist handelt der Schritt trotzdem, und :func:`focus_check` nennt,
+    wer den Fokus hält — gewartet wird auf eine Meldung, nicht auf ein Wunder.
+    """
+    began: list[float] = []
+
+    def ready() -> bool:
+        now = clock()
+        if not began:
+            began.append(now)
+        return inside() or now - began[0] > grace_s
+
+    return ready
+
+
 def focus_check(field: Any, target: str) -> None:
     """Ob der Fokus im Feld des Ziels liegt — sonst wird nicht getippt (Review M13).
 
-    Im Feld heißt: das Feld selbst, ein Kind davon (die Textzeile eines
-    Zahlenfelds) oder sein Fokusvertreter. Sonst ein Fehler mit dem Namen des
-    Widgets, das den Fokus hat.
+    Im Feld heißt es nach :func:`focus_inside`. Sonst ein Fehler mit dem Namen
+    des Widgets, das den Fokus hat.
     """
     from PySide6.QtWidgets import QApplication
 
@@ -947,9 +987,6 @@ def focus_check(field: Any, target: str) -> None:
     focus = QApplication.focusWidget()
     if field is None:
         raise RuntimeError(f"{target}: kein Feld hinter dem Namen — nicht getippt")
-    inside = focus is not None and (
-        focus is field or field.isAncestorOf(focus) or field.focusProxy() is focus
-    )
-    if not inside:
+    if not focus_inside(field):
         holder = f"{type(focus).__name__} „{name_of(focus)}“" if focus is not None else "nichts"
         raise RuntimeError(f"{target}: der Fokus liegt auf {holder}, nicht im Feld — nicht getippt")
