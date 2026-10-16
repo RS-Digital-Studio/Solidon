@@ -1162,7 +1162,8 @@ def write_version(content: str) -> None:
         for key in entries:
             print(f"    {key}")
     else:
-        print(f"  version.json: {APP_VERSION}, ohne Pakete — die Anwendung zeigt auf die Seite")
+        remark = "ohne Pakete — die Anwendung zeigt auf die Seite"
+        print(f"  version.json: {APP_VERSION}, {remark}")
 
 
 def main() -> int:
