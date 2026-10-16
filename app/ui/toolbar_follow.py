@@ -20,13 +20,13 @@ from PySide6.QtWidgets import QWidget
 class _FontFollower(QObject):
     """Ein Wechsel, eine neue Wahl — auch wenn Qt mehrere Ereignisse schickt."""
 
-    def __init__(self, bar: QWidget, refit: Callable[[], None]) -> None:
+    def __init__(self, bar: QWidget, steps: tuple[Callable[[], None], ...]) -> None:
         super().__init__(bar)
-        self._refit = refit
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(0)
-        self._timer.timeout.connect(refit)
+        for step in steps:
+            self._timer.timeout.connect(step)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
         if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
@@ -34,6 +34,6 @@ class _FontFollower(QObject):
         return False
 
 
-def follow_the_font(bar: QWidget, refit: Callable[[], None]) -> None:
-    """``refit`` nach jedem Schrift- oder Stilwechsel der Leiste, gebündelt."""
-    bar.installEventFilter(_FontFollower(bar, refit))
+def follow_the_font(bar: QWidget, *steps: Callable[[], None]) -> None:
+    """``steps`` der Reihe nach nach jedem Schrift- oder Stilwechsel der Leiste, gebündelt."""
+    bar.installEventFilter(_FontFollower(bar, steps))

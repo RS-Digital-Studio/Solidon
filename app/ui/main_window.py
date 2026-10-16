@@ -5817,9 +5817,7 @@ class MainWindow(QMainWindow):
         # Überstand wie bei jeder Werkzeugleiste im Pfeilmenü ein.
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         # Nach einem Schriftwechsel von der Wortform aus neu wählen wie beim Start (L1).
-        follow_the_font(
-            toolbar, lambda: self._set_toolbar_form(TOOLBAR_WORDS) or self._fit_toolbar()
-        )
+        follow_the_font(toolbar, partial(self._set_toolbar_form, TOOLBAR_WORDS), self._fit_toolbar)
         # **Und wenn der Platz nicht reicht, kürzen sie, statt zu
         # verschwinden** (Befund D6). Qt sammelt den Überstand einer
         # Werkzeugleiste hinter einem unbeschrifteten Pfeil ein — was dort
