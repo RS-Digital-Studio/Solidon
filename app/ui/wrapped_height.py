@@ -82,9 +82,16 @@ def follow_wrapped_height(label: QLabel, estimate: int) -> None:
     echte Breite kommt mit dem ersten Größenereignis, noch vor dem Zeichnen.
     """
     placed = label.testAttribute(Qt.WidgetAttribute.WA_Resized)
-    claim_wrapped_height(label, label.width() if placed else estimate)
+    width = label.width() if placed else estimate
     if isinstance(label, WrappedNote):
+        # **Nur die Untergrenze** (M1): Der Satz folgt sich selbst, auch einem
+        # Schriftwechsel (``style_follow``). Mit gepinnter Höchsthöhe gab das
+        # Layout ihm nach 9 → 14 pt keine neue Höhe frei, kein ``Resize`` kam,
+        # und die leere Parameterleiste zeigte 48 von 101 Punkten.
+        label.setMinimumHeight(0)
+        label.setMinimumHeight(max(label.heightForWidth(width), 0))
         return
+    claim_wrapped_height(label, width)
     follower = label.findChild(_HeightFollower, options=Qt.FindChildOption.FindDirectChildrenOnly)
     if follower is None:
         follower = _HeightFollower(label)

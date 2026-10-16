@@ -93,6 +93,13 @@ def refit_dialogs() -> None:
                 height.fit(window, scroll, intent="font")
 
 
+def _is_note(watched: QObject) -> bool:
+    """Ob ``watched`` ein ``style.WrappedNote`` ist (spät geladen: ``style`` lädt dieses Modul)."""
+    from app.ui.style import WrappedNote
+
+    return isinstance(watched, WrappedNote)
+
+
 class StyleFollower(QObject):
     """Der eine Zuhörer für Schriftwechsel und Knopfhöhen."""
 
@@ -114,6 +121,12 @@ class StyleFollower(QObject):
         if isinstance(watched, QPushButton):
             self._waiting[id(watched)] = weakref.ref(watched)
             self._timer.start()
+        elif event.type() == QEvent.Type.FontChange and _is_note(watched):
+            # **Ein umbrochener Satz misst in der neuen Schrift neu** (M1, P4):
+            # Breite und Text bleiben, ``WrappedNote`` bekäme sonst kein Ereignis,
+            # auf das er misst, und behielte nach 14 → 9 pt die Höhe der großen
+            # Schrift. In der nächsten Runde, wenn die Schrift im Satz steht.
+            QTimer.singleShot(0, watched, watched.claim_height)  # type: ignore[attr-defined]
         return False
 
     def _settle(self) -> None:

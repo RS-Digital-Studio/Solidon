@@ -79,6 +79,35 @@ def _activation() -> QDialog:
     return ActivationDialog()
 
 
+def _settings() -> QDialog:
+    from app.ui.settings import UiSettings
+    from app.ui.settings_dialog import SettingsDialog
+
+    return SettingsDialog(UiSettings(), slicer_path="")
+
+
+MAKERS = [
+    _calibration,
+    _parameter,
+    _counterpart,
+    _recipe,
+    _first_run,
+    _chat,
+    _activation,
+    _settings,
+]
+NAMES = [
+    "kalibrieren",
+    "parameter",
+    "gegenstueck",
+    "baustein",
+    "erste",
+    "chat",
+    "freischalten",
+    "einstellungen",
+]
+
+
 def _settle(qt_app: QApplication, dialog: QDialog) -> None:
     """Bis die Größe acht Umläufe lang steht, höchstens drei Sekunden."""
     last = None
@@ -90,6 +119,12 @@ def _settle(qt_app: QApplication, dialog: QDialog) -> None:
         now = (dialog.width(), dialog.height())
         still = still + 1 if now == last else 0
         last = now
+
+
+def _waits(dialog: QDialog) -> Callable[[], object] | None:
+    """Worauf der Dialog nach dem Öffnen wartet, bevor sein Inhalt steht."""
+    found = getattr(dialog, "wait_for_look", None) or getattr(dialog, "wait_for_survey", None)
+    return found if callable(found) else None
 
 
 def _strip(dialog: QDialog, *, may_stay: bool = False) -> str:
@@ -126,8 +161,8 @@ def _strip(dialog: QDialog, *, may_stay: bool = False) -> str:
 @pytest.mark.parametrize("points", [9, 11, 14, 16])
 @pytest.mark.parametrize(
     "make",
-    [_calibration, _parameter, _counterpart, _recipe, _first_run, _chat, _activation],
-    ids=["kalibrieren", "parameter", "gegenstueck", "baustein", "erste", "chat", "freischalten"],
+    MAKERS,
+    ids=NAMES,
 )
 def test_the_dialog_fits_its_content_before_and_after_each_flap(
     qt_app: QApplication, make: Callable[[], QDialog], points: int
@@ -140,8 +175,9 @@ def test_the_dialog_fits_its_content_before_and_after_each_flap(
         try:
             dialog.show()
             _settle(qt_app, dialog)
-            # Der Chatdialog reicht den Schlüsselstatus aus einem Arbeiter nach.
-            looks = getattr(dialog, "wait_for_look", None)
+            # Chat und Einstellungen reichen Schlüsselstatus und Slicersuche aus
+            # einem Arbeiter nach.
+            looks = _waits(dialog)
             if looks is not None:
                 looks()
                 _settle(qt_app, dialog)
@@ -156,6 +192,62 @@ def test_the_dialog_fits_its_content_before_and_after_each_flap(
                     if said := _strip(dialog):
                         state = "auf" if heading.isChecked() else "zu"
                         found.append(f"„{heading.text()}“ {state}: {said}")
+        finally:
+            dialog.reject()
+            dialog.deleteLater()
+            qt_app.processEvents()
+    apply_style(qt_app, "light")
+    assert not found, found
+
+
+def _spare_notes(dialog: QDialog) -> list[str]:
+    """Umbrochene Sätze, die höher stehen, als ihr Text in ihrer Breite braucht."""
+    from app.ui.style import WrappedNote
+
+    found = []
+    for note in dialog.findChildren(WrappedNote):
+        if not note.isVisible() or not note.text():
+            continue
+        least, most = note.minimumHeight(), note.maximumHeight()
+        note.setMinimumHeight(0)
+        note.setMaximumHeight(16_777_215)
+        needed = max(note.heightForWidth(note.width()), 0)
+        note.setMinimumHeight(least)
+        note.setMaximumHeight(most)
+        if note.height() - needed > SLACK:
+            found.append(f"{note.text()[:30]!r} {note.height()} hoch für {needed}")
+    return found
+
+
+@pytest.mark.parametrize("make", MAKERS, ids=NAMES)
+def test_the_dialog_gives_back_its_height_after_a_font_change(
+    qt_app: QApplication, make: Callable[[], QDialog]
+) -> None:
+    """Nach 9 → 14 → 9 pt steht nichts leer, weder über den Knöpfen noch zwischen
+    den Sätzen (L5: *Erste Schritte* 12 Punkte; P4: *Chat einrichten* 750 statt
+    606, die Lücken zwischen den Sätzen)."""
+    from PySide6.QtGui import QFont
+
+    found: list[str] = []
+    with bundled_font(qt_app, 9):
+        apply_theme(qt_app, "light")
+        apply_style(qt_app, "light")
+        dialog = make()
+        try:
+            dialog.show()
+            _settle(qt_app, dialog)
+            looks = _waits(dialog)
+            if looks is not None:
+                looks()
+                _settle(qt_app, dialog)
+            for points in (14, 9):
+                qt_app.setFont(QFont("DejaVu Sans", points))
+                _settle(qt_app, dialog)
+                # Ein Satz misst eine Runde nach der Schrift, das Fenster danach.
+                _settle(qt_app, dialog)
+            if said := _strip(dialog):
+                found.append(f"nach 9 → 14 → 9 pt: {said}")
+            found += [f"Satz: {said}" for said in _spare_notes(dialog)]
         finally:
             dialog.reject()
             dialog.deleteLater()

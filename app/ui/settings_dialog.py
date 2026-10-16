@@ -519,7 +519,11 @@ class SettingsDialog(QDialog):
         self._natural_advanced_width = self._reserve_advanced_width()
         heading = self.advanced.findChild(QToolButton)
         assert heading is not None
-        heading.toggled.connect(self._fit_explicit_soon)
+        # Jede Klappe misst ausdrücklich, nicht nur *Weitere Einstellungen*:
+        # Zugeklappt gaben *Anwendung* und *Vorgaben für neue Projekte* bis zu
+        # 418 Punkte nicht zurück (P1, Zwilling von FD-198).
+        for flap in self.findChildren(QToolButton, "sectionHeading"):
+            flap.toggled.connect(self._fit_explicit_soon)
         tab_order = (
             self.language,
             self.unit,

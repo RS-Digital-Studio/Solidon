@@ -716,6 +716,12 @@ class FirstRunDialog(QDialog):
         flap = self.extras_section.findChild(QToolButton, "sectionHeading")
         if flap is not None:
             flap.toggled.connect(weak_slot(self, FirstRunDialog._grow_soon, "explicit"))
+        # Ein Schriftwechsel misst über die eigenen Schritte von
+        # ``_grow_to_content`` (``style_follow.refit_dialogs``); direkt gemessen
+        # blieben nach 9 → 14 → 9 pt 12 Punkte leer (L5).
+        self.queue_refit: Callable[..., None] = weak_slot(
+            self, FirstRunDialog._grow_soon, forward=True
+        )
         for editor in self._contents.findChildren(QComboBox):
             wheel_needs_focus(editor)
         for spin in (*self._contents.findChildren(NumberSpin), self.printer_nozzles):

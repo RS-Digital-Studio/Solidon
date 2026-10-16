@@ -228,6 +228,14 @@ def test_a_note_still_says_that_it_grew(qt_app: QApplication) -> None:
         _settle(qt_app)
         assert grew, "der Satz sagt nicht mehr, dass er gewachsen ist"
         assert note.minimumHeight() == _needed(note)
+
+        # Schmaler heißt höher, ohne neuen Text: Auch dann meldet er es (L2).
+        # Mit gepinnter Höchsthöhe und zweitem Folger blieb das aus.
+        grew.clear()
+        host.resize(180, 600)
+        _settle(qt_app)
+        assert grew, "schmaler und höher, aber kein ``grown``"
+        assert note.height() == note.minimumHeight() == _needed(note)
     finally:
         host.hide()
         host.deleteLater()
