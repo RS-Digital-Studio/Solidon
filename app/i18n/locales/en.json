@@ -8747,6 +8747,7 @@
   "— im Bild wählen —": "— pick in the view —",
   "— keines —": "— none —",
   "„Automatisch teilen“ legt keine Naht durch diese Stelle. Die Sperre wird mit dem Projekt gespeichert; das Bild zeigt sie schraffiert.": "“Split automatically” places no seam through this spot. The protection is saved with the project; the view shows it hatched.",
+  "„Fluss bei Brücken“ stand auf {percent} %, ein Fehler von Version 0.6.0. Jetzt gilt wieder der Wert ohne eigene Einstellung.": "“Flow on bridges” was set to {percent} %, an error in version 0.6.0. The value without your own setting applies again.",
   "„author“ ist kein Text.": "“author” is not text.",
   "„author“ ist {length} Zeichen lang, erlaubt sind {limit}.": "“author” is {length} characters long; {limit} are allowed.",
   "„document“ ist kein Objekt.": "“document” is not an object.",

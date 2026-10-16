@@ -1793,10 +1793,10 @@ def test_filament_override_refuses_a_number_until_it_is_corrected(
         line = editor.lineEdit()
         line.setFocus()
         line.selectAll()
-        QTest.keyClicks(line, "401")
+        QTest.keyClicks(line, "501")
         refusal = editor.refusal()
-        assert editor.refused_value() == pytest.approx(401)
-        assert "Obergrenze" in refusal and "400" in refusal
+        assert editor.refused_value() == pytest.approx(501)
+        assert "Obergrenze" in refusal and "500" in refusal
         assert dialog._refusals["temperature.nozzle"].isVisibleTo(dialog)
         ok = dialog._ok_button
         assert ok is not None
@@ -1913,7 +1913,7 @@ def test_the_printer_header_refuses_out_of_range_numbers(
 @pytest.mark.parametrize(
     ("path", "invalid", "boundary", "bound_word"),
     [
-        ("layers.layer_height", 1.5, 1.2, "Obergrenze"),
+        ("layers.layer_height", 4.5, 4.0, "Obergrenze"),
         ("shell.wall_count", 21, 20, "Obergrenze"),
         ("shell.wall_count", 0, 1, "Untergrenze"),
     ],

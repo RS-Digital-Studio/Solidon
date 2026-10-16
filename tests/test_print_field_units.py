@@ -28,6 +28,7 @@ from app.core.export.writer import write_assembly
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
 from app.core.knowledge.print_fields import FIELDS, Field, field_of
+from app.core.scene import migrations
 from app.core.scene.migrations import FORMAT_VERSION, migrate
 from app.core.scene.project import load, project_data
 from app.core.types import PrintSettings, Profile, SceneObject
@@ -82,11 +83,12 @@ def _written(tmp_path: Path, profile: Profile, settings: PrintSettings, flavour:
 
 
 def test_the_bridge_flow_field_counts_in_percent() -> None:
-    """50 bis 150 % in Fünferschritten, die Vorgabe der Programme steht als 100 %."""
+    """50 bis 200 % in Fünferschritten, die Vorgabe der Programme steht als 100 %.
+    Oben reicht es über die 180 % der Creality Hi (HueForge, Review 1 F1)."""
     field = field_of("shell.bridge_flow")
     assert field is not None
     assert (field.unit, field.factor, field.decimals) == ("%", 100.0, 0)
-    assert (field.minimum, field.maximum, field.step) == (50.0, 150.0, 5.0)
+    assert (field.minimum, field.maximum, field.step) == (50.0, 200.0, 5.0)
     assert _shown(field, PrintSettings().shell.bridge_flow) == pytest.approx(100.0)
 
 
@@ -134,18 +136,27 @@ def test_every_shipped_profile_lands_inside_the_fields_it_fills() -> None:
     Harzdrucker zeigen die Reiter nicht (``_reduce_for_resin``)."""
     outside: dict[tuple[str, float], str] = {}
     printers = [key for key, printer in profiles.printer_profiles().items() if not printer.is_resin]
-    assert printers
+    materials = list(profiles.material_profiles())
+    qualities = list(print_settings.quality_presets())
+    # Gezählt, nicht nur gelaufen: Über eine leere Menge ist ein Verbot immer
+    # grün (Review 1 F6). Gemessen 16 Filamentdrucker, 7 Materialien, 4 Stufen.
+    assert len(printers) >= 10 and len(materials) >= 5 and len(qualities) >= 4
+    checked = 0
     for printer in printers:
-        for material in profiles.material_profiles():
+        for material in materials:
             profile = profiles.make_profile(printer, material)
-            for quality in print_settings.quality_presets():
+            for quality in qualities:
                 settings = print_settings.resolve(profile, quality)  # type: ignore[arg-type]
                 for field in NUMBER_FIELDS:
                     value = print_settings.read_path(settings, field.path)
-                    if value is not None and not _within(field, value):
+                    if value is None:
+                        continue
+                    checked += 1
+                    if not _within(field, value):
                         outside.setdefault(
                             (field.path, _shown(field, value)), f"{printer}/{material}/{quality}"
                         )
+    assert checked >= len(printers) * len(materials) * len(qualities) * (len(NUMBER_FIELDS) - 2)
     assert not outside, outside
 
 
@@ -208,17 +219,20 @@ def test_a_bridge_flow_from_the_percent_slip_falls_back_to_the_profile() -> None
 def test_the_old_file_hands_over_the_profile_bridge_flow(
     tmp_path: Path, printer: str, flavour: str, key: str
 ) -> None:
-    """Die alte Datei rechnet richtig: In der Datei des Slicers steht kein Prozent
-    Brückenfluss mehr, sondern der Wert der Grundlage (oder gar keiner)."""
+    """Die alte Datei rechnet richtig: In der Datei des Slicers steht der Wert der
+    Grundlage. Die Grundlage trägt hier 85 %, damit sie sich vom zurückgesetzten
+    Wert der Datei (1,0) unterscheidet (Review 1 F3) — wie der Standardprozess
+    des K1 Max mit 0,9."""
     settings = load(OLD_FILE).document.print_settings
     assert settings is not None
     profile = profiles.make_profile(printer, "pla")
-    effective = print_settings.on_base(settings, print_settings.resolve(profile))
+    base = print_settings.with_path(print_settings.resolve(profile), "shell.bridge_flow", 0.85)
+    effective = print_settings.on_base(settings, base)
+    assert effective.shell.wall_count == 4, "die eigene Wahl der Datei gilt weiter"
 
     written = _written(tmp_path, profile, effective, flavour)
 
-    value = _plate_value(written, flavour, key)
-    assert value is None or float(str(value)) >= 0.5, value
+    assert float(str(_plate_value(written, flavour, key))) == pytest.approx(0.85)
 
 
 def _v52(shell: dict[str, object], **stored: object) -> dict[str, object]:
@@ -277,3 +291,50 @@ def test_the_step_keeps_every_real_bridge_flow() -> None:
     assert migrate(deepcopy(bare))["format_version"] == FORMAT_VERSION
     damaged = _v52({"bridge_flow": "viel"}, chosen="shell.bridge_flow")
     assert migrate(deepcopy(damaged))["print_settings"]["shell"]["bridge_flow"] == "viel"
+
+
+# --- Der Kunde erfährt es (Review 1 F2, Regel 21) ---------------------------------
+
+
+def test_opening_the_old_file_says_what_was_taken_back() -> None:
+    """Die alte Datei bringt beim Öffnen einen Hinweis mit: der Wert von damals,
+    was jetzt gilt, und der Weg zum Feld. Gespeichert wird er nicht."""
+    project = load(OLD_FILE)
+
+    (notice,) = project.notices
+    assert (notice.code, notice.severity) == ("project.bridge_flow_reset", "info")
+    assert "1 %" in str(notice.message) and "0.6.0" in str(notice.message)
+    assert notice.values.get("field") == "shell.bridge_flow"
+    assert [action.id for action in notice.suggestions] == ["open_print_settings"]
+    assert "project.bridge_flow_reset" not in {entry.code for entry in project.report.findings}
+
+
+@pytest.mark.parametrize("slip", [0.01, 0.02])
+def test_the_step_notes_each_slip_once(slip: float) -> None:
+    told: list[dict[str, object]] = []
+    migrated = migrate(
+        _v52(
+            {"bridge_flow": slip},
+            chosen=["shell.bridge_flow"],
+            accepted=[],
+            plate_choices={"shell.bridge_flow": slip},
+        ),
+        notes=told,
+    )
+    assert told == [{"code": "project.bridge_flow_reset", "percent": round(slip * 100)}]
+    assert migrations.NOTES_KEY not in migrated
+    (finding,) = migrations.notes_as_findings(told)
+    assert f"{round(slip * 100)} %" in str(finding.message)
+
+
+def test_a_file_cannot_bring_its_own_notes() -> None:
+    """Hinweise schreibt nur die Kette; ein Schlüssel aus der Datei sagt nichts."""
+    told: list[dict[str, object]] = []
+    planted = {
+        **_v52({"bridge_flow": 0.9}, chosen=[], accepted=[]),
+        migrations.NOTES_KEY: [{"code": "project.bridge_flow_reset", "percent": 99}],
+    }
+    assert migrations.NOTES_KEY not in migrate(planted, notes=told)
+    assert told == []
+    real = {"format_version": 52, "scene": {}, "ops": [], "transactions": []}
+    assert migrate(deepcopy(real), notes=told) and told == []

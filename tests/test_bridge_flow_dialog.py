@@ -59,7 +59,7 @@ def test_the_field_shows_the_default_as_one_hundred_percent(dialog: PrintSetting
     assert isinstance(editor, BoundedSpin)
     assert print_settings.read_path(dialog.settings, PATH) == pytest.approx(1.0)
     assert editor.text() == "100 %"
-    assert (editor.minimum(), editor.maximum()) == (50.0, 150.0)
+    assert (editor.minimum(), editor.maximum()) == (50.0, 200.0)
     assert editor.singleStep() == pytest.approx(5.0)
 
 
@@ -92,7 +92,7 @@ def test_ninety_is_taken_and_reaches_the_slicer_file_as_a_ratio(
 
 
 @pytest.mark.parametrize(
-    ("typed", "bound"), [("200", "Obergrenze 150 %"), ("40", "Untergrenze 50 %")]
+    ("typed", "bound"), [("250", "Obergrenze 200 %"), ("40", "Untergrenze 50 %")]
 )
 def test_a_value_outside_names_the_percent_limits(
     dialog: PrintSettingsDialog, typed: str, bound: str
@@ -107,3 +107,49 @@ def test_a_value_outside_names_the_percent_limits(
     assert typed in refusal
     assert print_settings.read_path(dialog.settings, PATH) == pytest.approx(1.0)
     assert PATH not in dialog.settings.chosen
+
+
+def test_a_vendor_value_above_the_limit_stands_whole(dialog: PrintSettingsDialog) -> None:
+    """Review 1 F1: Creality Hi und SPARKX i7/i8 tragen 180 %. Das Feld zeigt 180 %,
+    nicht 150; getippt gilt weiter die Grenze."""
+    from app.ui.print_settings_dialog import _set_setting_editor
+
+    editor = dialog._editors[PATH]
+    assert isinstance(editor, BoundedSpin)
+    dialog._loading = True
+    try:
+        _set_setting_editor(editor, dialog._fields[PATH], 1.8)
+    finally:
+        dialog._loading = False
+    assert editor.text() == "180 %"
+    _type(editor, "250")
+    assert "Obergrenze 200 %" in editor.refusal()
+    _type(editor, "190")
+    assert not editor.refusal()
+    assert print_settings.read_path(dialog.settings, PATH) == pytest.approx(1.9)
+
+
+def test_the_report_after_opening_says_it_once(qt_app: QApplication) -> None:
+    """Review 1 F2: Der Hinweis aus dem Formatschritt steht im Prüfbericht der
+    ersten Auswertung nach dem Öffnen und nicht bei jeder weiteren."""
+    from app.core.scene.project import load
+    from app.ui.session import _EvaluationWorker
+
+    session = Session()
+    session.project = load(Path(__file__).parent / "data" / "projects" / "bridge_flow_v52.p3d")
+    session.pending_foreign_check = True
+    received: list[object] = []
+    worker = _EvaluationWorker(session)
+    worker.finishedWith.connect(received.append)
+    try:
+        worker.run()
+        worker.run()
+    finally:
+        worker.finishedWith.disconnect()
+
+    first, second = (
+        {finding.code for finding in result.scene.report.findings}  # type: ignore[attr-defined]
+        for result in received
+    )
+    assert "project.bridge_flow_reset" in first
+    assert "project.bridge_flow_reset" not in second

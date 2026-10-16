@@ -440,6 +440,9 @@ class _EvaluationWorker(Worker):
             if session.pending_foreign_check:
                 session.pending_foreign_check = False
                 outside = foreign.findings_for(session.project.document)
+                # Was die Umstellung der Datei zurücknahm, einmal nach dem
+                # Öffnen (Regel 21, FD-197).
+                outside.extend(session.project.notices)
             if session.pending_part_check:
                 # §24.4: was die Bibliothek geändert hat, seit diese Datei
                 # gespeichert wurde, wird einmal gesagt — beim Öffnen, nicht

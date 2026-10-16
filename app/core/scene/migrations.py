@@ -19,9 +19,10 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any, Final
 
-from app.core.errors import CANCEL, CHECK_UPDATES, ValidationError
+from app.core.errors import CANCEL, CHECK_UPDATES, OPEN_PRINT_SETTINGS, ValidationError
 from app.core.log import get_logger
 from app.core.scene.gathered import carry_over
+from app.core.types import Finding
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -34,6 +35,12 @@ FORMAT_VERSION: Final = 53
 #: einer bestimmten Rechnung zuletzt gesehen wurde (45 → 46). :func:`migrate`
 #: setzt ihn vor dem ersten Schritt und nimmt ihn nach dem letzten heraus.
 SAVED_FORMAT_KEY: Final = "_saved_format_version"
+
+#: Was ein Schritt dem Kunden beim Öffnen sagen muss, weil er eine Wahl
+#: zurücknahm (Regel 21). Reist wie :data:`SAVED_FORMAT_KEY` durch die Kette;
+#: :func:`migrate` nimmt ihn heraus und gibt ihn an ``notes``, ``load`` macht
+#: daraus Befunde (:func:`notes_as_findings`). In die Datei kommt er nie.
+NOTES_KEY: Final = "_migration_notes"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1631,6 +1638,7 @@ def _bridge_flow_leaves_the_percent_slip(data: dict[str, Any]) -> dict[str, Any]
         and isinstance(chosen, list)
         and path in chosen
     ):
+        _note_bridge_flow(data, shell["bridge_flow"])
         stored["chosen"] = [entry for entry in chosen if entry != path]
         # Ohne Herkunft ist der Wert nur Grundlage und kommt beim Öffnen neu aus
         # dem Profil; hier steht die Vorgabe der Programme, damit die Datei selbst
@@ -1638,8 +1646,45 @@ def _bridge_flow_leaves_the_percent_slip(data: dict[str, Any]) -> dict[str, Any]
         shell["bridge_flow"] = 1.0
     choices = stored.get("plate_choices")
     if isinstance(choices, dict) and _slipped(choices.get(path)):
+        _note_bridge_flow(data, choices[path])
         del choices[path]
     return data
+
+
+def _note_bridge_flow(data: dict[str, Any], value: float) -> None:
+    """Merkt für ``load``, dass der Brückenfluss zurückgenommen wurde — mit dem Wert,
+    wie der Dialog von 0.6.0 ihn zeigte."""
+    notes = data.setdefault(NOTES_KEY, [])
+    note = {"code": "project.bridge_flow_reset", "percent": round(float(value) * 100.0)}
+    if note not in notes:
+        notes.append(note)
+
+
+def notes_as_findings(notes: Sequence[Mapping[str, Any]]) -> tuple[Finding, ...]:
+    """Die Hinweise der Kette als Befunde für den Prüfbericht nach dem Öffnen.
+
+    Der Schritt 52 → 53 nimmt eine Wahl zurück, die der Kunde getroffen hat;
+    was er damals wollte, weiß niemand — 90 % lehnte das Feld ab, 1 oder 2 nahm
+    es an. Still entschieden wäre geraten (Regel 21): Der Befund sagt, was galt,
+    was jetzt gilt, und führt zum Feld.
+    """
+    findings: list[Finding] = []
+    for note in notes:
+        if note.get("code") == "project.bridge_flow_reset":
+            findings.append(
+                Finding(
+                    code="project.bridge_flow_reset",
+                    severity="info",
+                    message=_(
+                        "„Fluss bei Brücken“ stand auf {percent} %, ein Fehler von "
+                        "Version 0.6.0. Jetzt gilt wieder der Wert ohne eigene Einstellung.",
+                        percent=int(note.get("percent", 0)),
+                    ),
+                    values={"field": "shell.bridge_flow"},
+                    suggestions=(OPEN_PRINT_SETTINGS,),
+                )
+            )
+    return tuple(findings)
 
 
 def _slipped(value: object) -> bool:
@@ -1712,8 +1757,13 @@ def migrate(
     data: dict[str, Any],
     target: int = FORMAT_VERSION,
     steps: Sequence[Step] = MIGRATIONS,
+    *,
+    notes: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Hebt ein Dokument auf ``target`` — oder sagt, warum das nicht geht."""
+    """Hebt ein Dokument auf ``target`` — oder sagt, warum das nicht geht.
+
+    ``notes`` bekommt, was ein Schritt dem Kunden sagen muss (:data:`NOTES_KEY`).
+    """
     version = int(data.get("format_version", 0))
     if version == target:
         return data
@@ -1741,6 +1791,9 @@ def migrate(
     # Die gespeicherte Version reist durch die Kette mit (``SAVED_FORMAT_KEY``)
     # und wird danach herausgenommen — kein Schritt schreibt sie in die Datei.
     current = {**data, SAVED_FORMAT_KEY: version}
+    # Hinweise schreibt nur die Kette; was eine Datei unter dem Schlüssel
+    # mitbringt, ist kein Satz von Solidon.
+    current.pop(NOTES_KEY, None)
     while version < target:
         step = by_source.get(version)
         if step is None:
@@ -1755,4 +1808,7 @@ def migrate(
         current["format_version"] = step.to_version
         version = step.to_version
     current.pop(SAVED_FORMAT_KEY, None)
+    told = current.pop(NOTES_KEY, [])
+    if notes is not None and isinstance(told, list):
+        notes.extend(note for note in told if isinstance(note, dict))
     return current

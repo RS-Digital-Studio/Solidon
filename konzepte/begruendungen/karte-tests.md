@@ -111,7 +111,10 @@ zeitversetzte Einstiege; `test_widget_lifetime.py` behält sein eigenes Gebiet.
 `test_print_field_units.py` hält Grenzen, Schritt, Vorgabe und die Werte jedes
 mitgelieferten Profils jedes Druckfelds in seiner Anzeigeeinheit, den Weg eines
 Prozentwerts als Anteil in die Datei für Orca und Prusa und den Formatschritt
-52 → 53 (FD-197); `test_bridge_flow_dialog.py` dasselbe am Druckdialog.
+52 → 53 samt Hinweis beim Öffnen (FD-197); `test_bridge_flow_dialog.py` dasselbe am
+Druckdialog und im Prüfbericht. `test_vendor_field_values.py` hält die Feldgrenzen gegen die
+Herstellerwerte aus `data/vendor_print_values.json` und zeigt sie am gebauten Feld
+ungekürzt (FD-203).
 
 `test_boolean_stage3.py` bindet den Jitter der dritten Stufe an die Zugabe,
 axial und schräg; `test_boolean_empty_result.py` prüft leere Ergebnisse und

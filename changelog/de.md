@@ -104,8 +104,9 @@ Nutzen da und sonst nichts.
 ### Drucken und Übergabe an den Slicer
 
 - Ist als Slicer eine Datei gewählt, die kein Programm ist, sagt Solidon das sofort und bietet einen anderen Slicer an. In Version 0.6.0 wartete das Slicen, bis jemand eine Windows-Meldung schloss.
-- Das Feld *Fluss bei Brücken* zeigt 100 % und nimmt 50 bis 150 % an. In Version 0.6.0 stand dort 2 %, und wer es änderte, schickte 1 oder 2 % Brückenfluss an den Slicer.
-- Ein Projekt aus Version 0.6.0 mit 1 oder 2 % Brückenfluss öffnet mit dem Wert aus dem Herstellerprofil.
+- Das Feld *Fluss bei Brücken* zeigt den Wert in Prozent und nimmt 50 bis 200 % an. In Version 0.6.0 stand dort 2 %, und wer es änderte, schickte 1 oder 2 % Brückenfluss an den Slicer.
+- Ein Projekt aus Version 0.6.0 mit 1 oder 2 % Brückenfluss öffnet mit dem Wert ohne eigene Einstellung, und der Prüfbericht sagt es.
+- Die Druckeinstellungen zeigen Werte aus dem Profil des Slicers ungekürzt, etwa 40 000 mm/s² Beschleunigung. In Version 0.6.0 stand dort die Obergrenze des Felds.
 
 ### Bearbeiten und Zeichnen
 

@@ -8747,6 +8747,7 @@
   "— im Bild wählen —": "— escolher na vista —",
   "— keines —": "— nenhum —",
   "„Automatisch teilen“ legt keine Naht durch diese Stelle. Die Sperre wird mit dem Projekt gespeichert; das Bild zeigt sie schraffiert.": "«Dividir automaticamente» não coloca nenhuma junta por esta zona. A proteção é guardada com o projeto; a vista mostra-a tracejada.",
+  "„Fluss bei Brücken“ stand auf {percent} %, ein Fehler von Version 0.6.0. Jetzt gilt wieder der Wert ohne eigene Einstellung.": "«Fluxo em pontes» estava em {percent} %, um erro da versão 0.6.0. Volta a aplicar-se o valor sem definição própria.",
   "„author“ ist kein Text.": "«author» não é texto.",
   "„author“ ist {length} Zeichen lang, erlaubt sind {limit}.": "«author» tem {length} caracteres; são permitidos {limit}.",
   "„document“ ist kein Objekt.": "«document» não é um objeto.",
