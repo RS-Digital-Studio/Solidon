@@ -20,6 +20,8 @@ from typing import Any, Final
 
 #: Die Klasse, als die Qt eine Kurzhilfe zeigt (``QToolTip``).
 TIP_CLASS: Final = "QTipLabel"
+#: Grund in ``unmeasured``: grau, aber ohne Kurzhilfe — beim Überfahren zeigt Qt nichts.
+NO_VISIBLE_REASON: Final = "kein sichtbarer Sperrgrund: grau ohne Kurzhilfe"
 
 
 def _shown_tip() -> Any | None:
@@ -36,13 +38,14 @@ def _shown_tip() -> Any | None:
 def reason_picture(widget: Any, path: Path) -> bool:
     """Zeigt die Kurzhilfe eines grauen Elements wie beim Überfahren und speichert ihr Bild.
 
-    Der Satz ist der, den der Kunde liest: die Kurzhilfe, sonst die zugängliche
-    Beschreibung (``function_surface.grey_reason``). Ohne Satz, an einem
+    Der Satz ist der, den der Kunde beim Überfahren liest: nur die Kurzhilfe.
+    Die zugängliche Beschreibung zeigt Qt dort nicht; ein Bild mit ihr zeigte
+    einen Grund, den der Kunde nicht sieht (RC-7). Ohne Kurzhilfe, an einem
     offenen Element oder wenn Qt keine Kurzhilfe zeigt: kein Bild, ``False``.
     """
     from PySide6.QtWidgets import QApplication, QToolTip
 
-    text = str(widget.toolTip() or widget.accessibleDescription() or "")
+    text = str(widget.toolTip() or "")
     if widget.isEnabled() or not text.strip() or not widget.isVisible():
         return False
     QToolTip.showText(widget.mapToGlobal(widget.rect().center()), text, widget)
@@ -60,17 +63,27 @@ def reason_picture(widget: Any, path: Path) -> bool:
 
 
 def reason_pictures(
-    find: Callable[[str], Any | None], targets: Sequence[str], folder: Path, out: Path
+    find: Callable[[str], Any | None],
+    targets: Sequence[str],
+    folder: Path,
+    out: Path,
+    *,
+    silent: Callable[[str], None] = lambda target: None,
 ) -> list[str]:
     """Je graues Ziel der Zeile das Bild seines Sperrgrunds, relativ zu ``out``.
 
     ``find`` liest das Widget hinter einem Wortschatznamen (``FunctionFlow.widget``).
-    Die Bilder heißen ``04-fehlfall-grund-<n>.png`` in der Folge der Ziele.
+    Die Bilder heißen ``04-fehlfall-grund-<n>.png`` in der Folge der Ziele. Ein
+    sichtbares graues Ziel ohne Kurzhilfe bekommt kein Bild; ``silent`` nennt es.
     """
     images = []
     for number, target in enumerate(targets, 1):
         widget = find(target)
         path = folder / f"04-fehlfall-grund-{number}.png"
-        if widget is not None and reason_picture(widget, path):
+        if widget is None:
+            continue
+        if reason_picture(widget, path):
             images.append(path.relative_to(out).as_posix())
+        elif widget.isVisible() and not widget.isEnabled() and not str(widget.toolTip() or ""):
+            silent(target)
     return images

@@ -1475,9 +1475,18 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
             # Automat den Dialog bereits mit Escape geschlossen.
             self.picture("04-fehlfall")
             # Der Sperrgrund eines grauen Ziels steht nur in seiner Kurzhilfe:
-            # als eigenes Bild, wie der Kunde ihn beim Überfahren sieht (FD-149).
+            # als eigenes Bild, wie der Kunde ihn beim Überfahren sieht (FD-149);
+            # grau ohne Kurzhilfe sagt das Protokoll (RC-7).
             self.data["images"].extend(
-                tooltips.reason_pictures(self.widget, targets, self.folder, self.out)
+                tooltips.reason_pictures(
+                    self.widget,
+                    targets,
+                    self.folder,
+                    self.out,
+                    silent=lambda target: unmeasured(
+                        self.data, f"sperrgrund:{target}", tooltips.NO_VISIBLE_REASON
+                    ),
+                )
             )
 
         computed = {"seen": False}

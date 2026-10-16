@@ -265,3 +265,40 @@ def test_the_reason_of_a_grey_button_becomes_its_own_picture(qt_app: Any, tmp_pa
         assert function_tooltips._shown_tip() is None, "die Kurzhilfe ist danach wieder weg"
     finally:
         root.close()
+
+
+def test_a_grey_button_without_a_tip_has_no_picture_of_one(qt_app: Any, tmp_path: Any) -> None:
+    """RC-7: Die zugängliche Beschreibung zeigt Qt beim Überfahren nicht.
+
+    Das Bild zeigte sie trotzdem als Kurzhilfe; Stufe B sähe einen Grund, den der
+    Kunde nicht sieht. Ohne Kurzhilfe kein Bild, und ``silent`` nennt das Ziel.
+    """
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from tools import function_tooltips
+
+    root = QWidget()
+    layout = QVBoxLayout(root)
+    described = QPushButton("Schlüssel prüfen", root)
+    described.setAccessibleDescription(
+        "Der aktive Lizenzschlüssel kann nicht überschrieben werden."
+    )
+    described.setEnabled(False)
+    layout.addWidget(described)
+    root.show()
+    qt_app.processEvents()
+    folder = tmp_path / "cases" / "003"
+    folder.mkdir(parents=True)
+    silent: list[str] = []
+    try:
+        images = function_tooltips.reason_pictures(
+            {"grau": described}.get, ["grau"], folder, tmp_path
+        )
+        assert images == []
+        assert not (folder / "04-fehlfall-grund-1.png").exists()
+        function_tooltips.reason_pictures(
+            {"grau": described}.get, ["grau"], folder, tmp_path, silent=silent.append
+        )
+        assert silent == ["grau"]
+    finally:
+        root.close()

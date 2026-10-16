@@ -151,7 +151,7 @@ def test_the_reason_of_a_grey_target_is_pictured_in_the_fault_phase(monkeypatch,
     flow.session = SimpleNamespace(last_result=None)
     flow.window = object()
     flow.folder, flow.out = folder, tmp_path
-    flow.data = {"messages": None, "images": []}
+    flow.data = {"messages": None, "images": [], "unmeasured": {}}
     flow.fault_scene = lambda key: True
     flow.path_steps = list
     flow.input_steps = lambda inputs: []
@@ -166,8 +166,9 @@ def test_the_reason_of_a_grey_target_is_pictured_in_the_fault_phase(monkeypatch,
     monkeypatch.setattr(function_capture, "visible_texts", lambda root: [])
     asked = []
 
-    def reason_pictures(find, targets, where, out):
+    def reason_pictures(find, targets, where, out, *, silent):
         asked.append(([find(name) for name in targets], where, out))
+        silent(targets[0])
         return ["cases/002/04-fehlfall-grund-1.png"]
 
     monkeypatch.setattr(function_tooltips, "reason_pictures", reason_pictures)
@@ -185,3 +186,7 @@ def test_the_reason_of_a_grey_target_is_pictured_in_the_fault_phase(monkeypatch,
         "cases/002/04-fehlfall.png",
         "cases/002/04-fehlfall-grund-1.png",
     ]
+    # Grau ohne Kurzhilfe sagt das Protokoll, statt ein Bild zu zeigen (RC-7).
+    assert flow.data["unmeasured"] == {
+        "sperrgrund:finding.action:place_on_bed": function_tooltips.NO_VISIBLE_REASON
+    }
