@@ -26,7 +26,8 @@ import math
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from app.core.brep.kernel import DEFLECTION, Solid, copy_shape, require
+from app.core.brep import kernel
+from app.core.brep.kernel import DEFLECTION, Solid, require
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
 from app.core.sketch.traced import on_bisector
 from app.core.types import CancelToken, Point2, Vec3
@@ -85,7 +86,7 @@ def plane_section(
         raise ValueError("the drawing axes of a section plane must not be parallel")
     unit = (normal[0] / length, normal[1] / length, normal[2] / length)
     plane = gp_Pln(gp_Ax3(gp_Pnt(*origin), gp_Dir(*unit), gp_Dir(*x_axis)))
-    working, _faces, _edges = copy_shape(solid.shape)
+    working, _faces, _edges = kernel.copy_shape(solid.shape)
     section = BRepAlgoAPI_Section(working, plane, False)
     section.Approximation(True)
     section.Build()
@@ -203,7 +204,7 @@ def horizontal_regions(
         float(bounds.minimum[1]) - margin,
         float(bounds.maximum[1]) + margin,
     ).Face()
-    working, _faces, _edges = copy_shape(solid.shape)
+    working, _faces, _edges = kernel.copy_shape(solid.shape)
     common = BRepAlgoAPI_Common(working, sheet)
     if cancelled is not None:
         cancelled.raise_if_cancelled()

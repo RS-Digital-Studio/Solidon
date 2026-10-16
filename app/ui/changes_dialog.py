@@ -31,7 +31,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_NAME, APP_VERSION, website_page_url
+from app import branding
+from app.branding import APP_NAME, website_page_url
 from app.core import changes
 from app.core.markup import inline
 from app.i18n import get_language, native_text, tr
@@ -86,7 +87,7 @@ def lead_html(points: tuple[str, ...]) -> str:
 
 def history_html(
     entries: tuple[changes.Entry, ...],
-    current: str = APP_VERSION,
+    current: str = branding.APP_VERSION,
     *,
     lead_apart: bool = False,
 ) -> str:
@@ -173,7 +174,7 @@ class ChangesDialog(QDialog):
         self.headline.setWordWrap(True)
         self.headline.setText(
             tr("Was sich in {app} geändert hat. Sie benutzen {version}.").format(
-                app=APP_NAME, version=APP_VERSION
+                app=APP_NAME, version=branding.APP_VERSION
             )
         )
 
@@ -182,12 +183,16 @@ class ChangesDialog(QDialog):
         self.version_choice.setAccessibleName(tr("Version"))
         for entry in self.entries:
             label = entry.version
-            if entry.version == APP_VERSION:
+            if entry.version == branding.APP_VERSION:
                 label += " — " + tr("diese Version")
             self.version_choice.addItem(label, entry.version)
 
         current_index = next(
-            (index for index, entry in enumerate(self.entries) if entry.version == APP_VERSION),
+            (
+                index
+                for index, entry in enumerate(self.entries)
+                if entry.version == branding.APP_VERSION
+            ),
             0,
         )
         if self.entries:

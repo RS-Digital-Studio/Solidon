@@ -24,11 +24,6 @@ import trimesh
 from app.core.bootstrap import load_operations
 from app.core.errors import OperationCancelled
 from app.core.geom import boolean as boolean_module
-from app.core.geom import hollow as hollow_module
-from app.core.geom import label_ops as label_module
-from app.core.geom import lid as lid_module
-from app.core.geom import pins as pins_module
-from app.core.geom import prepare as prepare_module
 from app.core.geom.hollow import erosion_steps, hollow
 from app.core.geom.lattice import _cavity_mesh
 from app.core.geom.measure import ray_distances
@@ -713,10 +708,10 @@ def test_the_quality_setting_reaches_the_boolean_chain(
     # Sonst greift der Ersatz an einem Namen, den niemand liest — und der Test
     # wäre grün, ohne etwas zu messen.
     monkeypatch.setattr(boolean_module, "boolean", recording)
-    monkeypatch.setattr(hollow_module, "boolean", recording)
-    monkeypatch.setattr(lid_module, "boolean", recording)
-    monkeypatch.setattr(pins_module, "boolean", recording)
-    monkeypatch.setattr(prepare_module, "boolean", recording)
+    monkeypatch.setattr(boolean_module, "boolean", recording)
+    monkeypatch.setattr(boolean_module, "boolean", recording)
+    monkeypatch.setattr(boolean_module, "boolean", recording)
+    monkeypatch.setattr(boolean_module, "boolean", recording)
 
     spec = REGISTRY.get(op)
     spec.fn(
@@ -784,10 +779,10 @@ def test_the_cancel_token_reaches_the_boolean_chain(
     # (``lattice`` und ``texture_ops`` importieren sie im Aufruf, die übrigen
     # als Kopfkopie).
     monkeypatch.setattr(boolean_module, "boolean", recording)
-    monkeypatch.setattr(hollow_module, "boolean", recording)
-    monkeypatch.setattr(lid_module, "boolean", recording)
-    monkeypatch.setattr(pins_module, "boolean", recording)
-    monkeypatch.setattr(label_module, "boolean", recording)
+    monkeypatch.setattr(boolean_module, "boolean", recording)
+    monkeypatch.setattr(boolean_module, "boolean", recording)
+    monkeypatch.setattr(boolean_module, "boolean", recording)
+    monkeypatch.setattr(boolean_module, "boolean", recording)
 
     spec = REGISTRY.get(op)
     spec.fn(

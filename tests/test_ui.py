@@ -10,6 +10,7 @@ den fachlichen ``test_ui_*.py``-Modulen; ihre Fenster-Fixtures in ``ui_helpers``
 from __future__ import annotations
 
 import dataclasses
+import importlib
 import itertools
 import logging
 import math
@@ -37,7 +38,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import errors
-from app.core.export import handover
+from app.core.export import handover, writer
 from app.core.geom.measure import Measurement
 from app.core.registry import REGISTRY, catalogue_operations
 from app.core.scene import OperationDraft
@@ -52,6 +53,7 @@ from app.core.types import (
     SlotOverride,
 )
 from app.i18n import tr
+from app.ui import dialogs as ui_dialogs
 from app.ui import main_window as main_window_module
 from app.ui.leash import Worker
 from app.ui.main_window import MainWindow
@@ -793,7 +795,7 @@ def test_a_delayed_image_source_keeps_its_project_and_target(
     calls: list[dict[str, Any]] = []
     errors: list[Exception] = []
     monkeypatch.setattr(window, "run_operation", lambda spec, **kwargs: calls.append(kwargs))
-    monkeypatch.setattr(main_window_module, "show_error", lambda error, *args: errors.append(error))
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *args: errors.append(error))
     window.object_tree.select_object("obj_1")
     window._drop_image(filename)
     worker = window._source_worker
@@ -1069,7 +1071,7 @@ def test_matching_question_context_reaches_the_worker_request_and_is_cleared(
         assert kwargs["ask"]("Welche Einheit?", ["mm"]) == "mm"
         return preview
 
-    monkeypatch.setattr(module, "evaluate", evaluate)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", evaluate)
     session.askRequested.connect(answer, Qt.ConnectionType.DirectConnection)
     worker = module._EvaluationWorker(session)
     session._worker = worker
@@ -1704,9 +1706,7 @@ def test_cancelled_or_stale_organizer_editor_cannot_change_the_document(
     from app.ui.organizer_dialog import OrganizerDialog
 
     errors_seen = []
-    monkeypatch.setattr(
-        main_window_module, "show_error", lambda error, *a, **k: errors_seen.append(error)
-    )
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *a, **k: errors_seen.append(error))
     session = window.session
     assert session.apply(
         "Organizer", [OperationDraft(op="create_organizer", params=OrganizerParams().as_dict())]
@@ -3027,12 +3027,12 @@ def test_declined_and_failed_exports_do_not_count(
     # Das Schreiben scheitert.
     monkeypatch.setattr(main_window_module, "check_before_export", lambda *a, **k: [])
     shown: list[object] = []
-    monkeypatch.setattr(main_window_module, "show_error", lambda *args: shown.append(args))
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda *args: shown.append(args))
 
     def refuse(*args: Any, **kwargs: Any) -> Any:
         raise errors.FileWriteError(str(tmp_path / "gescheitert.stl"), detail="gesperrt")
 
-    monkeypatch.setattr(main_window_module, "write_plan", refuse)
+    monkeypatch.setattr(writer, "write_plan", refuse)
     _export_once(window, monkeypatch, tmp_path / "gescheitert.stl")
     assert shown, "der Fehler kam an"
     assert feedback.read().deliveries == 0
@@ -7299,7 +7299,7 @@ def test_a_halted_chain_takes_no_new_step_and_names_the_way_on(
     # — als Dialog beim Kunden, nicht als Zeile auf stderr.
     refusals: list[errors.AppError] = []
     monkeypatch.setattr(
-        main_window_module, "show_error", lambda error, *args, **kwargs: refusals.append(error)
+        ui_dialogs, "show_error", lambda error, *args, **kwargs: refusals.append(error)
     )
     steps_before = len(document.ops)
     accepted = window.session.apply(
@@ -10730,10 +10730,10 @@ def test_an_objectless_direct_error_has_no_repair_button(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Auch der modale Fehlerweg verspricht keine Reparatur ohne Ziel."""
-    from app.ui import main_window
+    from app.ui import dialogs as ui_dialogs
 
     shown: list[errors.AppError] = []
-    monkeypatch.setattr(main_window, "show_error", lambda error, _parent: shown.append(error))
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, _parent: shown.append(error))
 
     window._on_error(errors.NotManifoldError(open_edges=3))
 
@@ -16338,16 +16338,16 @@ def test_cancelling_frees_the_window_while_the_drive_still_reads(
     mit einem um 8 s verzögerten Lesen: frei nach 6,1 s. Gelesen wird seither
     in einem Daemon-Faden, und der Arbeiter endet auf den Klick.
     """
-    from app.ui import session as session_module
+    from app.core.ingest import loader
 
     release = threading.Event()
-    real = session_module.read_local_payload
+    real = loader.read_local_payload
 
     def hanging(path: Path) -> bytes:
         release.wait(30)
         return real(path)
 
-    monkeypatch.setattr(session_module, "read_local_payload", hanging)
+    monkeypatch.setattr(loader, "read_local_payload", hanging)
     finished: list[bool] = []
     window.session.importFinished.connect(finished.append)
     try:
@@ -16507,7 +16507,7 @@ def test_a_recent_file_that_vanished_leaves_the_list_after_the_attempt(
     „Zuletzt geöffnet“ prüft beim Aufbau; wer danach verschob und klickte, bekam
     den Hinweis — und denselben toten Eintrag wieder angeboten (Durchsicht 0.5.1).
     """
-    monkeypatch.setattr(main_window_module, "show_error", lambda *args, **kwargs: None)
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda *args, **kwargs: None)
     moved = tmp_path / "verschoben.stl"
     moved.write_bytes((MESHES / "cube_clean.stl").read_bytes())
     window.settings.recent = [str(moved)]
@@ -16534,9 +16534,7 @@ def test_a_file_without_a_model_leaves_no_step_and_no_recent_entry(
     einem Dialog abgewiesen, und die kaputte stand in „Zuletzt geöffnet“.
     """
     shown: list[Any] = []
-    monkeypatch.setattr(
-        main_window_module, "show_error", lambda error, *a, **k: shown.append(error)
-    )
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *a, **k: shown.append(error))
     broken = tmp_path / "kaputt.stl"
     broken.write_bytes(b"solid x\n facet normal 0 0 1\n  outer loop\n   vertex 0 0 nope\n" * 3)
     window.open_path(broken)
@@ -16662,7 +16660,7 @@ def test_a_broken_file_takes_the_wait_cursor_with_it(
     # was eine ersetzte Methode geworfen hätte.
     monkeypatch.setattr("app.ui.session.import_plan", refuse)
     monkeypatch.setattr(
-        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+        "app.ui.dialogs.show_error", lambda error, *args, **kwargs: shown.append(error)
     )
 
     window.open_path(MESHES / "cube_clean.stl")
@@ -16686,7 +16684,7 @@ def test_a_rejected_file_restores_status_before_showing_the_error(
     shown: list[tuple[Any, Any, str]] = []
     monkeypatch.setattr(window.session.history, "apply", refusing)
     monkeypatch.setattr(
-        "app.ui.main_window.show_error",
+        "app.ui.dialogs.show_error",
         lambda error, *_args, **_kwargs: shown.append(
             (error, QApplication.overrideCursor(), window.status_message.text())
         ),
@@ -17044,7 +17042,7 @@ def test_a_dropped_model_page_says_where_the_file_is(
 ) -> None:
     """Der Satz statt des Verbotszeichens — und ohne Anfrage ins Netz."""
     shown: list[errors.AppError] = []
-    monkeypatch.setattr("app.ui.main_window.show_error", lambda error, _parent: shown.append(error))
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda error, _parent: shown.append(error))
     window._show_start_screen(on_start)
     project = window.session.project
     url = "https://www.printables.com/model/3161-3d-benchy"
@@ -17208,7 +17206,7 @@ def test_a_bad_address_says_so_before_a_worker_starts(
 ) -> None:
     """§32: Eine ``file:``-Adresse wandert gar nicht erst in einen Thread."""
     seen: list[object] = []
-    monkeypatch.setattr("app.ui.main_window.show_error", lambda error, _parent: seen.append(error))
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda error, _parent: seen.append(error))
 
     window.download_model("file:///C:/Windows/win.ini")
 
@@ -17261,7 +17259,7 @@ def test_a_rejected_download_never_claims_success(
     # echte Weg läuft und die Abweisung über ``importFailed`` ankommt.
     monkeypatch.setattr("app.ui.session.import_plan", refusing)
     monkeypatch.setattr(
-        "app.ui.main_window.show_error", lambda error, *_args, **_kwargs: shown.append(error)
+        "app.ui.dialogs.show_error", lambda error, *_args, **_kwargs: shown.append(error)
     )
 
     window._downloaded(
@@ -17412,9 +17410,10 @@ def test_a_finished_blink_leaves_no_animation_behind(
     from PySide6.QtCore import QVariantAnimation
     from PySide6.QtWidgets import QTabWidget, QWidget
 
+    from app.ui import motion as ui_motion
     from app.ui import tab_signal
 
-    monkeypatch.setattr(tab_signal, "animations_enabled", lambda: True)
+    monkeypatch.setattr(ui_motion, "animations_enabled", lambda: True)
     monkeypatch.setattr(tab_signal, "CYCLE_MS", 5)
     monkeypatch.setattr(tab_signal, "CYCLES", 1)
     tabs = QTabWidget()
@@ -23209,9 +23208,7 @@ def test_a_failed_import_hands_no_name_to_the_next_one(monkeypatch: pytest.Monke
     shown: list[Any] = []
     remembered: list[Any] = []
     said: list[str] = []
-    monkeypatch.setattr(
-        main_window_module, "show_error", lambda error, *_a, **_k: shown.append(error)
-    )
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *_a, **_k: shown.append(error))
     monkeypatch.setattr(
         main_window_module,
         "QApplication",
@@ -23932,7 +23929,7 @@ def test_a_refused_derived_change_shows_the_valid_number_again(
     from app.core.scene import OperationDraft
 
     shown: list[errors.AppError] = []
-    monkeypatch.setattr(main_window_module, "show_error", lambda error, *_args: shown.append(error))
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *_args: shown.append(error))
     window.show()
     session = window.session
     assert session.add_parameter(Parameter(name="breite", value=100.0, unit="mm"))
@@ -23959,7 +23956,7 @@ def test_remote_parameters_name_the_limit_and_keep_title_and_bounds(
     eingestellt.“, und ``add_parameter`` verlor ``minimum``, ``maximum`` und
     ``title``, obwohl das Werkzeugschema sie anbietet.
     """
-    monkeypatch.setattr(main_window_module, "show_error", lambda *_args: None)
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda *_args: None)
     high = _bound_width_project(window.session)
 
     said = window._remote_parameter("set_parameter", {"name": "breite", "value": high + 4000.0})
@@ -24583,17 +24580,17 @@ def test_batch_import_discards_late_reads(session, qt_app, monkeypatch, interrup
     """Abbruch und Projektwechsel lassen einen verspäteten Sammelauftrag verfallen."""
     import threading
 
-    from app.ui import session as session_module
+    from app.core.ingest import loader
 
     entered, released = threading.Event(), threading.Event()
-    original = session_module.read_local_payload
+    original = loader.read_local_payload
 
     def delayed(path):
         entered.set()
         released.wait(5)
         return original(path)
 
-    monkeypatch.setattr(session_module, "read_local_payload", delayed)
+    monkeypatch.setattr(loader, "read_local_payload", delayed)
     session.import_models_async([MESHES / "cube_clean.stl", MESHES / "plate_holes.stl"])
     wait_until(qt_app, entered.is_set)
     if interruption == "cancel":
@@ -24629,11 +24626,11 @@ def test_batch_import_cancelled_during_evaluation_withdraws_the_whole_transactio
     """Abbruch nach dem Lesen räumt Schritte und Quellen; der Folgelauf bleibt möglich."""
     import threading
 
+    from app.core import scene as core_scene
     from app.core.errors import OperationCancelled
-    from app.ui import session as session_module
 
     entered, released = threading.Event(), threading.Event()
-    original = session_module.evaluate
+    original = core_scene.evaluate
     first = True
 
     def delayed(*args, **kwargs):
@@ -24645,7 +24642,7 @@ def test_batch_import_cancelled_during_evaluation_withdraws_the_whole_transactio
             raise OperationCancelled()
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(session_module, "evaluate", delayed)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", delayed)
     session.import_models_async([MESHES / "cube_clean.stl", MESHES / "plate_holes.stl"])
     wait_until(qt_app, entered.is_set)
     assert session.project.document.ops
@@ -24663,13 +24660,12 @@ def test_batch_import_cancelled_during_evaluation_withdraws_the_whole_transactio
 
 def test_batch_import_groups_recognition_permission_with_total_estimate(session, monkeypatch):
     """Zwei große Dateien stellen eine Frage mit gemeinsamer Zeitschätzung."""
-    import importlib
 
+    from app.core.perceive import local as perceive_local
     from app.ui import session as session_module
 
-    evaluation = importlib.import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
-    monkeypatch.setattr(session_module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     monkeypatch.setattr(session_module, "recognition_minutes", lambda *_a, **_kw: (4, 9))
     monkeypatch.setattr(session_module, "recognition_gigabytes", lambda *_: 3)
     asked = []
@@ -24765,7 +24761,7 @@ def test_model_page_clipboard_survives_url_dialog(window, monkeypatch, accepted)
         return url if accepted else None
 
     monkeypatch.setattr("app.ui.main_window.ask_text", answer)
-    monkeypatch.setattr("app.ui.main_window.show_error", lambda error, parent: shown.append(error))
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda error, parent: shown.append(error))
     try:
         window.action_import_url()
     finally:
@@ -24789,7 +24785,7 @@ def test_download_late_reply_cannot_change_a_new_context(
     shown = []
     monkeypatch.setattr(window._leash, "start", started.append)
     monkeypatch.setattr(window.session, "import_payload_async", lambda *a, **kw: imported.append(a))
-    monkeypatch.setattr("app.ui.main_window.show_error", lambda error, parent: shown.append(error))
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda error, parent: shown.append(error))
     window.download_model("https://example.invalid/first.stl")
     old = started[-1]
     request.addfinalizer(lambda: _release_unstarted_worker(window, "_download_worker", old))
@@ -24850,7 +24846,7 @@ def test_cancelled_archive_choice_keeps_the_current_project(window, qt_app, monk
         raise QuestionDeclined()
 
     monkeypatch.setattr(window.session, "ask_from_worker", cancel)
-    monkeypatch.setattr("app.ui.main_window.show_error", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda *args, **kwargs: None)
     window._downloaded(
         FetchedModel(
             "models.zip", buffer.getvalue(), "https://example.invalid/models.zip", "2026-10-03"

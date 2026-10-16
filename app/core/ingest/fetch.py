@@ -58,8 +58,8 @@ from app.core.http import (
     validate_download_redirect,
     validate_http_url,
 )
+from app.core.ingest import loader
 from app.core.ingest.archive import IMPORT_SUFFIXES
-from app.core.ingest.loader import MAX_FILE_BYTES
 from app.core.log import get_logger, redact_external, redact_url
 from app.core.types import ProgressFn
 from app.i18n import _
@@ -315,7 +315,7 @@ def fetch_model(
             field="file",
             detail=_("Die Datei ist größer, als diese Anwendung verarbeitet."),
             constraint="file_too_large",
-            values={"size": problem.received, "limit": MAX_FILE_BYTES},
+            values={"size": problem.received, "limit": loader.MAX_FILE_BYTES},
         ) from problem
     except ResponseDeadlineError as problem:
         raise ExternalToolError(
@@ -356,7 +356,7 @@ def _read_limited(
     seen = 0
     for chunk in iter_limited(
         answer,  # type: ignore[arg-type]
-        limit=MAX_FILE_BYTES,
+        limit=loader.MAX_FILE_BYTES,
         deadline=deadline,
         require_timeout=True,
         chunk_size=CHUNK_BYTES,

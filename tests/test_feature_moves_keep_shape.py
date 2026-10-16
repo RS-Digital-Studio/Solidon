@@ -29,6 +29,7 @@ import pytest
 
 from app.core.bootstrap import load_operations
 from app.core.errors import CHANGE_FEATURE, ValidationError
+from app.core.geom import mesh as geom_mesh
 from app.core.geom import prepare_ops
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.plan import import_plan
@@ -1640,7 +1641,7 @@ def _cut_with_twins(monkeypatch: pytest.MonkeyPatch, closed: list[bool]) -> list
 
     answers = iter(closed)
     monkeypatch.setattr(
-        prepare_ops, "as_mesh_data", lambda _body: SimpleNamespace(is_watertight=next(answers))
+        geom_mesh, "as_mesh_data", lambda _body: SimpleNamespace(is_watertight=next(answers))
     )
     plate = edit.box(20.0, 20.0, 5.0)
     overlaps: list[float] = []

@@ -579,6 +579,7 @@ def test_a_cancelled_planar_publication_leaves_no_partial_detection_cache(monkey
 
     from app.core.errors import OperationCancelled
     from app.core.perceive import features
+    from app.core.perceive import surfaces as perceive_surfaces
     from app.core.scene.cancel import CancelSignal
 
     mesh = MeshData.of(trimesh.creation.box(extents=(20.0, 30.0, 40.0)))
@@ -588,7 +589,7 @@ def test_a_cancelled_planar_publication_leaves_no_partial_detection_cache(monkey
     monkeypatch.setattr(features, "_FREEFORM_DROPPED", {})
     signal = CancelSignal()
     calls = []
-    original = features.planar_patch
+    original = perceive_surfaces.planar_patch
 
     def stopped(*args, **kwargs):
         assert kwargs["check_cancelled"] == signal.raise_if_cancelled
@@ -598,7 +599,7 @@ def test_a_cancelled_planar_publication_leaves_no_partial_detection_cache(monkey
         return result
 
     with monkeypatch.context() as active:
-        active.setattr(features, "planar_patch", stopped)
+        active.setattr(perceive_surfaces, "planar_patch", stopped)
         with pytest.raises(OperationCancelled):
             features.detect(mesh, check_cancelled=signal.raise_if_cancelled)
     assert len(calls) == 1

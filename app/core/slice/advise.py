@@ -36,7 +36,7 @@ from app.core.errors import (
 )
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
-from app.core.slice import fine_layers
+from app.core.slice import analysis, fine_layers
 from app.core.slice.analysis import (
     BRIDGE_FROM,
     OVERHANG_LAYER_MINIMUM,
@@ -55,8 +55,6 @@ from app.core.slice.analysis import (
     kept_overhang,
     largest_overhang_patch,
     largest_sloped_patch,
-    ledge_space,
-    ledges,
     model_support,
     narrow_share,
     narrowest_measured,
@@ -1010,7 +1008,7 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # stellte 831 m Baum außen am Turm hoch. Gefragt vor der Kanalfrage, die
     # dieselbe Antwort aus dem Merker liest. Beide sind abbrechbar; die
     # Kanalfrage kostete am Drachen (45°) 446 s CPU ohne Abbruch.
-    edges = ledges(result, cancelled=cancelled) if asked else frozenset()
+    edges = analysis.ledges(result, cancelled=cancelled) if asked else frozenset()
     # **Und kein Bogenstreifen, der sich selbst trägt** (RM-585,
     # :func:`vaults`): Am Eiffelturm verlangten die Bögen unten als Feld von
     # 360 mm² Stützen. Ihre Streifen zählen nicht zur Fläche. Eine Pult-,
@@ -1830,7 +1828,7 @@ def _from_geometry(
     if (
         needs_support
         and not settings.support.spare_ledges
-        and ledge_space(result, settings.layers.line_width)
+        and analysis.ledge_space(result, settings.layers.line_width)
     ):
         advice.append(
             _advice(
@@ -3448,7 +3446,7 @@ def _from_spans(result: SliceResult, cancelled: CancelToken | None = None) -> li
         for index in spanning
         for number in range(len(result.layers[index].overhangs))
     )
-    edges = ledges(result, asked, cancelled=cancelled)
+    edges = analysis.ledges(result, asked, cancelled=cancelled)
     widths = {index: span_beside(result, index, edges, cancelled=cancelled) for index in spanning}
     spanning = [index for index in spanning if widths[index] > SPAN_INTERESTING]
     if spanning:

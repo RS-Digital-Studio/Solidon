@@ -1883,13 +1883,12 @@ def test_every_operation_completes_with_its_declared_result(
     project = new_project("centauri-carbon-2", "petg")
     inputs = _inputs(case, kind, project, profile)
     if case.name == "detect_region" and kind == "mesh":
-        import importlib
-
         # Die globale Erkennung bleibt wie beim großen Kundenmodell aus.
         # Nur die geprüfte lokale Op darf das bisher unbekannte Loch finden.
         # Eine kleine Eingabe prüft denselben Zweig ohne einen Leistungslauf.
-        evaluation = importlib.import_module("app.core.scene.evaluate")
-        monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
+        from app.core.perceive import local
+
+        monkeypatch.setattr(local, "FEATURE_LIMIT_TRIANGLES", 1)
     registry = Registry()
     for spec in REGISTRY.all():
         registry.register(spec)

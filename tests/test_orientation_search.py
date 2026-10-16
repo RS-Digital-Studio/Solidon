@@ -201,6 +201,7 @@ def test_the_search_slices_each_direction_only_once(monkeypatch: pytest.MonkeyPa
     Eine zweite Schichtanalyse derselben Lage kann das Ergebnis nicht ändern;
     sie machte die Suche nur langsamer.
     """
+    from app.core.geom import orient as geom_orient
     from app.core.slice import orientation
 
     seen = []
@@ -217,8 +218,8 @@ def test_the_search_slices_each_direction_only_once(monkeypatch: pytest.MonkeyPa
         return orientation.Candidate(direction, float(len(seen)), 1.0, 1.0)
 
     monkeypatch.setattr(
-        orientation,
-        "face_candidates",
+        geom_orient,
+        "candidates",
         lambda _mesh, **_kwargs: [(0.0, 0.0, -1.0), (1.0, 0.0, 0.0), (1.0, 0.0, 0.0)],
     )
     monkeypatch.setattr(orientation, "judge", record)
@@ -454,6 +455,7 @@ def test_the_face_shortlist_is_decided_by_real_support(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Die Flächenheuristik darf vorauswählen, aber nicht das Ergebnis spielen."""
+    from app.core.geom import orient as geom_orient
     from app.core.slice import orientation
 
     directions = [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, -1.0)]
@@ -463,7 +465,7 @@ def test_the_face_shortlist_is_decided_by_real_support(
     ]
     support = {directions[0]: 1000.0, directions[1]: 10.0, directions[2]: 0.0}
     seen: list[tuple[float, float, float]] = []
-    monkeypatch.setattr(orientation, "ranked_orientations", lambda *_args, **_kwargs: coarse)
+    monkeypatch.setattr(geom_orient, "ranked_orientations", lambda *_args, **_kwargs: coarse)
 
     def record(
         _mesh: MeshData,
@@ -609,7 +611,7 @@ def test_the_face_shortlist_can_be_cancelled(profile: Profile) -> None:
 def test_the_face_shortlist_stops_before_the_real_slice(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from app.core.slice import orientation
+    from app.core.geom import orient as geom_orient
 
     signal = CancelSignal()
     coarse = [Orientation((0.0, 0.0, -1.0), 1.0, 1.0, 1.0)]
@@ -618,7 +620,7 @@ def test_the_face_shortlist_stops_before_the_real_slice(
         signal.cancel()
         return coarse
 
-    monkeypatch.setattr(orientation, "ranked_orientations", rank_and_cancel)
+    monkeypatch.setattr(geom_orient, "ranked_orientations", rank_and_cancel)
 
     with pytest.raises(OperationCancelled):
         best_face_candidate(corpus("cube_clean.stl"), count=1, profile=profile, cancelled=signal)
@@ -644,6 +646,7 @@ def test_an_already_cancelled_shortlist_does_not_collect_candidates(
 def test_the_face_shortlist_stops_after_a_real_slice(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from app.core.geom import orient as geom_orient
     from app.core.slice import orientation
 
     signal = CancelSignal()
@@ -652,7 +655,7 @@ def test_the_face_shortlist_stops_after_a_real_slice(
         Orientation(direction, 2.0 - index, 1.0, 1.0) for index, direction in enumerate(directions)
     ]
     seen: list[tuple[float, float, float]] = []
-    monkeypatch.setattr(orientation, "ranked_orientations", lambda *_args, **_kwargs: coarse)
+    monkeypatch.setattr(geom_orient, "ranked_orientations", lambda *_args, **_kwargs: coarse)
 
     def judge_and_cancel(
         _mesh: MeshData,

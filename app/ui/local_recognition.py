@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import scene as core_scene
 from app.core.errors import (
     CORRECT_INPUT,
     DECIMATE_MESH,
@@ -40,11 +41,12 @@ from app.core.errors import (
 from app.core.expressions import resolve_params
 from app.core.geom.mesh import MeshData
 from app.core.geom.section import SectionPlane
-from app.core.perceive.actions import FeatureAction, actions_for
+from app.core.perceive import actions as perceive_actions
+from app.core.perceive.actions import FeatureAction
 from app.core.perceive.local import features_in_region, local_error
 from app.core.perceive.ops import DetectRegionParams
 from app.core.registry import REGISTRY
-from app.core.scene import EvaluationResult, History, OperationDraft, evaluate
+from app.core.scene import EvaluationResult, History, OperationDraft
 from app.core.scene.cache import ResultCache
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.placement import original_surface_hit
@@ -176,7 +178,7 @@ class _RecognitionWorker(Worker):
             transaction = History(document).apply(
                 tr("Merkmale an dieser Stelle erkennen"), (draft,)
             )
-            result = evaluate(
+            result = core_scene.evaluate(
                 document,
                 self.profile,
                 # **Die Qualität der Sitzung, nicht „fein“.** Die Sitzung
@@ -242,7 +244,7 @@ class _RecognitionWorker(Worker):
             for name in choices:
                 self.cancelled.raise_if_cancelled()
                 actions[name] = tuple(
-                    actions_for(
+                    perceive_actions.actions_for(
                         entry.features[name],
                         entry.features,
                         mesh=entry.mesh if isinstance(entry.mesh, MeshData) else None,

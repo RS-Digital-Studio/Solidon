@@ -25,8 +25,9 @@ from PySide6.QtWidgets import (
 
 from app.core import guides
 from app.i18n import tr
+from app.ui import style
 from app.ui.leash import stop_watching_the_dying
-from app.ui.style import NORMAL, fit_dialog_to_screen
+from app.ui.style import NORMAL
 
 
 def reachable_geometry(saved: object, rooms: list[QRect]) -> QRect | None:
@@ -217,7 +218,7 @@ class DetachableTabs(QTabWidget):
         window.show()
         if at is not None:
             window.move(at)
-        fit_dialog_to_screen(window)
+        style.fit_dialog_to_screen(window)
         window.raise_()
         window.activateWindow()
         page.show()
@@ -329,7 +330,7 @@ class DetachableTabs(QTabWidget):
         """x/y gehören zum Rahmen, Breite/Höhe zum Inhalt: entsprechend zurücksetzen."""
         window.resize(rect.size())
         window.move(rect.topLeft())
-        fit_dialog_to_screen(window)
+        style.fit_dialog_to_screen(window)
 
     def _menu(self, at: QPoint) -> None:
         index = self.tabBar().tabAt(at)

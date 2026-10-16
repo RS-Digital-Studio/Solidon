@@ -47,6 +47,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.core.registry.registry import BODY_REQUIREMENTS  # noqa: E402
+from tools import function_scenes  # noqa: E402
 from tools.function_scan import UiScan, scan_ui, statements  # noqa: E402
 from tools.function_scenes import (  # noqa: E402
     DATA,
@@ -54,7 +55,6 @@ from tools.function_scenes import (  # noqa: E402
     MESH,
     FunctionListError,
     Scene,
-    load_scenes,
     registry,
     save_scenes,
     validate_scenes,
@@ -1306,7 +1306,7 @@ def rows(menubar: Iterable[MenuEntry] = (), *, with_specs: bool = True) -> list[
     from app.core.guides import TARGETS
 
     source = registry()
-    scenes = load_scenes()
+    scenes = function_scenes.load_scenes()
     scan = scan_ui(ui_sources())
     issues: list[str] = []
     collected: list[Row] = []
@@ -1474,7 +1474,7 @@ def problems(menubar: Iterable[MenuEntry] = ()) -> list[str]:
         return list(error.problems)
     issues = missing_scenes(found)
     issues += missing_selections(found)
-    scenes = load_scenes()
+    scenes = function_scenes.load_scenes()
     issues += validate_scenes(scenes)
     issues += scene_precondition_problems(scenes)
     issues += validate_specs(found, load_specs(), scenes)

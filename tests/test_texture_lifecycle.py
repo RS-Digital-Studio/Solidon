@@ -473,11 +473,13 @@ def test_generated_texture_remains_selectable_with_bounded_recognition(
 ) -> None:
     """Begrenzte Fremdformerkennung verliert keine selbst erzeugte Textur."""
     evaluation = import_module("app.core.scene.evaluate")
+    from app.core.perceive import local
+
     # Je Grenze eine Ersetzung mit festem Text: Die Dreiecksgrenze ist in der
     # Auswertung eine Kopfkopie aus ``perceive.local`` (CS-11), und der erzeugte
     # Schnitt stellt sie auf das Original um.
     if boundary == "triangles":
-        monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
+        monkeypatch.setattr(local, "FEATURE_LIMIT_TRIANGLES", 1)
     else:
         monkeypatch.setattr(evaluation, "FEATURE_LIMIT_COUNT", 1)
     forget_cache()

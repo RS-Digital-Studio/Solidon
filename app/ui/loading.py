@@ -39,8 +39,9 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QPushButton, QWidget
 
 from app.i18n import format_decimal, tr
+from app.ui import motion
 from app.ui.icons import application_icon_source, paint_printed_mark
-from app.ui.motion import EASING, FRAME_MS, animations_enabled
+from app.ui.motion import EASING, FRAME_MS
 from app.ui.style import ROOMY, WIDE
 from app.ui.theme import THEMES, Theme
 
@@ -438,7 +439,7 @@ class LoadingVeil(QWidget):
         self._shown = 0.0
         self.timing.begin()
         self._timing_changed()
-        if at_once or not animations_enabled():
+        if at_once or not motion.animations_enabled():
             # Offscreen sieht niemand ein Aufblitzen, und ein Test, der auf
             # einen Zeitgeber wartet, prüft die Uhr statt das Verhalten.
             self._appear()
@@ -466,7 +467,7 @@ class LoadingVeil(QWidget):
             self.setAccessibleDescription(description)
         if not self.showing:
             return
-        if not animations_enabled():
+        if not motion.animations_enabled():
             self._shown = self._target
         self.update(self._block_rect())
 
@@ -487,7 +488,7 @@ class LoadingVeil(QWidget):
         # Hier gehoben, lag der Schleier über der Werkzeugzeile.
         self.show()
         self._place_button()
-        if animations_enabled():
+        if motion.animations_enabled():
             self._frames.start()
         else:
             self._shown = self._target

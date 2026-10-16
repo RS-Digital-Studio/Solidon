@@ -65,9 +65,10 @@ from PySide6.QtCore import QEventLoop, QPoint, QRect, QTimer
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
 
-from app.core.bootstrap import load_operations
+from app import i18n
+from app.core import bootstrap
 from app.core.paths import PROFILE_VARIABLES, isolate_secrets
-from app.i18n import SOURCE_LANGUAGE, install_catalog, set_language
+from app.i18n import SOURCE_LANGUAGE, install_catalog
 from app.i18n.catalog import read_catalog
 from tools import make_figures as figures
 
@@ -716,12 +717,12 @@ def _screens_child(language: str) -> int:
     from app.ui.settings import UiSettings
     from app.ui.theme import apply_theme
 
-    load_operations()
+    bootstrap.load_operations()
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     apply_theme(app, "dark")
     install_catalog(language, read_catalog(language))
-    set_language(language)
+    i18n.set_language(language)
     install_qt_translations(app, language)
 
     # Der Stand eines Kunden, der schon ein wenig gearbeitet hat: Spulen im
@@ -1022,7 +1023,7 @@ def main() -> int:
     # Dieselbe Prüfung wie in ``make_figures``: Eine unbekannte Sprache gäbe
     # einen leeren Katalog, jedes ``tr()`` fiele auf Deutsch zurück, und der
     # Lauf endete mit „Fertig." — die Falle aus 229490a, über den anderen Weg.
-    load_operations()
+    bootstrap.load_operations()
     wanted = figures.chosen_languages(tuple(arguments))
     for language in wanted:
         if only in ("", "fenster"):

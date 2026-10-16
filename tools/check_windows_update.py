@@ -57,13 +57,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.branding import (  # noqa: E402
-    APP_ID,
-    APP_NAME,
-    APP_VERSION,
-    PART_FILE_SUFFIX,
-    PROJECT_SUFFIX,
-)
+from app import branding  # noqa: E402
+from app.branding import APP_ID, APP_NAME, PART_FILE_SUFFIX, PROJECT_SUFFIX  # noqa: E402
 from app.core import paths  # noqa: E402
 from app.core.http import apply_header_deadline, deadline_after, read_limited  # noqa: E402
 
@@ -192,7 +187,7 @@ def own_files() -> dict[Path, bytes]:
     Proben nicht zwingend; geprüft wird, dass ein Setup sie weder löscht noch
     ändert. Der Name sagt, wofür jede steht.
     """
-    stamp = f"Probe RM-055, {APP_VERSION}\n".encode()
+    stamp = f"Probe RM-055, {branding.APP_VERSION}\n".encode()
     config = paths.user_config_dir()
     return {
         paths.user_parts_dir() / f"eigener-baustein{PART_FILE_SUFFIX}": b"eigener Baustein\n"
@@ -408,7 +403,7 @@ def check(setup: Path, work: Path) -> None:  # pragma: no cover — nur Windows
     start_menu = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
     work.mkdir(parents=True, exist_ok=True)
     release = published()
-    reason = without_version_jump(release.version, APP_VERSION)
+    reason = without_version_jump(release.version, branding.APP_VERSION)
     if reason is not None:
         raise UpdateCheckError(reason)
 
@@ -431,20 +426,22 @@ def check(setup: Path, work: Path) -> None:  # pragma: no cover — nur Windows
     plant(own)
 
     arguments = setup_arguments()
-    print(f"4. Auf {APP_VERSION} aktualisieren mit {' '.join(arguments)} …", flush=True)
+    print(f"4. Auf {branding.APP_VERSION} aktualisieren mit {' '.join(arguments)} …", flush=True)
     code = _run([str(setup), *arguments], SETUP_SECONDS)
     new = installed(registry)
     if code != 0 or new is None:
         raise UpdateCheckError(f"Das Update endete mit {code}, Eintrag {'da' if new else 'fehlt'}.")
-    if new.version != APP_VERSION:
+    if new.version != branding.APP_VERSION:
         raise UpdateCheckError(
-            f"Nach dem Update steht {new.version} statt {APP_VERSION} unter Apps."
+            f"Nach dem Update steht {new.version} statt {branding.APP_VERSION} unter Apps."
         )
     if os.path.normcase(str(new.location)) != os.path.normcase(str(old.location)):
         raise UpdateCheckError(
             f"Das Update installierte nach {new.location} statt nach {old.location}."
         )
-    _require_all_traces(new.location, registry, start_menu, f"dem Update auf {APP_VERSION}")
+    _require_all_traces(
+        new.location, registry, start_menu, f"dem Update auf {branding.APP_VERSION}"
+    )
     # Die Anwendung trägt keine Versionsressource; welche Version läuft, sagt
     # der Starttest unten (sein Bericht muss ``APP_VERSION`` nennen).
     executable = new.location / f"{APP_NAME}.exe"
@@ -480,7 +477,8 @@ def check(setup: Path, work: Path) -> None:  # pragma: no cover — nur Windows
     if lost:
         raise UpdateCheckError("Die Deinstallation kostete eigene Daten: " + "; ".join(lost))
     print(
-        f"Update von {release.version} auf {APP_VERSION} und Deinstallation in Ordnung.", flush=True
+        f"Update von {release.version} auf {branding.APP_VERSION} und Deinstallation in Ordnung.",
+        flush=True,
     )
 
 

@@ -1164,16 +1164,17 @@ def test_a_standing_plate_is_laid_down_by_the_search() -> None:
 
 def test_a_dense_body_is_judged_on_a_smaller_twin(monkeypatch: pytest.MonkeyPatch) -> None:
     """Über der Dreiecksgrenze urteilt die Suche an einem dezimierten Netz, dreht aber das echte."""
+    from app.core.geom import mesh_ops
     from app.core.slice import orientation
 
     seen: list[int] = []
-    original = orientation.decimate_for_display
+    original = mesh_ops.decimate_for_display
 
     def recording(mesh: MeshData, target: int) -> MeshData:
         seen.append(mesh.triangle_count)
         return original(mesh, target)
 
-    monkeypatch.setattr(orientation, "decimate_for_display", recording)
+    monkeypatch.setattr(mesh_ops, "decimate_for_display", recording)
     dense = trimesh.creation.icosphere(subdivisions=5, radius=15.0)
     dense = trimesh.util.concatenate([dense, trimesh.creation.box(extents=(60.0, 60.0, 2.0))])
     body = MeshData.of(dense)

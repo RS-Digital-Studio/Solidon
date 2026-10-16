@@ -26,7 +26,7 @@ from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPalette, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QTabBar, QTabWidget, QWidget
 
 from app.i18n import tr
-from app.ui.motion import animations_enabled
+from app.ui import motion
 from app.ui.palette import ROLES, SEVERITY_ENCODING, readable_on
 from app.ui.style import SPACE, TIGHT
 from app.ui.tab_stops import chain_after
@@ -223,7 +223,7 @@ class SignalTabBar(QTabBar):
         self._describe(index)
         if before not in (-1, index):
             self._describe(before)
-        if not animations_enabled():
+        if not motion.animations_enabled():
             self._settle()
             return
         animation = QVariantAnimation(self)

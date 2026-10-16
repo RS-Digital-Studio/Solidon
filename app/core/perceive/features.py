@@ -35,6 +35,7 @@ import numpy as np
 
 from app.core import units
 from app.core.deferred import cKDTree, least_squares, trimesh
+from app.core.geom import repair
 from app.core.geom.mesh import (
     MeshData,
     face_components,
@@ -48,13 +49,13 @@ from app.core.geom.mesh import (
     triple_products,
     unique_edges,
 )
-from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.perceive import grouped, parallel, refine
+from app.core.perceive import surfaces as perceive_surfaces
 from app.core.perceive.helix import Helix, _facet_of_face, find_helices
 from app.core.perceive.patterns import patterns_instead_of_cells
 from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, slots_instead_of_half_bores
-from app.core.perceive.surfaces import clipped_patches, planar_patch
+from app.core.perceive.surfaces import clipped_patches
 from app.core.types import Feature, FeatureId, MeasureSource, SurfacePatch, Vec3, is_a_cavity
 from app.core.units import (
     EPS_GEOM,
@@ -1371,7 +1372,7 @@ def as_its_own_body(mesh: MeshData) -> None:
 
 def _welded(mesh: MeshData) -> MeshData | None:
     """Die verschweißte Kopie — oder nichts, wenn es nichts zu verschweißen gab."""
-    welded, gone = merge_vertices(mesh)
+    welded, gone = repair.merge_vertices(mesh)
     return welded if gone else None
 
 
@@ -14644,7 +14645,7 @@ def _finished_faces(
             check_cancelled()
         centre = feature.params["centre"]
         normal = feature.params["normal"]
-        plane = planar_patch(
+        plane = perceive_surfaces.planar_patch(
             mesh,
             np.asarray(feature.face_indices, dtype=np.int64),
             (float(centre[0]), float(centre[1]), float(centre[2])),

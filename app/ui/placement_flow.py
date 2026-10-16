@@ -53,10 +53,11 @@ from shiboken6 import isValid
 
 from app.core import expressions, guides
 from app.core.errors import AppError, ValidationError
-from app.core.geom.mesh import as_mesh_data, ray_hit_distances
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import ray_hit_distances
 from app.core.geom.transform import snap_to_marks
+from app.core.knowledge import profiles
 from app.core.knowledge.parts.ops import depth_field, normal_fields, placement_fields
-from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.perceive.features import copy_with_answers
 from app.core.registry import OperationSpec
@@ -664,7 +665,7 @@ def for_a_worker(mesh: Any) -> Any:
     Kopie stand die Maßgruppe der dichten Platte nach 420 ms, nebeneinander
     nach 500.
     """
-    source = as_mesh_data(mesh)
+    source = geom_mesh.as_mesh_data(mesh)
     raw = source.raw
     key = id(raw)
     with _worker_copies_lock:
@@ -692,7 +693,7 @@ def surface_object_for_worker(source: SceneObject) -> SceneObject:
 
 def _answers_at_once(mesh: Any) -> bool:
     """Ob eine Platzierungsfrage an diesem Körper im Hauptfaden läuft (:data:`AT_ONCE_BELOW`)."""
-    return bool(as_mesh_data(mesh).triangle_count < AT_ONCE_BELOW)
+    return bool(geom_mesh.as_mesh_data(mesh).triangle_count < AT_ONCE_BELOW)
 
 
 def _answer_now(
@@ -3400,7 +3401,9 @@ class PlacementFlow(QObject):
         # mehrere Objekte dieselbe Geometrie tragen. Exakte Kopien sind ungeteilt.
         guarded: Callable[[], Any] = compute
         held: set[int] = set()
-        ordered = sorted(originals.items(), key=lambda item: id(as_mesh_data(item[1].mesh).raw))
+        ordered = sorted(
+            originals.items(), key=lambda item: id(geom_mesh.as_mesh_data(item[1].mesh).raw)
+        )
         for key, original in ordered:
             source = surface_object_for_worker(original)
             objects[key] = source
@@ -3521,7 +3524,7 @@ class PlacementFlow(QObject):
         self._seat_waits = stamp
         self._hold_frames()
         at_once = _answers_at_once(entry.mesh)
-        mesh = as_mesh_data(entry.mesh) if at_once else for_a_worker(entry.mesh)
+        mesh = geom_mesh.as_mesh_data(entry.mesh) if at_once else for_a_worker(entry.mesh)
         values = self.dialog.values()
         target = None
         if self.spec_of().name in {"slot_hole", "resize_hole"} and all(
@@ -4148,7 +4151,7 @@ class PlacementFlow(QObject):
             values[placed["at_feature"]] = ""
         if placed["axis"] in values and not measured_drill:
             values[placed["axis"]] = "z"
-        profile = for_object(self.session.profile, source)
+        profile = profiles.for_object(self.session.profile, source)
         parameters = dict(self.session.project.document.parameters)
         key = repr(
             (
@@ -5172,7 +5175,7 @@ class PlacementFlow(QObject):
         if span < 1e-9:
             return 0.0
         along = along / span
-        mesh = as_mesh_data(entry.mesh)
+        mesh = geom_mesh.as_mesh_data(entry.mesh)
         origin = np.asarray(self._surface.point, dtype=np.float64)
         distances = ray_hit_distances(
             np.asarray(mesh.raw.triangles, dtype=np.float64), origin, -along

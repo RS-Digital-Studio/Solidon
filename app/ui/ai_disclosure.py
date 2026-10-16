@@ -41,7 +41,9 @@ from app.core import guides
 from app.core.backends import llm, mesh
 from app.core.log import get_logger
 from app.i18n import get_language, tr
-from app.ui.settings import UiSettings, is_utc_timestamp, save_settings, utc_timestamp
+from app.ui import settings as ui_settings
+from app.ui import style
+from app.ui.settings import is_utc_timestamp, save_settings, utc_timestamp
 from app.ui.style import (
     NORMAL,
     ROOMY,
@@ -49,7 +51,6 @@ from app.ui.style import (
     TIGHT,
     WIDE,
     DialogScrollArea,
-    fit_dialog_to_screen,
     make_primary,
     no_primary,
     set_level,
@@ -286,7 +287,7 @@ def clear_disclosure(settings: Any, target: AiDisclosureTarget | None = None) ->
 
 
 def ensure_ai_disclosure(
-    settings: UiSettings,
+    settings: ui_settings.UiSettings,
     backend_or_target: Any,
     parent: QWidget | None = None,
 ) -> DisclosureResult:
@@ -591,7 +592,7 @@ class AiDisclosureDialog(QDialog):
             if wanted != self._wanted_height:
                 self._wanted_height = wanted
                 self.resize(self.width(), wanted)
-        fit_dialog_to_screen(self)
+        style.fit_dialog_to_screen(self)
         if own:
             self._fitted_height = self.height()
 

@@ -10,7 +10,8 @@ from shapely.geometry import Polygon
 
 from app.core import units
 from app.core.errors import ValidationError
-from app.core.geom.sketch_solid import MAX_OUTLINE_POINTS, outline_points
+from app.core.geom import sketch_solid
+from app.core.geom.sketch_solid import outline_points
 from app.core.units import EPS_GEOM, MAX_FACET_SAG
 from app.i18n import _
 
@@ -54,7 +55,11 @@ def section_of(
             for hole in current.holes
         ]
         count += len(points)
-        if count > MAX_OUTLINE_POINTS or len(points) < 3 or any(len(hole) < 3 for hole in holes):
+        if (
+            count > sketch_solid.MAX_OUTLINE_POINTS
+            or len(points) < 3
+            or any(len(hole) < 3 for hole in holes)
+        ):
             raise _invalid()
         polygon = Polygon(points, holes)
         if not polygon.is_valid or polygon.area <= EPS_GEOM**2:
@@ -112,12 +117,12 @@ def offset_section(
         return section
     sag = min(max_sag, MAX_FACET_SAG)
     steps = _round_steps(radius, sag)
-    if steps > MAX_OUTLINE_POINTS:
+    if steps > sketch_solid.MAX_OUTLINE_POINTS:
         raise _invalid()
     moved = section.offset(distance, circular_segments=steps).simplify(EPS_GEOM)
     if check_cancelled is not None:
         check_cancelled()
-    if sum(len(path) for path in moved.to_polygons()) > MAX_OUTLINE_POINTS:
+    if sum(len(path) for path in moved.to_polygons()) > sketch_solid.MAX_OUTLINE_POINTS:
         raise _invalid()
     return moved
 

@@ -778,6 +778,7 @@ def test_local_part_file_way_runs_through_the_buttons(
     """
     from PySide6.QtWidgets import QFileDialog
 
+    from app.core import paths
     from app.core.knowledge.parts import PARTS
     from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
@@ -789,7 +790,7 @@ def test_local_part_file_way_runs_through_the_buttons(
 
     name = "probeklotz"
     storage = tmp_path / "user-parts"
-    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: storage)
 
     part = _box_recipe(name)
     source = save(part)
@@ -826,11 +827,11 @@ def test_local_part_file_way_runs_through_the_buttons(
         catalogs.append(dialog)
         return int(PartCatalog.DialogCode.Rejected)
 
-    from app.ui import main_window as _mw
+    from app.ui import dialogs
 
     troubles: list[object] = []
     monkeypatch.setattr(
-        _mw,
+        dialogs,
         "show_error",
         lambda problem, parent=None, handlers=None: troubles.append(problem),
     )
@@ -934,6 +935,7 @@ def test_open_path_routes_a_part_file_through_the_catalog_worker(
     qt_app: QApplication, tmp_path, monkeypatch
 ) -> None:
     """Startargument, Finder und Ablage nutzen denselben geprüften Importweg."""
+    from app.core import paths
     from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
     from app.ui.main_window import MainWindow
@@ -943,7 +945,7 @@ def test_open_path_routes_a_part_file_through_the_catalog_worker(
     name = "direkt_geoeffnet"
     incoming = tmp_path / f"{name}{PART_FILE_SUFFIX}"
     incoming.write_bytes(PartFileIO().export_file(_box_recipe(name)))
-    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: tmp_path / "user-parts")
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: tmp_path / "user-parts")
     catalogs: list[PartCatalog] = []
 
     def instead_of_exec(dialog: PartCatalog) -> int:
@@ -999,7 +1001,7 @@ def test_removing_a_used_local_part_is_immediate_exact_and_points_to_history(
     from PySide6.QtGui import QPixmap
     from PySide6.QtWidgets import QMessageBox
 
-    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core import paths
     from app.core.knowledge.parts.recipe import register, save
     from app.core.types import Operation, Transaction
     from app.ui.main_window import MainWindow
@@ -1008,7 +1010,7 @@ def test_removing_a_used_local_part_is_immediate_exact_and_points_to_history(
 
     name = "entfernungsprobe"
     storage = tmp_path / "user-parts"
-    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: storage)
     part = _box_recipe(name)
     path = save(part)
     register(part)
@@ -1110,7 +1112,7 @@ def test_the_picker_keeps_historical_json_and_reads_it_in_the_worker(
     from PySide6.QtCore import QThread
     from PySide6.QtWidgets import QFileDialog
 
-    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core import paths
     from app.core.knowledge.parts.part_file import PartFileIO
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -1119,7 +1121,7 @@ def test_the_picker_keeps_historical_json_and_reads_it_in_the_worker(
     name = "historische_json_probe"
     source = tmp_path / f"{name}.json"
     source.write_bytes(PartFileIO().export_file(_box_recipe(name)))
-    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: tmp_path / "user-parts")
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: tmp_path / "user-parts")
     offered: list[tuple[str, str]] = []
     read_off_main: list[bool] = []
     original_read = Path.read_bytes
@@ -1168,6 +1170,7 @@ def test_the_application_path_rejects_an_unreferenced_executable_payload(
 
     from PySide6.QtWidgets import QFileDialog
 
+    from app.core import paths
     from app.core.errors import AppError
     from app.core.knowledge.parts import PARTS
     from app.core.knowledge.parts import recipe as recipe_module
@@ -1181,7 +1184,7 @@ def test_the_application_path_rejects_an_unreferenced_executable_payload(
     name = "payload_probe"
     operation_name = f"insert_{name}"
     storage = tmp_path / "user-parts"
-    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: storage)
 
     data = json.loads(PartFileIO().export_file(_box_recipe(name)))
     source_id = "plugin_source"
@@ -1216,11 +1219,11 @@ def test_the_application_path_rejects_an_unreferenced_executable_payload(
         catalogs.append(dialog)
         return int(PartCatalog.DialogCode.Rejected)
 
-    from app.ui import main_window as _mw
+    from app.ui import dialogs
 
     monkeypatch.setattr(PartFileIO, "install_file", counted_install)
     monkeypatch.setattr(
-        _mw,
+        dialogs,
         "show_error",
         lambda problem, parent=None, handlers=None: troubles.append(problem),
     )
@@ -1266,8 +1269,8 @@ def test_a_name_collision_asks_and_uses_the_free_name(
 
     from PySide6.QtWidgets import QFileDialog
 
+    from app.core import paths
     from app.core.knowledge.parts import PARTS
-    from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
     from app.core.knowledge.parts.recipe import register, save
     from app.core.registry import REGISTRY
@@ -1279,7 +1282,7 @@ def test_a_name_collision_asks_and_uses_the_free_name(
     name = "kollisionsprobe"
     operation_name = f"insert_{name}"
     storage = tmp_path / "user-parts"
-    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: storage)
     existing = _box_recipe(name)
     source = save(existing)
     register(existing)
@@ -1300,6 +1303,7 @@ def test_a_name_collision_asks_and_uses_the_free_name(
         catalogs.append(dialog)
         return int(PartCatalog.DialogCode.Rejected)
 
+    from app.ui import dialogs
     from app.ui import main_window as _mw
 
     asked: list[tuple[str, str, str]] = []
@@ -1311,7 +1315,7 @@ def test_a_name_collision_asks_and_uses_the_free_name(
 
     monkeypatch.setattr(PartFileIO, "install_file", counted_install)
     monkeypatch.setattr(_mw, "ask_free_part_name", answer_yes)
-    monkeypatch.setattr(_mw, "show_error", lambda problem, *_a, **_k: errors.append(problem))
+    monkeypatch.setattr(dialogs, "show_error", lambda problem, *_a, **_k: errors.append(problem))
     monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
     monkeypatch.setattr(
         QFileDialog,
@@ -1361,8 +1365,8 @@ def test_an_unusable_part_file_action_opens_the_picker_again(
     """Formatfehler und Lesefehler führen mit „Auswählen“ zurück zur Datei."""
     from PySide6.QtWidgets import QFileDialog
 
+    from app.core import paths
     from app.core.knowledge.parts import PARTS
-    from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
     from app.ui.catalog import PartCatalog
     from app.ui.main_window import MainWindow
@@ -1371,7 +1375,7 @@ def test_an_unusable_part_file_action_opens_the_picker_again(
 
     name = f"auswahlprobe_{first_kind}"
     storage = tmp_path / "user-parts"
-    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: storage)
     invalid = tmp_path / f"ungueltig{PART_FILE_SUFFIX}"
     if first_kind == "invalid":
         invalid.write_bytes(b"kein json")
@@ -1390,14 +1394,14 @@ def test_an_unusable_part_file_action_opens_the_picker_again(
         catalogs.append(dialog)
         return int(PartCatalog.DialogCode.Rejected)
 
-    from app.ui import main_window as _mw
+    from app.ui import dialogs
 
     def choose_again(problem, parent=None, handlers=None):
         assert "choose" in {action.id for action in problem.suggestions}
         assert handlers is not None
         handlers["choose"](problem)
 
-    monkeypatch.setattr(_mw, "show_error", choose_again)
+    monkeypatch.setattr(dialogs, "show_error", choose_again)
     monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
     monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(choose_file))
 
@@ -1422,8 +1426,8 @@ def test_a_part_export_write_error_performs_the_chosen_action(
     """Erneut nutzt denselben Pfad; anderer Ort öffnet den Speicherdialog neu."""
     from PySide6.QtWidgets import QFileDialog
 
+    from app.core import paths
     from app.core.errors import FileWriteError
-    from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
     from app.core.knowledge.parts.recipe import register, save
     from app.i18n import tr
@@ -1434,7 +1438,7 @@ def test_a_part_export_write_error_performs_the_chosen_action(
 
     name = f"schreibprobe_{action_id}"
     storage = tmp_path / "user-parts"
-    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: storage)
     part = _box_recipe(name)
     source = save(part)
     register(part)
@@ -1471,10 +1475,10 @@ def test_a_part_export_write_error_performs_the_chosen_action(
         assert action_id in available
         available[action_id](problem)
 
-    from app.ui import main_window as _mw
+    from app.ui import dialogs
 
     monkeypatch.setattr(PartFileIO, "export_to_file", fail_once)
-    monkeypatch.setattr(_mw, "show_error", choose_recovery)
+    monkeypatch.setattr(dialogs, "show_error", choose_recovery)
     monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(choose_target))
 
@@ -1921,14 +1925,14 @@ def test_opening_a_part_for_editing_puts_its_steps_into_the_window(
     nur an eigenen Bausteinen, geht der Katalog danach zu, und trägt der Dialog
     die Herkunft?
     """
-    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core import paths
     from app.core.knowledge.parts.recipe import register
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
     name = "entwurfsprobe"
-    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: tmp_path / "user-parts")
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: tmp_path / "user-parts")
     part = _box_recipe(name)
     register(part)
     catalogs: list[PartCatalog] = []
@@ -2104,7 +2108,7 @@ def test_a_file_result_after_the_catalog_closed_still_reaches_the_window(
     from shiboken6 import isValid
 
     from app.core.errors import InternalError
-    from app.ui import main_window as _mw
+    from app.ui import dialogs
     from app.ui.catalog import PartCatalog
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -2119,7 +2123,7 @@ def test_a_file_result_after_the_catalog_closed_still_reaches_the_window(
 
     monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
     monkeypatch.setattr(
-        _mw, "show_error", lambda _problem, parent=None, handlers=None: shown.append(parent)
+        dialogs, "show_error", lambda _problem, parent=None, handlers=None: shown.append(parent)
     )
 
     window = MainWindow(Session(), UiSettings())
@@ -2207,7 +2211,7 @@ def test_the_catalog_scad_export_obeys_the_export_boundary(
 
     from app.core import activation
     from app.core.errors import LicenceRequired
-    from app.ui import main_window
+    from app.ui import dialogs, main_window
     from tests.helpers import set_test_license
 
     target = tmp_path / "rib.scad"
@@ -2217,7 +2221,7 @@ def test_the_catalog_scad_export_obeys_the_export_boundary(
     monkeypatch.setattr(
         main_window.QFileDialog, "getSaveFileName", lambda *_args: (str(target), "")
     )
-    monkeypatch.setattr(main_window, "show_error", lambda error, _parent: errors.append(error))
+    monkeypatch.setattr(dialogs, "show_error", lambda error, _parent: errors.append(error))
     set_test_license(monkeypatch, active=unlocked)
     host = SimpleNamespace(_current_part_values=lambda spec: spec.params(length=30))
     try:
@@ -2485,11 +2489,12 @@ def test_a_collision_without_a_catalog_entry_keeps_the_message_with_the_free_nam
     Dann bleibt die Meldung mit *Freien Namen verwenden*, und gefragt wird nichts."""
     from PySide6.QtWidgets import QFileDialog
 
+    from app.core import paths
     from app.core.knowledge.parts import PARTS
-    from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
     from app.core.knowledge.parts.recipe import register
     from app.core.registry import REGISTRY
+    from app.ui import dialogs
     from app.ui import main_window as _mw
     from app.ui.catalog import PartCatalog
     from app.ui.main_window import MainWindow
@@ -2498,7 +2503,7 @@ def test_a_collision_without_a_catalog_entry_keeps_the_message_with_the_free_nam
 
     name = "nur_operation"
     operation_name = f"insert_{name}"
-    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: tmp_path / "user-parts")
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: tmp_path / "user-parts")
     existing = _box_recipe(name)
     register(existing)
     PARTS.remove(name)
@@ -2516,7 +2521,7 @@ def test_a_collision_without_a_catalog_entry_keeps_the_message_with_the_free_nam
 
     monkeypatch.setattr(_mw, "ask_free_part_name", lambda *args, **_k: asked.append(args))
     monkeypatch.setattr(
-        _mw,
+        dialogs,
         "show_error",
         lambda problem, _parent=None, handlers=None: shown.append((problem, handlers)),
     )

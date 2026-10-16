@@ -203,6 +203,8 @@ def test_redundant_faces_do_not_reach_the_comparison_solver(
     from app.core.geom.prepare import drill
 
     module = import_module("app.core.geom.difference")
+    from app.core.geom import boolean as geom_boolean
+
     monkeypatch.setattr(module, "COMPARISON_FLATTEN_FROM", 100)
     raw = cube(20.0).raw
     for _ in range(4):
@@ -224,13 +226,13 @@ def test_redundant_faces_do_not_reach_the_comparison_solver(
     if reverse:
         before, after = after, before
     largest = []
-    original_boolean = module.boolean
+    original_boolean = geom_boolean.boolean
 
     def counted(kind, meshes, **kwargs):
         largest.append(max(mesh.triangle_count for mesh in meshes))
         return original_boolean(kind, meshes, **kwargs)
 
-    monkeypatch.setattr(module, "boolean", counted)
+    monkeypatch.setattr(geom_boolean, "boolean", counted)
     result = compare(before, after, profile=profile)
 
     assert result.removed_volume == pytest.approx(0.0 if reverse else math.pi * 45.0, rel=0.01)
@@ -294,10 +296,10 @@ def test_comparison_flattening_failure_keeps_the_full_answer(
 
 def _fail_rm298_difference_kernel(monkeypatch, failure_type, target_kind):
     """Beobachtet die echte Kette; nur ihre erreichte Kernelrechnung wirft."""
-    from importlib import import_module
 
-    difference_module = import_module("app.core.geom.difference")
-    original_boolean = difference_module.boolean
+    from app.core.geom import boolean as geom_boolean
+
+    original_boolean = geom_boolean.boolean
     original_run = kernel_process.run
     injected_error = failure_type()
     boolean_calls = []
@@ -320,7 +322,7 @@ def _fail_rm298_difference_kernel(monkeypatch, failure_type, target_kind):
             raise injected_error
         return original_run(job, arrays, values, **kwargs)
 
-    monkeypatch.setattr(difference_module, "boolean", counted_boolean)
+    monkeypatch.setattr(geom_boolean, "boolean", counted_boolean)
     monkeypatch.setattr(kernel_process, "run", failing_run)
     return injected_error, boolean_calls, target_requests, following
 
@@ -357,6 +359,8 @@ def test_a_local_change_is_compared_inside_its_box_with_the_same_answer(monkeypa
 
     load_operations()
     difference_module = import_module("app.core.geom.difference")
+    from app.core.geom import boolean as geom_boolean
+
     profile = make_profile("centauri-carbon-2", "petg")
     # Zweimal unterteilt, damit die Bohrung nur ihre Umgebung neu vernetzt:
     # An der groben Platte reichen die Fächer um das Loch bis zum Rand, jedes
@@ -371,13 +375,13 @@ def test_a_local_change_is_compared_inside_its_box_with_the_same_answer(monkeypa
     after = drill(body, position=(0.0, 0.0, top), axis="z", diameter=5.0, profile=profile).mesh
 
     calls: list[str] = []
-    original = difference_module.boolean
+    original = geom_boolean.boolean
 
     def counted(kind, bodies, **kwargs):
         calls.append(kind)
         return original(kind, bodies, **kwargs)
 
-    monkeypatch.setattr(difference_module, "boolean", counted)
+    monkeypatch.setattr(geom_boolean, "boolean", counted)
     clipped = compare(before, after, profile=profile)
     assert calls.count("intersection") == 2, "beide Körper werden auf die Änderungsbox beschnitten"
 
@@ -439,17 +443,17 @@ def test_clipping_a_local_comparison_forwards_the_original_kernel_process_error(
 
 def test_a_change_over_half_the_body_is_compared_whole(monkeypatch) -> None:
     """Wächst der Körper überall, spart die Box nichts — dann bleibt es beim ganzen."""
-    from importlib import import_module
 
-    difference_module = import_module("app.core.geom.difference")
+    from app.core.geom import boolean as geom_boolean
+
     calls: list[str] = []
-    original = difference_module.boolean
+    original = geom_boolean.boolean
 
     def counted(kind, bodies, **kwargs):
         calls.append(kind)
         return original(kind, bodies, **kwargs)
 
-    monkeypatch.setattr(difference_module, "boolean", counted)
+    monkeypatch.setattr(geom_boolean, "boolean", counted)
     difference = compare(cube(20.0), cube(24.0))
 
     assert "intersection" not in calls

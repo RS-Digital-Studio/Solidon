@@ -46,8 +46,8 @@ from app.core.errors import (
     GeometryError,
     ValidationError,
 )
-from app.core.geom import lathe, transform
-from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, boolean, deepest
+from app.core.geom import boolean, lathe, transform
+from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, deepest
 from app.core.geom.measure import SHARP_EDGE_ANGLE
 from app.core.geom.mesh import (
     MeshData,
@@ -1501,7 +1501,7 @@ def rounding_tool(
     # Häute ohne Dicke stehen. Der Körper war danach wasserdicht und trug sein
     # richtiges Volumen, aber ``body_count`` zählte drei Teile, und der
     # Prüfbericht meldet so etwas dem Kunden als Zerfall.
-    return boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
+    return boolean.boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
 
 
 #: Wie weit ein Zug von einem Stück zum nächsten höchstens abbiegen darf, damit
@@ -2070,7 +2070,7 @@ def _varying_tool(
         raise _without_an_angle(law.largest)
     if len(pieces) == 1:
         return pieces[0]
-    return boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
+    return boolean.boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
 
 
 def _loft(sections: list[list[np.ndarray]], along: np.ndarray, overshoot: float) -> MeshData | None:
@@ -2652,7 +2652,7 @@ def _corner_tools(
     ball = _corner_hull(ball_points, vertex)
     if local is None or ball is None:
         return None
-    removed = boolean(
+    removed = boolean.boolean(
         "difference", [local, ball], quality=quality, allow_empty=True, cancelled=cancelled
     )
     return kind, removed.mesh, [removed]
@@ -2700,7 +2700,7 @@ def _check_corner_region(
     cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Der örtliche Ersatz muss ausschließlich die drei gewählten Flächen treffen."""
-    clipped = boolean(
+    clipped = boolean.boolean(
         "intersection", [mesh, region], quality=quality, allow_empty=True, cancelled=cancelled
     )
     shifted = np.asarray(clipped.mesh.raw.triangles, dtype=np.float64) - frame[:3, 3]
@@ -3717,7 +3717,7 @@ def _edge_work(
     for _star, (frame, complement) in mixed:
         region, target = _mixed_corner_region(size, rounded=rounded)
         if complement:
-            reversed_target = boolean(
+            reversed_target = boolean.boolean(
                 "difference", [region, target], quality=quality, cancelled=cancelled
             )
             runs.append(reversed_target)
@@ -3735,7 +3735,7 @@ def _edge_work(
     if regions:
         clipped_inner = []
         for tool in inner:
-            clipped = boolean(
+            clipped = boolean.boolean(
                 "difference",
                 [tool, *regions],
                 quality=quality,
@@ -3752,7 +3752,7 @@ def _edge_work(
     for kind, tools in (("difference", outer), ("union", inner)):
         if not tools:
             continue
-        outcome = boolean(kind, [body, *tools], quality=quality, cancelled=cancelled)
+        outcome = boolean.boolean(kind, [body, *tools], quality=quality, cancelled=cancelled)
         body = outcome.mesh
         runs.append(outcome)
     # Ohne Kante hätte ``wanted`` angehalten, und ``rounding_tool`` wirft,
@@ -3968,7 +3968,7 @@ def unround(
             ),
         )
     kind: BooleanKind = "union" if corner.convex else "difference"
-    outcome = boolean(kind, [mesh, filler], quality=quality, cancelled=cancelled)
+    outcome = boolean.boolean(kind, [mesh, filler], quality=quality, cancelled=cancelled)
     return BooleanOutcome(mesh=outcome.mesh, solver=outcome.solver, findings=list(outcome.findings))
 
 
@@ -4102,7 +4102,7 @@ def radial_rounding(
     if not skin.is_watertight or not skin.is_winding_consistent:
         raise GeometryError(detail=_("Diese Zylinderfläche hat keinen geschlossenen Rand."))
     subtracted = (radius > fitted.radius) == fitted.inward
-    outcome = boolean(
+    outcome = boolean.boolean(
         "difference" if subtracted else "union",
         [mesh, MeshData.of(skin)],
         quality=quality,
@@ -4212,7 +4212,7 @@ def bead_edges(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         tools.extend(_rod_along(entry, radius))
-    return boolean("union", [mesh, *tools], quality=quality, cancelled=cancelled)
+    return boolean.boolean("union", [mesh, *tools], quality=quality, cancelled=cancelled)
 
 
 def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:

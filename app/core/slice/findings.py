@@ -31,18 +31,15 @@ import numpy as np
 from shapely.geometry import Polygon as ShapelyPolygon
 
 from app.core.errors import ORIENT_FOR_PRINT, SHOW_SUPPORT_NEED, OperationCancelled
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
 from app.core.knowledge import profiles
-from app.core.slice import advise
+from app.core.slice import advise, analysis
 from app.core.slice.analysis import (
     OVERHANG_LAYER_WORTH_SUPPORT,
-    _material,
-    _material_cross,
     keep_answers,
     largest_overhang_patch,
-    ledges,
     model_support,
-    slice_body,
     total_overhang,
     vaults,
     worth_support,
@@ -185,7 +182,7 @@ def print_findings(
         try:
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
-            usable = bool(as_mesh_data(entry.mesh).triangle_count)
+            usable = bool(geom_mesh.as_mesh_data(entry.mesh).triangle_count)
         except OperationCancelled:
             publish(replace(state, state="cancelled"))
             raise
@@ -219,7 +216,7 @@ def body_findings(
     search: bool = True,
 ) -> list[Finding]:
     """Was die Schichtanalyse über einen Körper zu berichten hat."""
-    mesh = as_mesh_data(entry.mesh)
+    mesh = geom_mesh.as_mesh_data(entry.mesh)
     wall, angle = profiles.analysis_limits(profile, entry)
     result = analysed(mesh, settings, angle, wall, cancelled=cancelled)
     bottom = float(mesh.bounds.minimum[2])
@@ -274,7 +271,7 @@ def analysed(
         return stored
     cache = getattr(mesh.raw, "_cache", None)
     name = _cache_name(settings, angle, wall)
-    result = slice_body(
+    result = analysis.slice_body(
         mesh,
         settings.layers.layer_height,
         first_layer_height=settings.layers.first_layer_height,
@@ -375,12 +372,14 @@ def _column_under(
     """Der Raum unter dem Stück; Materialkonturen werden unter Inseln geteilt."""
     if materials is None:
         materials = {}
-    pending = _material_cross(piece)
+    pending = analysis._material_cross(piece)
     volume = 0.0
     for below_index in range(index - 1, -1, -1):
         step = result.layers[below_index + 1].z - result.layers[below_index].z
         if below_index not in materials:
-            materials[below_index] = _material_cross(_material(result.layers[below_index]))
+            materials[below_index] = analysis._material_cross(
+                analysis._material(result.layers[below_index])
+            )
         pending -= materials[below_index]
         if pending.is_empty():
             return volume
@@ -428,7 +427,9 @@ def overhang_findings(
     # Und kein Streifen eines Bogens, der sich zwischen seinen Beinen schließt
     # (:func:`vaults`, RM-585), aus demselben Durchgang.
     asked = frozenset(entry[1] for entry in candidates)
-    edges = ledges(result, asked, cancelled=cancelled) | vaults(result, asked, cancelled=cancelled)
+    edges = analysis.ledges(result, asked, cancelled=cancelled) | vaults(
+        result, asked, cancelled=cancelled
+    )
     quiet = model_support(result, only=asked, cancelled=cancelled).channels | edges
     kept = [entry for entry in candidates if entry[1] not in quiet]
     if not kept:
@@ -478,7 +479,7 @@ def small_overhang_findings(
         return []
     # Die volle Randfrage hat ``support_need`` eben gestellt — ist der Weg
     # oben wahr, war er es auch mit allen Stücken —, sie kommt aus dem Merker.
-    quiet = need.model.channels | ledges(result, cancelled=cancelled)
+    quiet = need.model.channels | analysis.ledges(result, cancelled=cancelled)
     floating: set[tuple[int, int]] = set()
     layers: list[tuple[float, int, ShapelyPolygon]] = []
     for index, layer in enumerate(result.layers):

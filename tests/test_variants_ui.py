@@ -440,6 +440,8 @@ def test_a_write_that_fails_is_said_in_the_dialog(
     """Geschrieben wurde im Slot, und ein Schreibfehler lief ohne Satz heraus
     (Regel 17): Die Zeile blieb auf „wird gerechnet", nichts kam."""
     from app.core.errors import FileWriteError
+    from app.core.export import writer
+    from app.ui import dialogs
     from app.ui import variants_dialog as module
 
     monkeypatch.setattr(
@@ -449,9 +451,9 @@ def test_a_write_that_fails_is_said_in_the_dialog(
     def refuse(*_args: Any, **_kwargs: Any) -> list[Path]:
         raise FileWriteError(detail="Zugriff verweigert")
 
-    monkeypatch.setattr(module, "write_plan", refuse)
+    monkeypatch.setattr(writer, "write_plan", refuse)
     shown: list[object] = []
-    monkeypatch.setattr(module, "show_error", lambda error, _parent: shown.append(error))
+    monkeypatch.setattr(dialogs, "show_error", lambda error, _parent: shown.append(error))
     dialog = VariantsDialog(session_with_parameter())
     try:
         dialog.count.setValue(2)

@@ -13,7 +13,7 @@ import trimesh
 from app.core import activation, build_area
 from app.core.errors import AppError, ExternalToolError, OperationCancelled
 from app.core.export import handover, writer
-from app.core.geom import transform
+from app.core.geom import prepare, transform
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
 from app.core.scene.cancel import CancelSignal
@@ -88,7 +88,7 @@ def test_shared_arrangement_predicate_uses_the_actual_contour(subject, kind):
 def test_size_refusal_precedes_packer_and_binds_object(subject, monkeypatch, size):
     writer, profile, setup = subject
     monkeypatch.setattr(
-        writer, "arrange_on_bed", lambda *_a, **_kw: pytest.fail("Packer lief vor Größenprüfung")
+        prepare, "arrange_on_bed", lambda *_a, **_kw: pytest.fail("Packer lief vor Größenprüfung")
     )
     objects = [body("first", (20, 20, 10)), body("offender", size)]
     with pytest.raises(ExternalToolError) as raised:

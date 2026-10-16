@@ -25,18 +25,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.core import bootstrap
 from app.core.agent.session import AgentSession
+from app.core.backends import llm
 from app.core.backends.llm import (
     AnthropicBackend,
     LLMBackend,
     Message,
     ModelNotInstalled,
     OllamaBackend,
-    first_available,
 )
-from app.core.bootstrap import load_operations
 from app.core.knowledge import profiles
-from app.core.knowledge.parts.ops import part_of
+from app.core.knowledge.parts import ops
 from app.core.registry import menu_twins
 from app.core.scene import History, OperationDraft
 from app.core.scene.project import Project, ProjectSources, new_project
@@ -211,7 +211,7 @@ def pick(name: str, model: str) -> LLMBackend | None:
         return AnthropicBackend(model=model) if model else AnthropicBackend()
     if name == "ollama":
         return OllamaBackend(model=model) if model else OllamaBackend()
-    return first_available()
+    return llm.first_available()
 
 
 def why_unreachable(backend: LLMBackend) -> tuple[str, ...]:
@@ -262,7 +262,7 @@ def main() -> int:
     # tun das beim Start; dieser Läufer hat es nie getan und lief deshalb seit
     # der Umstellung auf explizites Laden überhaupt nicht mehr — er ist kein
     # Testlauf, also hat es niemandem etwas gesagt.
-    load_operations()
+    bootstrap.load_operations()
 
     backend = pick(arguments.backend, arguments.model)
     if backend is None or not backend.available:
@@ -341,7 +341,9 @@ def main() -> int:
         # Ein eigenständiger Baustein entsteht über ``create_…`` (RM-562); er ist
         # genauso ein Baustein wie das Einsetzen an einer Fläche.
         used_parts = sum(
-            1 for entry in building if any(part_of(name) is not None for name in entry.operations)
+            1
+            for entry in building
+            if any(ops.part_of(name) is not None for name in entry.operations)
         )
         print(f"Baustein statt eigener Geometrie: {used_parts}/{len(building)}")
     wanted_parameters = [entry for entry in outcomes if entry.case.expects_parameter]

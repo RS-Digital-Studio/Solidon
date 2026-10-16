@@ -3971,7 +3971,7 @@ def test_the_layer_worker_reuses_the_report_cache_and_invalidates_changed_inputs
 
     from app.core.geom.mesh import MeshData
     from app.core.knowledge import print_settings, profiles
-    from app.core.slice import findings
+    from app.core.slice import analysis as slice_analysis
     from app.core.types import SliceResult
     from app.ui.main_window import _SliceWorker
 
@@ -3985,7 +3985,7 @@ def test_the_layer_worker_reuses_the_report_cache_and_invalidates_changed_inputs
         calls.append((height, kwargs["first_layer_height"], body))
         return SliceResult(layers=(), support_volume=float(len(calls)), first_layer_area=0.0)
 
-    monkeypatch.setattr(findings, "slice_body", measure)
+    monkeypatch.setattr(slice_analysis, "slice_body", measure)
     angle, wall = 45.0, 0.84
 
     def run() -> SliceResult:
@@ -4033,6 +4033,7 @@ def test_a_cancelled_layer_worker_never_publishes_a_result(
 
     from app.core.geom.mesh import MeshData
     from app.core.knowledge import print_settings, profiles
+    from app.core.slice import findings as slice_findings
     from app.core.types import SliceResult
     from app.ui import main_window as module
 
@@ -4046,7 +4047,7 @@ def test_a_cancelled_layer_worker_never_publishes_a_result(
         cancelled.cancel()
         return SliceResult(layers=(), support_volume=0.0, first_layer_area=0.0)
 
-    monkeypatch.setattr(module, "analysed", measure)
+    monkeypatch.setattr(slice_findings, "analysed", measure)
     values = []
     worker.done.connect(values.append)
     if when == "before":
@@ -4137,8 +4138,8 @@ def test_the_layer_analysis_takes_both_limits_from_the_material(
     größte Mindestwand und den kleinsten Winkel der verwendeten Materialien.
     """
     from app.core.knowledge import profiles as profile_module
+    from app.core.slice import findings as slice_findings
     from app.core.types import SliceResult
-    from app.ui import main_window as module
 
     seen: list[tuple[float | None, float | None]] = []
 
@@ -4147,7 +4148,7 @@ def test_the_layer_analysis_takes_both_limits_from_the_material(
         seen.append((overhang_angle, bridge_from))
         return SliceResult(layers=(), support_volume=0.0, first_layer_area=0.0)
 
-    monkeypatch.setattr(module, "analysed", measure)
+    monkeypatch.setattr(slice_findings, "analysed", measure)
     entry = window.session.last_result.scene.objects["obj_1"]
     wall, angle = profile_module.analysis_limits(window.session.profile, entry)
 

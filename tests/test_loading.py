@@ -154,8 +154,9 @@ def test_clock_runs_without_animation_or_new_progress(
 ) -> None:
     """Der Sekundentakt malt weiter, wenn Anteil und Drucksymbol stillstehen."""
     import app.ui.loading as loading_module
+    from app.ui import motion
 
-    monkeypatch.setattr(loading_module, "animations_enabled", lambda: False)
+    monkeypatch.setattr(motion, "animations_enabled", lambda: False)
     now = [100.0]
     monkeypatch.setattr(loading_module.time, "monotonic", lambda: now[0])
     veil = LoadingVeil()
@@ -190,8 +191,9 @@ def test_the_clock_repaints_the_block_not_the_whole_window(
     from PySide6.QtCore import Qt
 
     import app.ui.loading as loading_module
+    from app.ui import motion
 
-    monkeypatch.setattr(loading_module, "animations_enabled", lambda: False)
+    monkeypatch.setattr(motion, "animations_enabled", lambda: False)
     veil = LoadingVeil()
     try:
         veil.resize(1600, 900)
@@ -385,9 +387,9 @@ def test_the_veil_tells_when_it_really_stands(
     Signal sah dort nie eines. Geprüft wird der Signalvertrag, nicht die
     Uhr.
     """
-    import app.ui.loading as loading_module
+    from app.ui import motion
 
-    monkeypatch.setattr(loading_module, "animations_enabled", lambda: False)
+    monkeypatch.setattr(motion, "animations_enabled", lambda: False)
     veil = LoadingVeil()
     seen: list[str] = []
     veil.appeared.connect(lambda: seen.append("auf"))
@@ -415,9 +417,9 @@ def test_a_certain_wait_skips_the_delay(
     seinen alten Pixeln: Beim Öffnen von Weg 1 standen sechs Sekunden
     Startbildschirmreste über dem unsichtbaren Schleier (23.08.2026).
     """
-    import app.ui.loading as loading_module
+    from app.ui import motion
 
-    monkeypatch.setattr(loading_module, "animations_enabled", lambda: True)
+    monkeypatch.setattr(motion, "animations_enabled", lambda: True)
     veil = LoadingVeil()
     try:
         veil.begin("Wird berechnet …")

@@ -25,10 +25,9 @@ from app.core.geom.mesh import (
     remember_refined_units,
 )
 from app.core.perceive import features as detection
-from app.core.perceive import recognition_time
+from app.core.perceive import matching, recognition_time, relations
 from app.core.perceive.helix import _facet_of_face
-from app.core.perceive.matching import DIAMETER_TOLERANCE, match
-from app.core.perceive.relations import cavity_chains
+from app.core.perceive.matching import DIAMETER_TOLERANCE
 from app.core.perceive.surfaces import clipped_patches, reindexed_patches
 from app.core.types import Feature, FeatureId, Transform, Vec3, is_a_cavity
 from app.core.units import EPS_GEOM, match_tolerance, weld_tolerance
@@ -932,7 +931,7 @@ def _recognise_region(
     # eine vollständige Senkung über einer abgelehnten Teilbohrung übrig bleiben.
     # Eine Ringschulter hat keine direkte Wandnaht; ihre Verbindung kommt aus
     # derselben Topologieauskunft wie Baum und Merkmalbearbeitung.
-    chains = cavity_chains(found, local)
+    chains = relations.cavity_chains(found, local)
     while True:
         newly_refused = set()
         for chain in chains:
@@ -1149,7 +1148,7 @@ def _query_is_complete(
     check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
     """Ein vollständiger Treffer am erwarteten Ort macht fremde Suchränder irrelevant."""
-    matched = match(
+    matched = matching.match(
         {expected.id: expected},
         dict(found),
         mesh.bounds.centre,

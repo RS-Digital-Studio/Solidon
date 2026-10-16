@@ -1696,19 +1696,18 @@ def test_cancelling_during_the_parts_preflight_stops_the_bore(
     an ``boolean()`` gaben; Senkung und Stopfen sind ihre Zwillinge. Hier wird
     während der Vorfrage abgebrochen.
     """
-    from app.core.geom import boolean as boolean_module
-    from app.core.geom import prepare
+    from app.core.geom import prepare, repair
     from app.core.knowledge import profiles
     from app.core.scene.cancel import CancelSignal
 
     token = CancelSignal()
-    real = boolean_module.parts_that_cross
+    real = repair.parts_that_cross
 
     def cancelled_while_searching(*args: object, **kwargs: object) -> object:
         token.cancel()
         return real(*args, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(boolean_module, "parts_that_cross", cancelled_while_searching)
+    monkeypatch.setattr(repair, "parts_that_cross", cancelled_while_searching)
     body = two_cubes(30.0)
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     common: dict[str, object] = {"profile": profile, "cancelled": token}

@@ -3434,8 +3434,9 @@ def test_the_mesh_transport_stops_reading_an_endless_answer(
     """
     from app.core.backends import mesh
     from app.core.backends.mesh import GenerationFailed
+    from app.core.ingest import loader
 
-    monkeypatch.setattr(mesh, "MAX_FILE_BYTES", 4096)
+    monkeypatch.setattr(loader, "MAX_FILE_BYTES", 4096)
     monkeypatch.setattr(mesh, "opener_for", _mesh_opener(Endless(64 * 1024)))
 
     with pytest.raises(GenerationFailed) as gefangen:

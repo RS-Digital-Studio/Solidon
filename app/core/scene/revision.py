@@ -42,14 +42,8 @@ from dataclasses import dataclass
 from typing import Any, Final, Literal
 
 from app.core.errors import CANCEL, SUPPRESS_ALONG, AmbiguityError, UserError
-from app.core.perceive.matching import (
-    AXIS_TOLERANCE,
-    MATCH_THRESHOLD,
-    POSITION_TOLERANCE,
-    feature_vector,
-    fingerprint,
-    resolve,
-)
+from app.core.perceive import matching
+from app.core.perceive.matching import AXIS_TOLERANCE, MATCH_THRESHOLD, feature_vector, fingerprint
 from app.core.registry import REGISTRY, Registry
 from app.core.registry.params import reads_scene
 from app.core.scene.evaluate import EvaluationResult, sight_of
@@ -220,7 +214,7 @@ def _same_place(saved: Mapping[str, Any], feature: Feature, centre: Any, diagona
             sum((vector[3 + i] + axis[i]) * (vector[3 + i] + axis[i]) for i in range(3))
         )
         turn = min(turn, back)
-    return shift / POSITION_TOLERANCE + turn / AXIS_TOLERANCE <= MATCH_THRESHOLD
+    return shift / matching.POSITION_TOLERANCE + turn / AXIS_TOLERANCE <= MATCH_THRESHOLD
 
 
 def verdict(
@@ -251,11 +245,11 @@ def verdict(
         if len(by_creator) == 1:
             target = by_creator[0]
         elif by_creator:
-            target = resolve(
+            target = matching.resolve(
                 expected.fingerprint, by_creator, same_kind, found.centre, found.diagonal
             ) or (expected.feature if expected.feature in by_creator else None)
     if target is None and expected.fingerprint:
-        target = resolve(
+        target = matching.resolve(
             expected.fingerprint, tuple(sorted(same_kind)), same_kind, found.centre, found.diagonal
         )
         if target is not None and creator is not None:

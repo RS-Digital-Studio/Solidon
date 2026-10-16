@@ -83,6 +83,7 @@ def test_large_preview_prepares_the_complete_result_and_changes_outside_qt(
     """Auch große Vorschauen zeigen das ganze Ergebnis und schneiden alle Überlagerungen."""
     from dataclasses import replace
 
+    from app.core.geom import mesh_ops
     from app.core.geom.difference import Difference, SceneDifference
     from app.core.geom.section import SectionPlane
     from app.ui import viewport as module
@@ -106,7 +107,7 @@ def test_large_preview_prepares_the_complete_result_and_changes_outside_qt(
         return mesh
 
     monkeypatch.setattr(module, "DISPLAY_DECIMATION_ABOVE", 1)
-    monkeypatch.setattr(module, "decimate_for_display", prepare)
+    monkeypatch.setattr(mesh_ops, "decimate_for_display", prepare)
     if section:
         view._section = SectionPlane.along("z", 0.0)
     difference = SceneDifference(
@@ -155,6 +156,7 @@ def test_a_cancelled_large_preview_cannot_restore_its_geometry(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein bereits eingereihtes Arbeiterergebnis bleibt nach Abbruch ungültig."""
+    from app.core.geom import mesh_ops
     from app.core.geom.difference import Difference, SceneDifference
     from app.ui import viewport as module
 
@@ -163,7 +165,7 @@ def test_a_cancelled_large_preview_cannot_restore_its_geometry(
     original = _scene_with_two_holes()
     view.show_scene(original)
     monkeypatch.setattr(module, "DISPLAY_DECIMATION_ABOVE", 1)
-    monkeypatch.setattr(module, "decimate_for_display", lambda mesh, _target: mesh)
+    monkeypatch.setattr(mesh_ops, "decimate_for_display", lambda mesh, _target: mesh)
     difference = SceneDifference(
         entries={"obj_1": Difference("obj_1", result=original.scene.objects["obj_1"])}
     )
@@ -186,6 +188,7 @@ def test_large_preview_failure_keeps_the_original_and_the_next_value_recovers(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein Aufbereitungsfehler bleibt sichtbar, ohne ein späteres gültiges Ergebnis zu sperren."""
+    from app.core.geom import mesh_ops
     from app.core.geom.difference import Difference, SceneDifference
     from app.ui import viewport as module
 
@@ -198,7 +201,7 @@ def test_large_preview_failure_keeps_the_original_and_the_next_value_recovers(
     def fail(_mesh: Any, _target: int) -> Any:
         raise RuntimeError("kontrollierter Aufbereitungsfehler")
 
-    monkeypatch.setattr(module, "decimate_for_display", fail)
+    monkeypatch.setattr(mesh_ops, "decimate_for_display", fail)
     try:
         view.show_difference(
             SceneDifference(
@@ -210,7 +213,7 @@ def test_large_preview_failure_keeps_the_original_and_the_next_value_recovers(
         assert "erneut" in view.banner.note.text()
         assert not view._cover_actors
         assert view._actors["obj_1"].visible()
-        monkeypatch.setattr(module, "decimate_for_display", lambda mesh, _target: mesh)
+        monkeypatch.setattr(mesh_ops, "decimate_for_display", lambda mesh, _target: mesh)
         view.show_difference(
             SceneDifference(
                 entries={"obj_1": Difference("obj_1", result=original.scene.objects["obj_1"])}
@@ -232,6 +235,7 @@ def test_a_new_preview_wins_even_when_the_previous_preparation_finishes_last(
     """Langsame alte Geometrie darf neuere Maße und Auswahl nicht überschreiben."""
     from dataclasses import replace
 
+    from app.core.geom import mesh_ops
     from app.core.geom.difference import Difference, SceneDifference
     from app.ui import viewport as module
 
@@ -253,7 +257,7 @@ def test_a_new_preview_wins_even_when_the_previous_preparation_finishes_last(
         return mesh
 
     monkeypatch.setattr(module, "DISPLAY_DECIMATION_ABOVE", 1)
-    monkeypatch.setattr(module, "decimate_for_display", prepare)
+    monkeypatch.setattr(mesh_ops, "decimate_for_display", prepare)
     try:
         view.show_difference(SceneDifference(entries={"obj_1": Difference("obj_1", result=body)}))
         assert entered.wait(1)
@@ -1032,6 +1036,7 @@ def test_a_heavy_scene_is_prepared_outside_the_qt_thread(
 ) -> None:
     """Dezimierung hält den Hauptthread nicht an und leert das alte Bild nicht."""
 
+    from app.core.geom import mesh_ops
     from app.ui import viewport as viewport_module
     from app.ui.viewport import Viewport
 
@@ -1047,7 +1052,7 @@ def test_a_heavy_scene_is_prepared_outside_the_qt_thread(
         return mesh
 
     monkeypatch.setattr(viewport_module, "DISPLAY_DECIMATION_ABOVE", 0)
-    monkeypatch.setattr(viewport_module, "decimate_for_display", observed)
+    monkeypatch.setattr(mesh_ops, "decimate_for_display", observed)
 
     viewport.show_scene(new)
     worker = viewport._scene_worker
@@ -1067,6 +1072,7 @@ def test_viewport_cleanup_cancels_a_running_preparation(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Beim Fensterabbau darf kein Ansichtsarbeiter sein Widget überleben."""
+    from app.core.geom import mesh_ops
     from app.ui import viewport as viewport_module
     from app.ui.viewport import Viewport
 
@@ -1083,7 +1089,7 @@ def test_viewport_cleanup_cancels_a_running_preparation(
         return mesh
 
     monkeypatch.setattr(viewport_module, "DISPLAY_DECIMATION_ABOVE", 0)
-    monkeypatch.setattr(viewport_module, "decimate_for_display", delayed)
+    monkeypatch.setattr(mesh_ops, "decimate_for_display", delayed)
     viewport.show_scene(_scene_with_two_holes())
     worker = viewport._scene_worker
     assert worker is not None and started.wait(1.0)
@@ -1103,6 +1109,7 @@ def test_viewport_cleanup_rejects_a_result_already_waiting_in_qt(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein vor dem Schließen eingereihtes Ergebnis darf den Renderer nicht mehr anfassen."""
+    from app.core.geom import mesh_ops
     from app.ui import viewport as viewport_module
     from app.ui.viewport import Viewport
 
@@ -1117,7 +1124,7 @@ def test_viewport_cleanup_rejects_a_result_already_waiting_in_qt(
         applied.append(result)
 
     monkeypatch.setattr(viewport_module, "DISPLAY_DECIMATION_ABOVE", 0)
-    monkeypatch.setattr(viewport_module, "decimate_for_display", lambda mesh, _target: mesh)
+    monkeypatch.setattr(mesh_ops, "decimate_for_display", lambda mesh, _target: mesh)
     monkeypatch.setattr(viewport, "_apply_scene", apply)
 
     viewport.show_scene(new)
@@ -1140,6 +1147,7 @@ def test_a_view_change_does_not_replace_the_pending_scene_with_the_old_one(
     Darstellung. Ein Setter, der daraus einen neuen Auftrag baut, darf deshalb
     nicht die inzwischen angeforderte Szene durch genau diese alte ersetzen.
     """
+    from app.core.geom import mesh_ops
     from app.ui import viewport as viewport_module
     from app.ui.viewport import Viewport
 
@@ -1166,7 +1174,7 @@ def test_a_view_change_does_not_replace_the_pending_scene_with_the_old_one(
         applied.append(result)
 
     monkeypatch.setattr(viewport_module, "DISPLAY_DECIMATION_ABOVE", 0)
-    monkeypatch.setattr(viewport_module, "decimate_for_display", delayed)
+    monkeypatch.setattr(mesh_ops, "decimate_for_display", delayed)
     monkeypatch.setattr(viewport, "_apply_scene", apply)
 
     viewport.show_scene(new)
@@ -6639,11 +6647,10 @@ def test_extending_selection_finishes_every_running_colour_transition(
     Hier läuft die echte Qt-Animation mit gesteuerter Uhr statt Wartezeit.
     """
     from app.ui import motion
-    from app.ui import viewport as viewport_module
     from app.ui.viewport import ACCENT_MS, SELECTED_COLOUR, Viewport
 
     monkeypatch.setattr(motion, "animations_enabled", lambda: True)
-    monkeypatch.setattr(viewport_module, "animations_enabled", lambda: True)
+    monkeypatch.setattr(motion, "animations_enabled", lambda: True)
     viewport = Viewport()
     viewport.renderer = RecordingRenderer()
     viewport.show_scene(_scene_with_two_bodies())
@@ -7772,6 +7779,7 @@ def test_scene_worker_owns_its_mesh_and_evicts_the_least_recently_used_display(
 
     from PySide6.QtTest import QTest
 
+    from app.core.geom import mesh_ops
     from app.core.scene import EvaluationResult
     from app.core.types import Scene, SceneObject
     from app.ui import viewport as module
@@ -7816,7 +7824,7 @@ def test_scene_worker_owns_its_mesh_and_evicts_the_least_recently_used_display(
     # im Viewport eine Kopfkopie aus ``mesh_ops`` (CS-11), und der erzeugte Schnitt
     # stellt sie auf das Original um.
     if preparation == "decimation":
-        monkeypatch.setattr(module, "decimate_for_display", inspect)
+        monkeypatch.setattr(mesh_ops, "decimate_for_display", inspect)
     else:
         monkeypatch.setattr(module, "cut", inspect)
     result = EvaluationResult(

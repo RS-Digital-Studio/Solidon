@@ -78,12 +78,12 @@ def test_a_very_fine_model_is_told_it_is_one(monkeypatch: pytest.MonkeyPatch) ->
     Vergleich, Befund —, nicht die Zahl: Die Schwelle wird auf die Größe des
     Korpus gesenkt, und das Modell muss dann sagen, was es ist.
     """
-    from app.core.ingest import loader
+    from app.core.perceive import maps
 
-    monkeypatch.setattr(loader, "MAP_LIMIT_TRIANGLES", 500_000)
+    monkeypatch.setattr(maps, "MAP_LIMIT_TRIANGLES", 500_000)
     result = load(HEAVY)
 
-    assert result.mesh.triangle_count > loader.MAP_LIMIT_TRIANGLES
+    assert result.mesh.triangle_count > maps.MAP_LIMIT_TRIANGLES
     codes = {entry.code for entry in result.findings}
     assert "ingest.very_large" in codes
     assert "ingest.multiple_components" in codes, "forty-one pieces, and it says so"

@@ -42,8 +42,9 @@ import numpy as np
 from numpy.typing import NDArray
 
 from app.core.errors import CANCEL, CHANGE_FEATURE, CORRECT_INPUT, ValidationError
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.boolean import BOOLEAN_OVERLAP
-from app.core.geom.mesh import MeshData, as_mesh_data, ray_hit_distances, stable_arctan2
+from app.core.geom.mesh import MeshData, ray_hit_distances, stable_arctan2
 from app.core.types import Feature, FeatureId, Finding, is_a_cavity
 from app.core.units import EPS_GEOM, MAX_FACET_SAG, circle_point, dot3, exact_tan_degrees
 from app.i18n import _
@@ -563,7 +564,7 @@ def cavity_of(
     """
     from app.core.perceive.relations import cavity_chain_state_at, cavity_sides
 
-    mesh = as_mesh_data(body)
+    mesh = geom_mesh.as_mesh_data(body)
     if feature.kind == "thread":
         return _at_a_thread(feature, features, mesh, size)
     state = cavity_chain_state_at(feature, features, mesh)

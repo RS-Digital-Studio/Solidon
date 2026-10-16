@@ -53,11 +53,13 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.branding import APP_NAME, APP_VERSION  # noqa: E402
+from app import branding  # noqa: E402
+from app.branding import APP_NAME  # noqa: E402
 from app.core.log import fatal_records  # noqa: E402
 from app.core.paths import PROFILE_VARIABLES, isolate_secrets  # noqa: E402
 from app.ui.start_check import FORMAT, REPORT_VARIABLE, SECONDS  # noqa: E402
-from tools.check_frozen_helper import application, image_of, is_the_application  # noqa: E402
+from tools import check_frozen_helper  # noqa: E402
+from tools.check_frozen_helper import application, is_the_application  # noqa: E402
 
 #: Was das Paket unter Linux aus Slicer-AppImages entpacken muss: zstd für die
 #: Orca-Familie, gzip für Cura (``app.core.export.squashfs``).
@@ -215,8 +217,10 @@ def judge(
     if report.get("format") != FORMAT:
         problems.append(f"Bericht in Fassung {report.get('format')!r}, erwartet {FORMAT}.")
     started = report.get("version")
-    if started != APP_VERSION:
-        problems.append(f"Gestartet wurde {started!r}, erwartet {APP_VERSION}: falsches Paket.")
+    if started != branding.APP_VERSION:
+        problems.append(
+            f"Gestartet wurde {started!r}, erwartet {branding.APP_VERSION}: falsches Paket."
+        )
     if not report.get("window", {}).get("visible"):
         problems.append("Das Hauptfenster war nicht sichtbar.")
     renderer = report.get("renderer", {})
@@ -289,7 +293,7 @@ def survivors(report: dict[str, Any] | None, *, flatpak: bool) -> list[int]:
     executable = Path(report.get("executable", ""))
     alive = []
     for pid in report.get("helpers", []):
-        image = image_of(int(pid))
+        image = check_frozen_helper.image_of(int(pid))
         if image is not None and is_the_application(image, executable):
             alive.append(int(pid))
     return alive

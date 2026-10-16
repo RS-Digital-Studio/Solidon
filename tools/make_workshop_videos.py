@@ -3872,6 +3872,7 @@ def main() -> int:
     if args.inputs_only:
         print([str(path) for path in make_inputs(folder / "sources", args.story)], flush=True)
         return 0
+    from app import i18n
     from tools import make_longform_video
 
     lf = make_longform_video
@@ -3892,7 +3893,7 @@ def main() -> int:
     lf.install_catalog(LANGUAGE, lf.read_catalog(LANGUAGE))
     # Über das gebundene Modul, nicht über ``lf``: ``set_language`` ist dort eine
     # Kopfkopie aus ``app.i18n`` (CS-11), die der erzeugte Schnitt umstellt.
-    make_longform_video.set_language(LANGUAGE)
+    i18n.set_language(LANGUAGE)
     lf.install_qt_translations(app, LANGUAGE)
     lf.apply_theme(app, "dark")
     if args.encode_only:

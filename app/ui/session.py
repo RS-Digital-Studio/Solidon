@@ -29,10 +29,12 @@ from typing import Any, BinaryIO, Final, NamedTuple, cast
 from PySide6.QtCore import QCoreApplication, QEventLoop, QObject, Signal
 
 from app.core import activation, expressions
+from app.core import scene as core_scene
 from app.core.agent import apply as agent_apply
 from app.core.agent.proposal import Proposal
 from app.core.agent.session import AgentSession
-from app.core.backends.llm import LLMBackend, first_available
+from app.core.backends import llm
+from app.core.backends.llm import LLMBackend
 from app.core.backends.mesh import GeneratedMesh
 from app.core.counterpart import (
     CounterpartApplied,
@@ -61,12 +63,14 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.generate import into_project as generate_into
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.autosplit import MARGIN
 from app.core.geom.difference import SceneDifference, compare_scenes
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData
 from app.core.geom.section import SectionPlane
+from app.core.ingest import loader
 from app.core.ingest.archive import is_archive, model_from_archive
-from app.core.ingest.loader import read_local_payload, unreadable_file
+from app.core.ingest.loader import unreadable_file
 from app.core.ingest.plan import (
     ImportPlan,
     import_plan,
@@ -79,9 +83,9 @@ from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts.recipe import Recipe
 from app.core.lid_flow import LidApplied, apply_lid
 from app.core.log import get_logger
+from app.core.perceive import local
 from app.core.perceive.local import (
     CONFIRMED_FEATURE_LIMIT_TRIANGLES,
-    FEATURE_LIMIT_TRIANGLES,
     forget_out_of_memory,
     recognition_gigabytes,
     recognition_minutes,
@@ -99,7 +103,7 @@ from app.core.scene import (
     foreign,
     orphans,
 )
-from app.core.scene.evaluate import conversion_finding, evaluate
+from app.core.scene.evaluate import conversion_finding
 from app.core.scene.history import (
     Dependencies,
     MoveTarget,
@@ -267,14 +271,14 @@ def _warm_metrics(result: EvaluationResult, cancelled: CancelSignal) -> None:
         if len(entry.features) > 1:
             cancelled.raise_if_cancelled()
             try:
-                cavity_chains(entry.features, as_mesh_data(mesh))
+                cavity_chains(entry.features, geom_mesh.as_mesh_data(mesh))
             except Exception as problem:  # die Ketten sagen es später am Ort
                 _log.info("cavity chains of %s not available: %s", entry.id, problem)
             # **Und die funktionalen Gruppen** (RM-184): Baum, Merkmalfenster und
             # die Sperre von *Kammer ändern* lesen sie im Hauptthread; gerechnet
             # wird hier, gemerkt am Netz (``perceive.groups.functional_groups``).
             try:
-                functional_groups(entry.features, as_mesh_data(mesh), cancelled=cancelled)
+                functional_groups(entry.features, geom_mesh.as_mesh_data(mesh), cancelled=cancelled)
             except OperationCancelled:
                 raise
             except Exception as problem:  # die Gruppen sagen es später am Ort
@@ -411,7 +415,7 @@ class _EvaluationWorker(Worker):
             for key, body in picture.scene.objects.items()
             if key in imported
             and isinstance(body.mesh, MeshData)
-            and FEATURE_LIMIT_TRIANGLES
+            and local.FEATURE_LIMIT_TRIANGLES
             < body.mesh.triangle_count
             <= CONFIRMED_FEATURE_LIMIT_TRIANGLES
         ]
@@ -672,7 +676,7 @@ class _ReadWorker(Worker):
     def _read_into(self, box: list[tuple[str, object]]) -> None:
         """Im Lesefaden: das Ergebnis oder den Hinweis in ``box`` legen."""
         try:
-            payload = read_local_payload(self._path)
+            payload = loader.read_local_payload(self._path)
         except AppError as error:
             box.append(("failed", error))
         except OSError as problem:
@@ -700,7 +704,7 @@ class _BatchReadWorker(_ReadWorker):
             for index, path in enumerate(self._paths):
                 if self.cancel.is_cancelled:
                     return
-                payload = read_local_payload(path)
+                payload = loader.read_local_payload(path)
                 plan = import_plan(
                     f"batch_{index}", path.name, payload, first_model=None, taken=taken
                 )
@@ -1543,7 +1547,7 @@ class _RevisionWorker(Worker):
         session._pending.project_generation = self._project_generation
 
         def run(document: Any) -> EvaluationResult:
-            return evaluate(
+            return core_scene.evaluate(
                 document,
                 self._profile,
                 quality=self._quality,
@@ -1621,7 +1625,7 @@ class _BakeWorker(Worker):
         session = self._session
         session._pending.project_generation = self._project_generation
         try:
-            result = evaluate(
+            result = core_scene.evaluate(
                 self._document,
                 self._profile,
                 quality="fine",
@@ -3260,7 +3264,7 @@ class Session(QObject):
         up_to = self._bake_document(op_id)
         if up_to is None:
             return False
-        result = evaluate(
+        result = core_scene.evaluate(
             up_to,
             self.evaluation_profile,
             quality="fine",
@@ -3339,7 +3343,7 @@ class Session(QObject):
             return False
 
         source_id = self._embed_source(
-            "generated", "sculpt.npz", as_mesh_data(entry.mesh).to_bytes()
+            "generated", "sculpt.npz", geom_mesh.as_mesh_data(entry.mesh).to_bytes()
         )
         self.change_params(op_id, {"baked": source_id})
         return True
@@ -3531,7 +3535,7 @@ class Session(QObject):
         """
         return self.import_payload(
             path.name,
-            read_local_payload(path),
+            loader.read_local_payload(path),
             unit=unit,
             raise_on_error=raise_on_error,
         )
@@ -4266,7 +4270,7 @@ class Session(QObject):
 
         applied = apply_split(
             self.project.document,
-            as_mesh_data(entry.mesh),
+            geom_mesh.as_mesh_data(entry.mesh),
             object_id,
             object_profile,
             features=entry.features,
@@ -4301,7 +4305,7 @@ class Session(QObject):
             self.project.document,
             object_id,
             plane,
-            mesh=as_mesh_data(entry.mesh) if entry is not None else None,
+            mesh=geom_mesh.as_mesh_data(entry.mesh) if entry is not None else None,
             features=entry.features if entry is not None else None,
             pins=pins,
             shape=shape,
@@ -4328,7 +4332,7 @@ class Session(QObject):
             targets.append(
                 SplitTarget(
                     object_id,
-                    mesh=as_mesh_data(entry.mesh) if entry is not None else None,
+                    mesh=geom_mesh.as_mesh_data(entry.mesh) if entry is not None else None,
                     features=entry.features if entry is not None else None,
                 )
             )
@@ -4738,7 +4742,7 @@ class Session(QObject):
         sources = ProjectSources(self.project, base_dir=self.base_dir)
         profile = self.evaluation_profile
         self.placement_async(
-            lambda: evaluate(
+            lambda: core_scene.evaluate(
                 document,
                 profile,
                 quality=self.quality,
@@ -4866,7 +4870,7 @@ class Session(QObject):
         # Markierung, aber kein Aufrufer reichte das eine an das andere: Eine
         # geschützte Fläche war ein Bild ohne Wirkung (RM-080).
         worker = _SplitWorker(
-            as_mesh_data(entry.mesh),
+            geom_mesh.as_mesh_data(entry.mesh),
             object_id,
             object_profile,
             entry.features,
@@ -5047,7 +5051,7 @@ class Session(QObject):
                 if cancel.is_cancelled:
                     raise OperationCancelled()
                 history.undo()
-            result = evaluate(
+            result = core_scene.evaluate(
                 document,
                 historical_profile(),
                 quality=quality,
@@ -5061,7 +5065,7 @@ class Session(QObject):
             if result.stopped_at is not None:
                 return None, None, str(_("Die Kette hält an — siehe Prüfbericht."))
             history.undo()
-            before = evaluate(
+            before = core_scene.evaluate(
                 document,
                 historical_profile(),
                 quality=quality,
@@ -5481,7 +5485,7 @@ class Session(QObject):
         from app.ui.print_contract import missing_profile_basis
 
         worker = getattr(self._pending, "worker", None)
-        result = evaluate(
+        result = core_scene.evaluate(
             document,
             self.evaluation_profile,
             quality=quality or self.quality,
@@ -5662,7 +5666,7 @@ class Session(QObject):
         aus (§27).
         """
         if self._backend is None and not self._backend_probed:
-            self._backend = first_available()
+            self._backend = llm.first_available()
             self._backend_probed = True
         return self._backend
 
@@ -6037,7 +6041,7 @@ class Session(QObject):
             )
         from app.ui.print_contract import missing_profile_basis
 
-        result = evaluate(
+        result = core_scene.evaluate(
             working,
             preview_profile,
             quality="fine" if review_print else "draft",
@@ -6188,7 +6192,7 @@ class Session(QObject):
             if review_print:
                 from app.ui.print_contract import review_difference
 
-                baseline = evaluate(
+                baseline = core_scene.evaluate(
                     snapshot.document,
                     preview_profile,
                     quality="fine",
@@ -6299,7 +6303,7 @@ class Session(QObject):
                     number for number, entry in enumerate(base.ops) if entry.id == change_op
                 )
                 _coarse_steps_before(base, index, before)
-            result = evaluate(
+            result = core_scene.evaluate(
                 base,
                 snapshot.profile,
                 quality="draft",
@@ -6451,7 +6455,7 @@ class Session(QObject):
         if index is None:
             return None
         document.ops[:] = document.ops[:index]
-        result = evaluate(
+        result = core_scene.evaluate(
             document,
             snapshot.profile,
             quality="draft",

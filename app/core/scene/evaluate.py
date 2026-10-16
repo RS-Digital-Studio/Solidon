@@ -61,6 +61,8 @@ from app.core.geom.boolean import body_split, pieces
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.profiles import analysis_limits, for_process
 from app.core.log import get_logger
+from app.core.perceive import features as perceive_features
+from app.core.perceive import local, matching
 from app.core.perceive.features import (
     DETECTABLE_KINDS,
     DetectionStore,
@@ -69,7 +71,6 @@ from app.core.perceive.features import (
     carry_detection,
     carry_refined_detection,
     centre_of,
-    detect,
     freeform_dropped,
     known_detection,
     moved_from,
@@ -87,7 +88,6 @@ from app.core.perceive.local import (
     remember_out_of_memory,
     rigid_transform,
 )
-from app.core.perceive.local import FEATURE_LIMIT_TRIANGLES as FEATURE_LIMIT_TRIANGLES
 from app.core.perceive.match_decisions import (
     MAPPING_NO_LONGER_VALID,
     conflict_groups,
@@ -112,29 +112,27 @@ from app.core.perceive.matching import (
     faces_in_plane,
     forget_transformed,
     inherit_originators,
-    match,
     moved_features,
     on_their_partners,
     pieces_in_place,
     planar_faces,
     planar_source,
     question_for,
-    resolve,
     settled_twins,
     transformed_features,
 )
 from app.core.perceive.relations import thinnest_sleeve
 from app.core.registry import REGISTRY, OperationSpec, Registry, needed_inputs, validate
 from app.core.registry.params import reads_scene
+from app.core.scene import fits, orphans
 from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.choice_ways import fitted_to_step
 from app.core.scene.edge_binding import NO_BINDING, EdgeBinding, EdgeTarget, bind_edges
 from app.core.scene.fits import active_fits
-from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import FeatureMemo, digest, object_hash, operation_hash
 from app.core.scene.history import Discarded, discarded
-from app.core.scene.orphans import Reference, feature_ref_of_sketch
+from app.core.scene.orphans import Reference
 from app.core.scene.orphans import references as feature_references
 from app.core.scene.parameter_binding import BindingSpot, binding_spots
 from app.core.scene.parameter_usage import ParameterUse, parameter_uses
@@ -1734,7 +1732,7 @@ def _evaluate(
         findings.extend(
             checks.run(
                 "scene.fits",
-                lambda: check_fits(scene, profile, document=document, cancelled=token, names=names),
+                lambda: fits.check(scene, profile, document=document, cancelled=token, names=names),
                 applicable=bool(scene.fits),
             )
         )
@@ -3818,7 +3816,7 @@ def _answer_matches(
         ):
             remembered = legacy.get(old_id)
             if isinstance(remembered, Mapping) and valid_fingerprint(remembered, legacy=True):
-                answer = resolve(
+                answer = matching.resolve(
                     remembered,
                     claims[old_id],
                     entry.features,
@@ -4230,7 +4228,7 @@ def _skipped_recognition(
     """
     assert isinstance(entry.mesh, MeshData)
     triangles = entry.mesh.triangle_count
-    values: dict[str, Any] = {"triangles": triangles, "limit": FEATURE_LIMIT_TRIANGLES}
+    values: dict[str, Any] = {"triangles": triangles, "limit": local.FEATURE_LIMIT_TRIANGLES}
     if out_of_memory:
         values["memory"] = recognition_gigabytes(triangles)
         message = (
@@ -4304,7 +4302,7 @@ def _ask_once_for_large_bodies(
         if not isinstance(mesh, MeshData):
             continue
         count = mesh.triangle_count
-        if not FEATURE_LIMIT_TRIANGLES < count <= CONFIRMED_FEATURE_LIMIT_TRIANGLES:
+        if not local.FEATURE_LIMIT_TRIANGLES < count <= CONFIRMED_FEATURE_LIMIT_TRIANGLES:
             continue
         object_id = operation.outputs[index]
         placed = dataclasses.replace(body, id=object_id)
@@ -5096,7 +5094,7 @@ def _with_features(
                 reference_features = transformed_features(
                     previous, transform, check_cancelled=watch.raise_if_cancelled
                 ).candidates
-            matched = match(
+            matched = matching.match(
                 reference_features,
                 exact_entry.features,
                 mesh.bounds.centre,
@@ -5207,7 +5205,7 @@ def _with_features(
                 object_id=entry.id,
             )
         return exact_entry
-    local_only = mesh.triangle_count > FEATURE_LIMIT_TRIANGLES
+    local_only = mesh.triangle_count > local.FEATURE_LIMIT_TRIANGLES
     # Gefragt wird nur oberhalb der automatischen Grenze; eine gespeicherte
     # Wahl gilt für jeden geladenen Körper bis zur bestätigbaren Grenze —
     # auch die Absage, die ein Speicherfehler weiter unten festhält.
@@ -5264,7 +5262,8 @@ def _with_features(
         state = _BodyRecognition(
             allowed,
             mesh.triangle_count
-            if saved is False and (out_of_memory or mesh.triangle_count <= FEATURE_LIMIT_TRIANGLES)
+            if saved is False
+            and (out_of_memory or mesh.triangle_count <= local.FEATURE_LIMIT_TRIANGLES)
             else None,
             (operation.id, key, mesh_scope) if allowed is not None else None,
         )
@@ -5501,7 +5500,7 @@ def _with_features(
                     and state is not None
                     and state.allowed is True
                     and state.answer is not None
-                    and mesh.triangle_count > FEATURE_LIMIT_TRIANGLES
+                    and mesh.triangle_count > local.FEATURE_LIMIT_TRIANGLES
                     and known_detection(mesh, detections) is None
                 ):
                     # **Eine gespeicherte Zustimmung wird gemeldet, wo sie die
@@ -5519,7 +5518,7 @@ def _with_features(
                         {"object_id": entry.id, "scope": answer_scope, "allowed": True},
                     )
                 try:
-                    full = detect(
+                    full = perceive_features.detect(
                         mesh,
                         check_cancelled=watch.raise_if_cancelled,
                         progress=advance,
@@ -6077,7 +6076,7 @@ def _with_features(
     watch.raise_if_cancelled()
     if say is not None:
         say(str(_("Merkmale zuordnen")))
-    matched = match(
+    matched = matching.match(
         previous,
         detected,
         centre,
@@ -6704,7 +6703,7 @@ def _with_nested_context(
         if spec.kind == "sketch" and objects is not None and hashes is not None:
             drawn = resolved.get(spec.name)
             if isinstance(drawn, str) and drawn:
-                plane_reference = feature_ref_of_sketch(drawn)
+                plane_reference = orphans.feature_ref_of_sketch(drawn)
                 if plane_reference is not None:
                     carriers = _carrier_hashes(
                         plane_reference.feature_id,

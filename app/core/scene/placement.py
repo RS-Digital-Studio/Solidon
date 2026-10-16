@@ -35,7 +35,8 @@ from typing import TYPE_CHECKING, Any, Final, Literal, cast
 import numpy as np
 
 from app.core.errors import CORRECT_INPUT, AmbiguityError, ValidationError
-from app.core.geom.mesh import MeshData, as_mesh_data, edge_table, unique_edges
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData, edge_table, unique_edges
 from app.core.geom.transform import along as projected_along
 from app.core.geom.transform import composed, inverse_affine, moved_points, turned
 from app.core.log import get_logger
@@ -172,7 +173,7 @@ def bore_step_of(
     feature = body.features.get(selected.feature_id) if body is not None else None
     if body is None or feature is None or feature.kind not in {"hole", "cone"}:
         return None
-    state = cavity_chain_state_at(feature, body.features, as_mesh_data(body.mesh))
+    state = cavity_chain_state_at(feature, body.features, geom_mesh.as_mesh_data(body.mesh))
     if state.touches_other and state.chain is None:
         return None
     sections = state.chain or (feature,)
@@ -1119,7 +1120,7 @@ def surface_at_feature(
     """
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     indices = np.asarray(feature.face_indices, dtype=np.int64)
     if not len(indices) or int(indices.min()) < 0 or int(indices.max()) >= len(mesh.raw.faces):
         raise _reference_error()
@@ -1193,7 +1194,7 @@ def bound_surface_values(
     if not np.isfinite((*placement.point, *placement.normal)).all():
         raise _placement_error()
     feature = _surface_feature(source, placement.face_indices)
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     vertices = np.asarray(mesh.raw.triangles)[list(placement.face_indices)].reshape(-1, 3)
     if not len(vertices):
         raise _placement_error()
@@ -1405,7 +1406,7 @@ def bind_surface(
         feature = source.features.get(reference.feature_id)
         if feature is None:
             raise _reference_error()
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     inverse = inverse_affine(np.asarray(record["frame"]))
     if inverse is None:
         raise _reference_error()
@@ -3302,7 +3303,7 @@ def _outward_drill_axis(values: Any, source: SceneObject | None) -> Vec3:
         return drill_outward_axis_from_bounds(axis, position, centre)
     else:
         # Der Netzkern prüft zuerst die offene Strahlseite, dann die Materialsäule.
-        return drill_outward_axis(as_mesh_data(source.mesh), axis, position)
+        return drill_outward_axis(geom_mesh.as_mesh_data(source.mesh), axis, position)
 
 
 def _creation_tool(

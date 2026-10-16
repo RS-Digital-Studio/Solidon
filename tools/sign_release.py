@@ -52,11 +52,11 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app import branding
 from app.branding import (
     APP_ID,
     APP_NAME,
     APP_VENDOR,
-    APP_VERSION,
     PART_FILE_MIME_TYPE,
     PART_FILE_SUFFIX,
     PROJECT_SUFFIX,
@@ -765,7 +765,7 @@ def _github_metadata(suffix: str) -> dict[str, Any]:
 
 def _verify_release_tag(commit: str) -> None:
     """Bindet den echten Versionstag direkt oder einmal annotiert an den Baucommit."""
-    tag = f"v{APP_VERSION}"
+    tag = f"v{branding.APP_VERSION}"
     reference = _github_metadata(f"git/ref/tags/{tag}")
     try:
         if reference["ref"] != f"refs/tags/{tag}":
@@ -868,7 +868,7 @@ def verify_ci_run(run_id: str, workflow: str) -> dict[str, Any]:
         release_tag = (
             workflow == BUILD_WORKFLOW
             and record.get("event") == "push"
-            and record.get("head_branch") == f"v{APP_VERSION}"
+            and record.get("head_branch") == f"v{branding.APP_VERSION}"
         )
         if (
             workflow not in {BUILD_WORKFLOW, INSTALLER_WORKFLOW}

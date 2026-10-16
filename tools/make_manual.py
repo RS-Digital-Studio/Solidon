@@ -50,10 +50,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from app.branding import APP_NAME, APP_VENDOR, APP_VERSION, COPYRIGHT, WEBSITE_URL
-from app.core import figures, manual
-from app.core.bootstrap import load_operations
-from app.i18n import SOURCE_LANGUAGE, install_catalog, language_name, set_language
+from app import branding, i18n
+from app.branding import APP_NAME, APP_VENDOR, COPYRIGHT, WEBSITE_URL
+from app.core import bootstrap, figures, manual
+from app.i18n import SOURCE_LANGUAGE, install_catalog, language_name
 from app.i18n.catalog import available_languages, read_catalog
 from tools.site_nav import BRAND_MARK, entries_for, nav_menu, site_text
 
@@ -969,7 +969,7 @@ def _cover_block(language: str) -> str:
         f'<p class="subtitle">{title}</p>'
         f"<hr>"
         f'<p class="claim">{subtitle}</p>'
-        f'<p class="imprint">{version_word} {APP_VERSION}<br>{COPYRIGHT}</p>'
+        f'<p class="imprint">{version_word} {branding.APP_VERSION}<br>{COPYRIGHT}</p>'
         f"</section>"
     )
 
@@ -1385,7 +1385,7 @@ def _stamp(pdf: Path, language: str) -> None:
         {
             "/Title": f"{site_text('Handbuch', language)} — {APP_NAME}",
             "/Author": APP_VENDOR,
-            "/Creator": f"{APP_NAME} {APP_VERSION}",
+            "/Creator": f"{APP_NAME} {branding.APP_VERSION}",
         }
     )
     _replace_with(pdf, writer)
@@ -1516,7 +1516,7 @@ def _overlay(target: Path, chapters: list[str], total: int, language: str) -> Pa
             painter.drawText(
                 foot,
                 int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
-                f"{site_text('Handbuch', language)} · {APP_NAME} {APP_VERSION}",
+                f"{site_text('Handbuch', language)} · {APP_NAME} {branding.APP_VERSION}",
             )
             painter.drawText(
                 foot,
@@ -1558,14 +1558,14 @@ def main() -> int:
     # bleibt für den Fall, dass doch.
     os.environ.pop("QT_QPA_PLATFORM", None)
 
-    load_operations()
+    bootstrap.load_operations()
     # Der Katalog ist die Anmeldung einer Sprache (§4.1). ``page_for`` und die
     # sichtbaren Rahmentexte stammen für jedes Kürzel aus demselben Katalog;
     # ein unvollständiger Katalog macht die Übersetzungsprüfung rot. Eine
     # zweite Sprachliste würde den Erzeugerlauf wieder still unvollständig machen.
     for language in available_languages():
         install_catalog(language, read_catalog(language))
-        set_language(language)
+        i18n.set_language(language)
         figures.forget()
         print(f"{language}:")
 

@@ -11,6 +11,7 @@ Geprüft wird offscreen, wie bei ``test_sketch_editor.py``: Die Züge entstehen
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from typing import Any
 
@@ -913,20 +914,20 @@ def test_the_wall_check_does_not_hold_the_window(
     import threading
     import time
 
-    import app.ui.main_window as module
+    from app.core.perceive import maps as perceive_maps
 
     object_id = with_a_thin_shell(window, tmp_path)
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 20.0))
     assert window.wait_for_sculpt_preview(60_000)
     release = threading.Event()
-    real = module.wall_thickness_map
+    real = perceive_maps.wall_thickness_map
 
     def slow(*args: Any, **kwargs: Any) -> Any:
         release.wait(10)
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(module, "wall_thickness_map", slow)
+    monkeypatch.setattr(perceive_maps, "wall_thickness_map", slow)
 
     # Der Hinweis auf ein zu grobes Netz hat Vorrang vor „wird geprüft"; hier
     # geht es um die Zeile, die sonst leer stünde.
@@ -1189,12 +1190,12 @@ def test_baking_keeps_the_fine_result(window: MainWindow, monkeypatch: pytest.Mo
     Dreiecke und dasselbe Volumen wie in der feinen Auswertung."""
     import threading
 
-    import app.ui.session as session_module
+    from app.core import scene
 
     object_id, op_id = with_a_cone_session(window)
     fine = window.session.evaluate_now().scene.objects[object_id].mesh
     asked: list[str] = []
-    real = session_module.evaluate
+    real = scene.evaluate
     caller = threading.get_ident()
 
     def spied(document: Any, *args: Any, **kwargs: Any) -> Any:
@@ -1205,10 +1206,10 @@ def test_baking_keeps_the_fine_result(window: MainWindow, monkeypatch: pytest.Mo
             asked.append(str(kwargs.get("quality")))
         return real(document, *args, **kwargs)
 
-    monkeypatch.setattr(session_module, "evaluate", spied)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", spied)
     assert window.session.bake_strokes(op_id)
     assert asked == ["fine"], "das Festschreiben rechnet fein"
-    monkeypatch.setattr(session_module, "evaluate", real)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", real)
     assert window.session.wait_for_idle(30_000)
 
     baked = window.session.evaluate_now().scene.objects[object_id].mesh
@@ -1225,27 +1226,27 @@ def test_baking_in_the_window_runs_beside_it_and_keeps_the_fine_result(
     import threading
     import time
 
-    import app.ui.session as session_module
+    from app.core import scene
 
     object_id, op_id = with_a_cone_session(window)
     fine = window.session.evaluate_now().scene.objects[object_id].mesh
     release = threading.Event()
     asked: list[str] = []
-    real = session_module.evaluate
+    real = scene.evaluate
 
     def held(document: Any, *args: Any, **kwargs: Any) -> Any:
         asked.append(str(kwargs.get("quality")))
         release.wait(10)
         return real(document, *args, **kwargs)
 
-    monkeypatch.setattr(session_module, "evaluate", held)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", held)
     started = time.perf_counter()
     window.bake_sculpt(op_id)
     assert time.perf_counter() - started < 1.0, "das Fenster wartete auf das Festschreiben"
     assert window.session.busy
     release.set()
     assert window.session.wait_for_idle(30_000)
-    monkeypatch.setattr(session_module, "evaluate", real)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", real)
 
     assert asked and asked[0] == "fine", "das Festschreiben rechnet fein"
     sculpt = next(entry for entry in window.session.project.document.ops if entry.id == op_id)
@@ -2216,7 +2217,7 @@ def test_a_refined_finish_that_does_not_land_keeps_the_session_and_its_strokes(
         raise UserError(title=_("Abgelehnt."), detail=_("Abgelehnt."))
 
     monkeypatch.setattr(session_module, "revise", ends)
-    monkeypatch.setattr("app.ui.main_window.show_error", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda *args, **kwargs: None)
     window.announce = lambda text, *args, **kwargs: said.append(str(text))  # type: ignore[method-assign]
     window.finish_sculpt()
     assert window.session.wait_for_idle(60_000)
@@ -2289,9 +2290,7 @@ def test_a_reopened_step_on_an_open_mesh_tries_once_and_says_why(
     import app.core.geom.mesh_ops as mesh_ops
 
     errors: list[Any] = []
-    monkeypatch.setattr(
-        "app.ui.main_window.show_error", lambda error, *a, **k: errors.append(error)
-    )
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda error, *a, **k: errors.append(error))
     _target, step = _sculpted_then_moved(window)
     before = _ops(window)
     calls: list[float] = []

@@ -49,19 +49,20 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QFileOpenEvent
 from PySide6.QtWidgets import QApplication
 
-from app.branding import APP_ID, APP_NAME, APP_VERSION
-from app.core import activation, network
+from app import branding, i18n
+from app.branding import APP_ID, APP_NAME
+from app.core import activation, bootstrap, network
 from app.core.backends.resources import release_warm_before_exit
-from app.core.bootstrap import load_operations, load_user_parts
+from app.core.bootstrap import load_user_parts
 from app.core.geom import kernel_process
 from app.core.log import configure, get_logger
-from app.i18n import set_key_platform, set_language, tr
-from app.i18n.catalog import install_language
+from app.i18n import catalog, set_key_platform, tr
 from app.ui import app_events, cursors, start_check, window_chrome
+from app.ui import settings as ui_settings
 from app.ui.icons import application_icon
 from app.ui.leash import Worker, WorkerLeash, collect_in_main_thread, configure_gil_switching
 from app.ui.qt_platform import prefer_an_input_method_qt_has, prefer_x11_for_the_viewport
-from app.ui.settings import UiSettings, load_settings
+from app.ui.settings import load_settings
 from app.ui.splash import SplashScreen
 from app.ui.theme import apply_theme, enable_hidpi
 
@@ -346,14 +347,14 @@ def build_application(
     appimage.never_wait_in(threading.current_thread())
     reach_every_control_by_tab(application)
     application.setApplicationName(APP_NAME)
-    application.setApplicationVersion(APP_VERSION)
+    application.setApplicationVersion(branding.APP_VERSION)
     application.setOrganizationDomain(APP_ID)
     application.setWindowIcon(application_icon())
 
     report(tr("Einstellungen werden gelesen …"), 0.45)
     settings = load_settings()
-    install_language(settings.language)
-    set_language(settings.language)
+    catalog.install_language(settings.language)
+    i18n.set_language(settings.language)
     # Kürzel im Text so, wie die Tastatur sie beschriftet: ⌘Z auf dem Mac.
     set_key_platform(sys.platform)
     install_qt_translations(application, settings.language)
@@ -385,7 +386,7 @@ def build_application(
 
 
 def rebuild_for_language(
-    application: QApplication, window: MainWindow, settings: UiSettings
+    application: QApplication, window: MainWindow, settings: ui_settings.UiSettings
 ) -> MainWindow:
     """Das Fenster in der neuen Sprache noch einmal aufbauen.
 
@@ -409,8 +410,8 @@ def rebuild_for_language(
     """
     from app.ui.main_window import MainWindow as Window
 
-    install_language(settings.language)
-    set_language(settings.language)
+    catalog.install_language(settings.language)
+    i18n.set_language(settings.language)
     install_qt_translations(application, settings.language)
 
     geometry = window.saveGeometry()
@@ -528,8 +529,8 @@ def main(argv: list[str] | None = None) -> int:
     # sie auf Deutsch zu zeigen, weil der Katalog erst später kommt, wäre
     # ausgerechnet beim Abschied der falsche Ton.
     settings = load_settings()
-    install_language(settings.language)
-    set_language(settings.language)
+    catalog.install_language(settings.language)
+    i18n.set_language(settings.language)
     set_key_platform(sys.platform)
     install_qt_translations(application, settings.language)
     # **Das Thema, bevor irgendetwas zu sehen ist.** Gesetzt hat es bisher erst
@@ -582,7 +583,7 @@ def main(argv: list[str] | None = None) -> int:
     leash.start(adapter_probe)
 
     splash.step(tr("Operationen werden geladen …"), 0.12)
-    load_operations()
+    bootstrap.load_operations()
     # Die eigenen Bausteine des Nutzers, nach der Bibliothek (§24.5). Ihre
     # Befunde — eine Datei, die sich nicht laden ließ — gehören in den
     # Prüfbericht, sobald es ihn gibt.
@@ -678,7 +679,7 @@ def main(argv: list[str] | None = None) -> int:
     # Fensters taugt dafür nicht: In der Suite laufen siebenhundert davon, und
     # ein Fenster ist nicht die Anwendung.
     application.aboutToQuit.connect(
-        lambda: _log.info("%s %s ended normally", APP_NAME, APP_VERSION)
+        lambda: _log.info("%s %s ended normally", APP_NAME, branding.APP_VERSION)
     )
     # Ein warm gehaltenes Sprachmodell gehört nicht über das Ende hinaus auf
     # die Grafikkarte (``resources.release_warm_before_exit``): Nach dem
@@ -691,7 +692,7 @@ def main(argv: list[str] | None = None) -> int:
     # Ebenso die Arbeiter der Erkennung (RM-637) — nur, wenn es sie gab.
     application.aboutToQuit.connect(_stop_perceive_workers)
 
-    _log.info("%s %s started", APP_NAME, APP_VERSION)
+    _log.info("%s %s started", APP_NAME, branding.APP_VERSION)
     return int(application.exec())
 
 

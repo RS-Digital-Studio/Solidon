@@ -14,7 +14,7 @@ from app.core import discover
 from app.core.errors import AppError
 from app.core.knowledge import profiles
 from app.core.types import PrinterProfile
-from app.ui import first_run
+from app.ui import dialogs, first_run
 from app.ui.first_run import FirstRunDialog
 from app.ui.settings import UiSettings
 
@@ -358,7 +358,7 @@ def test_choosing_a_program_solidon_does_not_work_with_is_refused(
         assert isinstance(handlers, dict)
         handlers["choose_slicer"](error)
 
-    monkeypatch.setattr(first_run, "show_error", refuse)
+    monkeypatch.setattr(dialogs, "show_error", refuse)
     setup_dialog._choose_slicer_file()
 
     assert len(shown) == 1, "einmal abgelehnt"
@@ -369,7 +369,7 @@ def test_choosing_a_program_solidon_does_not_work_with_is_refused(
 
     # *Abbrechen* lässt die Wahl, wie sie war.
     picks = iter([str(tmp_path / "notepad.exe")])
-    monkeypatch.setattr(first_run, "show_error", lambda error, *_args: shown.append(error))
+    monkeypatch.setattr(dialogs, "show_error", lambda error, *_args: shown.append(error))
     setup_dialog._choose_slicer_file()
     assert len(shown) == 2
     assert Path(setup_dialog.slicer.currentData()) == orca, "abgebrochen, nichts geändert"
@@ -673,6 +673,7 @@ def test_a_remembered_slicer_in_another_case_is_the_one_used(
 ) -> None:
     """Druckdialog und Filamentwähler nahmen bei abweichender Schreibweise den
     ersten Fund statt des gemerkten Slicers (RM-418)."""
+    from app.core.export import handover
     from app.ui import filament_picker
     from app.ui.print_settings_dialog import PrintSettingsDialog
 
@@ -687,7 +688,7 @@ def test_a_remembered_slicer_in_another_case_is_the_one_used(
     used: list[Path] = []
     monkeypatch.setattr(discover, "find_programs", lambda *_args: found)
     monkeypatch.setattr(
-        filament_picker, "detect", lambda path: used.append(path) or mock.Mock(flavour="orca")
+        handover, "detect", lambda path: used.append(path) or mock.Mock(flavour="orca")
     )
     monkeypatch.setattr(filament_picker.slicer_profiles, "find_profiles", lambda *_a, **_k: ())
     filament_picker.slicer_filaments()

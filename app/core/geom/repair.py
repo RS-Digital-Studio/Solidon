@@ -35,7 +35,7 @@ from app.core.errors import (
     SPLIT_BODIES,
     GeometryError,
 )
-from app.core.geom.attributes import transfer
+from app.core.geom import attributes
 from app.core.geom.intersections import Crossings
 from app.core.geom.mesh import (
     EdgeTable,
@@ -4938,7 +4938,7 @@ def resolve_self_intersections(
     # seit die Kette auch fehlende Wände schließt, läuft er — und aus zwei
     # Filamenten wurde eines. Zugeordnet wird über die nächste alte Fläche,
     # genau wie ``transfer`` es für die Slots tut.
-    resolved = transfer(rebuilt, [mesh])
+    resolved = attributes.transfer(rebuilt, [mesh])
     _carried_colours(mesh.raw, resolved.raw, _nearest_old_face(mesh.raw, resolved.raw))
     return resolved, True
 

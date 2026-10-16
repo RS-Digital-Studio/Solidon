@@ -38,13 +38,8 @@ from app.core.errors import (
     BooleanFailedError,
     GeometryError,
 )
-from app.core.geom import kernel_process
-from app.core.geom.attributes import (
-    DEFAULT_CUT_SLOT,
-    carry_refined_units,
-    in_source_layout,
-    transfer,
-)
+from app.core.geom import attributes, kernel_process, repair
+from app.core.geom.attributes import DEFAULT_CUT_SLOT, carry_refined_units, in_source_layout
 from app.core.geom.mesh import (
     MeshData,
     enclosed_volume,
@@ -53,10 +48,7 @@ from app.core.geom.mesh import (
     without_faces,
 )
 from app.core.geom.repair import (
-    CROSSING_PARTS_MAX,
-    merge_vertices,
     nested_part_families,
-    parts_that_cross,
     remove_degenerate_faces,
     resolve_self_intersections,
     self_crossing_shells,
@@ -574,7 +566,7 @@ def _united_parts(
     if cache is not None and cache_key in cache:
         return cast("_Joined | None", cache[cache_key])
     answer: _Joined | None = None
-    place = parts_that_cross(
+    place = repair.parts_that_cross(
         mesh.raw,
         cancelled=cancelled,
         max_pairs=None,
@@ -588,7 +580,7 @@ def _united_parts(
             if done
             else _Joined(None, place, tuple(self_crossing_shells(mesh)))
         )
-    elif mesh.component_count <= CROSSING_PARTS_MAX:
+    elif mesh.component_count <= repair.CROSSING_PARTS_MAX:
         nested = _nested_united(mesh, cancelled)
         answer = _Joined(*nested) if nested is not None else None
     if cache is not None:
@@ -734,7 +726,7 @@ def _keep_slots(
         diagonal = max(mesh.bounds.diagonal for mesh in sources)
         tolerance = max(diagonal * VOXEL_PITCH_RELATIVE, 0.05) * 1.5
     carriers = sources[:1] if kind == "difference" else sources
-    return transfer(result, carriers, cut_slot=cut_slot, tolerance=tolerance)
+    return attributes.transfer(result, carriers, cut_slot=cut_slot, tolerance=tolerance)
 
 
 def _run_stage(
@@ -770,7 +762,7 @@ def _welded_input(mesh: MeshData) -> MeshData:
     nur verschweißten Platte mit dünnen Knoten (``plate_countersunk.stl``) war
     das die Stufe, die trug, und die Kette lief bis in die Voxel.
     """
-    welded, _removed = merge_vertices(mesh)
+    welded, _removed = repair.merge_vertices(mesh)
     if mesh.is_watertight and not welded.is_watertight:
         welded = mesh
     cleaned, _dropped = remove_degenerate_faces(welded)

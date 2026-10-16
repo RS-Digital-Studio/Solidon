@@ -37,6 +37,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from app.core.errors import AmbiguityError
+from app.core.geom import edges
 from app.core.geom.edges import (
     EdgeKernel,
     described_by_key,
@@ -47,7 +48,6 @@ from app.core.geom.edges import (
     indices_in_kernel,
     points_in_kernel,
     same_edge,
-    wanted,
 )
 from app.core.perceive.match_decisions import MAPPING_NO_LONGER_VALID
 from app.core.perceive.match_records import edge_answer_key, validate_edge_answer
@@ -192,7 +192,7 @@ def bind_edges(
             usable = [candidate for candidate in entries if id(candidate) not in dropped]
         # Dieselbe Auflösung wie in der Operation — fehlende Schlüssel und
         # die leere Wahl tragen dieselben Sätze; nur die Kollision ist weg.
-        chosen_all = wanted(usable, _choice_of(entry, resolved), bundle)
+        chosen_all = edges.wanted(usable, _choice_of(entry, resolved), bundle)
         check_cancelled()
         selections[entry.name] = indices_in_kernel(kernel, source.mesh, chosen_all, entries)
         context[f"#{entry.name}"] = [edge_fingerprint(candidate) for candidate in chosen_all]

@@ -9,6 +9,7 @@ Planen, isoliert Rechnen, Übernehmen — steht in ``test_revision.py`` und
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from typing import Any
 
@@ -709,7 +710,7 @@ def test_history_preview_discards_outdated_answers(qt_app, monkeypatch, interrup
     """Schneller Wechsel, Abbruch und neues Projekt lassen keine alte Vorschau zurück."""
     import threading
 
-    from app.ui import session as session_module
+    from app.core import scene
     from app.ui.session import Session
     from tests.ui_helpers import wait_until
 
@@ -717,7 +718,7 @@ def test_history_preview_discards_outdated_answers(qt_app, monkeypatch, interrup
     session.history.apply("Quader", [OperationDraft(op="create_box")])
     session.history.apply("Kugel", [OperationDraft(op="create_sphere")])
     entered, release = threading.Event(), threading.Event()
-    original = session_module.evaluate
+    original = scene.evaluate
     first = True
 
     def delayed(*args, **kwargs):
@@ -728,7 +729,7 @@ def test_history_preview_discards_outdated_answers(qt_app, monkeypatch, interrup
             release.wait(5)
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(session_module, "evaluate", delayed)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", delayed)
     old, new = [], []
     session.history_preview_async(
         1, old.append, explained=lambda text: None, progressed=lambda value: None

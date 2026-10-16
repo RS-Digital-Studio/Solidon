@@ -8,6 +8,7 @@ import pytest
 
 from app.core.knowledge.parts import PARTS, preview, scad, user
 from app.core.knowledge.parts import check as part_check
+from app.core.knowledge.parts import registry as parts_registry
 from app.core.knowledge.parts.registry import LIBRARY_VERSION, PartRegistry, used_parts
 from app.core.scene import History, OperationDraft
 from app.core.scene.project import load, new_project, save
@@ -472,12 +473,11 @@ def test_load_user_parts_reports_a_broken_file(
     Aufrufer im Produkt — eigene Bausteine wurden nie geladen, ihr
     Katalogzweig war unerreichbar. `bootstrap.load_user_parts` ist der
     Aufrufer; eine kaputte Datei wird Befund, nie Startabbruch."""
-    from app.core import bootstrap
-    from app.core.knowledge.parts import user
+    from app.core import bootstrap, paths
 
     broken = tmp_path / "kaputt.py"
     broken.write_text("raise RuntimeError('absichtlich')", encoding="utf-8")
-    monkeypatch.setattr(user, "user_parts_dir", lambda: tmp_path)
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: tmp_path)
     monkeypatch.setattr(bootstrap, "_user_loaded", False)
     monkeypatch.setattr(bootstrap, "_user_findings", ())
 
@@ -625,8 +625,8 @@ def test_saving_a_project_really_records_the_own_parts(
     dort ein, wo die Frage sitzt" beschreibt.
     """
     registry = _own_part_registry(tmp_path, monkeypatch)
-    monkeypatch.setattr(part_check, "PARTS", registry)
-    monkeypatch.setattr(user, "PARTS", registry)
+    monkeypatch.setattr(parts_registry, "PARTS", registry)
+    monkeypatch.setattr(parts_registry, "PARTS", registry)
 
     project = new_project("centauri-carbon-2", "petg")
     project.document.ops = [Operation(id=1, op="insert_eigenbau")]

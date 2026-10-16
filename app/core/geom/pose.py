@@ -33,8 +33,9 @@ from app.core import units
 from app.core.deferred import trimesh
 from app.core.errors import Action, ValidationError
 from app.core.expressions import evaluate, is_expression, references
+from app.core.geom import mesh as geom_mesh
 from app.core.geom import transform
-from app.core.geom.mesh import MeshData, as_mesh_data, ray_hits_batch
+from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Bone, Finding, OpContext, OpResult, Pose, Vec3, as_vec3
@@ -191,7 +192,7 @@ def inside_the_body(
     # Ein Klick auf eine Ecke trifft sie bei null. Ein Hundertstel Millimeter
     # ist dünner als jede druckbare Wand.
     along = faces if surface is None else faces[surface.faces_along(start, ray)]
-    depth, _hit = ray_hits_batch(
+    depth, _hit = geom_mesh.ray_hits_batch(
         vertices[along],
         start[None, :],
         ray[None, :],
@@ -958,7 +959,7 @@ def pose_armature(ctx: OpContext) -> OpResult:
     """Skelett und Stellung als ein Schritt im Verlauf."""
     params = cast(PoseParams, ctx.params)
     source = ctx.inputs[0]
-    before = as_mesh_data(source.mesh)
+    before = geom_mesh.as_mesh_data(source.mesh)
     bones = armature_from_text(params.armature)
     # Derselbe Weg wie bei der gezeichneten Skizze (``sketch/ops.py``): Ein
     # Winkel wie ``=@arm_winkel`` rechnet hier mit denselben Werten wie

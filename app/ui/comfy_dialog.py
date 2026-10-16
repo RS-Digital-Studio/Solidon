@@ -41,7 +41,7 @@ from app.core.backends import comfy_setup, machine, mesh, needs
 from app.core.errors import InternalError
 from app.core.log import get_logger
 from app.i18n import format_decimal, tr
-from app.ui.dialogs import show_error
+from app.ui import dialogs
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import (
     NORMAL,
@@ -800,7 +800,7 @@ class ComfySetupDialog(QDialog):
         _log.warning("comfy setup crashed: %s", detail)
         error = InternalError(detail=detail)
         set_role(self.state, "warning", f"{error.title!s} {detail}")
-        show_error(error, self)
+        dialogs.show_error(error, self)
 
     def _idle(self) -> None:
         self._tick.stop()

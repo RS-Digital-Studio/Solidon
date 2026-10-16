@@ -40,15 +40,11 @@ from typing import TYPE_CHECKING, Final, cast
 import numpy as np
 
 from app.core.errors import CANCEL, CHANGE_FEATURE, CORRECT_INPUT, GeometryError
-from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, without_effect
+from app.core.geom import boolean
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.boolean import BOOLEAN_OVERLAP, without_effect
 from app.core.geom.chamber_ops import flat_cap, rims_of
-from app.core.geom.mesh import (
-    MeshData,
-    as_mesh_data,
-    face_components,
-    signed_volume,
-    stable_normals,
-)
+from app.core.geom.mesh import MeshData, face_components, signed_volume, stable_normals
 from app.core.geom.prepare import inside_material
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult, SolverInfo
@@ -155,7 +151,7 @@ def resize_closure(ctx: OpContext) -> OpResult:
 
     params = cast(ResizeClosureParams, ctx.params)
     source = ctx.inputs[0]
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     features = source.features
     group = group_of(params.at_feature, functional_groups(features, body, cancelled=ctx.cancelled))
     axis = closure_axis(group, features) if group is not None else None
@@ -340,7 +336,7 @@ def _applied(
     überstreicht, ist ihr Umriss mal ihr Weg. Zerfällt der Körper, sagt es das.
     """
     ctx.cancelled.raise_if_cancelled()
-    outcome = boolean(
+    outcome = boolean.boolean(
         "difference" if kind == "difference" else "union",
         [mesh, *tools],
         quality=ctx.quality,

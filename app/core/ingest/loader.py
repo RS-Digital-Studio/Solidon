@@ -42,6 +42,7 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
+from app.core.geom import repair
 from app.core.geom.mesh import (
     TRIMESH_SUFFIXES,
     MeshData,
@@ -50,16 +51,10 @@ from app.core.geom.mesh import (
     face_components,
     read_mesh,
 )
-from app.core.geom.repair import (
-    is_closed,
-    open_edge_count,
-    parts_can_be_merged,
-    parts_that_cross,
-    small_components,
-)
+from app.core.geom.repair import is_closed, open_edge_count, parts_can_be_merged, small_components
 from app.core.geom.repair import weld as weld_points
 from app.core.log import get_logger
-from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
+from app.core.perceive import maps
 from app.core.types import BoundingBox, CancelToken, Finding, IngestInfo, ProgressFn, Vec3
 from app.core.units import (
     EPS_GEOM,
@@ -1363,7 +1358,7 @@ def _too_fine(triangles: int) -> Finding | None:
     die Merkmalserkennung ausgelassen wird, entscheidet die Frage beim Laden
     (§21.1), und das meldet der Körper.
     """
-    if triangles <= MAP_LIMIT_TRIANGLES:
+    if triangles <= maps.MAP_LIMIT_TRIANGLES:
         return None
     return Finding(
         code="ingest.very_large",
@@ -1371,7 +1366,7 @@ def _too_fine(triangles: int) -> Finding | None:
         message=_(
             "Für die Analysekarten ist dieses Modell zu fein vernetzt. „Dreiecke verringern“ hilft."
         ),
-        values={"triangles": triangles, "comfortable": MAP_LIMIT_TRIANGLES},
+        values={"triangles": triangles, "comfortable": maps.MAP_LIMIT_TRIANGLES},
     )
 
 
@@ -1448,7 +1443,7 @@ def _count_components(
     small = small_components(body)
     # Ohne Teileliste (es sind dieselben): Eine vollständige Antwort bleibt am
     # Netz, und die erste Boolesche Operation daran fragt nicht noch einmal.
-    crossing = parts_that_cross(body, cancelled=cancelled) if closed else None
+    crossing = repair.parts_that_cross(body, cancelled=cancelled) if closed else None
     if crossing is not None:
         findings.append(
             Finding(

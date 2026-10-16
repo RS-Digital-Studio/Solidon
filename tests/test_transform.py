@@ -332,21 +332,19 @@ def test_fit_to_size_reaches_the_given_edge(profile: Profile) -> None:
 def _fitted_cube(profile: Profile, largest: float, monkeypatch: pytest.MonkeyPatch):
     """Würfel laden, auf ``largest`` bringen und legen; dazu die Zahl der vollen
     Merkmalserkennungen in dieser Auswertung."""
-    import importlib
 
     from app.core.perceive import features
-
-    evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
 
     full: list[int] = []
-    original = evaluation.detect
+    original = perceive_features.detect
 
     def counted(mesh, *args, **kwargs):
         if features.known_detection(mesh) is None:
             full.append(int(mesh.triangle_count))
         return original(mesh, *args, **kwargs)
 
-    monkeypatch.setattr(evaluation, "detect", counted)
+    monkeypatch.setattr(perceive_features, "detect", counted)
     features.forget_cache()
     project = new_project("centauri-carbon-2", "pla")
     project.document.sources["src_1"] = Source(

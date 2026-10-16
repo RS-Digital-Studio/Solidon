@@ -1147,7 +1147,7 @@ def test_an_ambiguous_match_stops_with_a_finding_instead_of_escaping(
     # verdeckt damit sein eigenes gleichnamiges Untermodul. Beide kurzen Formen
     # landen auf der Funktion, und ``monkeypatch`` meldet dann, sie habe kein
     # Attribut ``match``.
-    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "match", always_ambiguous)
+    monkeypatch.setattr(import_module("app.core.perceive.matching"), "match", always_ambiguous)
     # Erzwungen wird die Mehrdeutigkeit, die übrig bleibt: Die Lage der
     # Oberfläche entschiede die erfundene sonst gleich wieder.
     monkeypatch.setattr(
@@ -1218,7 +1218,7 @@ def test_an_unreferenced_feature_never_becomes_a_question(
             return MatchResult()
         return MatchResult(ambiguous={next(iter(old)): tuple(new)[:2]})
 
-    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "match", always_ambiguous)
+    monkeypatch.setattr(import_module("app.core.perceive.matching"), "match", always_ambiguous)
     # Erzwungen wird die Mehrdeutigkeit, die übrig bleibt: Die Lage der
     # Oberfläche entschiede die erfundene sonst gleich wieder.
     monkeypatch.setattr(
@@ -2356,7 +2356,6 @@ def test_the_new_name_for_a_used_up_one_spares_the_declared_names(
     und wich auf ``face_2`` aus, das erzeugte Merkmal daneben. Beim
     Zusammenführen überschrieb ``face_2`` die Wand, und sie fehlte still.
     """
-    import importlib
 
     import trimesh
 
@@ -2389,9 +2388,10 @@ def test_the_new_name_for_a_used_up_one_spares_the_declared_names(
     wall = dataclasses.replace(wall, params={**wall.params, "area": 400.0}, face_indices=(4, 5))
     floor = face("face_9", (0.0, 0.0, -1.0), (0.0, 0.0, 0.0), provenance="detected")
     floor = dataclasses.replace(floor, face_indices=(2, 3))
-    evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+
     monkeypatch.setattr(
-        evaluation, "detect", lambda *_args, **_kwargs: {"face_1": wall, "face_9": floor}
+        perceive_features, "detect", lambda *_args, **_kwargs: {"face_1": wall, "face_9": floor}
     )
 
     result = _with_features(
@@ -2481,6 +2481,8 @@ def test_a_cut_off_face_does_not_lend_its_name_either(
         detected["face_8"] = dataclasses.replace(floor, id="face_8")
         before_features["face_9"] = floor
     evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+
     cut: list[str] = []
     real_cut = evaluation._cut_by_the_step
 
@@ -2491,7 +2493,7 @@ def test_a_cut_off_face_does_not_lend_its_name_either(
         return bool(found)
 
     monkeypatch.setattr(evaluation, "_cut_by_the_step", watched)
-    monkeypatch.setattr(evaluation, "detect", lambda *_args, **_kwargs: dict(detected))
+    monkeypatch.setattr(perceive_features, "detect", lambda *_args, **_kwargs: dict(detected))
 
     result = _with_features(
         SceneObject(
@@ -2559,6 +2561,8 @@ def test_a_cut_away_carried_feature_does_not_lend_its_name_either(
         face_indices=(0, 1),
     )
     evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+
     away: list[str] = []
     real_away = evaluation._cut_away_here
 
@@ -2569,7 +2573,7 @@ def test_a_cut_away_carried_feature_does_not_lend_its_name_either(
         return found
 
     monkeypatch.setattr(evaluation, "_cut_away_here", watched)
-    monkeypatch.setattr(evaluation, "detect", lambda *_args, **_kwargs: {"hole_1": new_hole})
+    monkeypatch.setattr(perceive_features, "detect", lambda *_args, **_kwargs: {"hole_1": new_hole})
     findings: list[Finding] = []
 
     result = _with_features(
@@ -3812,21 +3816,20 @@ def test_an_unexpected_error_in_the_recognition_stops_at_its_step(
     Geprüft wird hier der allgemeine Fang, also mit einem Fehler, für den es
     keinen Rückweg gibt.
     """
-    from importlib import import_module
 
     from app.core.bootstrap import load_operations
     from app.core.knowledge.profiles import make_profile
-    from app.core.scene.project import ProjectSources, new_project
-    from app.core.types import Source
 
     # Das Modul, nicht die gleichnamige Funktion aus ``app.core.scene``.
-    evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
 
     def exhausted(*_args: object, **_kwargs: object) -> object:
         raise RuntimeError("kein Speicher für die Erkennung")
 
     load_operations()
-    monkeypatch.setattr(evaluate_module, "detect", exhausted)
+    monkeypatch.setattr(perceive_features, "detect", exhausted)
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source(
         id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
@@ -4127,7 +4130,7 @@ def test_a_contested_feature_never_gets_an_originator(
         if feature.kind == "face"
     ]
 
-    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "match", all_contested)
+    monkeypatch.setattr(import_module("app.core.perceive.matching"), "match", all_contested)
     # Erzwungen wird die Mehrdeutigkeit, die übrig bleibt: Die Lage der
     # Oberfläche entschiede die erfundene sonst gleich wieder.
     monkeypatch.setattr(
@@ -4193,6 +4196,8 @@ def test_fine_customer_meshes_reach_recognition_with_a_bounded_budget(
     from app.core.types import Operation, SceneObject
 
     evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+
     mesh = _small_body()
     calls: list[object] = []
 
@@ -4201,7 +4206,7 @@ def test_fine_customer_meshes_reach_recognition_with_a_bounded_budget(
         return _many_features(1)
 
     monkeypatch.setattr(MeshData, "triangle_count", property(lambda _body: triangles))
-    monkeypatch.setattr(evaluate_module, "detect", detect)
+    monkeypatch.setattr(perceive_features, "detect", detect)
     monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda _body: 0)
     findings: list[Finding] = []
     result = evaluate_module._with_features(
@@ -4236,6 +4241,8 @@ def test_a_named_feature_keeps_the_surface_found_in_the_current_mesh(
     from app.core.types import Feature, Operation, SceneObject, SurfacePatch
 
     evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+
     params = {
         "centre": (0.0, 0.0, 0.0),
         "axis": (0.0, 0.0, 1.0),
@@ -4262,7 +4269,7 @@ def test_a_named_feature_keeps_the_surface_found_in_the_current_mesh(
             ),
         ),
     )
-    monkeypatch.setattr(evaluate_module, "detect", lambda _mesh, **kwargs: {"hole_1": detected})
+    monkeypatch.setattr(perceive_features, "detect", lambda _mesh, **kwargs: {"hole_1": detected})
     entry = SceneObject(
         id="obj_1",
         name="Halter",
@@ -4711,6 +4718,7 @@ def test_too_many_features_keep_the_largest_and_say_so(monkeypatch: pytest.Monke
     from importlib import import_module
 
     evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
     from app.core.types import Feature, Operation, SceneObject
 
     body = _small_body()
@@ -4731,7 +4739,7 @@ def test_too_many_features_keep_the_largest_and_say_so(monkeypatch: pytest.Monke
         )
         for number, triangles in enumerate([(0, 1, 2, 3), (4,), (5, 6), (7, 8, 9)], start=1)
     }
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(faces))
+    monkeypatch.setattr(perceive_features, "detect", lambda mesh, **kwargs: dict(faces))
     findings: list[Finding] = []
     result = evaluate_module._with_features(
         SceneObject(id="obj_1", name="Teil", mesh=body),
@@ -4785,6 +4793,8 @@ def test_over_the_limit_a_stretched_body_keeps_its_names(monkeypatch: pytest.Mon
     from app.core.types import Feature, Operation, SceneObject
 
     evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+
     monkeypatch.setattr(evaluate_module, "FEATURE_LIMIT_COUNT", 3)
 
     def sides(mesh: Any, **kwargs: Any) -> dict[str, Feature]:
@@ -4807,7 +4817,7 @@ def test_over_the_limit_a_stretched_body_keeps_its_names(monkeypatch: pytest.Mon
                 )
         return found
 
-    monkeypatch.setattr(evaluate_module, "detect", sides)
+    monkeypatch.setattr(perceive_features, "detect", sides)
     body = _small_body()
     loaded = evaluate_module._with_features(
         SceneObject(id="obj_1", name="Teil", mesh=body),
@@ -4842,10 +4852,11 @@ def test_a_model_below_the_feature_limit_is_matched_as_before(
     from importlib import import_module
 
     evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
     from app.core.types import Operation, SceneObject
 
     crowd = _many_features(evaluate_module.FEATURE_LIMIT_COUNT)
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(crowd))
+    monkeypatch.setattr(perceive_features, "detect", lambda mesh, **kwargs: dict(crowd))
 
     entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
     findings: list[Finding] = []
@@ -4925,6 +4936,7 @@ def test_the_recognition_can_be_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
     from importlib import import_module
 
     evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
     from app.core.types import Operation, SceneObject
 
     signal = CancelSignal()
@@ -4934,7 +4946,7 @@ def test_the_recognition_can_be_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
     def must_not_run(mesh: object, **kwargs: object) -> dict[str, object]:
         raise AssertionError("nach dem Abbrechen darf nicht mehr erkannt werden")
 
-    monkeypatch.setattr(evaluate_module, "detect", must_not_run)
+    monkeypatch.setattr(perceive_features, "detect", must_not_run)
 
     with pytest.raises(OperationCancelled):
         evaluate_module._with_features(
@@ -4950,9 +4962,9 @@ def test_cancellation_during_first_recognition_does_not_publish_a_result(
     registry: Registry,
 ) -> None:
     """Ein Abbruch während der ersten Erkennung darf weder Szene noch Cache liefern."""
-    from importlib import import_module
 
-    evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+
     signal = CancelSignal()
     cache = ResultCache()
 
@@ -4978,7 +4990,7 @@ def test_cancellation_during_first_recognition_does_not_publish_a_result(
             check_cancelled()
         return _many_features(1)
 
-    monkeypatch.setattr(evaluate_module, "detect", cancelled_detection)
+    monkeypatch.setattr(perceive_features, "detect", cancelled_detection)
     history.apply(_("Einfügen"), [OperationDraft(op="load_test_mesh")])
 
     with pytest.raises(OperationCancelled):
@@ -4997,9 +5009,10 @@ def test_the_recognition_reports_what_it_is_doing(monkeypatch: pytest.MonkeyPatc
     from importlib import import_module
 
     evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
     from app.core.types import Operation, SceneObject
 
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(2)))
+    monkeypatch.setattr(perceive_features, "detect", lambda mesh, **kwargs: dict(_many_features(2)))
     said: list[str] = []
     entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
 
@@ -5028,9 +5041,10 @@ def test_what_the_recognition_left_out_on_a_freeform_is_said(
     from importlib import import_module
 
     evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
     from app.core.types import Operation, SceneObject
 
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
+    monkeypatch.setattr(perceive_features, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
     monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 281)
 
     entry = SceneObject(id="obj_1", name="Kiefer", mesh=_small_body())
@@ -5062,9 +5076,10 @@ def test_a_skin_without_dropped_shapes_still_gets_the_freeform_finding(
     from importlib import import_module
 
     evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
     from app.core.types import Operation, SceneObject
 
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
+    monkeypatch.setattr(perceive_features, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
     monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 0)
     monkeypatch.setattr(evaluate_module, "recognised_as_freeform", lambda mesh: True)
 
@@ -5090,9 +5105,10 @@ def test_a_model_that_is_no_freeform_gets_no_such_finding(
     from importlib import import_module
 
     evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
     from app.core.types import Operation, SceneObject
 
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
+    monkeypatch.setattr(perceive_features, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
     monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 0)
     monkeypatch.setattr(evaluate_module, "recognised_as_freeform", lambda mesh: False)
 
@@ -5117,9 +5133,10 @@ def test_shells_the_recognition_could_not_read_become_a_warning(
     from importlib import import_module
 
     evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
     from app.core.types import Operation, SceneObject
 
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
+    monkeypatch.setattr(perceive_features, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
     monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 0)
     monkeypatch.setattr(evaluate_module, "unreadable_void_shells", lambda mesh: 2)
 
@@ -5149,9 +5166,10 @@ def test_readable_shells_get_no_such_warning(monkeypatch: pytest.MonkeyPatch) ->
     from importlib import import_module
 
     evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
     from app.core.types import Operation, SceneObject
 
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
+    monkeypatch.setattr(perceive_features, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
     monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 0)
     monkeypatch.setattr(evaluate_module, "unreadable_void_shells", lambda mesh: 0)
 
@@ -5175,10 +5193,14 @@ def test_large_import_asks_before_recognition_and_keeps_original(monkeypatch, tr
     from app.core.types import Operation
 
     module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+
     mesh = _small_body()
     monkeypatch.setattr(MeshData, "triangle_count", property(lambda _body: triangles))
     calls, asked, progress, recorded, findings = [], [], [], {}, []
-    monkeypatch.setattr(module, "detect", lambda body, **_: calls.append(body) or _many_features(1))
+    monkeypatch.setattr(
+        perceive_features, "detect", lambda body, **_: calls.append(body) or _many_features(1)
+    )
     monkeypatch.setattr(module, "freeform_dropped", lambda _: 0)
     body = SceneObject("obj_1", "Großes Teil", mesh)
 
@@ -5248,9 +5270,13 @@ def test_large_recognition_never_asks_above_cap_after_import_or_for_preview(
     from app.core.types import Operation
 
     module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+
     mesh = _small_body()
     monkeypatch.setattr(MeshData, "triangle_count", property(lambda _: triangles))
-    monkeypatch.setattr(module, "detect", lambda *_a, **_k: pytest.fail("unexpected full scan"))
+    monkeypatch.setattr(
+        perceive_features, "detect", lambda *_a, **_k: pytest.fail("unexpected full scan")
+    )
     records = {}
     result = module._with_features(
         SceneObject("obj_1", "Teil", mesh),
@@ -5343,13 +5369,12 @@ def test_a_large_import_without_recognition_is_not_declined(
     Satz stünde über einer Frage, die gleich kommt. Er nennt den Körper als
     ausgelassen; der zweite Lauf fragt und schreibt die Absage wie bisher.
     """
-    from importlib import import_module
 
+    from app.core.perceive import local as perceive_local
     from app.core.perceive.features import forget_cache
     from app.core.scene.project import ProjectSources
 
-    module = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     forget_cache()
     project = _loaded_plate()
     body_id = project.document.ops[-1].outputs[0]
@@ -5377,16 +5402,15 @@ def test_large_recognition_answer_survives_save_cache_undo_and_changed_source(
     monkeypatch, tmp_path, profile, allowed
 ):
     """Echter Import mit kleinem Testbudget: Cache ist kein Ersatz für die gespeicherte Wahl."""
-    from importlib import import_module
 
     from app.core.geom.mesh import MeshCodec
+    from app.core.perceive import local as perceive_local
     from app.core.perceive.features import forget_cache
     from app.core.scene.cache import DiskCache
     from app.core.scene.project import ProjectSources, checksum, load, new_project, save
     from app.core.types import Source
 
-    module = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source("src_1", "import", "sources/box.stl", "")
     project.sources["src_1"] = _small_body().raw.export(file_type="stl")
@@ -5493,7 +5517,9 @@ def test_declined_recognition_does_not_poison_a_later_acceptance(monkeypatch, pr
     from app.core.types import Operation
 
     module = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    from app.core.perceive import local as perceive_local
+
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     mesh = _small_body()
     declined = module._with_features(
         SceneObject("obj_1", "Teil", mesh),
@@ -5586,9 +5612,13 @@ def test_a_large_import_without_anyone_to_ask_loads_like_a_declined_one(monkeypa
     from app.core.types import Operation
 
     module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+
     mesh = _small_body()
     monkeypatch.setattr(MeshData, "triangle_count", property(lambda _: 2_330_374))
-    monkeypatch.setattr(module, "detect", lambda *_a, **_k: pytest.fail("unexpected full scan"))
+    monkeypatch.setattr(
+        perceive_features, "detect", lambda *_a, **_k: pytest.fail("unexpected full scan")
+    )
 
     def end_of_input(question, choices):
         # Wie ``cli.main.terminal_ask`` bei EOF.
@@ -5611,13 +5641,12 @@ def test_a_large_import_without_anyone_to_ask_loads_like_a_declined_one(monkeypa
 
 def test_a_large_import_through_the_default_question_completes(monkeypatch, profile):
     """Ende zu Ende: ``evaluate`` ohne ``ask`` rechnet den Import durch."""
-    from importlib import import_module
 
+    from app.core.perceive import local as perceive_local
     from app.core.scene.project import ProjectSources, new_project
     from app.core.types import Source
 
-    module = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source("src_1", "import", "sources/box.stl", "")
     project.sources["src_1"] = _small_body().raw.export(file_type="stl")
@@ -5637,17 +5666,16 @@ def test_a_confirmed_large_import_reaches_the_disk_cache(monkeypatch, tmp_path, 
     Antwort. Als Frage des Schritts gezählt, ging der Import eines großen
     Modells nie auf die Platte — und jedes Öffnen las die Datei neu.
     """
-    from importlib import import_module
 
     from app.core.geom.mesh import MeshCodec
     from app.core.ingest import ops as ingest_ops
+    from app.core.perceive import local as perceive_local
     from app.core.perceive.features import forget_cache
     from app.core.scene.cache import DiskCache
     from app.core.scene.project import ProjectSources, new_project
     from app.core.types import Source
 
-    module = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source("src_1", "import", "sources/box.stl", "")
     project.sources["src_1"] = _small_body().raw.export(file_type="stl")
@@ -5701,6 +5729,8 @@ def test_running_out_of_memory_costs_the_recognition_not_the_import(monkeypatch,
     from app.core.types import Operation
 
     module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+
     monkeypatch.setattr(import_module("app.core.perceive.local"), "_OUT_OF_MEMORY", set())
     mesh = _small_body()
     if triangles is not None:
@@ -5709,7 +5739,7 @@ def test_running_out_of_memory_costs_the_recognition_not_the_import(monkeypatch,
     def out_of_memory(*_args, **_kwargs):
         raise MemoryError
 
-    monkeypatch.setattr(module, "detect", out_of_memory)
+    monkeypatch.setattr(perceive_features, "detect", out_of_memory)
     recorded, findings = {}, []
     operation = Operation(1, "load", outputs=("obj_1",))
     body = SceneObject("obj_1", "Teil", mesh)
@@ -5729,7 +5759,9 @@ def test_running_out_of_memory_costs_the_recognition_not_the_import(monkeypatch,
     # Der nächste Lauf liest die Absage und versucht es nicht noch einmal —
     # und sagt weiter, warum (Review B11): eine Warnung über den Speicher,
     # nicht der Hinweis auf eine ausgelassene Erkennung.
-    monkeypatch.setattr(module, "detect", lambda *_a, **_k: pytest.fail("the run repeated"))
+    monkeypatch.setattr(
+        perceive_features, "detect", lambda *_a, **_k: pytest.fail("the run repeated")
+    )
     later: list = []
     again = module._with_features(
         body,
@@ -5754,11 +5786,12 @@ def test_a_memory_error_outside_the_import_still_stops_the_step(monkeypatch):
     from app.core.types import Operation
 
     module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
 
     def out_of_memory(*_args, **_kwargs):
         raise MemoryError
 
-    monkeypatch.setattr(module, "detect", out_of_memory)
+    monkeypatch.setattr(perceive_features, "detect", out_of_memory)
     with pytest.raises(MemoryError):
         module._with_features(
             SceneObject("obj_1", "Teil", _small_body()),
@@ -5777,14 +5810,13 @@ def test_a_declined_recognition_can_be_asked_again(monkeypatch, profile):
     nächste Auswertung stellt dieselbe Frage mit Zeitschätzung wieder; die
     neue Antwort gilt, und der Befund mit dem Rückweg verschwindet.
     """
-    from importlib import import_module
 
+    from app.core.perceive import local as perceive_local
     from app.core.perceive.match_records import recognition_answer_key
     from app.core.scene.project import ProjectSources, new_project
     from app.core.types import Source
 
-    module = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source("src_1", "import", "sources/box.stl", "")
     project.sources["src_1"] = _small_body().raw.export(file_type="stl")
@@ -5825,13 +5857,12 @@ def test_a_declined_recognition_can_be_asked_again(monkeypatch, profile):
 
 def _confirmed_large_box(monkeypatch, profile, second):
     """Ein Quader, der als großes Netz gilt, geladen und von ``second`` weiterbearbeitet."""
-    from importlib import import_module
 
+    from app.core.perceive import local as perceive_local
     from app.core.scene.project import ProjectSources, new_project
     from app.core.types import Source
 
-    module = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source("src_1", "import", "sources/box.stl", "")
     project.sources["src_1"] = _small_body().raw.export(file_type="stl")
@@ -5885,7 +5916,7 @@ def test_a_declined_recognition_keeps_the_later_steps_local(monkeypatch, profile
     from importlib import import_module
 
     monkeypatch.setattr(
-        import_module("app.core.scene.evaluate"),
+        import_module("app.core.perceive.features"),
         "detect",
         lambda *_a, **_k: pytest.fail("the full recognition ran"),
     )
@@ -5905,17 +5936,17 @@ def test_a_declined_recognition_carries_over_to_the_pieces_of_a_split(monkeypatc
     Erkennung, der Bericht sagt es, und *Alle Merkmale erkennen* findet die
     Wahl am Ladeschritt des Ursprungs.
     """
-    from importlib import import_module
 
     import trimesh
 
+    from app.core.perceive import features as perceive_features
+    from app.core.perceive import local as perceive_local
     from app.core.perceive.match_records import recognition_answer_key
     from app.core.scene.history import recognition_reopenable
     from app.core.scene.project import ProjectSources, new_project
     from app.core.types import Source
 
-    module = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1000)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1000)
     project = new_project("centauri-carbon-2", "petg")
     ball = trimesh.creation.icosphere(subdivisions=3, radius=10.0)
     # Auf dem Bett, ob die Ladeoperation verschiebt oder nicht: z = 0 … 20.
@@ -5935,7 +5966,7 @@ def test_a_declined_recognition_carries_over_to_the_pieces_of_a_split(monkeypatc
     )
     pieces = project.document.ops[-1].outputs
     monkeypatch.setattr(
-        module, "detect", lambda *_a, **_k: pytest.fail("a piece was recognised in full")
+        perceive_features, "detect", lambda *_a, **_k: pytest.fail("a piece was recognised in full")
     )
 
     result = evaluate(
@@ -6000,9 +6031,9 @@ def test_a_memory_error_below_the_limit_keeps_the_later_steps_standing(monkeypat
     """
     from importlib import import_module
 
+    from app.core.perceive import features as perceive_features
     from app.core.scene.project import ProjectSources
 
-    module = import_module("app.core.scene.evaluate")
     monkeypatch.setattr(import_module("app.core.perceive.local"), "_OUT_OF_MEMORY", set())
     tried = []
 
@@ -6010,7 +6041,7 @@ def test_a_memory_error_below_the_limit_keeps_the_later_steps_standing(monkeypat
         tried.append(mesh.triangle_count)
         raise MemoryError
 
-    monkeypatch.setattr(module, "detect", out_of_memory)
+    monkeypatch.setattr(perceive_features, "detect", out_of_memory)
     project, history = _loaded_box_with(
         OperationDraft("scale_object", inputs=("obj_1",), params={"factor": 1.5})
     )
@@ -6033,9 +6064,10 @@ def test_a_memory_error_after_a_confirmation_is_not_repeated(monkeypatch, profil
 
     import numpy as np
 
-    module = import_module("app.core.scene.evaluate")
+    from app.core.perceive import features as perceive_features
+
     monkeypatch.setattr(import_module("app.core.perceive.local"), "_OUT_OF_MEMORY", set())
-    original = module.detect
+    original = perceive_features.detect
     failed = []
 
     def scaled_fails(mesh, **kwargs):
@@ -6044,7 +6076,7 @@ def test_a_memory_error_after_a_confirmation_is_not_repeated(monkeypatch, profil
             raise MemoryError
         return original(mesh, **kwargs)
 
-    monkeypatch.setattr(module, "detect", scaled_fails)
+    monkeypatch.setattr(perceive_features, "detect", scaled_fails)
     second = OperationDraft("scale_object", inputs=("obj_1",), params={"factor": 1.5})
     run = _confirmed_large_box(monkeypatch, profile, second)
     first, again = run(True), run(True)
@@ -6090,7 +6122,9 @@ def test_several_large_bodies_of_one_import_share_one_question(monkeypatch):
     from app.core.types import Operation
 
     module = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    from app.core.perceive import local as perceive_local
+
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     operation = Operation(1, "load", outputs=("obj_1", "obj_2"))
     produced = [
         SceneObject("a", "Teil A", _small_body()),
@@ -6130,11 +6164,14 @@ def test_several_large_bodies_of_one_import_share_one_question(monkeypatch):
 
 def _import_of_two_large_bodies(document, monkeypatch) -> Registry:
     """Ein Ladeschritt mit zwei Körpern über der (auf 1 gesenkten) Erkennungsgrenze."""
-    from importlib import import_module
 
-    module = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
-    monkeypatch.setattr(module, "detect", lambda *_a, **_k: pytest.fail("no full recognition"))
+    from app.core.perceive import features as perceive_features
+    from app.core.perceive import local as perceive_local
+
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(
+        perceive_features, "detect", lambda *_a, **_k: pytest.fail("no full recognition")
+    )
     own = Registry()
 
     @register_op(
@@ -6221,12 +6258,11 @@ def test_nobody_to_ask_about_the_shared_recognition_asks_no_body_again(
 
 def test_the_answer_to_the_recognition_question_is_told_at_once(monkeypatch, profile):
     """Die Antwort kommt sofort beim Aufrufer an, nicht erst mit dem Ergebnis (Review B18)."""
-    from importlib import import_module
 
+    from app.core.perceive import local as perceive_local
     from app.core.scene.project import ProjectSources
 
-    module = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     project, _history = _loaded_box_with(
         OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
     )
@@ -6251,10 +6287,10 @@ def _detect_failing_once(monkeypatch):
     Kopfkopie aus ``features`` (CS-11), und so stellt der erzeugte Schnitt Zugriff und
     Ersatz auf das Original um.
     """
-    from importlib import import_module
 
-    module = import_module("app.core.scene.evaluate")
-    real = module.detect
+    from app.core.perceive import features as perceive_features
+
+    real = perceive_features.detect
     calls: list[int] = []
 
     def detect(mesh, **kwargs):
@@ -6263,7 +6299,7 @@ def _detect_failing_once(monkeypatch):
             raise MemoryError
         return real(mesh, **kwargs)
 
-    monkeypatch.setattr(module, "detect", detect)
+    monkeypatch.setattr(perceive_features, "detect", detect)
     return calls
 
 
@@ -6276,15 +6312,14 @@ def test_a_new_decision_after_running_out_of_memory_tries_again(monkeypatch, pro
     denselben Speicherfehler, ohne dass ``detect`` einmal lief — der Kunde,
     der Programme geschlossen hatte, kam nur über einen Neustart weiter.
     """
-    from importlib import import_module
 
     from app.core.perceive import local
+    from app.core.perceive import local as perceive_local
     from app.core.scene.project import ProjectSources
 
-    module = import_module("app.core.scene.evaluate")
     monkeypatch.setattr(local, "_OUT_OF_MEMORY", set())
     if limit is not None:
-        monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", limit)
+        monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", limit)
     project, history = _loaded_box_with(
         OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
     )
@@ -6320,14 +6355,13 @@ def test_a_new_decision_after_running_out_of_memory_tries_again(monkeypatch, pro
 
 def test_the_same_mesh_in_another_project_is_a_new_decision(monkeypatch, profile):
     """Derselbe Import in einem neuen Projekt fragt den Speichermerker nicht (Review N2)."""
-    from importlib import import_module
 
     from app.core.perceive import local
+    from app.core.perceive import local as perceive_local
     from app.core.scene.project import ProjectSources
 
-    module = import_module("app.core.scene.evaluate")
     monkeypatch.setattr(local, "_OUT_OF_MEMORY", set())
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     first, _history = _loaded_box_with(
         OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
     )
@@ -6359,16 +6393,15 @@ def test_a_body_that_grows_past_the_limit_offers_no_way_back(monkeypatch, profil
     Befund versprach „Alle Merkmale erkennen“, und der Klick rechnete neu,
     ohne dass eine Frage kam.
     """
-    from importlib import import_module
 
+    from app.core.perceive import local as perceive_local
     from app.core.scene.history import recognition_reopenable
     from app.core.scene.project import ProjectSources
 
-    module = import_module("app.core.scene.evaluate")
     project, history = _loaded_box_with(
         OperationDraft("subdivide_surface", inputs=("obj_1",), params={"edge": 4.0})
     )
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", _small_body().triangle_count)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", _small_body().triangle_count)
     result = evaluate(
         project.document,
         profile,
@@ -6396,7 +6429,9 @@ def test_a_saved_confirmation_is_told_when_the_long_recognition_starts(monkeypat
     from app.core.scene.project import ProjectSources
 
     module = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    from app.core.perceive import local as perceive_local
+
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     project, history = _loaded_box_with(
         OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
     )
@@ -6440,12 +6475,11 @@ def test_an_unrecorded_memory_decline_does_not_repeat_the_long_run(monkeypatch, 
     Lauf dann als neue Entscheidung und übersprang den Merker. Die Absage geht
     deshalb sofort an den Aufrufer, wie eine Antwort.
     """
-    from importlib import import_module
 
+    from app.core.perceive import features as perceive_features
     from app.core.perceive import local
     from app.core.scene.project import ProjectSources
 
-    module = import_module("app.core.scene.evaluate")
     monkeypatch.setattr(local, "_OUT_OF_MEMORY", set())
     project, _history = _loaded_box_with(
         OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
@@ -6456,7 +6490,7 @@ def test_an_unrecorded_memory_decline_does_not_repeat_the_long_run(monkeypatch, 
         calls.append(mesh.triangle_count)
         raise MemoryError
 
-    monkeypatch.setattr(module, "detect", out_of_memory)
+    monkeypatch.setattr(perceive_features, "detect", out_of_memory)
     told: list = []
     for _run in range(2):
         result = evaluate(
@@ -8250,12 +8284,11 @@ def test_preview_recognises_only_features_read_after_the_current_step(
     profile: Profile, monkeypatch: pytest.MonkeyPatch, following: bool
 ) -> None:
     """RM-296: Ein bereits verbrauchter Bezug erzwingt keine abschließende Neuerkennung."""
-    from importlib import import_module
 
+    from app.core.perceive import features as perceive_features
     from app.core.perceive.features import forget_cache
     from app.core.scene.project import ProjectSources
 
-    module = import_module("app.core.scene.evaluate")
     project = _loaded_plate()
     sources = ProjectSources(project)
     cache = ResultCache()
@@ -8280,13 +8313,13 @@ def test_preview_recognises_only_features_read_after_the_current_step(
             ],
         )
     measured = []
-    original = module.detect
+    original = perceive_features.detect
 
     def track(mesh, **kwargs):
         measured.append(mesh)
         return original(mesh, **kwargs)
 
-    monkeypatch.setattr(module, "detect", track)
+    monkeypatch.setattr(perceive_features, "detect", track)
     forget_cache()
     result = evaluate(
         project.document, profile, sources=sources, cache=cache, detect_features=False

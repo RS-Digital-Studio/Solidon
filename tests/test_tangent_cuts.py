@@ -17,7 +17,7 @@ import pytest
 import trimesh
 
 from app.core.errors import GeometryError, UserError
-from app.core.geom import autosplit, pins, prepare_ops
+from app.core.geom import autosplit, pins
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.prepare import split_at_plane
 from app.core.geom.repair import branching_edge_count, open_edge_count
@@ -90,7 +90,7 @@ def test_a_tangent_cut_is_refused_before_building_connectors(
     """Beide Kundenwege und Güten sagen dieselbe Geometrie ab, auch ohne Stifte."""
     vertices, faces = plate.raw.vertices.copy(), plate.raw.faces.copy()
     assert plate.is_watertight
-    monkeypatch.setattr(prepare_ops, "add_pins", no_connector_calculation)
+    monkeypatch.setattr(pins, "add_pins", no_connector_calculation)
 
     with pytest.raises((GeometryError, UserError)) as problem:
         run_operation(name, plate, profile, quality, pins=count, **split_values(name, TANGENT))

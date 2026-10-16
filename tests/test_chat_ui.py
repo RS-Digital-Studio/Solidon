@@ -514,7 +514,7 @@ def test_the_invitation_waits_for_the_model_question_instead_of_asking_itself(
         if threading.get_ident() == main:
             asked_on_main.append("first_available")
 
-    monkeypatch.setattr("app.ui.session.first_available", first_available)
+    monkeypatch.setattr("app.core.backends.llm.first_available", first_available)
     monkeypatch.setattr(llm, "first_available", first_available)
     session = Session()
     window = MainWindow(session, UiSettings())
@@ -573,7 +573,7 @@ def test_a_failed_acceptance_shows_the_error_and_keeps_the_proposal(
     monkeypatch.setattr(window.session, "accept_proposal", refusing)
     shown: list[object] = []
     monkeypatch.setattr(
-        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+        "app.ui.dialogs.show_error", lambda error, *args, **kwargs: shown.append(error)
     )
 
     window._on_proposal_accepted()
@@ -1694,7 +1694,7 @@ def test_stopping_the_turn_shows_no_error_and_no_report(
     shown: list[object] = []
     reported: list[object] = []
     monkeypatch.setattr(
-        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+        "app.ui.dialogs.show_error", lambda error, *args, **kwargs: shown.append(error)
     )
     monkeypatch.setattr(window, "report_error", lambda error, *args: reported.append(error))
     started = _turn_waiting_for_cancel(window)
@@ -1720,7 +1720,7 @@ def test_a_new_project_stops_the_turn_and_hands_the_request_back(
 
     shown: list[object] = []
     monkeypatch.setattr(
-        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+        "app.ui.dialogs.show_error", lambda error, *args, **kwargs: shown.append(error)
     )
     started = _turn_waiting_for_cancel(window)
 

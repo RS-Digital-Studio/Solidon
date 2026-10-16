@@ -18,8 +18,7 @@ import dataclasses
 import math
 from typing import Any, cast
 
-from app.core.brep import edit, profiles
-from app.core.brep.features import features_of
+from app.core.brep import edit, features, profiles
 from app.core.brep.kernel import Solid, require
 from app.core.errors import (
     CANCEL,
@@ -463,7 +462,7 @@ def _created(
         name=name or fallback,
         mesh=solid,
         kind="brep",
-        features=features_of(solid, cancelled=cancelled),
+        features=features.features_of(solid, cancelled=cancelled),
     )
 
 
@@ -693,7 +692,7 @@ def sketch_join(ctx: OpContext) -> OpResult:
             source,
             mesh=joined,
             kind="brep",
-            features=features_of(joined, cancelled=ctx.cancelled),
+            features=features.features_of(joined, cancelled=ctx.cancelled),
         )
     else:
         on = frame if frame is not None else planes.frame_for_plane(plane)
@@ -1209,7 +1208,7 @@ def cut_regions(
                 source,
                 mesh=solid,
                 kind="brep",
-                features=features_of(solid, cancelled=ctx.cancelled),
+                features=features.features_of(solid, cancelled=ctx.cancelled),
             )
         ],
         findings=[*findings, *([nothing] if nothing is not None else [])],
@@ -2755,7 +2754,7 @@ def _cut_with_tool(
                 source,
                 mesh=solid,
                 kind="brep",
-                features=features_of(solid, cancelled=ctx.cancelled),
+                features=features.features_of(solid, cancelled=ctx.cancelled),
             )
             solver = SolverInfo(strategy="direct", attempted=("direct",))
         else:

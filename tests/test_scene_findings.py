@@ -15,6 +15,7 @@ import app.core.paths as paths_module
 import app.core.scene.project as project_module
 from app.core.bootstrap import load_operations
 from app.core.errors import ValidationError
+from app.core.ingest import loader
 from app.core.knowledge import profiles
 from app.core.scene import History, OperationDraft, bundling
 from app.core.scene.evaluate import evaluate
@@ -172,7 +173,7 @@ def test_two_linked_models_of_full_size_fit_together() -> None:
     Regel, derselbe Grund.
     """
     assert project_module.MAX_LINKED_SOURCE_BYTES == project_module.MAX_ARCHIVE_UNPACKED_BYTES
-    assert project_module.MAX_LINKED_SOURCE_BYTES >= 2 * project_module.MAX_FILE_BYTES
+    assert project_module.MAX_LINKED_SOURCE_BYTES >= 2 * loader.MAX_FILE_BYTES
 
 
 # --- Der Stempel der eigenen Bausteine (paths.py) --------------------------------

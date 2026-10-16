@@ -45,12 +45,12 @@ from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication, QWidget
 
-from app.core import figures
-from app.core.bootstrap import load_operations
+from app import i18n
+from app.core import bootstrap, figures
 from app.core.registry.registry import REGISTRY
 from app.core.scene.project import new_project
 from app.core.types import Feature, Parameter
-from app.i18n import install_catalog, set_language, tr
+from app.i18n import install_catalog, tr
 from app.i18n.catalog import available_languages, read_catalog
 
 #: Welches Beispielprojekt im Hauptfenster steht.
@@ -893,7 +893,7 @@ def main() -> int:
     from app.ui.theme import apply_theme
 
     languages = tuple(chosen_screen(sys.argv[1:]))
-    load_operations()
+    bootstrap.load_operations()
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     area = target_screen().availableGeometry()
@@ -907,7 +907,7 @@ def main() -> int:
     qt_translator = None
     for language in chosen_languages(languages):
         install_catalog(language, read_catalog(language))
-        set_language(language)
+        i18n.set_language(language)
         # Auch Qt selbst spricht die Sprache der Aufnahme — sonst zeigen die
         # Bilder „Cancel" auf Dialogen, die in der Anwendung (über
         # build_application) längst „Abbrechen" sagen.

@@ -21,7 +21,7 @@ def focus(monkeypatch: pytest.MonkeyPatch) -> dict[str, bool]:
     """Der nachgestellte Fokus: ``inside`` sagt, ob er im Feld liegt."""
     state = {"inside": False}
     monkeypatch.setattr(function_walk, "focus_inside", lambda field: state["inside"])
-    monkeypatch.setattr(function_bench, "focus_inside", lambda field: state["inside"])
+    monkeypatch.setattr(function_walk, "focus_inside", lambda field: state["inside"])
     return state
 
 

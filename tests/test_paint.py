@@ -1051,7 +1051,7 @@ def test_a_new_filament_computes_no_geometry_again(
     from app.core.brep import properties as brep_properties
     from app.core.scene import History, OperationDraft, ResultCache, evaluate
     from app.core.scene.project import new_project
-    from app.core.slice import findings as slice_findings
+    from app.core.slice import analysis
 
     exact_kernel()
     project = new_project()
@@ -1084,9 +1084,7 @@ def test_a_new_filament_computes_no_geometry_again(
     monkeypatch.setattr(
         brep_properties, "properties", counting("properties", brep_properties.properties)
     )
-    monkeypatch.setattr(
-        slice_findings, "slice_body", counting("slice_body", slice_findings.slice_body)
-    )
+    monkeypatch.setattr(analysis, "slice_body", counting("slice_body", analysis.slice_body))
 
     params: dict[str, object] = {"slot": 1, "name": "Rot", "colour": "#ff0000"}
     if scope == "face":

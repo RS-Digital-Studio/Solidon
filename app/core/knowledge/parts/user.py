@@ -27,9 +27,10 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.core.knowledge.parts.registry import PARTS, PartRegistry
+from app.core import paths
+from app.core.knowledge.parts import registry as parts_registry
+from app.core.knowledge.parts.registry import PartRegistry
 from app.core.log import get_logger
-from app.core.paths import user_parts_dir
 from app.core.types import Finding
 from app.i18n import _
 
@@ -56,12 +57,12 @@ def load(directory: Path | None = None, registry: PartRegistry | None = None) ->
     """Liest eigene Bausteine. Ein fehlendes Verzeichnis ist kein Fehler, es
     ist der Normalfall.
     """
-    target = directory or user_parts_dir()
+    target = directory or paths.user_parts_dir()
     result = LoadResult()
     if not target.is_dir():
         return result
 
-    before = set((registry or PARTS).versions())
+    before = set((registry or parts_registry.PARTS).versions())
     for path in sorted(target.glob("*.py")):
         try:
             _import_file(path)
@@ -76,7 +77,7 @@ def load(directory: Path | None = None, registry: PartRegistry | None = None) ->
                 )
             )
 
-    after = (registry or PARTS).versions()
+    after = (registry or parts_registry.PARTS).versions()
     result.loaded = tuple(sorted(set(after) - before))
     for name in result.loaded:
         _mark_as_own(name, registry)
@@ -105,7 +106,7 @@ def _mark_as_own(name: str, registry: PartRegistry | None) -> None:
     """Der Katalog kennzeichnet eigene Bausteine (§24.5) — die Herkunft muss
     also festgehalten werden.
     """
-    target = registry or PARTS
+    target = registry or parts_registry.PARTS
     target.mark_source(name, "user")
     loaded_fingerprint = fingerprint(name, target)
     if loaded_fingerprint:
@@ -133,7 +134,7 @@ def fingerprint(name: str, registry: PartRegistry | None = None) -> str:
     nichts: Ein fehlender Abdruck heißt „keine Aussage möglich" und erzeugt
     nie einen Befund.
     """
-    source = registry or PARTS
+    source = registry or parts_registry.PARTS
     if not source.has(name):
         return ""
     spec = source.get(name)
@@ -168,7 +169,7 @@ def travelling_parts(used: dict[str, str], registry: PartRegistry | None = None)
     Nutzerordner. Ein Rezept (§24.5, seit dem 24.08.2026) steht im Dokument
     selbst und fehlt darum nie — es taucht hier gar nicht erst auf.
     """
-    source = registry or PARTS
+    source = registry or parts_registry.PARTS
     # Ausdrücklich ``source == "user"`` und nicht ``own``: ``own`` umfasst
     # seit dem 25.08.2026 auch Rezepte, und die reisen als Daten im Dokument —
     # über ``own`` gefiltert würde jedes Rezept beim Speichern falsch gemeldet.

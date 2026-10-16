@@ -311,6 +311,8 @@ def test_every_reading_of_the_cache_key_reaches_the_fingerprint(
 
     # Das Modul, nicht die gleichnamige Funktion, die das Paket ausgibt.
     evaluation = import_module("app.core.scene.evaluate")
+    from app.core.scene import orphans as scene_orphans
+
     project = build()
     profile = profiles.make_profile(project.document.printer, project.document.material)
     result = evaluate(project.document, profile, sources=ProjectSources(project))
@@ -335,7 +337,7 @@ def test_every_reading_of_the_cache_key_reaches_the_fingerprint(
     def standing(text: str) -> FeatureRef | None:
         return plane if text == "plane" else None
 
-    monkeypatch.setattr(evaluation, "feature_ref_of_sketch", standing)
+    monkeypatch.setattr(scene_orphans, "feature_ref_of_sketch", standing)
     monkeypatch.setattr(orphans, "feature_ref_of_sketch", standing)
 
     def probes(entry: Any) -> list[object]:

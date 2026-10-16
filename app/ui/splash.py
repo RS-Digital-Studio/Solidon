@@ -21,7 +21,8 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QApplication, QWidget
 
-from app.branding import APP_NAME, APP_VERSION
+from app import branding
+from app.branding import APP_NAME
 from app.ui.icons import application_icon_source, paint_printed_mark
 from app.ui.motion import EASING, FRAME_MS
 
@@ -155,7 +156,7 @@ class SplashScreen(QWidget):
         painter.drawText(
             QRectF(0, 210, WIDTH, 20),
             int(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter),
-            APP_VERSION,
+            branding.APP_VERSION,
         )
         painter.drawText(
             QRectF(24, 238, WIDTH - 48, 20),

@@ -20,6 +20,7 @@ import app.core.scene.project as project_module
 from app.branding import PROJECT_SUFFIX
 from app.core import examples
 from app.core.errors import ValidationError
+from app.core.ingest import loader
 from app.core.knowledge import print_settings, profiles
 from app.core.paths import user_data_dir
 from app.core.scene import History, OperationDraft
@@ -1111,7 +1112,7 @@ def test_a_linked_source_is_bounded_before_reading(
         sha256=project_module.checksum(b"123"),
         embedded=False,
     )
-    monkeypatch.setattr(project_module, "MAX_FILE_BYTES", 2)
+    monkeypatch.setattr(loader, "MAX_FILE_BYTES", 2)
 
     with pytest.raises(ValidationError) as caught:
         ProjectSources(project, base_dir=tmp_path).read("src_1")
@@ -1282,7 +1283,7 @@ def test_too_many_archive_entries_are_refused_before_reading(
     path = save(filled, tmp_path / "projekt.p3d")
     with zipfile.ZipFile(path) as container:
         count = len(container.infolist())
-    monkeypatch.setattr(project_module, "MAX_ARCHIVE_ENTRIES", count - 1)
+    monkeypatch.setattr(loader, "MAX_ARCHIVE_ENTRIES", count - 1)
 
     with pytest.raises(ValidationError) as caught:
         load(path)
@@ -1340,7 +1341,7 @@ def test_every_project_payload_has_its_own_limit(
     # ``project`` eine Kopfkopie aus ``loader`` (CS-11). Sie steht mit festem Text
     # da, damit der erzeugte Schnitt den Ersatz auf das Original umstellt.
     if limit_name == "MAX_FILE_BYTES":
-        monkeypatch.setattr(project_module, "MAX_FILE_BYTES", size - 1)
+        monkeypatch.setattr(loader, "MAX_FILE_BYTES", size - 1)
     else:
         monkeypatch.setattr(project_module, limit_name, size - 1)
 
@@ -1378,8 +1379,8 @@ def test_an_extreme_compression_ratio_is_refused(
     path = save(filled, tmp_path / "projekt.p3d")
     payload = b"0" * 100_000
     _append_archive_entry(path, "bomb.bin", payload)
-    monkeypatch.setattr(project_module, "MIN_RATIO_ENTRY_BYTES", 10_000)
-    monkeypatch.setattr(project_module, "MAX_COMPRESSION_RATIO", 2.0)
+    monkeypatch.setattr(loader, "MIN_RATIO_ENTRY_BYTES", 10_000)
+    monkeypatch.setattr(loader, "MAX_COMPRESSION_RATIO", 2.0)
 
     with pytest.raises(ValidationError) as caught:
         load(path)
@@ -1397,8 +1398,8 @@ def test_the_total_compression_ratio_cannot_be_evaded_with_small_entries(
     path = save(filled, tmp_path / "projekt.p3d")
     for index in range(3):
         _append_archive_entry(path, f"small-{index}.bin", b"0" * 5_000)
-    monkeypatch.setattr(project_module, "MIN_RATIO_ENTRY_BYTES", 10_000)
-    monkeypatch.setattr(project_module, "MAX_COMPRESSION_RATIO", 2.0)
+    monkeypatch.setattr(loader, "MIN_RATIO_ENTRY_BYTES", 10_000)
+    monkeypatch.setattr(loader, "MAX_COMPRESSION_RATIO", 2.0)
 
     with pytest.raises(ValidationError) as caught:
         load(path)
@@ -1419,8 +1420,8 @@ def test_an_entry_at_the_compression_ratio_limit_is_accepted(
     with zipfile.ZipFile(path) as container:
         info = container.getinfo("dense.bin")
         ratio = info.file_size / info.compress_size
-    monkeypatch.setattr(project_module, "MIN_RATIO_ENTRY_BYTES", info.file_size)
-    monkeypatch.setattr(project_module, "MAX_COMPRESSION_RATIO", ratio)
+    monkeypatch.setattr(loader, "MIN_RATIO_ENTRY_BYTES", info.file_size)
+    monkeypatch.setattr(loader, "MAX_COMPRESSION_RATIO", ratio)
 
     assert load(path).document == filled.document
 
@@ -1435,7 +1436,7 @@ def test_the_bounded_reader_does_not_trust_the_declared_size(
 
     info = zipfile.ZipInfo("payload.bin")
     info.file_size = 1
-    monkeypatch.setattr(project_module, "MAX_FILE_BYTES", 2)
+    monkeypatch.setattr(loader, "MAX_FILE_BYTES", 2)
 
     with pytest.raises(ValidationError) as caught:
         project_module._read_archive_entry(LyingContainer(), info)  # type: ignore[arg-type]
@@ -1762,13 +1763,13 @@ def test_exact_archive_limits_still_open(
             if source.embedded
         )
     monkeypatch.setattr(project_module, "MAX_PROJECT_FILE_BYTES", path.stat().st_size)
-    monkeypatch.setattr(project_module, "MAX_ARCHIVE_ENTRIES", len(infos))
+    monkeypatch.setattr(loader, "MAX_ARCHIVE_ENTRIES", len(infos))
     monkeypatch.setattr(
         project_module,
         "MAX_ARCHIVE_UNPACKED_BYTES",
         sum(info.file_size for info in infos),
     )
-    monkeypatch.setattr(project_module, "MAX_FILE_BYTES", source_size)
+    monkeypatch.setattr(loader, "MAX_FILE_BYTES", source_size)
     monkeypatch.setattr(
         project_module,
         "MAX_PROJECT_JSON_BYTES",
@@ -1785,7 +1786,7 @@ def test_saving_refuses_an_oversized_embedded_source(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(project_module, "MAX_FILE_BYTES", len(MESH_PAYLOAD) - 1)
+    monkeypatch.setattr(loader, "MAX_FILE_BYTES", len(MESH_PAYLOAD) - 1)
 
     with pytest.raises(ValidationError) as caught:
         save(filled, tmp_path / "projekt.p3d")
@@ -3529,7 +3530,7 @@ def test_v33_migration_does_not_invent_a_recognition_choice(monkeypatch, profile
         not any(key.startswith("recognition-answer:") for key in op.matches)
         for op in project.document.ops
     )
-    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(import_module("app.core.perceive.local"), "FEATURE_LIMIT_TRIANGLES", 1)
     asked = []
 
     def ask(question, choices):

@@ -23,8 +23,7 @@ from app.core.errors import REACTIVATE_STEP, SUPPRESS_STEP
 from app.core.scene import OperationDraft
 from app.core.scene.project import save
 from app.core.types import Suppression
-from app.ui import main_window as main_window_module
-from app.ui import panels
+from app.ui import dialogs, panels
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -33,9 +32,7 @@ from app.ui.settings import UiSettings
 @pytest.fixture
 def said(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     shown: list[Any] = []
-    monkeypatch.setattr(
-        main_window_module, "show_error", lambda error, _parent: shown.append(error)
-    )
+    monkeypatch.setattr(dialogs, "show_error", lambda error, _parent: shown.append(error))
     return shown
 
 

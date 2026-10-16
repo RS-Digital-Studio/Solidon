@@ -94,11 +94,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_NAME, APP_VERSION
-from app.core import figures, guides
-from app.core.bootstrap import load_operations
+from app import branding, i18n
+from app.branding import APP_NAME
+from app.core import bootstrap, figures, guides
 from app.core.paths import isolate_secrets
-from app.i18n import install_catalog, set_language, tr
+from app.i18n import install_catalog, tr
 from app.i18n.catalog import read_catalog
 from tools import make_figures as shots
 from tools import make_guide_video as film
@@ -1760,7 +1760,7 @@ def _write_stamp(folder: Path, taken: list[guides.Guide]) -> None:
         stamp = json.loads(path.read_text(encoding="utf-8"))
     for guide in taken:
         stamp["guides"][guide.key] = {
-            "version": APP_VERSION,
+            "version": branding.APP_VERSION,
             "fingerprint": guides.fingerprint(guide),
         }
     path.write_text(
@@ -1847,12 +1847,12 @@ def _child(language: str, keys: list[str], target: Path, film_target: Path) -> i
     from app.ui.settings import UiSettings
     from app.ui.theme import apply_theme
 
-    load_operations()
+    bootstrap.load_operations()
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     apply_theme(app, "dark")
     install_catalog(language, read_catalog(language))
-    set_language(language)
+    i18n.set_language(language)
     install_qt_translations(app, language)
 
     folder = target / language

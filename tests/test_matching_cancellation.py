@@ -81,9 +81,10 @@ def _cancel_at_match(
     # (Durchsicht 0.5.1, derselbe Weg für Netz und exakten Baustein) — die
     # Zuordnung beginnt dort, im Modul der Zuordnung.
     monkeypatch.setattr(matching, "match", stopped)
-    evaluation = import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(evaluation, "match", stopped)
-    monkeypatch.setattr(local, "match", stopped)
+    from app.core.perceive import matching as perceive_matching
+
+    monkeypatch.setattr(perceive_matching, "match", stopped)
+    monkeypatch.setattr(matching, "match", stopped)
     return calls
 
 

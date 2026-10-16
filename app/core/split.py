@@ -20,15 +20,10 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from app.core.errors import ValidationError
+from app.core.geom import pins as geom_pins
 from app.core.geom.autosplit import MARGIN, SplitOutcome, Step, split_to_fit
 from app.core.geom.mesh import MeshData
-from app.core.geom.pins import (
-    PIN_COUNT,
-    PinPlan,
-    feature_side,
-    next_connector_index,
-    plan_pins,
-)
+from app.core.geom.pins import PIN_COUNT, PinPlan, feature_side, next_connector_index
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft, change_for
@@ -260,7 +255,7 @@ def plan_split(
             connectors.append(None)
             seated.append(wanted if step.source is None else 0)
             continue
-        connector = plan_pins(
+        connector = geom_pins.plan_pins(
             step.source, step.plane.plane, count=wanted, shape=step.connector_shape
         )
         if cancelled is not None:
@@ -321,7 +316,7 @@ def fitting_pins(
         return 0
     if mesh is None:
         return wanted
-    plan = plan_pins(mesh, plane, count=wanted, shape=shape, diameter=diameter or None)
+    plan = geom_pins.plan_pins(mesh, plane, count=wanted, shape=shape, diameter=diameter or None)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     return plan.count

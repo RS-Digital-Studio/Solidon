@@ -99,7 +99,7 @@ from app.core.http import (
     deadline_after,
     read_limited,
 )
-from app.core.ingest.loader import MAX_FILE_BYTES
+from app.core.ingest import loader
 from app.core.json_boundary import StrictJsonError
 from app.core.json_boundary import loads as load_json
 from app.core.log import get_logger
@@ -500,7 +500,7 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
         with opener.open(request, timeout=TIMEOUT_SECONDS) as answer:
             return read_limited(
                 answer,
-                limit=MAX_FILE_BYTES,
+                limit=loader.MAX_FILE_BYTES,
                 deadline=deadline,
                 # Wie im Update-Weg: Der Vertrag über das Nachsetzen des
                 # Zeitlimits gilt der echten Antwort. Steht eine Attrappe an

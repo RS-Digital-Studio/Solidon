@@ -20,12 +20,13 @@ import copy
 import dataclasses
 from dataclasses import dataclass, field
 
+from app.core import scene as core_scene
 from app.core.errors import ValidationError
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
 from app.core.geom.transform import apply, translation
 from app.core.log import get_logger
 from app.core.scene.cache import ResultCache, disk_backed_cache
-from app.core.scene.evaluate import evaluate
 from app.core.types import (
     CancelToken,
     Document,
@@ -182,7 +183,7 @@ def build(
                 """Der Anteil über alle Läufe, nicht der des einzelnen."""
                 progress((done + max(0.0, min(1.0, share))) / count, text)
 
-            result = evaluate(
+            result = core_scene.evaluate(
                 working,
                 profile,
                 quality=quality,
@@ -322,7 +323,9 @@ def _place(
 
     ``unit`` ist die Einheit des Parameters; sie steht im Befund neben dem Wert.
     """
-    meshes = {object_id: as_mesh_data(entry.mesh) for object_id, entry in scene.objects.items()}
+    meshes = {
+        object_id: geom_mesh.as_mesh_data(entry.mesh) for object_id, entry in scene.objects.items()
+    }
     if not meshes:
         return 0.0
     group_min = min(float(mesh.bounds.minimum[0]) for mesh in meshes.values())

@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from app.core.errors import InternalError, NativeReferenceLost
+from app.core.perceive import matching
 from app.core.perceive.matching import MatchResult
 from app.core.scene import History, OperationDraft, ResultCache, evaluate, orphans
 from app.core.scene.cache import CACHE_FORMAT_VERSION, CachedResult, DiskCache
@@ -313,7 +314,7 @@ def _native_call(
         assert matched is not None, "die Zuordnung darf hier gar nicht laufen"
         return dataclasses.replace(matched, mapping=dict(matched.mapping))
 
-    monkeypatch.setattr(evaluate_module, "match", fake_match)
+    monkeypatch.setattr(matching, "match", fake_match)
     body = SceneObject(
         id="body",
         name="Quader",
@@ -404,7 +405,7 @@ def test_unchanged_native_features_do_not_rename_a_proven_changed_rounding(
 ) -> None:
     """Die unveränderte Nachbarrundung darf die belegte Kennung nicht verdrängen."""
     previous, current = _rounding_transition()
-    matched = evaluate_module.match(
+    matched = matching.match(
         previous.features,
         current.features,
         current.mesh.bounds.centre,
@@ -445,7 +446,7 @@ def test_unchanged_native_features_do_not_rename_a_proven_changed_rounding(
 def test_native_reselection_does_not_rename_a_proven_changed_rounding(accepted: bool) -> None:
     """Die ausdrückliche Wahl links oben lässt die belegte R12 rechts unten stehen."""
     previous, current = _rounding_transition(changed_neighbour=True)
-    matched = evaluate_module.match(
+    matched = matching.match(
         previous.features,
         current.features,
         current.mesh.bounds.centre,
