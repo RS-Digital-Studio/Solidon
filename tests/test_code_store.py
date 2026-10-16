@@ -82,16 +82,22 @@ print(
 
 
 #: Zur Attrappe ein Alias von ``hasattr``, den ein anderes Modul bezieht: Den meldet der Wächter
-#: CS-34, und ein gelesener Index muss ihn kennen wie ein gebauter (RR2-2).
+#: CS-34, und ein gelesener Index muss ihn kennen wie ein gebauter (RR2-2). Ebenso ein Skript für
+#: ``python -c`` mit einem gültigen Bezug und einem fehlenden Namen: Bezug und W5-Fund der Art
+#: ``script:*`` (CS-18) muss ein gelesener Index tragen wie ein gebauter (RR2-16).
 ALIASED = {
     "app/ask.py": "has = hasattr\n",
     "tests/test_ask.py": """
+        import subprocess
+        import sys
+
         from app import mod
         from app.ask import has
 
 
         def test_ask():
             assert has(mod, "CONST")
+            subprocess.run([sys.executable, "-c", "from app.mod import CONST, FEHLT"], check=True)
     """,
 }
 
@@ -177,6 +183,11 @@ def test_stored_answers_equal_a_freshly_built_index_cold_and_warm(
     # Die Grundmenge von W5 ohne Auszüge: dieselbe Zahl wie über jede Datei gezählt.
     assert expected["imports"] == sum(len(facts.imports) for facts in fresh.files.values())
     assert expected["aliases"] == (("app.ask", "has", "app/ask.py", 1),)
+    # Die Skriptstelle trägt einen Bezug und einen W5-Fund (RR2-16), sonst verglichen die
+    # Antworten unten für ``script:*`` leere Mengen.
+    scripted = [(u.kind, u.name) for u in fresh.unresolved() if u.kind.startswith("script:")]
+    assert scripted == [("script:from", "FEHLT")]
+    assert {ref.kind for ref in fresh.references("app.mod", "CONST")} >= {"script:from"}
     builds = _count_builds(monkeypatch)
     loads = _count_loads(monkeypatch)
     cold = code_store.load(root)
