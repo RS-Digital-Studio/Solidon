@@ -484,6 +484,7 @@ from app.ui.survey import SupportNotice, SurveyNotice, UsageClock
 from app.ui.tab_signal import SignalTabBar
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
+from app.ui.toolbar_follow import follow_the_font
 from app.ui.tour import TourPanel
 from app.ui.transform_bar import ROLES as TRANSFORM_ROLES
 from app.ui.transform_bar import TransformBar
@@ -5815,6 +5816,10 @@ class MainWindow(QMainWindow):
         # bleibt eine Zeile hoch; auf schmalen Fenstern sammelt Qt den
         # Überstand wie bei jeder Werkzeugleiste im Pfeilmenü ein.
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        # Nach einem Schriftwechsel von der Wortform aus neu wählen wie beim Start (L1).
+        follow_the_font(
+            toolbar, lambda: self._set_toolbar_form(TOOLBAR_WORDS) or self._fit_toolbar()
+        )
         # **Und wenn der Platz nicht reicht, kürzen sie, statt zu
         # verschwinden** (Befund D6). Qt sammelt den Überstand einer
         # Werkzeugleiste hinter einem unbeschrifteten Pfeil ein — was dort

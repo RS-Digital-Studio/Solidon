@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from PySide6.QtCore import QSignalBlocker, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QSignalBlocker, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -269,6 +269,16 @@ class _EphemeralLabel(QLabel):
         super().resizeEvent(event)
         self._fit()
 
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 — Qt-Name
+        """Nach einem Schrift- oder Stilwechsel Mindestmaß und Kürzung neu (L1, FD-194).
+
+        Beide hingen an der Schrift beim letzten ``setText``; nach 9 → 14 pt
+        hielt das geschützte Ende das alte Maß, und die Kürzung blieb stehen.
+        """
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            self._set_accessible_text(self._full)
+
     def _tail(self) -> str:
         """Das rohe Ende, dessen Bedeutung eine Kürzung nicht verschlucken darf."""
         if self._protected_end and self._display.endswith(self._protected_end):
@@ -405,13 +415,9 @@ class HeaderBar(QWidget):
         self.filament_button.setAccessibleName(tr("Filamente"))
         self.filament_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.filament_button.clicked.connect(self.filamentsRequested)
-        # Gemessen in beiden Formen, einmal: Eng trägt der Knopf nur sein
-        # Zeichen wie die Knöpfe der Werkzeugleiste, und die Entscheidung über
-        # die Form braucht die Breite der anderen (:meth:`_filament_width`).
-        self.filament_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        self._filament_sign = self.filament_button.sizeHint().width()
-        self.filament_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self._filament_words = self.filament_button.sizeHint().width()
+        self._filament_sign = 0
+        self._filament_words = 0
+        self._measure_filament_button()
         self.show_filaments(())
         self._divider = divider(self)
         self._layout = QGridLayout(self)
@@ -453,6 +459,37 @@ class HeaderBar(QWidget):
         self._arrange(self._wide_width() > width)
         self._fit_filament_words(width)
         super().resizeEvent(event)
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 — Qt-Name
+        """Nach einem Schrift- oder Stilwechsel den Knopf neu messen (L1, FD-194).
+
+        Gemessen war er nur beim Bau: Nach 9 → 14 pt rechnete die Zeile mit der
+        alten Breite und kürzte Name, Maße und Drucker, die ein frisch
+        geöffnetes Fenster ganz zeigt. Eine Runde später, wenn der Knopf die
+        neue Schrift trägt.
+        """
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            QTimer.singleShot(0, self, self._remeasure)
+
+    def _remeasure(self) -> None:
+        self._measure_filament_button()
+        self._reflow()
+
+    def _measure_filament_button(self) -> None:
+        """Den Knopf *Filamente* in beiden Formen messen und seine Form behalten.
+
+        Eng trägt der Knopf nur sein Zeichen wie die Knöpfe der Werkzeugleiste,
+        und die Entscheidung über die Form braucht die Breite der anderen
+        (:meth:`_filament_width`).
+        """
+        button = self.filament_button
+        shown = button.toolButtonStyle()
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self._filament_sign = button.sizeHint().width()
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self._filament_words = button.sizeHint().width()
+        button.setToolButtonStyle(shown)
 
     def _filament_width(self, *, words: bool) -> int:
         """Der Knopf *Filamente* mit seinem Abstand — mit Wort oder nur mit Zeichen.
