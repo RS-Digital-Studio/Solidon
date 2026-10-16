@@ -569,19 +569,21 @@
        (`--language-hint-space` in `style.css`): Das Seitenende lässt sich
        über sie hinausrollen, und was den Fokus bekommt, rollt über ihr in den
        Blick. Steht sie bei wenig Höhe im Fluss, braucht sie keinen. */
-    /* Gesetzt an Wurzel **und** Seitenkörper: Chromium unter macOS gab den
-       neuen Wert der Wurzel nicht immer an `body` weiter — die Wurzel
-       sagte 162px, der Polster unten blieb 0, und die Fußverweise lagen
-       unter der Karte, bis ein Schriftwechsel neu rechnete. */
-    const holders = [document.documentElement, document.body];
+    /* Der Wert steht als Variable an der Wurzel und **unmittelbar** als
+       Polster von `body` und `scroll-padding` der Wurzel. Über `var()`
+       allein rechnete Chromium unter macOS den Polster nicht nach: Die
+       Variable sagte 162px — auch an `body` selbst gesetzt —, der Polster
+       blieb 0, und am Seitenende lagen die Fußverweise unter der Karte. */
+    const root = document.documentElement;
     const reserve = () => {
       const style = getComputedStyle(hint);
       const space = style.position === "fixed"
         ? hint.offsetHeight + 2 * parseFloat(style.bottom)
         : 0;
-      for (const holder of holders) {
-        holder.style.setProperty("--language-hint-space", `${Math.ceil(space)}px`);
-      }
+      const value = `${Math.ceil(space)}px`;
+      root.style.setProperty("--language-hint-space", value);
+      root.style.scrollPaddingBottom = value;
+      document.body.style.paddingBottom = value;
     };
     const watch = window.ResizeObserver ? new ResizeObserver(reserve) : null;
 
@@ -589,7 +591,9 @@
       const focused = hint.contains(document.activeElement);
       watch?.disconnect();
       window.removeEventListener("resize", reserve);
-      for (const holder of holders) holder.style.removeProperty("--language-hint-space");
+      root.style.removeProperty("--language-hint-space");
+      root.style.removeProperty("scroll-padding-bottom");
+      document.body.style.removeProperty("padding-bottom");
       hint.remove();
       remember("closed");
       /* Der Fokus darf nicht mit der Karte verschwinden: Er geht an das
