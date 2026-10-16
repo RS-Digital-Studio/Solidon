@@ -2675,7 +2675,9 @@ class OperationDialog(QDialog):
             or (placement_hint() if no_place else "")
             or (blocked or "")
         )
-        if first and not (refusal or pending):
+        # Ein Sperrgrund der Felder geht vor (D2): Wer den Haken *Ganzer Körper*
+        # abwählt, hat geändert, was der Satz verlangt; die leere Liste ist der Grund.
+        if first and not (refusal or pending) and not reason:
             reason = first
         incomplete = (
             self._waits_for_change
