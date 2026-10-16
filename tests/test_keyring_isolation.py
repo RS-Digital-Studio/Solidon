@@ -118,16 +118,18 @@ def test_the_keyring_of_a_fresh_profile_has_one_source() -> None:
 def test_a_tool_profile_hands_the_attrappe_to_its_children(
     tool: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Am Werkzeug: Nach der Umbiegung fragt ein Kind die Attrappe, danach gilt das Alte."""
-    import importlib
+    """Am Werkzeug: Nach der Umbiegung fragt ein Kind die Attrappe, danach gilt das Alte.
 
+    Jedes Werkzeug biegt mit seiner eigenen Funktion um; sie steht hier beim Namen, nicht
+    über ``importlib`` und ``module.…`` — so prüft W5, dass es sie gibt, auch nach einer
+    Umbenennung (Nachtrag welle5)."""
     from app.core.paths import PROFILE_VARIABLES
+    from tools import check_part_ranges, check_print_equal, registry_dump
 
     for name in PROFILE_VARIABLES:
         monkeypatch.setenv(name, str(tmp_path / "vorher"))
     monkeypatch.setenv("PYTHON_KEYRING_BACKEND", "keyring.backends.fail.Keyring")
     monkeypatch.setenv("SOLIDON3D_LLM_KEY_ANTHROPIC", "ausgedacht")
-    module = importlib.import_module(f"tools.{tool}")
     ask = (
         "import keyring, os; t = type(keyring.get_keyring());"
         " print(t.__module__ + '.' + t.__name__,"
@@ -145,10 +147,14 @@ def test_a_tool_profile_hands_the_attrappe_to_its_children(
         ).stdout.strip()
 
     if tool == "check_print_equal":
-        module._isolated(str(tmp_path / "profil"))
+        check_print_equal._isolated(str(tmp_path / "profil"))
         assert chosen() == "keyring.backends.null.Keyring []"
         return
-    bend = module._own_profile() if tool == "registry_dump" else module._isolate(tmp_path)
+    bend = (
+        registry_dump._own_profile()
+        if tool == "registry_dump"
+        else check_part_ranges._isolate(tmp_path)
+    )
     with bend:
         assert chosen() == "keyring.backends.null.Keyring []"
     assert os.environ["PYTHON_KEYRING_BACKEND"] == "keyring.backends.fail.Keyring"
