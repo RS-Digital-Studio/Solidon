@@ -62,18 +62,22 @@ def test_a_double_click_on_a_printer_change_opens_the_print_settings(
     """Drucker- und Materialänderungen öffnen die Druckeinstellungen (RA-6).
 
     Am echten Draht: Zeile doppelklicken, und der Dialog des Fensters geht auf.
+    Ersetzt ist ``exec`` jedes Dialogs, nicht nur der Druckeinstellungen: Führt
+    die Zeile in einen anderen Dialog, wird der Fall rot, statt modal zu hängen
+    (Nachprüfung, L3).
     """
+    from PySide6.QtWidgets import QDialog
+
     from app.core.types import DocumentChange, DocumentState, Transaction
     from app.ui import main_window
-    from app.ui.print_settings_dialog import PrintSettingsDialog
 
     shown: list[str] = []
 
-    def opened(dialog: PrintSettingsDialog) -> int:
+    def opened(dialog: QDialog) -> int:
         shown.append(type(dialog).__name__)
-        return int(PrintSettingsDialog.DialogCode.Rejected)
+        return int(QDialog.DialogCode.Rejected)
 
-    monkeypatch.setattr(PrintSettingsDialog, "exec", opened)
+    monkeypatch.setattr(QDialog, "exec", opened)
     monkeypatch.setattr(main_window, "ensure_print_disclosure", lambda *args: None)
     document = window.session.project.document
     document.transactions.append(
