@@ -6071,7 +6071,11 @@ def test_a_memory_error_after_a_confirmation_is_not_repeated(monkeypatch, profil
     failed = []
 
     def scaled_fails(mesh, **kwargs):
-        if float(np.ptp(np.asarray(mesh.raw.vertices)[:, 0])) > 25.0:
+        # Scheitern soll die volle Erkennung des Körpers in der Auswertung — die trägt den
+        # Merker (``store``). ``detect`` liest auch die örtliche Nachmessung zur Aufrufzeit
+        # (CS-11); sie bleibt hier unberührt, wie vor dem Schnitt.
+        big = float(np.ptp(np.asarray(mesh.raw.vertices)[:, 0])) > 25.0
+        if big and "store" in kwargs:
             failed.append(1)
             raise MemoryError
         return original(mesh, **kwargs)
@@ -8319,7 +8323,11 @@ def test_preview_recognises_only_features_read_after_the_current_step(
     original = perceive_features.detect
 
     def track(mesh, **kwargs):
-        measured.append(mesh)
+        # Gezählt wird die Erkennung der Auswertung (sie trägt den Merker, ``store``), nicht
+        # das Nachmessen der Bohrungsänderung in der Op — beide lesen ``detect`` zur
+        # Aufrufzeit (CS-11).
+        if "store" in kwargs:
+            measured.append(mesh)
         return original(mesh, **kwargs)
 
     monkeypatch.setattr(perceive_features, "detect", track)
