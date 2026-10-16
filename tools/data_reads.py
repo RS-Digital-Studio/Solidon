@@ -42,6 +42,11 @@ from tools.tree_reads import Borrowed, Definition, Env, Facts, Place, Read, Site
 #: Aufrufe, deren Ergebnis ein Pfad aus ihren Argumenten ist.
 _PATH_CALLS = frozenset({"Path", "PurePath", "PurePosixPath", "join"})
 
+#: Ordner, deren Dateien kein Ordnerweg erreicht: An der Wurzel und unter ``website/``
+#: liegt alles nebeneinander, und wer den Ordner nennt, liest damit nicht jede Datei darin
+#: (wie ``affected_tests._named_readers``); Lesestellen und Nennungen gelten weiter.
+_WIDE_FOLDERS = frozenset({(), ("website",)})
+
 #: Wo die Einheiten liegen, die diese Leser je Funktion verfolgen.
 _SCOPE = "tests/"
 
@@ -101,6 +106,8 @@ class DataReads(tree_reads.TreeReads):
             importers=shared.importers,
         )
         self._covered: dict[str, set[int]] = {}
+        #: Ob ein Pfad auf den Ordner oder ein Text, der ihn nennt, die Datei erreicht.
+        self._by_folder = file.parent.parts not in _WIDE_FOLDERS
         #: Wie eine Nennung im Grund heißt, je Stelle und je Lesung, die sie ergab.
         self._labels: dict[int, str] = {}
         self._naming: dict[int, tuple[Read, str]] = {}
@@ -155,7 +162,7 @@ class DataReads(tree_reads.TreeReads):
                 if name in node.value:
                     self._labels[id(node)] = f"nennt {name}"
                     yield Site(relative, node, "nennt", None, None)
-                elif names_folder(node.value, folder):
+                elif self._by_folder and names_folder(node.value, folder):
                     self._labels[id(node)] = f"nennt den Ordner {folder}/"
                     yield Site(relative, node, "nennt", None, None)
             elif is_path_expression(node):
@@ -185,14 +192,18 @@ class DataReads(tree_reads.TreeReads):
             if isinstance(value, Place):
                 if value.parts == self.file.parts:
                     found.append(self._at_file(site))
-                elif value.parts == folder:
+                elif value.parts == folder and self._by_folder:
                     found.append(self._in_folder(site))
                 continue
             if value is not None:
                 continue  # draußen
             base = _base(site.call)
             left = None if base is None else resolver.evaluate(base, scopes, site.relative, env)
-            if isinstance(left, Place) and len(folder) - 1 <= len(left.parts) <= len(folder):
+            if (
+                self._by_folder
+                and isinstance(left, Place)
+                and len(folder) - 1 <= len(left.parts) <= len(folder)
+            ):
                 if folder[: len(left.parts)] == left.parts:
                     found.append(self._in_folder(site))
             elif left is None and env is None:

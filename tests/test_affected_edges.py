@@ -536,3 +536,23 @@ def test_the_real_corpus_file_is_read_by_the_helpers_units(real_graph: ImportGra
         assert "tests/helpers.py" in reasons.get(root / "tests" / name, ""), name
     for name in ("test_placement.py", "test_history.py"):
         assert root / "tests" / name not in files, (name, reasons.get(root / "tests" / name))
+
+
+def test_naming_the_website_folder_reads_no_file_in_it(tree: Path) -> None:
+    """Wie bisher der Ordnerweg: An der Wurzel und direkt unter ``website/`` liegt alles
+    nebeneinander — wer den Ordner nennt oder als Pfad baut, liest damit nicht jede Datei darin.
+    Wer die Datei nennt, liest sie."""
+    icon = write(tree, "website/icon.svg", "<svg/>\n")
+    write(
+        tree,
+        "tests/test_site_named.py",
+        "from pathlib import Path\nURL = 'website/'\nSITE = Path('website')\n",
+    )
+    write(tree, "tests/test_icon_named.py", "ICON = 'website/icon.svg'\n")
+
+    files, reasons = affected([icon], ImportGraph(tree))
+
+    assert names(files, tree) == {"tests/test_icon_named.py"}
+    assert reasons[tree / "tests" / "test_icon_named.py"] == (
+        "nennt icon.svg (tests/test_icon_named.py:1)"
+    )

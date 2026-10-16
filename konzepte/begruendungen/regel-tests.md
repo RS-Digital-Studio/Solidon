@@ -1143,7 +1143,7 @@ sonst nichts ein solches Modul, läuft die Gruppe der `conftest.py` doch.
 `tests/data/meshes` und liest `plate_holes.stl` in einer Funktion — als ganzes
 Modul hingen daran 188 direkte und alle mittelbaren Importeure, 289
 Testdateien. `tools/data_reads.py` verfolgt die Funktion, die Konstante, die
-Fixture, die die Datei erreicht, mit den Werten an der Aufrufstelle: 153. Gegen
+Fixture, die die Datei erreicht, mit den Werten an der Aufrufstelle: 157. Gegen
 die Ausführung von 20 Testdateien, elf davon mit 325 Fensterfällen, verfehlte
 das keine Datei.
 
