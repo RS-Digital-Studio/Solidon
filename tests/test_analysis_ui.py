@@ -2706,9 +2706,10 @@ def test_an_orphaned_feature_keeps_its_internal_name_in_details_only(
     """Einsteiger lesen Wirkung und Ausweg, die Diagnose behält die Kennung.
 
     „Merkmal face_3 hat keinen Nachfolger" beschreibt die interne Zuordnung
-    statt der Folge für den Nutzer. Die Kennung bleibt im Tooltip und in der
-    zugänglichen Beschreibung erreichbar; die sichtbare Zeile nennt Körper,
-    Wirkung, nächsten Klick und dass die Bearbeitung erhalten ist.
+    statt der Folge für den Nutzer. Tooltip und zugängliche Beschreibung nennen
+    das Merkmal mit Art und Nummer (FD-186), die Kennung bleibt in den Werten;
+    die sichtbare Zeile nennt Körper, Wirkung, nächsten Klick und dass die
+    Bearbeitung erhalten ist.
     """
     from app.core.scene import EvaluationResult
     from app.core.types import Report, Scene
@@ -2740,8 +2741,11 @@ def test_an_orphaned_feature_keeps_its_internal_name_in_details_only(
         assert "Bearbeitung bleibt erhalten" in item.text()
         assert "Merkmal" not in item.text() and "Nachfolger" not in item.text()
         assert "face_3" not in item.text(), "interne Kennungen sind keine Kundensprache"
-        assert "face_3" in item.toolTip()
-        assert "face_3" in str(item.data(Qt.ItemDataRole.AccessibleDescriptionRole))
+        # Die Kurzhilfe nennt das Merkmal mit Art und Nummer (FD-186); die
+        # Kennung bleibt in den Werten für Agent und Handler.
+        assert "Fläche 3" in item.toolTip() and "face_3" not in item.toolTip()
+        assert finding.values["feature"] == "face_3"
+        assert "Fläche 3" in str(item.data(Qt.ItemDataRole.AccessibleDescriptionRole))
     finally:
         panel.deleteLater()
 
@@ -2772,8 +2776,9 @@ def test_a_mended_defect_keeps_its_internal_name_in_details_only(
         item = panel.list.item(0)
         assert "Halter" in item.text()
         assert "Merkmal" not in item.text() and "edge_loop_7" not in item.text()
-        assert "edge_loop_7" in item.toolTip()
-        assert "edge_loop_7" in str(item.data(Qt.ItemDataRole.AccessibleDescriptionRole))
+        # Mit Art und Nummer wie in der Merkmalsliste (FD-186).
+        assert "Offene Kante 7" in item.toolTip() and "edge_loop_7" not in item.toolTip()
+        assert "Offene Kante 7" in str(item.data(Qt.ItemDataRole.AccessibleDescriptionRole))
     finally:
         panel.deleteLater()
 

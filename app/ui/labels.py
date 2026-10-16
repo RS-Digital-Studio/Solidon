@@ -2067,7 +2067,13 @@ def value_text(key: str, value: object) -> str:
         # Die Kennung bleibt in den Werten für Agent und Handler; zu lesen ist
         # sie wie in der Merkmalsliste (FD-186): „Merkmal: thread_1“.
         found = value.split(", ") if isinstance(value, str) else [str(entry) for entry in value]
-        return ", ".join(feature_title_of(entry) for entry in found)
+        # Eine lange Liste endet mit „ … (+103)“ (``ReportPanel``); der Rest
+        # bleibt beziffert und hängt nicht an der letzten Kennung.
+        rest = ""
+        if found and " … (+" in found[-1]:
+            found[-1], marker, count = found[-1].partition(" … (+")
+            rest = marker + count
+        return ", ".join(feature_title_of(entry) for entry in found) + rest
     if key in ("solver", "attempted") and isinstance(value, str) and value in _METHOD_NAMES:
         return str(_METHOD_NAMES[value])
     if key in ("solver", "attempted") and isinstance(value, (list, tuple)):

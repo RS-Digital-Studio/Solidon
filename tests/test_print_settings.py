@@ -7203,6 +7203,8 @@ def test_a_slot_profile_follows_its_slot_across_plates(qt_app: object, tmp_path:
     dialog.session.last_result = SimpleNamespace(
         scene=Scene(objects={"A": erste, "B": zweite}, profile=dialog.session.profile),
         stopped_at=None,
+        # Die Exportprüfung nennt Passungspartner beim Namen (RB-5).
+        object_names={"A": "A", "B": "B"},
     )
     # Was der Kunde bei „Alle Platten" sieht und zuordnet: Rot, dann Weiß.
     assert [str(slot.name) for slot in dialog._plate_slots()] == ["Rot", "Weiß"]
