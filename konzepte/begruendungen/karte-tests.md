@@ -313,9 +313,10 @@ Die ausführlichen Zuordnungen der kompakten Karte:
   Je Prozess ein `solidon-tests-*`, beim Ende abgeräumt; Reste über einen
   Tag räumt der nächste Start.
 - Es setzt **einen Schlüsselbund im Speicher** (`SuiteKeyring`) vor jedem
-  Fall leer ein und nach ihm zurück; ein Fall, der einen bestimmten braucht,
-  ersetzt `keys._keyring` oder `device._load_keyring` per `monkeypatch`.
-  Kindprozesse erben ihn nicht — sie bekommen ihre Isolierung selbst.
+  Fall leer ein; ein Fall, der einen bestimmten braucht, ersetzt
+  `keys._keyring` oder `device._load_keyring` per `monkeypatch`.
+  Kindprozesse erreicht er nicht (eigene Isolierung mit `isolate_secrets`,
+  Restpaket C).
 - Unter `CI` beendet es den Lauf, wenn der exakte Kern fehlt
   (`pytest_sessionstart`, Muster `php_probe.py`): `build.yml` installiert das
   Extra `brep` in jedem Testlauf, und ohne den Kern übersprängen sich die

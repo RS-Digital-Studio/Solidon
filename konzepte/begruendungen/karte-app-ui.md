@@ -2430,10 +2430,12 @@ endgültigen Platzierungswerten geprüft. Ein früher Klick wartet auf das Bild
 seiner eigenen Freigabe — nie auf ein älteres: eine geänderte Zahl, ein
 geändertes Dokument oder ein Projektwechsel entwerten die Freigabe samt Klick.
 Ein Neuaufbau ohne Eingabe des Kunden entwertet sie nicht: Während
-`waiting_click.kept_through_rebuild` (Merkmalswahl, Antwort des
-Merkmalsarbeiters) und bei `_set_preview_order(..., rebuilt=True)` (Bindung
-der Schrittwerte, Maßgruppe vor ihrem ersten Zug) bleibt eine noch gültige
-Freigabe mit wartendem Klick stehen — samt laufender Vorschau.
+`waiting_click.kept_through_rebuild` (Merkmalswahl, Bohrung mit Senkung,
+Antwort des Merkmalsarbeiters) und bei `_set_preview_order(..., rebuilt=True)`
+(Maßgruppe vor ihrem ersten Zug) bleibt eine noch gültige Freigabe mit
+wartendem Klick stehen — samt laufender Vorschau —, und Maßgruppe und
+Merkmalfenster zeigen danach seine Werte. Ein anderer Wert verwirft ihn mit
+Satz. Begründung in `regel-wartezeit.md`.
 Identische Platzierungswerte lösen keine erneute Änderung aus. Die Revision
 und der geprüfte Auftrag gehören dem Hauptfenster, die Träger halten keine
 zweite Vorschauverwaltung. Auch Chat-Übernehmen und die Rückkehr zu einem

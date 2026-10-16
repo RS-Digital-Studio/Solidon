@@ -884,6 +884,7 @@ def test_what_a_person_types_into_an_address_field_is_checked_there() -> None:
         "/home/jemand/modelle",
         "~/modelle",
         "file:///c:/modelle",
+        "C:",
         "http://host:keinport",
         "http://:11434",
     )
