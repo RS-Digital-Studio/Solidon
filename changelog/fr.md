@@ -83,6 +83,7 @@ dans `website/version.json`.
 - Le champ *Débit sur les ponts* affiche la valeur en pourcentage et accepte de 50 à 200 %. En version 0.6.0, il affichait 2 %, et le modifier envoyait 1 ou 2 % au slicer.
 - Un projet de la version 0.6.0 avec un débit de pont de 1 ou 2 % s'ouvre avec la valeur sans réglage personnel, et le rapport le signale.
 - Les réglages d'impression affichent en entier les valeurs du profil du slicer, comme 40 000 mm/s² d'accélération. En version 0.6.0, le champ affichait sa limite.
+- Une largeur de ligne au-delà du double de la buse, comme 4 au lieu de 0,4 mm, donne un avertissement et propose la ligne propre la plus large.
 
 ### Modifier et esquisser
 

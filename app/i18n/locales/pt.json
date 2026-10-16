@@ -6638,6 +6638,7 @@
   "Slicer-Programm auswählen": "Selecionar o slicer",
   "Slicer: {name}; erfolgreich geöffnete Dateien: {count}": "Slicer: {name}; ficheiros abertos com sucesso: {count}",
   "Slot {number}": "Ranhura {number}",
+  "So breit legt diese Düse keine saubere Bahn mehr.": "Este bico não deposita uma linha limpa tão larga.",
   "So dick wird die Oberseite mindestens, auch wo die Schichten dünner sind. Der Slicer legt dafür Lagen dazu. Null überlässt es der Lagenzahl.": "A face superior tem pelo menos esta espessura, mesmo onde as camadas são mais finas. O slicer acrescenta camadas para isso. Zero deixa-o ao número de camadas.",
   "So finden Sie den Drucker später in der Liste wieder.": "Este nome ajuda a encontrar a impressora novamente na lista.",
   "So groß bricht das Gewinde durch die Wand des Teils. Mit der Mindestwand des Materials geht es bis {largest}.": "Com este tamanho a rosca atravessa a parede da peça. Com a parede mínima do material vai até {largest}.",

@@ -143,5 +143,15 @@ def test_the_built_field_shows_every_vendor_value_whole(
                 (int(loaded) if field.kind == "int" else loaded) * field.factor, decimals
             )
             assert editor.value() == pytest.approx(expected), f"{path} aus {source}"  # type: ignore[attr-defined]
+            # Ein Wert über null steht nicht als null da: 0,4 mm/s Rückzug der
+            # Bambu ASA wären bei null Stellen „0 mm/s“ (Nachprüfung R2-4).
+            assert loaded == 0 or editor.value() != 0, f"{path} aus {source}"  # type: ignore[attr-defined]
+            if loaded is middle:
+                # Nach einem Wert innerhalb gilt wieder die Spanne des Felds
+                # (Nachprüfung R2-3); der Raft-Abstand trägt seinen Sonderwert
+                # eine Anzeigestufe tiefer.
+                low = field.minimum - (10.0**-decimals if path == "adhesion.raft_gap" else 0.0)
+                assert editor.minimum() == pytest.approx(low), path  # type: ignore[attr-defined]
+                assert editor.maximum() == pytest.approx(field.maximum), path  # type: ignore[attr-defined]
     finally:
         holder.deleteLater()

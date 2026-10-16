@@ -9880,8 +9880,15 @@ def test_empty_print_dialog_explains_an_impossible_flow_and_recovers(qt_app, whe
 
     Vor dem Öffnen gesetzt heißt: früher selbst gewählt. Ohne Herkunft wären
     die Werte seit Stufe A Grundlage und kämen beim Öffnen aus dem Profil.
+
+    An einer 1-mm-Düse: An der 0,4er bringt der Rat Schicht und Bahn auf
+    höchstens 0,3 × 0,8 mm, und unter 0,5 mm³/s Volumenstrom geht das noch
+    (``advise.WIDE_LINE_SHARE``, Nachprüfung FD-197 NP-3).
     """
+    printer = profiles.printer(profiles.DEFAULT_PRINTER)
+    profiles.save_printer(replace(printer, nozzle_diameter=1.0, extrusion_width=1.05))
     session = Session()
+    assert session.profile.printer.nozzle_diameter == pytest.approx(1.0)
     settings = print_settings.resolve(session.profile)
     invalid = settings
     for path, value in (

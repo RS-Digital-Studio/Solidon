@@ -6638,6 +6638,7 @@
   "Slicer-Programm auswählen": "Choose slicer program",
   "Slicer: {name}; erfolgreich geöffnete Dateien: {count}": "Slicer: {name}; successfully opened files: {count}",
   "Slot {number}": "Slot {number}",
+  "So breit legt diese Düse keine saubere Bahn mehr.": "This nozzle cannot lay a clean line this wide.",
   "So dick wird die Oberseite mindestens, auch wo die Schichten dünner sind. Der Slicer legt dafür Lagen dazu. Null überlässt es der Lagenzahl.": "The top surface is at least this thick, even where layers are thinner. The slicer adds layers for it. Zero leaves it to the layer count.",
   "So finden Sie den Drucker später in der Liste wieder.": "Use this name to find the printer in the list later.",
   "So groß bricht das Gewinde durch die Wand des Teils. Mit der Mindestwand des Materials geht es bis {largest}.": "At this size the thread breaks through the wall of the part. With the material's minimum wall it can go up to {largest}.",

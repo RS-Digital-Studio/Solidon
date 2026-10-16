@@ -6638,6 +6638,7 @@
   "Slicer-Programm auswählen": "Scegli il programma slicer",
   "Slicer: {name}; erfolgreich geöffnete Dateien: {count}": "Slicer: {name}; file aperti correttamente: {count}",
   "Slot {number}": "Posto {number}",
+  "So breit legt diese Düse keine saubere Bahn mehr.": "Questo ugello non depone una linea pulita così larga.",
   "So dick wird die Oberseite mindestens, auch wo die Schichten dünner sind. Der Slicer legt dafür Lagen dazu. Null überlässt es der Lagenzahl.": "La superficie superiore è spessa almeno così, anche dove gli strati sono più sottili. Lo slicer aggiunge strati per questo. Zero lo lascia al numero di strati.",
   "So finden Sie den Drucker später in der Liste wieder.": "Questo nome ti aiuterà a ritrovare la stampante più avanti nell'elenco.",
   "So groß bricht das Gewinde durch die Wand des Teils. Mit der Mindestwand des Materials geht es bis {largest}.": "Con questa misura la filettatura sfonda la parete del pezzo. Con la parete minima del materiale arriva fino a {largest}.",

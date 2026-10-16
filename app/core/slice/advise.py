@@ -229,6 +229,15 @@ CHAMBER_FOR_WARPING: Final = 50
 #: falsch sind.
 NARROW_LINE_SHARE: Final = 0.85
 
+#: Breiter als das Doppelte der Düse legt kein Herstellerprofil eine Bahn:
+#: gemessen 11 167 Bahnbreiten aus den Prozessprofilen von Orca, Creality Print,
+#: Elegoo, Anycubic und Bambu, höchstens das 2,0-Fache der Düse (WEMAKE3D 0,2 mm, Creality
+#: SPARKX i7 Vase). Darüber streicht die Düsenfläche die Spur nicht mehr glatt.
+#: Das Geschwister von :data:`NARROW_LINE_SHARE` nach oben; die Feldgrenze
+#: reicht für die Granulatdüsen bis 10 mm und fängt einen Tippfehler wie 4 statt
+#: 0,4 mm nicht mehr ab (FD-203, Nachprüfung NP-3).
+WIDE_LINE_SHARE: Final = 2.0
+
 #: Ab welchem Umfang eine glatte Außenschleife ihre Naht als Linie zeigt, in
 #: mm: zwei Rampen der Schrägnaht (``print_settings.SCARF_LENGTH``). Ein Stift
 #: unter Ø 13 mm hat keinen Platz für die Rampe, und seine Naht fällt kaum auf.
@@ -792,6 +801,20 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
                     path=path,
                     value=round(narrowest, 3),
                     reason=_("Schmaler legt diese Düse keine Bahn, sie reißt ab."),
+                    severity="warning",
+                )
+            )
+    # **Und nach oben**, wie bei der Schichthöhe: Breiter als
+    # das :data:`WIDE_LINE_SHARE`-Fache der Düse legt kein Hersteller eine Bahn.
+    widest = WIDE_LINE_SHARE * printer.nozzle_diameter
+    for path in ("layers.line_width", "layers.first_layer_line_width"):
+        if is_greater(settings_table.read_path(settings, path), widest):
+            advice.append(
+                _advice(
+                    settings,
+                    path=path,
+                    value=round(widest, 3),
+                    reason=_("So breit legt diese Düse keine saubere Bahn mehr."),
                     severity="warning",
                 )
             )

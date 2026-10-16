@@ -260,17 +260,21 @@ def test_the_step_drops_the_slip_as_choice_and_as_plate_choice(slip: float) -> N
     assert chosen["shell"]["bridge_flow"] == pytest.approx(1.0)
     assert chosen["shell"]["wall_count"] == 4
 
+    told: list[dict[str, object]] = []
     plate = migrate(
         _v52(
             {"bridge_flow": 0.9},
             chosen=[],
             accepted=["shell.bridge_flow"],
             plate_choices={"shell.bridge_flow": slip, "adhesion.kind": "none"},
-        )
+        ),
+        notes=told,
     )["print_settings"]
     assert plate["accepted"] == ["shell.bridge_flow"]
     assert plate["shell"]["bridge_flow"] == pytest.approx(0.9)
     assert plate["plate_choices"] == {"adhesion.kind": "none"}
+    # Auch nur als Wahl der Platte sagt es der Prüfbericht (Nachprüfung R2-1).
+    assert told == [{"code": "project.bridge_flow_reset", "percent": round(slip * 100)}]
 
 
 def test_the_step_keeps_every_real_bridge_flow() -> None:
@@ -338,3 +342,29 @@ def test_a_file_cannot_bring_its_own_notes() -> None:
     assert told == []
     real = {"format_version": 52, "scene": {}, "ops": [], "transactions": []}
     assert migrate(deepcopy(real), notes=told) and told == []
+
+
+# --- Folge der gehobenen Grenzen: Bahnbreite gegen die Düse ----------------------
+
+
+@pytest.mark.parametrize("path", ["layers.line_width", "layers.first_layer_line_width"])
+def test_a_line_far_wider_than_the_nozzle_is_warned(path: str) -> None:
+    """Die Feldgrenze reicht für die Granulatdüsen bis 10 mm und wies den
+    Tippfehler 4 statt 0,4 mm an der 0,4er Düse nicht mehr ab (Nachprüfung
+    NP-3). Wie bei der Schichthöhe sagt der Rat es gegen die Düse — mit dem
+    Breitesten, was ein Herstellerprofil an dieser Düse legt, als Vorschlag."""
+    from app.core.slice import advise
+
+    profile = profiles.make_profile("generic-220", "pla")
+    nozzle = profile.printer.nozzle_diameter
+    assert nozzle == pytest.approx(0.4)
+    base = print_settings.resolve(profile)
+    typo = print_settings.with_choice(base, path, 4.0)
+
+    offered = {entry.path: entry for entry in advise.advise(typo, profile)}
+
+    assert path in offered
+    assert offered[path].severity == "warning"
+    assert offered[path].value == pytest.approx(advise.WIDE_LINE_SHARE * nozzle)
+    widest = print_settings.with_choice(base, path, advise.WIDE_LINE_SHARE * nozzle)
+    assert path not in {entry.path for entry in advise.advise(widest, profile)}

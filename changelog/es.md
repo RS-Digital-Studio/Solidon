@@ -83,6 +83,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El campo *Flujo en puentes* muestra el valor en porcentaje y admite de 50 a 200 %. En la versión 0.6.0 mostraba 2 %, y al cambiarlo se enviaba al slicer un flujo del 1 o del 2 %.
 - Un proyecto de la versión 0.6.0 con un flujo de puentes del 1 o del 2 % se abre con el valor sin ajuste propio, y el informe lo indica.
 - Los ajustes de impresión muestran completos los valores del perfil del slicer, como 40 000 mm/s² de aceleración. En la versión 0.6.0 aparecía el límite del campo.
+- Un ancho de línea de más del doble de la boquilla, como 4 en vez de 0,4 mm, recibe un aviso y la propuesta de la línea limpia más ancha.
 
 ### Editar y dibujar
 
