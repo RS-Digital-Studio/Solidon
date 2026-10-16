@@ -17,7 +17,7 @@ Felder je Fund, in dieser Reihenfolge:
 | Ursache | Satz |
 | Vorschlag | Satz |
 | Wirkung beim Kunden | Satz |
-| Stand | offen RM-…, behoben `<commit>`, gut nach Fix `<lauf>` |
+| Stand | offen RM-…, behoben `<commit>`, gut nach Fix `<lauf>`; nennt ein offener Stand einen Commit im Laufkopf, sagt er mit „Rest: …“, was offen bleibt, sonst hält `report` den Lauf an (FD-153) |
 
 Schwer heißt falsches Ergebnis, Datenverlust, Sackgasse oder nicht auffindbar;
 mittel heißt Regelverstoß, Umweg oder Fehlerweg ohne Handlung; leicht heißt
@@ -437,7 +437,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `request_in_view` holt die Maßgruppe ins Bild, ohne ihre Handlung scharf zu machen, wie es der Knopf *Im Bild einstellen* tut.
 - Vorschlag: ein Weg für Auswahl und Knopf; die Handlung im Bild ist auch rechts die scharfe.
 - Wirkung beim Kunden: Rechts steht offen eine andere Handlung als die, deren Maße er im Bild sieht.
-- Stand: offen RM-737; Hauptteil behoben `aa1bae3ba` (rechts ist die Handlung im Bild scharf, *Merkmal verschieben* nur noch zugeklappt); für den Rest — die Verschiebepfeile des Merkmals stehen neben der Maßgruppe scharf an derselben Bohrung (Stufe B, 02, 016, 019) — hat kein Paket einen Fix gebaut; F5 `90600562c` lässt die Pfeile erst ab der Knopfreichweite beginnen, ob das den Rest trägt, urteilt der Schlusslauf (Plan Punkt 26).
+- Stand: offen RM-737; Hauptteil behoben `aa1bae3ba` (rechts ist die Handlung im Bild scharf, *Merkmal verschieben* nur noch zugeklappt); F5 `90600562c` lässt die Pfeile des Griffs erst ab der Knopfreichweite beginnen. Rest: Die Verschiebepfeile des Merkmals stehen neben der Maßgruppe scharf an derselben Bohrung (Stufe B, 02, 016, 019); dafür hat kein Paket einen Fix gebaut, ob `90600562c` ihn trägt, urteilt der Schlusslauf (Plan Punkt 26).
 
 ## D0: Entwurf neuer Belege und Funde aus den Fixen (FD-35 bis FD-85)
 
@@ -1661,7 +1661,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: Der Registereintrag trägt kein `requires_body` (`colour_ops.py:314–330`); `grenzen.md` verlangt, dass am Menüeintrag steht, was am gewählten Körper nie etwas tun kann.
 - Vorschlag: Die Bedingung „trägt Farbinformation“ als `requires_body` mit demselben Satz; der Eintrag steht grau mit Grund.
 - Wirkung beim Kunden: Er öffnet eine Handlung, die an seinem Teil nie etwas tun kann.
-- Stand: offen RM-737; Kern vorbereitet `7938175dc`, `cac627d7e` (`BODY_REQUIREMENTS` mit `colour`, `NO_COLOUR`); die Sperre am Menüeintrag entsteht erst mit `fix-f6-fd135-aktivierung.patch` (`requires_body="colour"`, `labels.body_requirement`, Startszene `farbig.netz`), der in welle5 `1f8346073` nicht angewandt ist.
+- Stand: offen RM-737; Kern vorbereitet `7938175dc`, `cac627d7e` (`BODY_REQUIREMENTS` mit `colour`, `NO_COLOUR`). Rest: Die Sperre am Menüeintrag entsteht erst mit `fix-f6-fd135-aktivierung.patch` (`requires_body="colour"`, `labels.body_requirement`, Startszene `farbig.netz`), der in welle5 `1f8346073` nicht angewandt ist.
 
 ### FD-136 Der Übernehmen-Fuß steht weit unter seinem Feld
 
@@ -1886,7 +1886,7 @@ Auskunft.
 - Ursache: Der Stand wurde nach dem gemeinsamen Lauf nicht nachgezogen.
 - Vorschlag: Vor jeder Urteilsrunde den Stand der Funde nachziehen, deren Fix im Laufkopf liegt, mit Nachweis an ihrer Zeile.
 - Wirkung beim Kunden: Kein Produktfehler; *gut nach Fix* war eine Lesart statt einer Folge der Funddatei.
-- Stand: offen RM-737; die sechs Einzelfälle sind nachgezogen (`a00233340`), vor dem Schlusslauf zieht `fix/w5-funde` alle Stände nach; seit `2cfa39669` weist `report` ein Urteil ab, das dem Stand der Funddatei widerspricht, doch kein Wächter verlangt vor einer Urteilsrunde, dass ein Fund mit Fix im Laufkopf nicht mehr offen steht.
+- Stand: behoben `3b8b7ba28`; `report` hält einen Lauf an (Ausgang 1), solange ein offener Fund einen Commit nennt, der im Laufkopf liegt, ohne mit „Rest:“ zu sagen, was offen bleibt (`function_verdict_rules.stale_findings`); `test_function_findings.py::test_the_report_refuses_an_open_finding_whose_fix_lies_in_the_run_head` (gepflanzter offener Fund mit dem Kopf als Fix) am Stand davor rot, danach grün; die sechs Einzelfälle sind nachgezogen (`a00233340`), alle Stände vor dem Schlusslauf in `fix/w5-funde`.
 
 ## Folgefunde aus Fixen, Durchsichten und nativen Nachweisen (ab FD-154)
 
@@ -2611,3 +2611,68 @@ eingefroren“).
 - Vorschlag: den Abdruck unabhängig von der Formatversion des Dokuments rechnen oder das mitgereiste Rezept in der Version vergleichen, in der es gespeichert wurde; Test mit einem Projekt der Vorversion und geändertem eigenem Baustein.
 - Wirkung beim Kunden: Für jedes Projekt aus 0.6.0 mit geändertem eigenem Baustein sagt der Prüfbericht „ihr alter Stand liegt nicht mehr vor“, obwohl er mitgereist ist, und *Gespeicherten Stand verwenden* fehlt.
 - Stand: offen RM-737; in Arbeit
+
+## Nachgetragene Funde aus CI-Fix und Prüfstand (ab FD-213)
+
+Behobene Funde aus `output/konsolidierung-2026-10-12/fix-ci-main-claude.md` und
+`fix-rest-c-claude.md`, die ihre Nummer erst bei der Landung der Welle 5 bekamen.
+
+### FD-213 Ein Klick an einer Textur während einer Berechnung ging verloren
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `feature:texture.change`
+- Prüfpunkt: 6
+- Beleg: `output/konsolidierung-2026-10-12/fix-ci-main-claude.md`, Punkt 17: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` auf macOS Intel rot (`0.6 == 0.9`); lokal nachgestellt mit verzögertem `_PreviewWorker.work`: Verzögerung 0 → 0,9, 0,5 s und 3 s → 0,6, auch nach 20 s (`texslow*.txt`).
+- Ursache: Nach der Auswertung baut das Merkmalfenster die Textur neu auf, `show_texture` meldete die Werte des Schritts als Änderung und stellte die 300-ms-Entprellung; rechnete die Vorschau des getragenen Klicks länger, band die Uhr die alten Werte und ersetzte die Freigabe samt wartendem Klick — kein Schritt, kein Satz.
+- Vorschlag: `_apply_carried_feature_order` verwirft Merkposten und Uhr des Neuaufbaus, bevor es bindet; beide Wege des getragenen Klicks (Merkmalfenster und Maßgruppe) gehen hierdurch.
+- Wirkung beim Kunden: An größeren Modellen fiel ein *Übernehmen* an einer Textur während einer Berechnung still weg; seit 0.6.0.
+- Stand: behoben `bfdad2d9a`; der Fall hält die Vorschau an und lässt die Uhr ablaufen, am Stand davor rot (`0.6 == 0.9`), danach grün, `test_operation_ui.py` ganz 328 passed; die Wurzel trägt seit `6369e3b81` `app/ui/waiting_click.py` (FD-192); Endprobe 38862811071 auf Linux, macOS ARM, macOS Intel und Windows grün.
+
+### FD-214 Ohne Grafiktreiber hing das Prozessende in `wgpuSurfaceRelease`
+
+- Art: Stabilität
+- Schwere: mittel
+- Funktion: `viewport`
+- Prüfpunkt: 6
+- Beleg: `output/konsolidierung-2026-10-12/fix-ci-main-claude.md`, Punkt 19: Windows-Runner ohne Grafikkarte (WARP), py-spy des Fallprozesses im Hauptfaden in `wgpuSurfaceRelease → wgpuTextureViewRelease → WaitForSingleObjectEx` aus `GPUCanvasContext.__del__` beim Prozessende; nach `release_renderer` lebten `GfxRenderer`, `WgpuRenderer`, `WgpuContextToScreen` und `GPUCanvasContext` weiter; A/B in Probe 38855455034: ohne Freigabe beim Schließen 6 von 6 hängend, mit 0 von 6.
+- Ursache: Die Bildschirmfläche der Ansicht ging erst beim Abbau des Interpreters, nach Fenster und Anwendung; dort wartete wgpu ohne Gerät ewig.
+- Vorschlag: `GfxRenderer.close()` gibt die Fläche frei, solange Fenster und Gerät leben.
+- Wirkung beim Kunden: Ohne Grafiktreiber, etwa in einer virtuellen Maschine, lief Solidon nach dem Schließen unsichtbar weiter.
+- Stand: behoben `973fc5128`; `test_render_gfx_regressions.py` (ein Zeuge zählt die Freigabe, die Mutation ohne Aufruf ist rot; ein Vertragsfall über die Interna von pygfx, rendercanvas und wgpu); Endprobe 38862811071: Windows-Prüfstandsfall zwölfmal ohne Hänger.
+
+### FD-215 Die Sprachkarte der Website deckte die Fußverweise am Seitenende
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Website, Karte mit dem Sprachhinweis
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-ci-main-claude.md`, Punkt 18: `test_website_browser.py::test_the_fixed_card_keeps_its_space_free[telefon]` auf macOS rot; die Sonde zeigte `--language-hint-space` 162 px, der berechnete `padding-bottom` von `body` aber 0 px, am Seitenende lagen 12 Fußverweise unter der Karte; lokal nachgestellt mit QtWebEngine offscreen, 12-mal der Telefonfall: am Stand von main 4 von 12 mit verdeckten Verweisen.
+- Ursache: Chromium rechnete den Stil von `body` nach dem Setzen des Polsters während des Ladens erst beim nächsten Bild nach (im Prüfstand ohne Bild dauerhaft); weder die Variable an `body` noch ein Inline-Stil hielten.
+- Vorschlag: einen eigenen leeren Block in der Höhe der Karte am Ende von `body`, der den Platz sofort hält; die Variable nur noch für `scroll-padding-bottom`.
+- Wirkung beim Kunden: Auf dem Telefon lagen die Fußverweise am Seitenende zeitweise unter der Sprachkarte und waren nicht zu erreichen.
+- Stand: behoben `0da225deb`, `730e741f6`; lokal 12 von 12 ohne verdeckten Verweis, der Browserfall prüft die Höhe des Blocks gegen den Platzwert und nach dem Schließen 0 (Mutation ohne `spacer.remove()` rot); Endprobe 38862811071 auf vier Plattformen grün.
+
+### FD-216 Ein wartender Klick zeigte alte Werte, und gleiches Tippen ließ ihn still fallen
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `resize_hole`, `feature:texture.change`
+- Prüfpunkt: 6
+- Beleg: Nachprüfung CI, R2-2 (`output/konsolidierung-2026-10-12/review2-ci-claude.md`, Sonde `test_zz_sonde_review2.py`): Während der gehaltene Klick an seiner Freigabe wartete, zeigte die Maßgruppe 5,20, der Klick wollte 5,70; den gewollten Wert erneut getippt, verwarf den Klick ohne Schritt und ohne Satz, ein anderer Wert ebenso; an der Textur dasselbe mit 0,6 gegen 0,9; neue Fälle in `test_waiting_click_rebuild.py` am Stand davor 8 rot (`fix-ci-main-claude.md`).
+- Ursache: `_apply_carried_feature_order` und `show_values` der neuen Maßgruppe banden mit verschiedenen Eigentümern, ein gleicher Auftrag behielt die Freigabe nur beim selben; `_check_waiting_order` meldete nur den Klick nach der Auswertung, nicht den an der Freigabe wartenden.
+- Vorschlag: Nach einem Neuaufbau zeigen Maßgruppe und Merkmalfenster die Werte des wartenden Auftrags; ein anderer Wert sagt, dass nicht übernommen wurde.
+- Wirkung beim Kunden: Feld und Statuszeile widersprachen sich für die ganze Rechenzeit; wer dem Feld glaubte und seinen Wert noch einmal tippte, verlor die Änderung ohne Satz; seit 0.6.0.
+- Stand: behoben `c14595ed8`; die neuen Fälle am Stand davor 8 rot, danach 9 grün; die Mutationen (Werte tragen, Satz im Merkmalfenster, Satz in der Maßgruppe, Wächter `_clear_preview`) sind rot.
+
+### FD-217 Der Maßkartenläufer endete ohne `record_shutdown`
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: keine Zeile: native Läufer des Prüfstands (`tools/native_measure_card.py`)
+- Prüfpunkt: 19
+- Beleg: `output/konsolidierung-2026-10-12/fix-rest-c-claude.md`, Fund unterwegs: `test_window_bench.py::test_every_process_end_names_its_stragglers_once` war am Zweig seit dem Merge von F10 rot (am Stand `94da19159` 1 failed).
+- Ursache: `CardRoute.run` verwarf die Nachzügler von `shutdown_window` und setzte `shutdown_complete` selbst (RF-18), statt über `record_shutdown` zu gehen.
+- Vorschlag: `record_shutdown` nach `leave()`, damit ein sofortiges Ende bei Nachzüglern die Siegelprüfung nicht überspringt.
+- Wirkung beim Kunden: Kein Produktfehler; ein Nachzügler im nativen Lauf endete ohne Namen.
+- Stand: behoben `d5530a736`; der Test am Stand davor rot, danach grün (`test_window_bench`, `test_native_measure_card_cursor`, `test_native_runs`, `test_function_guard` 132 passed); nativer Nachweis mit der Maßkartenfolge im Schlusslauf (Plan Punkt 3, L1).
