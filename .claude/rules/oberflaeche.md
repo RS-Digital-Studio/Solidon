@@ -395,10 +395,15 @@ Vorrang.
   Befundauswahl, Einzelheiten, gelesener Reiter und offene Körperknoten bleiben.
   Zeilenidentität beruht auf rohen Mitgliedern samt Mehrfachvorkommen, nicht
   auf übersetzten Sammeltexten.
-- **Eindeutige alte mm-Texte bleiben Rohdaten:** `labels.value_text` rechnet
-  `excess`, `gap` und `needed` erst zur Anzeige um, nur bei vollständig passender
-  numerischer mm-Form. Nackte Slicerwerte und Freitext bleiben unverändert;
-  Anzeigewechsel ändern weder Befundidentität noch Cache-/Projektformat.
+- **Ein Maß in `values` sagt, dass es eines ist** (FD-188), sonst steht es
+  ohne Einheit und in Zoll falsch: ein Schlüssel mit Endung (`_mm`, `_mm2`,
+  `_deg`), ein Grenzwert (`minimum`, `maximum`, `value`) mit `"unit": "mm"`;
+  ein Schlüssel ohne Endung, den Agent oder Handler lesen, steht in
+  `labels._BARE_MEASURES` und trägt nirgends anderes. Der Wert bleibt die Zahl
+  in Millimetern; `tests/test_value_measures.py` liest jeden Eintrag in
+  `app/core`. Fertiger mm-Text („12.00 mm“, auch unter `_MEASURE_TEXTS`) wird
+  erst zur Anzeige umgerechnet, Befundidentität und Cache-/Projektformat
+  bleiben; Slicerwerte (`_SETTING_PATHS`) stehen wie im Druckdialog.
 - **Ein Satz trägt keine Einheit im Katalogtext:** Die Zahl kommt mit ihrer
   Einheit (`labels.length`, im Kern `format_length(…, display_unit())`) —
   sonst liest sich „misst {measure} mm“ in Zoll als „0.2047 mm“ (RM-516).

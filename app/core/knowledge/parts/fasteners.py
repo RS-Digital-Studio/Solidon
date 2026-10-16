@@ -1869,7 +1869,7 @@ def thread_problem(
                 "oder null für die Regelsteigung des Durchmessers.",
                 finest=format_length(FINEST_PITCH),
             ),
-            values={"minimum": FINEST_PITCH, "pitch": pitch},
+            values={"minimum": FINEST_PITCH, "pitch": pitch, "unit": "mm"},
             constraint="finest_pitch",
         )
     if pitch > COARSEST_PITCH + EPS_GEOM:
@@ -1880,7 +1880,7 @@ def thread_problem(
                 "oder null für die Reihe der Gewindeform.",
                 coarsest=format_length(COARSEST_PITCH),
             ),
-            values={"maximum": COARSEST_PITCH, "pitch": pitch},
+            values={"maximum": COARSEST_PITCH, "pitch": pitch, "unit": "mm"},
             constraint="coarsest_pitch",
         )
     share = shapes.DEPTH_SHARE[profile]
@@ -1893,6 +1893,7 @@ def thread_problem(
                 "maximum": max(major, 0.0) * (1.0 - THREAD_MIN_CORE_SHARE) / (2.0 * share),
                 "pitch": pitch,
                 "play": play,
+                "unit": "mm",
             },
             constraint="no_core",
         )

@@ -821,7 +821,7 @@ def _matched_pin(
                 field="length",
                 detail=bore_pin.TOO_LONG_FOR_THE_BORE,
                 value=params.length,
-                values={"maximum": round(top - deepest, 3), "length": params.length},
+                values={"maximum": round(top - deepest, 3), "length": params.length, "unit": "mm"},
                 constraint="maximum",
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
@@ -971,7 +971,7 @@ def _printable_thread(
                 length=_format(top - bottom),
                 maximum=_format(longest),
             ),
-            values={"maximum": round(longest, 3), "length": round(top - bottom, 3)},
+            values={"maximum": round(longest, 3), "length": round(top - bottom, 3), "unit": "mm"},
             constraint="maximum",
             suggestions=(CORRECT_INPUT, CANCEL),
         )
@@ -980,7 +980,7 @@ def _printable_thread(
     if top - shortest < deepest - EPS_GEOM:
         room = max(top - deepest, 0.0)
         step = source.features[zone.feature].created_by if zone.feature in source.features else None
-        values: dict[str, Any] = {"minimum": shortest, "room": round(room, 3)}
+        values: dict[str, Any] = {"minimum": shortest, "room": round(room, 3), "unit": "mm"}
         if step is not None:
             raise ValidationError(
                 field="length",

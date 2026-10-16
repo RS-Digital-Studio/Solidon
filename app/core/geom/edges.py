@@ -2716,7 +2716,7 @@ def _check_corner_region(
                 "Die Eckbearbeitung würde ein weiteres Detail verändern. Wählen Sie "
                 "ein kleineres Maß oder bearbeiten Sie die Kanten einzeln."
             ),
-            values={"size": size},
+            values={"size_mm": size},
             # Der Satz nennt zwei Wege, und beide sind Handlungen am Schritt —
             # nicht „Reparieren", die Vorgabe des Geometriefehlers: Am Netz ist
             # hier nichts kaputt, die Ecke ist nur zu eng für das Maß.

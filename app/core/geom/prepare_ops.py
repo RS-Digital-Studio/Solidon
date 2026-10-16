@@ -6521,7 +6521,8 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
     # 22: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
     # Verschweißweite, auch ein eng sitzender Stift (RM-661).
-    cache_version="22",
+    # 23: Wandbefunde bringen die Einheit ihrer Grenze mit (FD-188).
+    cache_version="23",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -6907,7 +6908,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
     # 22: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
     # Verschweißweite, auch ein eng sitzender Stift (RM-661).
-    cache_version="22",
+    # 23: Wandbefunde bringen die Einheit ihrer Grenze mit (FD-188).
+    cache_version="23",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -8394,7 +8396,8 @@ class RotateFeatureParams(BaseParams):
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
     # 19: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
     # Verschweißweite, auch ein eng sitzender Stift (RM-661).
-    cache_version="19",
+    # 20: Wandbefunde bringen die Einheit ihrer Grenze mit (FD-188).
+    cache_version="20",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -9708,7 +9711,7 @@ def _reject_oversized(field: str, diameter: float, mesh: Mesh, *, kind: str = "d
             ),
             value=diameter,
             constraint="maximum",
-            values={"maximum": limit},
+            values={"maximum": limit, "unit": "mm"},
         )
 
 
@@ -9848,7 +9851,8 @@ class ResizeFeatureParams(BaseParams):
     # 29: Das geänderte Gewinde behält Profil, Gangzahl, Drehsinn und Kegel und nennt
     # Vorschub und Drehsinn als Parameter (RM-544, Review GEW G6).
     # 30: Ein geänderter Kegel behält seine Bezugsebene (``gauge_offset``, Nachprüfung GEW N2).
-    cache_version="30",
+    # 31: Wandbefunde bringen die Einheit ihrer Grenze mit (FD-188).
+    cache_version="31",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -10084,7 +10088,7 @@ def _resize_chain_countersink(
             ),
             value=diameter,
             constraint="minimum",
-            values={"minimum": 2.0 * below},
+            values={"minimum": 2.0 * below, "unit": "mm"},
             suggestions=(CORRECT_INPUT, CANCEL),
         )
     mouths = {feature.id: mouth}
@@ -10564,7 +10568,7 @@ def _depth_plan(closed: MeshData, wish: _DepthWish, profile: Profile, radius: fl
                         thickness=thickness,
                         minimum=minimum,
                     ),
-                    values={"thickness": round(thickness, 3), "minimum": minimum},
+                    values={"thickness": round(thickness, 3), "minimum": minimum, "unit": "mm"},
                     suggestions=(CORRECT_INPUT,),
                 )
             )
@@ -10710,7 +10714,8 @@ OPEN_BODY_DETAIL: Final = _(
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
     # 26: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
     # Verschweißweite, auch ein eng sitzender Stift (RM-661).
-    cache_version="26",
+    # 27: Wandbefunde bringen die Einheit ihrer Grenze mit (FD-188).
+    cache_version="27",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -11444,7 +11449,8 @@ SLOT_FEATURE_RENAMED: Final = _(
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
     # 24: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
     # Verschweißweite, auch ein eng sitzender Stift (RM-661).
-    cache_version="24",
+    # 25: Wandbefunde bringen die Einheit ihrer Grenze mit (FD-188).
+    cache_version="25",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -12074,6 +12080,7 @@ def _neighbour_bore_findings(
                 values={
                     "thickness": after_gap,
                     "minimum": threshold,
+                    "unit": "mm",
                     **({} if before_gap is None else {"previous": before_gap}),
                 },
                 suggestions=(CORRECT_INPUT,),
@@ -17859,6 +17866,7 @@ def _thread_wall(
                 "diameter": diameter,
                 "largest": largest,
                 "minimum": minimum,
+                "unit": "mm",
             },
             constraint="thread_wall",
             suggestions=(CORRECT_INPUT, CANCEL),

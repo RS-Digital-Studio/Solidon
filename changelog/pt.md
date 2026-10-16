@@ -110,7 +110,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Num corpo sem cor, *Converter a textura em filamentos* fica a cinzento e indica o motivo, em vez de recusar só na pré-visualização.
 - Para parâmetros, ajustes, impressora, material e desfazer, o chat indica o lugar da janela onde se faz o mesmo à mão.
 - O relatório de verificação e a verificação antes da exportação nomeiam os corpos de um ajuste em vez de mostrar um identificador interno, também um corpo entretanto removido.
-- As mensagens indicam uma característica por tipo e número, como «Furo 2», em vez de um identificador interno. Na contraparte de uma rosca, diâmetro e passo aparecem na unidade escolhida.
+- As mensagens indicam uma característica por tipo e número, como «Furo 2», em vez de um identificador interno.
+- As medidas sob uma mensagem trazem a sua unidade, os comprimentos na unidade escolhida. A versão 0.6.0 mostrava muitas vezes só o número, como o comprimento mínimo de aresta em *Refinar as arestas*.
 - O inglês e o português distinguem agora o ressalto de um gancho, ou de um corpo abaixo da placa, da saliência na impressão.
 - Em espanhol e português, o menu, a pesquisa e o diálogo voltam a mostrar só a primeira frase de *Pino para furo* e *Orientar para impressão*.
 - Várias traduções leem-se com mais clareza, entre elas a introdução de *Criar parâmetro …*. O pino começa com maiúscula em todas as línguas.

@@ -34,6 +34,7 @@ from app.core.activation import Activation
 from app.core.export.slicer_profiles import model_name
 from app.core.geom.mesh import MeshData, face_components
 from app.core.geom.texture import carries_colour
+from app.core.knowledge.print_fields import shown_value as shown_setting
 from app.core.knowledge.profiles import shown_printer_title
 from app.core.perceive.actions import measure_explanation, measure_qualifier
 from app.core.perceive.groups import FunctionalGroup, GroupMeasure
@@ -2050,6 +2051,82 @@ _METHOD_NAMES: Final[dict[str, TranslatableText]] = {
 }
 
 
+#: Wert-Schlüssel ohne Einheiten-Endung, die überall ein Maß tragen, mit der
+#: Endung, die sie meinen (FD-188).
+#:
+#: Ein Maß bekommt seine Endung im Kern (``oversize_mm``); diese Schlüssel
+#: tragen keine, weil Agent und Handler sie unter diesem Namen lesen
+#: (``reachable`` für *Die kleinste Kantenlänge nehmen*, ``diameter`` und
+#: ``pitch`` für das Gegenstück, ``previous`` für das Bohrungsmaß). Unter der
+#: Absage stand deshalb „Erreichbar: 0,58“ — ohne Einheit und in Zoll falsch.
+#: Hier steht einmal, dass sie ein Maß sind; der Wert bleibt die Zahl in
+#: Millimetern (Regel 6). Ein Schlüssel kommt nur hierher, wenn er **nirgends**
+#: etwas anderes trägt — ``size`` ist auch eine Dateigröße, ``minimum`` jede
+#: Grenze; ein Grenzwert bringt seine Einheit in ``values["unit"]`` mit
+#: (:data:`UNIT_VALUES`). ``tests/test_value_measures.py`` wird rot, wenn ein
+#: Maß in ``values`` steht, das keiner dieser Wege kennzeichnet.
+_BARE_MEASURES: Final[dict[str, str]] = {
+    "amount": "_mm",
+    "at": "_mm",
+    "cell_width": "_mm",
+    "clearance": "_mm",
+    "core": "_mm",
+    "corner": "_mm",
+    "cut": "_mm",
+    "depth": "_mm",
+    "diameter": "_mm",
+    "distance": "_mm",
+    "drawn_width": "_mm",
+    "drop": "_mm",
+    "edge": "_mm",
+    "excess": "_mm",
+    "grip": "_mm",
+    "head_room": "_mm",
+    "height": "_mm",
+    "largest": "_mm",
+    "least": "_mm",
+    "length": "_mm",
+    "major": "_mm",
+    "margin": "_mm",
+    "needed": "_mm",
+    "nominal": "_mm",
+    "pitch": "_mm",
+    "play": "_mm",
+    "previous": "_mm",
+    "radius": "_mm",
+    "reachable": "_mm",
+    "room": "_mm",
+    "root": "_mm",
+    "shortest": "_mm",
+    "thickness": "_mm",
+    "tolerance": "_mm",
+    "tube_diameter": "_mm",
+    "width": "_mm",
+    "area": "_mm2",
+    "footprint": "_mm2",
+    "overhang": "_mm2",
+    "angle": "_deg",
+    "last_angle": "_deg",
+}
+
+#: Schlüssel, die nur als fertiger Text „12.00 mm“ ein Maß tragen — als Zahl
+#: sind ``actual`` und ``expected`` eine Anzahl, ``gap`` eine Druckeinstellung.
+_MEASURE_TEXTS: Final = frozenset({"actual", "expected", "gap"})
+
+#: Zahlen aus der Druckprüfung, die eine Druckeinstellung sind: Sie stehen wie
+#: im Druckdialog, mit dessen Stellen und Einheit (``print_fields``).
+_SETTING_PATHS: Final[dict[str, str]] = {
+    "gap": "support.z_gap",
+    "layer_height": "layers.layer_height",
+}
+
+#: Ein Maß als fertiger Text aus ``units.format_length``: Zahl, Leerzeichen, Einheit.
+_MEASURE_TEXT: Final = re.compile(r"([+-]?\d+(?:\.\d+)?) (mm|in)")
+
+#: Eine Zahl ohne alles — nur sie bekommt die Endung ihres Maßes.
+_PLAIN_NUMBER: Final = re.compile(r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?")
+
+
 def value_text(key: str, value: object) -> str:
     """Der Wert mit seiner Einheit, in der Einheit der Anzeige (§19.3)."""
     if key == "reason" and isinstance(value, str) and value == "points_are_on_one_line":
@@ -2083,21 +2160,27 @@ def value_text(key: str, value: object) -> str:
         return ", ".join(
             str(_METHOD_NAMES[entry]) if entry in _METHOD_NAMES else str(entry) for entry in value
         )
-    # Lage- und Abstandsbefunde tragen diese Längen auch im alten Cache als
-    # mm-Text. Erst hier umrechnen, damit derselbe Befund einem Einheitenwechsel
-    # folgt und seine gespeicherten Werte für die Entdoppelung gleich bleiben.
-    # Ein nackter numerischer ``gap`` ist dagegen eine Slicer-Einstellung;
-    # Freitext ohne die eindeutige gespeicherte Form wird nicht geraten.
-    if key in ("excess", "gap", "needed") and isinstance(value, str):
-        measured = re.fullmatch(r"([+-]?\d+(?:\.\d+)?) mm", value)
-        if measured is not None:
-            return length(float(measured[1]))
-    # Diese bestehenden Befundschlüssel tragen keine Einheiten-Endung.
-    # Längen folgen trotzdem der Anzeigeeinheit; Materialkennwerte behalten
-    # die Einheit des Filamentprofils und der Festigkeitsrechnung.
-    if key in ("at", "margin"):
-        key += "_mm"
-    elif key == "flow_limit":
+    # Maße unter Schlüsseln ohne Endung (FD-188, :data:`_BARE_MEASURES`): Ein
+    # fertiger Text „12.00 mm“ aus ``format_length`` wird erst hier umgerechnet,
+    # damit derselbe Befund einem Einheitenwechsel folgt und seine gespeicherten
+    # Werte für die Entdoppelung gleich bleiben. Eine Zahl bekommt die Endung
+    # ihres Maßes; was keine Zahl ist („0.35.0“, „auto:pla“), bleibt Text.
+    measure = _BARE_MEASURES.get(key)
+    if isinstance(value, str) and (measure == "_mm" or key in _MEASURE_TEXTS):
+        written = _MEASURE_TEXT.fullmatch(value)
+        if written is not None:
+            return length(to_mm(float(written[1]), cast(LengthUnit, written[2])))
+    if key in _SETTING_PATHS and isinstance(value, int | float):
+        # Eine Druckeinstellung steht wie im Druckdialog, in der Einheit ihres Felds.
+        return shown_setting(_SETTING_PATHS[key], value, localise=localised, choice=choice_label)
+    if measure is not None and isinstance(value, list | tuple) and value:
+        # Eine Lage aus drei Koordinaten: jede eine Länge.
+        return ", ".join(value_text(key, entry) for entry in value)
+    if measure is not None and _PLAIN_NUMBER.fullmatch(str(value)) and not isinstance(value, bool):
+        key += measure
+    # Materialkennwerte behalten die Einheit des Filamentprofils und der
+    # Festigkeitsrechnung.
+    if key == "flow_limit":
         return f"{localised_value(value)} mm³/s"
     elif key == "stress":
         return f"{localised_value(value)} MPa"

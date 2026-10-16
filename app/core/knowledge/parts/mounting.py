@@ -298,7 +298,7 @@ def magnet_pocket(raw: BaseParams) -> PartResult:
             ),
             value=magnet_diameter,
             constraint="minimum",
-            values={"minimum": grip},
+            values={"minimum": grip, "unit": "mm"},
         )
     narrow = magnet_diameter - grip
 
@@ -661,7 +661,10 @@ def lug(raw: BaseParams) -> PartResult:
             "width" if narrow else "length",
             reason,
             constraint="feasible",
-            values={"minimum": screw.head if narrow else (width + screw.head) / 2.0},
+            values={
+                "minimum": screw.head if narrow else (width + screw.head) / 2.0,
+                "unit": "mm",
+            },
         )
     thickness = params.thickness
 
@@ -858,7 +861,9 @@ def pipe_clamp(raw: BaseParams) -> PartResult:
     seat = _clamp_seat(params.screw_size)
     reason = _clamp_reason(params)
     if reason is not None:
-        raise ValidationError("width", reason, constraint="feasible", values={"minimum": seat})
+        raise ValidationError(
+            "width", reason, constraint="feasible", values={"minimum": seat, "unit": "mm"}
+        )
     screw = standards.screw(params.screw_size)
     pipe = params.diameter or standards.pipe(params.size).outer
     wall = params.wall
@@ -1076,7 +1081,7 @@ def keyhole(raw: BaseParams) -> PartResult:
             "drop",
             unbuildable,
             constraint="feasible",
-            values={"minimum": minimum_drop, "drop": params.drop},
+            values={"minimum": minimum_drop, "drop": params.drop, "unit": "mm"},
         )
     if unbuildable is KEYHOLE_HEAD_ROOM_TOO_DEEP:
         raise ValidationError(

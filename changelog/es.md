@@ -111,7 +111,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En un cuerpo sin color, *Convertir la textura en filamentos* aparece en gris e indica el motivo, en lugar de rechazarse solo en la vista previa.
 - Para parámetros, ajustes, impresora, material y deshacer, el chat indica el lugar de la ventana donde se hace lo mismo a mano.
 - El informe de comprobación y la comprobación antes de exportar nombran los cuerpos de un ajuste en lugar de mostrar un identificador interno, también un cuerpo ya eliminado.
-- Los mensajes nombran una característica por tipo y número, como «Taladro 2», en lugar de un identificador interno. En la contraparte de una rosca, diámetro y paso aparecen en la unidad elegida.
+- Los mensajes nombran una característica por tipo y número, como «Taladro 2», en lugar de un identificador interno.
+- Las medidas bajo un mensaje llevan su unidad, las longitudes en la unidad elegida. La versión 0.6.0 solía mostrar solo el número, como la longitud mínima de arista en *Refinar las aristas*.
 - El inglés y el portugués distinguen ahora el saliente de un gancho, o de un cuerpo bajo la placa, del voladizo al imprimir.
 - En español y portugués, el menú, la búsqueda y el diálogo vuelven a mostrar solo la primera frase de *Pasador para taladro* y *Orientar para imprimir*.
 - Varias traducciones se leen con más claridad, entre ellas la introducción de *Crear parámetro …*. La espiga empieza con mayúscula en todos los idiomas.

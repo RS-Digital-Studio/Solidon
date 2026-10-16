@@ -1914,7 +1914,7 @@ def _lowered_foot_findings(parts: Sequence[tuple[ObjectId, Mapping[str, str]]]) 
                 "erste Schicht wird so breit wie das Modell.",
                 value=format_length(float(keys["elefant_foot_compensation"])),
             ),
-            values={"value": keys["elefant_foot_compensation"]},
+            values={"value": float(keys["elefant_foot_compensation"]), "unit": "mm"},
             object_id=part,
         )
         for part, keys in parts

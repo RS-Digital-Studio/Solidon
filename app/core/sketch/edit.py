@@ -2917,7 +2917,7 @@ def fillet(sketch: Sketch, points: Sequence[Point2], flat: int, radius: float) -
             ),
             value=radius,
             constraint="maximum",
-            values={"most": written_measure(room * math.tan(theta / 2.0))},
+            values={"most_mm": room * math.tan(theta / 2.0)},
         )
     cx, cy = corner.spot
     touch_u: Point2 = (cx + u[0] * reach, cy + u[1] * reach)
@@ -3000,7 +3000,7 @@ def chamfer(sketch: Sketch, points: Sequence[Point2], flat: int, distance: float
             ),
             value=distance,
             constraint="maximum",
-            values={"most": written_measure(room)},
+            values={"most_mm": room},
         )
     cx, cy = corner.spot
     cut_u: Point2 = (cx + u[0] * distance, cy + u[1] * distance)

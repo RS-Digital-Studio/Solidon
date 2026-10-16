@@ -158,6 +158,9 @@ def build(
         )
 
     made = VariantSet(parameter=parameter)
+    # Die Einheit des Parameters reist mit dem Wert (``values["unit"]``, FD-188):
+    # „Wert: 0,4“ unter einer Absage ließ offen, ob Millimeter oder Grad.
+    unit = document.parameters[parameter].unit
     offset = 0.0
     # Derselbe Cache für alle Varianten, mit der Plattenebene der Anwendung
     # (``disk_backed_cache``): Ein zweiter Kalibrierdruck mit denselben Werten
@@ -197,7 +200,11 @@ def build(
                         code="variants.stopped",
                         severity="error",
                         message=_("Eine Variante ließ sich nicht rechnen."),
-                        values={"parameter": parameter, "value": round(value, 3)},
+                        values={
+                            "parameter": parameter,
+                            "value": round(value, 3),
+                            **({"unit": unit} if unit else {}),
+                        },
                     )
                 )
                 made.variants.append(variant)
@@ -211,6 +218,7 @@ def build(
                 offset,
                 result.scene.profile if mark else None,
                 quality,
+                unit=unit,
             )
             offset += width + gap
             made.variants.append(variant)
@@ -300,6 +308,8 @@ def _place(
     offset: float,
     profile: Profile | None = None,
     quality: Quality = "draft",
+    *,
+    unit: str = "",
 ) -> float:
     """Rückt einen Lauf aus dem Weg des vorigen und benennt ihn nach seinem
     Wert.
@@ -309,6 +319,8 @@ def _place(
     ineinander, und die gemeldete Breite war die des breitesten
     Einzelkörpers statt der Gruppe (Fund des Gesamtreviews vom 25.08.2026).
     Die Lagen der Körper zueinander gehören zur Variante.
+
+    ``unit`` ist die Einheit des Parameters; sie steht im Befund neben dem Wert.
     """
     meshes = {object_id: as_mesh_data(entry.mesh) for object_id, entry in scene.objects.items()}
     if not meshes:
@@ -342,6 +354,7 @@ def _place(
                 values={
                     "parts": ", ".join(unmarked),
                     "value": round(value, 4),
+                    **({"unit": unit} if unit else {}),
                 },
             )
         )

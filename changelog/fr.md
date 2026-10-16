@@ -111,7 +111,8 @@ dans `website/version.json`.
 - Sur un corps sans couleur, *Convertir la texture en filaments* est grisé et en donne la raison, au lieu de refuser seulement dans l'aperçu.
 - Pour les paramètres, les ajustements, l'imprimante, le matériau et l'annulation, le chat indique l'endroit de la fenêtre où faire de même soi-même.
 - Le rapport de contrôle et le contrôle avant l'export nomment les corps d'un ajustement au lieu d'afficher un identifiant interne, y compris un corps supprimé entre-temps.
-- Les messages nomment une caractéristique par type et numéro, comme « Perçage 2 », au lieu d'un identifiant interne. Pour la contrepartie d'un filetage, diamètre et pas sont dans l'unité choisie.
+- Les messages nomment une caractéristique par type et numéro, comme « Perçage 2 », au lieu d'un identifiant interne.
+- Les mesures sous un message portent leur unité, les longueurs dans l'unité choisie. La version 0.6.0 n'affichait souvent que le nombre, comme la longueur d'arête minimale d'*Affiner les arêtes*.
 - L'anglais et le portugais distinguent désormais le dépassement d'un crochet, ou d'un corps sous le plateau, du surplomb à l'impression.
 - En espagnol et en portugais, le menu, la recherche et la boîte de dialogue n'affichent de nouveau que la première phrase de *Goupille pour perçage* et *Orienter pour l'impression*.
 - Plusieurs traductions se lisent plus clairement, dont l'introduction de *Créer un paramètre …*. Le tenon commence par une majuscule dans toutes les langues.
