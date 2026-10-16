@@ -148,17 +148,48 @@ def test_the_evaluation_fits_a_halted_step() -> None:
     assert finding.values["choice_field"] == "at_feature"
 
 
-def test_both_ways_into_the_report_fit_the_choice() -> None:
-    """Ein Halt (``_finding_from``) und die Befunde einer Ausgabe gehen beide durch die Anpassung.
+def test_a_finding_of_an_output_names_the_field_of_its_step() -> None:
+    """Der zweite Weg in den Bericht: die Befunde einer Ausgabe (RB2-4).
 
-    Die Absagen selbst nennen kein Kantenfeld — sie wissen nicht, ob *Verrunden*
-    oder *Merkmal ändern* sie ruft. Fehlt einer der zwei Wege, steht dort wieder
-    eine Handlung ohne Feld.
+    *Aushöhlen* eines Winkels mit beiden Oberseiten als Öffnung: Die Rippe
+    (4 mm) ist dünner als zwei Wände zu 2,5 mm, unter ihrer Oberseite liegt
+    kein Hohlraum, und ``hollow.opening_misses`` bietet *Andere Flächen
+    wählen* an. Das Feld dazu ist *Öffnungen* — es liegt hinten. Gerechnet
+    wird über die ganze Auswertung, nicht über ihren Quelltext.
     """
-    import importlib
-    import inspect
+    import numpy as np
 
-    # ``app.core.scene.evaluate`` heißt im Paket auch die Funktion; das Modul selbst.
-    evaluation = importlib.import_module("app.core.scene.evaluate")
-    assert "fitted_to_step(" in inspect.getsource(evaluation._finding_from)
-    assert inspect.getsource(evaluation).count("fitted_to_step(") >= 2
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.project import new_project
+    from tools import function_scenes
+
+    project = new_project()
+    history = History(project.document)
+    for title, op, inputs, params in (
+        ("Sockel", "create_box", (), {"width": 40.0, "depth": 30.0, "height": 10.0}),
+        ("Rippe", "create_box", (), {"width": 40.0, "depth": 4.0, "height": 30.0, "y": 13.0}),
+        ("Winkel", "union_objects", ("obj_1", "obj_2"), {}),
+    ):
+        history.apply(title, [OperationDraft(op=op, inputs=inputs, params=params)])
+    body = function_scenes.evaluate_scene(project).scene.objects["obj_1"]
+    tops = tuple(
+        key
+        for key, feature in body.features.items()
+        if feature.kind == "face"
+        and np.allclose(feature.params["normal"], (0.0, 0.0, 1.0), atol=1e-6)
+    )
+    assert len(tops) == 2, tops
+    history.apply(
+        "Aushöhlen",
+        [
+            OperationDraft(
+                op="hollow_object", inputs=("obj_1",), params={"wall": 2.5, "openings": tops}
+            )
+        ],
+    )
+    findings = function_scenes.evaluate_scene(project).scene.report.findings
+    missed = next(entry for entry in findings if entry.code == "hollow.opening_misses")
+    assert missed.suggestions == (CORRECT_INPUT, CHANGE_FACES)
+    assert missed.values["choice_field"] == "openings"
+    # *Eingabe korrigieren* öffnet ohne eigenes Feld das erste, nicht die Öffnungen.
+    assert "field" not in missed.values
