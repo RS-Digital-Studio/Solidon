@@ -197,7 +197,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4 |
 | [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; Phase 4 |
 | [RM-790 — Ein nativer Abbruch nach Rückgängig bei gezeigter Maßgruppe, einmal gesehen](#rm-790) | Bedienung und Darstellung | 150 Zyklen unter Last ohne Wiederholung; beim nächsten Auftreten Stapel sichern und zuordnen |
-| [RM-812 — Funde des Funktionsdurchgangs nach 0.6.1](#rm-812) | Bedienung und Darstellung | nach dem Release von 0.6.1: FD-204 bis FD-211 der Funddatei beheben (Umfang eingefroren, Robert 16.10.) |
+| [RM-812 — Funde des Funktionsdurchgangs nach 0.6.1](#rm-812) | Bedienung und Darstellung | nach dem Release von 0.6.1: FD-204 bis FD-211, FD-218 bis FD-226 und FD-228 bis FD-230 der Funddatei beheben (Umfang eingefroren, Robert 16.10.) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -219,7 +219,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-719 — Ein Fenstertest wackelt mit vier Arbeitern](#rm-719) | Tests und Entwicklungswerkzeuge | Ursache des Wettlaufs finden |
 | [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | Wächter, Auflöser und Werkzeug in `welle5`; offen der erzeugte Schnitt K (W2 c) scharf), Review der Merge-Auflösungen und Tor — vor 0.6.1 |
 | [RM-728 — Kopfkopien entziehen sich Patches](#rm-728) | Tests und Entwicklungswerkzeuge | 226 Kopfkopien über `move_names copies` aufs Original umstellen (Paket K), dann W2 c) scharf |
-| [RM-813 — Codestruktur Schritt 1 und die offenen Punkte aus Schritt 0](#rm-813) | Tests und Entwicklungswerkzeuge | Phase 3 nach 0.6.1: Schritt 1 (`geom/prepare_ops.py`); CS-28, CS-29 und die Handfixe aus Paket M an ihrem Schritt |
+| [RM-813 — Codestruktur Schritt 1 und die offenen Punkte aus Schritt 0](#rm-813) | Tests und Entwicklungswerkzeuge | Phase 3 nach 0.6.1: Schritt 1 (`geom/prepare_ops.py`); CS-28, CS-29, CS-41 bis CS-44 und die Handfixe aus Paket M an ihrem Schritt |
 | [RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat](#rm-786) | Tests und Entwicklungswerkzeuge | Am Tag die Suite auslassen, wenn der main-Lauf zum Tag-Commit grün ist; Vertrag und Wächter nachziehen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -5964,7 +5964,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   FD-208 (der Rückzug wird nicht gegen den Extruder geprüft),
   FD-209 (die Kurzhilfe der Waisen-Sammelzeile nennt die Mitglieder zweimal),
   FD-210 (*Filament anlegen* öffnet bei 16 pt mit Leerraum über den Knöpfen),
-  FD-211 (das Schlüsselfeld in *Solidon freischalten* folgt keiner kleineren Schrift).
+  FD-211 (das Schlüsselfeld in *Solidon freischalten* folgt keiner kleineren Schrift),
+  FD-218 (Volumen und Mengen stehen in Befunden ohne Einheit),
+  FD-219 (die Skizzenabsage nennt das Maß ohne Einheit),
+  FD-220 (Sätze im Kern mit fester Millimeterlänge folgen der Zollanzeige nicht),
+  FD-221 („Ausrichtung“ zeigt einen Kosinus statt eines Winkels),
+  FD-222 (ein verlorener Anteil steht als Bruch),
+  FD-223 (der Kalibrierwert im Befund steht ohne Einheit),
+  FD-224 (große Anzahlen stehen in Absage und Bericht ohne Dreiergruppen),
+  FD-225 (die Seitenkarten gleiten auch bei ausgeschalteter Bewegung),
+  FD-226 (die Maßkarte kehrt nach Auf- und Zuklappen an verschiedene Lagen zurück),
+  FD-228 (das Merkmalfenster sperrt „Gewinde ändern“ mit einer falschen Begründung),
+  FD-229 (der Bausteinbau in einer Operation rechnet immer fein und ohne Abbruch),
+  FD-230 (ein Speicherfehler der örtlichen Nachmessung endet als interner Fehler).
   **Abnahme:** je Fund ein Test, der am Stand davor rot war, und der Stand „behoben `<commit>`“
   in der Funddatei; Kundenwirkung im Changelog der nächsten Version in sechs Sprachen.
 
@@ -6615,7 +6627,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   die Komponente, Schritt 4d) und die Punkte 8, 9, 12 und 13 aus Paket M
   (`importlib.reload` und `dir()` auf `slicer_keys` und `advise`, Aufruftexte in `tools/`,
   Methoden mit `self.sender()`, `getattr` und Namensraumlesungen über offene Namen in
-  `main_window.py`).
+  `main_window.py`). Dazu aus Paket U und K: CS-41 (Docstring in `tests/test_ui.py` nennt
+  `_pin_ui_widgets` statt `UI_PINS`), CS-42 (ein beim Import abgeleiteter Wert eines gepatchten
+  Namens, W2 c) sieht ihn nicht), CS-43 (der Schnitt bindet an 18 Stellen ein Modul lokal unter
+  zweitem Namen) und CS-44 (das Werkzeug meldet vervielfachte Ersetzungen nicht).
   **Nächster Schritt:** die Zuschnittliste für `geom/prepare_ops.py` messen (Konzept 4.2,
   Punkt 1).
   **Abnahme:** Schritt 1 nach Konzept 4.5 abgenommen; jeder genannte Punkt hat beim Schnitt

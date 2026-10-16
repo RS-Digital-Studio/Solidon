@@ -386,6 +386,8 @@ dort Vorbild ist. Stand: [RM-733](../ROADMAP.md#rm-733).
 Stand der Belege: welle5 `a25ac8cb2`. Gesucht haben die Pakete R, W13, P1,
 P2, Plattform, M, Q, R2, das Restpaket CS0 und — für CS-35, CS-36, CS-39,
 CS-40 — die Restpakete A und C und der CI-Fix, je in allen fünf Arten.
+CS-41 bis CS-44 meldeten die Pakete U und K nach dem Einfrieren; sie bleiben
+offen bis nach 0.6.1 ([RM-813](../ROADMAP.md#rm-813)).
 
 **Leistung.** CS-23 (der Auflöser kostete jeden Arbeiter 33,5 s und 1,9 GB,
 jetzt 0,97 s und 125 MB). Im eigenen Gebiet ohne Nummer behoben: Die Auswahl
@@ -403,7 +405,8 @@ zweiter Temp-Ordner, Profilvariablen mitten im Lauf umgebogen (P1,
 `f75499898`, erweitert in `93f5808f8`).
 
 **Fehler.** CS-18, CS-20, CS-21, CS-24, CS-27, CS-28, CS-31, CS-32, CS-34,
-CS-36, CS-37, CS-38. Aus dem Plan (`plan-cs0.md` §1, §5):
+CS-36, CS-37, CS-38; offen nach 0.6.1 CS-42. Aus dem Plan (`plan-cs0.md` §1,
+§5):
 
 - Zwei reine Quelltextprüfungen forderten `qt_app` an
   (`test_no_worker_is_started_past_the_leash`,
@@ -443,7 +446,8 @@ ersetzten ihre Datei je selbst (`4fe5be8c1`). In P2 gesucht und nichts
 gefunden; die alte `_cost_matrix` war ein toter zweiter Rechenweg, jetzt gibt
 es einen (CS-9).
 
-**Aufräumen.** CS-17, CS-19, CS-26. Aus dem Plan:
+**Aufräumen.** CS-17, CS-19, CS-26; offen nach 0.6.1 CS-41, CS-43, CS-44.
+Aus dem Plan:
 
 - Ort des Helfers gegen W1 (E4): Der rekursive Leser steht in
   `tests/source_tree.py`, nicht in `tests/helpers.py`, das in W1 steht (heute
@@ -885,3 +889,58 @@ und im Paar nach `test_placement_dimensions.py` grün (113 und 78 passed).
 Keine Wirkung beim Kunden. Stand: behoben in `989a4fe32` (Restpaket A, über
 welle5 `3f84a4c3c`; beim Merge blieb die Kartenhöhe aus welle5, die
 gebündelte Schrift aus A).
+
+### CS-41 Ein Docstring in `test_ui.py` nennt den alten Pin
+
+**Art:** Aufräumen.
+
+`tests/test_ui.py:21623` sagt im Docstring, die Suite halte Fenster früherer
+Tests über `_pin_ui_widgets` am Leben. Beleg (Paket U, Neue Punkte): Seit P1
+heißt der Pin `_PinOnImport` und läuft über `UI_PINS`; `_pin_ui_widgets` gibt
+es nicht mehr. Ursache: Der Umbau in P1 zog den Docstring nicht nach.
+Vorschlag: den Namen tauschen, wenn der Schnitt die Datei anfasst. Keine
+Wirkung beim Kunden. Stand: offen nach 0.6.1,
+[RM-813](../ROADMAP.md#rm-813).
+
+### CS-42 Ein beim Import abgeleiteter Wert folgt einem Patch am Original nicht
+
+**Art:** Fehler (Bauart CS-11).
+
+`app/core/scene/project.py` rechnet beim Import
+`MAX_ARCHIVE_UNPACKED_BYTES = 2 * loader.MAX_FILE_BYTES` und daraus
+`MAX_PROJECT_FILE_BYTES` (Zeilen 85 und 86; `MAX_LINKED_SOURCE_BYTES` in
+Zeile 127 übernimmt den ersten). Beleg (Paket K, Neue Punkte 2): Ein Ersatz an
+`loader.MAX_FILE_BYTES` erreicht keinen der Werte; W2 c) erkennt nur reine
+Kopien (`from M import N`, `X = M.N`) und sieht den abgeleiteten Ausdruck
+nicht. Ursache: Der Wert entsteht einmal beim Import. Vorschlag: W2 c) auf
+Ausdrücke auf Modulebene erweitern, die einen gepatchten Namen lesen, und die
+Funde entscheiden wie die vier Kopien unter neuem Namen aus CS-26. Keine
+Wirkung beim Kunden, die Werte sind zur Laufzeit gleich. Stand: offen nach
+0.6.1, [RM-813](../ROADMAP.md#rm-813).
+
+### CS-43 Der Schnitt bindet an 18 Stellen ein Modul lokal unter zweitem Namen
+
+**Art:** Aufräumen.
+
+War eine Kopie in einer Funktion importiert, setzt `tools/move_names.py` den
+Modulimport an dieselbe Stelle (dieselbe Ladezeit) und übergeht die Bindung,
+die die Datei auf Modulebene schon hat. Beleg (Paket K, Neue Punkte 3;
+`scan_aliases.py` gegen den Stand vor dem Schnitt): 18 Stellen, etwa
+`tests/test_solid_ownership.py` siebenmal `kernel` neben `brep_kernel` und
+`app/core/geom/lid.py` `_hinge_plan` `shapes` neben `parts_shapes`.
+Funktional gleich. Ursache: Das Werkzeug sucht keine vorhandene
+Modulbindung. Vorschlag: im Werkzeug eine sichtbare Modulbindung derselben
+Ladezeit wiederverwenden und die 18 Stellen neu erzeugen. Keine Wirkung beim
+Kunden. Stand: offen nach 0.6.1, [RM-813](../ROADMAP.md#rm-813).
+
+### CS-44 Das Werkzeug meldet vervielfachte Ersetzungen nicht
+
+**Art:** Aufräumen.
+
+Ersetzte ein Test zwei Kopien desselben Originals, stehen nach dem Schnitt
+von `tools/move_names.py` zwei wortgleiche Patch-Zeilen. Beleg (Paket K, Neue
+Punkte 4): zehn Funktionen, von Hand behoben in `ff972d188`. Ursache: Der
+Beweis kennt beide Patch-Stellen und ihr gemeinsames Ziel, das Protokoll nennt
+das Paar nicht. Vorschlag: `move_names` meldet solche Paare im Protokoll,
+damit der nächste Schnitt sie nicht übersieht. Keine Wirkung beim Kunden.
+Stand: offen nach 0.6.1, [RM-813](../ROADMAP.md#rm-813).
