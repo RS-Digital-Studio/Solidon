@@ -182,7 +182,15 @@ class DataReads(tree_reads.TreeReads):
             self._naming[id(read)] = (read, self._labels[id(site.call)])
             return [read]
         if site.how != "Pfad":
-            return super()._evaluate_site(site, env)
+            # Eine Lesestelle zählt hier nur, wenn sie die Datei decken kann: Die übrigen —
+            # ``*.py`` über die Quellen — wählt :attr:`affected_tests.ImportGraph.all_reads`, und
+            # hier markierten sie nur Einheiten, deren Lesungen die Datei nie erreichen.
+            return [
+                read
+                for read in super()._evaluate_site(site, env)
+                if read.covers(self.file)
+                or (read.folder is None and tree_reads.matches(self.file.name, read.pattern[-1]))
+            ]
         resolver = self.resolver
         _tree, parents = resolver.parsed(site.relative)
         scopes = resolver.scopes(site.call, parents)
@@ -231,7 +239,24 @@ class DataReads(tree_reads.TreeReads):
             and any(tree_reads.is_fixture(one) for one in unit.decorator_list)
         }
         self._requesting = {one for one in wanted if self._words(one) & fixtures}
-        return super().readers(wanted)
+        holders = set(self.reading.values()) | self.touched | self._requesting
+        found: dict[str, list[Borrowed]] = {}
+        for relative in wanted:
+            # Eine Lesestelle der Datei selbst ohne Einheit wählt ``all_reads``.
+            if relative not in holders and not (
+                relative.startswith(_SCOPE) and self._mention.search(self.texts.get(relative, ""))
+            ):
+                continue
+            reads = list(
+                dict.fromkeys(
+                    one
+                    for one in self.test_reads(relative)
+                    if not isinstance(one.read.folder, tree_reads.Outside)
+                )
+            )
+            if reads:
+                found[relative] = reads
+        return found
 
     def _in_folder(self, site: Site) -> Read:
         """Ein Pfad auf den Ordner oder offen darin: jede Datei des Ordners."""

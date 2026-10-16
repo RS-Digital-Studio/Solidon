@@ -1169,7 +1169,7 @@ class Site:
         return f"{self.relative}:{self.call.lineno}"
 
 
-def _matches(name: str, part: str) -> bool:
+def matches(name: str, part: str) -> bool:
     return part == "**" or PurePosixPath(name).full_match(part)
 
 
@@ -1229,7 +1229,7 @@ class Read:
         if isinstance(self.folder, Outside):
             return False
         if self.folder is None:
-            return self.meets_python() and _matches(path.name, self.pattern[-1])
+            return self.meets_python() and matches(path.name, self.pattern[-1])
         fixed = list(self.folder.parts)
         rest = list(self.pattern)
         while rest and not _WILDCARD.search(rest[0]):
