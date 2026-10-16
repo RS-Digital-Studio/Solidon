@@ -7812,9 +7812,13 @@ def test_scene_worker_owns_its_mesh_and_evicts_the_least_recently_used_display(
         from app.core.geom.section import SectionPlane
 
         viewport._section = SectionPlane.along("z", 0.0)
-    monkeypatch.setattr(
-        module, "decimate_for_display" if preparation == "decimation" else "cut", inspect
-    )
+    # Je Vorbereitung eine Ersetzung mit festem Text: ``decimate_for_display`` ist
+    # im Viewport eine Kopfkopie aus ``mesh_ops`` (CS-11), und der erzeugte Schnitt
+    # stellt sie auf das Original um.
+    if preparation == "decimation":
+        monkeypatch.setattr(module, "decimate_for_display", inspect)
+    else:
+        monkeypatch.setattr(module, "cut", inspect)
     result = EvaluationResult(
         Scene(objects={name: SceneObject(name, name, mesh) for name in ("hot", "new")}),
         object_hashes={"hot": "hot-hash", "new": "new-hash"},
