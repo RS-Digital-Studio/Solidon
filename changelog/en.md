@@ -77,7 +77,7 @@ it into `website/version.json`.
 - Text that a dialog fills in, such as a name, is selected when it opens. Typing replaces it.
 - Large counts appear in groups of three in input fields too, such as 1 051 736 triangles. You can type them with or without separators.
 - Long field names under *More settings* show every line, even with a large font. In version 0.6.0, *Drill a bore* for example lost the last word of a wrapped field name.
-- Function dialogs open as tall as their content. In version 0.6.0, *Repeat feature* for example left an empty strip above the buttons.
+- Function dialogs are as tall as their content, also after expanding *More settings*. In version 0.6.0, *Repeat feature* for example left an empty strip above the buttons.
 - If a required field such as the text of *Lettering as a body* is empty, the field says what goes in and the button waits. Version 0.6.0 showed an error there on opening.
 - When you change a step, you confirm with *Apply*. The button stays grey until something has changed and names the field to change.
 - The *Calibrate material* dialog shows clearance, interference, hole compensation, elephant foot and wall in the chosen unit, inches included, and keeps the third decimal place.

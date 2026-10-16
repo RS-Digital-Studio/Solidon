@@ -78,7 +78,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un texto que el diálogo ya trae, como un nombre, aparece seleccionado al abrir. Al escribir se sustituye.
 - Las cantidades grandes aparecen también en los campos en grupos de tres cifras, por ejemplo 1 051 736 triángulos. Se escriben con o sin separadores.
 - Los nombres largos de campos en *Más ajustes* muestran todas sus líneas, también con letra grande. En la versión 0.6.0, *Hacer un taladro* perdía la última palabra de uno.
-- Los diálogos de función se abren tan altos como su contenido. En la versión 0.6.0, *Repetir característica*, por ejemplo, dejaba una franja vacía sobre los botones.
+- Los diálogos de función tienen la altura de su contenido, también al desplegar *Más ajustes*. En la versión 0.6.0, *Repetir característica* dejaba una franja vacía sobre los botones.
 - Si un campo obligatorio como el texto de *Rótulo como cuerpo* está vacío, el campo dice qué va dentro y el botón espera. La versión 0.6.0 mostraba ahí un error al abrir.
 - Quien cambia un paso confirma con *Aplicar*. El botón sigue gris hasta que algo cambia y nombra el campo que hay que cambiar.
 - El diálogo *Calibrar material* muestra holgura, apriete, compensación de agujeros, pie de elefante y pared en la unidad elegida, también en pulgadas, y conserva el tercer decimal.

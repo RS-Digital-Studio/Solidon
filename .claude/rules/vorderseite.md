@@ -164,9 +164,11 @@ Rückseite; eine ausdrückliche Feldübergabe öffnet sie vor dem Fokuswechsel.
   `align_to_the_front` hält ihre Breite fest, `wrapped_caption.keep_whole_lines`
   die Höhe des Textes in dieser Breite, auch nach einem Schriftwechsel.
 - **Gemessen wird in der endgültigen Breite** (FD-45): Vor Anfangs- und
-  Klappenmessung zieht der Dialog auf seine Breite, und jede Merkmalsliste setzt
-  ihre Höhe (`FeatureList.fit_now`) — sonst bliebe über den Knöpfen ein
-  Streifen, den das passive Nachmessen nie zurückgibt.
+  Klappenmessung zieht der Dialog auf seine Breite, der vorläufige senkrechte
+  Rollbalken ist für die Messung aus, und jede Merkmalsliste setzt ihre Höhe
+  (`FeatureList.fit_now`) — sonst bliebe über den Knöpfen ein Streifen, den
+  das passive Nachmessen nie zurückgibt. Wächter für jede Operation in jeder
+  Sprache: `tests/test_operation_dialog_flap_height.py`.
 - **Jede Zeile trägt ihren Namen** (FD-94): `name_rows` nach jedem Aufbau, das
   Ausdrucksfeld heißt „{Zeile} · Ausdruck“; Wächter
   `tests/test_operation_dialog_names.py` öffnet jede Operation.

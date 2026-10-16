@@ -4643,9 +4643,20 @@ class OperationDialog(QDialog):
         if layout is None:
             return
         content = self._scroll.widget()
+        content_layout = content.layout() if content is not None else None
+        measuring = intent != "passive" and content is not None and content_layout is not None
+        bar = self._scroll.verticalScrollBarPolicy()
+        if measuring:
+            # **Gemessen in der Breite ohne vorläufigen Rollbalken.** Beim
+            # Aufklappen steht der senkrechte Balken für einen Umlauf, bis der
+            # Dialog gewachsen ist. In seiner Enge brach der Beschreibungssatz
+            # eine Zeile mehr um, eine Merkmalsliste behielt ihre Querleiste,
+            # und über den Knöpfen blieben bis zu 28 Punkte leer (R1 zu FD-45).
+            # Bleibt der Inhalt am Bildschirmrand länger, kommt der Balken
+            # danach zurück, und das passive Nachmessen wächst um den Rest.
+            self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         if isinstance(self._description, WrappedNote):
             self._description.claim_height()
-        content_layout = content.layout() if content is not None else None
         if content_layout is not None:
             content_layout.activate()
         self._scroll.updateGeometry()
@@ -4654,7 +4665,8 @@ class OperationDialog(QDialog):
             expanded_width(self._scroll, self._advanced_form),
             self._footer.natural_width + 2 * WIDE,
         )
-        if intent != "passive" and content is not None and content_layout is not None:
+        if measuring:
+            assert content is not None and content_layout is not None
             # **Erst in der Breite legen, dann messen** (FD-45): Eine Merkmalsliste
             # setzt ihre Höhe einen Umlauf später, und in der endgültigen Breite
             # verliert sie die Querleiste; ein Formular mit umbrochenem Satz meldet
@@ -4680,6 +4692,8 @@ class OperationDialog(QDialog):
                 natural_width if intent == "initial" else self._footer.natural_width + 2 * WIDE
             ),
         )
+        if measuring:
+            self._scroll.setVerticalScrollBarPolicy(bar)
 
     def _fill_filament_fields(
         self,

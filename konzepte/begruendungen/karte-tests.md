@@ -224,7 +224,9 @@ Der Operationsdialog hat je Fund eine eigene Datei:
 verlangt je Eingabefeld einen Namen, keinen doppelt;
 `test_operation_dialog_first_focus.py` den markierten Vorgabetext;
 `test_required_text_field.py` den leeren Pflichttext ohne Vorschau;
-`test_operation_dialog_height.py` die Anfangshöhe ohne Leerstreifen;
+`test_operation_dialog_height.py` die Anfangshöhe ohne Leerstreifen,
+`test_operation_dialog_flap_height.py` dasselbe für jede Operation in jeder
+Sprache beim Öffnen und nach dem Aufklappen;
 `test_grouped_count_field.py` Dreiergruppen im Ganzzahlfeld;
 `test_operation_dialog_change.py` den Änderungsweg (*Übernehmen*, grau bis zur
 ersten Änderung). Ohne Fenster: `test_hole_compensation_words.py` (der Name des

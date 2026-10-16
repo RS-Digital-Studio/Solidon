@@ -78,7 +78,7 @@ dans `website/version.json`.
 - Un texte déjà rempli par un dialogue, comme un nom, est sélectionné à l'ouverture. La frappe le remplace.
 - Les grands nombres s'affichent aussi dans les champs par groupes de trois chiffres, par exemple 1 051 736 triangles. On les saisit avec ou sans séparateurs.
 - Les noms de champs longs sous *Autres réglages* affichent chaque ligne, même en grande police. Dans la version 0.6.0, *Percer un trou* en perdait le dernier mot.
-- Les dialogues de fonction s'ouvrent à la hauteur de leur contenu. Dans la version 0.6.0, *Répéter la caractéristique* par exemple laissait une bande vide au-dessus des boutons.
+- Les dialogues de fonction ont la hauteur de leur contenu, même après avoir déplié *Autres réglages*. En version 0.6.0, *Répéter la caractéristique* laissait une bande vide au-dessus des boutons.
 - Si un champ obligatoire comme le texte de *Inscription comme corps* est vide, le champ indique ce qu'il attend et le bouton patiente. La version 0.6.0 y affichait une erreur à l'ouverture.
 - Pour modifier une étape, on confirme avec *Appliquer*. Le bouton reste grisé tant que rien n'a changé et nomme le champ à modifier.
 - Le dialogue *Calibrer le matériau* affiche jeu, serrage, compensation des trous, patte d'éléphant et paroi dans l'unité choisie, pouces compris, et garde la troisième décimale.
