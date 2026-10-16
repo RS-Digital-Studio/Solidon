@@ -388,11 +388,11 @@ passiven Größenweg zu. Kurzer Anfangsbedarf ist kein dauerhaftes
 Viewport-Minimum: Der innere Rollbereich gibt Platz an die Knopfleiste ab.
 Beim Öffnen, Monitorwechsel, geänderter nutzbarer Fläche oder logischer DPI
 sichern `DialogScrollArea` und `fit_dialog_to_screen` die Erreichbarkeit.
-Anfangsbreite samt zugeklappten Teilen und Rollbalken rechnet allein
-`style.expanded_width` (RM-342 D-N5). Im sichtbaren Rollbereich zählt für die Wunschhöhe
-`maximumViewportSize`, nicht vorläufige Rollbalkenenge. `_hidden_height`
-zieht eine rangefreie AsNeeded-Querleiste nicht ab; nötige und dauernde
-Leisten bleiben berücksichtigt.
+Anfangsbreite samt zugeklappten Teilen und Balken: `style.expanded_width`
+(RM-342 D-N5). `ContentHeight.fit` misst und legt ohne senkrechten Balken
+und verbreitert um fehlende Mindestbreite samt Balken; jede Klappe misst
+`explicit` (FD-198 bis FD-200).
+`_hidden_height` zieht eine rangefreie AsNeeded-Querleiste nicht ab.
 
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
 (`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine

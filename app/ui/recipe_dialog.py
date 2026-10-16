@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -863,6 +864,11 @@ class RecipeDialog(QDialog):
         self._scroll = DialogScrollArea(self)
         self._scroll.setWidget(content)
         self._scroll.contentSizeChanged.connect(self._fit_soon)
+        # Zugeklappt gibt der Dialog die Höhe zurück; passiv gemessen bliebe
+        # sie leer über den Knöpfen stehen (FD-198).
+        flap = self.more_section.findChild(QToolButton, "sectionHeading")
+        if flap is not None:
+            flap.toggled.connect(weak_slot(self, RecipeDialog._fit_soon, "explicit"))
         outer = QVBoxLayout(self)
         outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)

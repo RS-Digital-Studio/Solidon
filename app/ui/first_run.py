@@ -58,6 +58,7 @@ from PySide6.QtWidgets import (
     QListView,
     QPushButton,
     QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -86,7 +87,13 @@ from app.ui.labels import (
     slicer_title,
     wheel_needs_focus,
 )
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying
+from app.ui.leash import (
+    WAIT_TIMEOUT_MS,
+    Worker,
+    WorkerLeash,
+    stop_watching_the_dying,
+    weak_slot,
+)
 from app.ui.settings import UiSettings
 from app.ui.style import (
     NORMAL,
@@ -705,6 +712,10 @@ class FirstRunDialog(QDialog):
         self._scroll = DialogScrollArea(self)
         self._scroll.setWidget(self._contents)
         self._scroll.contentSizeChanged.connect(self._grow_soon)
+        # Zugeklappt gibt der Dialog die Höhe zurück (FD-198).
+        flap = self.extras_section.findChild(QToolButton, "sectionHeading")
+        if flap is not None:
+            flap.toggled.connect(weak_slot(self, FirstRunDialog._grow_soon, "explicit"))
         for editor in self._contents.findChildren(QComboBox):
             wheel_needs_focus(editor)
         for spin in (*self._contents.findChildren(NumberSpin), self.printer_nozzles):
@@ -840,8 +851,8 @@ class FirstRunDialog(QDialog):
         align_forms(self)
         self._grow_initial_soon()
 
-    def _grow_soon(self) -> None:
-        QTimer.singleShot(0, self, self._grow_to_content)
+    def _grow_soon(self, intent: ContentFitIntent = "passive") -> None:
+        QTimer.singleShot(0, self, weak_slot(self, FirstRunDialog._grow_to_content, intent))
 
     def _grow_initial_soon(self) -> None:
         QTimer.singleShot(0, self, self._grow_initial_content)

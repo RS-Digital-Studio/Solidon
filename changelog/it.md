@@ -98,6 +98,7 @@ scrive in `website/version.json`.
 - I numeri interi grandi compaiono anche nei campi a gruppi di tre cifre, come 1 051 736 triangoli o 10 000 mm/s² di *Accelerazione*. Si scrivono con o senza separatori.
 - I nomi lunghi dei campi in *Altre impostazioni* mostrano ogni riga, anche con caratteri grandi. Nella versione 0.6.0 *Pratica un foro* ne perdeva l'ultima parola.
 - Le finestre di operazione sono alte quanto il contenuto, anche dopo aver aperto *Altre impostazioni*. Nella versione 0.6.0 *Ripeti caratteristica* lasciava una striscia vuota sopra i pulsanti.
+- Le finestre con sezioni richiudibili, come *Crea parametro*, sono alte quanto il contenuto dopo averle aperte e chiuse. Scorrono in orizzontale solo se lo schermo è troppo stretto.
 - Se un campo obbligatorio come il testo di *Scritta come corpo* è vuoto, il campo dice cosa va inserito e il pulsante attende. La versione 0.6.0 mostrava lì un errore all'apertura.
 - Chi modifica un passo conferma con *Applica*. Il pulsante resta grigio finché qualcosa non cambia e indica il campo da cambiare.
 - La finestra *Calibra il materiale* mostra gioco, interferenza, compensazione dei fori, piede d'elefante e parete nell'unità scelta, anche in pollici, e conserva la terza decimale.

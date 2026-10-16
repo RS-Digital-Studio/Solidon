@@ -99,6 +99,7 @@ dans `website/version.json`.
 - Les grands nombres entiers s'affichent aussi dans les champs par groupes de trois chiffres, comme 1 051 736 triangles ou 10 000 mm/s² d'*Accélération*. On les saisit avec ou sans séparateurs.
 - Les noms de champs longs sous *Autres réglages* affichent chaque ligne, même en grande police. Dans la version 0.6.0, *Percer un trou* en perdait le dernier mot.
 - Les dialogues d'opération ont la hauteur de leur contenu, même après avoir déplié *Autres réglages*. En version 0.6.0, *Répéter la caractéristique* laissait une bande vide au-dessus des boutons.
+- Les dialogues à sections repliables, comme *Créer un paramètre*, ont la hauteur de leur contenu après dépliage et repliage. Ils ne défilent en largeur que si l'écran est trop étroit.
 - Si un champ obligatoire comme le texte de *Inscription comme corps* est vide, le champ indique ce qu'il attend et le bouton patiente. La version 0.6.0 y affichait une erreur à l'ouverture.
 - Pour modifier une étape, on confirme avec *Appliquer*. Le bouton reste grisé tant que rien n'a changé et nomme le champ à modifier.
 - Le dialogue *Calibrer le matériau* affiche jeu, serrage, compensation des trous, patte d'éléphant et paroi dans l'unité choisie, pouces compris, et garde la troisième décimale.

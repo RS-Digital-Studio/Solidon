@@ -272,11 +272,15 @@ verlangt je Eingabefeld einen Namen, keinen doppelt;
 `test_required_text_field.py` den leeren Pflichttext ohne Vorschau;
 `test_operation_dialog_height.py` die Anfangshöhe ohne Leerstreifen,
 `test_operation_dialog_flap_height.py` dasselbe für jede Operation in jeder
-Sprache beim Öffnen und nach dem Aufklappen;
+Sprache beim Öffnen und nach dem Aufklappen, quer gerollt nur bei schmalem
+Schirm (FD-200); `test_content_height_dialogs.py` dasselbe für die übrigen
+Dialoge mit Klappen, je nach Auf- und Zuklappen (FD-198, FD-199);
 `test_grouped_count_field.py` Dreiergruppen im Ganzzahlfeld;
 `test_operation_dialog_change.py` den Änderungsweg (*Übernehmen*, grau bis zur
-ersten Änderung); `test_unlisted_choices.py` Namen statt Kennungen für Werte,
-die eine Liste nicht führt. Ohne Fenster: `test_hole_compensation_words.py` (der Name des
+ersten Änderung), `test_change_waits_for_valid_list.py` den Sperrgrund des
+Feldes vor dem Satz zur ersten Änderung (D2); `test_unlisted_choices.py` Namen statt Kennungen für Werte,
+die eine Liste nicht führt, `test_unlisted_names.py` dieselben Namen wie in
+den Meldungen und Sätze ohne Genus (D3, D6). Ohne Fenster: `test_hole_compensation_words.py` (der Name des
 Ausgleichs an jeder Bohrung, in jeder Sprache). `test_calibration_units.py`
 prüft *Material kalibrieren* in Zoll. `test_wrapped_captions.py` verlangt jede
 Zeile jeder umgebrochenen Beschriftung bei Grund- und großer Schrift,
@@ -464,7 +468,10 @@ wartet, bis die Karte nach ihrer Öffnungsbewegung steht
 
 `test_font_follow_window.py` (FD-194): Ein Wechsel der Anwendungsschrift ohne
 `apply_style` erreicht Stufen, Knöpfe und einen offenen Operationsdialog,
-9 → 14 → 9 pt.
+9 → 14 → 9 pt. `test_font_height_window.py` (FD-195): Dialoge mit
+`ContentHeight` passen ihre Höhe dem Wechsel an, eine Größe des Kunden bleibt.
+`test_header_font_window.py` (L1): Kopfzeile und Hauptleiste wählen ihre Form
+nach dem Wechsel neu.
 
 `window_leftovers.py` gehört dem Wächter `_no_window_outlives_its_test` in
 `conftest.py` (FD-191): Ein Fall mit `qt_app`, der ein sichtbares Fenster

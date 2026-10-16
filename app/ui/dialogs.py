@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QTextBrowser,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -633,6 +634,9 @@ class KeyDialog(QDialog):
         self._scroll = DialogScrollArea(self)
         self._scroll.setWidget(content)
         self._scroll.contentSizeChanged.connect(self._fit_key_content_soon)
+        # Zugeklappt gibt der Dialog die Höhe zurück (FD-198).
+        for flap in content.findChildren(QToolButton, "sectionHeading"):
+            flap.toggled.connect(weak_slot(self, KeyDialog._fit_key_content_soon, "explicit"))
         # Rollt der Kunde selbst, gehört die Ansicht ihm: Ein späteres Wachsen
         # einer Notiz zieht sie nicht mehr zum Prüfergebnis zurück (Nachprüfung
         # K, N12). ``actionTriggered`` kommt nur von Rad, Tasten und Schieber,
@@ -1886,6 +1890,9 @@ class ActivationDialog(QDialog):
         self._scroll = DialogScrollArea(self)
         self._scroll.setWidget(content)
         self._scroll.contentSizeChanged.connect(self._fit_activation_soon)
+        # Zugeklappt gibt der Dialog die Höhe zurück (FD-198).
+        for flap in content.findChildren(QToolButton, "sectionHeading"):
+            flap.toggled.connect(weak_slot(self, ActivationDialog._fit_activation_soon, "explicit"))
         outer = QVBoxLayout(self)
         outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)

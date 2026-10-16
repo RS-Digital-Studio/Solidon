@@ -123,6 +123,7 @@ Nutzen da und sonst nichts.
 - Große ganze Zahlen stehen auch in Eingabefeldern in Dreiergruppen, etwa 1 051 736 Dreiecke oder 10 000 mm/s² *Beschleunigung*. Getippt werden sie mit oder ohne Trennzeichen.
 - Lange Feldnamen unter *Weitere Einstellungen* zeigen jede Zeile, auch bei großer Schrift. In Version 0.6.0 fehlte etwa bei *Bohrung setzen* das letzte Wort von „Durchmesser der Aufweitung“.
 - Operationsdialoge sind so hoch wie ihr Inhalt, auch nach dem Aufklappen von *Weitere Einstellungen*. In Version 0.6.0 blieb etwa bei *Merkmal vervielfachen* ein Streifen über den Knöpfen leer.
+- Dialoge mit aufklappbaren Abschnitten wie *Parameter anlegen* sind nach dem Auf- und Zuklappen so hoch wie ihr Inhalt. Seitwärts rollen sie nur, wenn der Bildschirm zu schmal ist.
 - Ist ein Pflichtfeld wie der Text von *Schriftzug als Körper* leer, sagt das Feld, was hineingehört, und der Knopf wartet. Version 0.6.0 zeigte dort beim Öffnen einen Fehler.
 - Wer einen Schritt ändert, bestätigt mit *Übernehmen*. Der Knopf bleibt grau, bis sich etwas geändert hat, und nennt das Feld dafür.
 - Der Dialog *Material kalibrieren* zeigt Spiel, Übermaß, Lochkorrektur, Elefantenfuß und Wand in der gewählten Einheit, auch in Zoll, und behält die dritte Nachkommastelle.

@@ -458,6 +458,11 @@ class ParameterDialog(QDialog):
         self._scroll.setWidget(content)
         self._scroll.contentSizeChanged.connect(self._fit_soon)
         self.fx_button.toggled.connect(weak_slot(self, ParameterDialog._fit_soon, "explicit"))
+        # Die Klappe ist eine Geste: Zugeklappt gibt der Dialog die Höhe zurück,
+        # die das passive Nachmessen nie zurückgäbe (FD-198).
+        flap = self._limits_section.findChild(QToolButton, "sectionHeading")
+        if flap is not None:
+            flap.toggled.connect(weak_slot(self, ParameterDialog._fit_soon, "explicit"))
         wheel_needs_focus(self.value_field)
         wheel_needs_focus(self.unit_field)
 

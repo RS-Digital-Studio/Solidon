@@ -98,6 +98,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os números inteiros grandes aparecem também nos campos em grupos de três algarismos, como 1 051 736 triângulos ou 10 000 mm/s² de *Aceleração*. Escrevem-se com ou sem separadores.
 - Os nomes longos de campos em *Mais definições* mostram todas as linhas, também com letra grande. Na versão 0.6.0, *Abrir furo* perdia a última palavra de um deles.
 - Os diálogos de operação têm a altura do conteúdo, também depois de expandir *Mais definições*. Na versão 0.6.0, *Repetir característica* deixava uma faixa vazia por cima dos botões.
+- Os diálogos com secções recolhíveis, como *Criar parâmetro*, têm a altura do conteúdo depois de expandir e recolher. Só deslizam na horizontal quando o ecrã é demasiado estreito.
 - Se um campo obrigatório como o texto de *Inscrição como corpo* estiver vazio, o campo diz o que lá vai e o botão espera. A versão 0.6.0 mostrava ali um erro ao abrir.
 - Quem altera um passo confirma com *Aplicar*. O botão fica cinzento até algo mudar e indica o campo a alterar.
 - O diálogo *Calibrar material* mostra folga, interferência, compensação de furos, pé de elefante e parede na unidade escolhida, também em polegadas, e mantém a 3.ª casa decimal.

@@ -99,6 +99,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los números enteros grandes aparecen también en los campos en grupos de tres cifras, como 1 051 736 triángulos o 10 000 mm/s² de *Aceleración*. Se escriben con o sin separadores.
 - Los nombres largos de campos en *Más ajustes* muestran todas sus líneas, también con letra grande. En la versión 0.6.0, *Hacer un taladro* perdía la última palabra de uno.
 - Los diálogos de operación tienen la altura de su contenido, también al desplegar *Más ajustes*. En la versión 0.6.0, *Repetir característica* dejaba una franja vacía sobre los botones.
+- Los diálogos con secciones plegables, como *Crear parámetro*, tienen la altura de su contenido al desplegar y plegar. Solo se desplazan en horizontal si la pantalla es demasiado estrecha.
 - Si un campo obligatorio como el texto de *Rótulo como cuerpo* está vacío, el campo dice qué va dentro y el botón espera. La versión 0.6.0 mostraba ahí un error al abrir.
 - Quien cambia un paso confirma con *Aplicar*. El botón sigue gris hasta que algo cambia y nombra el campo que hay que cambiar.
 - El diálogo *Calibrar material* muestra holgura, apriete, compensación de agujeros, pie de elefante y pared en la unidad elegida, también en pulgadas, y conserva el tercer decimal.

@@ -544,6 +544,12 @@ def _content_size_for_intent(
     return QSize(width, max(natural.height(), height_floor))
 
 
+#: So viele Schachtelungsebenen reicht eine Layout-Anfrage nach dem Legen
+#: hinauf: Jede Ebene stellt ihre erst, wenn die darunter gelegt ist, und
+#: Qt arbeitet in einem Aufruf nur ab, was vor ihm anstand (FD-198).
+_LAYOUT_LEVELS: Final = 8
+
+
 def _hidden_height(scroll: QScrollArea) -> int:
     """Wie viel vom Inhalt unter dem Rand des Rollbereichs liegt, in Punkten.
 
@@ -771,34 +777,81 @@ class ContentHeight:
             or (intent == "passive" and natural_width > 0)
         ) and self.user is None:
             self._widen_before_measuring(dialog, grow_width=grow_width, natural_width=natural_width)
-        scroll.updateGeometry()
-        layout.invalidate()
-        layout.activate()
-        if intent == "passive":
-            # Gewachsen wird um das, was im Rollbereich verdeckt läge — nicht
-            # auf einen Größenwunsch, der auch ohne verdeckten Inhalt größer sein
-            # kann (ein Umbruch, gemessen an einer anderen Breite).
-            wanted = QSize(dialog.width(), dialog.height() + _hidden_height(scroll))
-        else:
-            wanted = natural_size if natural_size is not None else dialog.sizeHint()
-        target = _content_size_for_intent(
-            dialog.size(),
-            wanted,
-            intent,
-            grow_width=grow_width,
-            natural_width=natural_width,
-            height_floor=floor,
-            available_height=(
-                self._available_height_at_anchor(dialog)
-                if self._keeps_anchor(intent)
-                else self._available_height_on_screen(dialog)
-                if intent == "passive"
-                else None
-            ),
-        )
-        if target is None:
-            return
-        self.settle(dialog, target.width(), target.height(), intent=intent)
+        # **Gemessen und gelegt ohne vorläufigen Rollbalken** (R1, FD-198): Nach
+        # dem Aufklappen steht der senkrechte Balken einen Umlauf lang. In seiner
+        # Enge bricht ein Satz eine Zeile mehr um, und Qt behält ihn auch in der
+        # gewachsenen Höhe, weil es in der alten Ausschnittbreite nachrechnet —
+        # über den Knöpfen blieb die Zeile leer. Braucht der Inhalt den Balken
+        # wirklich, kommt er beim Zurückstellen wieder; ein dauernder bleibt.
+        # **Nie passiv:** Ein Satz, der seine Höhe selbst pinnt, meldet nach
+        # jedem Ein- und Ausschalten eine andere Höhe, die passive Messung käme
+        # wieder, und *Modell erzeugen* schaltete mit einem langen Status ohne
+        # Ende hin und her.
+        bar = scroll.verticalScrollBarPolicy()
+        provisional = bar == Qt.ScrollBarPolicy.ScrollBarAsNeeded and intent != "passive"
+        if provisional:
+            scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # **Ein zweites Mal, wenn das Legen den Wunsch verschiebt** (FD-198): Ein
+        # Satz, der seine Höhe in der neuen Breite selbst neu pinnt, braucht
+        # danach eine Zeile weniger; passiv gäbe der Dialog sie nie zurück. Er
+        # bekommt die Breite erst mit den Layout-Anfragen, die das Legen stellt.
+        for attempt in range(2):
+            if attempt:
+                for _ in range(_LAYOUT_LEVELS):
+                    QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
+            scroll.updateGeometry()
+            layout.invalidate()
+            layout.activate()
+            if intent == "passive":
+                # Gewachsen wird um das, was im Rollbereich verdeckt läge — nicht
+                # auf einen Größenwunsch, der auch ohne verdeckten Inhalt größer sein
+                # kann (ein Umbruch, gemessen an einer anderen Breite).
+                wanted = QSize(dialog.width(), dialog.height() + _hidden_height(scroll))
+            else:
+                wanted = natural_size if natural_size is not None else dialog.sizeHint()
+            target = _content_size_for_intent(
+                dialog.size(),
+                wanted,
+                intent,
+                grow_width=grow_width,
+                natural_width=natural_width,
+                height_floor=floor,
+                available_height=(
+                    self._available_height_at_anchor(dialog)
+                    if self._keeps_anchor(intent)
+                    else self._available_height_on_screen(dialog)
+                    if intent == "passive"
+                    else None
+                ),
+            )
+            if target is None or (attempt and target == dialog.size()):
+                break
+            self.settle(dialog, target.width(), target.height(), intent=intent)
+            content = scroll.widget()
+            measured = content.layout() if content is not None else None
+            if intent != "passive" and self.user is None and measured is not None:
+                assert content is not None
+                # **Quer rollt nur, wofür der Bildschirm keine Breite hat**
+                # (FD-199): Reicht die Höhe am Bildschirmrand nicht, kommt der
+                # senkrechte Balken und nimmt dem Inhalt seine Breite; ein
+                # Dialog, der seine Breite nie misst, rollte schon beim Öffnen.
+                viewport = scroll.viewport()
+                need = measured.totalHeightForWidth(viewport.width())
+                if need < 0:
+                    need = content.sizeHint().height()
+                missing = content.minimumSizeHint().width() - viewport.width()
+                # Ein dauernder Balken steckt schon im Ausschnitt; einer, den der
+                # Aufrufer für seine Messung ausgeschaltet hat, kommt wieder.
+                if bar != Qt.ScrollBarPolicy.ScrollBarAlwaysOn and need > viewport.height():
+                    missing += scroll.verticalScrollBar().sizeHint().width()
+                if missing > 0:
+                    self._widen_before_measuring(
+                        dialog, grow_width=False, natural_width=dialog.width() + missing
+                    )
+                    continue
+            if intent == "passive" or natural_size is not None:
+                break
+        scroll.setVerticalScrollBarPolicy(bar)
 
 
 def select_data(box: QComboBox, identifier: str) -> None:

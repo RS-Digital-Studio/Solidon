@@ -7,7 +7,9 @@ Beschreibungssatz brach eine Zeile mehr um, eine Merkmalsliste behielt ihre
 Querleiste, und über den Knöpfen blieben 12 bis 28 Punkte leer, die das passive
 Nachmessen nie zurückgibt (``fenster.md``, RM-487). Geprüft wird jede
 Operation in jeder Sprache beim Öffnen und nach dem Aufklappen, dazu Deutsch in
-großer Schrift.
+großer Schrift. Quer rollen darf ein Dialog nur, wenn der Bildschirm keine
+Breite mehr hergibt: *Bohrung setzen* rollte bei 16 und 18 pt acht Punkte quer,
+und eine Ausnahme für jede Querleiste verdeckte es (FD-200).
 """
 
 from __future__ import annotations
@@ -26,29 +28,31 @@ from app.i18n import get_language, set_language
 from app.i18n.catalog import available_languages, install_language
 from app.ui.style import NORMAL, apply_style
 from app.ui.theme import apply_theme
+from tests.bundled_fonts import bundled_font
 
 #: So viele Punkte darf der Rollbereich höher sein als sein Inhalt — Rundung.
 SLACK = 1
 
 #: Grundschrift unter Windows und die große Schrift aus den Einstellungen.
-CASES = [(language, 9) for language in available_languages()] + [("de", 16)]
+CASES = [(language, 9) for language in available_languages()] + [("de", 16), ("de", 18)]
 
 FEATURES = {"hole_1": "Bohrung 1 · Ø5,20 mm", "hole_2": "Bohrung 2 · Ø5,20 mm"}
 
 
 @contextmanager
 def _spoken(qt_app: QApplication, language: str, points: int) -> Iterator[None]:
+    """Sprache und gebündelte Prüfschrift: Die synthetische Offscreen-Schrift
+    misst jede Familie gleich, und die Querleiste aus FD-200 zeigte sich nur
+    mit echter Metrik."""
     spoken = get_language()
     previous = QFont(qt_app.font())
-    font = QFont(previous)
-    font.setPointSize(points)
     install_language(language)
     set_language(language)
-    qt_app.setFont(font)
-    apply_theme(qt_app, "light")
-    apply_style(qt_app, "light")
     try:
-        yield
+        with bundled_font(qt_app, points):
+            apply_theme(qt_app, "light")
+            apply_style(qt_app, "light")
+            yield
     finally:
         qt_app.setFont(previous)
         apply_style(qt_app, "light")
@@ -70,20 +74,23 @@ def _settle(qt_app: QApplication, dialog: object) -> None:
 
 
 def _strip(dialog: object) -> str:
-    """Leer über den Knöpfen oder gerollt, obwohl unter dem Dialog Platz ist."""
+    """Leer über den Knöpfen, gerollt mit Platz darunter oder quer mit Platz daneben."""
     scroll = dialog._scroll  # type: ignore[attr-defined]
+    # Bis zum Rand, den ``fit_dialog_to_screen`` frei lässt.
+    screen = dialog.screen().availableGeometry().adjusted(NORMAL, NORMAL, -NORMAL, -NORMAL)  # type: ignore[attr-defined]
     if scroll.horizontalScrollBar().isVisibleTo(scroll):
-        # Der Prüfbildschirm (offscreen 800 Punkte) ist schmaler als die
-        # kleinste Arbeitsfläche (1920); ein Dialog, der dort quer rollt,
-        # sagt über seine Höhe auf dem Kundenbildschirm nichts.
+        sideways = scroll.horizontalScrollBar().maximum()
+        wider = screen.width() - dialog.frameGeometry().width()  # type: ignore[attr-defined]
+        if wider >= sideways:
+            return f"rollt quer {sideways} Punkte, daneben {wider} frei"
+        # Den Rest deckelt der Prüfbildschirm (offscreen 800 Punkte); über
+        # die Höhe auf dem Kundenbildschirm sagt der Dialog dann nichts.
         return ""
     layout = scroll.widget().layout()
     empty = scroll.viewport().height() - layout.totalHeightForWidth(scroll.viewport().width())
     if empty > SLACK:
         return f"{empty} Punkte leer"
     rolls = scroll.verticalScrollBar().maximum()
-    # Bis zum Rand, den ``fit_dialog_to_screen`` frei lässt.
-    screen = dialog.screen().availableGeometry().adjusted(0, 0, 0, -NORMAL)  # type: ignore[attr-defined]
     room = screen.bottom() - dialog.frameGeometry().bottom()  # type: ignore[attr-defined]
     if rolls > 0 and room > rolls:
         return f"rollt {rolls} Punkte, darunter {room} frei"
