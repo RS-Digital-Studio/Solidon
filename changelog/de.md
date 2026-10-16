@@ -135,6 +135,7 @@ Nutzen da und sonst nichts.
 - Englisch und Portugiesisch unterscheiden den Überstand eines Hakens oder eines Körpers unter dem Bett vom Überhang beim Drucken.
 - Auf Spanisch und Portugiesisch zeigen Menü, Suche und Dialog bei *Stift für Bohrung* und *Druckoptimal ausrichten* wieder nur den ersten Satz.
 - Einige Übersetzungen lesen sich klarer, darunter die Einleitung von *Parameter anlegen …*. Der Zapfen beginnt in allen Sprachen groß.
+- Erklärungen in den Karten sind so hoch wie ihr Text, auch in einer breiten Karte. In Version 0.6.0 standen dort je nach Sprache leere Zeilen, etwa unter zwei gewählten Flächen.
 
 ### Drucken und Übergabe an den Slicer
 

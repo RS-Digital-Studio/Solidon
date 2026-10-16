@@ -1454,6 +1454,38 @@ def qt_app() -> object:
     return application
 
 
+@pytest.fixture(autouse=True)
+def _no_mouse_button_outlives_its_test(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Nach einem Fall mit ``qt_app`` ist keine Maustaste mehr gedrückt (FD-142).
+
+    ``QTest.mouseDClick`` lässt die Taste nicht los, und Qt hielt sie bis zum
+    nächsten Klick im selben Prozess für gedrückt: Jede Bewegung danach war ein
+    Zug ohne Enter und Leave, und rot wurde ein späterer Fall, nicht der
+    verursachende (FD-83). Gemeldet wird hier am verursachenden; danach lässt
+    ein verborgenes Hilfswidget die Taste los, damit der nächste Fall frei
+    beginnt. Ein Doppelklick wie der des Kunden: ``tools.qt_clicks.double_click``.
+    """
+    yield
+    if "qt_app" not in request.fixturenames:
+        return
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QGuiApplication
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QWidget
+    from shiboken6 import delete
+
+    held = QGuiApplication.mouseButtons()
+    if held == Qt.MouseButton.NoButton:
+        return
+    spare = QWidget()
+    mouse = Qt.MouseButton
+    for button in (mouse.LeftButton, mouse.RightButton, mouse.MiddleButton):
+        if held & button:
+            QTest.mouseRelease(spare, button)
+    delete(spare)
+    pytest.fail(f"Nach dem Fall ist noch {held!r} gedrückt; ein Druck ohne Loslassen? (FD-142)")
+
+
 @pytest.fixture
 def record_trace(request: pytest.FixtureRequest) -> Callable[[str, object], None]:
     """Befunddaten eines Falls an seinen Bericht — ``record_property`` ohne JUnit.

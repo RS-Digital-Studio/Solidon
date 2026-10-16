@@ -207,6 +207,15 @@ steht in `constraints.txt`. Fehlt die API, nennt der Fehler
 Das allgemeine Anwendungsminimum bleibt davon unberührt.
 `function_guard.ALLOWED_CALLS` erlaubt dafür genau `QTest.wheelEvent` als
 öffentliche Zustellschnittstelle; die API-Vorbedingung wird statisch geprüft.
+
+Einen Doppelklick gibt `press` über `tools/qt_clicks.double_click`: Klick,
+Doppelklick, Loslassen wie beim Kunden, das Loslassen am gedrückten Widget
+oder, wenn der Doppelklick es abgebaut hat, am Widget unter dem Zeiger.
+`QTest.mouseDClick` allein ließ die Taste bis zum nächsten Klick gedrückt
+(FD-83, FD-142). Tests und Videowerkzeuge nehmen denselben Helfer; er ist
+kein Prüfstandsmodul, damit sein Nutzer nicht unter `function_guard` fällt.
+`tests/conftest.py` lässt keinen `qt_app`-Fall mit gedrückter Taste enden.
+`place_window` belässt maximierte Clientmaße ohne Ziel- und Größenwechsel.
 Die allgemeine Ereignissperre gilt weiter: direkte Widget-Handler,
 Handleraliase und dynamische `getattr`-Umwege bleiben unzulässig.
 

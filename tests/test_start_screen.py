@@ -30,6 +30,7 @@ from app.ui.start_screen import (
     accepted_path,
     current_theme,
 )
+from tools.qt_clicks import double_click
 
 
 @pytest.fixture
@@ -457,8 +458,7 @@ def test_one_click_opens_a_recent_project_once(screen: StartScreen) -> None:
     QTest.qWait(QApplication.doubleClickInterval() + 50)
 
     opened.clear()
-    QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=spot)
-    QTest.mouseDClick(view.viewport(), Qt.MouseButton.LeftButton, pos=spot)
+    double_click(view.viewport(), spot)
     assert opened == ["a.p3d"], "ein Doppelklick öffnet nicht zweimal"
     QTest.qWait(QApplication.doubleClickInterval() + 50)
 
@@ -954,7 +954,10 @@ def test_a_double_click_requests_at_most_one_start_action(qt_app: QApplication) 
     requests: list[bool] = []
     screen.supportRequested.connect(lambda: requests.append(True))
 
+    # Ein Hilfsmittel, das nur das Doppelklick-Ereignis schickt — der Zweig
+    # in ``mouseDoubleClickEvent``. Losgelassen wird auch hier (FD-142).
     QTest.mouseDClick(screen.support_button, Qt.MouseButton.LeftButton)
+    QTest.mouseRelease(screen.support_button, Qt.MouseButton.LeftButton)
 
     assert requests == [True], "das Doppelklick-Ereignis allein öffnet genau einmal"
 
@@ -962,8 +965,7 @@ def test_a_double_click_requests_at_most_one_start_action(qt_app: QApplication) 
     # Doppelklick-Ereignis kommt danach und darf kein zweites Fenster öffnen.
     feedback: list[bool] = []
     screen.feedbackRequested.connect(lambda: feedback.append(True))
-    QTest.mouseClick(screen.feedback_button, Qt.MouseButton.LeftButton)
-    QTest.mouseDClick(screen.feedback_button, Qt.MouseButton.LeftButton)
+    double_click(screen.feedback_button)
 
     assert feedback == [True], "Klick und Doppelklick sind zusammen ein Zug"
 

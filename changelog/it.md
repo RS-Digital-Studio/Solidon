@@ -110,6 +110,7 @@ scrive in `website/version.json`.
 - L'inglese e il portoghese distinguono ora la sporgenza di un gancio, o di un corpo sotto il piatto, dallo sbalzo in stampa.
 - In spagnolo e portoghese menu, ricerca e finestra di dialogo mostrano di nuovo solo la prima frase di *Perno per foro* e *Orienta per la stampa*.
 - Diverse traduzioni si leggono con più chiarezza, tra cui l'introduzione di *Crea parametro …*. Il perno inizia con la maiuscola in tutte le lingue.
+- Le spiegazioni nelle schede sono alte quanto il loro testo, anche in una scheda larga. Nella versione 0.6.0 in alcune lingue restavano righe vuote, per esempio sotto due facce selezionate.
 
 ### Stampare e passare allo slicer
 

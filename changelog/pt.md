@@ -110,6 +110,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O inglês e o português distinguem agora o ressalto de um gancho, ou de um corpo abaixo da placa, da saliência na impressão.
 - Em espanhol e português, o menu, a pesquisa e o diálogo voltam a mostrar só a primeira frase de *Pino para furo* e *Orientar para impressão*.
 - Várias traduções leem-se com mais clareza, entre elas a introdução de *Criar parâmetro …*. O pino começa com maiúscula em todas as línguas.
+- As explicações nos painéis ocupam só as linhas de que o texto precisa, também num painel largo. Na versão 0.6.0 ficavam linhas vazias em algumas línguas, por exemplo sob duas faces selecionadas.
 
 ### Imprimir e entregar ao slicer
 

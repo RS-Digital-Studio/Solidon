@@ -111,6 +111,7 @@ dans `website/version.json`.
 - L'anglais et le portugais distinguent désormais le dépassement d'un crochet, ou d'un corps sous le plateau, du surplomb à l'impression.
 - En espagnol et en portugais, le menu, la recherche et la boîte de dialogue n'affichent de nouveau que la première phrase de *Goupille pour perçage* et *Orienter pour l'impression*.
 - Plusieurs traductions se lisent plus clairement, dont l'introduction de *Créer un paramètre …*. Le tenon commence par une majuscule dans toutes les langues.
+- Les explications des cartes sont aussi hautes que leur texte, même dans une carte large. La version 0.6.0 laissait des lignes vides dans certaines langues, comme sous deux faces sélectionnées.
 
 ### Imprimer et transmettre au slicer
 
