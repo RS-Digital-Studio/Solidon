@@ -399,9 +399,10 @@ Vorrang.
   ohne Einheit und in Zoll falsch: ein Schlüssel mit Endung (`_mm`, `_mm2`,
   `_deg`), ein Grenzwert (`minimum`, `maximum`, `value`) mit `"unit": "mm"`;
   ein Schlüssel ohne Endung, den Agent oder Handler lesen, steht in
-  `labels._BARE_MEASURES` und trägt nirgends anderes. Der Wert bleibt die Zahl
-  in Millimetern; `tests/test_value_measures.py` liest jeden Eintrag in
-  `app/core`. Fertiger mm-Text („12.00 mm“, auch unter `_MEASURE_TEXTS`) wird
+  `labels._BARE_MEASURES` und trägt als Zahl nirgends anderes (Text wie die
+  ComfyUI-Version unter `needed` bleibt Text). Der Wert bleibt die Zahl in
+  Millimetern; `tests/test_value_measures.py` liest jeden Eintrag in `app/`
+  und `tools/`. Fertiger mm-Text („12.00 mm“, auch unter `_MEASURE_TEXTS`) wird
   erst zur Anzeige umgerechnet, Befundidentität und Cache-/Projektformat
   bleiben; Slicerwerte (`_SETTING_PATHS`) stehen wie im Druckdialog.
 - **Ein Satz trägt keine Einheit im Katalogtext:** Die Zahl kommt mit ihrer

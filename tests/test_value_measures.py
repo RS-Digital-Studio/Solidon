@@ -31,7 +31,24 @@ from app.core.errors import AppError
 from app.ui import labels
 from app.ui.labels import value_line
 
-CORE = Path(__file__).resolve().parents[1] / "app" / "core"
+ROOT = Path(__file__).resolve().parents[1]
+CORE = ROOT / "app" / "core"
+
+#: Wo ``values`` entstehen, die die Oberfläche über ``labels.value_text``
+#: zeigt: der Kern, die Oberfläche selbst (Druckdialog, Hauptfenster) und
+#: die Werkzeuge, die Befunde für Handbuch und Prüfstand bauen. Die Tabelle
+#: in ``labels`` wirkt auf jeden dieser Werte, also liest der Wächter alle
+#: (Review I, B-3).
+SOURCES = (ROOT / "app", ROOT / "tools")
+
+
+def _sources() -> list[Path]:
+    return sorted(path for folder in SOURCES for path in folder.rglob("*.py"))
+
+
+def _named(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix()
+
 
 #: Endungen, die die Anzeige als Einheit liest (``labels._VALUE_UNITS``).
 SUFFIXES = ("_mm3", "_mm2", "_cm3", "_percent", "_deg", "_mm")
@@ -257,21 +274,24 @@ NO_MEASURE_CALLS = frozenset({"len", "str", "repr", "sorted", "list", "_directio
 
 #: Einträge, die nach Maß aussehen und keines sind — je mit Grund.
 NOT_A_MEASURE: dict[tuple[str, str], str] = {
-    ("loader.py", "open_edges"): "eine Anzahl offener Kanten",
-    ("step_ops.py", "open_edges"): "eine Anzahl offener Kanten",
-    ("counterpart.py", "tpi"): "Gänge je Zoll, eine Anzahl",
-    ("profile_clamp_ops.py", "size"): "die Schraubengröße als Name (M5)",
-    ("advise.py", "possible"): "eine Düsentemperatur",
-    ("advise.py", "wanted"): "eine Düsentemperatur",
-    ("prepare_ops.py", "bore"): "die Kennung eines Merkmals",
-    ("prepare_ops.py", "widening"): "die Kennung eines Merkmals",
-    ("lid_hinge.py", "bore"): "der Parameter eines Merkmals, kein Befundwert",
-    ("placement.py", "diameter"): "Parameter eines Schritts, kein Befundwert",
-    ("seals.py", "area"): "Kenngrößen eines Merkmals, kein Befundwert",
-    ("seals.py", "centre"): "Kenngrößen eines Merkmals, kein Befundwert",
-    ("prepare_ops.py", "centre"): "Kenngrößen eines Merkmals, kein Befundwert",
-    ("edit.py", "middle"): "interne Absage, die Koordinate ist eine Diagnose",
-    ("support.py", "limit"): "die Länge einer Nachricht in Zeichen",
+    ("app/core/ingest/loader.py", "open_edges"): "eine Anzahl offener Kanten",
+    ("app/core/ingest/step_ops.py", "open_edges"): "eine Anzahl offener Kanten",
+    ("app/core/counterpart.py", "tpi"): "Gänge je Zoll, eine Anzahl",
+    ("app/core/geom/profile_clamp_ops.py", "size"): "die Schraubengröße als Name (M5)",
+    ("app/core/slice/advise.py", "possible"): "eine Düsentemperatur",
+    ("app/core/slice/advise.py", "wanted"): "eine Düsentemperatur",
+    ("app/core/geom/prepare_ops.py", "bore"): "die Kennung eines Merkmals",
+    ("app/core/geom/prepare_ops.py", "widening"): "die Kennung eines Merkmals",
+    ("app/core/geom/lid_hinge.py", "bore"): "der Parameter eines Merkmals, kein Befundwert",
+    ("app/core/scene/placement.py", "diameter"): "Parameter eines Schritts, kein Befundwert",
+    ("app/core/knowledge/parts/seals.py", "area"): "Kenngrößen eines Merkmals, kein Befundwert",
+    ("app/core/knowledge/parts/seals.py", "centre"): "Kenngrößen eines Merkmals, kein Befundwert",
+    ("app/core/geom/prepare_ops.py", "centre"): "Kenngrößen eines Merkmals, kein Befundwert",
+    ("app/core/brep/edit.py", "middle"): "interne Absage, die Koordinate ist eine Diagnose",
+    ("app/core/support.py", "limit"): "die Länge einer Nachricht in Zeichen",
+    ("app/ui/main_window.py", "slot_length"): "Parameter eines Schritts, kein Befundwert",
+    ("app/ui/main_window.py", "slot_angle"): "Parameter eines Schritts, kein Befundwert",
+    ("app/ui/main_window.py", "offset"): "Parameter eines Schritts, kein Befundwert",
 }
 
 
@@ -384,8 +404,8 @@ def test_no_measure_reaches_a_value_without_its_unit() -> None:
     Grund.
     """
     found = []
-    for path in sorted(CORE.rglob("*.py")):
-        found.extend(_unmarked(path.read_text(encoding="utf-8"), path.name))
+    for path in _sources():
+        found.extend(_unmarked(path.read_text(encoding="utf-8"), _named(path)))
     assert not found, (
         "Maß ohne Einheit in values — Endung _mm/_mm2/_deg, bei einer Grenze "
         '"unit": "mm", ein gelesener Schlüssel in labels._BARE_MEASURES, sonst '
@@ -418,17 +438,55 @@ def test_a_bare_measure_key_never_carries_a_count_or_an_identifier() -> None:
     from app.ui.labels import _BARE_MEASURES
 
     wrong = []
-    for path in sorted(CORE.rglob("*.py")):
+    for path in _sources():
         for key, line, value, _unit in _value_entries(path.read_text(encoding="utf-8")):
-            if key not in _BARE_MEASURES or (path.name, key) in NOT_A_MEASURE:
+            if key not in _BARE_MEASURES or (_named(path), key) in NOT_A_MEASURE:
                 continue
             callee = ""
             if isinstance(value, ast.Call):
                 callee = getattr(value.func, "id", "") or getattr(value.func, "attr", "")
             identifier = isinstance(value, ast.Attribute) and value.attr in {"id", "name"}
             if callee in {"len", "int"} or identifier:
-                wrong.append(f"{path.name}:{line} {key}")
+                wrong.append(f"{_named(path)}:{line} {key}")
     assert not wrong, wrong
+
+
+#: Text unter einem Maßschlüssel, der als Text stehen bleibt: Datei und
+#: Schlüssel → Modul und Name der Konstante. Er bleibt nur, solange er keine
+#: Zahl ist — eine Mindestversion „1.0“ stünde als „1,00 mm“ da.
+TEXT_UNDER_A_MEASURE_KEY: dict[tuple[str, str], tuple[str, str]] = {
+    ("app/core/backends/mesh.py", "needed"): ("app.core.backends.mesh", "MINIMUM_COMFYUI_TEXT"),
+}
+
+
+def test_a_text_under_a_measure_key_never_reads_as_a_number() -> None:
+    """``needed`` trägt auch die ComfyUI-Mindestversion (Review I, B-3).
+
+    Die Tabelle deutet Zahlen und Zahlentexte als Maß; ein Text aus einer
+    Konstante oder ein Textliteral unter einem ihrer Schlüssel muss hier
+    stehen, und sein Wert darf weder Zahl noch Maßtext sein.
+    """
+    import importlib
+
+    from app.ui.labels import _BARE_MEASURES, _MEASURE_TEXT, _PLAIN_NUMBER
+
+    unlisted = []
+    for path in _sources():
+        for key, line, value, _unit in _value_entries(path.read_text(encoding="utf-8")):
+            if key not in _BARE_MEASURES:
+                continue
+            constant = isinstance(value, ast.Name) and (
+                value.id.endswith("_TEXT") or "VERSION" in value.id
+            )
+            literal = isinstance(value, ast.Constant) and isinstance(value.value, str)
+            if (constant or literal) and (_named(path), key) not in TEXT_UNDER_A_MEASURE_KEY:
+                unlisted.append(f"{_named(path)}:{line} {key}")
+    assert not unlisted, f"Text unter einem Maßschlüssel ohne Eintrag: {unlisted}"
+    for (_file, key), (module, name) in TEXT_UNDER_A_MEASURE_KEY.items():
+        text = str(getattr(importlib.import_module(module), name))
+        assert not _PLAIN_NUMBER.fullmatch(text), f"{name} = {text!r} läse sich als Maß"
+        assert not _MEASURE_TEXT.fullmatch(text), f"{name} = {text!r} läse sich als Maß"
+        assert labels.value_text(key, text) == text
 
 
 #: Stellen, deren Maß der Wächter am Ausdruck nicht erkennt (``value``,

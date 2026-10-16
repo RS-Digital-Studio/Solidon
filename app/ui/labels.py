@@ -2060,11 +2060,15 @@ _METHOD_NAMES: Final[dict[str, TranslatableText]] = {
 #: ``pitch`` für das Gegenstück, ``previous`` für das Bohrungsmaß). Unter der
 #: Absage stand deshalb „Erreichbar: 0,58“ — ohne Einheit und in Zoll falsch.
 #: Hier steht einmal, dass sie ein Maß sind; der Wert bleibt die Zahl in
-#: Millimetern (Regel 6). Ein Schlüssel kommt nur hierher, wenn er **nirgends**
-#: etwas anderes trägt — ``size`` ist auch eine Dateigröße, ``minimum`` jede
-#: Grenze; ein Grenzwert bringt seine Einheit in ``values["unit"]`` mit
-#: (:data:`UNIT_VALUES`). ``tests/test_value_measures.py`` wird rot, wenn ein
-#: Maß in ``values`` steht, das keiner dieser Wege kennzeichnet.
+#: Millimetern (Regel 6). Ein Schlüssel kommt nur hierher, wenn er **als Zahl
+#: nirgends** etwas anderes trägt — ``size`` ist auch eine Dateigröße,
+#: ``minimum`` jede Grenze; ein Grenzwert bringt seine Einheit in
+#: ``values["unit"]`` mit (:data:`UNIT_VALUES`). Text ohne Zahlform bleibt Text:
+#: Unter ``needed`` steht auch die Mindestversion von ComfyUI („0.35.0“), unter
+#: ``tolerance`` „auto:pla“. ``tests/test_value_measures.py`` liest jede Stelle
+#: in ``app/`` und ``tools/``, die ``values`` erzeugt, und wird rot, wenn ein Maß
+#: ohne Kennzeichnung dasteht oder ein Text unter einem dieser Schlüssel
+#: ungeprüft bleibt.
 _BARE_MEASURES: Final[dict[str, str]] = {
     "amount": "_mm",
     "at": "_mm",
