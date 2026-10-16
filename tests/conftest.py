@@ -97,7 +97,7 @@ class SuiteKeyring(keyring.backend.KeyringBackend):
     Fälle, die das LLM-Backend oder die Gerätekennung erreichen, fragten ihn
     ohne eigenen Ersatz — gemessen in ``test_chat_ui.py`` (``solidon-llm``).
     Ein Fall, der einen eigenen Schlüsselbund braucht, ersetzt ihn wie bisher;
-    die Fixture darunter setzt nach jedem Fall diesen wieder ein.
+    die Fixture darunter setzt vor jedem Fall diesen wieder ein.
     """
 
     priority = 1
@@ -884,12 +884,16 @@ def _the_language_starts_at_the_source() -> Iterator[None]:
 
 @pytest.fixture(autouse=True)
 def _the_keyring_stays_the_suites() -> Iterator[None]:
-    """Jeder Fall findet den leeren Schlüsselbund der Suite (:class:`SuiteKeyring`)."""
-    SuiteKeyring.values.clear()
-    yield
-    SuiteKeyring.values.clear()
+    """Jeder Fall findet den leeren Schlüsselbund der Suite (:class:`SuiteKeyring`).
+
+    Gesetzt **vor** dem Fall, nicht nur danach: So hängt es nicht an der
+    Reihenfolge, ob der erste Fall eines Arbeiters ihn hat (Review 1, RCI-3).
+    Das Setzen beim Import bleibt für Code, der vor jeder Fixture fragt.
+    """
     if keyring.get_keyring() is not SUITE_KEYRING:
         keyring.set_keyring(SUITE_KEYRING)
+    SuiteKeyring.values.clear()
+    yield
 
 
 @pytest.fixture(autouse=True)
