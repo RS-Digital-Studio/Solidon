@@ -2323,7 +2323,10 @@ den Einstellungen entfernt beide Nachweise erst beim Speichern.
 
 *Früher unter „§29 — was die Datei mitnimmt › Erscheinung“, HEAD-Fassung.*
 
-`style.py` (Stylesheet, Typografie-Skala, Abstandsraster, §19.3) · `theme.py`
+`style.py` (Stylesheet, Typografie-Skala, Abstandsraster, §19.3) ·
+`button_floor.py` (hebt die Mindesthöhe jedes Knopfs auf seine Beschriftung;
+die `min-height` des Stylesheets wird sonst zur ausdrücklichen Mindesthöhe
+von 26 Punkten, und ein enges Layout staucht die Schrift, FD-185) · `theme.py`
 (hell und dunkel) · `window_chrome.py` (die Titelleiste trägt die Farben der
 Anwendung — Windows malt sie weiter, es bekommt nur gesagt, in welcher Farbe;
 ein Wächter am Ereignisstrom, damit kein Dialog vergessen wird) ·

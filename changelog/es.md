@@ -102,6 +102,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Quien cambia un paso confirma con *Aplicar*. El botón sigue gris hasta que algo cambia y nombra el campo que hay que cambiar.
 - El diálogo *Calibrar material* muestra holgura, apriete, compensación de agujeros, pie de elefante y pared en la unidad elegida, también en pulgadas, y conserva el tercer decimal.
 - Un botón largo bajo un rechazo se divide en varias líneas con letra grande, en lugar de ensanchar el diálogo.
+- Los botones ya no se aplastan con letra grande. En la versión 0.6.0, las acciones de un hallazgo en el informe de comprobación quedaban cortadas por arriba y por abajo.
 
 ### Imprimir y entregar al slicer
 

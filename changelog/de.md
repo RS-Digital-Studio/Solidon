@@ -126,6 +126,7 @@ Nutzen da und sonst nichts.
 - Wer einen Schritt ändert, bestätigt mit *Übernehmen*. Der Knopf bleibt grau, bis sich etwas geändert hat, und nennt das Feld dafür.
 - Der Dialog *Material kalibrieren* zeigt Spiel, Übermaß, Lochkorrektur, Elefantenfuß und Wand in der gewählten Einheit, auch in Zoll, und behält die dritte Nachkommastelle.
 - Ein langer Knopf unter einer Absage bricht bei großer Schrift um, statt den Dialog zu verbreitern.
+- Knöpfe werden bei großer Schrift nicht mehr gestaucht. Im Prüfbericht waren die Handlungen eines Befunds in Version 0.6.0 oben und unten abgeschnitten.
 
 ### Drucken und Übergabe an den Slicer
 

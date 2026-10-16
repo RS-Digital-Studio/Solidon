@@ -101,6 +101,7 @@ scrive in `website/version.json`.
 - Chi modifica un passo conferma con *Applica*. Il pulsante resta grigio finché qualcosa non cambia e indica il campo da cambiare.
 - La finestra *Calibra il materiale* mostra gioco, interferenza, compensazione dei fori, piede d'elefante e parete nell'unità scelta, anche in pollici, e conserva la terza decimale.
 - Un pulsante lungo sotto un rifiuto va a capo con caratteri grandi, invece di allargare la finestra.
+- I pulsanti non vengono più schiacciati con caratteri grandi. Nella versione 0.6.0 le azioni di un rilievo nel rapporto di verifica erano tagliate in alto e in basso.
 
 ### Stampare e passare allo slicer
 

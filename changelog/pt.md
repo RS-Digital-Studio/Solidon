@@ -101,6 +101,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Quem altera um passo confirma com *Aplicar*. O botão fica cinzento até algo mudar e indica o campo a alterar.
 - O diálogo *Calibrar material* mostra folga, interferência, compensação de furos, pé de elefante e parede na unidade escolhida, também em polegadas, e mantém a 3.ª casa decimal.
 - Um botão longo por baixo de uma recusa quebra a linha com letra grande, em vez de alargar o diálogo.
+- Os botões já não ficam esmagados com letra grande. Na versão 0.6.0, as ações de uma constatação no relatório de verificação ficavam cortadas em cima e em baixo.
 
 ### Imprimir e entregar ao slicer
 

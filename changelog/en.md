@@ -101,6 +101,7 @@ it into `website/version.json`.
 - When you change a step, you confirm with *Apply*. The button stays grey until something has changed and names the field to change.
 - The *Calibrate material* dialog shows clearance, interference, hole compensation, elephant foot and wall in the chosen unit, inches included, and keeps the third decimal place.
 - A long button under a refusal wraps at large font sizes instead of widening the dialog.
+- Buttons are no longer squashed at large font sizes. In version 0.6.0 the actions of a finding in the check report were cut off at the top and bottom.
 
 ### Printing and slicer handover
 

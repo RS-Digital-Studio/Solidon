@@ -237,7 +237,10 @@ Zu FD-182: `test_refusal_field_ways_window.py` (Wächter über jeden
 Operationsdialog und jedes Feld: ein Feldweg ist Knopf mit Sprung oder
 kein Knopf, *Eingabe korrigieren* dann still, die Ebene als Rat; der
 umbrechende Knopf) und `test_plane_refusal_field.py`
-(die Ebenenabsage einer Skizzenoperation nennt `sketch`).
+(die Ebenenabsage einer Skizzenoperation nennt `sketch`). Zu FD-185:
+`test_report_offer_height_window.py` (Handlungsknöpfe im Prüfbericht eines
+niedrigen Fensters bei 11 und 18 pt nie unter ihrer Mindesthöhe; ein Knopf
+folgt dem Schriftwechsel in beide Richtungen).
 
 Der Operationsdialog hat je Fund eine eigene Datei:
 `test_operation_dialog_names.py` öffnet jede registrierte Operation und
