@@ -75,7 +75,7 @@ scrive in `website/version.json`.
 - La finestra *Dettagli* nomina corpo e passaggio e dà il punto nell'unità scelta. *Mostra i valori* mostra i nomi dei campi ed è alto solo quanto serve.
 - Un lettore di schermo nomina ogni campo di ogni finestra di funzione, anche elenchi a discesa, caselle di spunta ed elenchi di caratteristiche.
 - Un testo che la finestra propone, come un nome, è selezionato all'apertura. Digitando lo si sostituisce.
-- I numeri grandi compaiono anche nei campi a gruppi di tre cifre, per esempio 1 051 736 triangoli. Si scrivono con o senza separatori.
+- I numeri interi grandi compaiono anche nei campi a gruppi di tre cifre, come 1 051 736 triangoli o 10 000 mm/s² di *Accelerazione*. Si scrivono con o senza separatori.
 - I nomi lunghi dei campi in *Altre impostazioni* mostrano ogni riga, anche con caratteri grandi. Nella versione 0.6.0 *Pratica un foro* ne perdeva l'ultima parola.
 - Le finestre di funzione sono alte quanto il contenuto, anche dopo aver aperto *Altre impostazioni*. Nella versione 0.6.0 *Ripeti caratteristica* lasciava una striscia vuota sopra i pulsanti.
 - Se un campo obbligatorio come il testo di *Scritta come corpo* è vuoto, il campo dice cosa va inserito e il pulsante attende. La versione 0.6.0 mostrava lì un errore all'apertura.

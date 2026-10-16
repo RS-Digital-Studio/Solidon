@@ -566,9 +566,13 @@ def _make_setting_editor(
         button.changed.connect(changed)
         editor = button
     else:
-        # Eine Anzahl steht in Dreiergruppen wie jede andere (FD-184).
-        number = GroupedSpin(parent) if field.kind == "int" else BoundedSpin(parent)
-        if field.kind != "int":
+        # Eine Anzahl und jedes Maß ohne Nachkomma stehen in Dreiergruppen wie
+        # jede andere Zahl (FD-184), und „1.000“ heißt dort tausend: Die
+        # *Beschleunigung* stand als „10000 mm/s²“ da, und „1.000“ in
+        # *Leerfahrt* wurde still 1 mm/s (Review F2a, R2).
+        whole = field.kind == "int" or field.decimals == 0
+        number = GroupedSpin(parent) if whole else BoundedSpin(parent)
+        if not whole:
             number.setDecimals(field.decimals)
         number.setRange(field.minimum, field.maximum)
         number.setSingleStep(1 if field.kind == "int" else field.step)

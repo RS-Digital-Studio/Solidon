@@ -100,7 +100,7 @@ Nutzen da und sonst nichts.
 - Die *Einzelheiten* nennen Körper und Schritt beim Namen und die Stelle in der gewählten Einheit. *Werte ansehen* zeigt die Namen der Felder und ist nur so hoch wie nötig.
 - Ein Bildschirmleser nennt in jedem Funktionsdialog jedes Feld beim Namen, auch Auswahllisten, Haken und Merkmalslisten.
 - Ein vorgegebener Text in einem Dialog, etwa ein Name, ist beim Öffnen markiert. Tippen ersetzt ihn.
-- Große Anzahlen stehen auch in Eingabefeldern in Dreiergruppen, etwa 1 051 736 Dreiecke. Getippt werden sie mit oder ohne Trennzeichen.
+- Große ganze Zahlen stehen auch in Eingabefeldern in Dreiergruppen, etwa 1 051 736 Dreiecke oder 10 000 mm/s² *Beschleunigung*. Getippt werden sie mit oder ohne Trennzeichen.
 - Lange Feldnamen unter *Weitere Einstellungen* zeigen jede Zeile, auch bei großer Schrift. In Version 0.6.0 fehlte etwa bei *Bohrung setzen* das letzte Wort von „Durchmesser der Aufweitung“.
 - Funktionsdialoge sind so hoch wie ihr Inhalt, auch nach dem Aufklappen von *Weitere Einstellungen*. In Version 0.6.0 blieb etwa bei *Merkmal vervielfachen* ein Streifen über den Knöpfen leer.
 - Ist ein Pflichtfeld wie der Text von *Schriftzug als Körper* leer, sagt das Feld, was hineingehört, und der Knopf wartet. Version 0.6.0 zeigte dort beim Öffnen einen Fehler.

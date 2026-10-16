@@ -76,7 +76,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La ventana *Detalles* nombra el cuerpo y el paso y da el punto en la unidad elegida. *Mostrar los valores* muestra los nombres de los campos y solo es tan alto como hace falta.
 - Un lector de pantalla nombra cada campo de cada diálogo de función, también listas desplegables, casillas y listas de características.
 - Un texto que el diálogo ya trae, como un nombre, aparece seleccionado al abrir. Al escribir se sustituye.
-- Las cantidades grandes aparecen también en los campos en grupos de tres cifras, por ejemplo 1 051 736 triángulos. Se escriben con o sin separadores.
+- Los números enteros grandes aparecen también en los campos en grupos de tres cifras, como 1 051 736 triángulos o 10 000 mm/s² de *Aceleración*. Se escriben con o sin separadores.
 - Los nombres largos de campos en *Más ajustes* muestran todas sus líneas, también con letra grande. En la versión 0.6.0, *Hacer un taladro* perdía la última palabra de uno.
 - Los diálogos de función tienen la altura de su contenido, también al desplegar *Más ajustes*. En la versión 0.6.0, *Repetir característica* dejaba una franja vacía sobre los botones.
 - Si un campo obligatorio como el texto de *Rótulo como cuerpo* está vacío, el campo dice qué va dentro y el botón espera. La versión 0.6.0 mostraba ahí un error al abrir.

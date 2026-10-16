@@ -75,7 +75,7 @@ it into `website/version.json`.
 - The *Details* window names the body and the step and give the location in the chosen unit. *Show the values* shows the field names and is only as tall as needed.
 - A screen reader names every field of every function dialog, including drop-down lists, checkboxes and feature lists.
 - Text that a dialog fills in, such as a name, is selected when it opens. Typing replaces it.
-- Large counts appear in groups of three in input fields too, such as 1 051 736 triangles. You can type them with or without separators.
+- Large whole numbers appear in groups of three in input fields too, such as 1 051 736 triangles or 10 000 mm/s² *Acceleration*. You can type them with or without separators.
 - Long field names under *More settings* show every line, even with a large font. In version 0.6.0, *Drill a bore* for example lost the last word of a wrapped field name.
 - Function dialogs are as tall as their content, also after expanding *More settings*. In version 0.6.0, *Repeat feature* for example left an empty strip above the buttons.
 - If a required field such as the text of *Lettering as a body* is empty, the field says what goes in and the button waits. Version 0.6.0 showed an error there on opening.
