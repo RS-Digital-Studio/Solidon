@@ -1593,7 +1593,14 @@ def test_the_hull_is_named_at_every_boolean_of_the_hollowing(
         seen = set() if seen is None else seen
         found: list[str] = []
         for call in ast.walk(start):
-            if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Name):
+            if not isinstance(call, ast.Call):
+                continue
+            # ``boolean.boolean(…)``: Seit ``hollow`` die Kette über ihr Modul liest
+            # (CS-11), zählt der Name hinter dem Modul wie ein eigener.
+            if isinstance(call.func, ast.Attribute) and isinstance(call.func.value, ast.Name):
+                found.append(call.func.attr)
+                continue
+            if not isinstance(call.func, ast.Name):
                 continue
             name = call.func.id
             found.append(name)

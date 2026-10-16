@@ -8093,10 +8093,15 @@ def test_window_revision_and_agent_go_the_full_chain_and_previews_do_not() -> No
             if not isinstance(function, ast.FunctionDef | ast.AsyncFunctionDef):
                 continue
             for node in own_nodes(function):
-                if (
-                    isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Name)
-                    and node.func.id == "evaluate"
+                # ``evaluate(…)`` oder ``core_scene.evaluate(…)``: Seit Sitzung und Agent die
+                # Auswertung über ihr Modul lesen (CS-11), steht sie meist hinter einem Namen.
+                if isinstance(node, ast.Call) and (
+                    (isinstance(node.func, ast.Name) and node.func.id == "evaluate")
+                    or (
+                        isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.attr == "evaluate"
+                    )
                 ):
                     flagged = any(
                         keyword.arg == "full_chain_when_stuck"
