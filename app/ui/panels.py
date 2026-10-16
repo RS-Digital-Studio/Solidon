@@ -142,6 +142,7 @@ from app.core.perceive.groups import FunctionalGroup
 from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES
 from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import REGISTRY, kernel_switch_label, kernel_twin_of, shown_of_twins
+from app.core.registry.registry import feature_title_of
 from app.core.registry.surfaces import first_sentence
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
@@ -7772,24 +7773,29 @@ class ReportPanel(QWidget):
             details.append(step)
         details.extend(_value_lines(finding))
         if members:
+            # **Je Mitglied, wen es betrifft — nicht noch einmal der Satz**, und
+            # höchstens fünfzehn wie in der Zeile (FD-196): 118 Waisen ergaben
+            # 20 179 Zeichen, und ein Bildschirmleser las den Satz 118-mal.
+            one_step = all(one.op_id == members[0].op_id for one in members)
             details.extend(
                 " · ".join(
                     filter(
                         None,
                         (
                             self._member_label(one),
-                            _origin_text(one.op_id, self._document),
-                            str(one.message),
+                            "" if one_step else _origin_text(one.op_id, self._document),
                         ),
                     )
                 )
-                for one in members
+                for one in members[:15]
             )
+            if len(members) > 15:
+                details.append(f"… (+{len(members) - 15})")
         detail_text = " · ".join(details)
         item.setToolTip(detail_text)
         # Tastatur und Bildschirmleser bekommen dieselbe Diagnose wie die
-        # Maus. Bei verlorenen Formdetails liegt die interne Kennung bewusst
-        # nur hier und nicht in der sichtbaren Nicht-CAD-Zeile.
+        # Maus. Verlorene Formdetails stehen hier mit Art und Nummer; die
+        # Kennung bleibt in den Werten des Befunds (FD-186).
         item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, detail_text)
         self.list.addItem(item)
         if self._running:
@@ -8031,10 +8037,14 @@ class ReportPanel(QWidget):
 
         Der Körper mit Namen, dahinter seine eigenen Werte — die Zeile sagt
         den Satz einmal, hier steht, für wen er gilt und mit welchen Zahlen.
-        Waisen nennen ihr Merkmal, wie eh und je.
+        Waisen nennen ihr Merkmal mit Art und Nummer und den Körper, keine
+        Kennung (FD-186, Review 2 Restpaket A, L2).
         """
         if finding.code == "perceive.orphaned":
-            return str(finding.values.get("feature", finding.object_id or "?"))
+            feature = str(finding.values.get("feature", ""))
+            body = str(finding.object_id) if finding.object_id is not None else ""
+            named = [feature_title_of(feature) if feature else "", self._names.get(body, body)]
+            return " · ".join(part for part in named if part) or "?"
         parts: list[str] = []
         if finding.object_id is not None:
             identifier = str(finding.object_id)

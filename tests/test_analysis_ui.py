@@ -2700,10 +2700,10 @@ def test_a_finding_without_values_stays_as_it_is() -> None:
     assert _line_for(finding) == "Doppelte Punkte verschweißt."
 
 
-def test_an_orphaned_feature_keeps_its_internal_name_in_details_only(
+def test_an_orphaned_feature_is_named_without_its_identifier(
     qt_app: QApplication,
 ) -> None:
-    """Einsteiger lesen Wirkung und Ausweg, die Diagnose behält die Kennung.
+    """Einsteiger lesen Wirkung und Ausweg; die Kennung steht nur in den Werten.
 
     „Merkmal face_3 hat keinen Nachfolger" beschreibt die interne Zuordnung
     statt der Folge für den Nutzer. Tooltip und zugängliche Beschreibung nennen
@@ -2744,16 +2744,17 @@ def test_an_orphaned_feature_keeps_its_internal_name_in_details_only(
         # Die Kurzhilfe nennt das Merkmal mit Art und Nummer (FD-186); die
         # Kennung bleibt in den Werten für Agent und Handler.
         assert "Fläche 3" in item.toolTip() and "face_3" not in item.toolTip()
-        assert finding.values["feature"] == "face_3"
+        shown: Finding = item.data(Qt.ItemDataRole.UserRole)
+        assert shown.values["feature"] == "face_3", "die Kennung bleibt im Befund"
         assert "Fläche 3" in str(item.data(Qt.ItemDataRole.AccessibleDescriptionRole))
     finally:
         panel.deleteLater()
 
 
-def test_a_mended_defect_keeps_its_internal_name_in_details_only(
+def test_a_mended_defect_is_named_without_its_identifier(
     qt_app: QApplication,
 ) -> None:
-    """Eine geschlossene Fehlstelle ist Wirkung, nicht `edge_loop_7`."""
+    """Eine geschlossene Fehlstelle ist Wirkung, nicht `edge_loop_7` (FD-186)."""
     from app.core.scene import EvaluationResult
     from app.core.types import Report, Scene
     from app.ui.panels import ReportPanel
@@ -2779,6 +2780,8 @@ def test_a_mended_defect_keeps_its_internal_name_in_details_only(
         # Mit Art und Nummer wie in der Merkmalsliste (FD-186).
         assert "Offene Kante 7" in item.toolTip() and "edge_loop_7" not in item.toolTip()
         assert "Offene Kante 7" in str(item.data(Qt.ItemDataRole.AccessibleDescriptionRole))
+        shown: Finding = item.data(Qt.ItemDataRole.UserRole)
+        assert shown.values["feature"] == "edge_loop_7", "die Kennung bleibt im Befund"
     finally:
         panel.deleteLater()
 
@@ -4901,8 +4904,18 @@ def test_a_flood_of_identical_findings_becomes_one_line_that_counts_them(
 
         row = texts.index(bundle[0])
         tooltip = panel.list.item(row).toolTip()
-        assert "hole_0" in tooltip, "die Betroffenen bleiben erreichbar"
+        # Die Betroffenen mit Art und Nummer, ohne Kennung (FD-186, L2).
+        assert "Bohrung 0" in tooltip, "die Betroffenen bleiben erreichbar"
+        assert "hole_" not in tooltip, "keine Kennung in der Kurzhilfe"
         assert "+103" in tooltip, "und der Rest hinter den ersten fünfzehn wird beziffert"
+        # **Höchstens fünfzehn Mitglieder, ohne den Satz je Mitglied** (FD-196):
+        # 118 Waisen ergaben 20 179 Zeichen, und ein Bildschirmleser las den
+        # ganzen Satz 118-mal.
+        sentence = "Formdetails sind nach diesem Schritt nicht mehr automatisch"
+        assert tooltip.count(sentence) <= 1, tooltip.count(sentence)
+        assert len(tooltip) < 2000, len(tooltip)
+        described = str(panel.list.item(row).data(Qt.ItemDataRole.AccessibleDescriptionRole))
+        assert described == tooltip
 
         stored: Finding = panel.list.item(row).data(Qt.ItemDataRole.UserRole)
         assert stored.values.get("count") == 118
