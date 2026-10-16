@@ -25,6 +25,7 @@ import pytest
 from app.core.knowledge.parts import check, recipe
 from app.core.knowledge.parts.registry import PARTS, used_parts
 from app.core.knowledge.parts.user import FINGERPRINT_KEY
+from app.core.knowledge.parts.user import fingerprint as user_fingerprint
 from app.core.scene.project import load, project_data, save
 
 DATA = Path(__file__).parent / "data"
@@ -156,11 +157,21 @@ def test_a_stamp_from_0_5_3_still_means_the_same_part(tmp_path: Path) -> None:
                 data["libs"][f"{FINGERPRINT_KEY}{NAME}"] = stamp_46
                 payload = json.dumps(data).encode("utf-8")
             target.writestr(entry, payload)
+    # Aus beiden Registern, sonst nimmt das zweite Öffnen das Rezept nicht auf
+    # („operation registered twice“), und der Vergleich ginge ins Leere
+    # (Review I, B-1).
+    from app.core.knowledge.parts.ops import op_name
+    from app.core.registry import REGISTRY
+
     for spec_entry in PARTS.all():
         if spec_entry.source == recipe.TRAVELLED_SOURCE:
             PARTS.remove(spec_entry.name)
+            REGISTRY.remove(op_name(spec_entry.name))
+    assert not PARTS.has(NAME)
 
     document = load(older).document
 
+    assert PARTS.has(NAME), "das mitgereiste Rezept ist aufgenommen"
+    assert user_fingerprint(NAME), "der heutige Abdruck ist da — sonst ist der Vergleich leer"
     assert document.libs[f"{FINGERPRINT_KEY}{NAME}"] == f"{stamp_46}{check.STAMP_FORMAT}46"
     assert check.changed_own_parts(document, used_parts(document.ops)) == ()
