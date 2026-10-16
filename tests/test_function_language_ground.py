@@ -186,15 +186,21 @@ def test_the_ground_state_sees_a_remembered_section_and_a_rolled_card(qt_app: An
             qt_app.processEvents()
         assert function_language.ground_state(window) != pristine, "Reiter Auswahl vorn"
         ports = QtPorts(window, 0.0)
-        for _step in range(60):
-            click = guide_targets.next_click(window, "filament.section")
-            point = click.rect.center()
-            under = guide_targets.widget_under(point)
-            if click.why == "rollen":
-                ports.press(under, point, "wheel_down", wheel_angle=click.wheel_angle)
-            else:
-                ports.press(under, point, "left")
-                break
+        # Gemerkt wird *Filament und Druck*; sie steht seit FD-19 oben und braucht
+        # keinen Radschritt. Gerollt wird zu *Vorbereiten* unter dem Rand.
+        for name, click_it in (("filament.section", True), ("section:prepare", False)):
+            for _step in range(60):
+                click = guide_targets.next_click(window, name)
+                point = click.rect.center()
+                under = guide_targets.widget_under(point)
+                if click.why == "rollen":
+                    ports.press(under, point, "wheel_down", wheel_angle=click.wheel_angle)
+                else:
+                    if click_it:
+                        ports.press(under, point, "left")
+                    break
+                for _ in range(10):
+                    qt_app.processEvents()
             for _ in range(10):
                 qt_app.processEvents()
         for _ in range(30):
