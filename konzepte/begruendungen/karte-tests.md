@@ -56,6 +56,7 @@ Hier statt in der Karte, weil sie an ihrem Budget steht.
 | Natürlicher Anfang und Wiederzuklappen mit gleichem Inhalt, echte Inhaltsschrift, Paarwechsel, manuelle Maße, passives Wachstum sowie dauernde/benötigte/vorläufige Rollleisten | `test_counterpart_initial_height_ui.py` |
 | Maßgruppe und rechte Zeile teilen Vorderseite und Hilfe; Sammelhakenbudget, Einlauf, Ausdruck/Ablehnung, Radius, Fokus/Wiederverwendung, Hauptaktionspriorität, Einzel-/Sammelübernahme mit Undo, registrierter Befehl/Suche und örtliche Erkennung; konsistente Themenfixture | `test_feature_front_contract.py` |
 | Layoutitem-Hüllen vor verzögertem Widgetabbau entwerten, verschachtelte Layouts und externe Hosts; Nachbarn und zurückgegebene Maßfelder erhalten | `test_feature_layout_lifetime.py` |
+| Lesen eines Layouts hinterlässt keine Elementhülle: Breite messen und `removeRow`, Prüfstand am umbrechenden `DialogFooter`, eigene Abstandhalter und innere Layouts bleiben gültig; kein Index-`itemAt` außerhalb von `layout_lifetime` (FD-201) | `test_layout_item_wrappers.py` |
 | Echte Lage-/Abstandsbefunde und warme Daten bei mm/in/mm, sechs Sprachen, Auswahl/Einzelheiten/Nachschub, rohe Gruppenidentität samt vorigem Stand, gelesener Reiter und offene/geschlossene Körperknoten; Slicerwerte und Freitext als Gegenfälle | `test_finding_display_units.py` |
 | Nach Absage wieder sichtbare Vorschaulegende, kurze und lange Texte in sechs Sprachen und zwei tatsächlichen Anwendungsschriften | `test_preview_banner_layout.py` |
 | Vorschaulegende nur über einer Differenz, die Volumen oder Körper hinzufügt oder wegnimmt (nicht beim Umbenennen, nicht vor der Differenz) | `test_preview_legend.py` |
@@ -443,8 +444,10 @@ Arbeiter, die `wait_for_idle` nicht sieht, sowie `PlacementItem`,
 `PlacementViewport`, `placement_layout` und `scene_with_a_hole_and_a_fillet`
 für Platzierungsfälle. Für Maßkarten: `send_mouse_event` (Mausereignis mit
 festem Bildschirmbezug), `begin_card_drag`/`end_card_drag`,
-`settle_measure_layout` (Layoutaufträge zustellen) und
-`measure_more_heading`.
+`settle_measure_layout` (Layoutaufträge zustellen, dann warten, bis keine
+Seitenkarte mehr gleitet: `wait_for_resting_cards`, `cards_at_rest`; jeder
+Schritt einer gleitenden Karte setzt die Maßkarte neu und kostet ein Bild,
+FD-202) und `measure_more_heading`.
 
 `release_signing.py` hält ein eigenes Schlüsselpaar der Suite für unterschriebene
 Versionsdateien (`signed`, auch mit fremdem Schlüssel); die echten Schlüssel
@@ -474,7 +477,8 @@ Ende (CS-35).
 `guide_window.py` gehört allein `test_guide_targets.py`: die Fixture
 `prepared_window` für den Wortschatz des Funktionsdurchgangs (Quader mit
 Bohrung unter dem Bett, im Kundenthema) und `settle`, das nach festen Runden
-wartet, bis keine Seitenkarte mehr gleitet (`at_rest`) — gelesen wird die Lage,
+wartet, bis keine Seitenkarte mehr gleitet (`ui_helpers.wait_for_resting_cards`,
+dieselbe Bedingung wie im Einschwingen der Maßkarte) — gelesen wird die Lage,
 die der Kunde nach dem Gleiten sieht, nicht eine Zwischenlage, die an der
 Rechnerlast hängt (FD-157).
 

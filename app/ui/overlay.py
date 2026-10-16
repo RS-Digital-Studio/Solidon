@@ -74,6 +74,7 @@ from shiboken6 import isValid
 from app.i18n import tr
 from app.ui.cursors import cursor
 from app.ui.icons import icon
+from app.ui.layout_lifetime import layout_parts
 from app.ui.leash import stop_watching_the_dying
 from app.ui.scroll_areas import PassingScrollArea
 from app.ui.style import ROOMY, SPACE
@@ -759,13 +760,11 @@ class CardColumn(QWidget):
         """Die Flächen der sichtbaren Karten, in den Koordinaten der Spalte."""
         layout = self.layout()
         assert isinstance(layout, QVBoxLayout)
-        rects = []
-        for index in range(layout.count()):
-            item = layout.itemAt(index)
-            card = item.widget() if item is not None else None
-            if card is not None and card.isVisibleTo(self):
-                rects.append(card.geometry())
-        return rects
+        return [
+            card.geometry()
+            for card, _inner in layout_parts(layout)
+            if card is not None and card.isVisibleTo(self)
+        ]
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
         if stop_watching_the_dying(self, watched, event):
@@ -1271,9 +1270,7 @@ def extra_height(zone: QWidget) -> int:
         return 0
     margins = layout.contentsMargins()
     total = margins.top() + margins.bottom() + max(layout.count() - 1, 0) * layout.spacing()
-    for index in range(layout.count()):
-        item = layout.itemAt(index)
-        widget = item.widget() if item is not None else None
+    for widget, _inner in layout_parts(layout):
         if widget is None or not widget.isVisibleTo(zone):
             continue
         takers = [

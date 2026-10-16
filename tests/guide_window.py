@@ -7,9 +7,7 @@ für jede Änderung hier mitnähme (``tests.md``).
 
 from __future__ import annotations
 
-import time
 from collections.abc import Iterator
-from typing import Any
 
 import pytest
 from PySide6.QtWidgets import QApplication, QMenu
@@ -18,39 +16,19 @@ from app.core.scene.history import OperationDraft
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
-
-
-def at_rest(window: Any) -> bool:
-    """Ob keine Seitenkarte mehr gleitet und kein Setzen der Zonen vorgemerkt ist.
-
-    Eine Karte gleitet ``overlay.MOVE_MS`` zu ihrem Platz; wer währenddessen
-    liest, sieht eine Zwischenlage, die der Kunde nach dem Gleiten nicht mehr
-    hat — und wie weit die Bewegung in einer festen Zahl Ereignisrunden kommt,
-    hängt an der Rechnerlast (FD-157).
-    """
-    overlay = window.overlay
-    return not overlay._moves and overlay._pending is None
+from tests.ui_helpers import wait_for_resting_cards
 
 
 def settle(qt_app: QApplication, rounds: int = 20) -> None:
     """Ereignisse zustellen, bis jedes gezeigte Hauptfenster still steht.
 
     Erst die festen Runden (Listen legen ihre Zeilen über Nullzeitgeber), dann
-    auf den Zustand warten, nicht Runden zählen. Gewartet wird mit
-    ``processEvents`` und ``time.sleep``: die Bewegung braucht Wanduhrzeit.
+    auf den Zustand warten, nicht Runden zählen
+    (:func:`tests.ui_helpers.wait_for_resting_cards`, FD-157).
     """
     for _ in range(rounds):
         qt_app.processEvents()
-    windows = [
-        widget
-        for widget in qt_app.topLevelWidgets()
-        if isinstance(widget, MainWindow) and widget.isVisible()
-    ]
-    deadline = time.monotonic() + 60
-    while not all(at_rest(window) for window in windows) and time.monotonic() < deadline:
-        qt_app.processEvents()
-        time.sleep(0.01)
-    assert all(at_rest(window) for window in windows), "eine Seitenkarte gleitet nach 60 s noch"
+    wait_for_resting_cards(qt_app)
 
 
 @pytest.fixture

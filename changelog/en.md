@@ -20,7 +20,7 @@ it into `website/version.json`.
 ### Operation and system
 
 - Measurement cards can be moved and grow with open fields. Clearer action titles and bed dimensions, quieter toolbars and handles, and a clearer light-theme grid help keep the model in view.
-- Fixed a crash that could occur when switching features or projects.
+- Fixed a crash that could occur when switching features or projects, or when opening a dialog.
 - The note for “Place on the bed” now also applies to bodies below the bed.
 - Lists of feature actions now stay entirely in the selected language.
 - On the Mac, Solidon may now load the 3Dconnexion driver (3DxWare) for the 3D mouse. From version 0.4.1 to 0.6.0, macOS did not allow this.

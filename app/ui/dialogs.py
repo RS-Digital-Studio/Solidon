@@ -100,6 +100,7 @@ from app.ui.labels import (
     value_line,
     wheel_needs_focus,
 )
+from app.ui.layout_lifetime import layout_parts
 from app.ui.leash import (
     WAIT_TIMEOUT_MS,
     Worker,
@@ -704,15 +705,12 @@ class KeyDialog(QDialog):
         """Die Tab-Taste folgt Cloud, lokalem Modell und erst dann den Aktionen."""
         button_layout = self.buttons.layout()
         assert button_layout is not None
-        footer: list[QAbstractButton] = []
         buttons = self.buttons.buttons()
-        for index in range(button_layout.count()):
-            item = button_layout.itemAt(index)
-            if item is None:
-                continue
-            widget = item.widget()
-            if isinstance(widget, QAbstractButton) and widget in buttons:
-                footer.append(widget)
+        footer: list[QAbstractButton] = [
+            widget
+            for widget, _inner in layout_parts(button_layout)
+            if isinstance(widget, QAbstractButton) and widget in buttons
+        ]
         order = (
             self.field,
             self.forget_button,

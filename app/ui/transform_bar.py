@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 from app.i18n import tr
 from app.ui.icons import icon
 from app.ui.labels import LengthSpin, NumberSpin, choice_label
+from app.ui.layout_lifetime import layout_parts
 from app.ui.style import NORMAL, TIGHT
 
 #: **Kein Einrasten als Vorgabe** (Entscheidung Robert, 03.09.2026).
@@ -309,9 +310,7 @@ class TransformBar(QWidget):
             if layout is None:
                 continue
             layout.invalidate()
-            for index in range(layout.count()):
-                item = layout.itemAt(index)
-                pending.append(item.layout() if item is not None else None)
+            pending.extend(inner for _widget, inner in layout_parts(layout))
 
     def roles_show_words(self) -> bool:
         """Ob die Rollen gerade ihr Wort tragen — für Tests und Bilder."""

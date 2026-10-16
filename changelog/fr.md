@@ -21,7 +21,7 @@ dans `website/version.json`.
 ### Utilisation et système
 
 - Les cartes de mesures se déplacent et suivent les champs ouverts. Titres et cotes du plateau plus nets, barres et poignées plus sobres et grille visible en thème clair facilitent la vue du modèle.
-- Correction d’un plantage possible lors du changement de caractéristique ou de projet.
+- Correction d’un plantage possible lors du changement de caractéristique ou de projet, ou à l’ouverture d’une boîte de dialogue.
 - L'explication de «Poser sur le plateau» convient aussi aux corps situés sous le plateau.
 - Les listes d'actions sur les caractéristiques utilisent entièrement la langue choisie.
 - Sur Mac, Solidon peut désormais charger le pilote de 3Dconnexion (3DxWare) pour la souris 3D. De la version 0.4.1 à la 0.6.0, macOS ne l'autorisait pas.

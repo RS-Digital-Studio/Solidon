@@ -225,7 +225,7 @@ from app.ui.labels import (
     volume,
     wheel_needs_focus,
 )
-from app.ui.layout_lifetime import detach_from_layout
+from app.ui.layout_lifetime import detach_from_layout, layout_parts
 from app.ui.leash import Worker, WorkerLeash, weak_slot
 from app.ui.loading import DELAY_MS
 from app.ui.overlay import (
@@ -1230,8 +1230,7 @@ def finding_place(
 
 def _last_widget(row: QBoxLayout) -> QToolButton:
     """Die Überschrift, die :func:`collapsible` eben in ``row`` gelegt hat."""
-    item = row.itemAt(row.count() - 1)
-    widget = item.widget() if item is not None else None
+    widget = layout_parts(row)[-1][0]
     assert isinstance(widget, QToolButton)
     return widget
 
@@ -3838,10 +3837,8 @@ class ParameterPanel(QWidget):
         margins = self._outer.contentsMargins()
         shown = [
             widget
-            for index in range(self._outer.count())
-            if (item := self._outer.itemAt(index)) is not None
-            and (widget := item.widget()) is not None
-            and not widget.isHidden()
+            for widget, _inner in layout_parts(self._outer)
+            if widget is not None and not widget.isHidden()
         ]
         gaps = max(len(shown) - 1, 0) * self._outer.spacing()
         buttons = self.add_button.sizeHint().height()
@@ -12806,8 +12803,8 @@ def even_fields(dialog: QWidget) -> None:
         if isinstance(widget, (QAbstractSpinBox, QComboBox)):
             return widget
         line = widget.layout() if widget is not None else None
-        first = line.itemAt(0) if line is not None and line.count() else None
-        inner = first.widget() if first is not None else None
+        parts = layout_parts(line) if line is not None else []
+        inner = parts[0][0] if parts else None
         return inner if isinstance(inner, (QAbstractSpinBox, QComboBox)) else None
 
     for form in dialog.findChildren(QFormLayout):

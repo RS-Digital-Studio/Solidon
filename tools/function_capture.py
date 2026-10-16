@@ -1191,11 +1191,10 @@ def _qt_own_layout(layout: Any, widget: Any) -> bool:
 
 def _shown_items(layout: Any) -> int:
     """Wie viele Elemente eines Layouts zu sehen sind — Widgets und Layouts mit solchen."""
+    from app.ui.layout_lifetime import layout_parts
+
     count = 0
-    for index in range(layout.count()):
-        item = layout.itemAt(index)
-        widget = item.widget() if item is not None else None
-        inner = item.layout() if item is not None else None
+    for widget, inner in layout_parts(layout):
         if (widget is not None and widget.isVisible()) or (
             inner is not None and _shown_items(inner)
         ):

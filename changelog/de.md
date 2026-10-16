@@ -45,7 +45,7 @@ Nutzen da und sonst nichts.
 ### Bedienung und System
 
 - Maßkarten sind verschiebbar und wachsen mit offenen Feldern. Klarere Handlungstitel und Bettmaße, ruhigere Leisten und Griffe sowie ein deutlicheres helles Raster erleichtern den Blick aufs Modell.
-- Ein möglicher Absturz beim Wechseln von Merkmalen oder Projekten ist behoben.
+- Ein möglicher Absturz beim Wechseln von Merkmalen oder Projekten und beim Öffnen von Dialogen ist behoben.
 - Der Hinweis bei „Auf das Bett setzen“ passt jetzt auch zu Körpern, die unter dem Bett liegen.
 - Aufzählungen von Merkmalshandlungen verwenden durchgehend die gewählte Sprache.
 - Am Mac darf Solidon für die 3D-Maus jetzt den Treiber von 3Dconnexion (3DxWare) laden. Von Version 0.4.1 bis 0.6.0 ließ macOS das nicht zu.
