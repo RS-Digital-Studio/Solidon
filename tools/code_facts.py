@@ -29,16 +29,23 @@ from __future__ import annotations
 
 import ast
 import hashlib
-import os
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
+
+# Mit diesem Modul geladen, nicht erst beim ersten Speichern: Der Stand (:func:`stamp`) trägt
+# die Quelle von ``code_cache``, die rechnet (RR2-13). ``code_cache`` bezieht dieses Modul nur
+# in Funktionen.
+from tools import code_cache
 
 #: Bereiche, deren Module der Index als Ziele prüft (W2 und W5).
 INDEXED = ("app", "tools")
 #: Bereiche, deren Dateien gelesen werden; ``tests`` liefert Patch-Stellen und Importe.
 AREAS = ("app", "tools", "tests")
+
+#: Längster Text, den der Auszug als Konstante hält: Ein Skript für ``python -c`` ist oft
+#: ein ganzer Absatz (CS-18); im Baum stehen 262 Texte über 512 Zeichen, zusammen 0,3 MB.
+LONGEST_TEXT = 1 << 16
 
 COND = 1  # unter if/try/Schleife/match: kann fehlen
 CHECKING = 2  # unter TYPE_CHECKING: bindet zur Laufzeit nicht
@@ -285,7 +292,12 @@ class Fn:
 
 
 class Ref(NamedTuple):
-    kind: str  # attr, store, del, getattr, getattr-default, hasattr
+    """Ein Bezug. ``kind``: ``attr``, ``store``, ``del``, ``getattr``, ``getattr-default``,
+    ``hasattr`` — oder ``query``/``query-default``: ein Aufruf über einen Namen, der in der Datei
+    an ``getattr``/``hasattr`` gebunden wird (``has = hasattr``, ``builtins.hasattr``). Ob und
+    welcher der beiden Eingebauten gerufen wird, faltet der Index für alle fünf aus ``func``."""
+
+    kind: str
     scope: int
     line: int
     col: int
@@ -294,6 +306,7 @@ class Ref(NamedTuple):
     name: IR | None
     runtime: bool
     checking: bool
+    func: IR | None = None
 
 
 class Imp(NamedTuple):
@@ -330,6 +343,21 @@ class Site(NamedTuple):
     keywords: tuple[tuple[str, IR], ...]
 
 
+class Script(NamedTuple):
+    """Ein Skript in einer Zeichenkette, das ein Befehl ``[kopf, …, "-c", skript, …]`` an einen
+    Prozess gibt (CS-18). ``head`` ist ``None``, wenn ``-c`` vorn steht (Argumente, die vor
+    einen Interpreter kommen), ``head_text`` der Kopf als Quelltext; Lage ist die des
+    Skriptausdrucks."""
+
+    scope: int
+    line: int
+    col: int
+    head: IR | None
+    head_text: str
+    script: IR
+    runtime: bool
+
+
 @dataclass(slots=True)
 class Facts:
     path: str
@@ -356,6 +384,8 @@ class Facts:
     comprehensions: dict[tuple[int, int], int] = field(default_factory=dict)
     #: Abweichender Typ-/Headerkontext für öffentliche Abfragen an eigenen AST-Knoten.
     contexts: dict[tuple[int, int], tuple[int, bool]] = field(default_factory=dict)
+    #: Skripte in Zeichenketten, die an ``python -c`` gehen; der Index liest sie wie Module.
+    scripts: list[Script] = field(default_factory=list)
 
 
 def to_ir(
@@ -377,7 +407,7 @@ def to_ir(
         return Use(node.id, scope, node.lineno, node.col_offset, checking=checking)
     if isinstance(node, ast.Constant):
         value = node.value
-        if isinstance(value, str) and len(value) > 512:
+        if isinstance(value, str) and len(value) > LONGEST_TEXT:
             return Unknown("lange Zeichenkette")
         if value is None or isinstance(value, (str, int, float, bytes)):
             return const(value)
@@ -436,7 +466,9 @@ def to_ir(
             ):
                 parts.append(to_ir(part.value, scope, d, comps, checking))
             else:
-                return Unknown("formatierter Text")
+                # Ein Teil mit Umwandlung (``!r``) oder Format bleibt offen, der Rest des Texts
+                # bleibt lesbar (ein Skript mit eingesetztem Pfad, CS-18).
+                parts.append(Unknown("formatierter Teil"))
         return Fstr(tuple(parts))
     if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Div)):
         left, right = (
@@ -564,6 +596,8 @@ class _Extractor:
         self.grows: list[tuple[int, str, tuple[int, int], str, IR]] = []
         self.patch_until: tuple[int, int] | None = None
         self.contexts: dict[str, tuple[int, int]] = {}
+        #: Aufrufe mit zwei Argumenten über einen Namen oder ``….getattr``/``….hasattr``.
+        self.maybe: list[tuple[ast.Call, int, bool, bool]] = []
 
     # ---- Bereiche und Bindungen
 
@@ -737,7 +771,15 @@ class _Extractor:
             self.expr(node.value)
             if isinstance(node.target, ast.Name):
                 self.load(node.target.id, node.lineno)
-                self.bind(node.target.id, Unknown("erweiterte Zuweisung"), _end(node))
+                grown: IR = Unknown("erweiterte Zuweisung")
+                if isinstance(node.op, ast.Add):
+                    # ``text += …`` ist der Wert davor plus der Zusatz; gelesen an der Stelle davor.
+                    before = node.target.lineno, node.target.col_offset
+                    grown = Add(
+                        Use(node.target.id, self.scope, *before, checking=self.checking),
+                        self.ir(node.value),
+                    )
+                self.bind(node.target.id, grown, _end(node))
             else:
                 self.target(node.target, Unknown("erweiterte Zuweisung"), _end(node))
         elif isinstance(node, ast.While):
@@ -986,6 +1028,8 @@ class _Extractor:
     def expr(self, node: ast.expr) -> None:
         if self.checking or self.f.scopes[self.scope].kind == "typeparams":
             self.f.contexts[(node.lineno, node.col_offset)] = self.scope, self.checking
+        if isinstance(node, (ast.List, ast.Tuple)):
+            self.command(node)
         if isinstance(node, ast.Name):
             if isinstance(node.ctx, ast.Load):
                 self.load(node.id, node.lineno)
@@ -1021,6 +1065,37 @@ class _Extractor:
                     self.expr(child)
                 elif isinstance(child, ast.keyword):
                     self.expr(child.value)
+
+    def command(self, node: ast.List | ast.Tuple) -> None:
+        """``[kopf, …, "-c", skript, …]``: Das Element hinter ``-c`` ist ein Skript, wenn
+        davor nur Schalter eines Interpreters stehen (``-I``, ``-u``, ``-X faulthandler``) — nach
+        ``-m modul`` oder einem Dateinamen gehört ``-c`` dem Programm (``pytest -c``). Ob der Kopf
+        ein Python ist, entscheidet der Index (:class:`Script`); ``-c`` vorn heißt: kein Kopf."""
+        elements = node.elts
+        position = 0 if _text_is(elements[0] if elements else None, "-c") else 1
+        while position < len(elements) - 1:
+            element = elements[position]
+            if not (isinstance(element, ast.Constant) and isinstance(element.value, str)):
+                return
+            if element.value == "-c":
+                break
+            if element.value in ("-X", "-W"):
+                position += 2
+            elif element.value.startswith("-") and element.value not in ("-", "-m"):
+                position += 1
+            else:
+                return
+        else:
+            return
+        script, head = elements[position + 1], elements[0] if position else None
+        if isinstance(script, ast.Starred) or isinstance(head, ast.Starred):
+            return
+        head_ir = None if head is None else self.ir(head)
+        head_text = "" if head is None else ast.unparse(head)
+        at = (script.lineno, script.col_offset)
+        self.f.scripts.append(
+            Script(self.scope, *at, head_ir, head_text, self.ir(script), self.runtime)
+        )
 
     def chain(self, node: ast.Attribute) -> None:
         attrs: list[str] = []
@@ -1081,10 +1156,19 @@ class _Extractor:
             if kind == "getattr" and len(node.args) >= 3:
                 kind = "getattr-default"
             at = (node.lineno, node.col_offset)
-            base, name = self.ir(node.args[0]), self.ir(node.args[1])
+            base, name, called = (self.ir(part) for part in (node.args[0], node.args[1], func))
+            # Mit ``func``: Ob der Name der eingebaute ist und kein Parameter oder eine eigene
+            # Bindung gleichen Namens, faltet der Index wie beim Alias (RR2-6).
             self.f.refs.append(
-                Ref(kind, self.scope, *at, base, (), name, self.runtime, self.checking)
+                Ref(kind, self.scope, *at, base, (), name, self.runtime, self.checking, called)
             )
+        elif len(node.args) >= 2 and (
+            isinstance(func, ast.Name)
+            or (isinstance(func, ast.Attribute) and func.attr in ("getattr", "hasattr"))
+        ):
+            # Vielleicht ``has(M, "N")`` mit ``has = hasattr``: ob ``has`` in der Datei so
+            # gebunden wird, steht erst am Ende fest (:meth:`queries`).
+            self.maybe.append((node, self.scope, self.runtime, self.checking))
         last = func.id if isinstance(func, ast.Name) else _dotted(func) or ""
         last = last.rpartition(".")[2]
         if last in ("import_module", "importorskip") and node.args:
@@ -1189,8 +1273,32 @@ class _Extractor:
         for scope in facts.scopes:
             scope.loads = {}
         self.grown()
+        self.queries()
         if self.in_tests:
             self.helper_calls()
+
+    def queries(self) -> None:
+        """Behält die Aufrufe, die ``getattr``/``hasattr`` unter anderem Namen sein können: über
+        einen Namen, den die Datei an einen von beiden bindet (``has = hasattr``, ``from
+        builtins import hasattr as has``), oder als Attribut (``builtins.hasattr``). Welcher es
+        ist, faltet der Index; ein Alias aus einem anderen Modul sieht der Auszug nicht."""
+        aliases = {
+            name
+            for scope in self.f.scopes
+            for name, binds in scope.binds.items()
+            if any(query_alias(bind.value) for bind in binds)
+        }
+        for node, number, runtime, checking in self.maybe:
+            func = node.func
+            if isinstance(func, ast.Name) and func.id not in aliases:
+                continue
+            kind = "query-default" if len(node.args) >= 3 else "query"
+            at = (node.lineno, node.col_offset)
+            base, name, called = (
+                to_ir(part, number, comps=self.comps, checking=checking)
+                for part in (node.args[0], node.args[1], func)
+            )
+            self.f.refs.append(Ref(kind, number, *at, base, (), name, runtime, checking, called))
 
     def grown(self) -> None:
         """Hängt an jede Bindung eines Behälters, was der Code später hineinlegt.
@@ -1245,6 +1353,20 @@ class _Extractor:
 
 #: Methoden, die einen Behälter füllen; ``setdefault`` legt ein Paar ab, ``update`` öffnet.
 _FILLS = frozenset({"append", "add", "insert", "extend", "appendleft", "setdefault", "update"})
+
+
+def _text_is(node: ast.expr | None, text: str) -> bool:
+    return isinstance(node, ast.Constant) and node.value == text
+
+
+def query_alias(value: IR) -> bool:
+    """Ob eine Bindung ``getattr``/``hasattr`` unter anderem Namen sein kann."""
+    queries = ("getattr", "hasattr")
+    if isinstance(value, Use):
+        return value.name in queries
+    if isinstance(value, FromRef):
+        return value.module == "builtins" and value.name in queries
+    return isinstance(value, Attr) and value.attr in queries and isinstance(value.base, Use)
 
 
 def _container(value: IR) -> bool:
@@ -1386,6 +1508,20 @@ def extract(path: str, source: bytes) -> Facts:
     return facts
 
 
+def extract_script(path: str, text: str) -> Facts | None:
+    """Der Auszug eines Skripts aus einer Zeichenkette (CS-18), oder ``None``, wenn der Text
+    kein Python ist. ``path`` ist ein eigener Schlüssel; als ``-c`` gestartet heißt das Modul
+    ``__main__``, und es liegt in keinem Bereich: Es liest keinen Namen zur Aufrufzeit eines
+    Moduls aus ``app/`` oder ``tools/`` und hat keine Patch-Stellen."""
+    try:
+        tree = ast.parse(text, filename=path)
+    except SyntaxError, ValueError:
+        return None
+    facts = Facts(path, "__main__", "script", False, False, text.count("\n"))
+    _Extractor(facts).run(tree)
+    return facts
+
+
 def source_files(root: Path) -> list[tuple[str, Path]]:
     """Alle ``*.py`` und ``*.pyi`` unter den Bereichen, sortiert, ohne ``__pycache__`` und
     Punktordner. Gelesen wird das Dateisystem, nicht Git: So geht dasselbe an einer Attrappe,
@@ -1410,12 +1546,15 @@ def source_files(root: Path) -> list[tuple[str, Path]]:
 # ---------------------------------------------------------------------- Zwischenspeicher
 
 
+#: Die Quelle, wie dieser Prozess sie geladen hat; ``tools.code_store`` bildet daraus den Stand
+#: des Auflösers, nicht aus der Platte (RR2-1).
+_SOURCE = Path(__file__).read_bytes()
+
 #: Der Stand beim Import, nicht beim Bau: Ein Prozess, der den alten Code geladen hat, während
 #: die Datei schon neu ist, schrieb sonst alte Auszüge unter dem neuen Stand (gemessen: ein
-#: Lauf ohne ``import_reads`` unter dem Stand mit).
-_STAMP = hashlib.sha256(
-    Path(__file__).read_bytes() + Path(__file__).with_name("code_cache.py").read_bytes()
-).hexdigest()
+#: Lauf ohne ``import_reads`` unter dem Stand mit). Ebenso ``code_cache``: dessen geladene
+#: Quelle, nicht die auf der Platte (RR2-13).
+_STAMP = hashlib.sha256(_SOURCE + code_cache._SOURCE).hexdigest()
 
 
 def stamp() -> str:
@@ -1423,27 +1562,16 @@ def stamp() -> str:
     return _STAMP
 
 
-def load_cache(path: Path, current: str) -> dict[str, tuple[str, Facts]]:
-    """Die gespeicherten Auszüge je Pfad mit ihrem Inhaltshash; leer bei anderem Stand."""
-    from tools.code_cache import decode
-
-    return decode(path, current)
+def load_cache(
+    path: Path, current: str, wanted: dict[str, str] | None = None
+) -> dict[str, tuple[str, Facts]]:
+    """Die gespeicherten Auszüge je Pfad mit ihrem Inhaltshash; leer bei anderem Stand. Mit
+    ``wanted`` (Pfad → Hash) nur die Auszüge, deren Inhalt noch so aussieht."""
+    return code_cache.decode(path, current, wanted)
 
 
 def save_cache(path: Path, current: str, files: dict[str, tuple[str, Facts]]) -> None:
-    """Schreibt über eine eigene Zwischendatei und ersetzt dann; ein zweiter Prozess liest so nie
-    eine halbe Datei. Hält ein anderer die Datei gerade offen, bleibt dessen Stand — seine
-    Einträge sind nach Inhaltshash ebenso gültig, fehlende zieht der nächste Bau nach."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    from tools.code_cache import encode
-
-    data = encode(current, files)
-    temporary.write_bytes(data)
-    for _attempt in range(20):
-        try:
-            temporary.replace(path)
-            return
-        except PermissionError:
-            time.sleep(0.05)
-    temporary.unlink()
+    """Über :func:`tools.code_cache.replace_atomically`; ein zweiter Prozess liest so nie eine
+    halbe Datei. Hält ein anderer die Datei gerade offen, bleibt dessen Stand — seine Einträge
+    sind nach Inhaltshash ebenso gültig, fehlende zieht der nächste Bau nach."""
+    code_cache.replace_atomically(path, code_cache.encode(current, files))
