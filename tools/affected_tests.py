@@ -50,8 +50,8 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
 Gewählt werden nur Testdateien: Aus einem Helfer sammelt pytest nichts, er
 steht für die Testdateien, die ihn importieren.
 
-Und ``tests/conftest.py`` ist die Ausnahme von allem: Wer es ändert, ändert
-jeden Test.
+Und ``conftest.py`` ist die Ausnahme von allem, die unter ``tests/`` wie die an der Wurzel,
+die für jede Sitzung ``load_operations()`` fährt: Wer eine ändert, ändert jeden Test.
 
 **Was das nicht ist: das Tor.** Die Auswahl sagt, was eine Änderung *sicher*
 berührt; das Tor sagt, ob der Stand *insgesamt* trägt. Auf Paket- und
@@ -74,6 +74,7 @@ from __future__ import annotations
 import argparse
 import ast
 import functools
+import gc
 import os
 import re
 import subprocess
@@ -81,6 +82,7 @@ import sys
 import zipfile
 from collections import defaultdict
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -91,14 +93,10 @@ PYTHON = Path(sys.executable)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools import tree_reads  # noqa: E402
+from tools import data_reads, tree_reads  # noqa: E402
 
-#: Die Pakete, deren Importgraph gelesen wird. ``app`` und ``tools`` reisen
-#: als Module, ``tests`` sind die Blätter.
-PACKAGES = ("app", "tools", "tests")
-
-#: Aufrufe, deren Argument ein Pfadteil ist: ``Path("app", "ui")``, ``os.path.join``.
-_PATH_CALLS = frozenset({"Path", "PurePath", "PurePosixPath", "join"})
+#: Die Pakete, deren Importgraph gelesen wird — eine Quelle mit dem Auflöser (F-7).
+PACKAGES = tree_reads.PACKAGES
 
 #: Die Dekoratoren, über die ein Modul Operationen und Bausteine registriert.
 _REGISTRATIONS = {"register_op": "die Operation", "register_part": "den Baustein"}
@@ -137,8 +135,9 @@ _EXAMPLES = "app.core.examples"
 _EXAMPLES_FOLDER = PurePosixPath("app/examples")
 _PROJECT = "app.core.scene.project"
 
-#: Änderungen hieran betreffen jeden Test.
-_EVERYTHING = frozenset({"tests/conftest.py", "pyproject.toml", "constraints.txt"})
+#: Änderungen hieran betreffen jeden Test — auch die ``conftest.py`` an der Wurzel, die jede
+#: Sitzung vor der Sammlung lädt (CS-37).
+_EVERYTHING = frozenset({"conftest.py", "tests/conftest.py", "pyproject.toml", "constraints.txt"})
 
 #: Arbeiter für die Gruppe ``plain`` von ``--run`` — fest, nie ``-n auto`` (``tests.md``):
 #: Agenten laufen nebeneinander, und eine Zahl an der Kernzahl ist eine stille Variable.
@@ -158,17 +157,18 @@ def module_name(path: Path, root: Path = ROOT) -> str:
     return ".".join(parts)
 
 
-def imports_of(path: Path, name: str) -> set[str]:
-    """Jedes Importziel der Datei als Modulname — eifrig, träge und für Typen."""
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    except SyntaxError:
-        # Ein fremder Zwischenstand im geteilten Baum. Die Datei zählt als
-        # Blatt ohne Kanten; ihr eigener Lauf sagt dann, was los ist.
-        return set()
-    package = name if path.name == "__init__.py" else name.rpartition(".")[0]
+def imports_of(tree: ast.Module, name: str, *, initializer: bool) -> set[str]:
+    """Jedes Importziel eines Syntaxbaums als Modulname — eifrig, träge und für Typen.
+
+    Eine Datei mit Syntaxfehler, ein fremder Zwischenstand im geteilten Baum, kommt als
+    leerer Baum (:meth:`tools.tree_reads.Resolver.tree`) und zählt als Blatt ohne Kanten; ihr
+    eigener Lauf sagt dann, was los ist.
+    """
+    package = name if initializer else name.rpartition(".")[0]
     found: set[str] = set()
-    for node in ast.walk(tree):
+    # Ein Import ist eine Anweisung: Die Ausdrücke, die den größten Teil des Baums ausmachen,
+    # brauchen keinen Gang (F-6).
+    for node in tree_reads.statements(tree):
         if isinstance(node, ast.Import):
             found.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
@@ -183,13 +183,91 @@ def imports_of(path: Path, name: str) -> set[str]:
     return found
 
 
+#: Woran ein Modul einen verzögerten Import tragen kann.
+_LAZY_WORDS = re.compile(r"\bimport_module\s*\(|\binstall\s*\(")
+
+
+def lazy_imports(
+    resolver: tree_reads.Resolver, relative: str, name: str, *, initializer: bool
+) -> set[str]:
+    """Verzögerte Importe als Kanten (F-3): ``import_module("app.core.scene.evaluate")``, auch
+    über ``f"{__package__}.registry"`` oder eine Konstante, und die Ziele von
+    ``app.core.lazy.install(__name__, _EXPORTS)`` — ``from app.core.knowledge.parts import PARTS``
+    lädt ``parts/builtin.py``, und keine Importanweisung sagt es."""
+    if _LAZY_WORDS.search(resolver.text(relative)) is None:
+        return set()
+    package = name if initializer else name.rpartition(".")[0]
+    tree = resolver.tree(relative)
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        called = _called(node)
+        if called == "import_module":
+            target = _module_text(resolver, relative, node.args[0], name, package)
+            if target and not target.startswith("."):
+                found.add(target)
+        elif called == "install" and len(node.args) >= 2:
+            owner = _module_text(resolver, relative, node.args[0], name, package)
+            table = _module_level_value(tree, node.args[1])
+            if owner and isinstance(table, ast.Dict):
+                found.update(
+                    f"{owner}.{entry.elts[0].value}"
+                    for entry in table.values
+                    if isinstance(entry, ast.Tuple)
+                    and entry.elts
+                    and isinstance(entry.elts[0], ast.Constant)
+                    and isinstance(entry.elts[0].value, str)
+                )
+    return found
+
+
+def _module_text(
+    resolver: tree_reads.Resolver, relative: str, node: ast.expr, name: str, package: str
+) -> str | None:
+    """Ein Modulname als Text: Konstante, ``__name__``, ``__package__`` oder ein f-String aus
+    ihnen; sonst ``None``."""
+    if isinstance(node, ast.Name) and node.id in ("__name__", "__package__"):
+        return name if node.id == "__name__" else package
+    if isinstance(node, ast.JoinedStr):
+        pieces: list[str] = []
+        for part in node.values:
+            inner = part.value if isinstance(part, ast.FormattedValue) else part
+            text = _module_text(resolver, relative, inner, name, package)
+            if text is None:
+                return None
+            pieces.append(text)
+        return "".join(pieces)
+    value = resolver.value_at(relative, node)
+    return value if isinstance(value, str) else None
+
+
+def _module_level_value(tree: ast.Module, node: ast.expr) -> ast.expr | None:
+    """Der Wert, an den ein Name auf Modulebene einmal gebunden ist."""
+    if not isinstance(node, ast.Name):
+        return node
+    found = [
+        statement.value
+        for statement in tree.body
+        if (
+            isinstance(statement, ast.Assign)
+            and any(isinstance(one, ast.Name) and one.id == node.id for one in statement.targets)
+        )
+        or (
+            isinstance(statement, ast.AnnAssign)
+            and isinstance(statement.target, ast.Name)
+            and statement.target.id == node.id
+        )
+    ]
+    return found[0] if len(found) == 1 else None
+
+
 class ImportGraph:
     """Wer importiert wen — über ``app``, ``tools`` und ``tests``."""
 
     def __init__(self, root: Path = ROOT) -> None:
         self.root = root
         self._strings: dict[str, tuple[str, ...]] = {}
-        self._texts: dict[str, str] = {}
         self.modules: dict[str, Path] = {}
         for package in PACKAGES:
             folder = root / package
@@ -207,7 +285,14 @@ class ImportGraph:
             parts = name.split(".")
             for depth in range(1, len(parts)):
                 self.importers[".".join(parts[:depth])].add(name)
-            for target in imports_of(path, name):
+            # Über den Auflöser: Jede Datei wird je Lauf einmal gelesen und geparst, und was
+            # die Auswahl danach fragt, liest denselben Baum (F-6).
+            relative = path.relative_to(root).as_posix()
+            initializer = path.name == "__init__.py"
+            tree = self.resolver.tree(relative)
+            targets = imports_of(tree, name, initializer=initializer)
+            targets |= lazy_imports(self.resolver, relative, name, initializer=initializer)
+            for target in targets:
                 # Auch fehlende Ziele bleiben Knoten: Nach dem Löschen
                 # müssen relative und mittelbare Importe noch auffindbar sein.
                 if target != name:
@@ -240,7 +325,8 @@ class ImportGraph:
 
     @functools.cached_property
     def resolver(self) -> tree_reads.Resolver:
-        """Der statische Auflöser für Ordner, einer je Graph — er parst jede Datei einmal."""
+        """Der statische Auflöser für Ordner, einer je Graph — er liest und parst jede Datei
+        einmal, für den Graphen wie für jede Frage danach."""
         return tree_reads.Resolver(self.root, working_root=True)
 
     @functools.cached_property
@@ -254,9 +340,19 @@ class ImportGraph:
         """Wie :attr:`reads`, mit jedem Muster — für eine geänderte Datei, die kein Python ist."""
         return self._reads(python_only=False)
 
+    @functools.cached_property
+    def _facts(self) -> tree_reads.Facts:
+        """Was je Datei gilt — einmal je Graph, für die Leser über Python und über alles."""
+        return tree_reads.Facts()
+
     def _reads(self, *, python_only: bool) -> dict[str, list[tree_reads.Borrowed]]:
         analysis = tree_reads.TreeReads(
-            self.root, self.modules, self.importers, self.resolver, python_only=python_only
+            self.root,
+            self.modules,
+            self.importers,
+            self.resolver,
+            python_only=python_only,
+            facts=self._facts,
         )
         return analysis.readers(
             path.relative_to(self.root).as_posix()
@@ -269,14 +365,13 @@ class ImportGraph:
         Anweisung zählen nicht, Kommentare stehen gar nicht im Baum."""
         if name not in self._strings:
             relative = self.modules[name].relative_to(self.root).as_posix()
-            tree, _parents = self.resolver.parsed(relative)
+            tree = self.resolver.tree(relative)
             self._strings[name] = _strings_of(tree)
         return self._strings[name]
 
     def text(self, name: str) -> str:
-        if name not in self._texts:
-            self._texts[name] = self.modules[name].read_text(encoding="utf-8")
-        return self._texts[name]
+        """Der Text eines Moduls, über den Auflöser einmal je Lauf gelesen."""
+        return self.resolver.text(self.modules[name].relative_to(self.root).as_posix())
 
     def names_in_strings(self, name: str, word: str) -> bool:
         """Ob das Modul ``word`` in einer seiner Zeichenketten nennt; erst der Text, dann der
@@ -303,15 +398,15 @@ class ImportGraph:
             if _is_test_file(self, name) or _CREATES.search(self.text(name)) is None:
                 continue
             relative = self.modules[name].relative_to(self.root).as_posix()
-            tree, parents = self.resolver.parsed(relative)
-            for node in ast.walk(tree):
-                if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
-                    continue
-                parent = parents.get(node)
-                if (isinstance(parent, ast.keyword) and parent.arg == "op") or isinstance(
-                    parent, ast.Return
-                ):
-                    found[node.value].add(name)
+            for node in ast.walk(self.resolver.tree(relative)):
+                value = (
+                    node.value
+                    if isinstance(node, ast.Return)
+                    or (isinstance(node, ast.keyword) and node.arg == "op")
+                    else None
+                )
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    found[value.value].add(name)
         return found
 
     @functools.cached_property
@@ -357,6 +452,65 @@ class ImportGraph:
                     found[name] = reason
         return found
 
+    def loading_conftests(self, name: str) -> list[str]:
+        """Die ``conftest.py``, die ``name`` beim Laden mittelbar importieren."""
+        return sorted(
+            conftest for conftest, loaded in self._conftest_loads.items() if name in loaded
+        )
+
+    @functools.cached_property
+    def _conftest_loads(self) -> dict[str, set[str]]:
+        """Je ``conftest.py`` die Module, die ihr Laden mittelbar importiert."""
+        forward: dict[str, set[str]] = defaultdict(set)
+        for target, importers in self.importers.items():
+            resolved = self.resolve(target)
+            for importer in importers:
+                forward[importer].update(one for one in (target, resolved) if one in self.modules)
+        found: dict[str, set[str]] = {}
+        for conftest in self._conftests:
+            relative = conftest.relative_to(self.root).as_posix()
+            name = module_name(conftest, self.root)
+            start = (
+                forward.get(name, set())
+                if name in self.modules
+                else {
+                    one
+                    for one in map(
+                        self.resolve,
+                        imports_of(self.resolver.tree(relative), name, initializer=False),
+                    )
+                    if one is not None
+                }
+            )
+            seen = set(start)
+            queue = list(start)
+            while queue:
+                for one in forward.get(queue.pop(), ()):
+                    if one not in seen:
+                        seen.add(one)
+                        queue.append(one)
+            found[relative] = seen
+        return found
+
+    @functools.cached_property
+    def _conftests(self) -> list[Path]:
+        """Jede ``conftest.py`` unter den Paketen und die an der Wurzel."""
+        found = [path for path in self.modules.values() if path.name == "conftest.py"]
+        if (self.root / "conftest.py").is_file():
+            found.append(self.root / "conftest.py")
+        return sorted(found)
+
+    @functools.cached_property
+    def per_test(self) -> dict[str, str]:
+        """Je Modul, das eine ``conftest.py`` für jeden Test ausführt, deren Ort
+        (:func:`_run_for_every_test`) — einmal je Graph."""
+        found: dict[str, str] = {}
+        for conftest in self._conftests:
+            relative = conftest.relative_to(self.root).as_posix()
+            for name in sorted(_run_for_every_test(self, relative)):
+                found.setdefault(name, relative)
+        return found
+
 
 #: ``tests/conftest.py`` lädt pytest als Plugin unter seinem bloßen Namen;
 #: ``import conftest`` erreicht genau dieses geladene Modul und lädt keine
@@ -392,13 +546,9 @@ def bare_local_imports(graph: ImportGraph) -> list[str]:
     for name, path in graph.modules.items():
         if name.split(".")[0] not in ("tests", "tools"):
             continue
-        text = path.read_text(encoding="utf-8")
-        if not statement.search(text):
+        if not statement.search(graph.text(name)):
             continue
-        try:
-            tree = ast.parse(text, filename=str(path))
-        except SyntaxError:
-            continue
+        tree = graph.resolver.tree(path.relative_to(graph.root).as_posix())
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 targets = [alias.name for alias in node.names]
@@ -474,8 +624,11 @@ def _called(node: ast.Call) -> str:
     return function.attr if isinstance(function, ast.Attribute) else getattr(function, "id", "")
 
 
-def _tree_readers(graph: ImportGraph, paths: Iterable[PurePosixPath]) -> dict[str, str]:
-    """Die Testdateien, die den Ordner einer dieser Dateien lesen, je mit dem Grund.
+def _tree_readers(
+    graph: ImportGraph, paths: Iterable[PurePosixPath]
+) -> dict[str, tuple[str, frozenset[str]]]:
+    """Die Testdateien, die den Ordner einer dieser Dateien lesen, je mit dem Grund und den
+    Einheiten, die ihn lesen (:attr:`tools.tree_reads.Borrowed.unit`).
 
     Was eine Testdatei liest, sagt :mod:`tools.tree_reads` — selbst oder über eine
     Definition, die sie bezieht (``source_tree.python_files``, ``code_facts.source_files``,
@@ -483,19 +636,23 @@ def _tree_readers(graph: ImportGraph, paths: Iterable[PurePosixPath]) -> dict[st
     Pfad mit Ordner und Muster deckt (:meth:`tools.tree_reads.Read.covers`).
     """
     wanted = list(paths)
-    found: dict[str, str] = {}
+    found: dict[str, tuple[str, frozenset[str]]] = {}
     python = all(path.suffix == ".py" for path in wanted)
     for relative, borrowed in sorted((graph.reads if python else graph.all_reads).items()):
-        hit = next((one for path in wanted for one in borrowed if one.read.covers(path)), None)
-        if hit is None:
+        hits = [one for path in wanted for one in borrowed if one.read.covers(path)]
+        if not hits:
             continue
+        hit = hits[0]
         what = f"liest {hit.read.describe()}"
         reason = (
             f"{what} ({hit.read.site})"
             if hit.lender == relative
             else f"{what} über {hit.read.site}"
         )
-        found[module_name(graph.root / relative, graph.root)] = reason
+        found[module_name(graph.root / relative, graph.root)] = (
+            reason,
+            frozenset(one.unit for one in hits),
+        )
     return found
 
 
@@ -505,7 +662,7 @@ def _registered(graph: ImportGraph, name: str) -> list[tuple[str, str]]:
     if not any(word in graph.text(name) for word in _REGISTRATIONS):
         return []
     relative = graph.modules[name].relative_to(graph.root).as_posix()
-    tree, _parents = graph.resolver.parsed(relative)
+    tree = graph.resolver.tree(relative)
     found: list[tuple[str, str]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -566,35 +723,135 @@ def _goes_over_everything(graph: ImportGraph, name: str) -> str | None:
     if not any(word in text for word in _REGISTRIES):
         return None
     relative = graph.modules[name].relative_to(graph.root).as_posix()
-    tree, parents = graph.resolver.parsed(relative)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Name):
-            word = node.id
-        elif isinstance(node, ast.Attribute):
-            word = node.attr
+    # Vom Träger aus gefragt, nicht vom Register: So braucht der Gang keine Eltern (F-6).
+    for node in ast.walk(graph.resolver.tree(relative)):
+        if isinstance(node, ast.Attribute):
+            whole = node.attr in _WHOLE_REGISTRY and _is_registry(node.value)
+        elif isinstance(node, ast.Call):
+            # Als Argument übergeben, auch als Schlüsselwort: ``rows(registry=REGISTRY)``.
+            whole = _called(node) not in _NOT_OVER and any(
+                _is_registry(one) for one in (*node.args, *(one.value for one in node.keywords))
+            )
+        elif isinstance(node, ast.For | ast.AsyncFor | ast.comprehension):
+            whole = _is_registry(node.iter)
+        elif isinstance(node, ast.Starred):
+            whole = _is_registry(node.value)
         else:
             continue
-        if word not in _REGISTRIES or not isinstance(node.ctx, ast.Load):
-            continue
-        parent = parents.get(node)
-        if isinstance(parent, ast.Attribute):
-            if parent.attr in _WHOLE_REGISTRY:
-                return "geht über das ganze Register"
-        elif isinstance(parent, ast.Call | ast.keyword):
-            # Als Argument übergeben, auch als Schlüsselwort: ``rows(registry=REGISTRY)``.
-            call = parent if isinstance(parent, ast.Call) else parents.get(parent)
-            if (
-                isinstance(call, ast.Call)
-                and call.func is not node
-                and _called(call) not in _NOT_OVER
-            ):
-                return "geht über das ganze Register"
-        elif (
-            isinstance(parent, ast.For | ast.comprehension | ast.Starred)
-            and getattr(parent, "iter", node) is node
-        ):
+        if whole:
             return "geht über das ganze Register"
     return None
+
+
+def _run_for_every_test(graph: ImportGraph, relative: str) -> set[str]:
+    """Die Module, deren Code eine ``conftest.py`` für jeden Test ausführt (CS-38).
+
+    Das ist, was ihre Haken (``pytest_*``) und ihre ``autouse``-Fixtures importieren oder über
+    einen Namen der Modulebene benutzen, was die Modulebene selbst tut (``load_operations()``
+    der Wurzel, ``PROFILE_VARIABLES``), auch über Funktionen der Datei, die eines davon ruft,
+    und ein Import, der nur seiner Wirkung wegen steht (``import app.ui``). Ein Modul, das die
+    Datei nur lädt, gehört nicht dazu: Ein Ladefehler darin macht jeden Test rot, auch jeden
+    gewählten, und sein Verhalten wirkt nur, wo es gerufen wird — das tragen Importeure und
+    Kanten (Entscheidung Koordinator). Ermittelt aus der Datei, ohne Liste: Ein neuer Haken
+    oder eine neue autouse-Fixture zieht ihre Module mit.
+    """
+    tree = graph.resolver.tree(relative)
+    package = ".".join(PurePosixPath(relative).parent.parts)
+    bound: dict[str, str] = {}
+    imported: list[tuple[str, str]] = []
+    functions: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+    for statement in tree.body:
+        if isinstance(statement, ast.Import):
+            for alias in statement.names:
+                head = alias.asname or alias.name.split(".")[0]
+                bound[head] = alias.name if alias.asname else head
+                imported.append((head, alias.name))
+        elif isinstance(statement, ast.ImportFrom):
+            source = _imported_module(statement, package)
+            for alias in statement.names:
+                bound[alias.asname or alias.name] = f"{source}.{alias.name}"
+        elif isinstance(statement, ast.FunctionDef | ast.AsyncFunctionDef):
+            functions[statement.name] = statement
+    targets: set[str] = set()
+    queue: list[ast.AST] = [
+        statement
+        for statement in tree.body
+        if not isinstance(statement, ast.Import | ast.ImportFrom | ast.ClassDef)
+        and (
+            not isinstance(statement, ast.FunctionDef | ast.AsyncFunctionDef)
+            or statement.name.startswith("pytest_")
+            or data_reads.is_autouse(statement)
+        )
+    ]
+    done = {one.name for one in queue if isinstance(one, ast.FunctionDef | ast.AsyncFunctionDef)}
+    while queue:
+        unit = queue.pop()
+        if isinstance(unit, ast.FunctionDef | ast.AsyncFunctionDef):
+            # Was eine autouse-Fixture anfordert, läuft mit ihr: ``def _x(tmp_path, other):``.
+            for argument in (*unit.args.posonlyargs, *unit.args.args, *unit.args.kwonlyargs):
+                if argument.arg in functions and argument.arg not in done:
+                    done.add(argument.arg)
+                    queue.append(functions[argument.arg])
+        for node in ast.walk(unit):
+            if isinstance(node, ast.Import):
+                targets.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                source = _imported_module(node, package)
+                targets.add(source)
+                targets.update(f"{source}.{alias.name}" for alias in node.names)
+            elif isinstance(node, ast.Name | ast.Attribute) and isinstance(node.ctx, ast.Load):
+                chain = _dotted(node)
+                if chain is None:
+                    continue
+                head, _dot, rest = chain.partition(".")
+                if head in bound:
+                    targets.add(f"{bound[head]}.{rest}" if rest else bound[head])
+                if head in functions and head not in done:
+                    done.add(head)
+                    queue.append(functions[head])
+    every_name = {
+        node.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+    }
+    # Ein Import, dessen Name nie gelesen wird, steht seiner Wirkung wegen.
+    targets.update(module for head, module in imported if head not in every_name)
+    return {
+        resolved
+        for resolved in (graph.resolve(one) for one in targets)
+        if resolved is not None and not _is_test_file(graph, resolved)
+    }
+
+
+def _imported_module(statement: ast.ImportFrom, package: str) -> str:
+    """Das Modul hinter ``from … import``, auch relativ zu ``package``."""
+    if not statement.level:
+        return statement.module or ""
+    base = package.split(".") if package else []
+    base = base[: len(base) - (statement.level - 1)] if statement.level > 1 else base
+    return ".".join([*base, statement.module] if statement.module else base)
+
+
+def _dotted(node: ast.expr) -> str | None:
+    """``a.b.c`` als Text; ``None`` für alles, was nicht mit einem Namen beginnt."""
+    parts: list[str] = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if not isinstance(node, ast.Name):
+        return None
+    return ".".join([node.id, *reversed(parts)])
+
+
+def _is_registry(node: ast.expr) -> bool:
+    """Ob ``node`` ``REGISTRY`` oder ``PARTS`` liest — als Name oder als letztes Glied."""
+    if isinstance(node, ast.Name):
+        word = node.id
+    elif isinstance(node, ast.Attribute):
+        word = node.attr
+    else:
+        return False
+    return word in _REGISTRIES and isinstance(node.ctx, ast.Load)
 
 
 def _loaders(
@@ -622,7 +879,9 @@ def _loaders(
     return found, projects
 
 
-def _data_readers(graph: ImportGraph, file: PurePosixPath) -> list[str]:
+def _data_readers(
+    graph: ImportGraph, file: PurePosixPath, *, source: bool = False, units: bool = False
+) -> list[str]:
     """Die Module, die eine Datendatei unter ``app/``, ``tests/data/`` oder ``website/`` lesen;
     eine Änderung an der Datei ist eine Änderung an ihnen (Entscheidung Koordinator).
 
@@ -633,31 +892,47 @@ def _data_readers(graph: ImportGraph, file: PurePosixPath) -> list[str]:
     Nur aufgelöste Orte zählen — ein offener Ordner läse jede Datei —, und nur ein Muster, das
     eine Art Datei meint: ``make_installer`` kopiert ``app/**/*`` und hinge sonst mit
     163 Testdateien an jeder ``CLAUDE.md``.
+
+    Mit ``source`` ist die Datei Python, gleich wo sie liegt, und gelesen wird sie nur über einen
+    Pfad, der ihren vollen Namen trägt: ``app/i18n/extract.py`` liest die Erzeuger unter
+    ``tools/`` als Quelltext (``EXTRA_SOURCES``) für ``test_translations`` (F-2). Eine
+    Lesestelle über einen Ordner mit Python wählt dort schon :func:`_tree_readers`, und als
+    Leser hinge sonst jede Änderung unter ``app/`` an allem, was ``extract`` importiert.
+
+    Mit ``units`` bleiben die Module unter ``tests/`` draußen: Sie lesen je Einheit
+    (:mod:`tools.data_reads`).
     """
     folder = re.compile(_folder_pattern(file.parent.name))
     stem = re.compile(f"[\"']{re.escape(file.stem)}[\"']")
     found: list[str] = []
     for name, path in graph.modules.items():
+        if units and name.startswith("tests."):
+            continue
         # Erst der Text: die Datei beim Namen, oder ihr Ordner neben einer Lesestelle.
         text = graph.text(name)
-        if (
-            file.name not in text
-            and stem.search(text) is None
-            and (folder.search(text) is None or tree_reads.READ_WORDS.search(text) is None)
+        if file.name not in text and (
+            source
+            or (
+                stem.search(text) is None
+                and (folder.search(text) is None or tree_reads.READ_WORDS.search(text) is None)
+            )
         ):
             continue
-        if _reads_data(graph, name, path.relative_to(graph.root).as_posix(), file):
+        if _reads_data(graph, name, path.relative_to(graph.root).as_posix(), file, source=source):
             found.append(name)
     return found
 
 
-def _reads_data(graph: ImportGraph, name: str, relative: str, file: PurePosixPath) -> bool:
+def _reads_data(
+    graph: ImportGraph, name: str, relative: str, file: PurePosixPath, *, source: bool = False
+) -> bool:
     """Ob das Modul ``name`` die Datei ``file`` liest (:func:`_data_readers`)."""
     resolver = graph.resolver
-    tree, _parents = resolver.parsed(relative)
-    named = bool({file.name, file.stem} & set(graph.strings(name)))
+    tree = resolver.tree(relative)
+    names = {file.name} if source else {file.name, file.stem}
+    named = bool(names & set(graph.strings(name)))
     for node in ast.walk(tree):
-        if not _is_path_expression(node):
+        if not data_reads.is_path_expression(node):
             continue
         assert isinstance(node, ast.expr)
         values = tree_reads.options(resolver.value_at(relative, node))
@@ -674,6 +949,8 @@ def _reads_data(graph: ImportGraph, name: str, relative: str, file: PurePosixPat
             left = resolver.value_at(relative, base)
             if isinstance(left, tree_reads.Place) and left.parts == file.parent.parts:
                 return True
+    if source:
+        return False
     for site in tree_reads.sites(resolver, relative):
         for read in tree_reads.evaluate_site(resolver, site, None):
             if (
@@ -696,7 +973,7 @@ def _folder_pattern(folder: str) -> str:
     return "[\"'/]" + re.escape(folder) + "[\"'/]"
 
 
-def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
+def _named_readers(graph: ImportGraph, file: Path, *, units: bool = False) -> dict[str, str]:
     """Testdateien, die von einer Datei außerhalb des Importgraphen abhängen — auf zwei Wegen.
 
     **Der Name allein genügt nicht, und das hat am 03.09.2026 eine CI-Runde
@@ -721,7 +998,7 @@ def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
     """
     found: dict[str, str] = {}
     for name in graph.modules:
-        if name.startswith("tests.") and graph.names_in_strings(name, file.name):
+        if not units and name.startswith("tests.") and graph.names_in_strings(name, file.name):
             found[name] = f"nennt {file.name}"
 
     # Der Ordner, in dem die Datei liegt — ``changelog``, ``locales``,
@@ -747,10 +1024,13 @@ def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
     if folder.parent.name not in ("", "app", "tests", "tools"):
         words.append(folder.parent.name)
     patterns = [re.compile(_folder_pattern(word)) for word in words]
+    # Mit ``units`` lesen Module unter ``tests/`` je Einheit (:mod:`tools.data_reads`): Nicht
+    # jede Funktion eines Helfers, der den Ordner nennt, liest die Datei.
     readers = [
         name
         for name in graph.modules
-        if any(one.search(graph.text(name)) for one in patterns)
+        if not (units and name.startswith("tests."))
+        and any(one.search(graph.text(name)) for one in patterns)
         and _reads_folder(graph, name, folder, relative)
     ]
     # Der Namensweg oben ist der genauere und behält den Vorrang, danach
@@ -780,9 +1060,9 @@ def _reads_folder(
     (``"changelog"``); ein bloßes ``"data"`` als Schlüssel eines Wörterbuchs liest nichts.
     """
     relative = graph.modules[name].relative_to(graph.root).as_posix()
-    tree, _parents = graph.resolver.parsed(relative)
+    tree = graph.resolver.tree(relative)
     for node in ast.walk(tree):
-        if not _is_path_expression(node):
+        if not data_reads.is_path_expression(node):
             continue
         assert isinstance(node, ast.expr)
         value = graph.resolver.value_at(relative, node)
@@ -823,18 +1103,6 @@ def _reads_folder(
     return False
 
 
-def _is_path_expression(node: ast.AST) -> bool:
-    """``a / b``, ``Path(…)``, ``os.path.join(…)``, ``x.joinpath(…)``."""
-    if isinstance(node, ast.BinOp):
-        return isinstance(node.op, ast.Div)
-    if not isinstance(node, ast.Call):
-        return False
-    function = node.func
-    if isinstance(function, ast.Attribute):
-        return function.attr in ("joinpath", "join") or function.attr in _PATH_CALLS
-    return isinstance(function, ast.Name) and function.id in _PATH_CALLS
-
-
 def _note_readers(graph: ImportGraph, reasons: dict[Path, str], found: dict[str, str]) -> None:
     """Trägt die Leser einer Datei ein: Testdateien selbst, für einen Helfer die Testdateien,
     die ihn direkt importieren.
@@ -862,8 +1130,26 @@ def affected(
     was bei einer reinen Doku-Änderung stimmt und bei einer Codeänderung ein
     Zeichen ist, dass ein Test fehlt.
     """
+    found = selection(changed, graph)
+    return set(found.reasons), found.reasons
+
+
+@dataclass(frozen=True)
+class Selection:
+    """Die betroffenen Testdateien, je mit dem Grund — und für die, die allein eine Lesestelle
+    gewählt hat, die Einheiten, die lesen: Test, Fixture oder Klasse beim Namen, ``""`` für
+    die Modulebene. ``ci_selection`` fährt die Fenster und Slicer einer solchen Datei nur,
+    wenn einer ihrer Fälle eine davon erreicht (F-11)."""
+
+    reasons: dict[Path, str]
+    units: dict[Path, frozenset[str]]
+
+
+def selection(changed: Iterable[Path], graph: ImportGraph | None = None) -> Selection:
+    """Wie :func:`affected`, mit den lesenden Einheiten (:class:`Selection`)."""
     graph = graph or ImportGraph()
     reasons: dict[Path, str] = {}
+    units: dict[Path, frozenset[str]] = {}
     changed_modules: set[str] = set()
     deleted_modules: set[str] = set()
     named_tools: list[str] = []
@@ -871,6 +1157,10 @@ def affected(
     data_readers: dict[str, str] = {}
     #: Jede geänderte Datei, neu oder gelöscht — für die, die ihren Ordner lesen.
     paths: list[PurePosixPath] = []
+    #: Testdateien, die eine geänderte Python-Datei selbst über ihren Pfad lesen (F-2).
+    source_tests: dict[str, str] = {}
+    #: Jede geänderte Datei, die kein Python ist — für die Leser je Einheit unter ``tests/``.
+    data_files: list[PurePosixPath] = []
     for path in changed:
         relative = (
             path.relative_to(graph.root).as_posix() if path.is_absolute() else path.as_posix()
@@ -908,11 +1198,23 @@ def affected(
                 # Läufer unter ``.claude/.state/`` — importiert niemand; seine
                 # Tests laden es über den Pfad und nennen dabei den Namen.
                 _note_readers(graph, reasons, _named_readers(graph, graph.root / relative))
-        else:
-            _note_readers(graph, reasons, _named_readers(graph, graph.root / relative))
-            if relative.startswith(_DATA_FOLDERS):
-                for reader in _data_readers(graph, PurePosixPath(relative)):
+            # Wer die Datei über ihren Pfad als Quelltext liest, ändert mit ihr, was er tut —
+            # ``extract.EXTRA_SOURCES`` liest die Erzeuger für ``test_translations`` (F-2).
+            # Die Datei selbst (``Path(__file__)``) ist schon geändert.
+            own = module_name(graph.root / relative, graph.root)
+            for reader in _data_readers(graph, PurePosixPath(relative), source=True):
+                if reader != own and _is_test_file(graph, reader):
+                    source_tests.setdefault(reader, PurePosixPath(relative).name)
+                elif reader != own:
                     data_readers.setdefault(reader, PurePosixPath(relative).name)
+        else:
+            # Ein Helfer unter ``tests/`` liest je Einheit (:mod:`tools.data_reads`), nicht als
+            # ganzes Modul für alle, die ihn importieren.
+            _note_readers(graph, reasons, _named_readers(graph, graph.root / relative, units=True))
+            if relative.startswith(_DATA_FOLDERS):
+                for reader in _data_readers(graph, PurePosixPath(relative), units=True):
+                    data_readers.setdefault(reader, PurePosixPath(relative).name)
+            data_files.append(PurePosixPath(relative))
     # Eine Datendatei ändert, was ihr Leser tut: Sie zählt wie eine Änderung an
     # ihm, mit seinen mittelbaren Importeuren (``materials.toml`` → ``knowledge.profiles``).
     for reader, file_name in sorted(data_readers.items()):
@@ -921,6 +1223,11 @@ def affected(
             if _is_test_file(graph, name):
                 reasons.setdefault(graph.modules[name], f"hängt an {where}, das {file_name} liest")
     changed_modules.update(data_readers)
+    for file in data_files:
+        _note_data_units(graph, reasons, units, file)
+    # Was eine ``conftest.py`` je Test ausführt, wirkt auf jede Testdatei unter ihr (CS-38).
+    for name in sorted(changed_modules & graph.per_test.keys()):
+        _note_group(graph, reasons, graph.per_test[name], f"führt {name} für jeden Test aus")
     dependents = graph.dependents(changed_modules)
     for name in sorted(dependents):
         path = graph.modules[name]
@@ -945,6 +1252,12 @@ def affected(
                 if name.startswith("tests.") and graph.names_in_strings(name, file_name)
             },
         )
+    # Eine Testdatei, die die Quelle über ihren Pfad liest, liest sie — nach den genaueren
+    # Gründen oben (``nennt matrix_unit.py``).
+    for test, file_name in sorted(source_tests.items()):
+        for name in sorted({test} | graph.dependents({test})):
+            if _is_test_file(graph, name):
+                reasons.setdefault(graph.modules[name], f"liest {file_name}")
     # Ein Modul, das Ops registriert, erreichen seine Tests über die Namen — auch wenn es nur
     # mittelbar betroffen ist: ``closure_ops`` importiert ``chamber_ops``, und
     # ``test_closure_ops`` nennt nur ``resize_closure``. Wer über das ganze Register oder die
@@ -961,12 +1274,90 @@ def affected(
         _note_readers(graph, reasons, graph.over_everything)
         loaders, projects = _loaders(graph, registering)
         _note_readers(graph, reasons, loaders)
-        for name, reason in _tree_readers(graph, projects).items():
-            reasons.setdefault(graph.modules[name], reason)
+        _note_reads(graph, reasons, units, _tree_readers(graph, projects))
     if paths:
-        for name, reason in _tree_readers(graph, paths).items():
-            reasons.setdefault(graph.modules[name], reason)
-    return set(reasons), reasons
+        _note_reads(graph, reasons, units, _tree_readers(graph, paths))
+    # Ein Modul, das eine ``conftest.py`` nur lädt, zeigt einen Ladefehler in jedem Test — aber
+    # nur, wenn einer läuft (CS-38).
+    if not reasons:
+        for name in sorted(changed_modules):
+            for conftest in graph.loading_conftests(name):
+                _note_group(graph, reasons, conftest, f"lädt {name}, und sonst wählte nichts")
+    return Selection(reasons, units)
+
+
+def _helper(graph: ImportGraph, name: str) -> bool:
+    """Ob ``name`` ein Helfer unter ``tests/`` ist — ein Modul dort, aus dem pytest nichts
+    sammelt, auch ``conftest.py``."""
+    return name.startswith("tests.") and not _is_test_file(graph, name)
+
+
+def _note_data_units(
+    graph: ImportGraph,
+    reasons: dict[Path, str],
+    units: dict[Path, frozenset[str]],
+    file: PurePosixPath,
+) -> None:
+    """Die Testdateien, die ``file`` über eine Einheit unter ``tests/`` erreichen — selbst, über
+    einen Helfer, eine Fixture, die Modulebene eines Helfers beim Import oder eine
+    autouse-Fixture (:class:`tools.data_reads.DataReads`)."""
+    analysis = data_reads.DataReads(
+        graph.root, graph.modules, graph.importers, graph.resolver, file, graph._facts
+    )
+    tests = {
+        path.relative_to(graph.root).as_posix(): name
+        for name, path in graph.modules.items()
+        if _is_test_file(graph, name)
+    }
+    found: dict[str, tuple[str, frozenset[str]]] = {}
+    for relative, borrowed in sorted(analysis.readers(tests).items()):
+        hits = [one for one in borrowed if one.read.covers(file)]
+        if hits:
+            what, hit = analysis.reason(hits)
+            site = hit.read.site
+            how = f"({site})" if hit.lender == relative else f"über {site}"
+            found[tests[relative]] = (f"{what} {how}", frozenset(one.unit for one in hits))
+    _note_reads(graph, reasons, units, found)
+    for name, path in sorted(graph.modules.items()):
+        relative = path.relative_to(graph.root).as_posix()
+        if not _helper(graph, name):
+            continue
+        hits = [one for one in analysis.import_time(relative) if one.read.covers(file)]
+        if hits:
+            for test in sorted(graph.dependents({name})):
+                if _is_test_file(graph, test):
+                    reasons.setdefault(
+                        graph.modules[test], f"über {relative}: liest {file} beim Import"
+                    )
+        if path.name == "conftest.py" and any(
+            one.read.covers(file) for one in analysis.autouse_reads(relative)
+        ):
+            _note_group(graph, reasons, relative, f"liest {file} in einer autouse-Fixture")
+
+
+def _note_reads(
+    graph: ImportGraph,
+    reasons: dict[Path, str],
+    units: dict[Path, frozenset[str]],
+    found: dict[str, tuple[str, frozenset[str]]],
+) -> None:
+    """Trägt Leser ein, die noch keinen Grund haben, mit ihren lesenden Einheiten."""
+    for name, (reason, reading) in found.items():
+        path = graph.modules[name]
+        if path not in reasons:
+            reasons[path] = reason
+            units[path] = reading
+        elif path in units:
+            units[path] = units[path] | reading
+
+
+def _note_group(graph: ImportGraph, reasons: dict[Path, str], conftest: str, what: str) -> None:
+    """Wählt jede Testdatei unter dem Ordner einer ``conftest.py``."""
+    folder = PurePosixPath(conftest).parent
+    for name, path in graph.modules.items():
+        relative = PurePosixPath(path.relative_to(graph.root).as_posix())
+        if _is_test_file(graph, name) and relative.is_relative_to(folder):
+            reasons.setdefault(path, f"{conftest} {what}")
 
 
 def split_windowed(
@@ -1196,4 +1587,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # Nur als Skript: Ein kurzer Lauf, dessen Syntaxbäume bis zum Ende leben — die Bereinigung
+    # von Zyklen ging immer wieder über jeden Baum und kostete ein Drittel der CPU-Zeit,
+    # freigeben konnte sie nichts (gemessen im Wechsel, F-6). Ein Testprozess, der ``main``
+    # ruft, behält sie.
+    gc.disable()
     raise SystemExit(main())

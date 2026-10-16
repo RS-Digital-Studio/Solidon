@@ -1128,6 +1128,25 @@ Fixzweigen mit ruff, format und mypy auch vor dem Commit; das Entwicklungstor
 vor jedem Stand, der nach main geht, bleibt `/pruefen`. Eine Änderung an `types.py` oder `errors.py`
 berührt über den Graphen fast alles, und das Werkzeug sagt das dann auch.
 
+**Was eine `conftest.py` je Test ausführt, wählt jede Testdatei unter ihr;
+was sie nur lädt, nicht** (Entscheidung Koordinator, CS-38). Je Test laufen
+ihre Haken und autouse-Fixtures und die Modulebene; deren Module ermittelt die
+Auswahl aus der Datei selbst, ein neuer Haken zieht sein Modul also mit. Der
+übrige Ladeabschluss sind über 200 Module, schon eine leere Testdatei lädt 208
+— als „jede Testdatei“ wäre die Auswahl für die meiste Kernarbeit die Suite,
+ohne einen Test mehr zu fangen: Ein Ladefehler macht jeden Test rot, auch jeden
+gewählten, und ein geändertes Verhalten wirkt nur, wo es gerufen wird. Wählt
+sonst nichts ein solches Modul, läuft die Gruppe der `conftest.py` doch.
+
+**Eine Datei, die kein Python ist, lesen Module unter `tests/` je Einheit**
+(Entscheidung Koordinator, Review 2 Q): `tests/helpers.py` nennt den Ordner
+`tests/data/meshes` und liest `plate_holes.stl` in einer Funktion — als ganzes
+Modul hingen daran 188 direkte und alle mittelbaren Importeure, 289
+Testdateien. `tools/data_reads.py` verfolgt die Funktion, die Konstante, die
+Fixture, die die Datei erreicht, mit den Werten an der Aufrufstelle: 153. Gegen
+die Ausführung von 20 Testdateien, elf davon mit 325 Fensterfällen, verfehlte
+das keine Datei.
+
 ## Eine Fremdmeldung ist ein Zeitpunkt, keine Ursache
 
 Vier Meldungen an einem Tag, alle vier von fremden Programmen, alle vier

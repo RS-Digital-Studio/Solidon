@@ -159,6 +159,8 @@ TWICE = HERE
 TWICE = UI
 PATTERN = "*.py"
 OWN_PATTERN = "test_*.py"
+SURFACE = (UI,)
+OWN = (HERE,)
 
 
 def surface():
@@ -236,6 +238,14 @@ def comprehension():
 
 def loop_over_both():
     return [path for folder in (HERE, UI) for path in folder.glob("*.py")]  # rot
+
+
+def loop_over_a_starred_tuple():
+    return [path for folder in (*SURFACE, HERE) for path in folder.glob("*.py")]  # rot
+
+
+def loop_over_an_own_starred_tuple():
+    return [path for folder in (*OWN, HERE) for path in folder.glob("*.py")]  # grün
 
 
 def constant_pattern():
@@ -320,8 +330,8 @@ def _verdicts(root: Path, relative: str) -> tuple[set[int], set[int]]:
 def test_the_flat_glob_guard_sees_every_form(probe_tree: Path, relative: str) -> None:
     """Gegenprobe des Wächters: Jede rote Zeile der Attrappe ist rot, jede grüne grün,
     und rekursive oder fremde Muster zählen gar nicht erst. Eine Schleife über zwei Ordner
-    ist rot, wenn einer davon es ist; ein Muster aus einer Konstanten und ein umbenanntes
-    ``glob`` sind Globs wie jedes andere (RQ-6)."""
+    ist rot, wenn einer davon es ist, auch über ein ``*``-Element (F-1); ein Muster aus einer
+    Konstanten und ein umbenanntes ``glob`` sind Globs wie jedes andere (RQ-6)."""
     expected_red, expected_green = _verdicts(probe_tree, relative)
     globs = tree_reads.flat_globs(probe_tree, relative)
 

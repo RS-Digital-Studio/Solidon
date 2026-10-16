@@ -1329,3 +1329,31 @@ def test_a_collection_in_the_process_leaves_no_test_module_behind(tmp_path: Path
     ]
     assert "test_same_probe" not in sys.modules
     assert loaded <= set(sys.modules)
+
+
+@pytest.mark.parametrize("target", ["folder", "file"])
+def test_a_collection_in_the_process_leaves_no_helper_behind(tmp_path: Path, target: str) -> None:
+    """F-5: Auch ein Helfer neben den Testdateien steht nach der Sammlung unter seinem bloßen
+    Namen in ``sys.modules``. Sammelte der Prozess danach einen Ordner mit einem gleichnamigen
+    Helfer, kam der still aus dem ersten — und dort war der Fall kein Fenstertest. Was die
+    Sammlung aus den gesammelten Ordnern geladen hat, geht wieder, gleich ob ein Ordner oder eine
+    Datei genannt ist."""
+    case = (
+        "import pytest\n"
+        "from same_probe_helper import WINDOW\n"
+        "MARKS = [pytest.mark.windowed] if WINDOW else []\n"
+        "@pytest.mark.parametrize('x', [pytest.param(1, marks=MARKS)])\n"
+        "def test_case(x):\n"
+        "    assert x\n"
+    )
+    found = []
+    for folder, window in (("first", False), ("second", True)):
+        where = tmp_path / folder
+        where.mkdir()
+        (where / "same_probe_helper.py").write_text(f"WINDOW = {window}\n", encoding="utf-8")
+        (where / "test_same_helper_probe.py").write_text(case, encoding="utf-8")
+        named = where if target == "folder" else where / "test_same_helper_probe.py"
+        found.append(list_windowed_tests.collect_windowed((named,), confcutdir=where))
+
+    assert found == [(), ((tmp_path / "second" / "test_same_helper_probe.py").resolve(),)]
+    assert "same_probe_helper" not in sys.modules

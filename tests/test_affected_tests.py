@@ -16,6 +16,9 @@ from subprocess import CompletedProcess
 
 import pytest
 
+from tests.selection_trees import names as _names
+from tests.selection_trees import small_tree
+from tests.selection_trees import write as _write
 from tools.affected_tests import (
     ImportGraph,
     affected,
@@ -37,41 +40,9 @@ def _no_inherited_addopts(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
 
 
-def _write(root: Path, relative: str, text: str) -> Path:
-    path = root / relative
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    return path
-
-
 @pytest.fixture
 def tree(tmp_path: Path) -> Path:
-    _write(tmp_path, "app/__init__.py", "")
-    _write(tmp_path, "app/x.py", "VALUE = 1\n")
-    _write(tmp_path, "app/y.py", "from app.x import VALUE\n")
-    _write(tmp_path, "app/z.py", "OTHER = 2\n")
-    _write(tmp_path, "tests/__init__.py", "")
-    _write(tmp_path, "tests/conftest.py", "")
-    _write(tmp_path, "tests/test_direct.py", "from app import x\n")
-    _write(tmp_path, "tests/test_indirect.py", "def f():\n    from app.y import VALUE\n")
-    _write(
-        tmp_path,
-        "tests/test_typed.py",
-        "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from app.x import VALUE\n",
-    )
-    _write(
-        tmp_path,
-        "tests/test_reader.py",
-        "from pathlib import Path\nSOURCES = Path('app').rglob('*.py')\n",
-    )
-    _write(tmp_path, "tests/test_unrelated.py", "from app.z import OTHER\n")
-    _write(tmp_path, "tests/test_roadmap.py", "TEXT = 'ROADMAP.md'\n")
-    _write(tmp_path, "ROADMAP.md", "# Liste\n")
-    return tmp_path
-
-
-def _names(files: set[Path], root: Path) -> set[str]:
-    return {path.relative_to(root).as_posix() for path in files}
+    return small_tree(tmp_path)
 
 
 @pytest.fixture(scope="module")
@@ -343,18 +314,22 @@ def test_a_helper_listing_a_foreign_tree_is_no_source_reader(tree: Path) -> None
 
 
 def test_a_file_named_by_a_helper_selects_the_tests_behind_it(tree: Path) -> None:
-    """Nennt ein Helfer unter ``tests/`` eine Datei, zählen die Testdateien, die ihn
-    importieren — der Helfer allein sammelt keinen Test, und sein Importeur liefe nicht."""
-    _write(tree, "tests/roadmap_helper.py", "TEXT = 'ROADMAP.md'\n")
-    _write(tree, "tests/test_roadmap_view.py", "from tests.roadmap_helper import TEXT\n")
+    """Nennt ein Helfer unter ``tests/`` eine Datei, zählen die Testdateien, die die nennende
+    Einheit beziehen (je Einheit, Entscheidung Koordinator) — der Helfer allein sammelt keinen
+    Test, und wer aus ihm nur anderes bezieht, liest die Datei nicht."""
+    _write(tree, "tests/roadmap_helper.py", "TEXT = 'ROADMAP.md'\nOTHER = 1\n")
+    _write(tree, "tests/test_roadmap_view.py", "from tests.roadmap_helper import TEXT\nX = TEXT\n")
+    _write(tree, "tests/test_other.py", "from tests.roadmap_helper import OTHER\nX = OTHER\n")
 
     files, reasons = affected([tree / "ROADMAP.md"], ImportGraph(tree))
 
     assert _names(files, tree) == {"tests/test_roadmap.py", "tests/test_roadmap_view.py"}
     assert reasons[tree / "tests" / "test_roadmap_view.py"] == (
-        "über tests/roadmap_helper.py: nennt ROADMAP.md"
+        "nennt ROADMAP.md über tests/roadmap_helper.py:1"
     )
-    assert reasons[tree / "tests" / "test_roadmap.py"] == "nennt ROADMAP.md"
+    assert (
+        reasons[tree / "tests" / "test_roadmap.py"] == "nennt ROADMAP.md (tests/test_roadmap.py:1)"
+    )
 
 
 def test_a_tool_or_a_deleted_module_named_by_a_helper_selects_the_tests_behind_it(
@@ -389,27 +364,37 @@ def test_a_tool_or_a_deleted_module_named_by_a_helper_selects_the_tests_behind_i
 def test_a_helper_names_a_file_in_strings_and_for_its_direct_importers_only(tree: Path) -> None:
     """RQ-2: ``tests/php_probe.py`` nannte ``build.yml`` nur im Docstring und in einer
     Fehlermeldung, und über ``tests/helpers.py`` hingen 189 Testdateien daran. Ein Kommentar
-    oder Docstring nennt nichts; was ein Helfer in einer Zeichenkette nennt, liest er für
-    die Testdateien, die ihn direkt importieren — ein Zwischenhelfer trägt es nicht weiter."""
+    oder Docstring nennt nichts; was ein Helfer in einer Zeichenkette nennt, liest, wer die
+    nennende Einheit bezieht — auch über einen Zwischenhelfer, nicht wer den Helfer nur
+    importiert (je Einheit, Entscheidung Koordinator)."""
     workflow = _write(tree, ".github/workflows/build.yml", "name: Bau\n")
     _write(
         tree,
         "tests/php_probe.py",
         '"""Liest, was build.yml dem Lauf mitgibt."""\n# siehe build.yml\nVALUE = 1\n',
     )
-    _write(tree, "tests/test_probe_user.py", "from tests.php_probe import VALUE\n")
-    _write(tree, "tests/reader_helper.py", "WORKFLOW = 'build.yml'\n")
+    _write(tree, "tests/test_probe_user.py", "from tests.php_probe import VALUE\nX = VALUE\n")
+    _write(tree, "tests/reader_helper.py", "WORKFLOW = 'build.yml'\nOTHER = 1\n")
     _write(tree, "tests/between.py", "from tests.reader_helper import WORKFLOW\n")
-    _write(tree, "tests/test_direct_user.py", "from tests.reader_helper import WORKFLOW\n")
-    _write(tree, "tests/test_far_user.py", "from tests.between import WORKFLOW\n")
+    _write(
+        tree,
+        "tests/test_direct_user.py",
+        "from tests.reader_helper import WORKFLOW\nX = WORKFLOW\n",
+    )
+    _write(tree, "tests/test_far_user.py", "from tests.between import WORKFLOW\nX = WORKFLOW\n")
+    _write(tree, "tests/test_other_user.py", "from tests.reader_helper import OTHER\nX = OTHER\n")
     _write(tree, "tests/test_comment.py", "# build.yml steht hier nur im Kommentar\nX = 1\n")
     _write(tree, "tests/test_names_it.py", "NAME = 'build.yml'\n")
 
     files, reasons = affected([workflow], ImportGraph(tree))
 
-    assert _names(files, tree) == {"tests/test_direct_user.py", "tests/test_names_it.py"}
+    assert _names(files, tree) == {
+        "tests/test_direct_user.py",
+        "tests/test_far_user.py",
+        "tests/test_names_it.py",
+    }
     assert reasons[tree / "tests" / "test_direct_user.py"] == (
-        "über tests/reader_helper.py: nennt build.yml"
+        "nennt build.yml über tests/reader_helper.py:1"
     )
 
 
@@ -1060,7 +1045,9 @@ def test_a_named_text_file_selects_the_test_that_names_it(tree: Path) -> None:
     files, reasons = affected([tree / "ROADMAP.md"], ImportGraph(tree))
 
     assert _names(files, tree) == {"tests/test_roadmap.py"}
-    assert reasons[tree / "tests" / "test_roadmap.py"] == "nennt ROADMAP.md"
+    assert (
+        reasons[tree / "tests" / "test_roadmap.py"] == "nennt ROADMAP.md (tests/test_roadmap.py:1)"
+    )
 
 
 def test_a_data_file_selects_the_tests_of_the_module_that_reads_it(tree: Path) -> None:
@@ -1132,25 +1119,32 @@ def test_a_folder_named_by_a_test_or_a_test_helper_selects_its_readers(tree: Pat
     """RPL-1 (Review des Plattformpakets): Nach dem Schnitt nennt nur
     ``tests/packaging_helpers.py`` den Ordner ``.github/workflows``, und der
     Workflow-Wächter in ``test_packaging_platform.py`` fehlte bei drei Workflows in der
-    Auswahl. Ein Helfer unter ``tests/``, der den Ordner nennt, liest ihn für seine
-    Importeure; eine Testdatei, die ihn nennt, liest ihn selbst. Attrappe, weil die
-    Plattformdateien in diesem Zweig noch fehlen."""
+    Auswahl. Ein Helfer unter ``tests/``, der den Ordner nennt, liest ihn für die Testdateien,
+    die die nennende Einheit beziehen (je Einheit); eine Testdatei, die ihn nennt, liest ihn
+    selbst. Attrappe, weil die Plattformdateien in diesem Zweig noch fehlen."""
     workflow = _write(tree, ".github/workflows/mac-netz.yml", "name: Mac\n")
     _write(
         tree,
         "tests/packaging_helpers.py",
-        "from pathlib import Path\nWORKFLOWS = Path('.github/workflows')\n",
+        "from pathlib import Path\nWORKFLOWS = Path('.github/workflows')\nOTHER = 1\n",
     )
-    _write(tree, "tests/test_packaging_platform.py", "from tests.packaging_helpers import X\n")
+    _write(
+        tree,
+        "tests/test_packaging_platform.py",
+        "from tests.packaging_helpers import WORKFLOWS\nX = check(WORKFLOWS)\n",
+    )
+    _write(tree, "tests/test_other_packaging.py", "from tests.packaging_helpers import OTHER\n")
     _write(tree, "tests/test_ci_files.py", "WORKFLOWS = '.github/workflows/'\n")
 
     files, reasons = affected([workflow], ImportGraph(tree))
 
     assert _names(files, tree) == {"tests/test_packaging_platform.py", "tests/test_ci_files.py"}
     assert reasons[tree / "tests" / "test_packaging_platform.py"] == (
-        "hängt an einem Modul, das .github/workflows/ liest"
+        "liest .github/workflows/* über tests/packaging_helpers.py:2"
     )
-    assert reasons[tree / "tests" / "test_ci_files.py"] == "nennt den Ordner .github/workflows/"
+    assert reasons[tree / "tests" / "test_ci_files.py"] == (
+        "nennt den Ordner .github/workflows/ (tests/test_ci_files.py:1)"
+    )
 
 
 def test_a_script_outside_the_packages_selects_the_test_that_loads_it(tree: Path) -> None:
@@ -1778,7 +1772,10 @@ def test_run_spreads_a_large_plain_group_over_a_fixed_number_of_workers() -> Non
     def options(line: list[str]) -> list[str]:
         return line[: line.index("--window-group")]
 
+    # Beide Zahlen sind gemessen (``konzepte/begruendungen/regel-tests.md``, Arbeiter für
+    # ``--run``), und Regel, Karte und Begründung nennen sie (F-8).
     assert WORKERS == 4
+    assert PARALLEL_FROM == 8
     assert "-n" not in options(_commands([], files(PARALLEL_FROM - 1), release=False)[0])
     large = options(_commands([], files(PARALLEL_FROM), release=False)[0])
     start = large.index("-n")
