@@ -255,8 +255,10 @@ SMALLEST_AVAILABLE: Final = (SMALLEST_SCREEN[0], SMALLEST_SCREEN[1] - TASKBAR_HE
 #: diese Innenfläche.
 SMALLEST_WINDOW: Final = (SMALLEST_AVAILABLE[0], SMALLEST_AVAILABLE[1] - CAPTION_HEIGHT)
 #: Z6: Die Skalierungen — eine ist nur ein Fall, solange die logische Fläche
-#: des Schirms dabei mindestens :data:`SMALLEST_AVAILABLE` bleibt.
-SCALES: Final = (1.0, 1.5, 2.0)
+#: des Schirms dabei mindestens :data:`SMALLEST_AVAILABLE` bleibt. 125 % ist am
+#: Messschirm 2560 x 1440 der eine gültige Fall über 100 % (2048 x 1152 logisch,
+#: FD-109); 150 und 200 % drücken ihn unter die kleinste Fläche.
+SCALES: Final = (1.0, 1.25, 1.5, 2.0)
 #: I3: Anteil der häufigsten Kundenziele, die ohne Suche dastehen.
 GOAL_SHARE: Final = 0.8
 #: Prüfpunkt 1 und I6: höchster Rang eines Suchtreffers.

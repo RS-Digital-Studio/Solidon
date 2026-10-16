@@ -478,7 +478,7 @@ Prüfpunkte 9 und 11 und *gut nach Fix* im Konzept §4 (Tabelle der Prüfpunkte,
 | Z3 Am Objekt | A misst (kein Wegklick nach der Auswahl), B urteilt | Protokoll mit Klappenklick, B sagt „ja“: Widerspruch |
 | Z4 Leere Zustände | B; A listet sie mit und ohne Knopf | ohne Knopf, B sagt „ja“: Widerspruch |
 | Z5 Rohe Qt-Fenster = 0 | A: Instanzen im Weg | `QInputDialog` |
-| Z6 Größen und Skalierung | A: 1280 × 820 und 1366 × 728 ohne Rollleiste vorn; 100/150/200 % `devicePixelRatio`; hell und dunkel gleiche Zahl Akzente | Rollleiste bei 1366 × 728; Pixmap 1,0 bei 200 % |
+| Z6 Größen und Skalierung | A: 1280 × 820 und 1366 × 728 ohne Rollleiste vorn; 100/125/150/200 % `devicePixelRatio`; hell und dunkel gleiche Zahl Akzente | Rollleiste bei 1366 × 728; Pixmap 1,0 bei 200 % |
 | Z7 Erste fünf Minuten | C (Protokoll) | Protokoll ohne Fehlklickzahl wird abgewiesen |
 | I1 Name und Maß beim Überfahren | A: Überfahren über `view:` je Art; B; Bauplanzusage, Fehlen ist ein Fund | Art ohne Beschriftung, Urteil „gut“ |
 | I2 Druckfolge im Band | A: Text von `preview.banner`; B | gerechnete Vorschau ohne Bandaufnahme ergibt „nicht gemessen“ |

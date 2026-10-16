@@ -685,8 +685,8 @@ def below_smallest(placed: Mapping[str, Any], variant: Variant) -> str:
         return ""
     return (
         f"Skalierung {variant.scale:.0%} lässt auf {placed.get('screen') or 'diesem Schirm'} "
-        f"nur {width} x {height} logisch — unter {SMALLEST_SCREEN[0]} x "
-        f"{SMALLEST_SCREEN[1]} kein Fall"
+        f"nur {width} x {height} logisch — unter der kleinsten Arbeitsfläche "
+        f"{SMALLEST_SCREEN[0]} x {SMALLEST_SCREEN[1]} logisch (Konzept §4, Z6) kein Fall"
     )
 
 

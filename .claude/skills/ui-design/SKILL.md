@@ -80,7 +80,7 @@ Prüfpunkt 17, Vorschlag ist bei I6 nur die Suche mit Frageformen.
 | Z3 | Am Objekt: Handlung ohne Menü und Suche nach dem Klick auf die Stelle | ja je Zeile mit Merkmals- oder Körperbezug | A misst, B urteilt | `steps` |
 | Z4 | Leere Zustände führen weiter | Knopf zur nächsten Handlung | B, A listet | `empty_states` |
 | Z5 | Rohe Qt-Fenster im Kundenweg | 0, außer `QFileDialog` und den Ausnahmen aus Z2 | A | `raw_windows` |
-| Z6 | Größen und Skalierungen | maximiert auf 1920 × 1080 logisch, Taskleiste und Titelleiste ab (`SMALLEST_WINDOW`), ohne Rollleiste vorn; Symbole scharf bei 100, 150, 200 %, solange ≥ 1920 × 1080 logisch; hell und dunkel gleiche Flächen und Akzente | A | `scrollbars`, `icons` |
+| Z6 | Größen und Skalierungen | maximiert auf 1920 × 1080 logisch, Taskleiste und Titelleiste ab (`SMALLEST_WINDOW`), ohne Rollleiste vorn; Symbole scharf bei 100, 125, 150, 200 %, solange ≥ 1920 × 1080 logisch; hell und dunkel gleiche Flächen und Akzente | A | `scrollbars`, `icons` |
 | Z7 | Die ersten fünf Minuten | Schritte und Fehlklicks, jeder Fehlklick ein Fund | C | Protokoll der Stufe C |
 | I1 | Merkmal statt Dreieck: Name und Maß beim Überfahren | ja an jeder erkannten Art | A misst, B urteilt | `hover_labels` gegen `recognized_kinds` |
 | I2 | Druckfolge im Vorschauband | ja an jeder Zeile mit gerechneter Vorschau | A misst, B urteilt | `preview.banner_text` |
