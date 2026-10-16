@@ -78,12 +78,29 @@ CHANGE_SELECTION = Action("change_selection", _("Andere Objekte wählen"), prima
 #: markierten Körper, und an einem Kantenfehler wählte der Kunde damit einen
 #: anderen Körper statt einer anderen Kante (FD-123).
 CHANGE_EDGES = Action("change_step", _("Andere Kanten wählen"), primary=True)
+#: Andere **Flächen** für *Formschräge anstellen* oder *Fläche versetzen* —
+#: im Dialog des Schritts, wo *Flächen* beziehungsweise *Fläche* stehen; der
+#: Zwilling von :data:`CHANGE_EDGES` (FD-165).
+CHANGE_FACES = Action("change_step", _("Andere Flächen wählen"), primary=True)
+#: Ein anderes **Merkmal** — Bohrung, Gewinde, Kammer, Verschluss, Ring — im
+#: Dialog des Schritts, wo *Merkmal* (``at_feature``/``at_features``) steht;
+#: eingelöst wie *Größe ändern* (``change_step``). *Andere Objekte wählen* gab
+#: dem Schritt einen anderen Körper statt eines anderen Merkmals; der vierte
+#: Zwilling neben :data:`CHANGE_EDGES` und :data:`CHANGE_FACES` (FD-179).
+CHANGE_FEATURE = Action("change_step", _("Anderes Merkmal wählen"), primary=True)
 #: Eine Zeichenebene, die sich nicht lesen lässt (``sketch.planes._unreadable``):
 #: den Schritt mit dem Cursor in seinem Ebenenfeld öffnen — derselbe Weg wie
 #: *Eingabe korrigieren*, mit dem Satz, der sagt, was dort zu tun ist. Bis zum
 #: 22.09.2026 stand die Kennung nur an ihrer Aufrufstelle, und der Kunde las
 #: den Rat als Satz ohne Knopf.
 PICK_PLANE = Action("sketch.pick_plane", _("Eine andere Ebene wählen"), primary=True)
+#: **Die Wege, die ``values["field"]`` als das Feld lesen, dessen Wert nicht
+#: ging** — eine Liste für Kern und Oberfläche. Die Auswertung lässt ihnen das
+#: Feld, wenn sie eine Auswahlhandlung an den Schritt anpasst
+#: (``scene.choice_ways``, RB-2); im offenen Dialog springen sie in genau dieses
+#: Feld oder schweigen (``ui.refusal_details.field_ways``, FD-95, FD-182). Hier,
+#: weil beide Handlungen hier stehen und der Kern die Oberfläche nicht fragt.
+FIELD_WAYS: Final = frozenset({CORRECT_INPUT.id, PICK_PLANE.id})
 REPAIR_AND_RETRY = Action("repair_and_retry", _("Reparieren und erneut versuchen"), primary=True)
 #: **Die Reparatur gehört vor den Schritt, nicht dahinter** (RM-246). Ein
 #: Schritt, der auf das Raster auswich, hat ein Ergebnis — geschlossen, aber

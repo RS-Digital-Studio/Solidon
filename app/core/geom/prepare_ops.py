@@ -22,6 +22,8 @@ from app.core.deferred import trimesh
 from app.core.errors import (
     BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
     CANCEL,
+    CHANGE_FACES,
+    CHANGE_FEATURE,
     CHANGE_SELECTION,
     CHANGE_SIZE,
     CHANGE_THIS_STEP,
@@ -607,10 +609,13 @@ class DrillParams(BaseParams):
         ),
     )
     compensate: bool = param(
-        title=_("Materialtoleranz berücksichtigen"),
+        title=_("Druckabweichung ausgleichen"),
         default=True,
         placement="advanced",
-        doc=_("Vergrößert die Bohrung um den Wert aus dem Materialprofil."),
+        doc=_(
+            "Gibt dem Durchmesser die Lochkorrektur aus dem Materialprofil dazu, weil gedruckte "
+            "Bohrungen enger ausfallen. Aus: Die Bohrung erhält genau das eingegebene Maß."
+        ),
     )
 
 
@@ -734,7 +739,7 @@ def bore_shape(params: DrillParams, *, within: Mesh | None = None) -> BoreShape:
     deterministic=False,
     shortcut="Ctrl+B",
     doc=_(
-        "Bohrt ein rundes Loch oder ein Langloch — auf Wunsch um die Materialtoleranz vergrößert."
+        "Bohrt ein rundes Loch oder ein Langloch, auf Wunsch mit der Lochkorrektur des Materials."
     ),
 )
 def drill_hole(ctx: OpContext) -> OpResult:
@@ -2937,7 +2942,7 @@ def _tool_for(
             detail=NO_BODY_FROM_FACES if alone else NO_OWN_BODY,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     if rooted and not is_a_cavity(feature):
         built = _rooted(mesh, feature, built, quality=quality, seed=seed, cancelled=cancelled)
@@ -4105,7 +4110,7 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
             detail=_("Dieses Merkmal gibt es an diesem Objekt nicht."),
             values={"feature": name, "object": source.id},
             constraint="unknown_feature",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     # Ein Kegelstück ohne eigenen Körper: derselbe Satz wie im Panel, bevor
     # ``_body_from_faces`` an seinem Rand scheitert. Eine Verengung ändert
@@ -4173,7 +4178,7 @@ def _refuse_like_the_card(
         offer = split_offer(as_mesh_data(source.mesh), feature)
         ways = split_ways(offer)
     elif refusal in (HOLE_IS_NOT_EMPTY, NO_BODY_FROM_FACES, NEEDS_A_PLAIN_BORE, NOT_AT_THE_MOUTH):
-        ways = (CHANGE_SELECTION, CANCEL)
+        ways = (CHANGE_FEATURE, CANCEL)
     raise ValidationError(
         field="at_feature",
         detail=refusal,
@@ -4964,7 +4969,7 @@ def filled_bore_refusal(mesh: MeshData, feature: Feature) -> ValidationError:
         values={"feature": feature.id, "kind": feature.kind, **offer},
         constraint="not_movable",
         suggestions=(
-            split_ways(offer) if reason is OTHER_PART_IN_THE_BORE else (CHANGE_SELECTION, CANCEL)
+            split_ways(offer) if reason is OTHER_PART_IN_THE_BORE else (CHANGE_FEATURE, CANCEL)
         ),
     )
 
@@ -7438,7 +7443,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
             field="at_features",
             detail=_("Wählen Sie mindestens ein Merkmal, das sich wiederholen soll."),
             constraint="required",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     units: list[_PatternUnit] = []
     covered: set[str] = set()
@@ -7450,7 +7455,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
                 detail=_("Dieses Merkmal gibt es an diesem Objekt nicht."),
                 values={"feature": name, "object": source.id},
                 constraint="unknown_feature",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         against = cone_piece_blocked(feature) or reason_against("pattern_feature", feature.kind)
         if against is not None:
@@ -7459,7 +7464,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
                 detail=against,
                 values={"feature": name, "kind": feature.kind},
                 constraint="not_movable",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         if feature.id in covered:
             continue
@@ -7473,7 +7478,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
                 ),
                 values={"feature": name},
                 constraint="not_evidenced",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         state = cavity_chain_state_at(feature, source.features, body)
         if (refused := cavity_refusal(state)) is not None:
@@ -7482,7 +7487,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
                 detail=refused,
                 values={"feature": name},
                 constraint="not_movable",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         chain = tuple(state.chain) if state.chain is not None else None
         members = chain if chain is not None else (feature,)
@@ -10054,7 +10059,7 @@ def _resize_chain_countersink(
             detail=side,
             values={"feature": feature.id},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     entrance, way, sections = side
     section = sections[-1]
@@ -10305,8 +10310,8 @@ class ResizeHoleParams(BaseParams):
         default=False,
         placement="advanced",
         doc=_(
-            "Vergrößert den Ziel-Durchmesser um die Druckkorrektur aus dem Materialprofil. "
-            "Aus: Die Bohrung erhält genau das eingegebene Maß."
+            "Gibt dem Durchmesser die Lochkorrektur aus dem Materialprofil dazu, weil gedruckte "
+            "Bohrungen enger ausfallen. Aus: Die Bohrung erhält genau das eingegebene Maß."
         ),
     )
     legacy_slot_tool: bool = _saved_slot_tool_marker()
@@ -11130,7 +11135,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
     # **Und die Toleranz wird auch beim Versetzen gemeldet.** `drill` erzeugt
     # den Befund nur bei `compensate=True`, und der Aufruf oben setzt `False`,
     # weil `cut` sie schon trägt — ohne diese Zeile verschwände die Auskunft
-    # „Die Bohrung wurde um die Materialtoleranz vergrößert" still, sobald das
+    # „Die Bohrung ist um die Lochkorrektur des Materials größer geschnitten.“ still, sobald das
     # Loch die Stelle wechselt (Fund des Reviews, 11.09.2026).
     moved_findings = (
         compensation_findings(params.diameter, cut, params.compensate) if redrilled else []
@@ -11361,12 +11366,12 @@ class SlotHoleParams(BaseParams):
         ),
     )
     compensate: bool = param(
-        title=_("Materialtoleranz berücksichtigen"),
+        title=_("Druckabweichung ausgleichen"),
         default=False,
         placement="advanced",
         doc=_(
-            "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. "
-            "Aus bleibt das gemessene Maß unverändert."
+            "Gibt der Breite die Lochkorrektur aus dem Materialprofil dazu, weil gedruckte "
+            "Langlöcher enger ausfallen. Aus: Die Breite bleibt, wie eingegeben oder gemessen."
         ),
     )
     # **Nur für Schritte aus Projekten bis Format 38** (Migration 38 → 39).
@@ -11511,7 +11516,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
             # An einer Kette mit Verengung deren Satz, nicht der über eine
             # Senkung — wie im Panel (Durchsicht 0.5.1).
             detail=narrowing_reason("slot_hole", state.chain) or NEEDS_A_PLAIN_BORE,
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     _refuse_like_the_card("slot_hole", source, feature, ctx.cancelled)
     if (
@@ -16703,7 +16708,7 @@ def _exact_body_from_faces(source: SceneObject, feature: Feature) -> Any:
             detail=NO_BODY_FROM_FACES,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     return body
 
@@ -16916,7 +16921,7 @@ def _exact_resize_by_faces(
                 detail=NO_BODY_FROM_FACES,
                 values={"feature": feature.id, "kind": feature.kind},
                 constraint="not_movable",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         wider = dataclasses.replace(feature, params={**feature.params, "diameter": diameter})
         tool = _exact_pin_tool(
@@ -17016,7 +17021,7 @@ def _torus_refusal(feature: Feature, *, whole: bool) -> ValidationError:
         detail=TORUS_IS_THE_BODY if whole else TORUS_NOT_SEPARABLE,
         values={"feature": feature.id, "kind": feature.kind},
         constraint="not_movable",
-        suggestions=(CHANGE_SELECTION, CANCEL),
+        suggestions=(CHANGE_FEATURE, CANCEL),
     )
 
 
@@ -17034,7 +17039,7 @@ def _torus_axis(feature: Feature, axis: Vec3 | None = None) -> np.ndarray:
             detail=FEATURE_WITHOUT_AXIS,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     return direction / length
 
@@ -17602,7 +17607,7 @@ def _thread_frame(feature: Feature) -> tuple[np.ndarray, np.ndarray, float]:
             detail=THREAD_WITHOUT_LENGTH,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     centre = np.asarray(_bore_vector(feature, "centre"), dtype=float)
     return centre, _torus_axis(feature), length
@@ -19285,7 +19290,7 @@ def _exact_rotate_cone(
             detail=NO_BODY_FROM_FACES,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     old_axis = np.asarray(_bore_vector(feature, "axis"), dtype=float)
     new_axis = np.asarray(turned_axis, dtype=float)
@@ -19943,7 +19948,7 @@ class PlugParams(BaseParams):
         ),
     )
     compensate: bool = param(
-        title=_("Materialtoleranz berücksichtigen"),
+        title=_("Druckabweichung ausgleichen"),
         default=True,
         placement="advanced",
         doc=_(
@@ -20470,7 +20475,7 @@ def _mesh_hollow_open(
                 ),
                 value=feature.id,
                 constraint="not_planar",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FACES, CANCEL),
             )
         chosen.append(Opening(triangles=triangles, name=feature.id))
     if params.open_top:
@@ -20854,7 +20859,10 @@ class TestPieceParams(BaseParams):
         doc=_("Wie groß der Ausschnitt wird. Groß genug, dass die Passung Material hat."),
     )
     spot: str = param(
-        title=_("Stelle"),
+        # Nicht „Stelle“: So heißt vorn schon die Lesezeile mit den
+        # Koordinaten, und zweimal dasselbe Wort ließ raten, welches Feld die
+        # Stelle festlegt (FD-119).
+        title=_("Lage des Würfels"),
         # Vorgabe die genannte Stelle: Ein Schritt von vor diesem Feld bleibt,
         # was er war.
         default="point",
@@ -21444,7 +21452,7 @@ def split_ways(offer: Mapping[str, str]) -> tuple[Action, ...]:
     Ohne Angebot — über :data:`SPLIT_LIMIT` Teile, Merkmal ohne Flächen — bliebe
     sonst nur *Abbrechen*, und das ist kein Weg (Regel 17, Nachprüfung I, N3).
     """
-    return (SPLIT_AND_RETRY, CANCEL) if offer else (CHANGE_SELECTION, CANCEL)
+    return (SPLIT_AND_RETRY, CANCEL) if offer else (CHANGE_FEATURE, CANCEL)
 
 
 def _split_limit() -> int:
@@ -21780,15 +21788,22 @@ def split_bodies(ctx: OpContext) -> OpResult:
     # nachher eine andere Zahl liefert, hält die ganze Kette an. Ist zu wenig
     # da, wird das gesagt statt geraten — mit der Zahl, die passen würde.
     found = len(kept)
-    if found <= 1 and dropped and found < params.count:
+    if found <= 1 and dropped and found + dropped > 1 and found < params.count:
         # **Ein druckbares Teil und Splitter daneben ist nicht „ein Stück“**
         # (FD-113): Der Prüfbericht zählt die Splitter mit und meldet mehrere
         # Teile. Die Absage nennt sie und den einen Schalter, der sie behält —
-        # der Schritt öffnet mit dem Cursor dort (``KEEP_SPLINTERS``).
+        # der Schritt öffnet mit dem Cursor dort (``KEEP_SPLINTERS``). Ein
+        # Splitter allein bleibt ein Stück; ihn zu behalten teilte nichts.
         raise ValidationError(
             field="keep_tiny",
             detail=(
+                # Kein druckbares Teil, etwa nach einem kaputten Import (RB-5).
                 _(
+                    "Der Körper besteht nur aus {count} Splittern, die der Drucker nicht abbildet.",
+                    count=dropped,
+                )
+                if found == 0
+                else _(
                     "Der Körper hat nur ein druckbares Teil und einen Splitter, den der Drucker "
                     "nicht abbildet."
                 )
@@ -24078,7 +24093,7 @@ def _refuse_a_corner(feature: Feature) -> None:
     if "axis" not in feature.params:
         from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
 
-        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_FEATURE, CANCEL))
 
 
 def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float | None) -> OpResult:

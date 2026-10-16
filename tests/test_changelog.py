@@ -436,3 +436,30 @@ def test_the_press_drafts_count_the_same_changes() -> None:
         f"das Muster greift nicht mehr: aus der Probe kam {erkannt}"
     )
     assert not funde, "\n".join(funde)
+
+
+#: Ein zweiter Name für den Operationsdialog, je Sprache (Review F2a, R9).
+#: Das Handbuch und der Changelog bis 0.6.0 sagen „Operationsdialog“ (Bauplan
+#: §4.2: Operation); zwei Namen lassen nach dem Unterschied suchen.
+OTHER_DIALOG_NAMES = {
+    "de": r"funktionsdialog",
+    "en": r"function dialog",
+    "es": r"diálogos? de función",
+    "fr": r"dialogues? de fonction",
+    "it": r"finestr[ae] di funzione",
+    "pt": r"diálogos? de função",
+}
+
+
+@pytest.mark.parametrize("language", sorted(available_languages()))
+def test_the_operation_dialog_has_one_name(language: str) -> None:
+    from app.core import changes
+
+    other = re.compile(OTHER_DIALOG_NAMES[language], re.IGNORECASE)
+    found = [
+        f"{entry.version}: {point}"
+        for entry in changes.history(language)
+        for point in entry.points
+        if other.search(point)
+    ]
+    assert not found, found

@@ -19,6 +19,7 @@ from app.core.scene.project import new_project
 from app.ui.generate_dialog import GenerateDialog
 from app.ui.session import Session
 from tests.helpers import FakeMesh
+from tests.resize_watchdog import RESIZES_PER_STATUS, ResizeWatchdog
 from tests.scripted_backend import ScriptedMeshBackend
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
@@ -858,8 +859,14 @@ def test_status_text_grows_the_dialog_once_and_stays_reachable(qt_app: QApplicat
         _settle(qt_app)
         before = dialog.size()
 
+        watchdog = ResizeWatchdog(dialog)
+        dialog._scroll.viewport().installEventFilter(watchdog)
         dialog.state.setText(long_text)
         _settle(qt_app)
+        assert watchdog.count <= RESIZES_PER_STATUS, (
+            f"der Ausschnitt änderte {watchdog.count}-mal seine Größe, "
+            "der Dialog schaltet ohne Ende"
+        )
         grown = dialog.size()
         assert grown.width() == before.width(), "die Breite bleibt"
         assert grown.height() > before.height(), "der lange Satz bekommt Platz"

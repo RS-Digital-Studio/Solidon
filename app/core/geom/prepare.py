@@ -147,7 +147,7 @@ def unchanged_bore(diameter: float, *, with_depth: bool = False) -> Finding:
 
 
 def compensation_findings(nominal: float, cut: float, compensate: bool) -> list[Finding]:
-    """Der Hinweis, dass eine Bohrung um die Materialtoleranz gewachsen ist.
+    """Der Hinweis, dass eine Bohrung um die Lochkorrektur gewachsen ist.
 
     **Einmal für alle drei Bohrungswege.** Der Befund stand bis zum 04.09.2026
     dreifach im Baum: hier ausgeschrieben, in ``brep.ops`` ausgeschrieben, und
@@ -166,7 +166,7 @@ def compensation_findings(nominal: float, cut: float, compensate: bool) -> list[
         Finding(
             code="bore.compensated",
             severity="info",
-            message=_("Die Bohrung wurde um die Materialtoleranz vergrößert."),
+            message=_("Die Bohrung ist um die Lochkorrektur des Materials größer geschnitten."),
             values={"nominal": format_length(nominal), "cut": format_length(cut)},
         )
     ]

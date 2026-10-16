@@ -147,6 +147,7 @@ from app.ui.first_run import (
     printers_on_offer,
     valid_printer_choice,
 )
+from app.ui.grouped_spin import GroupedSpin
 from app.ui.header import filament_names
 from app.ui.icons import icon
 from app.ui.labels import (
@@ -565,10 +566,16 @@ def _make_setting_editor(
         button.changed.connect(changed)
         editor = button
     else:
-        number = BoundedSpin(parent)
+        # Eine Anzahl und jedes Maß ohne Nachkomma stehen in Dreiergruppen wie
+        # jede andere Zahl (FD-184), und „1.000“ heißt dort tausend: Die
+        # *Beschleunigung* stand als „10000 mm/s²“ da, und „1.000“ in
+        # *Leerfahrt* wurde still 1 mm/s (Review F2a, R2).
+        whole = field.kind == "int" or field.decimals == 0
+        number = GroupedSpin(parent) if whole else BoundedSpin(parent)
+        if not whole:
+            number.setDecimals(field.decimals)
         number.setRange(field.minimum, field.maximum)
         number.setSingleStep(1 if field.kind == "int" else field.step)
-        number.setDecimals(0 if field.kind == "int" else field.decimals)
         if field.path == "adhesion.raft_gap":
             # Wie optionale Op-Felder: Sondertext eine Anzeigestufe unter null.
             number.setMinimum(field.minimum - 10.0**-field.decimals)
@@ -1173,6 +1180,9 @@ class _PlateJob:
     #: Export, und ihr Bericht war bis dahin um diese zwei Zeilen ärmer.
     scene: Scene | None = None
     document: Document | None = None
+    #: Die Namen derselben Auswertung: Ein entfernter Passungspartner heißt im
+    #: Bericht der Übergabe wie im Prüfbericht (RB2-5).
+    names: Mapping[str, str] | None = None
     #: Der Abbruch des Arbeiters, der diesen Auftrag schreibt. Die Stützsperre
     #: für Kanäle rechnet an einem Gitterwerk eine Viertelminute
     #: (``writer._support_blocker``); ohne ihn griff *Abbrechen* erst danach.
@@ -1347,6 +1357,7 @@ def _prepare_plates(job: _PlateJob) -> ProjectRun:
         place_on_bed=keep,
         setup=job.setup,
         scene=job.scene,
+        names=job.names,
         document=job.document,
         cancelled=job.cancelled,
         for_window=job.for_window,
@@ -1415,6 +1426,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         place_on_bed=keep,
         setup=job.setup,
         scene=job.scene,
+        names=job.names,
         document=job.document,
         cancelled=job.cancelled,
         for_window=job.for_window,
@@ -3403,10 +3415,8 @@ class PrintSettingsDialog(QDialog):
         # zwei Filamente ohne Spülgang (Entscheidung Robert, 19.09.2026). Sie
         # gehört wie der Durchmesser zum Drucker und wird in dessen Profil
         # abgelegt; die Tabelle führt jedes Gerät mit einer.
-        self.nozzle_count = BoundedSpin(self)
+        self.nozzle_count = GroupedSpin(self)
         self.nozzle_count.setRange(1, 8)
-        self.nozzle_count.setSingleStep(1)
-        self.nozzle_count.setDecimals(0)
         self.nozzle_count.setKeyboardTracking(False)
         self.nozzle_count.setAccessibleName(tr("Düsenzahl"))
         self.nozzle_count.setToolTip(
@@ -4747,21 +4757,21 @@ class PrintSettingsDialog(QDialog):
 
     def _unfold_tabs(self, _open_now: bool) -> None:
         """Die Tiefe wächst mit ihrer aktuellen Seite und gibt den Platz wieder frei."""
-        self._queue_refit("passive" if self._search_revealing else "explicit")
+        self.queue_refit("passive" if self._search_revealing else "explicit")
 
     def _unfold_sections(self, _open_now: bool) -> None:
         """Vorn und Vorschläge passen sich nur nach einer bewussten Klappe an."""
-        self._queue_refit("passive" if self._search_revealing else "explicit")
+        self.queue_refit("passive" if self._search_revealing else "explicit")
 
     def _refit_sections(self, _state: bool | int = False) -> None:
         """Passiv aktualisieren, etwa nach Reiter-, Such- oder Statusänderung."""
-        self._queue_refit("passive")
+        self.queue_refit("passive")
 
-    def _queue_refit(self, intent: ContentFitIntent) -> None:
+    def queue_refit(self, intent: ContentFitIntent) -> None:
         """Fasst gleichzeitige Größenwünsche mit Vorrang der bewussten Klappe zusammen."""
         if not self._built:
             return
-        priority = {"passive": 0, "explicit": 1, "initial": 2}
+        priority = {"passive": 0, "font": 1, "explicit": 2, "initial": 3}
         if priority[intent] > priority[self._size_refit_intent]:
             self._size_refit_intent = intent
         self._size_refit.start(0)
@@ -4775,7 +4785,7 @@ class PrintSettingsDialog(QDialog):
     def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
         """Passt die natürliche Dialoggröße genau beim ersten Anzeigen ein."""
         super().showEvent(event)
-        self._queue_refit("initial")
+        self.queue_refit("initial")
 
     def _resize_to_content(self, intent: ContentFitIntent = "passive") -> None:
         """Misst den Inhalt je nach Anlass, ohne passive Außenrahmensprünge."""
@@ -5194,7 +5204,7 @@ class PrintSettingsDialog(QDialog):
 
     def _unfold_slicer(self, _open_now: bool) -> None:
         """Nur eine bewusste Klappe darf den äußeren Rahmen anpassen."""
-        self._queue_refit(self._slicer_toggle_fit_intent or "explicit")
+        self.queue_refit(self._slicer_toggle_fit_intent or "explicit")
 
     def _forget_result(self) -> None:
         """Das Ergebnis des vorigen Slicers verwerfen.
@@ -8084,7 +8094,7 @@ class PrintSettingsDialog(QDialog):
                 refusal = self._refusals.get(path)
                 if isinstance(editor, BoundedSpin) and refusal is not None:
                     form.setRowVisible(refusal, active and bool(editor.refusal()))
-        self._queue_refit("passive")
+        self.queue_refit("passive")
 
     def _editor_changed(self, path: str) -> None:
         """Ein Feld hat sich geändert: **genau dieses** wird eigene Wahl — und
@@ -9318,6 +9328,9 @@ class PrintSettingsDialog(QDialog):
             slot_profiles=slot_profiles,
             with_settings=with_settings,
             scene=None if self.session.last_result is None else self.session.last_result.scene,
+            names=(
+                None if self.session.last_result is None else self.session.last_result.object_names
+            ),
             document=self.session.project.document,
             inputs=StoredInputs.snapshot(
                 self.session.project,

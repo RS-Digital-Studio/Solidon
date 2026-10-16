@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Final, Literal
@@ -456,16 +456,29 @@ def _shown_number(document: Document, plan: RevisionPlan, step: OpId) -> int:
     return step_position(plan.document(document).ops, step)
 
 
-def _halted(document: Document, plan: RevisionPlan, result: EvaluationResult) -> UserError:
-    """Die Absage, wenn der Vorschlag anhält — mit dem Grund aus dem Halt."""
-    halt = next(
+def halt_finding(findings: Iterable[Finding], stopped_at: OpId | None) -> Finding | None:
+    """Der Befund, an dem die Kette hält — oder ``None`` ohne Halt.
+
+    Eine Quelle für die Sitzung (``Session.halt_in_the_way`` trägt seine Wege
+    als die des Halts), für diese Absagen und für die graue Anzeige der
+    Befundhandlungen (``change_lock.action_refusal``, RA-3): Hinter einem Halt
+    gehen genau die Wege dieses Befunds, nicht eine Liste von Kennungen.
+    """
+    if stopped_at is None:
+        return None
+    return next(
         (
             finding
-            for finding in result.scene.report.findings
-            if finding.severity == "error" and finding.op_id == result.stopped_at
+            for finding in findings
+            if finding.severity == "error" and finding.op_id == stopped_at
         ),
         None,
     )
+
+
+def _halted(document: Document, plan: RevisionPlan, result: EvaluationResult) -> UserError:
+    """Die Absage, wenn der Vorschlag anhält — mit dem Grund aus dem Halt."""
+    halt = halt_finding(result.scene.report.findings, result.stopped_at)
     shown = _old_number(plan, result.stopped_at)
     reason: TranslatableText | str = halt.message if halt is not None else ""
     known = {entry.id for entry in document.ops}

@@ -23,6 +23,7 @@ from app.ui.main_window import MainWindow
 from app.ui.session import ProposalPreview, Session
 from app.ui.settings import UiSettings
 from tests.scripted_backend import ScriptedBackend
+from tests.ui_helpers import wait_until
 
 #: Die echte Rechnerauskunft — ``tests/conftest.py`` setzt je Test einen
 #: neutralen Rechner ein.
@@ -2692,11 +2693,10 @@ def test_the_probe_result_keeps_the_buttons_inside_the_visible_dialog(
     dialog.show()
     qt_app.processEvents()
     dialog._probe_done(True, llm.Speed(tokens_per_second=850.0))
-    qt_app.processEvents()
-
-    assert dialog.height() >= dialog.sizeHint().height(), (
-        "das Fenster muss nach dem dynamischen Ergebnis mindestens seine Wunschhöhe haben"
-    )
+    # Das Fenster muss nach dem dynamischen Ergebnis mindestens seine Wunschhöhe
+    # haben. Gewachsen wird ein paar Umläufe später; ein einzelner Umlauf reichte
+    # nur, solange über den Knöpfen ein leerer Streifen stand (FD-198).
+    wait_until(qt_app, lambda: dialog.height() >= dialog.sizeHint().height())
     from PySide6.QtWidgets import QDialogButtonBox
 
     buttons = dialog.findChild(QDialogButtonBox)

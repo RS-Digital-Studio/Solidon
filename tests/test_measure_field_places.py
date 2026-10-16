@@ -8,7 +8,12 @@ from itertools import combinations
 
 from PySide6.QtCore import QPoint, QRect, QSize
 
-from app.ui.measure_field_places import distance_reserve, emergency_places, rows_height
+from app.ui.measure_field_places import (
+    distance_reserve,
+    emergency_places,
+    grown_place,
+    rows_height,
+)
 from app.ui.style import SPACE
 
 
@@ -60,6 +65,29 @@ def test_the_emergency_places_stay_in_view_and_give_up_distance_before_freedom()
     # Selbst ohne jeden freien Platz bleibt es im Bild und nicht darunter.
     (place,) = emergency_places([field], bounds, [bounds], ([],))
     assert bounds.contains(place)
+
+
+def test_a_grown_card_keeps_its_corner_and_moves_only_as_far_as_it_must() -> None:
+    """Die gewachsene Karte bleibt stehen und rückt nur um das Nötige (FD-87).
+
+    Bis dahin verlor sie mit der neuen Größe ihren Platz und sprang an den
+    nächsten freien, oft an den anderen Bildrand.
+    """
+    bounds = QRect(0, 0, 1000, 800)
+    card = QRect(300, 500, 400, 200)
+    # Passt sie, bleibt die Ecke oben links.
+    assert grown_place(card, QSize(400, 280), bounds, []) == QRect(300, 500, 400, 280)
+    # Ragt sie unten hinaus, rückt sie genau um den Überstand hoch.
+    assert grown_place(card, QSize(400, 350), bounds, []) == QRect(300, 450, 400, 350)
+    # Ein Hindernis im Weg schiebt sie nur bis an seinen Rand, mit Abstand.
+    grip = QRect(300, 460, 100, 50)
+    assert grown_place(card, QSize(400, 350), bounds, [grip]) == QRect(
+        300 + 100 + SPACE, 450, 400, 350
+    )
+    # Was nirgends frei ist, behält keinen Platz.
+    assert grown_place(card, QSize(400, 350), bounds, [bounds]) is None
+    # Größer als der Raum findet sie keinen.
+    assert grown_place(card, QSize(1200, 200), bounds, []) is None
 
 
 def test_a_field_without_room_covers_another_field_rather_than_the_card() -> None:

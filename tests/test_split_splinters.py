@@ -79,3 +79,39 @@ def test_a_body_of_one_piece_still_says_so(profile: Profile) -> None:
 
     assert refusal.value.detail is ONE_PIECE
     assert refusal.value.suggestions == (CORRECT_INPUT, CANCEL)
+
+
+def test_a_body_of_only_splinters_says_so(profile: Profile) -> None:
+    """Zwei Würfel unter dem kleinsten druckbaren Volumen: kein „ein druckbares Teil“ (RB-5).
+
+    Die Absage sagte „nur ein druckbares Teil und 2 Splitter“, wo keins
+    druckbar ist — dieselbe Selbstwiderrede, die FD-113 behebt, am Körper
+    aus einem kaputten Import.
+    """
+    first = trimesh.creation.box((0.2, 0.2, 0.2))
+    second = trimesh.creation.box((0.2, 0.2, 0.2))
+    second.apply_translation((5.0, 0.0, 0.0))
+    assert first.volume < profile.smallest_printable_volume, "Vorbedingung: Splitter"
+    entry = SceneObject(
+        id="obj_1", name="Krümel", mesh=MeshData.of(trimesh.util.concatenate([first, second]))
+    )
+
+    with pytest.raises(ValidationError) as refusal:
+        _split(entry, profile, count=2)
+
+    error = refusal.value
+    assert "druckbares Teil" not in str(error.detail)
+    assert str(error.detail) == (
+        "Der Körper besteht nur aus 2 Splittern, die der Drucker nicht abbildet."
+    )
+    assert error.suggestions == (KEEP_SPLINTERS, CANCEL)
+
+
+def test_a_single_splinter_is_one_piece(profile: Profile) -> None:
+    """Ein Splitter allein bleibt ein Stück; ihn zu behalten teilte nichts."""
+    entry = SceneObject(
+        id="obj_1", name="Krümel", mesh=MeshData.of(trimesh.creation.box((0.2, 0.2, 0.2)))
+    )
+    with pytest.raises(ValidationError) as refusal:
+        _split(entry, profile, count=2)
+    assert refusal.value.detail is ONE_PIECE

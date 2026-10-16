@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -61,8 +62,10 @@ from app.ui.labels import (
     PARAMETER_UNITS,
     NumberSpin,
     area,
+    display_unit,
     feature_measure_tip,
     feature_name,
+    fill_parameter_units,
     length,
     localised,
     measure_text,
@@ -70,6 +73,7 @@ from app.ui.labels import (
 )
 from app.ui.leash import Worker, WorkerLeash, weak_slot
 from app.ui.panels import align_forms, collapsible, least_number_width
+from app.ui.parameter_dialog import number_places, shown_number, stored_number
 from app.ui.style import (
     NORMAL,
     SPACE,
@@ -318,14 +322,11 @@ class _ParamRow:
         # (Regel 21): So sieht der Kunde, was der Fall ist, statt es zu erfahren,
         # wenn das Teil falsch herauskommt.
         self.unit = QComboBox(parent)
-        for code, label in UNITS:
-            self.unit.addItem(str(label), code)
         chosen = str(parameter.unit or "")
-        if self.unit.findData(chosen) < 0:
-            self.unit.addItem(
-                str(tr("{unit} — wird nicht umgerechnet").format(unit=chosen or "?")), chosen
-            )
-        self.unit.setCurrentIndex(self.unit.findData(chosen))
+        # Eine Länge steht in der Anzeigeeinheit (FD-125), dieselbe Auswahl wie
+        # im Parameterdialog und in der Leiste.
+        fill_parameter_units(self.unit, chosen, display_unit())
+        self._given_code = chosen
 
         # Die Grenzen stehen am Projektparameter, wenn der Kunde sie gesetzt
         # hat. Wo nicht, ist die Vorgabe ihr eigener Anhaltspunkt: die Hälfte
@@ -340,8 +341,8 @@ class _ParamRow:
             spin.setRange(-1_000_000.0, 1_000_000.0)
             # Zwei Stellen wie überall sonst: „20,000" liest sich als
             # zwanzigtausend, und für ein Maß in Millimetern ist die dritte
-            # Stelle ohnehin unter der Druckgenauigkeit.
-            spin.setDecimals(2)
+            # Stelle ohnehin unter der Druckgenauigkeit. Zoll braucht vier.
+            spin.setDecimals(number_places(chosen, 2))
         # **Auch um die Null herum ein Bereich.** Die Hälfte und das Doppelte
         # sind bei 0 beide 0, und bei einem negativen Wert stehen sie verkehrt
         # herum — beides ergibt ``min == max``, und der Bereichstest prüft dann
@@ -349,13 +350,14 @@ class _ParamRow:
         # nach beiden Seiten ist keine Wahrheit über das Teil, aber ein
         # Bereich, den man ansieht und ändert.
         span = abs(value) or 1.0
-        self.minimum.setValue(
-            float(parameter.minimum) if parameter.minimum is not None else value - span / 2
-        )
-        self.maximum.setValue(
-            float(parameter.maximum) if parameter.maximum is not None else value + span
-        )
-        self.default.setValue(value)
+        self._given: dict[str, float] = {
+            "minimum": float(parameter.minimum)
+            if parameter.minimum is not None
+            else value - span / 2,
+            "maximum": float(parameter.maximum) if parameter.maximum is not None else value + span,
+            "default": value,
+        }
+        self._show_given()
 
         self.placement = QComboBox(parent)
         self.placement.addItem(tr("Vorn im Dialog"), PLACE_FRONT)
@@ -412,16 +414,14 @@ class _ParamRow:
         self.take.setChecked(True)
         self.title.setText(str(entry.title))
         unit = str(entry.unit or "")
-        if self.unit.findData(unit) < 0:
-            self.unit.addItem(
-                str(tr("{unit} — wird nicht umgerechnet").format(unit=unit or "?")), unit
-            )
-        self.unit.setCurrentIndex(self.unit.findData(unit))
+        fill_parameter_units(self.unit, unit, display_unit())
+        self._given_code = unit
         if entry.minimum is not None:
-            self.minimum.setValue(float(entry.minimum))
+            self._given["minimum"] = float(entry.minimum)
         if entry.maximum is not None:
-            self.maximum.setValue(float(entry.maximum))
-        self.default.setValue(float(entry.default))
+            self._given["maximum"] = float(entry.maximum)
+        self._given["default"] = float(entry.default)
+        self._show_given()
         self.placement.setCurrentIndex(max(0, self.placement.findData(str(entry.placement))))
         self.doc.setText(str(entry.doc or ""))
 
@@ -454,14 +454,32 @@ class _ParamRow:
             self.doc,
         )
 
+    def _spins(self) -> tuple[tuple[str, NumberSpin], ...]:
+        return (("minimum", self.minimum), ("maximum", self.maximum), ("default", self.default))
+
+    def _show_given(self) -> None:
+        """Die gespeicherten Zahlen in den Feldern — eine Länge in der Anzeigeeinheit (FD-125)."""
+        for key, spin in self._spins():
+            spin.setDecimals(number_places(self._given_code, 2))
+            spin.setValue(shown_number(self._given[key], self._given_code))
+        self._shown = {key: spin.text() for key, spin in self._spins()}
+
+    def _stored(self, key: str) -> float:
+        """Die Zahl eines Felds im Maß des Bausteins; unberührt gilt die gespeicherte."""
+        spin = dict(self._spins())[key]
+        code = str(self.unit.currentData() or "")
+        if code == self._given_code and spin.text() == self._shown[key]:
+            return self._given[key]
+        return stored_number(spin.value(), code)
+
     def exposed(self) -> Any:
         return recipes.ExposedParam(
             name=self.name,
             title=self.title.text().strip() or self.name,
-            default=self.default.value(),
+            default=self._stored("default"),
             unit=str(self.unit.currentData()),
-            minimum=self.minimum.value(),
-            maximum=self.maximum.value(),
+            minimum=self._stored("minimum"),
+            maximum=self._stored("maximum"),
             placement=str(self.placement.currentData()),
             doc=self.doc.text().strip(),
         )
@@ -846,6 +864,11 @@ class RecipeDialog(QDialog):
         self._scroll = DialogScrollArea(self)
         self._scroll.setWidget(content)
         self._scroll.contentSizeChanged.connect(self._fit_soon)
+        # Zugeklappt gibt der Dialog die Höhe zurück; passiv gemessen bliebe
+        # sie leer über den Knöpfen stehen (FD-198).
+        flap = self.more_section.findChild(QToolButton, "sectionHeading")
+        if flap is not None:
+            flap.toggled.connect(weak_slot(self, RecipeDialog._fit_soon, "explicit"))
         outer = QVBoxLayout(self)
         outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)

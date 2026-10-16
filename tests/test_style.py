@@ -2204,7 +2204,8 @@ _LAYOUTS = frozenset({"QVBoxLayout", "QHBoxLayout", "QFormLayout", "QGridLayout"
 #: Module der Karten des Hauptfensters: geprüft, auch wenn ihre Dialogklasse
 #: (``BodyChoiceDialog``) einmal umzieht. Ihre Höhen teilt
 #: ``OverlayHost._share_room`` und liest dabei die Abstände der Layouts (FD-23).
-_CARD_MODULES = frozenset({"panels.py"})
+#: Dazu die Maßgruppe im Bild mit Leiste und Karte (FD-103).
+_CARD_MODULES = frozenset({"panels.py", "placement_flow.py"})
 
 
 def _layouts_without_spacing(source: str) -> list[str]:

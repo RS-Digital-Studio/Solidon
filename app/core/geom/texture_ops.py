@@ -1109,7 +1109,7 @@ def _face_texture_tool(source: SceneObject, params: TextureParams, seed: int) ->
     from shapely.geometry import Polygon
     from shapely.ops import unary_union
 
-    from app.core.errors import CANCEL, CHANGE_SELECTION, GeometryError
+    from app.core.errors import CANCEL, CHANGE_FACES, GeometryError
     from app.core.geom.face_ops import _chosen_face, _no_face
     from app.core.geom.faces import FLAT_ENOUGH_FOR_A_TOOL, _triangles_of, face_normal
     from app.core.geom.mesh import as_mesh_data
@@ -1137,7 +1137,7 @@ def _face_texture_tool(source: SceneObject, params: TextureParams, seed: int) ->
     if np.max(np.abs(local[:, :, 2])) > FLAT_ENOUGH_FOR_A_TOOL:
         raise GeometryError(
             detail=_("Für ein Muster bis zum Rand wählen Sie eine ebene Fläche."),
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FACES, CANCEL),
         )
     outline = unary_union([Polygon(triangle[:, :2]) for triangle in local])
     return tool_in_outline(

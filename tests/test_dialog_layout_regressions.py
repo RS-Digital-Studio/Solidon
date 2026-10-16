@@ -394,7 +394,11 @@ def test_parameter_dialog_keeps_validation_and_actions_reachable_when_short(
         assert buttons.parentWidget() is dialog
         assert dialog._scroll.verticalScrollBar().maximum() > 0
 
-        dialog.name_field.clear()
+        # Ein Satz am Ende des Formulars: Eine Ablehnung des Namens steht seit
+        # FD-155 am Namensfeld ganz oben und rollte nie aus dem Bild.
+        dialog.name_field.setText("wand")
+        dialog.value_field.setValue(2.0)
+        dialog.minimum_field.setText("5")
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         assert ok is not None
         ok.click()

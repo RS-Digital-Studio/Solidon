@@ -1500,6 +1500,62 @@ def qt_app() -> object:
     return application
 
 
+@pytest.fixture(autouse=True)
+def _no_mouse_button_outlives_its_test(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Nach einem Fall mit ``qt_app`` ist keine Maustaste mehr gedrückt (FD-142).
+
+    ``QTest.mouseDClick`` lässt die Taste nicht los, und Qt hielt sie bis zum
+    nächsten Klick im selben Prozess für gedrückt: Jede Bewegung danach war ein
+    Zug ohne Enter und Leave, und rot wurde ein späterer Fall, nicht der
+    verursachende (FD-83). Gemeldet wird hier am verursachenden; danach lässt
+    ein verborgenes Hilfswidget die Taste los, damit der nächste Fall frei
+    beginnt. Ein Doppelklick wie der des Kunden: ``tools.qt_clicks.double_click``.
+    """
+    yield
+    if "qt_app" not in request.fixturenames:
+        return
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QGuiApplication
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QWidget
+    from shiboken6 import delete
+
+    held = QGuiApplication.mouseButtons()
+    if held == Qt.MouseButton.NoButton:
+        return
+    spare = QWidget()
+    mouse = Qt.MouseButton
+    for button in (mouse.LeftButton, mouse.RightButton, mouse.MiddleButton):
+        if held & button:
+            QTest.mouseRelease(spare, button)
+    delete(spare)
+    pytest.fail(f"Nach dem Fall ist noch {held!r} gedrückt; ein Druck ohne Loslassen? (FD-142)")
+
+
+@pytest.fixture(autouse=True)
+def _no_window_outlives_its_test(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Nach einem Fall mit ``qt_app`` steht kein neues sichtbares Fenster mehr (FD-191).
+
+    Ein offen gelassener Dialog machte einen späteren Fall im selben Arbeiter
+    rot (``function_surface.open_dialog``: „Mehrere offene Bedienflächen“).
+    Gemeldet wird hier am verursachenden; danach sind die Fenster zu, damit
+    der nächste Fall frei beginnt. Die Liste von vorher hält die Fenster fest,
+    damit keine Kennung an ein neues Objekt weitergegeben wird.
+    """
+    from tests import window_leftovers
+
+    before = window_leftovers.visible_windows()
+    yield
+    if "qt_app" not in request.fixturenames:
+        return
+    left = window_leftovers.leftovers({id(widget) for widget in before})
+    if not left:
+        return
+    named = window_leftovers.describe(left)
+    window_leftovers.close_all(left)
+    pytest.fail(f"Nach dem Fall stehen noch offen: {named}; wer öffnet, schließt (FD-191)")
+
+
 @pytest.fixture
 def record_trace(request: pytest.FixtureRequest) -> Callable[[str, object], None]:
     """Befunddaten eines Falls an seinen Bericht — ``record_property`` ohne JUnit.

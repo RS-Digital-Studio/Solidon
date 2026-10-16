@@ -1032,11 +1032,12 @@ class NewFilamentDialog(QDialog):
             )
         self.stock_hint.setText(text)
 
-    def focus_field(self, field: str) -> bool:
+    def focus_field(self, field: str, *, check_only: bool = False) -> bool:
         """Den Cursor in das Feld setzen, das der Kern in einer Abweisung nennt.
 
         Die Namen sind die der ``CatalogueFilament``-Felder; ein Feld hinter
-        „Weitere Angaben" klappt seinen Abschnitt dafür auf.
+        „Weitere Angaben" klappt seinen Abschnitt dafür auf. ``check_only``
+        fragt nur, ob der Sprung ginge (``refusal_details.field_ways``).
         """
         editors: dict[str, QWidget] = {
             "name": self.name,
@@ -1057,6 +1058,8 @@ class NewFilamentDialog(QDialog):
         editor = editors.get(field)
         if editor is None:
             return False
+        if check_only:
+            return True
         if self.more.isAncestorOf(editor):
             open_section(self.more)
         editor.setFocus()

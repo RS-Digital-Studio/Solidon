@@ -40,7 +40,7 @@ from numpy.typing import NDArray
 from app.core.errors import (
     ARRANGE_ON_BED,
     CANCEL,
-    CHANGE_SELECTION,
+    CHANGE_FEATURE,
     CHANGE_THIS_STEP,
     CHANGE_THREAD_STEP,
     CORRECT_INPUT,
@@ -497,7 +497,7 @@ def _hole_of(source: SceneObject, name: str) -> Feature:
             value=name,
             constraint="not_a_hole",
             values={"known": ", ".join(sorted(source.features))},
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     # Die Einführfase einer Einpressbuchse ist als Bohrung erklärt, aber kein
     # Hohlraum für sich: Der Stift dort war eine Scheibe Ø 4,75 und 0,5 hoch (Review G, F2).
@@ -507,7 +507,7 @@ def _hole_of(source: SceneObject, name: str) -> Feature:
             detail=_("Das ist die Einführfase der Bohrung darunter. Wählen Sie die Bohrung."),
             value=name,
             constraint="lead_in",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     return feature
 

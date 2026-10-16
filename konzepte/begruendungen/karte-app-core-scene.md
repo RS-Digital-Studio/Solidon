@@ -970,3 +970,29 @@ und nachherigen Zuständen rücknehmbarer Operationsänderungen. Eine bereits
 gespeicherte ausdrückliche Wahl bleibt erhalten. Neue Schritte dürfen schlanke
 Körper auf ihrer bestehenden Platte zur nächsten besseren freien Mittellage
 verschieben; Plattenzahl, Nachbarn und Abstände bleiben erhalten.
+
+
+## Zuordnungsbezug zur Ansicht (aus der Karte)
+
+`EvaluationResult.question_reference` trägt bei einer offenen Zuordnungsfrage
+den bisherigen Bezug mit Ansichtsdreiecken, nur vorübergehend zur Ansicht und
+nie im Dokument.
+
+
+## Auswahlhandlungen am auslösenden Schritt (Review 1 Restpaket B, RB-1/RB-2)
+
+*Andere Kanten wählen*, *Andere Flächen wählen* und *Anderes Merkmal wählen*
+öffnen den Schritt (`change_step`). Dieselbe Absage kommt aus mehreren
+Schritten: „Radius zu groß für diese Kanten“ aus *Verrunden* (Feld *Kanten*)
+und aus *Merkmal ändern* (Feld *Merkmal*), „Fläche gewölbt“ aus *Fläche
+versetzen* und *Kammer ändern*. Die Absage weiß nicht, wer sie ruft; die
+Auswertung weiß es. `choice_ways.fitted_to_step` läuft deshalb an beiden
+Wegen in den Prüfbericht (`evaluate._finding_from` und die Befunde einer
+Ausgabe), liest das Schema des Schritts und legt das Feld in
+`values["choice_field"]` ab. Hat der Schritt kein Feld der genannten Art,
+meint die Absage sein Merkmal (`CHANGE_FEATURE`), ohne Merkmalsfeld den
+Schritt selbst (`CHANGE_THIS_STEP`). `values["field"]` bleibt dem Wert, den
+*Eingabe korrigieren* öffnet; ein Schlüssel für beide ließ beide Knöpfe
+dasselbe tun. Der Fensterhandler von `change_step` nimmt das Auswahlfeld
+(`choice_ways.for_the_choice`).
+

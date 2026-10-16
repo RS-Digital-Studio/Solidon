@@ -43,7 +43,6 @@ from PySide6.QtWidgets import (
     QMenu,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
@@ -67,10 +66,12 @@ from app.ui.filament_picker import (
     stock_label,
     swatch,
 )
+from app.ui.grouped_spin import GroupedNumberSpin
 from app.ui.icons import icon
-from app.ui.labels import NumberSpin, calendar_day, local_timestamp, localised
+from app.ui.labels import calendar_day, local_timestamp, localised
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying, weak_slot
 from app.ui.panels import collapsible
+from app.ui.scroll_areas import PassingScrollArea
 from app.ui.style import NORMAL, SPACE, TIGHT, WIDE, make_primary, set_level
 
 _log = get_logger(__name__)
@@ -518,9 +519,8 @@ class InventoryView(QWidget):
         )
         self.booking_mode.currentIndexChanged.connect(self._booking_mode_changed)
         settings_layout.addWidget(self.booking_mode)
-        self.low_stock_threshold = NumberSpin(shelf)
+        self.low_stock_threshold = GroupedNumberSpin(shelf)
         self.low_stock_threshold.setRange(0, 100)
-        self.low_stock_threshold.setDecimals(0)
         self.low_stock_threshold.setSuffix(f" {tr('%')}")
         self.low_stock_threshold.setValue(self._low_stock_percent)
         self.low_stock_threshold.setAccessibleName(tr("Warnschwelle für niedrigen Bestand"))
@@ -590,7 +590,7 @@ class InventoryView(QWidget):
         empty_layout.addWidget(self.empty_actions)
         empty_layout.addStretch(1)
         layout.addWidget(self.empty_panel, 1)
-        self.page_scroll = QScrollArea(shelf)
+        self.page_scroll = PassingScrollArea(shelf)
         self.page_scroll.setWidgetResizable(True)
         self.page_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.shelves = QWidget(self.page_scroll)
@@ -607,7 +607,7 @@ class InventoryView(QWidget):
         layout.addLayout(actions)
         self.pages.addWidget(shelf)
         self.detail = QWidget(self)
-        detail_scroll = QScrollArea(self)
+        detail_scroll = PassingScrollArea(self)
         detail_scroll.setWidgetResizable(True)
         detail_scroll.setFrameShape(QFrame.Shape.NoFrame)
         detail_scroll.setWidget(self.detail)

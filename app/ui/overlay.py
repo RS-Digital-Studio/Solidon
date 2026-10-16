@@ -75,6 +75,7 @@ from app.i18n import tr
 from app.ui.cursors import cursor
 from app.ui.icons import icon
 from app.ui.leash import stop_watching_the_dying
+from app.ui.scroll_areas import PassingScrollArea
 from app.ui.style import ROOMY, SPACE
 from app.ui.tab_windows import DetachableTabs
 from app.ui.theme import THEMES, Theme
@@ -1016,7 +1017,7 @@ class CurrentPageTabs(DetachableTabs):
         return self._chrome_height(super().sizeHint(), stack) + inner
 
 
-class ContentScroller(QScrollArea):
+class ContentScroller(PassingScrollArea):
     """Ein Rollbereich, der seinen ganzen Inhalt wünscht; legen darf Qt ihn selbst.
 
     Anders als :class:`FittedScroller` setzt Qt die Größe des Inhalts hier
@@ -1043,7 +1044,7 @@ class ContentScroller(QScrollArea):
         return QSize(hint.width(), height + 2 * self.frameWidth())
 
 
-class FittedScroller(QScrollArea):
+class FittedScroller(PassingScrollArea):
     """Ein Rollbereich, der seinen ganzen Inhalt wünscht und erst rollt, wenn die Zone knapp ist.
 
     Für eine Karte aus vielen festen Zeilen, deren Höhe die Überlagerung
@@ -1622,7 +1623,15 @@ class OverlayHost(QWidget):
     def _card_width(self, key: str, width: int) -> int:
         """Wie breit eine Seitenkarte ist — gleich, wo sie steht."""
         if key == "left":
-            return card_width(LEFT_WIDTH, LEFT_MAX, width)
+            card = card_width(LEFT_WIDTH, LEFT_MAX, width)
+            if self.left is None:
+                return card
+            # **Was der Inhalt mindestens braucht, bekommt er, bis LEFT_MAX**
+            # (FD-20): Der Objektbaum nennt die Breite, in der Name und Maß
+            # ganz stehen. Über der schmalen Grenze wächst nichts; dort teilt
+            # der Baum die Breite wie bisher.
+            least = self.left.minimumSizeHint().width()
+            return max(card, min(least, LEFT_MAX, int(width * NARROW_CARD_SHARE)))
         return self._right_width(width)
 
     def _card_sizes(

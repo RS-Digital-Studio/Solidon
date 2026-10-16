@@ -690,6 +690,35 @@ nicht zweimal. Der Kunde sieht davon nichts außer der längeren Wartezeit —
 und die hat seit RM-208 über zwei Sekunden Balken und *Abbrechen*.
 Nachweis: `test_evaluation.py::test_a_coarse_preview_the_kernel_refuses_is_computed_exactly`.
 
+### Aus der Regel: Einzelheiten der groben Stufe
+
+Beim Merge von welle5 (16.10.2026) aus `wartezeit.md` hierher verschoben,
+damit die Ladelast von `main_window.py` und `placement_flow.py` unter der
+Grenze bleibt; die Regel nennt die Stelle.
+
+Ein Verkleinerungsziel unter dem, was der Sehnenfehler allein erreicht,
+reißt Geschlecht und erkannten Bohrungsdurchmesser. Braucht eine Form (Figur,
+Scan) bei 0,05 mm mehr Dreiecke als die Schranke, wird sie gröber — „grob“
+steht auch dann.
+
+**Beim Rückweg ins Netz** fallen Splitter (`kernel_jobs.without_slivers`), und
+`mesh_ops._as_mesh` verschweißt nur, wo das Netz dicht bleibt (wie
+`boolean._tidied`).
+
+**Die Verkleinerung rechnet aus einem Arbeiter im Hilfsprozess**
+(`geom.kernel_process`, RM-212; GIL: `kern.md`), aus dem Hauptthread gerufen
+hier — gewartet wäre dort genauso.
+
+**Was an der Dreieckszahl hängt, zählt das Original:** Eine Absage ist die
+Antwort, mit den Handlungen, die der Dialog selbst einlöst
+(`OperationDialog.show_refusal`, `MainWindow._refusal_handlers`) — *Dreiecke
+verringern und erneut versuchen* ist eine Transaktion. Ändert eine Operation
+nur das Netz (`retriangulates`) und wüchse es über die Schranke, ist die
+geschätzte Zahl die Vorschau (`TriangleCounts`); sonst rechnet der Schritt am
+Original, bei `retriangulates` ohne Booleschen Vergleich
+(`compare_scenes(retriangulated=…)`). Exakte Eingänge und der Agentenweg
+werden nicht vorab gezählt.
+
 ### Die Vorschau über zwei Sekunden, und was ihr Band sagt
 
 **Über zwei Sekunden bekommt die Vorschau Balken und *Abbrechen*.** Ein

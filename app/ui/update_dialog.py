@@ -41,6 +41,7 @@ from app.i18n import get_language, tr
 from app.ui.changes_dialog import groups_html, lead_box, lead_html
 from app.ui.dialogs import open_link
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
+from app.ui.scroll_areas import ReadingScrollArea
 from app.ui.style import NORMAL, SPACE, WIDE, make_primary
 
 #: Wie viel Liste beim Öffnen sichtbar ist, bevor sie rollt — eine
@@ -199,7 +200,9 @@ class UpdateDialog(QDialog):
         # Ein Rollbereich mit Deckel: Acht Punkte passen, zwanzig nicht, und
         # ein Fenster, das über den Bildschirmrand wächst, verliert seine
         # Knöpfe nach unten.
-        self.scroller = QScrollArea(self)
+        self.scroller = ReadingScrollArea(
+            tr("Neue Version"), tr("Mit Pfeil- und Bildtasten blättern."), self
+        )
         self.scroller.setWidget(self.changes)
         self.scroller.setWidgetResizable(True)
         self.scroller.setFrameShape(QScrollArea.Shape.NoFrame)

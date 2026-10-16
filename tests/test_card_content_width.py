@@ -170,7 +170,6 @@ def test_the_face_keeps_its_lines_columns_and_footer_when_it_shrinks(
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(0)
     layout.addWidget(scroller, 1)
-    layout.addWidget(feature_panel.footer())
     tabs.addTab(page, "Auswahl")
     shell = QWidget()
     box = QVBoxLayout(shell)
@@ -236,7 +235,7 @@ def test_the_face_keeps_its_lines_columns_and_footer_when_it_shrinks(
         )
     for label, height in heights.items():
         assert label.heightForWidth(label.width()) <= height, label.text()
-    assert feature_panel.footer().geometry().bottom() <= page.height()
+    assert feature_panel._footer.geometry().bottom() <= feature_panel.height()
     assert scroller.horizontalScrollBar().maximum() == 0
 
 
@@ -486,7 +485,6 @@ def test_open_hole_coordinates_follow_actual_font_changes(
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(0)
     layout.addWidget(scroller, 1)
-    layout.addWidget(panel.footer())
     tabs.addTab(page, "Auswahl")
     shell = QWidget()
     box = QVBoxLayout(shell)
@@ -549,7 +547,7 @@ def test_open_hole_coordinates_follow_actual_font_changes(
             "Geöffnete XYZ-Felder bleiben bei vorhandenem Platz nebeneinander"
         )
         assert coordinates.width() >= coordinates._needed()
-        assert panel.footer().geometry().bottom() <= page.height()
+        assert panel._footer.geometry().bottom() <= panel.height()
         assert scroller.horizontalScrollBar().maximum() == 0
         from app.ui.card_width import button_width
 

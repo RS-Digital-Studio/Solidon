@@ -257,42 +257,6 @@ def plane(centre: Vec, width: float, depth: float) -> Mesh:
     return vertices, np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int64)
 
 
-def grid_lines(
-    centre: Vec, width: float, depth: float, step: float
-) -> tuple[np.ndarray, list[int]]:
-    """Die Linien eines Rasters über einer Fläche — als Punktpaare, dazu die
-    Kettenlängen (immer zwei), für ``add_lines(polylines=...)``."""
-    x, y, z = (float(value) for value in centre)
-    columns = max(1, round(width / step))
-    rows = max(1, round(depth / step))
-    xs = np.linspace(x - width / 2.0, x + width / 2.0, columns + 1)
-    ys = np.linspace(y - depth / 2.0, y + depth / 2.0, rows + 1)
-    points: list[list[float]] = []
-    for value in xs:
-        points.append([float(value), float(ys[0]), z])
-        points.append([float(value), float(ys[-1]), z])
-    for value in ys:
-        points.append([float(xs[0]), float(value), z])
-        points.append([float(xs[-1]), float(value), z])
-    return np.asarray(points, dtype=float), [2] * (len(points) // 2)
-
-
-def grid_line_levels(
-    centre: Vec, width: float, depth: float, step: float
-) -> tuple[np.ndarray, np.ndarray]:
-    """Vorhandene Rasterlinien in Nebenlinien und jede fünfte Hauptlinie teilen.
-
-    Beide Richtungen zählen ab ihrem bisherigen Ursprung; Lage und Abstand
-    bleiben gleich. Keine Linie wird in beiden Stufen gezeichnet.
-    """
-    points, _spans = grid_lines(centre, width, depth, step)
-    columns = max(1, round(width / step)) + 1
-    pairs = points.reshape(-1, 2, 3)
-    indices = np.concatenate((np.arange(columns), np.arange(len(pairs) - columns)))
-    major = indices % 5 == 0
-    return pairs[~major].reshape(-1, 3), pairs[major].reshape(-1, 3)
-
-
 def merge(*meshes: Mesh) -> Mesh:
     """Mehrere Netze zu einem — die Indizes verschieben sich mit."""
     vertices: list[np.ndarray] = []

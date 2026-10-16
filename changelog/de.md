@@ -77,6 +77,11 @@ Nutzen da und sonst nichts.
 - Ein Bildschirmleser liest an jedem Zahlenfeld eines Dialogs Namen und Erklärung vor.
 - Nach einer Handlung im Prüfbericht bleibt der Bericht vorn, und Strg+Z nimmt sie gleich zurück. Bisher sprang der Reiter *Auswahl* nach vorn.
 - Hinweise zu Druckbett und Haftung nutzen die gewählte Einheit. Beim Wechsel mm/Zoll bleiben Befundauswahl, offene Details, Reiter und der Klappzustand der Körper erhalten.
+- Die Maßzahlen am Druckbett folgen der gewählten Einheit und nennen sie. In Version 0.6.0 standen dort auch bei Zoll Millimeter.
+- Das Bettraster zählt von der Bettmitte aus, in Millimetern alle 10 mm, in Zoll jeden halben Zoll. Jede Maßzahl steht an einer kräftigen Linie.
+- In der Ansicht *Orthografisch* zeigt ein Klick auf einen Befund die Stelle in passender Größe. Bisher blieb der Zoom davor stehen.
+- Ein Klick auf einen Befund ohne eigene Stelle zeigt den ganzen Körper, und ein geöffnetes Projekt steht ganz im Bild.
+- Eine gewählte Bohrung bleibt samt Rand sichtbar. Die Ziehknöpfe stehen außen am Rand, die Pfeile beginnen erst dahinter.
 - Strg+Z und Strg+Y wirken auch, wenn der Cursor in einem leeren Feld steht, etwa im Suchfeld. Wer dort getippt hat, nimmt zuerst sein Tippen zurück.
 - Ohne Freischaltung sind ändernde Handlungen in Prüfbericht, Reiter *Auswahl*, Kontextmenüs und Filamentwahl grau und nennen den Grund. Bisher kam die Absage erst nach dem Klick.
 - Ohne Freischaltung sind auch *Parameter anlegen …*, *Bewegen*, *Teilen*, die Tasten im Verlauf und die Maße im Bild grau. Jeder Grund nennt den Weg, etwa *Hilfe → Solidon freischalten …*.
@@ -92,11 +97,49 @@ Nutzen da und sonst nichts.
 - Die Auswahlkarte folgt Inhalt und Schrift; Text und Handlungsspalten bleiben erhalten. Freie Reiterfenster behalten ihre Größe. Bei angebotener Merkmaländerung ist „Übernehmen“ die Hauptaktion.
 - Gegenstücke fragen zuerst nach Paar und Größe; die Auswahl erklärt beide Hälften. Form und Passung stehen unter „Weitere Einstellungen“. Die Anfangshöhe passt zum Inhalt.
 - Nach einer Vorschauabsage bleiben die Texte der nächsten Vorschau vollständig lesbar.
+- Die Zahlenzeile mit Material und Druckdauer nennt „seit dem letzten Schritt“ nur noch, was ein Schritt geändert hat. Solange die Werte des Slicerprofils noch gelesen werden, steht „vorläufig“ daneben.
+- Material und Druckdauer stehen in der Statusleiste immer ganz da. Ist die Leiste voll, kürzt sich die Meldung daneben, ihr ganzer Satz steht in der Kurzhilfe.
+- Die Kopfzeile kürzt den Druckernamen erst, wenn die Zeile voll ist. Projektname und Maße stehen links beisammen, der Drucker rechts neben *Druckeinstellungen …*.
+- Findet *Automatisch teilen* keinen Schnitt, sagt die Statuszeile den Grund. Bisher meldete sie dann, das Teil passe bereits auf das Bett.
+- Die kurze Quittung nach einer Handlung steht neben den Karten statt darüber, etwa neben dem Prüfbericht. Der nächste Schritt nimmt sie samt Statuszeile mit, auch ein altes „Zurückgenommen“.
+- Am Befund eines erzeugten Modells öffnet *Neu erzeugen* den Generator mit dessen Beschreibung und dem nächsten Startwert.
+- Lehnt die Analysekarte ein zu großes Modell ab, stehen die Dreieckszahlen in Dreiergruppen, etwa 2 103 472.
+- Hält die Kette an, öffnet eine Funktion, die einen Schritt dahinter anlegen würde, keinen Dialog mit grauem Knopf mehr. Der Halt und sein Weg weiter stehen gleich da.
+- Im Prüfbericht erreicht die Tabulatortaste die angebotene Handlung, und kein Rollbereich ist mehr ein eigener Halt ohne Namen.
+- Ein Doppelklick auf eine Maßänderung im Verlauf öffnet das Maß zum Ändern, auf einen Drucker- oder Materialwechsel die *Druckeinstellungen …*.
+- Die Maßspalte im Objektbaum zeigt auch krumme Maße ganz; die linke Karte wird dafür bei Bedarf etwas breiter.
+- Befundzeilen im Prüfbericht zeigen ihre Maßangabe vollständig und nennen jeden Körper nur einmal.
+- Die Parameterleiste zeigt Längen in Zoll, wenn Zoll eingestellt ist. Ein Rechtsklick auf das Wertfeld öffnet *Ändern …*.
+- Der Dialog *Parameter anlegen …* erklärt jedes Feld, auch Unter- und Obergrenze, und ein Bildschirmleser nennt jedes Feld beim Namen.
+- Passt ein Parametername nicht, steht der Grund direkt unter dem Namensfeld, mit einem Knopf für einen Namen, der geht.
+- Wer in Zoll arbeitet, gibt Längenparameter in *Parameter anlegen …* und beim Speichern eines Bausteins in Zoll ein. Version 0.6.0 zeigte dort nur Millimeter.
+- Der Dialog *Material kalibrieren* nennt ein ungemessenes Material „noch nicht kalibriert“, auch in der Kommandozeile. Bisher stand dort „Startwert“.
+- Eine Absage im Dialog wiederholt ihren Titel nicht mehr darunter. *Eingabe korrigieren* setzt dort den Cursor in das Feld, um das es geht.
+- Die *Einzelheiten* nennen Körper und Schritt beim Namen und die Stelle in der gewählten Einheit. *Werte ansehen* zeigt die Namen der Felder und ist nur so hoch wie nötig.
+- Die Felder der Leisten *Analyse* und *Teilen*, die Beschreibung in *Modell erzeugen*, die Wahl *Typ* und der Haken „Werte mitgeben“ sagen in der Kurzhilfe und dem Bildschirmleser, was sie bewirken.
+- Von einem Reiter der rechten Karte führt die Tabulatortaste in die Seite, die vorn steht, und geht sie von oben nach unten durch.
+- Ein Projektmaß ohne Einheit bleibt im Verlauf und in der Parameterleiste eine Zahl, auch bei Zoll. Version 0.6.0 schrieb im Verlauf „mm“ dazu.
+- Ein Bildschirmleser nennt in jedem Operationsdialog jedes Feld beim Namen, auch Auswahllisten, Haken und Merkmalslisten.
+- Große ganze Zahlen stehen auch in Eingabefeldern in Dreiergruppen, etwa 1 051 736 Dreiecke oder 10 000 mm/s² *Beschleunigung*. Getippt werden sie mit oder ohne Trennzeichen.
+- Lange Feldnamen unter *Weitere Einstellungen* zeigen jede Zeile, auch bei großer Schrift. In Version 0.6.0 fehlte etwa bei *Bohrung setzen* das letzte Wort von „Durchmesser der Aufweitung“.
+- Operationsdialoge sind so hoch wie ihr Inhalt, auch nach dem Aufklappen von *Weitere Einstellungen*. In Version 0.6.0 blieb etwa bei *Merkmal vervielfachen* ein Streifen über den Knöpfen leer.
+- Dialoge mit aufklappbaren Abschnitten wie *Parameter anlegen* sind nach dem Auf- und Zuklappen so hoch wie ihr Inhalt. Seitwärts rollen sie nur, wenn der Bildschirm zu schmal ist.
+- Ist ein Pflichtfeld wie der Text von *Schriftzug als Körper* leer, sagt das Feld, was hineingehört, und der Knopf wartet. Version 0.6.0 zeigte dort beim Öffnen einen Fehler.
+- Wer einen Schritt ändert, bestätigt mit *Übernehmen*. Der Knopf bleibt grau, bis sich etwas geändert hat, und nennt das Feld dafür.
+- Der Dialog *Material kalibrieren* zeigt Spiel, Übermaß, Lochkorrektur, Elefantenfuß und Wand in der gewählten Einheit, auch in Zoll, und behält die dritte Nachkommastelle.
+- Ein langer Knopf unter einer Absage bricht bei großer Schrift um, statt den Dialog zu verbreitern.
+- Knöpfe werden bei großer Schrift nicht mehr gestaucht. Im Prüfbericht waren die Handlungen eines Befunds in Version 0.6.0 oben und unten abgeschnitten.
+- Ändert sich die Schriftgröße des Systems, folgt Solidon sofort, auch in offenen Dialogen. Version 0.6.0 übernahm sie erst nach einem Neustart.
+- Eine Sammelzeile im Prüfbericht nennt in der Kurzhilfe höchstens fünfzehn Betroffene mit Art und Körper. In Version 0.6.0 las ein Bildschirmleser dort jeden Satz einzeln.
+- Die Legende *Hinzugefügt* und *Entfernt* steht im Vorschauband nur, wenn die Vorschau Material hinzufügt oder entfernt. Bei *Objekt umbenennen* fehlt sie deshalb.
 - Der Chat nennt bei Parametern, Passungen, Drucker, Material und Rückgängig den Ort im Fenster, an dem man dasselbe selbst tut.
-- Der Prüfbericht nennt die Körper einer Passung beim Namen statt mit einer internen Kennung.
+- Der Prüfbericht und die Prüfung vor dem Export nennen die Körper einer Passung beim Namen statt mit einer internen Kennung, auch einen inzwischen entfernten Körper.
+- Meldungen nennen ein Merkmal mit Art und Nummer, etwa „Bohrung 2“, statt mit einer internen Kennung. Beim Gegenstück zu einem Gewinde stehen Durchmesser und Steigung in der eingestellten Einheit.
 - Englisch und Portugiesisch unterscheiden den Überstand eines Hakens oder eines Körpers unter dem Bett vom Überhang beim Drucken.
 - Auf Spanisch und Portugiesisch zeigen Menü, Suche und Dialog bei *Stift für Bohrung* und *Druckoptimal ausrichten* wieder nur den ersten Satz.
 - Einige Übersetzungen lesen sich klarer, darunter die Einleitung von *Parameter anlegen …*. Der Zapfen beginnt in allen Sprachen groß.
+- Erklärungen in den Karten sind so hoch wie ihr Text, auch in einer breiten Karte. In Version 0.6.0 standen dort je nach Sprache leere Zeilen, etwa unter zwei gewählten Flächen.
+- Ein Auswahlfeld nennt einen Wert, den seine Liste nicht anbietet, beim Namen, etwa „Fläche 1 · passt hier nicht“, eine Kante mit Lage und Ort. Version 0.6.0 zeigte eine interne Kennung.
 - Im Fenster *Solidon freischalten …* bleibt *Solidon kaufen* auch auf einem freigeschalteten Rechner bedienbar. Graue Knöpfe nennen ihren Grund, *Schlüssel prüfen* auch den Weg zum neuen Schlüssel.
 - Auf Französisch heißt der Erste eines Monats jetzt „1er“, etwa „1er décembre 2026“.
 - Ohne Grafiktreiber, etwa in einer virtuellen Maschine, endet Solidon nach dem Schließen jetzt zuverlässig. In Version 0.6.0 konnte das Programm dort unsichtbar weiterlaufen.
@@ -118,8 +161,28 @@ Nutzen da und sonst nichts.
 - Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
 - Bei Bohrungen zeigen Bild und *Auswahl* dieselbe Änderung. Zielmaß, Tiefe und mitgehender Einlauf stehen vorn; Druckkorrektur und Feinwerte unter „Weitere Werte“.
 - Bohrungsfelder und der Haken zum gemeinsamen Ändern gleichartiger Merkmale erklären ihre Wirkung. „Druckabweichung ausgleichen“ beschreibt die Korrektur aus dem Materialprofil verständlicher.
+- Im Reiter *Auswahl* steht *Übernehmen* direkt unter der offenen Handlung, „Filament und Druck“ steht oben mit der Farbe der Zuweisung, und unter der Liste bleibt keine leere Fläche.
+- Eine geänderte Bohrung behält ihren Platz im Objektbaum.
+- Handlungen, die an einem Merkmal nicht gehen, stehen als „Hier nicht möglich: …“ mit ihrem Grund da.
+- Wer einen Würfel zum Ausprobieren einer Passung ausschneidet, wählt dessen Lage jetzt unter *Lage des Würfels*. Die Zeile *Stelle* darüber zeigt sie an.
+- Der Dialog hinter *Dicke geben* sagt in seiner ersten Zeile, dass er der Fläche eine Dicke gibt.
+- Die Tabulatortaste geht in der Maßkarte von den Feldern über den Haken für gleichartige Merkmale zu *Übernehmen* und *Abbrechen* und zurück. Der Haken steht jetzt über den Knöpfen.
+- Nach *Abbrechen* oder Esc in der Maßkarte steht die Tastatur wieder in der 3D-Ansicht, wie nach *Übernehmen*. Bisher landete sie auf der Karte *Objekte*.
+- In der Maßkarte bleibt *Übernehmen* grau, bis sich ein Wert oder der Haken für gleichartige Merkmale ändert, und nennt das erste Feld. Bisher genügte ein Klick ins Feld, ohne Wirkung.
+- Lehnt die Maßkarte einen Wert ab, steht der Grund einmal, direkt unter dem Feld. Bisher stand derselbe Satz noch einmal über den Knöpfen und in der Statusleiste.
+- Wird die Maßkarte durch einen Hinweis höher, bleibt sie stehen und rückt nur so weit, wie Bildrand oder Griff es verlangen, mit kurzer Bewegung. Bisher sprang sie an eine andere Stelle.
+- Ein vorgegebener Text in einem Dialog ist beim Öffnen markiert, und Tippen ersetzt ihn. So beginnt *Objekt umbenennen* mit dem jetzigen Namen, und ohne neuen Namen entsteht kein Schritt.
+- Im Reiter *Auswahl* bleibt *Übernehmen* grau, bis sich ein Wert ändert, und nennt das erste Feld. Drehen oder Verdoppeln mit ihrer Vorgabe gehen weiter sofort.
+- Beim Bohren, Verschließen, Langloch und Lochfeld heißt der Ausgleich „Druckabweichung ausgleichen“ wie in der Maßgruppe und gibt die Lochkorrektur des Materials zu.
+- Nach einer unlesbaren Zeichenebene öffnet *Eine andere Ebene wählen* den Schritt mit dem Cursor in seiner Skizze.
+- Führt ein Knopf im Prüfbericht in den Skizzenmodus, steht die Tastatur dort, wo es weitergeht: im Feld *Zeichenebene*, wenn die Ebene fehlt, sonst in der Ansicht.
 - Bleiben neben einem druckbaren Teil nur Splitter, nennt *In Einzelteile aufteilen* sie und bietet *Splitter behalten* an. Bisher hieß es, der Körper bestehe aus einem Stück.
 - Ist der Radius einer Rundung oder die Breite einer Fase für die Kanten zu groß, bietet die Meldung *Andere Kanten wählen* an.
+- Passt eine gewählte Fläche nicht zu *Formschräge anstellen* oder *Fläche versetzen*, bietet die Meldung *Andere Flächen wählen* an.
+- Dasselbe gilt für *Aushöhlen*, *Dichtnut mit Dichtung* und *Textur aufbringen*. Lässt sich eine Rundung nicht auf eine Kante zurückführen, bietet die Meldung *Anderes Merkmal wählen* an.
+- Passt ein gewähltes Merkmal nicht, etwa eine Bohrung, ein Gewinde, eine Kammer oder ein Verschluss, bietet die Meldung *Anderes Merkmal wählen* an.
+- Die Knöpfe *Andere Kanten wählen*, *Andere Flächen wählen* und *Anderes Merkmal wählen* öffnen den Schritt mit dem Cursor im passenden Feld, auch hinter *Weitere Einstellungen*.
+- Gehört eine Meldung zu keinem Schritt, etwa bei *Gegenstück zum Gewinde*, nennt sie ihren Weg als Satz, zum Beispiel *Anderes Merkmal wählen*, und zeigt nur Knöpfe, die dort etwas bewirken.
 - Ein Klick auf *Übernehmen* an einem Merkmal während einer Berechnung behält die Änderung, auch wenn die Vorschau länger braucht. In Version 0.6.0 ging sie an größeren Modellen still verloren.
 - Eine angezeigte Textur rechnet ohne Änderung keine Vorschau mehr und bietet kein *Abbrechen* an.
 

@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QToolButton,
@@ -38,6 +39,7 @@ from app.core.units import LengthUnit
 from app.i18n import tr
 from app.ui.labels import BoundedLengthSpin, BoundedSpin, LengthSpin, NumberSpin
 from app.ui.panels import FeaturePanel
+from tests.window_leftovers import close_after
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -182,8 +184,11 @@ def test_texture_fields_keep_expressions_and_hidden_parameters(qt_app: QApplicat
     }
     assert {"width", "height", "pitch", "depth", "angle"} == set(fields)
     assert fields["width"].value() == "=@span"
+    # Übernommen wird erst eine Änderung (FD-99); die übrigen Werte gehen mit.
+    fields["height"].set_value(18.0)
     panel._apply.click()
     assert seen[0][0] == 8
+    assert seen[0][1]["height"] == pytest.approx(18.0)
     assert seen[0][1]["width"] == "=@span"
     assert seen[0][1]["x"] == pytest.approx(12.0)
     assert "at_feature" not in seen[0][1]
@@ -987,6 +992,8 @@ def test_a_locked_panel_says_why_before_anyone_clicks(qt_app: QApplication) -> N
         if isinstance(widget, LengthSpin | NumberSpin) and widget.isVisibleTo(panel)
     ]
     assert felder, "ohne Felder prüft dieser Test nichts"
+    # Übernommen wird erst eine Änderung (FD-99).
+    felder[0].setValue(felder[0].value() + 0.5)
     assert panel._apply.isEnabled(), "Voraussetzung: ohne Halt geht es"
 
     panel.set_locked(grund)
@@ -1219,7 +1226,9 @@ def test_a_part_bore_diameter_below_its_limit_names_removing_the_part(
         panel.deleteLater()
 
 
-def test_a_refusal_hides_with_its_field_and_returns_with_it(qt_app: QApplication) -> None:
+def test_a_refusal_hides_with_its_field_and_returns_with_it(
+    qt_app: QApplication, request: pytest.FixtureRequest
+) -> None:
     """RM-342 D-N1: Verschwindet ein Feld mit abgelehnter Zahl, geht sein Satz mit.
 
     Der gemeldete Weg: *Zum Langloch ziehen* X = 1500 mm, dann trägt die
@@ -1233,6 +1242,7 @@ def test_a_refusal_hides_with_its_field_and_returns_with_it(qt_app: QApplication
 
     identifier, feature = a_hole()
     panel = FeaturePanel()
+    close_after(request, panel)
     mesh = plate()
     panel.show_feature(identifier, feature, features=features.detect(mesh), mesh=mesh)
     panel.show()
@@ -1331,7 +1341,11 @@ def test_return_rechecks_preview_permission_after_interpreting_text(qt_app: QApp
     spin.setKeyboardTracking(False)
     editor = spin.lineEdit()
     assert editor is not None
+    # Wie getippt: Das Feld benennt seine Handlung, und ungelesener Text ist
+    # schon eine Änderung (``first_change.typed``).
+    panel._arm(next(key for key, entry in panel._runs.items() if entry.title == "Bohrung ändern"))
     editor.setText("6")
+    editor.setModified(True)
     assert not changed and panel.can_accept()
     QTest.keyClick(editor, Qt.Key.Key_Return)
 
@@ -1553,7 +1567,11 @@ def test_focusing_a_field_names_the_action_above_apply(qt_app: QApplication) -> 
     )
     qt_app.sendEvent(editor, QFocusEvent(QEvent.Type.FocusIn))
     assert panel._armed == editor.property("handlingKey")
-    assert panel._armed_title.isVisibleTo(panel)
+    # Seit FD-136 steht die Knopfzeile unter der Handlung; deren Kopfzeile
+    # nennt sie direkt darüber, ein zweiter Titel am Knopf entfällt.
+    box = next(row.box for row in panel._shown_rows.values() if row.key == panel._armed)
+    assert panel._rows.indexOf(panel._footer) == panel._rows.indexOf(box) + 1
+    assert not panel._armed_title.isVisibleTo(panel)
     assert panel._armed_title.text() == panel._apply.accessibleName()
 
 
@@ -1626,6 +1644,7 @@ def test_every_number_starts_on_what_was_measured(qt_app: QApplication) -> None:
 )
 def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     qt_app: QApplication,
+    request: pytest.FixtureRequest,
     mesh_name: str,
     scale: float,
     kind: str,
@@ -1652,6 +1671,7 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     assert diameter.value == pytest.approx(measured)
 
     panel = FeaturePanel()
+    close_after(request, panel)
     panel.show_feature(identifier, feature)
     panel.show()
     QApplication.processEvents()
@@ -1660,13 +1680,15 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     assert spin.isVisibleTo(panel), "der gemessene Durchmesser steht nicht sichtbar im Panel"
     assert spin.value_mm() == pytest.approx(measured), "das Panel klemmt den Messwert"
 
-    # **Beide Wege zählen.** *Bohrung ändern* führt seit dem 10.09.2026 ins
-    # Bild statt sofort auszuführen (``LEADS_INTO_THE_VIEW``); was der Knopf
-    # dabei weiterreicht, ist dieselbe Wertetabelle — und genau die prüft
-    # dieser Test.
+    # **Beide Wege zählen.** *Bohrung ändern* führt ins Bild statt sofort
+    # auszuführen (``LEADS_INTO_THE_VIEW``); was der Knopf dabei weiterreicht, ist
+    # dieselbe Wertetabelle. Beim heutigen Stand wartet er auf eine Änderung
+    # (FD-99) — wie getippt, ohne die Zahl zu ändern, nimmt er an
+    # (``first_change.typed``), und der Messwert geht unverändert durch.
     emitted: list[tuple[str, dict[str, object]]] = []
     panel.operationRequested.connect(lambda op, params: emitted.append((op, params)))
     panel.inViewRequested.connect(lambda op, params: emitted.append((op, params)))
+    spin.lineEdit().setModified(True)
     press(panel, str(action.title))
 
     assert len(emitted) == 1
@@ -1689,7 +1711,7 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
 @pytest.mark.parametrize("recess", [False, True], ids=["fillet", "groove"])
 @pytest.mark.parametrize("unit", ["mm", "in"])
 def test_a_rounding_shows_its_radius_and_sends_the_diameter(
-    qt_app: QApplication, recess: bool, unit: LengthUnit
+    qt_app: QApplication, request: pytest.FixtureRequest, recess: bool, unit: LengthUnit
 ) -> None:
     """Das angezeigte Rundungsmaß gilt für Vorschau und Übernehmen, auch in Zoll."""
     from app.ui.labels import set_display_unit
@@ -1708,6 +1730,7 @@ def test_a_rounding_shows_its_radius_and_sends_the_diameter(
         },
     )
     panel = FeaturePanel()
+    close_after(request, panel)
     try:
         set_display_unit(unit)
         panel.show_feature(feature.id, feature)
@@ -1760,7 +1783,11 @@ def test_a_round_wall_offers_radius_instead_of_removing_a_corner(
 def test_the_radius_panel_edits_a_detected_rounding_without_changing_its_neighbours(
     qt_app: QApplication, kind: str
 ) -> None:
-    """Anklicken und unverändert übernehmen bewahrt das Teil; ein neuer Radius wirkt lokal."""
+    """Die Werte beim Anklicken bewahren das Teil; ein neuer Radius wirkt lokal.
+
+    Unverändert übernehmen lässt der Knopf nicht mehr zu (FD-99); gelesen wird
+    deshalb die Wertetabelle der Handlung, die er danach weiterreicht.
+    """
     from app.core.brep import edit
     from app.core.brep.features import features_of
     from app.core.types import SceneObject
@@ -1775,9 +1802,9 @@ def test_the_radius_panel_edits_a_detected_rounding_without_changing_its_neighbo
     panel.show_feature(rounding.id, rounding)
     sent: list[tuple[str, dict[str, Any]]] = []
     panel.operationRequested.connect(lambda op, values: sent.append((op, values)))
-    press(panel, "Merkmal ändern")
-    op, values = sent.pop()
-    assert run(op, source, **values).outputs[0] is source
+    entry = next(entry for entry in panel._runs.values() if entry.title == "Merkmal ändern")
+    assert not panel._apply.isEnabled(), "beim heutigen Stand gibt es nichts zu übernehmen"
+    assert run(entry.op, source, **entry.values()).outputs[0] is source
 
     row = row_of(panel, "Merkmal ändern")
     spin = next(widget for widget in fields(row) if isinstance(widget, LengthSpin))
@@ -1806,6 +1833,13 @@ def test_pressing_an_action_names_the_operation_and_its_feature(qt_app: QApplica
     panel.show_feature(identifier, feature)
     seen: list[tuple[str, dict[str, object]]] = []
     panel.operationRequested.connect(lambda op, params: seen.append((op, params)))
+    # Übernommen wird erst eine Änderung (FD-99).
+    spin = next(
+        widget
+        for widget in fields(row_of(panel, "Merkmal verschieben"))
+        if isinstance(widget, LengthSpin)
+    )
+    spin.set_value_mm(spin.value_mm() + 1.0)
 
     press(panel, "Merkmal verschieben")
 
@@ -1890,6 +1924,11 @@ def test_a_honeycomb_pattern_stands_in_the_panel_with_its_own_fields(qt_app: QAp
     panel.operationRequested.connect(lambda op, params: seen.append((op, params)))
     press(panel, "Merkmal entfernen")
     assert seen and seen[0][0] == "remove_feature" and seen[0][1]["at_feature"] == identifier
+    # Ändern wartet beim heutigen Stand auf eine Änderung (FD-99) — wie getippt,
+    # ohne die Zahl zu ändern, nimmt der Knopf an, und die Teilung geht durch.
+    changing = row_of(panel, "Merkmal ändern")
+    for line in changing.findChildren(QLineEdit):
+        line.setModified(True)
     press(panel, "Merkmal ändern")
     assert seen[-1][0] == "resize_feature" and seen[-1][1]["at_feature"] == identifier
     assert math.isclose(float(seen[-1][1]["pitch"]), pitch, abs_tol=0.01)
@@ -2567,7 +2606,9 @@ def spread(panel: FeaturePanel, scroller: QScrollArea, height: int) -> int:
     return max(lagen) - min(lagen)
 
 
-def test_a_tall_window_does_not_pull_the_handlings_apart(qt_app: QApplication) -> None:
+def test_a_tall_window_does_not_pull_the_handlings_apart(
+    qt_app: QApplication, request: pytest.FixtureRequest
+) -> None:
     """Der Restplatz gehört nach unten, nicht zwischen die Handlungen.
 
     Das Panel steckt in einem Rollbereich mit ``setWidgetResizable`` und wird
@@ -2584,6 +2625,7 @@ def test_a_tall_window_does_not_pull_the_handlings_apart(qt_app: QApplication) -
     key, feature = a_hole()
     panel = FeaturePanel()
     scroller = QScrollArea()
+    close_after(request, scroller)
     scroller.setWidget(panel)
     scroller.setWidgetResizable(True)
     scroller.show()
@@ -3247,12 +3289,22 @@ def test_a_part_shows_its_step_and_writes_back_into_it(qt_app: QApplication) -> 
 
         # **Der zweite Knopf schreibt nur die Lage.** Wer beim Verschieben die
         # Maße mitschickte, setzte die Schraubengröße auf ihre Vorgabe zurück.
+        # Übernommen wird erst eine Änderung (FD-99): Y wandert, X bleibt.
+        from app.ui.op_dialog import ValueField
+
+        along = next(
+            field
+            for field in row_of(panel, "Baustein verschieben").findChildren(ValueField)
+            if field._entry.name == "y"
+        )
+        along.set_value(1.5)
         press(panel, "Baustein verschieben")
         assert len(changed) == 1, "ein Zug, eine Meldung"
         op_id, params = changed[0]
         assert op_id == 7, "der Schritt, der den Baustein gesetzt hat"
         assert set(params) == {"x", "y", "z"}, params
         assert params["x"] == pytest.approx(4.0), "der Wert aus dem Schritt steht im Feld"
+        assert params["y"] == pytest.approx(1.5)
 
         # Und Entfernen fragt nichts und nennt nur den Schritt.
         press(panel, "Baustein entfernen")
@@ -3819,6 +3871,10 @@ def test_the_one_button_stands_below_every_handling(qt_app: QApplication) -> Non
     (``footer``), damit ein Träger sie aus dem Rollinhalt heben kann; ihre
     Reihenfolge zueinander gilt dort weiter, und die Zeile als Ganzes steht
     unter den Handlungen.
+
+    **Seit FD-136 unter der offenen Handlung, nicht unter allen:** Das Feld
+    stand oben, *Übernehmen* am Kartenende. Über den Handlungen steht die
+    Zeile weiterhin nie.
     """
     identifier, feature = a_hole()
     panel = FeaturePanel()
@@ -3831,9 +3887,11 @@ def test_the_one_button_stands_below_every_handling(qt_app: QApplication) -> Non
     plaetze = {rows.itemAt(index).widget(): index for index in range(rows.count())}
     zeilen = [plaetze[row] for row in panel._built if row in plaetze]
     assert zeilen, "ohne Zeilen prüft dieser Test nichts"
-    assert plaetze[panel.footer()] > max(zeilen), "die Knopfzeile steht über den Handlungen"
+    assert plaetze[panel._footer] > min(zeilen), "die Knopfzeile steht über den Handlungen"
+    scharf = next(row.box for row in panel._shown_rows.values() if row.key == panel._armed)
+    assert plaetze[panel._footer] == plaetze[scharf] + 1, "direkt unter der offenen Handlung"
 
-    unten = panel.footer().layout()
+    unten = panel._footer.layout()
     assert unten is not None
     ordnung = {unten.itemAt(index).widget(): index for index in range(unten.count())}
     assert ordnung[panel._every] == ordnung[panel._apply] - 1, (
@@ -4243,12 +4301,19 @@ def test_a_bound_part_still_offers_moving_and_removing(qt_app: QApplication) -> 
         ]
         assert len(bound) == 1, "die gebundene Achse trägt das Ausdrucksfeld"
 
+        # Übernommen wird erst eine Änderung (FD-99): X wandert, die Bindung bleibt.
+        across = next(
+            field
+            for field in row_of(panel, "Baustein verschieben").findChildren(ValueField)
+            if field._entry.name == "x"
+        )
+        across.set_value(-19.0)
         press(panel, "Baustein verschieben")
         assert len(changed) == 1, changed
         op_id, params = changed[0]
         assert op_id == 2
         assert params["z"] == "=@staerke", "der Ausdruck kommt unverändert zurück"
-        assert params["x"] == pytest.approx(-20.0)
+        assert params["x"] == pytest.approx(-19.0)
     finally:
         panel.deleteLater()
 

@@ -6,6 +6,7 @@ import pytest
 from PySide6.QtGui import QFont, QFontInfo, QFontMetrics
 from PySide6.QtWidgets import QApplication
 
+from app.core.geom.difference import Difference, SceneDifference
 from app.i18n import get_language, set_language, tr
 from app.i18n.catalog import install_language
 from app.ui.style import apply_style
@@ -82,6 +83,9 @@ def test_preview_after_refusal_fits_the_restored_legend(
                 tr("Druckbefunde noch nicht geprüft"),
             )
         )
+    # Die Legende steht nur über einer Differenz, die Volumen ändert (FD-116).
+    grown = Difference(object_id="obj_1", added_volume=500.0)
+    view.show_difference(SceneDifference(entries={"obj_1": grown}))
     view.mark_preview(note, tr("Leertaste halten: vorher"))
     banner = view.banner
     assert banner.isVisible() and banner.legend.isVisible()

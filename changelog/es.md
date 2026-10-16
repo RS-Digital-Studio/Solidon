@@ -53,6 +53,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un lector de pantalla lee el nombre y la explicación de cada campo numérico de un diálogo.
 - Tras una acción en el *Informe de comprobación*, el informe sigue delante y Ctrl+Z la deshace al momento. Hasta ahora saltaba al frente la pestaña *Selección*.
 - Los avisos de cama y adhesión usan la unidad elegida. Al cambiar mm/pulgadas se conservan aviso seleccionado, detalles abiertos, pestaña y estado desplegado de los cuerpos.
+- Los números a lo largo de la cama siguen la unidad elegida y la indican. La versión 0.6.0 mostraba milímetros aunque se hubieran elegido pulgadas.
+- La cuadrícula de la cama cuenta desde el centro de la cama, cada 10 mm en milímetros y cada media pulgada en pulgadas. Cada número está en una línea marcada.
+- En la vista *Ortográfica*, un clic en un aviso muestra el lugar a un tamaño adecuado. Hasta ahora se mantenía el zoom anterior.
+- Un clic en un aviso sin lugar propio muestra el cuerpo entero, y un proyecto abierto se ve completo.
+- Un taladro seleccionado se ve entero, con su borde. Los tiradores quedan fuera del borde y las flechas empiezan detrás de ellos.
 - Ctrl+Z y Ctrl+Y funcionan también con el cursor en un campo vacío, por ejemplo en el campo de búsqueda. Si escribió algo allí, primero se deshace lo escrito.
 - Sin activación, las acciones que cambian algo en el *Informe de comprobación*, *Selección*, los menús contextuales y el filamento salen en gris con el motivo. Antes el rechazo llegaba tras el clic.
 - Sin activación, también *Crear parámetro …*, *Mover*, *Dividir*, las teclas del historial y las medidas en la vista salen en gris. Cada motivo indica el camino, como *Ayuda → Desbloquear Solidon …*.
@@ -68,11 +73,49 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La tarjeta de selección sigue contenido y letra, conservando texto y columnas. Las pestañas separadas mantienen su tamaño. Si se ofrece editar una característica, «Aplicar» es la acción principal.
 - Los elementos correspondientes piden par y tamaño y explican ambas mitades. Forma y ajuste están en «Más ajustes». La altura inicial del diálogo se adapta al contenido.
 - Tras rechazarse una vista previa, los textos de la siguiente siguen siendo totalmente legibles.
+- La línea con material y tiempo de impresión solo indica «desde el último paso» lo que cambió un paso. Mientras todavía se leen los valores del perfil de slicer, pone «provisional».
+- El material y el tiempo de impresión se ven siempre completos en la barra de estado. Si la barra está llena, se acorta el mensaje de al lado, y la frase completa aparece en la ayuda emergente.
+- La barra superior solo acorta el nombre de la impresora si la fila está llena. Proyecto y medidas quedan a la izquierda, la impresora a la derecha junto a *Ajustes de impresión …*.
+- Si *Dividir automáticamente* no encuentra un corte, la línea de estado indica el motivo. Hasta ahora decía entonces que la pieza ya cabía en la placa.
+- La breve confirmación tras una acción aparece junto a las tarjetas, no encima, por ejemplo junto al informe. El siguiente paso la retira con la línea de estado, también un «Deshecho» antiguo.
+- En un aviso de un modelo generado, *Volver a generar* abre el generador con su descripción y la siguiente semilla.
+- Cuando el mapa de análisis rechaza un modelo demasiado grande, el número de triángulos aparece en grupos de tres, como 2 103 472.
+- Cuando la cadena se detiene, una función que añadiría un paso detrás ya no abre un diálogo con el botón en gris. La parada y el camino a seguir aparecen enseguida.
+- En el informe de comprobación, la tecla Tab llega a la acción ofrecida, y ninguna zona desplazable es ya una parada propia sin nombre.
+- Un doble clic en un cambio de medida del historial abre esa medida para editarla, y en un cambio de impresora o material, *Ajustes de impresión …*.
+- La columna de medidas del árbol de objetos muestra completas también las medidas con decimales; la tarjeta izquierda se ensancha un poco si hace falta.
+- Las filas de hallazgos del informe muestran su medida completa y nombran cada cuerpo una sola vez.
+- La barra de parámetros muestra las longitudes en pulgadas cuando están ajustadas las pulgadas. Un clic derecho en el campo del valor abre *Cambiar …*.
+- El diálogo *Crear parámetro …* explica cada campo, también los límites inferior y superior, y un lector de pantalla nombra cada campo.
+- Si un nombre de parámetro no sirve, el motivo aparece justo debajo del campo del nombre, con un botón para un nombre que sí sirve.
+- Quien trabaja en pulgadas introduce los parámetros de longitud en pulgadas en *Crear parámetro …* y al guardar un bloque. La versión 0.6.0 mostraba allí solo milímetros.
+- El diálogo *Calibrar material* llama a un material sin medir «aún sin calibrar», también en la línea de comandos. Antes ponía «valores de partida».
+- Un rechazo en un diálogo ya no repite su título debajo. *Corregir la entrada* pone el cursor en el campo afectado.
+- La ventana *Detalles* nombra el cuerpo y el paso y da el punto en la unidad elegida. *Mostrar los valores* muestra los nombres de los campos y solo es tan alto como hace falta.
+- Los campos de las barras *Análisis* y *Dividir*, la descripción en *Generar modelo*, la elección *Tipo* y la casilla «Incluir valores» se explican en la ayuda emergente y al lector de pantalla.
+- Desde una pestaña de la tarjeta de la derecha, la tecla Tab entra en la página visible y la recorre de arriba abajo.
+- Una medida del proyecto sin unidad sigue siendo un número en el historial y en la barra de parámetros, también en pulgadas. La versión 0.6.0 le añadía «mm» en el historial.
+- Un lector de pantalla nombra cada campo de cada diálogo de operación, también listas desplegables, casillas y listas de características.
+- Los números enteros grandes aparecen también en los campos en grupos de tres cifras, como 1 051 736 triángulos o 10 000 mm/s² de *Aceleración*. Se escriben con o sin separadores.
+- Los nombres largos de campos en *Más ajustes* muestran todas sus líneas, también con letra grande. En la versión 0.6.0, *Hacer un taladro* perdía la última palabra de uno.
+- Los diálogos de operación tienen la altura de su contenido, también al desplegar *Más ajustes*. En la versión 0.6.0, *Repetir característica* dejaba una franja vacía sobre los botones.
+- Los diálogos con secciones plegables, como *Crear parámetro*, tienen la altura de su contenido al desplegar y plegar. Solo se desplazan en horizontal si la pantalla es demasiado estrecha.
+- Si un campo obligatorio como el texto de *Rótulo como cuerpo* está vacío, el campo dice qué va dentro y el botón espera. La versión 0.6.0 mostraba ahí un error al abrir.
+- Quien cambia un paso confirma con *Aplicar*. El botón sigue gris hasta que algo cambia y nombra el campo que hay que cambiar.
+- El diálogo *Calibrar material* muestra holgura, apriete, compensación de agujeros, pie de elefante y pared en la unidad elegida, también en pulgadas, y conserva el tercer decimal.
+- Un botón largo bajo un rechazo se divide en varias líneas con letra grande, en lugar de ensanchar el diálogo.
+- Los botones ya no se aplastan con letra grande. En la versión 0.6.0, las acciones de un hallazgo en el informe de comprobación quedaban cortadas por arriba y por abajo.
+- Si cambia el tamaño de letra del sistema, Solidon lo sigue al instante, también en los diálogos abiertos. La versión 0.6.0 solo lo aplicaba tras reiniciar.
+- Una línea agrupada del informe de comprobación nombra en su sugerencia como máximo quince afectados, con tipo y cuerpo. En la versión 0.6.0 un lector de pantalla leía cada frase.
+- La leyenda *Añadido* y *Eliminados* aparece en la barra de vista previa solo cuando la vista previa añade o quita material. Por eso *Renombrar objeto* no la muestra.
 - Para parámetros, ajustes, impresora, material y deshacer, el chat indica el lugar de la ventana donde se hace lo mismo a mano.
-- El informe de comprobación nombra los cuerpos de un ajuste en lugar de mostrar un identificador interno.
+- El informe de comprobación y la comprobación antes de exportar nombran los cuerpos de un ajuste en lugar de mostrar un identificador interno, también un cuerpo ya eliminado.
+- Los mensajes nombran una característica por tipo y número, como «Taladro 2», en lugar de un identificador interno. En la contraparte de una rosca, diámetro y paso aparecen en la unidad elegida.
 - El inglés y el portugués distinguen ahora el saliente de un gancho, o de un cuerpo bajo la placa, del voladizo al imprimir.
 - En español y portugués, el menú, la búsqueda y el diálogo vuelven a mostrar solo la primera frase de *Pasador para taladro* y *Orientar para imprimir*.
 - Varias traducciones se leen con más claridad, entre ellas la introducción de *Crear parámetro …*. La espiga empieza con mayúscula en todos los idiomas.
+- Las explicaciones de las tarjetas ocupan solo las líneas de su texto, también en una tarjeta ancha. La versión 0.6.0 dejaba líneas vacías en algunos idiomas, como bajo dos caras seleccionadas.
+- Un campo de selección nombra un valor que su lista no ofrece, como «Cara 1 · no sirve aquí», y una arista por orientación y posición. La versión 0.6.0 mostraba un código interno.
 - En la ventana *Desbloquear Solidon …*, *Comprar Solidon* sigue disponible en un ordenador activado. Los botones en gris indican su motivo, y *Comprobar clave* también el camino a una clave nueva.
 - En francés, el primer día del mes se escribe ahora «1er», por ejemplo «1er décembre 2026».
 - Sin controlador gráfico, por ejemplo en una máquina virtual, Solidon termina ahora de forma fiable al cerrarlo. En la versión 0.6.0 el programa podía seguir ejecutándose allí sin verse.
@@ -94,8 +137,28 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro o un recipiente solo sale adelante moviendo las esquinas una cantidad mínima, la abertura queda libre. En la versión 0.6.0 podía quedar encima una piel finísima.
 - En agujeros, vista y *Selección* muestran el mismo cambio. Medida, profundidad y entrada vinculada están delante; compensación de impresión y ajustes finos, en «Más valores».
 - Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
+- En la pestaña *Selección*, *Aplicar* queda justo debajo de la acción abierta, «Filamento e impresión» está arriba con el color de la asignación, y bajo la lista no queda espacio vacío.
+- Un taladro modificado conserva su lugar en el árbol de objetos.
+- Las acciones que no funcionan en un elemento aparecen como «Aquí no es posible: …» con su motivo.
+- Al recortar un cubo para probar un ajuste, su posición se elige ahora en *Posición del cubo*. La línea *Punto* de arriba la muestra.
+- El diálogo tras *Dar grosor* dice en su primera línea que da grosor a la superficie.
+- En la tarjeta de medidas, el tabulador va de los campos a la casilla de características iguales, a *Aplicar* y *Cancelar*, y vuelve. La casilla está ahora encima de los botones.
+- Tras *Cancelar* o Esc en la tarjeta de medidas, el teclado vuelve a la vista 3D, como tras *Aplicar*. Antes acababa en la tarjeta *Objetos*.
+- En la tarjeta de medidas, *Aplicar* sigue en gris hasta que cambia un valor o la casilla de características iguales, e indica el primer campo. Antes bastaba un clic en un campo, sin efecto.
+- Si la tarjeta de medidas rechaza un valor, el motivo aparece una sola vez, justo debajo del campo. Antes la misma frase se repetía encima de los botones y en la barra de estado.
+- Si un aviso hace crecer la tarjeta de medidas, se queda en su sitio y solo se desplaza lo que exigen el borde o el tirador, con un movimiento breve. Antes saltaba a otro lugar.
+- Un texto que el diálogo ya trae aparece seleccionado al abrir, y al escribir se sustituye. Así *Renombrar objeto* empieza con el nombre actual, y sin un nombre nuevo no se crea ningún paso.
+- En la pestaña *Selección*, *Aplicar* sigue en gris hasta que cambia un valor e indica el primer campo. Girar o duplicar con sus valores previstos sigue siendo inmediato.
+- Al taladrar, tapar, en ranuras y en campos de agujeros, el ajuste se llama «Compensar desviaciones de impresión», como en el grupo de cotas, y suma la compensación de agujeros.
+- Tras un plano de dibujo ilegible, *Elegir otro plano* abre el paso con el cursor en su boceto.
+- Cuando un botón del informe de comprobación lleva al modo de boceto, el teclado queda donde sigue el trabajo: en el campo *Plano de dibujo* si falta el plano y, si no, en la vista.
 - Si junto a una pieza imprimible solo quedan astillas, *Dividir en piezas sueltas* las nombra y ofrece *Conservar las astillas*. Antes decía que el cuerpo era de una sola pieza.
 - Si el radio de un redondeo o el ancho de un chaflán es demasiado grande para las aristas, el mensaje ofrece *Elegir otras aristas*.
+- Si una cara seleccionada no sirve para *Aplicar ángulo de desmoldeo* o *Desplazar cara*, el mensaje ofrece *Elegir otras caras*.
+- Lo mismo vale para *Vaciar*, *Ranura de sellado con junta* y *Aplicar textura*. Si un redondeo no puede reducirse a una arista, el mensaje ofrece *Elegir otra característica*.
+- Si una característica seleccionada no sirve, por ejemplo un taladro, una rosca, una cámara o un cierre, el mensaje ofrece *Elegir otra característica*.
+- Los botones *Elegir otras aristas*, *Elegir otras caras* y *Elegir otra característica* abren el paso con el cursor en el campo correspondiente, también tras *Más ajustes*.
+- Si un mensaje no pertenece a ningún paso, como con *Contraparte de la rosca*, indica su camino con una frase, por ejemplo *Elegir otra característica*, y solo muestra botones que allí hacen algo.
 - Pulsar *Aplicar* en una característica durante un cálculo conserva el cambio, aunque la vista previa tarde más. En la versión 0.6.0 se perdía sin aviso en modelos grandes.
 - Una textura mostrada ya no calcula una vista previa sin cambios ni ofrece *Cancelar*.
 

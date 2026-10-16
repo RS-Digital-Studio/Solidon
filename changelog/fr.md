@@ -53,6 +53,11 @@ dans `website/version.json`.
 - Un lecteur d'écran lit le nom et l'explication de chaque champ numérique d'un dialogue.
 - Après une action dans le *Rapport de contrôle*, le rapport reste au premier plan, et Ctrl+Z l'annule aussitôt. Jusqu'ici, l'onglet *Sélection* passait devant.
 - Les avis de plateau et d’adhérence suivent l’unité choisie. Passer de mm à pouces conserve constat sélectionné, détails ouverts, onglet et état déplié des corps.
+- Les cotes au bord du plateau suivent l’unité choisie et l’indiquent. La version 0.6.0 y affichait des millimètres même en pouces.
+- La grille du plateau part du centre du plateau, tous les 10 mm en millimètres et tous les demi-pouces en pouces. Chaque cote tombe sur une ligne appuyée.
+- En vue *Orthographique*, un clic sur un constat montre l’endroit à une taille adaptée. Jusqu’ici, le zoom précédent restait.
+- Un clic sur un constat sans emplacement propre montre le corps entier, et un projet ouvert tient entièrement dans la vue.
+- Un perçage sélectionné reste visible, bord compris. Les poignées se placent à l’extérieur du bord et les flèches commencent au-delà.
 - Ctrl+Z et Ctrl+Y fonctionnent aussi quand le curseur se trouve dans un champ vide, par exemple le champ de recherche. Si vous y avez tapé du texte, c'est d'abord la saisie qui est annulée.
 - Sans activation, les actions qui modifient le modèle sont grisées avec leur raison dans le *Rapport de contrôle*, *Sélection*, les menus contextuels et le filament. Le refus venait après le clic.
 - Sans activation, *Créer un paramètre …*, *Déplacer*, *Diviser*, les touches de l'historique et les cotes dans la vue sont grisés. Chaque raison indique la voie, comme *Aide → Déverrouiller Solidon …*.
@@ -68,11 +73,49 @@ dans `website/version.json`.
 - La carte de sélection suit contenu et police, gardant textes et colonnes. Les onglets détachés gardent leur taille. Si une modification est proposée, « Appliquer » est l’action principale.
 - Les contreparties demandent paire et taille et expliquent les deux moitiés. Forme et ajustement sont dans « Autres réglages ». La hauteur initiale du dialogue suit le contenu.
 - Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
+- La ligne de matière et de durée n'indique « depuis la dernière étape » que ce qu'une étape a changé. Tant que le profil de slicer est encore lu, elle affiche « provisoire ».
+- La matière et la durée d'impression s'affichent toujours en entier dans la barre d'état. Si la barre est pleine, le message à côté se raccourcit, et sa phrase complète figure dans l'infobulle.
+- L'en-tête ne raccourcit le nom de l'imprimante que lorsque la ligne est pleine. Le nom du projet et les dimensions restent ensemble à gauche, l'imprimante à droite à côté de *Réglages d'impression …*.
+- Si *Diviser automatiquement* ne trouve aucune coupe, la ligne d'état en donne la raison. Jusqu'ici, elle annonçait alors que la pièce tenait déjà sur le plateau.
+- La brève confirmation après une action s'affiche à côté des cartes, pas dessus, par exemple à côté du rapport. L'étape suivante l'efface avec la ligne d'état, même un ancien « Annulé ».
+- Sur un constat d'un modèle généré, *Générer de nouveau* ouvre le générateur avec sa description et la graine suivante.
+- Quand la carte d'analyse refuse un modèle trop grand, les nombres de triangles s'affichent par groupes de trois, par exemple 2 103 472.
+- Quand la chaîne s'arrête, une fonction qui ajouterait une étape derrière n'ouvre plus de dialogue au bouton grisé. L'arrêt et la suite à donner s'affichent tout de suite.
+- Dans le rapport de contrôle, la touche Tab atteint l'action proposée, et aucune zone défilante n'est plus un arrêt à part sans nom.
+- Un double-clic sur une modification de cote dans l'historique ouvre cette cote pour la modifier, et sur un changement d'imprimante ou de matériau, *Réglages d'impression …*.
+- La colonne des cotes de l'arborescence affiche en entier aussi les cotes non rondes ; la carte de gauche s'élargit un peu au besoin.
+- Les lignes de constat du rapport affichent leur mesure en entier et ne nomment chaque corps qu'une fois.
+- La barre des paramètres affiche les longueurs en pouces lorsque les pouces sont réglés. Un clic droit sur le champ de valeur ouvre *Modifier …*.
+- Le dialogue *Créer un paramètre …* explique chaque champ, y compris les bornes inférieure et supérieure, et un lecteur d'écran nomme chaque champ.
+- Si un nom de paramètre ne convient pas, la raison s'affiche juste sous le champ du nom, avec un bouton pour un nom qui convient.
+- En pouces, les paramètres de longueur se saisissent en pouces dans *Créer un paramètre …* et à l'enregistrement d'un bloc. La version 0.6.0 n'y affichait que des millimètres.
+- Le dialogue *Calibrer le matériau* indique « pas encore calibré » pour un matériau non mesuré, aussi en ligne de commande. Avant, on y lisait « valeurs de départ ».
+- Un refus dans un dialogue ne répète plus son titre en dessous. *Corriger la saisie* place le curseur dans le champ concerné.
+- La fenêtre *Détails* nomme le corps et l'étape et donne l'emplacement dans l'unité choisie. *Afficher les valeurs* montre le nom des champs et n'est pas plus haut que nécessaire.
+- Les champs des barres *Analyse* et *Diviser*, la description dans *Générer un modèle*, le choix *Type* et la case « Inclure les valeurs » s'expliquent dans l'infobulle et au lecteur d'écran.
+- Depuis un onglet de la carte de droite, la touche Tab entre dans la page affichée et la parcourt de haut en bas.
+- Une cote de projet sans unité reste un nombre dans l'historique et la barre des paramètres, même en pouces. La version 0.6.0 y ajoutait « mm » dans l'historique.
+- Un lecteur d'écran nomme chaque champ de chaque dialogue d'opération, y compris les listes déroulantes, les cases à cocher et les listes de caractéristiques.
+- Les grands nombres entiers s'affichent aussi dans les champs par groupes de trois chiffres, comme 1 051 736 triangles ou 10 000 mm/s² d'*Accélération*. On les saisit avec ou sans séparateurs.
+- Les noms de champs longs sous *Autres réglages* affichent chaque ligne, même en grande police. Dans la version 0.6.0, *Percer un trou* en perdait le dernier mot.
+- Les dialogues d'opération ont la hauteur de leur contenu, même après avoir déplié *Autres réglages*. En version 0.6.0, *Répéter la caractéristique* laissait une bande vide au-dessus des boutons.
+- Les dialogues à sections repliables, comme *Créer un paramètre*, ont la hauteur de leur contenu après dépliage et repliage. Ils ne défilent en largeur que si l'écran est trop étroit.
+- Si un champ obligatoire comme le texte de *Inscription comme corps* est vide, le champ indique ce qu'il attend et le bouton patiente. La version 0.6.0 y affichait une erreur à l'ouverture.
+- Pour modifier une étape, on confirme avec *Appliquer*. Le bouton reste grisé tant que rien n'a changé et nomme le champ à modifier.
+- Le dialogue *Calibrer le matériau* affiche jeu, serrage, compensation des trous, patte d'éléphant et paroi dans l'unité choisie, pouces compris, et garde la troisième décimale.
+- Un bouton long sous un refus passe à la ligne en grande police, au lieu d'élargir le dialogue.
+- Les boutons ne sont plus écrasés en grande police. Dans la version 0.6.0, les actions d'un constat du rapport de contrôle étaient coupées en haut et en bas.
+- Quand la taille de police du système change, Solidon suit aussitôt, y compris dans les dialogues ouverts. La version 0.6.0 ne la reprenait qu'après un redémarrage.
+- Une ligne regroupée du rapport de contrôle nomme dans son info-bulle au plus quinze éléments, avec type et corps. Dans la version 0.6.0, un lecteur d'écran y lisait chaque phrase.
+- La légende *Ajouté* et *Retiré* n'apparaît dans le bandeau d'aperçu que si l'aperçu ajoute ou retire de la matière. *Renommer l'objet* ne l'affiche donc pas.
 - Pour les paramètres, les ajustements, l'imprimante, le matériau et l'annulation, le chat indique l'endroit de la fenêtre où faire de même soi-même.
-- Le rapport de contrôle nomme les corps d'un ajustement au lieu d'afficher un identifiant interne.
+- Le rapport de contrôle et le contrôle avant l'export nomment les corps d'un ajustement au lieu d'afficher un identifiant interne, y compris un corps supprimé entre-temps.
+- Les messages nomment une caractéristique par type et numéro, comme « Perçage 2 », au lieu d'un identifiant interne. Pour la contrepartie d'un filetage, diamètre et pas sont dans l'unité choisie.
 - L'anglais et le portugais distinguent désormais le dépassement d'un crochet, ou d'un corps sous le plateau, du surplomb à l'impression.
 - En espagnol et en portugais, le menu, la recherche et la boîte de dialogue n'affichent de nouveau que la première phrase de *Goupille pour perçage* et *Orienter pour l'impression*.
 - Plusieurs traductions se lisent plus clairement, dont l'introduction de *Créer un paramètre …*. Le tenon commence par une majuscule dans toutes les langues.
+- Les explications des cartes sont aussi hautes que leur texte, même dans une carte large. La version 0.6.0 laissait des lignes vides dans certaines langues, comme sous deux faces sélectionnées.
+- Un champ de sélection nomme une valeur absente de sa liste, comme « Face 1 · ne convient pas ici », et une arête par orientation et position. La version 0.6.0 affichait un code interne.
 - Dans la fenêtre *Déverrouiller Solidon …*, *Acheter Solidon* reste disponible sur un ordinateur activé. Les boutons grisés indiquent leur raison, *Vérifier la clé* aussi la voie vers une nouvelle clé.
 - Le premier jour du mois s'écrit désormais « 1er », par exemple « 1er décembre 2026 ».
 - Sans pilote graphique, par exemple dans une machine virtuelle, Solidon se termine désormais de façon fiable à la fermeture. En version 0.6.0, il pouvait y continuer à tourner sans être vu.
@@ -94,8 +137,28 @@ dans `website/version.json`.
 - Si un perçage ou un récipient ne réussit qu'avec des sommets déplacés d'un rien, l'ouverture reste libre. En version 0.6.0, une peau très fine pouvait rester par-dessus.
 - Pour les trous, vue et *Sélection* montrent la même action. Dimension, profondeur et entrée liée sont devant ; compensation d’impression et réglages fins, dans « Autres valeurs ».
 - Les champs du perçage et la case de modification simultanée des éléments similaires expliquent leur effet. « Compenser les écarts d'impression » précise la correction issue du profil du matériau.
+- Dans l'onglet *Sélection*, *Appliquer* se trouve juste sous l'action ouverte, « Filament et impression » est en haut avec la couleur de l'affectation, et il ne reste plus d'espace vide sous la liste.
+- Un perçage modifié garde sa place dans l'arborescence.
+- Les actions impossibles sur un élément s'affichent comme « Impossible ici : … » avec leur raison.
+- Pour découper un cube afin d'essayer un ajustement, sa position se choisit désormais sous *Position du cube*. La ligne *Emplacement* au-dessus l'affiche.
+- Le dialogue derrière *Donner une épaisseur* dit dès sa première ligne qu'il donne une épaisseur à la surface.
+- Dans la carte de cotes, la touche Tab passe des champs à la case des éléments similaires, puis à *Appliquer* et *Annuler*, et revient. La case est désormais au-dessus des boutons.
+- Après *Annuler* ou Échap dans la carte de cotes, le clavier revient dans la vue 3D, comme après *Appliquer*. Auparavant, il arrivait sur la carte *Objets*.
+- Dans la carte de cotes, *Appliquer* reste grisé tant qu'aucune valeur ni la case des éléments similaires ne change, et indique le premier champ. Avant, un clic dans un champ l'activait, sans effet.
+- Si la carte de cotes refuse une valeur, la raison apparaît une seule fois, juste sous le champ. Auparavant, la même phrase se répétait au-dessus des boutons et dans la barre d'état.
+- Si un message agrandit la carte de cotes, elle reste en place et ne se déplace que de ce qu'exigent le bord ou la poignée, avec un mouvement bref. Avant, elle sautait ailleurs.
+- Un texte déjà rempli par un dialogue est sélectionné à l'ouverture, et la frappe le remplace. *Renommer l'objet* s'ouvre ainsi avec le nom actuel, et sans nouveau nom aucune étape n'est créée.
+- Dans l'onglet *Sélection*, *Appliquer* reste grisé tant qu'aucune valeur ne change, et indique le premier champ. Pivoter ou dupliquer avec leurs valeurs prévues reste immédiat.
+- Perçage, rebouchage, trous oblongs et champs de trous nomment le réglage « Compenser les écarts d'impression », comme le groupe de cotes. Il ajoute la compensation des trous.
+- Après un plan de dessin illisible, *Choisir un autre plan* ouvre l'étape avec le curseur dans son esquisse.
+- Quand un bouton du rapport de contrôle mène au mode esquisse, le clavier arrive là où le travail continue : dans le champ *Plan de dessin* si le plan manque, sinon dans la vue.
 - S'il ne reste que des éclats à côté d'une pièce imprimable, *Diviser en pièces distinctes* les nomme et propose *Garder les éclats*. Avant, le corps était dit d'un seul tenant.
 - Si le rayon d'un congé ou la largeur d'un chanfrein est trop grand pour les arêtes, le message propose *Choisir d'autres arêtes*.
+- Si une face sélectionnée ne convient pas à *Appliquer une dépouille* ou *Décaler la face*, le message propose *Choisir d'autres faces*.
+- Il en va de même pour *Évidement*, *Rainure avec joint* et *Appliquer une texture*. Si un congé ne peut pas être ramené à une arête, le message propose *Choisir une autre caractéristique*.
+- Si une caractéristique sélectionnée ne convient pas, par exemple un perçage, un filetage, une chambre ou une fermeture, le message propose *Choisir une autre caractéristique*.
+- Les boutons *Choisir d'autres arêtes*, *Choisir d'autres faces* et *Choisir une autre caractéristique* ouvrent l'étape avec le curseur dans le champ concerné, même derrière *Autres réglages*.
+- Un message sans étape, comme avec *Contrepartie du filetage*, donne la marche à suivre en une phrase, par exemple *Choisir une autre caractéristique*, et n'affiche que des boutons qui agissent.
 - Un clic sur *Appliquer* d'un élément pendant un calcul garde la modification, même si l'aperçu prend plus de temps. En version 0.6.0, elle se perdait sans avertissement sur les gros modèles.
 - Une texture affichée ne calcule plus d'aperçu sans modification et ne propose plus *Annuler*.
 

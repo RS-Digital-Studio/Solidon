@@ -3917,7 +3917,7 @@ def test_a_fixed_boss_is_not_a_separate_pin_for_the_slot(
     fused = connection == "fused"
     assert caught.value.detail is (HOLE_IS_NOT_EMPTY if fused else OTHER_PART_IN_THE_BORE)
     assert [action.id for action in caught.value.suggestions] == [
-        "change_selection" if fused else "split_and_retry",
+        "change_step" if fused else "split_and_retry",
         "cancel",
     ]
 
@@ -6710,4 +6710,4 @@ def test_a_part_refusal_without_an_offer_still_names_a_way(
 
     assert caught.value.detail is OTHER_PART_IN_THE_BORE
     assert "count" not in caught.value.values
-    assert [action.id for action in caught.value.suggestions] == ["change_selection", "cancel"]
+    assert [action.id for action in caught.value.suggestions] == ["change_step", "cancel"]

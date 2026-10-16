@@ -35,7 +35,7 @@ def test_dialog_size_decision_follows_the_change_intent() -> None:
 
 
 def test_screen_fit_does_not_consume_the_initial_content_fit() -> None:
-    from PySide6.QtCore import QSize
+    from PySide6.QtCore import QSize, Qt
 
     from app.ui.style import ContentHeight
 
@@ -48,6 +48,12 @@ def test_screen_fit_does_not_consume_the_initial_content_fit() -> None:
 
     class Scroll:
         def updateGeometry(self) -> None:  # noqa: N802 — Qt-Name
+            pass
+
+        def verticalScrollBarPolicy(self) -> Qt.ScrollBarPolicy:  # noqa: N802 — Qt-Name
+            return Qt.ScrollBarPolicy.ScrollBarAsNeeded
+
+        def setVerticalScrollBarPolicy(self, _policy: Qt.ScrollBarPolicy) -> None:  # noqa: N802
             pass
 
         def widget(self) -> None:
@@ -167,6 +173,12 @@ def test_late_content_grows_an_automatic_dialog_but_never_a_drawn_one() -> None:
         def updateGeometry(self) -> None:  # noqa: N802 — Qt-Name
             pass
 
+        def verticalScrollBarPolicy(self) -> Qt.ScrollBarPolicy:  # noqa: N802 — Qt-Name
+            return Qt.ScrollBarPolicy.ScrollBarAsNeeded
+
+        def setVerticalScrollBarPolicy(self, _policy: Qt.ScrollBarPolicy) -> None:  # noqa: N802
+            pass
+
         def widget(self) -> Content:
             return self._content
 
@@ -247,7 +259,7 @@ def test_late_content_grows_an_automatic_dialog_but_never_a_drawn_one() -> None:
 
 
 def test_first_run_initial_width_after_screen_fit_is_not_treated_as_user_size() -> None:
-    from PySide6.QtCore import QSize
+    from PySide6.QtCore import QSize, Qt
 
     from app.ui.first_run import FirstRunDialog
     from app.ui.style import ContentHeight
@@ -268,6 +280,12 @@ def test_first_run_initial_width_after_screen_fit_is_not_treated_as_user_size() 
 
     class Scroll:
         def updateGeometry(self) -> None:  # noqa: N802 — Qt-Name
+            pass
+
+        def verticalScrollBarPolicy(self) -> Qt.ScrollBarPolicy:  # noqa: N802 — Qt-Name
+            return Qt.ScrollBarPolicy.ScrollBarAsNeeded
+
+        def setVerticalScrollBarPolicy(self, _policy: Qt.ScrollBarPolicy) -> None:  # noqa: N802
             pass
 
         def widget(self) -> None:

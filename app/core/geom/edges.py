@@ -39,7 +39,7 @@ from app.core import units
 from app.core.errors import (
     CANCEL,
     CHANGE_EDGES,
-    CHANGE_SELECTION,
+    CHANGE_FEATURE,
     CORRECT_INPUT,
     REPAIR_AND_RETRY,
     SHOW_LOCATION,
@@ -3822,7 +3822,7 @@ def sharp_corner(
     axis = axis / _length(axis)
     normals, neighbours = _around(mesh, triangles, axis, feature.params.get("centre"), features)
     if len(normals) != THROUGH:
-        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_FEATURE, CANCEL))
     first, second = normals[0], normals[1]
     line, point = _plane_cut(first, neighbours[0], second, neighbours[1])
 
@@ -3923,7 +3923,7 @@ def _plane_cut(
         (first, second, line), (units.dot3(first, on_first), units.dot3(second, on_second), 0.0)
     )
     if point is None:
-        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_FEATURE, CANCEL))
     return line, point
 
 

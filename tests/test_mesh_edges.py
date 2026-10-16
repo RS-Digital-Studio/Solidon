@@ -27,7 +27,7 @@ import pytest
 import trimesh
 
 from app.core.bootstrap import load_operations
-from app.core.errors import GeometryError, OperationCancelled
+from app.core.errors import CANCEL, CHANGE_FEATURE, GeometryError, OperationCancelled
 from app.core.geom.boolean import boolean
 from app.core.geom.edges import (
     EDGE_CHOICES,
@@ -1655,7 +1655,8 @@ def test_a_fillet_beside_a_curved_wall_does_not_invent_a_plane(
         run(operation, source, profile, **params)
 
     assert "zwei ebene Flächen" in str(problem.value.detail)
-    assert {entry.id for entry in problem.value.suggestions} == {"change_selection", "cancel"}
+    # Die Absage kommt aus einem Merkmalsschritt; sein Feld ist das Merkmal (RB-1).
+    assert tuple(problem.value.suggestions) == (CHANGE_FEATURE, CANCEL)
     assert body.volume == pytest.approx(before)
 
 

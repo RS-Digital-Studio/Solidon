@@ -1603,12 +1603,13 @@ def test_the_list_stands_in_two_columns_where_every_title_fits(qt_app: QApplicat
     assert all(panel.columns_of(title) == 1 for title in shown), "schmal: untereinander"
 
 
-def test_filament_waits_folded_below_the_list(qt_app: QApplication) -> None:
-    """RM-510: Filament und Druck stehen zugeklappt unter der Liste, nicht vor ihr.
+def test_filament_waits_folded_above_the_list(qt_app: QApplication) -> None:
+    """RM-510: Filament und Druck stehen zugeklappt, als eine Zeile.
 
     Vor *Bohrung setzen* standen zehn Bedienelemente und 44 Wörter zu Filament
     und Nahtschutz. Der Abschnitt steht nur, solange etwas in ihm steht, und
-    zugeklappt nennt er die Zuweisung.
+    zugeklappt nennt er die Zuweisung. **Seit FD-19 vor Suche und Liste:** Am
+    Ende lag er unter rund vierzig Handlungen.
     """
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
@@ -1620,7 +1621,7 @@ def test_filament_waits_folded_below_the_list(qt_app: QApplication) -> None:
     assert not panel.print_section.isHidden()
     layout = panel.layout()
     assert layout is not None
-    assert layout.indexOf(panel.print_section) > layout.indexOf(panel.scroller), "unter der Liste"
+    assert layout.indexOf(panel.print_section) < layout.indexOf(panel.scroller), "über der Liste"
     panel.describe_print("Im Projekt: PLA Rot")
     summary = panel.print_section.findChild(QLabel, "sectionSummary")
     assert summary is not None and summary.text() == "Im Projekt: PLA Rot"

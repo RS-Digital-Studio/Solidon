@@ -70,6 +70,7 @@ from tests.ui_helpers import MESHES, wait_for_export, wait_for_print_findings, w
 from tests.ui_helpers import expire_trial as _expired
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
+from tests.window_leftovers import close_after
 
 
 @pytest.mark.parametrize("command", ["start_sketch", "start_sculpt", "start_armature"])
@@ -669,8 +670,9 @@ def test_legacy_paint_finding_opens_its_real_values_and_history(window, monkeypa
     buttons = {button.text(): button for button in window.report._offers.findChildren(QPushButton)}
     buttons["Werte ansehen"].click()
     assert len(opened) == 1
-    assert "radius" in opened[0] and "12.0" in opened[0]
-    assert all(name in opened[0] for name in ("x", "y", "z", "slot"))
+    # Lesbar statt roh (FD-105): Feldnamen und Längen wie im Dialog.
+    assert "Radius: 12,00 mm" in opened[0]
+    assert all(name in opened[0] for name in ("Position X", "Position Y", "Position Z", "Filament"))
     buttons["Verlauf zeigen"].click()
     assert visited == ["history"]
     assert window.session.project.document.ops[1].params["radius"] == pytest.approx(12.0)
@@ -5760,11 +5762,15 @@ def test_the_apply_button_stays_in_sight_however_low_the_window_is(window: MainW
     ]
     assert not draussen, f"unter dem Rand: {draussen} (Fenster {dock.height()} hoch)"
 
-    # **Die strukturelle Hälfte derselben Zusage.** Was im Rollinhalt liegt,
-    # kann hinausgerollt werden — gleich wie es in dieser Höhe gerade steht.
-    inhalt = roller.widget()
-    assert inhalt is not None and not inhalt.isAncestorOf(panel.footer()), (
-        "die Knopfzeile rollt mit"
+    # **Die strukturelle Hälfte derselben Zusage** (FD-136): Die Knopfzeile
+    # steht im Rollinhalt direkt unter der offenen Handlung, nicht am
+    # Kartenende; im Bild hält sie ``feature_footer.keep_in_sight``, und das
+    # hat die erste Hälfte eben an einem Fenster gemessen, das zum Rollen zwingt.
+    knopfzeile = panel._footer
+    scharf = next(row.box for row in panel._shown_rows.values() if row.key == panel._armed)
+    assert knopfzeile.parentWidget() is panel, "die Knopfzeile steht im Merkmalfenster"
+    assert panel._rows.indexOf(knopfzeile) == panel._rows.indexOf(scharf) + 1, (
+        "die Knopfzeile steht unter der offenen Handlung"
     )
 
 
@@ -5834,7 +5840,11 @@ def test_a_halted_chain_locks_the_feature_panel_and_lets_go_after_undo(
         if widget.isVisibleTo(panel) and widget.property("handlingKey")
     ]
     assert felder, "ohne Felder prüft dieser Test nichts"
-    assert panel._apply.isEnabled(), "Voraussetzung: ohne Halt nimmt das Fenster Zahlen an"
+    # *Übernehmen* wartet ohnehin auf die erste Änderung (FD-99); die Zusage
+    # gilt den Feldern.
+    assert all(feld.isEnabled() for feld in felder), (
+        "Voraussetzung: ohne Halt nimmt das Fenster Zahlen an"
+    )
 
     window.session.apply(
         "Bohrung setzen",
@@ -5875,7 +5885,7 @@ def test_a_halted_chain_locks_the_feature_panel_and_lets_go_after_undo(
     QApplication.processEvents()
 
     assert window.session.last_result.stopped_at is None, "zurückgenommen rechnet sie wieder"
-    assert panel._apply.isEnabled(), "und das Fenster gibt ohne Neuauswahl wieder frei"
+    assert panel._apply.toolTip() != grund, "und das Fenster gibt ohne Neuauswahl wieder frei"
     assert not panel._lock_note.isVisibleTo(window.feature_dock)
     frei = [
         widget
@@ -7794,6 +7804,7 @@ def test_the_history_counts_through_a_group_and_keeps_the_kernel_switch_last(
 
 def test_history_context_delete_uses_the_visible_multiple_selection(
     qt_app: QApplication,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Rechtsklick löscht dieselbe Mehrfachauswahl wie die Entf-Taste."""
     from app.core.types import Document, Operation, Transaction
@@ -7809,6 +7820,7 @@ def test_history_context_delete_uses_the_visible_multiple_selection(
         ],
     )
     panel = HistoryPanel()
+    close_after(request, panel)
     panel.show_document(document)
     panel.show()
     QApplication.processEvents()
@@ -11490,6 +11502,9 @@ def test_closing_is_no_advice_either(window: MainWindow) -> None:
             continue
         error = errors.AppError.__new__(value)
         object.__setattr__(error, "suggestions", list(suggestions))
+        # Ohne ``__init__`` fehlt auch die Schrittkennung; ``unhandled_advice``
+        # fragt sie seit RB-3 für Wege, die einen Schritt brauchen.
+        object.__setattr__(error, "op_id", None)
         assert str(CANCEL.label) not in unhandled_advice(error, known), (
             f"{name} schreibt das Abbrechen als Ratschlag in den Text"
         )
@@ -12658,6 +12673,12 @@ def test_the_catalog_grid_never_scrolls_sideways(qt_app: QApplication) -> None:
 
 def test_a_fitting_body_gets_the_same_passive_reply_at_the_action_and_in_status(window):
     """Der echte Menüweg bleibt ohne neue Operation und quittiert im Blickfeld."""
+    # Die Blase steht nur, wo über dem Bild Platz ist (FD-108): ein gezeigtes
+    # Fenster in Kundengröße, nicht die 640 mal 480 eines nie gezeigten.
+    window.resize(1600, 900)
+    window.show()
+    window._show_start_screen(False)
+    QApplication.processEvents()
     assert window.session.apply("Quader", [OperationDraft(op="create_box")])
     assert window.session.wait_for_idle(60_000)
     count = len(window.session.project.document.ops)
@@ -12677,6 +12698,12 @@ def test_a_fitting_body_gets_the_same_passive_reply_at_the_action_and_in_status(
 
 def test_evaluation_cancellation_replaces_the_action_reply_and_its_timer(window):
     """Das echte Sitzungssignal ersetzt eine alte Quittung an beiden sichtbaren Orten."""
+    # Die Blase steht nur, wo über dem Bild Platz ist (FD-108): ein gezeigtes
+    # Fenster in Kundengröße, nicht die 640 mal 480 eines nie gezeigten.
+    window.resize(1600, 900)
+    window.show()
+    window._show_start_screen(False)
+    QApplication.processEvents()
     window.announce("Vorherige Meldung")
     notice = window._action_notice
     # Ein alter Ablauf darf der neuen, längeren Meldung keine Restzeit leihen.
@@ -12697,6 +12724,12 @@ def test_evaluation_cancellation_replaces_the_action_reply_and_its_timer(window)
 
 def test_action_reply_survives_progress_and_replaces_its_previous_text(window):
     """Auslaufender Fortschritt überschreibt weder Karte noch Ergebnisquittung."""
+    # Die Blase steht nur, wo über dem Bild Platz ist (FD-108): ein gezeigtes
+    # Fenster in Kundengröße, nicht die 640 mal 480 eines nie gezeigten.
+    window.resize(1600, 900)
+    window.show()
+    window._show_start_screen(False)
+    QApplication.processEvents()
     window.announce("Erster Hinweis")
     notice = window._action_notice
     second = "<b>Lesbarer Klartext</b> " + "Längerer verständlicher Hinweis. " * 10
@@ -15493,9 +15526,10 @@ def test_the_object_tree_fits_its_measures_in_the_card(qt_app: QApplication) -> 
     header = tree.tree.header()
     needed = header.sectionSize(0) + header.sectionSize(1)
     assert needed <= LEFT_WIDTH, f"{needed} Pixel bei {LEFT_WIDTH} verfügbaren"
-    assert header.sectionSize(0) > header.sectionSize(1), (
-        "der Name ist die Auskunft, das Maß die Beigabe"
-    )
+    # Der Name steht ganz da; das Maß nimmt, was er übrig lässt (FD-20,
+    # ``test_object_tree_columns``). Den Vorrang des Namens bei langen Namen
+    # prüft ``test_analysis_ui``.
+    assert header.sectionSize(0) >= tree.tree.sizeHintForColumn(0), "der Name ist die Auskunft"
     tree.close()
     tree.deleteLater()
 
@@ -15678,7 +15712,9 @@ def test_another_project_does_not_inherit_a_refused_number(qt_app: QApplication)
     panel.close()
 
 
-def test_parameter_rows_recalculate_the_card_height(qt_app: QApplication) -> None:
+def test_parameter_rows_recalculate_the_card_height(
+    qt_app: QApplication, request: pytest.FixtureRequest
+) -> None:
     """Neue Zeilen dürfen nicht in der Höhe des leeren Zustands landen.
 
     Die schwebende linke Karte besitzt kein übergeordnetes Layout, das eine
@@ -15690,6 +15726,7 @@ def test_parameter_rows_recalculate_the_card_height(qt_app: QApplication) -> Non
     from app.ui.panels import ParameterPanel
 
     panel = ParameterPanel()
+    close_after(request, panel)
     panel.resize(260, panel.minimumHeight())
     panel.show_document(Document(format_version=1, app_version="0.0.1"))
     panel.show()
@@ -16602,7 +16639,9 @@ def test_import_dialog_keeps_its_reading_status_after_starting_the_project(
     assert status == tr("Modell einfügen …"), "der Projektanfang löschte den Ladehinweis"
     expected = "" if starting_fresh else "Bereit"
     assert announcement == expected, "nur ein neues Dokument verwirft die vorige Quittung"
-    assert window._announcement == expected
+    # Der Import ist ein Schritt ohne eigene Quittung: Er nimmt die vorige mit,
+    # die Statuszeile folgt dem letzten Schritt (FD-162).
+    assert window._announcement == ""
     assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
 
 
@@ -22230,6 +22269,7 @@ def test_editing_a_box_offers_to_name_its_dimensions_in_one_step(window: MainWin
 
 def test_a_bounded_parameter_has_a_slider_and_a_drag_is_one_change(
     qt_app: QApplication,
+    request: pytest.FixtureRequest,
 ) -> None:
     """RM-359 F8: Ein Maß mit eigener Unter- und Obergrenze hat einen Regler (§13).
 
@@ -22244,6 +22284,7 @@ def test_a_bounded_parameter_has_a_slider_and_a_drag_is_one_change(
     from app.ui.panels import SLIDER_STEPS, ParameterPanel
 
     panel = ParameterPanel()
+    close_after(request, panel)
     document = Document(format_version=1, app_version="0.0.1")
     document.parameters["breite"] = Parameter(
         name="breite", value=40.0, minimum=10.0, maximum=110.0, title="Breite"
@@ -22287,7 +22328,7 @@ def test_two_named_boxes_get_distinct_rows_with_names(window: MainWindow) -> Non
     ändern“. Jetzt trägt der zweite Satz die Nummer seines Namens, und jedes
     Feld, jede Einheit und jeder Knopf heißt nach seinem Maß.
     """
-    from app.ui.labels import BoundedSpin
+    from app.ui.labels import BoundedLengthSpin, BoundedSpin
 
     spec = REGISTRY.get("create_box")
     for _round in range(2):
@@ -22317,7 +22358,10 @@ def test_two_named_boxes_get_distinct_rows_with_names(window: MainWindow) -> Non
     ]
     assert all(named), "kein Feld ohne Namen"
     assert len(named) == len(set(named)), f"doppelte Namen: {named}"
-    assert all(isinstance(editor, BoundedSpin) for editor in panel._editors.values())
+    # Längen in der Anzeigeeinheit (FD-125) lehnen ebenso ab, statt zu kürzen.
+    assert all(
+        isinstance(editor, BoundedSpin | BoundedLengthSpin) for editor in panel._editors.values()
+    )
     assert all(panel._titles[name].buddy() is editor for name, editor in panel._editors.items()), (
         "die Beschriftung zeigt auf ihr Feld"
     )

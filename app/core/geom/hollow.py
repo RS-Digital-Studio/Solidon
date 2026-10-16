@@ -530,7 +530,7 @@ def _hollow_with_openings(
 
 def _opening_misses(opening: Opening) -> Finding:
     """Unter dieser Fläche liegt kein Hohlraum — sie bleibt zu."""
-    from app.core.errors import CHANGE_SELECTION, CORRECT_INPUT
+    from app.core.errors import CHANGE_FACES, CORRECT_INPUT
 
     return Finding(
         code="hollow.opening_misses",
@@ -540,7 +540,7 @@ def _opening_misses(opening: Opening) -> Finding:
             "dünner als zwei Wände."
         ),
         feature_ids=(opening.name,) if opening.name else (),
-        suggestions=(CORRECT_INPUT, CHANGE_SELECTION),
+        suggestions=(CORRECT_INPUT, CHANGE_FACES),
     )
 
 

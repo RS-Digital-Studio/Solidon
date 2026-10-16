@@ -242,10 +242,16 @@ def _frame_of(ctx: OpContext, plane: str) -> PlaneFrame | None:
     keiner Tabelle des Kerns, und ohne diesen Rahmen läge die Zeichnung auf
     der Grundebene statt zwanzig Millimeter darüber — der Vertrag wäre eine
     Angabe, die niemand einlöst. Ihr Abstand darf ein Projektparameter sein,
-    deshalb reisen die Werte mit."""
+    deshalb reisen die Werte mit.
+
+    Eine Absage nennt das Feld ``sketch``: Dort steht die Ebene, und jede
+    Skizzenoperation führt es. ``plane`` gibt es in keinem ihrer Dialoge, und
+    *Eine andere Ebene wählen* führte ins Leere (FD-182)."""
     if not (is_feature_plane(plane) or is_derived_plane(plane)):
         return None
-    return frame_for_sketch(plane, ctx.scene.objects.values(), _parameter_values(ctx))
+    return frame_for_sketch(
+        plane, ctx.scene.objects.values(), _parameter_values(ctx), field="sketch"
+    )
 
 
 def _regions_for(
@@ -1263,7 +1269,7 @@ class SketchRevolveParams(BaseParams):
         #
         # Der ``doc``-Satz bleibt vorerst, wie er ist: Er ist ein Katalogtext
         # in fünf Sprachen, und beim Vieleck steht ohnehin der Grund der
-        # Sperre an der Zeile statt seiner (``_explain`` in ``op_dialog.py``).
+        # Sperre an der Zeile statt seiner (``form_fields.explain`` im Operationsdialog).
         depends_on=("shape", ("rectangle", "slot")),
         placement="advanced",
     )

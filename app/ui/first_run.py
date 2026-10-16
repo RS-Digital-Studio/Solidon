@@ -57,8 +57,8 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListView,
     QPushButton,
-    QSpinBox,
     QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -77,6 +77,7 @@ from app.core.units import LARGEST_NOZZLE, SMALLEST_NOZZLE
 from app.i18n import _, format_decimal, language_name, set_language, tr
 from app.i18n.catalog import available_languages, install_language
 from app.ui.dialogs import show_error
+from app.ui.grouped_spin import GroupedIntSpin
 from app.ui.icons import icon
 from app.ui.labels import (
     NumberSpin,
@@ -86,7 +87,13 @@ from app.ui.labels import (
     slicer_title,
     wheel_needs_focus,
 )
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying
+from app.ui.leash import (
+    WAIT_TIMEOUT_MS,
+    Worker,
+    WorkerLeash,
+    stop_watching_the_dying,
+    weak_slot,
+)
 from app.ui.settings import UiSettings
 from app.ui.style import (
     NORMAL,
@@ -490,7 +497,7 @@ class FirstRunDialog(QDialog):
         # Wie viele davon: Eine Düse mit Wechselstation spült bei jedem
         # Filamentwechsel, und danach richtet sich, ob Filamente auf eigene
         # Platten kommen. Der Druckdialog führt dasselbe Feld.
-        self.printer_nozzles = QSpinBox(self.custom_printer)
+        self.printer_nozzles = GroupedIntSpin(self.custom_printer)
         self.printer_nozzles.setRange(1, 8)
         self.printer_nozzles.setValue(template.nozzles)
         self.printer_nozzles.setToolTip(
@@ -705,6 +712,16 @@ class FirstRunDialog(QDialog):
         self._scroll = DialogScrollArea(self)
         self._scroll.setWidget(self._contents)
         self._scroll.contentSizeChanged.connect(self._grow_soon)
+        # Zugeklappt gibt der Dialog die Höhe zurück (FD-198).
+        flap = self.extras_section.findChild(QToolButton, "sectionHeading")
+        if flap is not None:
+            flap.toggled.connect(weak_slot(self, FirstRunDialog._grow_soon, "explicit"))
+        # Ein Schriftwechsel misst über die eigenen Schritte von
+        # ``_grow_to_content`` (``style_follow.refit_dialogs``); direkt gemessen
+        # blieben nach 9 → 14 → 9 pt 12 Punkte leer (L5).
+        self.queue_refit: Callable[..., None] = weak_slot(
+            self, FirstRunDialog._grow_soon, forward=True
+        )
         for editor in self._contents.findChildren(QComboBox):
             wheel_needs_focus(editor)
         for spin in (*self._contents.findChildren(NumberSpin), self.printer_nozzles):
@@ -840,8 +857,8 @@ class FirstRunDialog(QDialog):
         align_forms(self)
         self._grow_initial_soon()
 
-    def _grow_soon(self) -> None:
-        QTimer.singleShot(0, self, self._grow_to_content)
+    def _grow_soon(self, intent: ContentFitIntent = "passive") -> None:
+        QTimer.singleShot(0, self, weak_slot(self, FirstRunDialog._grow_to_content, intent))
 
     def _grow_initial_soon(self) -> None:
         QTimer.singleShot(0, self, self._grow_initial_content)

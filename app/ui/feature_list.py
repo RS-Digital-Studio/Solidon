@@ -33,6 +33,18 @@ class FeatureList(QListWidget):
     def _queue_fit(self) -> None:
         self._fit_timer.start(0)
 
+    def fit_now(self) -> None:
+        """Die Höhe jetzt setzen, in der Breite, die die Liste gerade hat.
+
+        Für die Anfangsmessung eines Dialogs: Fiel sie vor den Zeitgeber oder
+        vor das Wegfallen der Querleiste in der endgültigen Breite, maß der
+        Dialog die Liste in ihrer alten Höhe, und der Streifen, um den sie
+        danach schrumpfte, blieb über den Knöpfen leer — passives Nachmessen
+        gibt nie Höhe zurück (FD-45).
+        """
+        self._fit_timer.stop()
+        self._fit_height()
+
     def _fit_height(self) -> None:
         # Erst nach Qts verzögertem Modell-/Schriftwechsel messen; während
         # rowsInserted kann selbst der Text der neuen Zeile noch fehlen.

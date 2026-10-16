@@ -225,6 +225,7 @@ from app.core.scene import (
 )
 from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
+from app.core.scene.choice_ways import for_the_choice
 from app.core.scene.evaluate import size_set_by
 from app.core.scene.history import change_for, repair_is_available, step_titles
 from app.core.scene.parameter_usage import bounds_refusal
@@ -232,6 +233,7 @@ from app.core.scene.placement import NORMAL as NORMAL_FIELDS
 from app.core.scene.placement import POSITION as POSITION_FIELDS
 from app.core.scene.placement import bound_surface_values, seats_on, surface_at_feature
 from app.core.scene.project import clear_autosave, discard_recovery, find_recovery
+from app.core.scene.revision import halt_finding
 from app.core.sketch.planes import (
     feature_plane,
     feature_plane_parts,
@@ -279,6 +281,7 @@ from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
 from app.i18n import TranslatableText, _, format_decimal, tr
 from app.ui import app_events, change_lock, first_run
 from app.ui import settings as settings_module
+from app.ui.action_notice import ActionNotice
 from app.ui.ai_disclosure import (
     DisclosureResult,
     ensure_ai_disclosure,
@@ -287,7 +290,7 @@ from app.ui.ai_disclosure import (
 from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
 from app.ui.calibration_dialog import CalibrationDialog
 from app.ui.catalog import PartCatalog
-from app.ui.change_lock import change_refusal
+from app.ui.change_lock import change_refusal, halt_line
 from app.ui.chat import ChatPanel
 from app.ui.dialogs import (
     AboutDialog,
@@ -324,7 +327,12 @@ from app.ui.filament_picker import (
     swatch,
 )
 from app.ui.filament_usage import UsageNotice
-from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
+from app.ui.generate_dialog import (
+    IMAGE_SUFFIXES,
+    GenerateDialog,
+    generated_origin,
+    image_filter,
+)
 from app.ui.guide_targets import (
     MissingTargetError,
     menu_entries,
@@ -366,7 +374,7 @@ from app.ui.labels import (
 )
 from app.ui.labels import area as area_label
 from app.ui.labels import set_display_unit as set_length_unit
-from app.ui.leash import Worker, WorkerLeash, stop_watching_the_dying, wait_for_all, weak_slot
+from app.ui.leash import Worker, WorkerLeash, wait_for_all, weak_slot
 from app.ui.loading import (
     BAR_AFTER_MS,
     DELAY_MS,
@@ -377,6 +385,7 @@ from app.ui.loading import (
 )
 from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
+from app.ui.measure_card import stands_in
 from app.ui.message_dialog import name_button
 from app.ui.motion import switch
 from app.ui.op_dialog import DeferredSourcePicker, OperationDialog, simple_shape_of
@@ -455,12 +464,13 @@ from app.ui.sketch_editor import (
     grid_step_for,
     plane_where,
 )
+from app.ui.sketch_focus import focus_the_sketch
 from app.ui.spacemouse import SpaceMouseController
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_paths, accepted_url, dropped_file
+from app.ui.status_line import StatusLine
 from app.ui.style import (
     NORMAL,
-    ROOMY,
     TIGHT,
     divider,
     make_danger,
@@ -474,12 +484,13 @@ from app.ui.survey import SupportNotice, SurveyNotice, UsageClock
 from app.ui.tab_signal import SignalTabBar
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
+from app.ui.toolbar_follow import follow_the_font
 from app.ui.tour import TourPanel
 from app.ui.transform_bar import ROLES as TRANSFORM_ROLES
 from app.ui.transform_bar import TransformBar
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
-from app.ui.viewport import DisplayMode, Projection, SketchSelectionBadge, Viewport
+from app.ui.viewport import DisplayMode, Projection, Viewport
 from app.ui.waiting_click import kept_through_rebuild, waiting_approval
 
 _log = get_logger(__name__)
@@ -939,66 +950,6 @@ class _DialogsStayAbove(QObject):
         for dialog in dialogs_above(window, windows):
             dialog.raise_()
         return False
-
-
-class _ActionNotice(SketchSelectionBadge):
-    """Dieselbe passive Quittung wie in der Skizze, am Ort der letzten Handlung."""
-
-    def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent)
-        self.setTextFormat(Qt.TextFormat.PlainText)
-        self.setWordWrap(True)
-        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._anchor = QPoint()
-        self._expiry = QTimer(self)
-        self._expiry.setSingleShot(True)
-        self._expiry.timeout.connect(self.clear)
-        parent.installEventFilter(self)
-
-    def show_message(self, text: str, anchor: QPoint) -> None:
-        """Ersetzt die alte Meldung; Fortschritt besitzt weder Text noch Zeitgeber."""
-        self.clear()
-        if not text:
-            return
-        self._anchor = anchor
-        self.setText(text)
-        self.place()
-        self.show()
-        # Der volle Text bleibt zusätzlich in der Statuszeile. Hier reichen
-        # kurze Sätze mindestens acht Sekunden, lange bekommen mehr Lesezeit.
-        self._expiry.start(max(8000, len(text) * 60))
-
-    def clear(self) -> None:
-        """Projektwechsel und Fensterabbau nehmen auch den Zeitgeber mit."""
-        self._expiry.stop()
-        super().clear()
-        self.hide()
-
-    def place(self) -> None:
-        """Am gemerkten Ort, umbrochen und innerhalb der aktuellen Zeichenfläche."""
-        parent = self.parentWidget()
-        if parent is None:
-            return
-        available = max(1, parent.width() - 2 * ROOMY)
-        self.setMaximumWidth(min(available, max(1, self.fontMetrics().averageCharWidth() * 60)))
-        self.adjustSize()
-        x = min(max(ROOMY, self._anchor.x()), max(ROOMY, parent.width() - self.width() - ROOMY))
-        y = self._anchor.y() + ROOMY
-        if y + self.height() > parent.height() - ROOMY:
-            y = self._anchor.y() - self.height() - ROOMY
-        y = min(max(ROOMY, y), max(ROOMY, parent.height() - self.height() - ROOMY))
-        self.move(x, y)
-        self.raise_()
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
-        """Größe und Schrift dürfen den gemerkten Satz nicht außerhalb stehen lassen."""
-        if stop_watching_the_dying(self, watched, event):
-            return False
-        if event.type() in (QEvent.Type.Resize, QEvent.Type.FontChange, QEvent.Type.StyleChange):
-            self.place()
-        elif event.type() == QEvent.Type.Hide:
-            self.clear()
-        return super().eventFilter(watched, event)
 
 
 class _SelectionPage(QWidget):
@@ -1890,7 +1841,7 @@ _WORKED_ALONGSIDE: Final = frozenset({"generate", "agent"})
 SLICER_WARMUP_DELAY_MS: Final = 2000
 
 #: Wie lange eine Ansage neben einem solchen Lauf in der Zeile steht —
-#: so lange wie ihre Blase mindestens (``_ActionNotice.show_message``).
+#: so lange wie ihre Blase mindestens (``ActionNotice.show_message``).
 SPOKEN_HOLD_MS: Final = 8000
 
 
@@ -1951,6 +1902,7 @@ class _ExportWorker(Worker):
         evaluated: Sequence[Finding] = (),
         chosen: _ChosenSetup | None = None,
         inputs: StoredInputs | None = None,
+        names: Mapping[str, str] | None = None,
     ) -> None:
         super().__init__()
         self._objects = objects
@@ -1973,6 +1925,8 @@ class _ExportWorker(Worker):
         self._document = document
         self._evaluated = tuple(evaluated)
         """Die Befunde der Auswertung, aus der die Körper stammen (RM-419)."""
+        self._names = dict(names or {})
+        """Die Namen derselben Auswertung — für einen entfernten Passungspartner (RB2-5)."""
         #: Ein schon erhobener Bericht — dann wurde die Frage bereits gestellt
         #: und beantwortet. ``None`` heißt „noch nicht geprüft"; eine **leere**
         #: Liste ist eine Antwort und keine fehlende.
@@ -2023,6 +1977,7 @@ class _ExportWorker(Worker):
             evaluated=self._evaluated,
             chosen=self._chosen,
             inputs=self._inputs,
+            names=self._names,
         )
 
     def work(self) -> None:
@@ -2038,6 +1993,7 @@ class _ExportWorker(Worker):
                     document=self._document,
                     cancelled=self.cancelled,
                     evaluated=self._evaluated,
+                    names=self._names,
                 )
                 self.cancelled.raise_if_cancelled()
                 if any(entry.severity in ("warning", "error") for entry in found):
@@ -3626,6 +3582,9 @@ class MainWindow(QMainWindow):
         """Ob die Markierung im Verlauf jünger ist als die Körperwahl im Baum (Review G7)."""
         self.history_panel.list.itemSelectionChanged.connect(self._history_selection_changed)
         self.history_panel.operationActivated.connect(self.edit_operation)
+        # Eine Maßänderung öffnet ihr Maß wie *Ändern …* an der Leiste (FD-166).
+        self.history_panel.parameterActivated.connect(self.action_edit_parameter)
+        self.history_panel.printSettingsActivated.connect(self.action_print_settings)
         self.history_panel.noteRequested.connect(self.announce)
         self.history_panel.removalRequested.connect(self.remove_history_operations)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
@@ -4522,7 +4481,7 @@ class MainWindow(QMainWindow):
         for notice in (self._survey_notice, self._support_notice):
             for zone in (left, self.right_column, bottom, self.viewport.view_bar):
                 notice.keep_clear_of(zone)
-        self._action_notice = _ActionNotice(self.overlay)
+        self._action_notice = ActionNotice(self.overlay)
         self._announcement_document = self.session.project.document
         self._tour_project = self.session.project
         # Parameterzeilen entstehen nach dem Öffnen eines Projekts neu. Ihre
@@ -4652,7 +4611,7 @@ class MainWindow(QMainWindow):
 
     def _build_status_bar(self) -> None:
         self.measurements = MeasurementLabel(self)
-        self.status_message = QLabel("", self)
+        self.status_message = StatusLine(self)
         # **Keine Zahl im Balken.** Sie steht mittig, und der Rand der
         # Füllung wandert darunter hindurch: bei 45 % lag sie halb auf
         # Bernstein und halb auf der Spur, ab 60 % ganz auf Bernstein — mit
@@ -5861,6 +5820,8 @@ class MainWindow(QMainWindow):
         # bleibt eine Zeile hoch; auf schmalen Fenstern sammelt Qt den
         # Überstand wie bei jeder Werkzeugleiste im Pfeilmenü ein.
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        # Nach einem Schriftwechsel von der Wortform aus neu wählen wie beim Start (L1).
+        follow_the_font(toolbar, partial(self._set_toolbar_form, TOOLBAR_WORDS), self._fit_toolbar)
         # **Und wenn der Platz nicht reicht, kürzen sie, statt zu
         # verschwinden** (Befund D6). Qt sammelt den Überstand einer
         # Werkzeugleiste hinter einem unbeschrifteten Pfeil ein — was dort
@@ -7012,13 +6973,8 @@ class MainWindow(QMainWindow):
         halted = self.session.halted_step()
         if halted is None:
             return None
-        number, title = halted
-        return tr(
-            "Die Kette hält an Schritt {number} ({step}) an — ein neuer Schritt dahinter "
-            "würde nicht gerechnet. Der Weg weiter steht im Prüfbericht.",
-            number=step_number(self.session.project.document, number),
-            step=title,
-        )
+        # Derselbe Satz wie an den Befundhandlungen (FD-104): eine Quelle.
+        return halt_line(self.session.project.document, halted[0])
 
     def _feature_kinds_of_selection(self) -> frozenset[str]:
         """Die Arten der erkannten Merkmale am gewählten Körper.
@@ -8502,7 +8458,8 @@ class MainWindow(QMainWindow):
         """
         self._generate(Path(path))
 
-    def _generate(self, image: Path | None) -> None:
+    def _generate(self, image: Path | None, again: Any = None) -> None:
+        """Den Erzeugen-Dialog öffnen; ``again`` ist der Befund hinter *Neu erzeugen*."""
         if self._drawing_refuses():
             return
         # **Gefragt wird vor dem Start, wie beim Import** (RM-361). Der Lauf
@@ -8516,7 +8473,7 @@ class MainWindow(QMainWindow):
                 refusal,
                 self,
                 tr("Einfügen beenden und Modell erzeugen"),
-                partial(self._generate, image),
+                partial(self._generate, image, again),
             )
             return
         # **Nichtmodal, und einer zur Zeit** (RM-371, §2.8). Der Dialog lief
@@ -8526,9 +8483,18 @@ class MainWindow(QMainWindow):
         # bedienbar. Ein zweiter Aufruf holt denselben Dialog nach vorn: Zwei
         # Läufe auf derselben Grafikkarte wären doppelte Wartezeit.
         dialog = self._generator
+        # **Neu erzeugen bringt die Beschreibung mit** (FD-117): Der Befund
+        # nennt den erzeugten Körper, seine Quelle Beschreibung und Startwert.
+        origin = (
+            generated_origin(self.session.project.document, getattr(again, "object_id", None))
+            if again is not None
+            else None
+        )
         if dialog is not None:
             if image is not None:
                 dialog.set_image(image)
+            if again is not None:
+                dialog.start_over(origin)
             self._show_generator(dialog, activate=True)
             return
         # Der Aufbau fragt einmal, ob ein Generator läuft, und das ist ein
@@ -8560,6 +8526,8 @@ class MainWindow(QMainWindow):
         self._generator_project = self.session._project_generation
         if image is not None:
             dialog.set_image(image)
+        if again is not None:
+            dialog.start_over(origin)
         self._show_generator(dialog, activate=True)
 
     def _show_generator(self, dialog: GenerateDialog, *, activate: bool) -> None:
@@ -9091,6 +9059,22 @@ class MainWindow(QMainWindow):
             if self._split_turn is not None:
                 self._split_turn_done += 1
         if applied.transaction is None:
+            # **Ohne Schnitt passt es nur, wenn die Suche nichts zu sagen hat**
+            # (FD-106): Fand sie keine Trennebene oder sperrte eine geschützte
+            # Fläche, stand hier „passt bereits“ neben der Warnung, dass es über
+            # den Bauraum ragt. Dann sagt die Zeile den Grund; seine Handlung
+            # steht am Befund im Bericht.
+            reason = next(
+                (finding for finding in applied.findings if finding.severity != "info"), None
+            )
+            if reason is not None:
+                self.announce(
+                    tr(
+                        "Nicht geteilt. {reason}",
+                        reason=first_sentence(str(reason.message)),
+                    )
+                )
+                return
             self.announce(tr("Dieses Objekt passt bereits auf das Bett."))
             return
         self._queue_split_reveal(applied.object_ids)
@@ -10564,6 +10548,7 @@ class MainWindow(QMainWindow):
             # Und was die Auswertung schon fand: Ein durchstochener Formzug
             # stand im Prüfbericht und nicht vor dem Schreiben (RM-419).
             evaluated=result.scene.report.findings,
+            names=result.object_names,
             # Dieselbe Slicerwahl wie die Zahlenzeile, ohne den Bestand ein
             # zweites Mal zu lesen (RM-623).
             chosen=self._chosen_setup_now(),
@@ -12443,6 +12428,12 @@ class MainWindow(QMainWindow):
             self._on_selection(self.object_tree.selected(), refresh_analysis=False)
         self._refresh_map_units()
         self._update_header()
+        # **Die Parameterleiste baut ihre Zeilen neu** (RA-2): Grenzen, Ablehnung,
+        # abgeleitete Maße und Einheitenliste stehen sonst in der alten Einheit —
+        # „über der Obergrenze 254,0000 in“ für 254 mm. Ein fremdes Dokument
+        # erzwingt den Neubau (``ParameterPanel.show_document``).
+        self.parameters._document = None
+        self._refresh_parameters()
         # Auch alte und nachträglich ergänzte Befunde lesen ihre Werte neu.
         # Der öffentliche Nachschubweg erhält Filter und Befundauswahl; die
         # bereits geöffneten Einzelheiten bleiben ebenfalls offen.
@@ -13330,6 +13321,8 @@ class MainWindow(QMainWindow):
         self.toolbar.setVisible(False)
         self.sketch_bar.setVisible(True)
         self._update_actions()
+        # Die Tastatur ins Ziel: Ebenenwahl ohne lesbare Ebene, sonst die Ansicht (FD-190).
+        focus_the_sketch(panel, self.viewport, frame)
         # Beide Texte sagten „die Operation", auch wenn es noch keine gab: der
         # Zeichnen-Knopf startet ohne festgelegte Op, und was aus der Skizze
         # wird, entscheidet der Dialog bei „Fertig". Ein Hinweis, der auf eine
@@ -16471,21 +16464,16 @@ class MainWindow(QMainWindow):
         scroller = SelectionScroller(self)
         scroller.setWidget(inside)
 
-        # **Die Knopfzeile rollt nicht mit.** Gemessen am gebauten Fenster bei
-        # 1600 auf 1000 Punkten mit gewählter Bohrung (13.09.2026): Sichtfeld
-        # 877 Punkte, Inhalt 1579 — *Im Bild einstellen* lag bei y = 1015,
-        # *Übernehmen* bei y = 1062, also unter dem Rand. Wer eine Zahl tippte,
-        # musste erst rollen, um seinen Schritt abzuschließen. Sie steht
-        # deshalb **unter** dem Rollbereich, nicht darin; dieselbe Regel, die
-        # `fenster.md` für die Karten schon kennt („Was unter der Liste
-        # steht, gehört in beide Rechnungen … sonst schiebt man den einzigen
-        # Weg hinaus, den die Karte anbietet").
+        # **Die Knopfzeile steht unter der offenen Handlung** (FD-136), im
+        # Rollinhalt des Merkmalfensters (``feature_footer``): Unter dem
+        # Rollbereich stand *Übernehmen* am Kartenende, das Feld oben. Dass sie
+        # nicht aus dem Bild rollt (13.09.2026, *Übernehmen* bei y = 1062 unter
+        # dem Rand), hält ``feature_footer.keep_in_sight`` bei jedem Wechsel.
         column = _SelectionPage(self.right, self.report, self, tour=self.tour)
         stack = QVBoxLayout(column)
         stack.setContentsMargins(0, 0, 0, 0)
         stack.setSpacing(0)
         stack.addWidget(scroller, 1)
-        stack.addWidget(self.feature_panel.footer())
 
         # „Auswahl", nicht „Merkmal": Der Reiter steht auch an einem gewählten
         # Körper, seit er dessen Handlungen trägt. Er ist der erste der Karte,
@@ -18127,7 +18115,7 @@ class MainWindow(QMainWindow):
                 tr(
                     "Für eine Analysekarte ist dieses Modell zu groß: "
                     "{count} Dreiecke, möglich sind {limit}."
-                ).format(count=triangles, limit=limit)
+                ).format(count=count_text(triangles), limit=count_text(limit))
                 + " "
                 + tr("Wählen Sie einen anderen Körper oder schließen Sie die Karte."),
                 tr("Keine Karte"),
@@ -18138,7 +18126,7 @@ class MainWindow(QMainWindow):
             tr(
                 "Für eine Analysekarte ist dieses Modell zu groß: "
                 "{count} Dreiecke, möglich sind {limit}."
-            ).format(count=triangles, limit=limit),
+            ).format(count=count_text(triangles), limit=count_text(limit)),
             tr("Dreiecke verringern"),
             weak_slot(self, MainWindow._decimate_for_a_map, limit),
         )
@@ -18591,6 +18579,12 @@ class MainWindow(QMainWindow):
         target = None if kind == "deviation" else maps.location_of(entry, finding)
         if target is not None:
             self._show_finding_at(str(finding.message), entry, target, finding.outline)
+        else:
+            # **Ohne eigenen Ort ist der Körper die Stelle** (FD-111): Zu groß
+            # für den Bauraum, Erkennung übersprungen, Netzfehler einer
+            # Operation. Die Kamera blieb sonst, wo sie war — im Prüfstand in
+            # der Nahsicht der vorigen Szene, und der Körper füllte das Bild.
+            self.viewport.reset_camera()
         if kind is not None:
             self._analysis_map(kind, entry.id, finding=finding if target is None else None)
 
@@ -21669,7 +21663,10 @@ class MainWindow(QMainWindow):
                 host.refuse_fields(refusal)
                 if interpret:
                     focus_target.setFocus()
-                    window.announce(refusal)
+                    # Steht der Satz schon unter dem Feld, sagt ihn die
+                    # Statuszeile nicht ein zweites Mal (FD-88).
+                    if not stands_in(window._quiet_placement.measure_group, refusal):
+                        window.announce(refusal)
                 return False
             host.refuse_fields(None)
             if interpret:
@@ -22125,6 +22122,16 @@ class MainWindow(QMainWindow):
         """
         if not self._quiet_command_allowed() or not self._begin_from_the_start_screen():
             return
+        # **Hinter einen Halt kommt kein Schritt — gesagt vor dem Dialog**
+        # (FD-104): Eine Befundhandlung wie *In Flächen und Kanten umwandeln*
+        # öffnete ihren Dialog, dessen Hauptknopf grau blieb, ohne Grund. Die
+        # Absage der Sitzung kommt jetzt sofort, mit den Wegen des Halts. Mit
+        # Einfügemarke landet der Schritt vor ihr und geht.
+        if self.session.inserting is None:
+            refusal = self.session.halt_in_the_way()
+            if refusal is not None:
+                self._on_error(refusal)
+                return
         if spec.name == "create_container":
             from app.core.geom.container_ops import ContainerWizardParams
 
@@ -22243,6 +22250,13 @@ class MainWindow(QMainWindow):
                 values.update(dict(zip(("angle_x", "angle_y", "angle_z"), angles, strict=True)))
             except AppError:
                 pass  # Der relative Weg bleibt offen; „nach“ erklärt seinen fehlenden Bezug.
+        # **Umbenennen beginnt beim jetzigen Namen** (FD-114): Mit leerem Feld
+        # tippte man für eine kleine Änderung den ganzen Namen neu.
+        current_name: str | None = None
+        if spec.unchanged_effect == "name" and len(chosen) == 1 and result is not None:
+            named = result.scene.objects.get(chosen[0])
+            if named is not None:
+                current_name = values["name"] = str(named.name)
         # Leere Materialrollen übernehmen die Projektvorgabe. Ausdrücklich
         # mitgebrachte Werte folgen danach und behalten damit Vorrang.
         for parameter in spec.params.spec():
@@ -22431,6 +22445,8 @@ class MainWindow(QMainWindow):
                         # Regel 18: der Grund steht nicht nur am Zeigerbild.
                         item.setData(locked, Qt.ItemDataRole.AccessibleDescriptionRole)
                 variant.setToolTip(str(group.doc))
+                # Auch für den Bildschirmleser (FD-78).
+                variant.setAccessibleDescription(str(group.doc))
                 variant.setCurrentIndex(variant.findData(spec.name))
 
             def chosen_spec() -> OperationSpec:
@@ -22500,6 +22516,10 @@ class MainWindow(QMainWindow):
                 offer_naming=offers_naming(spec) and spec.name != "create_container",
                 # Die letzte Wahl des Kunden, beim ersten Start an (RM-369).
                 naming_default=self.settings.name_dimensions,
+                # Steht der jetzige Name im Feld, wartet *Übernehmen* auf einen
+                # neuen (RA-13, FD-114): kein leerer Schritt „Objekt umbenennen“.
+                # Ein mitgebrachter anderer Name ist schon die Änderung.
+                offered=current_name is not None and values.get("name") == current_name,
             )
             dialog.spoolChosen.connect(remember_spool)
             if spec.name == "apply_texture":
@@ -23041,6 +23061,13 @@ class MainWindow(QMainWindow):
             offer_naming=offers_naming(spec) and spec.name != "create_container",
             naming_default=self.settings.name_dimensions,
             note=self._size_set_later(op_id),
+            # Ein bestehender Schritt: *Übernehmen*, grau bis zur ersten Änderung
+            # (FD-99). Nicht, wenn eine Geste die Werte schon geändert hat
+            # (``given``) oder dieser Schritt die Kette anhält — dort sagt erst
+            # die Vorschau, was gilt, samt Weg (*Gewindeschritt öffnen*).
+            changing=True,
+            wait_for_change=given is None
+            and (self.session.last_result is None or self.session.last_result.stopped_at != op_id),
         )
         number = step_number(self.session.project.document, op_id)
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {number}")
@@ -23826,6 +23853,13 @@ class MainWindow(QMainWindow):
             """Auch Nebenmeldungen tragen denselben Eigentümer und dieselbe Revision."""
 
             def receive(value: Any) -> None:
+                # **Ein abgebautes Fenster hört nichts mehr** (FD-158): Die
+                # Vorschau rechnet im Arbeiter weiter, und ihre Antwort kam
+                # nach dem Abbau an — ``_preview_is_current`` las dann den
+                # Objektbaum, den es nicht mehr gab. Gefragt wird hier, an der
+                # einen Stelle, über die jeder Vorschaurückruf eintrifft.
+                if not isValid(self) or self._close_requested:
+                    return
                 if self._preview_is_current(approval):
                     callback(value)
 
@@ -25733,14 +25767,7 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         if chosen == "correct_step":
             if result is not None and result.stopped_at is not None:
-                refusal = next(
-                    (
-                        finding
-                        for finding in result.scene.report.findings
-                        if finding.severity == "error" and finding.op_id == result.stopped_at
-                    ),
-                    None,
-                )
+                refusal = halt_finding(result.scene.report.findings, result.stopped_at)
                 if refusal is not None:
                     self._correct_after_error(as_error(refusal, self.session.project.document))
                 else:
@@ -26104,6 +26131,10 @@ class MainWindow(QMainWindow):
             self._bodies_shown = ()
             self._feature_shown = None
             self.feature_dock.forget_dismissal()
+            # **Und ein neuer Rahmen** (FD-111): Dieselbe Kennung galt der
+            # Ansicht als verschobener Körper, und das neue Projekt stand in
+            # der Kamera des alten — bis zum Fünffachen der Größe.
+            self.viewport.frame_next_scene()
         self._selection_document = document
         request = self._map_request
         if request is not None and not self._map_is_current(request):
@@ -26111,7 +26142,15 @@ class MainWindow(QMainWindow):
             self.viewport.set_analysis_map(None, None)
             self.viewport.clear_finding_mark()
             self.analysis_bar.show_legend(None)
-        if self._announcement_document is not self.session.project.document:
+        # **Die Statuszeile folgt dem letzten Schritt** (FD-162): Ein Projekt-
+        # wechsel räumt die Quittung ab, und ebenso ein Schritt nach ihr, der
+        # keine eigene sagt — sonst stand „zurückgenommen“ noch nach der
+        # nächsten Übernahme da.
+        steps = tuple(entry.id for entry in self.session.project.document.transactions)
+        if self._announcement_document is not self.session.project.document or (
+            (self._announcement or self._action_notice.isVisible())
+            and self._action_notice.outlived_by(steps)
+        ):
             self._announcement_document = self.session.project.document
             self.announce("")
         # Eine Änderung während der Erkennung meldet kein ``busyChanged``; das
@@ -26469,8 +26508,30 @@ class MainWindow(QMainWindow):
         return profiles.for_process(self.session.profile, settings, effective=True)
 
     def _foundation_crashed(self, detail: str) -> None:
+        """Der Arbeiter kam nicht zurück: Solidons Tabelle ist die Grundlage (RA-14).
+
+        Ohne Merker galt die Zahlenzeile danach für immer als vorläufig, und
+        ihre Kurzhilfe sagte, das Slicerprofil werde noch gelesen. Gemerkt wird
+        die Tabelle für genau den Schlüssel, für den gerechnet wurde — Schlüssel
+        und Stufe trägt der Arbeiter, der sich meldet. Der Absturz eines
+        abgelösten Arbeiters ändert nichts.
+        """
         _log.warning("print foundation worker crashed: %s", detail)
+        worker = self.sender()
+        key = getattr(worker, "_key", None)
+        quality = getattr(worker, "_quality", None)
+        if key is None or quality is None:
+            self._foundation_pending = None
+            return
+        if self._foundation_pending != key:
+            return
         self._foundation_pending = None
+        self._foundation_cache = (
+            key,
+            manufacturer.base_settings(self.session.profile, quality, None),
+        )
+        if not self._close_requested:
+            self._update_facts()
 
     def _foundation_worker_done(self, worker: Any) -> None:
         if self._foundation_worker is worker:
@@ -26496,9 +26557,26 @@ class MainWindow(QMainWindow):
         if result is None or not result.scene.objects:
             self.facts.show_estimate(None, self._facts_key())
             return
+        session = self.session
+        if not (session.result_current or session.picture_current):
+            # Das Ergebnis gehört zum Stand vor der letzten Änderung; die Zeile
+            # behält ihre Zahl, bis das neue da ist (FD-89).
+            return
+        settings = self.effective_print_settings()
+        cached = self._foundation_cache
         bodies = [(entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()]
+        # **Verglichen wird nur zwischen Schritten auf derselben Grundlage**
+        # (FD-89): Die Grundlage des Slicerprofils kommt nach der ersten
+        # Auswertung aus dem Arbeiter, und die Zeile meldete die Differenz als
+        # „seit dem letzten Schritt“. Der Stand ist die Folge der
+        # Transaktionen; die Einfügemarke zählt zur Grundlage, denn sie ändert
+        # die Zahl ohne Schritt.
         self.facts.show_estimate(
-            estimate_total(bodies, self.effective_print_settings()), self._facts_key()
+            estimate_total(bodies, settings),
+            self._facts_key(),
+            state=tuple(entry.id for entry in session.project.document.transactions),
+            basis=(settings, session.inserting),
+            provisional=cached is None or cached[0] != self._foundation_key(settings.quality),
         )
 
     def _facts_key(self) -> str:
@@ -26561,6 +26639,11 @@ class MainWindow(QMainWindow):
                 self._render_progress_state()
             return
         self._announcement = text
+        # Nach welchem Schritt gesagt wurde: Der nächste nimmt die Quittung mit
+        # (FD-162, :meth:`ActionNotice.outlived_by`).
+        self._action_notice.remember(
+            tuple(entry.id for entry in self.session.project.document.transactions)
+        )
         # Nur was neben einem solchen Lauf gesagt wird, nimmt ihm die Zeile:
         # Eine Ansage unter einer Teilung oder einem Export gehört zu diesem
         # und soll danach nicht über dem Agenten stehen bleiben.
@@ -27594,7 +27677,7 @@ class MainWindow(QMainWindow):
             # Die Rücknahme-Warnung des Agenten zeigt in den Verlauf — dort
             # stehen die Transaktionen, die eine Annahme mitnähme (H-1).
             "show_history": lambda _error: self._flash_area("history"),
-            "generate_again": lambda _error: self._generate(None),
+            "generate_again": lambda error: self._generate(None, error),
             # **Ein Rat, den nur der Kunde ausführen kann, ist ein halber.**
             # „Die Teilung läuft schon" schlägt vor, sie abzubrechen, und die
             # Handlung gibt es (``Session.cancel_split`` hält an *und*
@@ -27639,7 +27722,8 @@ class MainWindow(QMainWindow):
             # Derselbe Weg an einem Befund, der sagt, was ein Schritt getan hat
             # (RM-374): *Größe ändern* öffnet ``fit_to_size`` mit dem Cursor im
             # Maß — der Wert ist danach ein gewöhnlicher Parameter.
-            "change_step": self._correct_after_error,
+            # Und an einer Auswahlabsage das Feld, das sie nennt (RB-2, ``choice_ways``).
+            "change_step": lambda error: self._correct_after_error(for_the_choice(error)),
             # **Eine unlesbare Zeichenebene** (``sketch.planes._unreadable``):
             # Der Schritt geht mit dem Cursor im Ebenenfeld auf, das der Kern
             # nennt — dort wird die andere Ebene gewählt. Bis zum 22.09.2026

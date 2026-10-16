@@ -64,6 +64,36 @@ die Nebenfolge statt des Grundes (FD-27). Und ein Grund ohne Weg ist eine
 halbe Antwort (V5): „Aktivieren Sie diesen Rechner einmal online …“ stammte
 aus der gescheiterten Vorschau der Maßgruppe, nicht aus `change_lock`.
 
+**Vor der ersten Änderung ist *Übernehmen* grau** — Entscheidung Koordinator
+im Funktionsdurchgang (FD-31 an der Maßgruppe, FD-99 am Operationsdialog).
+Je Fläche verhielt sich der Knopf anders: die Maßgruppe grau ohne Satz,
+Merkmalfenster und Flächenkarte boten ihn ohne Änderung an, der Änderungsweg
+des Dialogs war grau ohne Grund. Eine Regel für alle: grau, und ein Satz
+nennt das erste offene Feld derselben Fläche als Weg. Der Funktionsdurchgang
+zählt genau diesen Feldtitel als Ausweg
+(`tools/function_capture.surface_field_titles`); ein verborgenes Feld zählt
+nicht, deshalb fragt `first_change.first_field` Sichtbarkeit und
+Bedienbarkeit auf der Fläche. An der Maßgruppe begann schon der Fokus im
+Feld den Entwurf — er bindet die Auswahl gegen Außenklicks (`griffe.md`) —
+und gab *Übernehmen* frei; der Klick legte dann keinen Schritt an (offscreen
+an `plate_holes.stl`: null Transaktionen). Geändert ist seither, was von den
+Werten zu Beginn des Entwurfs abweicht (`QuietHost.begun_with`), oder der
+umgeschaltete Sammelhaken, der den Umfang ändert und keinen Wert.
+
+Im Merkmalfenster gilt dieselbe Regel, aber nicht an jeder Handlung: *Merkmal
+drehen* steht auf 90°, *Merkmal verdoppeln* legt die Kopie daneben, *Zum
+Langloch ziehen* macht aus einer runden Bohrung ein Langloch — ihre Vorgabe
+tut schon etwas, und wer sie will, übernimmt sofort. Gewartet wird nur, wo die
+Felder den heutigen Stand tragen: am Merkmal gelesen, ein Weg ab null
+(*Fläche versetzen*) oder ein gespeicherter Schrittwert. Das sagt der Kern je
+Feld (`ActionField.current`), weil nur er weiß, woher ein Wert kam;
+`measurement` taugt dafür nicht, es fehlt bei unsicherer Messung und bei einem
+Weg ab null. `first_change.offered_unchanged` fasst die Handlung zusammen,
+`waits_for_change` vergleicht mit den Werten beim Anbieten. Getippter, noch
+ungelesener Text ist schon eine Änderung (`typed`): Ein Ausdruck wird erst
+beim Verlassen des Felds zum Wert, und der Klick auf einen grauen Knopf, der
+das Feld verlassen sollte, ginge ins Leere.
+
 ## Texte
 
 **Eine Tabelle, und Auswahlwerte stehen an zwei Stellen.** Die
@@ -323,6 +353,10 @@ nicht vollständig geprüft sind, sagt dieselbe Zeile, und „behoben" heißt
 weiterhin nur, was eine vollständige Gegenprüfung nicht mehr findet. Neue
 und behobene Befunde teilen sich höchstens drei Zeilen, die letzte zählt den
 Rest — vorher je vier und je eine Zählzeile.
+
+**Ohne Pflichtwahl rechnet der Dialog nicht**, weil die Auswertung sicher
+anhielte und das Band eine Absage nennte, bevor jemand gewählt hat (RM-773,
+RM-775).
 
 ## Ein Feld ohne Namen ist für einen Bildschirmleser ein leeres Kästchen
 

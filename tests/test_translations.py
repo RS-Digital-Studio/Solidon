@@ -902,7 +902,7 @@ def test_french_measurement_warnings_and_advice_keep_complete_text_frames(
             Finding(
                 "test.error",
                 "error",
-                TranslatableText("Objekt: {object_id}", values={"object_id": "cube:12.5"}),
+                TranslatableText("{name}: {value}", values={"name": "Objet", "value": "cube:12.5"}),
             ),
         )
     )

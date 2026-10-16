@@ -27,7 +27,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -35,8 +34,9 @@ from PySide6.QtWidgets import (
 from app.core.geom.pins import PIN_COUNT
 from app.core.geom.prepare_ops import CONNECTOR_SHAPES
 from app.i18n import tr
+from app.ui.grouped_spin import GroupedIntSpin
 from app.ui.labels import choice_label
-from app.ui.style import NORMAL, TIGHT, make_primary
+from app.ui.style import NORMAL, ROOMY, TIGHT, make_primary
 from app.ui.tool_strip import BarComboBox
 
 #: Wie viele Punkte eine Trennlinie hat. Zwei — mehr wäre ein Polygonzug, und
@@ -100,14 +100,18 @@ class SplitBar(QWidget):
             )
         )
         self.connect_halves.toggled.connect(self._follow_connection)
+        # Der Satz auch für den Bildschirmleser (FD-78), an allen drei Feldern.
+        self.connect_halves.setAccessibleDescription(self.connect_halves.toolTip())
 
-        self.count = QSpinBox(self)
+        self.count = GroupedIntSpin(self)
         self.count.setRange(1, 6)
         self.count.setValue(PIN_COUNT)
         self.count.setToolTip(
             tr("Zwei Stifte halten die Hälften gegen Verdrehen. Einer wäre ein Scharnier.")
         )
+        self.count.setAccessibleDescription(self.count.toolTip())
         self.count_label = QLabel(tr("Stifte"), self)
+        self.count_label.setBuddy(self.count)
 
         # Die Form gehört neben die Zahl und nicht hinten in einen Dialog: Wer
         # einen Schwalbenschwanz will, will ihn *bevor* er trennt, und ein Wert,
@@ -131,6 +135,7 @@ class SplitBar(QWidget):
         # Der Umschalter nennt das Werkzeug, der Knopf seine Handlung — sonst
         # stehen zwei gleich beschriftete Bedienelemente übereinander, und der
         # obere tut etwas anderes als der untere.
+        self.shape.setAccessibleDescription(self.shape.toolTip())
         self.apply = QPushButton(tr("Jetzt teilen"), self)
         make_primary(self.apply)
         self.apply.setEnabled(False)
@@ -153,7 +158,13 @@ class SplitBar(QWidget):
         # und braucht eine Zeilenhöhe, die Knöpfe behalten ihre.
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
+        controls.setSpacing(TIGHT)
         controls.addWidget(self.connect_halves)
+        # **Der Haken ist ein Satz, „Stifte“ beschriftet das Feld daneben**
+        # (FD-120): Mit Qts Vorgabeabstand las sich „Zum Zusammenstecken
+        # vorbereiten Stifte“ als eine Zeile. Zwischen Haken und Feldgruppe
+        # steht deshalb mehr Raum als zwischen Beschriftung und Feld.
+        controls.addSpacing(ROOMY)
         controls.addWidget(self.count_label)
         controls.addWidget(self.count)
         controls.addWidget(self.shape)

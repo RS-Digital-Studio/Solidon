@@ -13,8 +13,9 @@ from collections.abc import Callable
 
 import pytest
 
-from app.core.errors import CHANGE_EDGES, CHANGE_SELECTION, GeometryError
+from app.core.errors import CANCEL, CHANGE_EDGES, CHANGE_FEATURE, CHANGE_SELECTION, GeometryError
 from app.core.geom.edges import too_large_for_the_faces, wanted
+from tests.helpers import exact_kernel
 
 
 def _refusal(make: Callable[[], object]) -> GeometryError:
@@ -54,3 +55,51 @@ def test_other_edges_opens_the_step_where_the_edges_are_chosen() -> None:
     """Der Knopf öffnet den Schritt wie *Größe ändern* (``change_step``)."""
     assert CHANGE_EDGES.id == "change_step"
     assert str(CHANGE_EDGES.label) == "Andere Kanten wählen"
+
+
+def test_a_rounding_without_an_edge_beneath_offers_another_feature() -> None:
+    """„Diese Rundung grenzt nicht an zwei ebene Flächen“ (FD-178, RB-1).
+
+    Die Absage kommt nur aus *Merkmal entfernen* und *Merkmal ändern*, und
+    deren Dialog hat kein Kantenfeld, sondern das Merkmal.
+    """
+    from app.core.geom.prepare_ops import _refuse_a_corner
+    from app.core.types import Feature
+
+    corner = Feature(id="fillet_1", kind="fillet", provenance="detected", params={})
+    error = _refusal(lambda: _refuse_a_corner(corner))
+    assert error.suggestions == (CHANGE_FEATURE, CANCEL)
+
+
+def test_every_refusal_of_a_rounding_offers_another_feature() -> None:
+    """Jede Stelle, die ``NOT_BETWEEN_TWO_PLANES`` sagt, in beiden Kernen."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "app"
+    found = {
+        f"{path.relative_to(root)}:{text[: match.start()].count(chr(10)) + 1}": match.group(1)
+        for path in root.rglob("*.py")
+        for text in [path.read_text(encoding="utf-8")]
+        for match in re.finditer(r"detail=NOT_BETWEEN_TWO_PLANES,\s*suggestions=\(([^)]*)\)", text)
+    }
+    assert len(found) >= 4, found
+    assert all(ways.split(",")[0].strip() == "CHANGE_FEATURE" for ways in found.values()), found
+
+
+def test_no_edge_refusal_in_either_kernel_offers_other_objects() -> None:
+    """Die Kantenmodule beider Kerne kennen *Andere Objekte wählen* nicht mehr (RB-4).
+
+    Die Direktaufrufe oben erreichen nicht jede Stelle — ``check_varying_radius``,
+    ``_without_an_angle``, ``_check_corner_region``, ``_grouped_edge_work`` nennt
+    kein Test beim Namen. Eine zurückgedrehte Stelle braucht den Import wieder.
+    """
+    import inspect
+
+    from app.core.geom import edges
+
+    exact_kernel()
+    from app.core.brep import edit
+
+    for module in (edges, edit):
+        assert "CHANGE_SELECTION" not in inspect.getsource(module), module.__name__

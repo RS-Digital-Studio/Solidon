@@ -186,9 +186,12 @@ def test_chosen_place_survives_fold_value_and_missing_surface(
     # und Seitenkarten sind, hängt an der Schrift. Offscreen ist die Karte 537
     # Punkte breit, und bei x = 960 rastete sie am rechten Rand ein (FD-84).
     # Rechts bleibt Platz für die aufgeklappte Karte, die auf Französisch fast
-    # tausend Punkte breit wird; zwei Fangweiten vom Rand rastet nichts ein.
+    # tausend Punkte breit wird; anderthalb Fangweiten vom Rand rastet nichts
+    # ein. Zwei waren es, bis die linke Karte für ein ganzes Maß um zwei Punkte
+    # breiter werden durfte (FD-20) — dann fehlten der aufgeklappten Karte
+    # rechts genau diese zwei, und sie rückte nach links.
     room = flow._measure_drag._room
-    destination = QPoint(room.left() + 2 * SNAP_TO_EDGE, 90)
+    destination = QPoint(room.left() + SNAP_TO_EDGE + SNAP_TO_EDGE // 2, 90)
     assert room.contains(QRect(destination, flow._measure_box.size()))
     _move_card(flow, destination)
     settle_measure_layout(qt_app)

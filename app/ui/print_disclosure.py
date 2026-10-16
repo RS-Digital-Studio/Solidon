@@ -191,6 +191,9 @@ class PrintDisclosureDialog(QDialog):
 
         self.share = QCheckBox(share_label(), self)
         self.share.setChecked(share)
+        # Der Satz darunter ist auch die Hilfe des Hakens (FD-78).
+        self.share.setToolTip(_share_note())
+        self.share.setAccessibleDescription(_share_note())
         layout.addWidget(self.share)
 
         note = QLabel(_share_note(), self)

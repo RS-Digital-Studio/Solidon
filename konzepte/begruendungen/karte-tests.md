@@ -32,7 +32,12 @@ Hier statt in der Karte, weil sie an ihrem Budget steht.
 | Vertrag | Zuständige Testdatei |
 |---|---|
 | Beginnt jede Merkmalsart groß, und fallen *Überstand* und *Überhang* in keiner Sprache zusammen? | `test_catalog_terms.py` |
-| Bietet eine Kantenabsage *Andere Kanten wählen* statt *Andere Objekte wählen*? | `test_edge_refusal_ways.py` |
+| Bietet eine Kanten- oder Rundungsabsage *Andere Kanten wählen* statt *Andere Objekte wählen*? | `test_edge_refusal_ways.py` |
+| Bietet eine Flächenabsage (Formschräge, Fläche versetzen, Aushöhlen, Dichtnut, Muster bis zum Rand) *Andere Flächen wählen* statt *Andere Objekte wählen*, in beiden Kernen? | `test_face_refusal_ways.py` |
+| Bietet eine Absage an einem gewählten Merkmal (Bohrung, Gewinde, Kammer, Verschluss, Ring, Merkmalsoperationen) *Anderes Merkmal wählen* statt *Andere Objekte wählen*? | `test_feature_refusal_ways.py` |
+| Richtet sich eine Auswahlhandlung nach dem Schritt, der die Absage auslöst, mit einem Feld aus seinem Schema, im ganzen Register, bei einzeln gewählten Kanten die gewählten; gehen Halt und Ausgabebefund (*Aushöhlen* ohne Hohlraum) beide durch die Anpassung? | `test_choice_ways.py` |
+| Öffnet *Anderes Merkmal/Andere Kanten/Andere Flächen wählen* den Schritt mit dem Feld sichtbar und im Fokus, auch *Einzelne Kanten*, *Eingabe korrigieren* daneben den Wert? (Fenster) | `test_choice_ways_ui.py` |
+| Nennt eine Absage ohne Schrittkennung (*Gegenstück zum Gewinde*, nichts zum Slicen) ihren Weg als Satz statt eines Knopfs ohne Wirkung, und nicht noch einmal neben seinem Knopf (`left_out`)? Stehen Merkmal und Längen lesbar darunter? | `test_stepless_advice.py` |
 | Nennt *In Einzelteile aufteilen* Splitter und bietet *Splitter behalten* an? | `test_split_splinters.py` |
 | Nennen die Zusatzwerkzeuge des Agenten ihren Fensterort, und steht er in der gebauten Menüleiste? | `test_agent_tool_places.py` |
 
@@ -52,10 +57,12 @@ Hier statt in der Karte, weil sie an ihrem Budget steht.
 | Layoutitem-Hüllen vor verzögertem Widgetabbau entwerten, verschachtelte Layouts und externe Hosts; Nachbarn und zurückgegebene Maßfelder erhalten | `test_feature_layout_lifetime.py` |
 | Echte Lage-/Abstandsbefunde und warme Daten bei mm/in/mm, sechs Sprachen, Auswahl/Einzelheiten/Nachschub, rohe Gruppenidentität samt vorigem Stand, gelesener Reiter und offene/geschlossene Körperknoten; Slicerwerte und Freitext als Gegenfälle | `test_finding_display_units.py` |
 | Nach Absage wieder sichtbare Vorschaulegende, kurze und lange Texte in sechs Sprachen und zwei tatsächlichen Anwendungsschriften | `test_preview_banner_layout.py` |
+| Vorschaulegende nur über einer Differenz, die Volumen oder Körper hinzufügt oder wegnimmt (nicht beim Umbenennen, nicht vor der Differenz) | `test_preview_legend.py` |
 | Maßgruppe nach Auf-/Zuklappen neu bemessen, ohne Layoutschleife; vorgemerkte Antwort bei Gruppentausch und Abschluss | `test_measure_group_layout.py` |
 | Maßkarte an Titel/freiem Grund ziehen; Felder, Knöpfe und Klappen bedienbar; Nutzerort bei Größenwechsel, Grenzen, Abbruch und Rückrufabbau; am gemeinsamen Verteiler (`app_events`) nur während des Zugs angemeldet, QWindow-Maustransport durchgelassen, damit Qt beim Release seinen impliziten Druckempfänger löst; Bewegungszeiger am Druckempfänger, dessen eigener oder geerbter Zeiger auf jedem Ausgang zurück (Escape, Verbergen, Reset, Abbau, Fokus- und Fensterverlust, erster Bewegungsfehler); ein fremder Override bleibt unberührt, auch im Fehlerweg; Verlust des Druckempfängers (gelöscht, umgehängt) und Abbau des Helfers beenden die Anmeldung | `test_measure_card_drag_ui.py` |
 | Echter Maßfluss: Nutzerort bei Klappen, Werten und fehlender Fläche; Gruppenwechsel/Abbruch, Seiten-/Bodenkarten und freie Maßfelder auch im Rückfall | `test_measure_card_placement.py` |
-| Bettrasterfarbe und Hauptlinien getrennt von Bauraum/Zeichnung; unveränderte Linienpositionen/Tiefe, Themenwechsel und Sichtbarkeit; Bettmaßzahlen aus der Textrolle, Bauraumfarbe unverändert | `test_bed_grid_visibility.py` |
+| Bettrasterfarbe und Hauptlinien getrennt von Bauraum/Zeichnung; Hauptlinien an den gezeichneten Maßzahlen auf jeder Platte, mm und Zoll, Tiefe, Themenwechsel und Sichtbarkeit; Bettmaßzahlen aus der Textrolle, Bauraumfarbe unverändert | `test_bed_grid_visibility.py` |
+| Bettraster ohne Fenster: Hauptlinien genau an den Zahlen von `bed_scale`, Nebenschritt ab der Mitte (10 mm, halber Zoll), Rand schließt ohne Doppelstrich | `test_bed_grid_at_scale.py` |
 | Nur direkte gewöhnliche Werkzeugknöpfe in Ruhe ohne Rahmenfarbe; Geometrie und Hover/Fokus/Wahl sowie fremde Eingaben und Hauptaktion erhalten | `test_toolbar_rest_style.py` |
 | Ruhende Knöpfe durchscheinend, geschlossene Hilfsflächen verborgen; bestehendes Neuzeichnen wertet Vorschlag/held/waiting aus (held-Fall ruft es selbst auf); bewegter Zug/Feldentwurf und wartender Entwurf sichtbar, Abbruch/Wiederaufbau ohne Entwurf verborgen; Hover, Halten, Leave/Release und direkter Lochdruck bei gleichen Bounds/Geometrie/Picks; Griffbuchstaben/Maße: Text/Fensterpaar, Anker, Schrift und Pickauftrag bei Themenwechsel, Update/Neuaufbau; L-Felder außerhalb projizierter Knopfhüllen bei Aufbau, Kamera/Zoom, DPR und Maßänderung; vollständige endliche Anker ohne Projektion/Nahplatz, kein Update bei gleichen Punkten/Texten und kein Rücksetzen der Gizmo-Zugmatrix durch den Kameratimer | `test_feature_grip_readability.py` |
 | Raum-/Vordergrundmischung bei Erstellung und set_opacity für Vorder-/Rückseite/Kanten, wirksame Deckkraft 0/1/teiltransparent und force_opaque, Tiefentest/Queue; leere Beschriftungsfelder bei Textwechsel, Sichtbarkeit, _wake und adopt/build mit erhaltenen Nachbarpaaren/Listenplätzen; Materialzustände ohne Qt/GPU | `test_front_overlay_alpha.py` |
@@ -229,6 +236,64 @@ Hilfen bereit; jedes Fenster und jede Sitzung bleiben pro Test frisch.
 Anzeige- und Schemafälle in `test_operation_ui.py` verwenden ein leeres
 Fenster, soweit ihre Aussage keine importierte Geometrie benötigt.
 
+Formulare und Absagen der Dialoge: `test_form_fields.py` hält den gemeinsamen
+Weg zu Feldname und Feldsatz (`form_fields`) und wacht über die Formulare von
+Parameter-, Kalibrier-, Baustein- und Chatdialog; `test_parameter_units.py`
+die Länge in Anzeigeeinheit im Parameter- und Bausteindialog;
+`test_refusal_details.py` Absage, *Einzelheiten* und *Werte ansehen*;
+`test_dialog_texts.py` ohne Fenster, was ein Dialog vorn sagt (Lesezeile
+*Stelle*, erster Satz hinter *Dicke geben*); `test_field_help_rest.py` den Satz
+in Kurzhilfe und Beschreibung an Generatorbeschreibung, „Werte mitgeben“ und
+*Typ*; `test_rename_dialog.py` den jetzigen Namen als Vorgabe beim Umbenennen;
+`test_measure_refusal_status.py`, dass die Statusleiste keine Ablehnung
+wiederholt, die am Maßfeld steht.
+
+Aus Review 1 des Restpakets A: `test_parameter_panel_units.py` (Zoll in der
+Leiste, ein Maß ohne Einheit bleibt eine Zahl), `test_parameter_unit_switch_window.py`
+(Wechsel bei offener Leiste: abgeleitete Maße, Grenze, Einheitenliste),
+`test_halt_ways_window.py` (Wege am haltenden Befund frei, hinter einem fremden
+Halt grau), `test_history_change_rows.py` (Doppelklick auf Drucker-, Material-
+und Passungsänderung), `test_step_values_copy.py` (*Kopieren* gibt gespeicherte
+Werte), `test_literal_shared.py` (ein Literal für TOML und OpenSCAD),
+`test_rename_dialog.py` (Vorgabe des Namens, markiert beim ersten Fokus,
+Übernehmen erst nach einer Änderung) und `test_foundation_crash_window.py`
+(nach einem Absturz des Grundlagenarbeiters die Tabelle, nichts Vorläufiges).
+Zu FD-182: `test_refusal_field_ways_window.py` (Wächter über jeden
+Operationsdialog und jedes Feld: ein Feldweg ist Knopf mit Sprung oder
+kein Knopf, *Eingabe korrigieren* dann still, die Ebene als Rat; der
+umbrechende Knopf) und `test_plane_refusal_field.py`
+(die Ebenenabsage einer Skizzenoperation nennt `sketch`). Zu FD-185:
+`test_report_offer_height_window.py` (Handlungsknöpfe im Prüfbericht eines
+niedrigen Fensters bei 11 und 18 pt nie unter ihrer Mindesthöhe; ein Knopf
+folgt dem Schriftwechsel in beide Richtungen). Zu FD-190:
+`test_sketch_way_focus_window.py` (Knopf im Bericht → Skizzenmodus: Tastatur
+in *Zeichenebene* bei unlesbarer Ebene, in der Ansicht bei einer kaputten
+Zeichnung). Nach dem Merge A/B: `test_field_ways_source.py` (eine Quelle
+`errors.FIELD_WAYS`) und `test_field_ways_both_paths_window.py` (FD-95,
+FD-182, RB2-2 im Dialog, Ebenenweg im Fenster).
+
+Der Operationsdialog hat je Fund eine eigene Datei:
+`test_operation_dialog_names.py` öffnet jede registrierte Operation und
+verlangt je Eingabefeld einen Namen, keinen doppelt;
+`test_operation_dialog_first_focus.py` den markierten Vorgabetext;
+`test_required_text_field.py` den leeren Pflichttext ohne Vorschau;
+`test_operation_dialog_height.py` die Anfangshöhe ohne Leerstreifen,
+`test_operation_dialog_flap_height.py` dasselbe für jede Operation in jeder
+Sprache beim Öffnen und nach dem Aufklappen, quer gerollt nur bei schmalem
+Schirm (FD-200); `test_content_height_dialogs.py` dasselbe für die übrigen
+Dialoge mit Klappen, je nach Auf- und Zuklappen (FD-198, FD-199);
+`test_grouped_count_field.py` Dreiergruppen im Ganzzahlfeld;
+`test_operation_dialog_change.py` den Änderungsweg (*Übernehmen*, grau bis zur
+ersten Änderung), `test_change_waits_for_valid_list.py` den Sperrgrund des
+Feldes vor dem Satz zur ersten Änderung (D2); `test_unlisted_choices.py` Namen statt Kennungen für Werte,
+die eine Liste nicht führt, `test_unlisted_names.py` dieselben Namen wie in
+den Meldungen und Sätze ohne Genus (D3, D6). Ohne Fenster: `test_hole_compensation_words.py` (der Name des
+Ausgleichs an jeder Bohrung, in jeder Sprache). `test_calibration_units.py`
+prüft *Material kalibrieren* in Zoll. `test_wrapped_captions.py` verlangt jede
+Zeile jeder umgebrochenen Beschriftung bei Grund- und großer Schrift,
+`test_grouped_count_fields.py` liest den Quelltext auf Ganzzahlfelder ohne
+Dreiergruppen.
+
 Statische Quellprüfungen teilen die Vorbereitung innerhalb eines Testfalls:
 `test_language_rules.py` prüft je Datei denselben AST auf alle Sprachregeln;
 `test_translations.py` extrahiert die Nachrichten einmal für alle Kataloge.
@@ -297,6 +362,11 @@ von weiterhin zwei unabhängigen Bauten für den Determinismusvergleich.
 | Bleiben Musteränderung und -entfernung auf STL-gerundeten Zylinderfacetten dicht und frei von Selbstschnitten? | `test_pattern_features.py` — binärer STL-Rundlauf in beiden Güten, getrennte Importfelder und deren unabhängige Bearbeitung, Schnittprüfung, Wiedererkennung, Winkelnaht, Abbruch und Attributerhalt; `test_platform_identity.py` prüft die Ausrichtung aufrecht und gekippt gegen Plattformrauschen. *Aus der Karte verschoben, als die Suche (RM-735) ihre Zeile bekam.* |
 | Findet die Suche, was der Kunde tippt? | `test_search.py` — drei Runden, Güte, Vorauswahl und Kundenwörter in jeder Sprache, ohne Fenster; das Suchfeld der Karte mit Trefferliste, Tasten und Hinweiszeile in `test_selection_operations.py` |
 | Verträgt jeder Fall den JUnit-Bericht der CI, und hinterlässt er die Anwendung, wie er sie fand? | `test_suite_isolation.py` — kein Fall fordert `record_property` oder `record_xml_attribute` an (im `xunit2`-Bericht von `run_suite_isolated.py` ein Setup-Fehler), mit Gegenprobe; Befunddaten legt `record_trace` aus `conftest.py` als Berichtsabschnitt ab. Ein Fallpaar stellt Thema, Stil und Schrift um und prüft im Nachfolger Stil, Palette, Stylesheet, Schrift, Themenmerker und Thema gegen den Stand davor (Rückgabe: `_the_application_look_stays_with_its_test`) |
+| Ist ein Rollbereich kein namenloser Tab-Halt, und erreicht Tab im Prüfbericht die angebotene Handlung? | `test_scroll_areas.py` — kein nacktes `QScrollArea` in `app/ui` (ausstehende Dateien anderer Pakete in `PENDING`, Eintrag muss fallen), Behälter auf NoFocus, Lesebereich mit Namen, Tab im Parameterdialog; `test_report_tab_chain.py` drückt Tab ab jedem Halt vor der Handlung (FD-139, FD-140); `test_card_tab_chain.py` Tab von der Reiterleiste in die vordere Seite, Auswahl von oben nach unten (FD-177) |
+| Öffnet ein Doppelklick auf eine Maßänderung im Verlauf das Maß, und behält ein geändertes Merkmal seinen Platz? | `test_history_parameter_rows.py` (Panel), `test_history_parameter_window.py` (Fenster: Doppelklick → `action_edit_parameter`), `test_feature_order.py` (Platz nach *Bohrung ändern*, neue Bohrung bei den Bohrungen) |
+| Stehen Merkmalfenster und Auswahlkarte, wo das Auge sie sucht? | `test_feature_footer.py` (Knopfzeile unter der scharfen Handlung), `test_footer_in_sight.py` (im Bild mit wenig Rollweg, auch wenn die Karte danach wächst), `test_feature_footer_window.py` (dasselbe im Fenster, Kopf der Wahl sichtbar), `test_feature_footer_low_window.py` (unterste Handlung in niedriger Karte, Mutation an `keep_in_sight` rot), `test_feature_first_change.py` (*Übernehmen* wartet beim heutigen Stand auf die erste Änderung), `test_offered_unchanged.py` (ohne Fenster: welche Handlung beim heutigen Stand angeboten wird), `test_selection_card_room.py` (kein Leerraum über „Filament und Druck“), `test_print_section_place.py` (Filament oben, mit Farbfeld), `test_refusal_line.py` (Sperrzeile „Hier nicht möglich“ in sechs Sprachen), `test_info_dot.py` (Symbol statt „i“), `test_lock_reason_once.py` (Sperrgrund einmal, Gegenprobe vor `4170f587b` rot) |
+| Zeigen Objektbaum, Bericht und Leisten ihre Werte ganz? | `test_object_tree_columns.py` (Maßspalte und Mindestbreite des Baums), `test_left_card_width_window.py` (die linke Karte bekommt sie im Fenster, Mutation an `_card_width` rot), `test_report_rows.py` (Messreserve der Befundzeilen), `test_finding_line_names.py` (Körper einmal), `test_split_bar_spacing.py`, `test_analysis_offer_accent.py`, `test_bar_field_sentences.py`, `test_halted_report_offers.py` (FD-104 aus F3) |
+| Spricht die Parameterleiste die Anzeigeeinheit und ihr Wertfeld das Menü der Zeile? | `test_parameter_panel_units.py` (Zoll gezeigt, mm gespeichert, ohne Rundungsrest), `test_parameter_row_menu.py` (Rechtsklick → *Ändern …*), `test_parameter_empty_note.py` (Satz misst sich je Breite) |
 
 ## Helfer
 
@@ -405,6 +475,40 @@ Bohrung unter dem Bett, im Kundenthema) und `settle`, das nach festen Runden
 wartet, bis keine Seitenkarte mehr gleitet (`at_rest`) — gelesen wird die Lage,
 die der Kunde nach dem Gleiten sieht, nicht eine Zwischenlage, die an der
 Rechnerlast hängt (FD-157).
+
+`licence_states.py` gehört den Fenstertests der Sperre (`test_licence_lock_offers.py`,
+`test_lock_reason_once.py`): `set_licence` stellt einen Freischaltzustand über
+`tools.function_setup` her. Er stand in `ui_helpers.py` und zog das
+Prüfstandswerkzeug in siebzig Fenstertestdateien (RA-9).
+
+`hole_window.py` gibt den Fenstertests der Auswahlkarte ein Fenster mit
+gewählter Bohrung in einer bestimmten Größe (`hole_window`) und `settle`, das
+wartet, bis die Karte nach ihrer Öffnungsbewegung steht
+(`test_feature_footer_window.py`, `test_feature_footer_low_window.py`,
+`test_card_tab_chain.py`).
+
+`test_font_follow_window.py` (FD-194): Ein Wechsel der Anwendungsschrift ohne
+`apply_style` erreicht Stufen, Knöpfe und einen offenen Operationsdialog,
+9 → 14 → 9 pt. `test_font_height_window.py` (FD-195): Dialoge mit
+`ContentHeight` passen ihre Höhe dem Wechsel an, eine Größe des Kunden bleibt.
+`test_header_font_window.py` (L1): Kopfzeile und Hauptleiste wählen ihre Form
+nach dem Wechsel neu. `test_left_card_empty_sentences_window.py` (D1): Im neuen
+Projekt sind die leeren Sätze der linken Karte in jeder Sprache so hoch wie ihr
+Text, gemessen am Hauptfenster.
+
+`window_leftovers.py` gehört dem Wächter `_no_window_outlives_its_test` in
+`conftest.py` (FD-191): Ein Fall mit `qt_app`, der ein sichtbares Fenster
+offen lässt, wird an sich selbst rot, nicht am nächsten im selben Arbeiter;
+`close_after(request, …)` schließt ein gezeigtes Panel auch im Fehlerfall.
+Sichtbarkeit wird über die Klasse gefragt, weil Fälle `isVisible` ersetzen.
+Geprüft in `test_window_leftovers.py`.
+
+`resize_watchdog.py`: `ResizeWatchdog` zählt die Größenänderungen eines Ausschnitts und verbirgt den Dialog über `RESIZES_PER_STATUS` — eine Größenschleife wird ein roter Fall statt eines Hängers (`test_generate_ui.py`, L3).
+
+`plane_refusals.py` gibt `sketch_plane_refusal`: die echte Ebenenabsage einer
+Skizzenoperation für `test_plane_refusal_field.py` und
+`test_refusal_field_ways_window.py` (FD-182), statt eines privaten Helfers aus
+`test_sketch_planes.py`.
 
 ## Stolperfallen
 

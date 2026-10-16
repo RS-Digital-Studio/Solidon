@@ -2,7 +2,8 @@
 
 Reine Rechnung über Rechtecke, ohne Fenster prüfbar: ``PlacementFlow`` fragt
 hier, wie viele Feldzeilen die Maßkarte unter sich freihält
-(:func:`distance_reserve`, :func:`rows_height`), und wohin die Felder kommen,
+(:func:`distance_reserve`, :func:`rows_height`), wohin ein gewachsenes Feld
+von seinem Platz aus rückt (:func:`grown_place`) und wohin die Felder kommen,
 wenn die Nähe-Suche keinen Platz mehr fand (:func:`emergency_places`).
 """
 
@@ -43,6 +44,54 @@ def distance_reserve(line: int, rows: int) -> int:
     das letzte Feld unter den Bildrand fallen (FD-84).
     """
     return max(line + SPACE, rows)
+
+
+def grown_place(
+    previous: QRect, size: QSize, bounds: QRect, taken: Sequence[QRect]
+) -> QRect | None:
+    """Wohin ein Feld mit neuer Größe rückt, das seinen Platz behalten soll.
+
+    Die Ecke oben links bleibt, und das Feld rückt nur so weit, wie Raum und
+    Belegtes es verlangen (FD-87): Gefragt wird an den Kanten des alten
+    Platzes, des Raums und vor und hinter jedem belegten Rechteck — dort
+    beginnt jede Lücke —, und es gewinnt der freie Platz, dessen Ecke der alten
+    am nächsten liegt. Frei heißt wie bei der Nähe-Suche: mit :data:`SPACE`
+    Abstand zu allem Belegten. ``None``, wenn nichts im Raum frei ist.
+    """
+    width, height = size.width(), size.height()
+    xs = {
+        previous.left(),
+        previous.right() - width + 1,
+        bounds.left(),
+        bounds.right() - width + 1,
+        *(rect.left() - width - SPACE for rect in taken),
+        *(rect.right() + SPACE + 1 for rect in taken),
+    }
+    ys = {
+        previous.top(),
+        previous.bottom() - height + 1,
+        bounds.top(),
+        bounds.bottom() - height + 1,
+        *(rect.top() - height - SPACE for rect in taken),
+        *(rect.bottom() + SPACE + 1 for rect in taken),
+    }
+    spread = [rect.adjusted(-SPACE, -SPACE, SPACE, SPACE) for rect in taken]
+    free = [
+        rect
+        for x in xs
+        for y in ys
+        if bounds.contains(rect := QRect(x, y, width, height))
+        and not any(rect.intersects(other) for other in spread)
+    ]
+    return min(
+        free,
+        key=lambda rect: (
+            abs(rect.left() - previous.left()) + abs(rect.top() - previous.top()),
+            rect.top(),
+            rect.left(),
+        ),
+        default=None,
+    )
 
 
 def _first_free(size: QSize, bounds: QRect, taken: Sequence[QRect]) -> QRect | None:

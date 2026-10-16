@@ -39,7 +39,7 @@ from app.core.perceive.groups import FunctionalGroup, GroupMeasure
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import REGISTRY
 from app.core.registry import group_title as group_title
-from app.core.registry.registry import FEATURE_TITLES
+from app.core.registry.registry import FEATURE_TITLES, feature_title_of
 from app.core.registry.surfaces import _CHOICE_NAMES as _CHOICE_NAMES
 from app.core.registry.surfaces import SIDE_NAMES
 from app.core.registry.surfaces import choice_label as _choice_label
@@ -109,25 +109,30 @@ def localised(text: str) -> str:
 #: in der Kerneinheit; Winkel und einheitenlose Anzahlen sind die beiden anderen
 #: Bedeutungen. Dieselbe Liste bedient Parameterdialog, linke Leiste und
 #: Rezeptdialog, damit ein Projektparameter überall dieselbe Sprache spricht.
+#: Die Länge nennt die Einheit, in der ihr Feld schreibt (``{unit}``, FD-125):
+#: gespeichert bleibt ``mm``, gezeigt wird die Anzeigeeinheit.
 PARAMETER_UNITS: Final[tuple[tuple[str, TranslatableText], ...]] = (
-    ("mm", _("mm — Länge")),
+    ("mm", _("{unit} — Länge")),
     (DEGREE_UNIT, _("Grad — Winkel")),
     ("", _("ohne Einheit")),
 )
 
 
-def fill_parameter_units(box: QComboBox, selected: str = "mm") -> None:
+def fill_parameter_units(box: QComboBox, selected: str = "mm", shown: str = "mm") -> None:
     """Füllt *box* mit den festen Parametereinheiten und wählt *selected*.
 
     Eine alte Projektdatei kann einen freien Wert tragen. Er wird sichtbar als
     zusätzlicher Eintrag erhalten, nie still als Millimeter umgedeutet. Tippen
     lässt die Auswahl trotzdem nicht zu: Neue Werte kommen nur aus der
     freigegebenen Liste.
+
+    *shown* ist die Einheit, in der das Feld daneben eine Länge schreibt —
+    die Daten bleiben die Codes des Dokuments.
     """
     box.clear()
     box.setEditable(False)
     for code, label in PARAMETER_UNITS:
-        box.addItem(str(label), code)
+        box.addItem(str(label).format(unit=shown), code)
     index = box.findData(selected)
     if index < 0:
         unknown_label = str(tr("{unit} — wird nicht umgerechnet").format(unit=selected or "?"))
@@ -408,9 +413,11 @@ class NumberSpin(QDoubleSpinBox):
     ein neuer Fehler derselben Sorte: „1.000,50" wurde damit im deutschen
     Fenster zu 1,00. Sichtbar war es, aber um den Faktor tausend falsch. Was
     zweideutig **bleibt**, ist „1.000" ohne Nachkomma — nach dieser Regel eins.
-    Angezeigt wird nie mit Tausendertrennung
-    (``setGroupSeparatorShown`` steht auf falsch), also gibt es keine
-    Schreibweise, die das Feld vormacht und dann nicht liest.
+    Ein Feld mit Nachkomma zeigt nie eine Tausendertrennung
+    (``setGroupSeparatorShown`` steht auf falsch); ein Ganzzahlfeld schreibt
+    ab vier Stellen in Dreiergruppen wie ``count_text`` und liest „1.000“ dort
+    als tausend (:class:`app.ui.grouped_spin.GroupedSpin`, FD-124). Keins macht
+    eine Schreibweise vor, die es dann nicht liest.
     ``DragValueBar.typed_value`` im Viewport entscheidet ähnlich, nur ohne die
     Gruppen.
 
@@ -1624,6 +1631,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "changes": _("Änderungen"),
     "character": _("Zeichen"),
     "choice": _("Wahl"),
+    # ``scene.choice_ways``: das Feld, das eine Auswahlhandlung öffnet.
+    "choice_field": _("Feld"),
     "choices": _("Auswahl"),
     "checked": _("Geprüft"),
     "clearance": _("Spiel"),
@@ -2054,6 +2063,17 @@ def value_text(key: str, value: object) -> str:
         # Die Art eines Merkmals heißt, wie Karte, Handbuch und Agent sie nennen
         # (Review I, M3): Im Bericht stand „Art: hole“.
         return str(FEATURE_TITLES[value])
+    if key == "feature" and isinstance(value, str | list | tuple):
+        # Die Kennung bleibt in den Werten für Agent und Handler; zu lesen ist
+        # sie wie in der Merkmalsliste (FD-186): „Merkmal: thread_1“.
+        found = value.split(", ") if isinstance(value, str) else [str(entry) for entry in value]
+        # Eine lange Liste endet mit „ … (+103)“ (``ReportPanel``); der Rest
+        # bleibt beziffert und hängt nicht an der letzten Kennung.
+        rest = ""
+        if found and " … (+" in found[-1]:
+            found[-1], marker, count = found[-1].partition(" … (+")
+            rest = marker + count
+        return ", ".join(feature_title_of(entry) for entry in found) + rest
     if key in ("solver", "attempted") and isinstance(value, str) and value in _METHOD_NAMES:
         return str(_METHOD_NAMES[value])
     if key in ("solver", "attempted") and isinstance(value, (list, tuple)):
@@ -2983,20 +3003,14 @@ def edge_label(entry: Any) -> str:
     """
     # Die Lage fragt der Kern (``edges.edge_lie_of``): An einem Ring ist die
     # Richtung null, und ``flat`` galt an jedem — die Mündung einer quer
-    # liegenden Bohrung hieß „Waagerecht“ (RM-269). Erst hier geladen: Die
-    # Kantenrechnung zieht die Boolesche Kette nach, und ``labels`` lädt früh.
-    from app.core.geom.edges import edge_lie_of
+    # liegenden Bohrung hieß „Waagerecht“ (RM-269). Wörter und Ort stehen in
+    # ``unlisted_choice``, damit eine Kante aus ihrem Schlüssel (FD-189)
+    # genauso heißt. Erst hier geladen: Die Kantenrechnung zieht die Boolesche
+    # Kette nach, und ``labels`` lädt früh.
+    from app.ui.unlisted_choice import edge_lie_word, edge_place
 
-    shown = edge_lie_of(entry)
-    if shown == "upright":
-        lie = tr("Senkrecht")
-    elif shown == "flat":
-        lie = tr("Waagerecht")
-    else:
-        lie = tr("Schräg")
-    x, y, _z = entry.middle
-    place = f"x {length(x, with_unit=False)}, y {length(y, with_unit=False)}"
-    return f"{lie} · {length(float(entry.length))} · {place}"
+    lie = edge_lie_word(entry)
+    return f"{lie} · {length(float(entry.length))} · {edge_place(entry.middle)}"
 
 
 def local_timestamp(value: str) -> str:

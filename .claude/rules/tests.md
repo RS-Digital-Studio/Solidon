@@ -272,10 +272,7 @@ einem begründeten Verfahrenswechsel zurückzusetzen ist richtig.
   Serie und wird von selbst grün. Ob er streut oder sich verschlechtert hat,
   entscheidet eine Messreihe gegen einen **älteren** Stand.
 - **Die Bestmarke ist ein Median, kein Minimum** (`measure`, `WINDOW`,
-  `MIN_RUNS`): Ein Minimum kann nur sinken, der Median der letzten fünf Läufe
-  folgt dem Maschinenzustand, und eine echte Verlangsamung reißt die Schwelle
-  trotzdem sofort (`REGRESSION_STRIKES`). `MIN_RUNS = 3`: Zwei Läufe bewusst
-  blind sind ehrlicher als zwei Läufe falsch rot.
+  `MIN_RUNS`); warum: `regel-tests.md`.
 
 Das ist der einzige Teil des Tors, dessen Rot nicht „nicht fertig“ bedeutet.
 

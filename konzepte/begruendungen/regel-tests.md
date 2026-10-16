@@ -463,6 +463,16 @@ niemanden sonst, und nach einem begründeten Verfahrenswechsel ist es richtig �
 ein Zähler, der Überschreitungen gegen eine alte Marke zählte, sagt gegen die
 neue nichts.
 
+### Warum die Bestmarke ein Median ist
+
+*Aus `tests.md` beim Merge von welle5 (16.10.2026), damit die Regel unter
+ihrer Größengrenze bleibt.*
+
+Ein Minimum kann nur sinken, der Median der letzten fünf Läufe folgt dem
+Maschinenzustand, und eine echte Verlangsamung reißt die Schwelle trotzdem
+sofort (`REGRESSION_STRIKES`). `MIN_RUNS = 3`: Zwei Läufe bewusst blind sind
+ehrlicher als zwei Läufe falsch rot.
+
 ## Fremdlast macht auch funktionale Tests rot, nicht nur Messungen langsam
 
 Der Abschnitt oben handelt von Zeiten, und deshalb liest man ihn als Regel für

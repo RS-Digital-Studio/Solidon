@@ -40,6 +40,11 @@ zwei Stellen gewinnen abwechselnd.
 Sperre (`hold_inputs`), Griffe. Grau trägt den Grund in Kurzhilfe und
 Beschreibung (`say_refusal`), und der Grund nennt den Weg.
 
+**Vor der ersten Änderung ist *Übernehmen* grau** und nennt das erste offene
+Feld als Weg (`first_change`, eine Quelle für Maßgruppe, Dialog und
+Merkmalfenster). Ein Fokus ändert nichts, ein Umfangshaken schon; eine
+Vorgabe, die selbst etwas tut, ist sofort übernehmbar (`offered_unchanged`).
+
 ## Texte
 
 Keine feste Zeichenkette — alles über `tr()`, deutsche Quelle, jeder Katalog
@@ -68,7 +73,7 @@ hier Sätze gibt: die Druckeinstellungen über `note`, jeder Parameter jeder
 Operation über seinen `doc`-Satz. Der Satz sagt, was der Wert bewirkt, nicht
 den Titel noch einmal, und hängt an **beiden** Hälften der Zeile — man zeigt
 auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
-`_explain` über `QFormLayout.labelForField`, samt Innenfeld).
+`form_fields.explain`, samt Innenfeld).
 Ist eine Zeile gesperrt, tragen beide Hälften den *Grund* statt des Satzes. Dazu `accessibleDescription`
 (Regel 18); ein eigener Tooltip bleibt, der Satz kommt dahinter. **Einen
 `statusTip` tragen nur Menüaktionen** (Entscheidung Robert, RM-509): An Feldern
@@ -186,7 +191,8 @@ eine Zeile nicht in Zoll sprechen.
 *Herein:* Ein Zahlenfeld ist eine `NumberSpin` (oder `LengthSpin`), **kein
 nacktes `QDoubleSpinBox`** — Qt liest den Punkt in deutscher Anzeigesprache als
 Tausendertrennung, aus „12.5“ wird still 125. Leseregel: **das letzte
-Trennzeichen ist das Dezimaltrennzeichen**, alle davor trennen Tausender; nur
+Trennzeichen ist das Dezimaltrennzeichen**, alle davor trennen Tausender (ein
+Feld ohne Nachkomma liest Dreiergruppen, `grouped_spin`); nur
 „1.000“ ohne Nachkomma bleibt zweideutig (eins), und was gelesen wurde, steht
 danach im Feld. **Der getippte Text bleibt unangetastet:** `validate` prüft
 beide Lesarten und gibt ihn unverändert zurück, gelesen wird in
@@ -256,11 +262,10 @@ selbst wenn der Dialog keinen zusätzlichen Handlungsknopf ausführen kann.
 Die nächste Vorschau räumt den alten Satz ab; das Vorschauband bleibt die
 Rückmeldung im Bild.
 
-**Ohne Pflichtwahl keine Vorschau:** Fehlt ein Bild, eine Datei
-(`OperationDialog.source_missing`) oder die Stelle eines Bausteins
-(`place_missing`), rechnet der Dialog nicht — die Auswertung hielte sicher an
-und das Band nennte eine Absage, bevor jemand gewählt hat —, und *Übernehmen*
-nennt den Knopf oder „Stelle im Bild anklicken.“ (RM-773, RM-775).
+**Ohne Pflichtwahl keine Vorschau:** Fehlt ein Bild, eine Datei, ein Pflichttext
+(`source_missing`, `required_inputs`) oder die Stelle eines Bausteins
+(`place_missing`), rechnet der Dialog nicht, und *Übernehmen* nennt den Knopf
+oder „Stelle im Bild anklicken.“ (RM-773, RM-775).
 
 Eine fehlgeschlagene oder unvollständige Rechnung sperrt auch ohne Bildpflicht
 das Übernehmen und verwirft einen bereits wartenden Klick. Neue Werte brauchen
@@ -277,8 +282,8 @@ Handlungen da (`ReportPanel.set_running`, RM-534).
 
 **Wo Felder stehen, tragen sie ihren Namen — und „wo“ heißt jede Stelle**, nicht
 die zwei, die man gerade im Kopf hat. Ein `QFormLayout` verbindet Beschriftung
-und Feld nicht: `label.setBuddy(editor)` **und** ein Name am Feld selbst
-(`setBuddy` allein hängt nur das Tastenkürzel an).
+und Feld nicht: Name und Ziel setzt `form_fields.name_rows`, den Satz
+`explain_row` (Wächter `unnamed_inputs`).
 
 - **Der Name trägt die Handlung mit** („Durchmesser“ allein sagt nicht,
   welcher), wiederholte Zeilen nennen, wozu sie gehören („· {Parameter}“);
@@ -295,10 +300,7 @@ Formularzeile ist ein Haken ein `labels.RowCheckBox`, die Beschriftung bekommt
 `labels.caption_toggles` (der Haken selbst ist ihr Ereignisfilter; wer mit
 gehaltener Taste hinausfährt, schaltet nichts), und die Zeile ist so hoch wie
 ihre Nachbarn (`RowCheckBox.sizeHint` über `labels.input_field_height`, an
-einem Drehfeld gemessen).
-`tests/test_operation_ui.py` prüft Klickfläche und Bauart über alle
-`bool`-Parameter; die Höhe zeigt nur die echte Plattform (Sonde mit
-`WA_DontShowOnScreen` — offscreen fehlen Stylesheet und Schrift).
+einem Drehfeld gemessen). Wie geprüft wird: `regel-oberflaeche.md`.
 
 ## PySide legt seine Qt-Typen an, bevor das erste Fenster entsteht
 
@@ -312,10 +314,11 @@ verdächtigen, dann den Code** — die Reichweite ist der Prozess.
 ## Die Tabulatortaste geht denselben Weg wie das Auge
 
 Die Fokuskette folgt der Reihenfolge, in der Widgets **entstanden** sind, nicht
-dem Layout. Wer ein Element später umhängt, zieht sie mit
-`QWidget.setTabOrder` von hinten nach (`FeaturePanel._settle_tab_order`;
+dem Layout. Wer ein Element später umhängt, zieht sie nach dem
+Layout nach (`tab_stops.chain_after`, `FeaturePanel._settle_tab_order`;
 unsichtbare und gesperrte übergeht Qt). Geprüft wird gegen das Layout, nicht
-gegen Bildpunkte. **Nie in Python über `nextInFocusChain` laufen:** PySide
+gegen Bildpunkte. Ein Rollbereich ist nie namenloser Halt (`scroll_areas`).
+**Nie in Python über `nextInFocusChain` laufen:** PySide
 hängt das Ergebnis an das befragte Widget, der Bereiniger löscht dann echte
 mit (`CardGrip`).
 

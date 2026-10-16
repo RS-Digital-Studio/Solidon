@@ -37,6 +37,7 @@ from tools.function_checks import (
     WHY,
 )
 from tools.function_machine import SETTLE_MS, BenchFinding, Step, StepMachine
+from tools.qt_clicks import double_click
 
 #: Warum ein Klick fällt (``guide_targets.next_click``): das Ziel selbst …
 TARGET_REASON: Final = "ziel"
@@ -833,26 +834,7 @@ class QtPorts:
             pairs = zip(before, after, strict=False)
             return any((late - early) * towards > 0 for early, late in pairs)
         if button == "double":
-            # Ein Doppelklick des Kunden ist erst ein Klick, dann der zweite
-            # Druck: ``mouseDClick`` allein schickt nur das Doppelklickereignis,
-            # und eine Liste meldet ``itemDoubleClicked`` nur an der Zeile, die
-            # vorher gedrückt war — kein Doppelklick des Prüfstands öffnete je
-            # einen Verlaufsschritt (Probelauf F-34, Prüfpunkt 12).
-            QTest.mouseClick(widget, Qt.MouseButton.LeftButton, modifiers, local)
-            QTest.mouseDClick(widget, Qt.MouseButton.LeftButton, modifiers, local)
-            # Danach lässt der Kunde die Taste los; ``mouseDClick`` tut das nicht.
-            # Ohne Loslassen hielt Qt die linke Taste bis zum nächsten Klick für
-            # gedrückt: Jede Bewegung bis dahin war ein Zug ohne Enter und Leave,
-            # und ein Tooltip blieb über dem nächsten Ziel stehen (FD-83). Wie bei Qt
-            # empfängt das Loslassen das gedrückte Widget oder, wenn der
-            # Doppelklick es abgebaut hat, das unter dem Zeiger.
-            from shiboken6 import isValid
-
-            release = widget if isValid(widget) else self.widget_under(point)
-            if release is not None:
-                QTest.mouseRelease(
-                    release, Qt.MouseButton.LeftButton, modifiers, release.mapFromGlobal(point)
-                )
+            double_click(widget, local, modifiers, under=self.widget_under)
             return
         mouse = {
             "left": Qt.MouseButton.LeftButton,

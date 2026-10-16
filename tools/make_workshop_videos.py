@@ -2433,7 +2433,8 @@ class Tutorial:
     ) -> None:
         """Einen Schritt im Verlauf per Doppelklick öffnen und ihm andere Werte geben."""
         from PySide6.QtCore import Qt
-        from PySide6.QtTest import QTest
+
+        from tools.qt_clicks import double_click
 
         lf._fit(self.window, self.recorder.app)
         history = self.window.history_panel
@@ -2459,18 +2460,11 @@ class Tutorial:
             8.0,
             target=history.list.viewport().mapToGlobal(centre),
         )
-        QTest.mouseDClick(
-            history.list.viewport(),
-            Qt.MouseButton.LeftButton,
-            Qt.KeyboardModifier.NoModifier,
-            centre,
-        )
+        # Klick, Doppelklick, Loslassen wie beim Kunden (FD-142): Ohne den Klick
+        # davor meldet die Liste keinen Doppelklick, ohne das Loslassen hielt Qt
+        # die Taste für den Rest der Aufnahme gedrückt.
+        double_click(history.list.viewport(), centre)
         self.settle(15)
-        if self.window._op_dialog is None:
-            # Ein synthetischer Doppelklick erreicht die Liste nicht in jeder Lage;
-            # ``_on_activated`` ist genau der Slot, an dem der echte Doppelklick hängt.
-            history._on_activated(item)
-            self.settle(15)
         dialog = self.window._op_dialog
         if dialog is None:
             raise RuntimeError("Der Doppelklick im Verlauf hat keinen Dialog geöffnet.")

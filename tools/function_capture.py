@@ -1774,22 +1774,15 @@ def surface_field_titles(widget: Any) -> list[str]:
     ist kein Ausweg. Der Titel ist die Beschriftung im Formular, die
     Beschriftung mit dem Feld als Partner oder der zugängliche Name.
     """
-    from PySide6.QtWidgets import (
-        QAbstractSpinBox,
-        QComboBox,
-        QFormLayout,
-        QLabel,
-        QLineEdit,
-        QMainWindow,
-    )
+    from PySide6.QtWidgets import QFormLayout, QLabel, QLineEdit, QMainWindow, QWidget
 
+    from app.ui.first_change import is_field
+
+    # Dieselben Arten wie der Satz am grauen Knopf, auch Haken und Listen
+    # (``first_change.is_field``, Review F2a, R4).
     def inputs(root: Any) -> list[Any]:
         return [
-            field
-            for kind in (QAbstractSpinBox, QComboBox, QLineEdit)
-            for field in root.findChildren(kind)
-            if _visible(field)
-            and not isinstance(field.parentWidget(), (QAbstractSpinBox, QComboBox))
+            field for field in root.findChildren(QWidget) if is_field(field) and _visible(field)
         ]
 
     surface = widget.parentWidget()

@@ -52,7 +52,6 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QSizePolicy,
-    QSpinBox,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -98,6 +97,7 @@ from app.core.types import (
 from app.core.units import DEGREE_UNIT, EPS_DISPLAY
 from app.i18n import TranslatableText, _, tr
 from app.ui import cursors, icons, style
+from app.ui.grouped_spin import GroupedIntSpin
 from app.ui.labels import (
     LengthSpin,
     circle_measure,
@@ -6477,7 +6477,7 @@ class SketchPanel(QWidget):
         # ihrem Werkzeug: Ein Feld, das bei jedem anderen Werkzeug dasteht,
         # ist eine Einstellung ohne Gegenstand — und es kostet die Zeile
         # Breite, die sie im Normalzustand nicht hat.
-        self.polygon_corners_field = QSpinBox(self)
+        self.polygon_corners_field = GroupedIntSpin(self)
         self.polygon_corners_field.setRange(LEAST_POLYGON_CORNERS, MOST_POLYGON_CORNERS)
         self.polygon_corners_field.setValue(DEFAULT_POLYGON_CORNERS)
         corners_note = tr("Wie viele Ecken das Vieleck bekommt — drei bis zwölf.")
@@ -6508,7 +6508,7 @@ class SketchPanel(QWidget):
         # Lochs. Wie Eckenzahl und Breite entscheiden sie, *was* entsteht, und
         # stehen nur bei ihrem Werkzeug da.
         columns_note = tr("Spalten des Lochrasters — Löcher in x-Richtung.")
-        self.grid_columns_field = QSpinBox(self)
+        self.grid_columns_field = GroupedIntSpin(self)
         self.grid_columns_field.setRange(1, MOST_HOLE_GRID_LINES)
         self.grid_columns_field.setValue(DEFAULT_GRID_COLUMNS)
         self.grid_columns_field.setToolTip(columns_note)
@@ -6521,7 +6521,7 @@ class SketchPanel(QWidget):
         )
         tools.addWidget(self.grid_columns_field)
         rows_note = tr("Zeilen des Lochrasters — Löcher in y-Richtung.")
-        self.grid_rows_field = QSpinBox(self)
+        self.grid_rows_field = GroupedIntSpin(self)
         self.grid_rows_field.setRange(1, MOST_HOLE_GRID_LINES)
         self.grid_rows_field.setValue(DEFAULT_GRID_ROWS)
         self.grid_rows_field.setToolTip(rows_note)
@@ -6534,7 +6534,7 @@ class SketchPanel(QWidget):
         )
         tools.addWidget(self.grid_rows_field)
         count_note = tr("Löcher auf dem Lochkreis.")
-        self.bolt_count_field = QSpinBox(self)
+        self.bolt_count_field = GroupedIntSpin(self)
         self.bolt_count_field.setRange(edit.LEAST_PATTERN_HOLES, edit.MOST_BOLT_CIRCLE_HOLES)
         self.bolt_count_field.setValue(DEFAULT_BOLT_COUNT)
         self.bolt_count_field.setToolTip(count_note)

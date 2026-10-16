@@ -75,6 +75,7 @@ class DetectRegionParams(BaseParams):
         default=-1,
         minimum=-1,
         placement="advanced",
+        identifier=True,
         doc=_("Geprüfter Hinweis auf das gewählte Originaldreieck; -1 sucht über die Stelle."),
     )
 
