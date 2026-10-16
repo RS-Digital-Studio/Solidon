@@ -192,3 +192,116 @@ def test_a_preset_naming_hook_is_already_a_change(qt_app: QApplication) -> None:
         dialog.show()
         qt_app.processEvents()
         assert dialog._accept_button.isEnabled()
+
+
+#: Vorn nur Haken oder eine Liste — dort war *Übernehmen* sofort frei (Review F2a, R4).
+TICKS_AND_LISTS = ("repair", "orient_for_print", "clear_filament", "pose_armature")
+
+
+def _waits(dialog: Any) -> bool:
+    button = dialog._accept_button
+    return not button.isEnabled() and bool(button.toolTip()) and dialog._waits_for_change
+
+
+def test_every_step_with_a_field_waits_whatever_kind_and_flap(qt_app: QApplication) -> None:
+    """Jede Operation, deren Dialog ein Feld zeigt, wartet im Änderungsweg auf
+    die erste Änderung — auch mit nur Haken oder Listen vorn, und gleich, ob
+    „Weitere Einstellungen“ offen oder zu ist (R4)."""
+    from app.ui.op_dialog import OperationDialog
+
+    bootstrap.load_operations()
+    waiting: set[str] = set()
+    free: list[str] = []
+    for spec in sorted(REGISTRY.all(), key=lambda entry: entry.name):
+        values = {
+            entry.name: entry.default for entry in spec.params.spec() if entry.default is not None
+        }
+        dialog = OperationDialog(
+            spec,
+            {"obj_1": "Quader"},
+            None,
+            features={"hole_1": "Bohrung 1"},
+            values=values,
+            promote_values=False,
+            changing=True,
+        )
+        try:
+            dialog.show()
+            qt_app.processEvents()
+            # Ein Feld zählt, ob es vorn steht oder hinter der zugeklappten Klappe.
+            behind = dialog._advanced_form.parentWidget()
+            shown = [
+                editor
+                for editor in dialog._editors.values()
+                if editor.isEnabled() and (editor.isVisibleTo(dialog) or editor.isVisibleTo(behind))
+            ]
+            if not shown:
+                continue
+            states = [_waits(dialog)]
+            advanced = getattr(dialog, "advanced", None)
+            if advanced is not None and advanced.isVisible():
+                for _ in range(2):
+                    advanced.click()
+                    qt_app.processEvents()
+                    states.append(_waits(dialog))
+            if all(states):
+                waiting.add(spec.name)
+            else:
+                free.append(f"{spec.name}: {states}")
+        finally:
+            dialog.reject()
+            dialog.deleteLater()
+    assert set(TICKS_AND_LISTS) <= waiting, sorted(set(TICKS_AND_LISTS) - waiting)
+    assert len(waiting) > 150, len(waiting)
+    assert not free, "frei vor der ersten Änderung (Zustände: zu, auf, zu):\n" + "\n".join(free)
+
+
+def test_a_tick_is_named_and_its_change_frees_the_button(qt_app: QApplication) -> None:
+    """*Prüfen und reparieren* trägt vorn nur Haken: Der Satz nennt den ersten,
+    ein Klick darauf gibt den Knopf frei, ein zweiter nimmt es zurück."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QCheckBox
+
+    bootstrap.load_operations()
+    spec = REGISTRY.get("repair")
+    values = {
+        entry.name: entry.default for entry in spec.params.spec() if entry.default is not None
+    }
+    with _changing("repair", values) as dialog:
+        dialog.show()
+        qt_app.processEvents()
+        button = dialog._accept_button
+        tick = next(
+            editor
+            for editor in dialog._editors.values()
+            if isinstance(editor, QCheckBox) and editor.isVisibleTo(dialog)
+        )
+        assert not button.isEnabled()
+        assert tick.accessibleName() in button.toolTip(), button.toolTip()
+        QTest.mouseClick(tick, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, button.isEnabled)
+        QTest.mouseClick(tick, Qt.MouseButton.LeftButton)
+        wait_until(qt_app, lambda: not button.isEnabled())
+
+
+def test_fields_only_behind_the_flap_are_named_with_the_flap(qt_app: QApplication) -> None:
+    """*Skelett stellen* hat vorn kein Feld: Der Satz nennt das erste Feld hinter
+    der Klappe und die Klappe dazu; aufgeklappt nennt er das Feld allein."""
+    bootstrap.load_operations()
+    spec = REGISTRY.get("pose_armature")
+    values = {
+        entry.name: entry.default for entry in spec.params.spec() if entry.default is not None
+    }
+    with _changing("pose_armature", values) as dialog:
+        dialog.show()
+        qt_app.processEvents()
+        button = dialog._accept_button
+        assert not button.isEnabled()
+        said = button.toolTip()
+        assert tr("Weitere Einstellungen") in said and tr("Skelett") in said, said
+        dialog.advanced.click()
+        qt_app.processEvents()
+        assert not button.isEnabled()
+        assert tr("Weitere Einstellungen") not in button.toolTip(), button.toolTip()
+        assert tr("Skelett") in button.toolTip(), button.toolTip()

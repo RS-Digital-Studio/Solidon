@@ -3771,6 +3771,7 @@
   "Erst „Dichtweg aus: Zeichnung“ wählen.": "First choose “Seal path from: Drawing”.",
   "Erst „Dichtweg aus: Öffnung am Körper“ wählen.": "First choose “Seal path from: Opening on body”.",
   "Erst „{field}“ ausfüllen, dann übernehmen.": "Fill in “{field}” first, then apply.",
+  "Erst „{field}“ unter „{flap}“ ändern, dann übernehmen.": "Change “{field}” under “{flap}” first, then apply.",
   "Erst „{field}“ ändern, dann übernehmen.": "Change “{field}” first, then apply.",
   "Erste Art": "First kind",
   "Erste Bedingung": "First constraint",

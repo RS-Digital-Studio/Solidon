@@ -147,8 +147,10 @@ Rückseite; eine ausdrückliche Feldübergabe öffnet sie vor dem Fokuswechsel.
   Benennungshaken ein Maß benennt; nicht nach einer Geste (`given`) und nicht
   am Schritt, der die Kette anhält (`wait_for_change=False`).
   Der Satz nennt das Feld, über das der Kunde kam (`focus_field`), sonst das
-  erste offene (`first_change`). Ein Fokus oder dieselbe Zahl ist keine
-  Änderung, und die Eingabetaste wartet dann auf keine Vorschau.
+  erste offene (`first_change`); Haken und Listen sind Felder wie Zahlen. Steht
+  vorn keines, nennt er das erste hinter der Klappe samt Klappe, damit das
+  Warten nicht am Klappzustand hängt (R4). Ein Fokus oder dieselbe Zahl ist
+  keine Änderung, und die Eingabetaste wartet dann auf keine Vorschau.
 - **Ein leerer Pflichttext ist ein Hinweis, keine Absage** (FD-134): Im Feld
   steht der erste Satz seiner `doc`, es rechnet keine Vorschau, der Knopf sagt
   „Erst „Text“ ausfüllen, dann übernehmen.“ (`required_inputs.missing_input`).

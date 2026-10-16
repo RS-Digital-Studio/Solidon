@@ -2633,7 +2633,10 @@ class OperationDialog(QDialog):
         asked = self._editors.get(self._asked_field)
         first = (
             first_change_sentence(
-                [*([asked] if asked is not None else []), *self._editors.values()], self
+                [*([asked] if asked is not None else []), *self._editors.values()],
+                self,
+                getattr(self, "advanced", None),
+                self._advanced_form.parentWidget(),
             )
             if unchanged
             else ""
@@ -4579,8 +4582,15 @@ class OperationDialog(QDialog):
             self.advanced.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _advanced_toggled(self, _open_now: bool) -> None:
-        """Ausdrücklich auf- oder zugeklappt: die Höhe folgt (``fenster.md``)."""
+        """Ausdrücklich auf- oder zugeklappt: die Höhe folgt (``fenster.md``).
+
+        Im Änderungsweg zeigt die Klappe andere Felder; der wartende Knopf nennt
+        danach eines, das dasteht, statt bis zur nächsten Änderung den alten
+        Satz zu tragen (Review F2a, R4).
+        """
         self._queue_refit("explicit")
+        if self._opened_with is not None:
+            self._follow_source_pending()
 
     def _advanced_titles(self) -> list[str]:
         """Die Beschriftungen der sichtbaren Zeilen hinter der Klappe, in ihrer Reihenfolge.
