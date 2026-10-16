@@ -105,7 +105,8 @@ PHASES: Final[dict[str, tuple[str, ...]]] = {
     "vorhersage": ("main",),
     "zoll": ("surface",),
     "skalierung": ("surface",),
-    "dunkel": ("surface",),
+    # Das Griffmaß im dunklen Thema zieht nur eine Zeile mit ``spec.drag`` (FD-73).
+    "dunkel": ("surface", "drag"),
     "bewegung": ("surface",),
     # Inhaltsschrift 14 und 18 pt, und ihr Wechsel zur Laufzeit (``function_fonts``).
     "schrift": ("surface",),

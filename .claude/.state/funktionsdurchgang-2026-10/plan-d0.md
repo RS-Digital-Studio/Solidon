@@ -215,6 +215,7 @@ In `app/core/guides.py`: `TARGET_PROPERTY = "guideTarget"`, `menubar_name(msgid,
 | `preconditions` | nein | ki, comfyui, slicer: vorhanden oder fehlt; licence: ein Zustand aus `licence_states()` (der Sprachfall läuft dann darin); printer: filament oder resin; druckhinweis: gesehen (Vorgabe im Profil jedes Falls) oder offen (nur die Zeile des Hinweises, ohne Gegenlauf). Zustände, die keine Maschine liefert, über die Nähte aus `tools/function_seams.py`, ohne Gegenlauf und ohne Weg nach draußen: update, browser, installation, slicerlauf, slicerfilamente, sicherung, chatmodell, aktivierung, erzeugung |
 | `not_applicable` | nein | `{prüfpunkt = grund}`, Grund aus der geschlossenen Liste |
 | `budget_s`, `budget_ref` | nein | nur mit §31-Beleg, sonst „kein Budget“ |
+| `drag` | nein | der Griff (`handle:…`), an dem Z1 zieht, wenn erst die Handlung der Zeile ihn zeigt; der Weg geht bis zur Handlung, das Bild `05-zug-gehalten` entsteht vor dem Loslassen, im Satz `dunkel` zieht nur eine Zeile mit `drag` (FD-73) |
 | `manual`, `website` | ja für Prüfpunkt 11 außerhalb des Registers | Handbuchseite (`<seite>` oder `<ref-seite>#<anker>`) und Abschnitte der Funktionsseite (`["funktionen.html#<anker>"]`, die Übersetzungen an derselben Stelle); eine Stelle, die es nicht gibt, macht P11 nicht prüfbar (`tools/function_promises.py`) |
 
 ### 2.5 Szenenkatalog und Anforderung → Szene

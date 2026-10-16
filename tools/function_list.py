@@ -1511,6 +1511,9 @@ SPEC_KEYS: Final[frozenset[str]] = frozenset(
         # ``tools/function_promises.py``.
         "manual",
         "website",
+        # Der Griff, an dem Z1 zieht, wenn erst die Handlung der Zeile ihn zeigt
+        # (FD-73: ``handle:slot.end`` nach *Zum Langloch ziehen*).
+        "drag",
     }
 )
 PROBE_ORIGINS: Final[tuple[str, ...]] = ("slicer", "cad", "fragebogen")
@@ -1711,6 +1714,9 @@ def validate_specs(
                 issues.append(
                     f"{where}: Eingabe auf dem Weg zu {step.get('target')!r} ist kein Text"
                 )
+        drag = spec.get("drag")
+        if drag is not None and not (str(drag).startswith("handle:") and is_target(str(drag))):
+            issues.append(f"{where}: Zug an {drag!r} ist kein Griff")
         if "inputs" in spec and not spec.get("example_goal"):
             issues.append(f"{where}: Eingaben ohne Beispielziel")
         for name in spec.get("inputs", {}):

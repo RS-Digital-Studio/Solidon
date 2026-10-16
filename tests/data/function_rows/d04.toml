@@ -24,6 +24,8 @@ volume = { value = 31089.64, tolerance = 3.0, origin = "Formel 80 · 50 · 8 −
 # erkannten steht im Bild *Bohrung ändern*, und die Handlung bleibt rechts (FD-101).
 [row."slot_hole"]
 start_scene = "erkannte_bohrung.netz"
+# Der Zug am Langlochgriff, gehalten aufgenommen: das freistehende Griffmaß (FD-73).
+drag = "handle:slot.end"
 
 # Die Fußknöpfe des Merkmalfensters stehen nur an einer offenen Handlungszeile und
 # nie neben einer Maßgruppe im Bild. *Merkmal verschieben* hat keinen Weg ins Bild:

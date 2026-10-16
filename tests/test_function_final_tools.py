@@ -134,3 +134,80 @@ def test_the_font_change_records_every_stage_narrow_and_wide(qt_app: Any) -> Non
         "cases/001/schrift-3-9pt-schmal.png",
     ]
     assert all(isinstance(stage["cut"], list) for stage in stages)
+
+
+# --- Werkzeug 2: das Bild im gehaltenen Zug (FD-73) ------------------------------------
+
+
+def _drag_flow(qt_app: Any, row_set: str, spec: dict[str, Any]) -> tuple[Any, list[str]]:
+    """Ein Fall mit einem echten Griff-Widget; ``events`` hält Druck, Bild und Loslassen."""
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QEvent, QObject, QRect
+    from PySide6.QtWidgets import QWidget
+
+    from tools import function_bench
+
+    events: list[str] = []
+
+    class Spy(QObject):
+        def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qts Name
+            kinds = {QEvent.Type.MouseButtonPress: "druck", QEvent.Type.MouseButtonRelease: "los"}
+            if event.type() in kinds:
+                events.append(kinds[event.type()])
+            return False
+
+    grip = QWidget()
+    grip.resize(80, 40)
+    grip.show()
+    spy = Spy(grip)
+    grip.installEventFilter(spy)
+    click = SimpleNamespace(rect=QRect(grip.mapToGlobal(grip.rect().topLeft()), grip.size()))
+    flow = object.__new__(function_bench.FunctionFlow)
+    flow.application = qt_app
+    flow.window = SimpleNamespace(viewport=SimpleNamespace())
+    flow.row = {"id": "slot_hole", "target": "feature:slot_hole"}
+    flow.spec = spec
+    flow.variant = function_setup.Variant.of({"set": row_set, "theme": "dark"})
+    flow.data = {"images": [], "unmeasured": {}}
+    flow.frames_wrapped = True
+    flow.ports = SimpleNamespace(
+        next_click=lambda name: click,
+        centre=lambda rect: rect.center(),
+        widget_under=lambda point: grip,
+        covers=lambda found, hit: hit is grip,
+    )
+    flow.path_steps = list
+    flow.picture = lambda label: (events.append(label), flow.data["images"].append(label))
+
+    def run_steps(label: str, steps: list[Any], timeout_s: float | None = None) -> bool:
+        for step in steps:
+            step.act(SimpleNamespace(insert=lambda more: None))
+        return True
+
+    flow.run_steps = run_steps
+    flow._keep = (grip, spy)
+    return flow, events
+
+
+def test_the_held_drag_is_pictured_before_the_release(qt_app: Any) -> None:
+    """FD-73: Das Griffmaß steht nur, solange die Taste gehalten wird — dort entsteht das Bild."""
+    from tools.function_gestures import HELD_PICTURE
+
+    flow, events = _drag_flow(qt_app, "basis", {"drag": "handle:slot.end"})
+    flow.phase_drag()
+    assert events == ["druck", HELD_PICTURE, "los"], events
+    # Im dunklen Thema zieht nur eine Zeile, die ihren Griff nennt.
+    dark, dark_events = _drag_flow(qt_app, "dunkel", {"drag": "handle:slot.end"})
+    dark.phase_drag()
+    assert dark_events == ["druck", HELD_PICTURE, "los"], dark_events
+    plain, plain_events = _drag_flow(qt_app, "dunkel", {})
+    plain.phase_drag()
+    assert plain_events == [] and plain.data["unmeasured"] == {}
+
+
+def test_the_slot_row_names_its_grip() -> None:
+    from tools.function_list import SPEC_KEYS, load_specs
+
+    assert "drag" in SPEC_KEYS
+    assert load_specs()["slot_hole"].values["drag"] == "handle:slot.end"
