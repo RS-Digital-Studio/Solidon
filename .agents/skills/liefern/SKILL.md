@@ -69,6 +69,31 @@ Review, in den offenen Abschnitt aller sechs `changelog/<sprache>.md` ein,
 geprüft wie dort beschrieben. Unterlagen, Tests
 und Werkzeuge ohne Wirkung beim Kunden brauchen keinen.
 
+## Ein Schritt der Codestruktur
+
+Verschiebe- und Ordnungsschritte (`konzepte/konzept-codestruktur-2026-10.md`,
+4.2 und 4.3) liefern zusätzlich:
+
+1. **Das Beweisprotokoll** des Verschiebewerkzeugs (`tools/move_names.py
+   <zuschnitt> --proof <datei>`) liegt dem Review bei; die Commit-Meldung
+   nennt den erzeugenden Befehl und die Zahl der Kopien. Ein Konflikt im
+   erzeugten Schnitt wird neu erzeugt, nie von Hand zusammengeführt.
+2. **Die Wächter W1 bis W6** sind grün und im Bericht genannt:
+   `test_size_ratchet.py`, `test_patch_targets.py`, `registry_dump.py
+   --compare` gegen den Abzug von vorher (bytegleich), `test_source_readers.py`,
+   `test_import_resolution.py`, `test_name_lists.py` und `test_suite_pin.py`.
+3. **Ein Oberflächenschritt** fährt vor dem Merge lokal die Fenstertests, die
+   `tools/ci_selection.py --diff origin/main...<zweig>` nennt — Exit-Code und
+   gelaufen gegen gesammelt im Bericht (Ausnahme in `AGENTS.md`,
+   „Arbeitsweise“).
+
+**Die Sperrklinke** (`tests/data/size_ratchet.toml`) folgt in jeder Einheit
+im selben Commit: nach einer gelöschten oder herausgelösten Definition in einer
+gelisteten Datei `tools/size_ratchet.py --lower`; zieht eine gelistete Datei
+um, vorher `--move ALT NEU …`; nur ein Ordnungsschritt hebt mit `--raise`
+genau seine Abschnitte. Bei einem Konflikt in der Liste eine Fassung aus Git
+nehmen und `--lower` fahren, nie erneut `--init`.
+
 ## Die Einheit abgrenzen
 
 Andere Sitzungen arbeiten im selben Baum. Geliefert wird nur, was zu dieser

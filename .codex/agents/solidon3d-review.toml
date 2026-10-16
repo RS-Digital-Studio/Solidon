@@ -39,10 +39,14 @@ Trenne fremde Änderungen vom Prüfling, bevor du urteilst.
      (`.claude/rules/tests.md`);
    - eine zweite Stelle, die dieselbe Auskunft gibt
      (`.claude/rules/zwillinge.md`);
-   - eine neue Datei, wo die Sache in ein vorhandenes Modul gehört.
+   - eine neue Datei, wo die Sache in ein vorhandenes Modul gehört — oder eine
+     neue Definition in einer Datei der Sperrklinke (W1, Codestruktur Regel 6).
 4. **Kundensicht:** Was sieht der Kunde vor und nach der Änderung? Muss er
    raten, führt aus jedem Zustand ein Weg hinaus, sprechen neue Texte
    Kundenwörter?
+5. **Codestruktur:** Bei einem Verschiebe- oder Ordnungsschritt das
+   Beweisprotokoll und W1 bis W6 prüfen (`.agents/skills/liefern/SKILL.md`, „Ein Schritt der
+   Codestruktur“).
 
 ## Rauschfilter
 
