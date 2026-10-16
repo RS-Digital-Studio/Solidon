@@ -25,7 +25,8 @@ from pathlib import Path
 from types import TracebackType
 from typing import Final
 
-from app.branding import APP_NAME, APP_VERSION, ENVIRONMENT_PREFIX
+from app import branding
+from app.branding import APP_NAME, ENVIRONMENT_PREFIX
 from app.core.log import (
     CAUGHT_ATTACHMENT,
     CRASH_ATTACHMENT,
@@ -254,7 +255,7 @@ def environment() -> dict[str, str]:
     versions = {name: _version_of(name) for name in REPORTED_PACKAGES}
 
     return {
-        "app": f"{APP_NAME} {APP_VERSION}",
+        "app": f"{APP_NAME} {branding.APP_VERSION}",
         "python": sys.version.split()[0],
         "platform": f"{platform.system()} {platform.release()}",
         "language": get_language(),
@@ -266,7 +267,7 @@ def environment() -> dict[str, str]:
 def as_text(report: ErrorReport) -> str:
     """Der Bericht als ein lesbarer Text — der Teil, der in eine E-Mail geht."""
     lines = [
-        f"{APP_NAME} {APP_VERSION} — {tr('Fehlerbericht')}",
+        f"{APP_NAME} {branding.APP_VERSION} — {tr('Fehlerbericht')}",
         datetime.now(UTC).isoformat(timespec="seconds"),
         "",
         report.summary,

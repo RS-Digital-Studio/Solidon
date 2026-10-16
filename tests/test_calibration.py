@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import dataclasses
+import importlib
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from app.core import scene as core_scene
 from app.core.errors import FileWriteError, ValidationError
 from app.core.knowledge import calibration, profiles
 from app.core.knowledge.parts import PARTS
@@ -690,7 +692,7 @@ def test_the_steps_before_the_parameter_are_computed_once(
                 hits.append(key)
             return found
 
-    real_evaluate = variants.evaluate
+    real_evaluate = core_scene.evaluate
 
     def remembering(*args, **kwargs):  # type: ignore[no-untyped-def]
         qualities.append(kwargs["quality"])
@@ -699,7 +701,7 @@ def test_the_steps_before_the_parameter_are_computed_once(
     # Der gemeinsame Cache der Varianten kommt aus ``disk_backed_cache``; hier
     # ohne Platte, damit jeder Treffer aus diesem einen Aufruf stammt.
     monkeypatch.setattr(variants, "disk_backed_cache", Counting)
-    monkeypatch.setattr(variants, "evaluate", remembering)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", remembering)
 
     made = variants.build(
         project.document,

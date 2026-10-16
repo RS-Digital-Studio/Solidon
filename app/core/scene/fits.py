@@ -29,7 +29,8 @@ from app.core.errors import (
 )
 from app.core.expressions import resolve as resolve_parameters
 from app.core.expressions import resolve_value
-from app.core.knowledge.profiles import for_object, resolve_tolerance, thread_share
+from app.core.knowledge import profiles
+from app.core.knowledge.profiles import resolve_tolerance, thread_share
 from app.core.log import get_logger
 from app.core.perceive.features import EPS_ANGLE
 from app.core.scene.cancel import NeverCancelled
@@ -1432,7 +1433,7 @@ def _thread_wanted(
 
 def _profile_of(scene: Scene, reference: FeatureRef, profile: Profile) -> Profile:
     """Das Profil des Körpers, auf den ein Passungsverweis zeigt."""
-    return for_object(profile, scene.objects.get(reference.object_id))
+    return profiles.for_object(profile, scene.objects.get(reference.object_id))
 
 
 def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:

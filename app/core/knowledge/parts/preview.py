@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.core import drawing
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom import mesh as geom_mesh
 from app.core.knowledge.parts.registry import PartSpec
 from app.core.types import BaseParams
 
@@ -61,13 +61,15 @@ def render(
     values = params or spec.params()
     produced = spec.fn(values)
     # Eine Bohrung durch den Träger liegt sonst ganz im Baustein (RM-632).
-    mesh = as_mesh_data(with_shown_bores(spec, produced, as_mesh_data(produced.mesh)))
+    mesh = geom_mesh.as_mesh_data(
+        with_shown_bores(spec, produced, geom_mesh.as_mesh_data(produced.mesh))
+    )
     addition = spec.host_add(values) if spec.host_add is not None else None
     if addition is not None:
         from app.core.knowledge.parts.build import subtract, union
         from app.core.knowledge.parts.shapes import mesh_only
 
-        support = as_mesh_data(addition.mesh)
+        support = geom_mesh.as_mesh_data(addition.mesh)
         mesh = mesh_only(subtract(support, mesh) if spec.subtractive else union(support, mesh))
     colours = drawing.palette(theme)
     tone = colours.subtractive if spec.subtractive and addition is None else colours.solid

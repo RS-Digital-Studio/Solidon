@@ -31,8 +31,10 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 
 from app.core.errors import CANCEL, CHANGE_FEATURE, CORRECT_INPUT, GeometryError
-from app.core.geom.boolean import boolean, without_effect
-from app.core.geom.mesh import MeshData, as_mesh_data, signed_volume, stable_normals
+from app.core.geom import boolean
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.boolean import without_effect
+from app.core.geom.mesh import MeshData, signed_volume, stable_normals
 from app.core.geom.prepare import FEATURE_OVERLAP
 from app.core.registry import op_params, param, register_op
 from app.core.registry.params import ZERO_MEASURED
@@ -114,7 +116,7 @@ def resize_chamber(ctx: OpContext) -> OpResult:
 
     params = cast(ResizeChamberParams, ctx.params)
     source = ctx.inputs[0]
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     region = chamber_region(source.features, body, params.at_feature, cancelled=ctx.cancelled)
     if region is None:
         raise not_a_chamber()
@@ -191,13 +193,15 @@ def _stretched_chamber(
     grows = all(value >= -EPS_GEOM for value in changes.values())
     ctx.cancelled.raise_if_cancelled()
     if grows:
-        outcome = boolean(
+        outcome = boolean.boolean(
             "difference", [body, moved_tool], quality=ctx.quality, cancelled=ctx.cancelled
         )
         findings = list(outcome.findings)
     else:
-        filled = boolean("union", [body, fill], quality=ctx.quality, cancelled=ctx.cancelled)
-        outcome = boolean(
+        filled = boolean.boolean(
+            "union", [body, fill], quality=ctx.quality, cancelled=ctx.cancelled
+        )
+        outcome = boolean.boolean(
             "difference", [filled.mesh, moved_tool], quality=ctx.quality, cancelled=ctx.cancelled
         )
         findings = [*filled.findings, *outcome.findings]

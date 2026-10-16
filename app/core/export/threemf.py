@@ -34,7 +34,8 @@ from xml.etree import ElementTree as ET
 
 import numpy as np
 
-from app.branding import APP_NAME, APP_VERSION
+from app import branding
+from app.branding import APP_NAME
 from app.core.errors import CANCEL, SPLIT_FILAMENT_FILES, InternalError, ValidationError
 from app.core.export import slicer_keys
 from app.core.geom.mesh import MeshData
@@ -821,7 +822,9 @@ def _assembly_xml(
             **({"xmlns:cura": CURA_NAMESPACE} if cura else {}),
         },
     )
-    ET.SubElement(root, "metadata", {"name": "Application"}).text = f"{APP_NAME} {APP_VERSION}"
+    ET.SubElement(
+        root, "metadata", {"name": "Application"}
+    ).text = f"{APP_NAME} {branding.APP_VERSION}"
     ET.SubElement(root, "metadata", {"name": "slic3rpe:MmPaintingVersion"}).text = "1"
     if not blocker_as_part:
         # **PrusaSlicer liest seine Beilage erst mit dieser Angabe.** Ohne sie
@@ -1010,7 +1013,9 @@ def _model_xml(mesh: MeshData, slots: list[MaterialSlot], name: str) -> bytes:
             "xmlns": CORE_NAMESPACE,
         },
     )
-    ET.SubElement(root, "metadata", {"name": "Application"}).text = f"{APP_NAME} {APP_VERSION}"
+    ET.SubElement(
+        root, "metadata", {"name": "Application"}
+    ).text = f"{APP_NAME} {branding.APP_VERSION}"
     if name:
         ET.SubElement(root, "metadata", {"name": "Title"}).text = name
 

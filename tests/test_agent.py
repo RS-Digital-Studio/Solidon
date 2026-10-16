@@ -2540,14 +2540,14 @@ def test_read_digest_with_objects_gives_every_position_back(
     project: Project, profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Was der verdichtete Steckbrief verspricht, hält ``read_digest`` mit ``objects``."""
-    from app.core.agent import session as session_module
+    from app.core.agent import context as agent_context
 
     class LocalLike(ScriptedBackend):
         @property
         def id(self) -> str:
             return "ollama"
 
-    monkeypatch.setattr(session_module, "CONDENSE_ABOVE_CHARS", 100)
+    monkeypatch.setattr(agent_context, "CONDENSE_ABOVE_CHARS", 100)
     backend = LocalLike(
         answers=[
             Reply(tool_calls=(ToolCall(id="1", name="read_digest", arguments={}),)),

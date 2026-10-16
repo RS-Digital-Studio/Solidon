@@ -45,7 +45,7 @@ if hasattr(sys.stdout, "reconfigure"):
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QApplication, QWidget
 
-from app.core.bootstrap import load_operations
+from app.core import bootstrap
 
 TARGET = Path(__file__).resolve().parent.parent / "website" / "bilder"
 
@@ -214,7 +214,7 @@ def main() -> int:
     from app.ui.settings import UiSettings
     from tools.make_figures import await_result, prepared
 
-    load_operations()
+    bootstrap.load_operations()
     app = QApplication.instance() or QApplication(sys.argv[:1])
 
     source = Path(__file__).resolve().parent.parent / "website" / "teile"

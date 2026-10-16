@@ -17,14 +17,16 @@ from typing import Any, Final
 
 import numpy as np
 
+from app.core import scene
 from app.core.errors import CANCEL, UserError, ValidationError
 from app.core.geom import lathe
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.difference import SurfaceDistanceBound, surface_distance_bound
-from app.core.geom.mesh import MeshData, as_mesh_data, face_components, signed_volume, unique_edges
+from app.core.geom.mesh import MeshData, face_components, signed_volume, unique_edges
 from app.core.geom.transform import along, turned
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
-from app.core.scene.evaluate import SOURCE_KINDS, EvaluationResult, evaluate
+from app.core.scene.evaluate import SOURCE_KINDS, EvaluationResult
 from app.core.scene.history import History, OperationDraft, change_for
 from app.core.scene.serialise import document_to_data
 from app.core.types import (
@@ -217,8 +219,8 @@ def _unexplained_planes(
         for feature in features_of(body, cancelled=cancelled).values()
         if feature.kind == "face"
     ]
-    original_triangles = np.asarray(as_mesh_data(source.mesh).raw.triangles)
-    candidate_triangles = np.asarray(as_mesh_data(body).raw.triangles)
+    original_triangles = np.asarray(geom_mesh.as_mesh_data(source.mesh).raw.triangles)
+    candidate_triangles = np.asarray(geom_mesh.as_mesh_data(body).raw.triangles)
     unexplained = set()
     for feature in source.features.values():
         cancelled.raise_if_cancelled()
@@ -445,7 +447,7 @@ def _boxed(
     width, depth, height = bounds.size
     placement = _position(centre)
     if basis is not None:
-        vertices = np.asarray(as_mesh_data(source.mesh).raw.vertices)
+        vertices = np.asarray(geom_mesh.as_mesh_data(source.mesh).raw.vertices)
         origin = np.asarray(bounds.centre)
         local = turned(vertices - origin, basis.T)
         low, high = local.min(axis=0), local.max(axis=0)
@@ -1801,7 +1803,7 @@ def _built(
 ) -> EvaluationResult:
     candidate = Document(document.format_version, document.app_version)
     History(candidate).apply(_("Modell nachbauen"), drafts)
-    return evaluate(candidate, profile, cancelled=cancelled, detect_features=False)
+    return scene.evaluate(candidate, profile, cancelled=cancelled, detect_features=False)
 
 
 def _post_options(
@@ -2118,7 +2120,7 @@ def propose(
     document_mark = document_to_data(document)
     if progress is not None:
         progress(0.0, str(_("Modell nachbauen")))
-    original = evaluate(document, profile, sources=sources, cancelled=token)
+    original = scene.evaluate(document, profile, sources=sources, cancelled=token)
     if not original.complete or object_id not in original.scene.objects:
         raise UserError(
             _("Der Nachbau braucht ein vollständig berechnetes Modell."),
@@ -2126,7 +2128,7 @@ def propose(
             suggestions=(CANCEL,),
         )
     source = original.scene.objects[object_id]
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     if not mesh.is_watertight or not mesh.raw.is_winding_consistent:
         raise UserError(
             _("Der Nachbau braucht ein geschlossenes Modell mit eindeutiger Innenseite."),
@@ -2412,7 +2414,7 @@ def prepare_application(
         losses.append(
             _("Passungen zum ursprünglichen Modell werden entfernt und müssen neu angelegt werden.")
         )
-    visual = as_mesh_data(source.mesh).raw.visual
+    visual = geom_mesh.as_mesh_data(source.mesh).raw.visual
     if (visual is not None and visual.kind == "texture") or any(
         feature.params.get("texture") for feature in source.features.values()
     ):
@@ -2428,7 +2430,7 @@ def prepare_application(
         if progress is not None:
             progress(0.1 + 0.7 * value, label)
 
-    evaluated = evaluate(
+    evaluated = scene.evaluate(
         trial,
         profile,
         sources=sources,
@@ -2444,7 +2446,9 @@ def prepare_application(
     result = evaluated.scene.objects[first]
     if progress is not None:
         progress(0.8, str(_("Modell nachbauen")))
-    checked = check_shape(as_mesh_data(source.mesh), result, proposal.budget, cancelled=token)
+    checked = check_shape(
+        geom_mesh.as_mesh_data(source.mesh), result, proposal.budget, cancelled=token
+    )
     if not checked.accepted:
         raise UserError(
             _("Dieser Nachbau hat die Formprüfung nicht bestanden."),

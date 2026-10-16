@@ -2,7 +2,6 @@
 
 from copy import deepcopy
 from dataclasses import replace
-from importlib import import_module
 
 import pytest
 import trimesh
@@ -466,15 +465,15 @@ def test_native_competition_does_not_take_a_matching_mesh_answer(monkeypatch):
     Zuordnung fragt neu, statt Kennungen über die Kerngrenze zu übernehmen."""
     edit = exact_kernel()
     from app.core.brep.features import features_of
+    from app.core.perceive import matching
     from app.core.perceive.match_decisions import group_fingerprint
 
-    module = import_module("app.core.scene.evaluate")
     solid = edit.box(10, 10, 10)
     found = features_of(solid)
     name = next(iter(found))
     body = SceneObject(id="body", name="Quader", mesh=solid, features=found)
     matched = MatchResult(ambiguous={name: (name,)}, fresh=(name,))
-    monkeypatch.setattr(module, "match", lambda *_, **__: deepcopy(matched))
+    monkeypatch.setattr(matching, "match", lambda *_, **__: deepcopy(matched))
     before = deepcopy(body.features)
     saved = group_fingerprint(
         "body", matched.ambiguous, {name: name}, found, solid.bounds.centre, solid.bounds.diagonal

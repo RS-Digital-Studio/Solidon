@@ -26,6 +26,7 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
+from app.core.geom import mesh
 from app.core.geom.faces import (
     draft_walls,
     gone_face_error,
@@ -33,7 +34,6 @@ from app.core.geom.faces import (
     pushed_features,
     tangent_faces_finding,
 )
-from app.core.geom.mesh import as_mesh_data
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
     BaseParams,
@@ -126,7 +126,7 @@ def push_face_op(ctx: OpContext) -> OpResult:
     if source.kind == "brep":
         return _on_a_solid(ctx, params, chosen)
 
-    body = as_mesh_data(source.mesh)
+    body = mesh.as_mesh_data(source.mesh)
     if chosen is None:
         raise _no_face()
     outcome = push_face(body, chosen, params.distance, quality=ctx.quality, cancelled=ctx.cancelled)
@@ -292,7 +292,7 @@ def draft_faces(ctx: OpContext) -> OpResult:
         )
 
     outcome = draft_walls(
-        as_mesh_data(source.mesh),
+        mesh.as_mesh_data(source.mesh),
         params.angle,
         walls=chosen or None,
         direction=pull,

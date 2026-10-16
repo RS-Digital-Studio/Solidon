@@ -16,7 +16,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts.literal import literal
 from app.core.knowledge.parts.registry import PartSpec
 from app.core.types import BaseParams
@@ -38,7 +39,7 @@ def to_scad(spec: PartSpec, params: BaseParams | None = None) -> str:
 
     values = params or spec.params()
     produced = spec.fn(values)
-    mesh = as_mesh_data(produced.mesh)
+    mesh = geom_mesh.as_mesh_data(produced.mesh)
 
     lines = [
         HEADER.format(title=spec.title, name=spec.name, version=spec.version),
@@ -55,7 +56,11 @@ def to_scad(spec: PartSpec, params: BaseParams | None = None) -> str:
         extra = build(values) if build is not None else None
         if extra is not None:
             lines.extend(
-                ["", f"// {advice}", *_module(f"{spec.name}_{suffix}", as_mesh_data(extra.mesh))]
+                [
+                    "",
+                    f"// {advice}",
+                    *_module(f"{spec.name}_{suffix}", geom_mesh.as_mesh_data(extra.mesh)),
+                ]
             )
     shown = shown_bores(spec, produced, upward=builds_upward(mesh))
     lines.extend(_shown_module(spec.name, shown))

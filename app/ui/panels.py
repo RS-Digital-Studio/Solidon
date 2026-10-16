@@ -130,7 +130,8 @@ from app.core.errors import (
     AppError,
 )
 from app.core.export.writer import PART_SETTING_CODES
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
 from app.core.ingest.plan import imported_group_for_bed
 from app.core.log import get_logger
 from app.core.perceive.actions import (
@@ -178,6 +179,7 @@ from app.core.types import (
 )
 from app.core.units import LengthUnit, is_close
 from app.i18n import TranslatableText, sort_key, tr
+from app.ui import dialogs, icons
 from app.ui.change_lock import (
     action_refusal,
     change_refusal,
@@ -186,12 +188,12 @@ from app.ui.change_lock import (
     hold_inputs,
     say_refusal,
 )
-from app.ui.dialogs import ADDRESS_VALUES, NEEDS_OP, handlers_of, unhandled_advice
+from app.ui.dialogs import ADDRESS_VALUES, NEEDS_OP, handlers_of
 from app.ui.feature_editing import advanced_fields, configure_scope, explain_value_help
 from app.ui.feature_footer import keep_in_sight, place_below
 from app.ui.first_change import first_change_sentence, offered_values, typed, waits_for_change
 from app.ui.grouped_spin import GroupedSpin
-from app.ui.icons import icon, icon_name_for, svg_pixmap
+from app.ui.icons import icon, icon_name_for
 from app.ui.labels import (
     BoundedLengthSpin,
     BoundedSpin,
@@ -2372,7 +2374,7 @@ class ObjectTree(QWidget):
 
     def _preview_drawn(self, stamp: str, image: str) -> None:
         """Ein fertiges SVG wird zum Symbol — das Einzige, wofür es Qt braucht."""
-        found = QIcon(svg_pixmap(image, _preview_pixels(self.tree)))
+        found = QIcon(icons.svg_pixmap(image, _preview_pixels(self.tree)))
         self._previews[stamp] = found
         for item in self._rows_for.get(stamp, ()):
             # Die Zeile kann inzwischen weg sein — eine neue Auswertung räumt
@@ -2508,7 +2510,7 @@ class ObjectTree(QWidget):
             from app.core.export.threemf import slots_for_object
             from app.core.geom.attributes import used_slots
 
-            mesh = as_mesh_data(entry.mesh)
+            mesh = geom_mesh.as_mesh_data(entry.mesh)
             definitions = slots_for_object(entry)
             occupied = set(used_slots(mesh))
             self._show_filament(item, tuple(slot for slot in definitions if slot.index in occupied))
@@ -2570,7 +2572,7 @@ class ObjectTree(QWidget):
 
             under: dict[str, str] = {}
             chains = (
-                cavity_chains(entry.features, as_mesh_data(entry.mesh))
+                cavity_chains(entry.features, geom_mesh.as_mesh_data(entry.mesh))
                 if len(entry.features) > 1
                 else ()
             )
@@ -2592,7 +2594,7 @@ class ObjectTree(QWidget):
             from app.core.perceive.groups import numbered_titles as group_titles
 
             functional = (
-                functional_groups(entry.features, as_mesh_data(entry.mesh))
+                functional_groups(entry.features, geom_mesh.as_mesh_data(entry.mesh))
                 if len(entry.features) > 1
                 else ()
             )
@@ -6982,7 +6984,7 @@ class ReportPanel(QWidget):
             if finding is not None and action.id == CORRECT_INPUT.id:
                 # Der Rat des Kerns, den kein Knopf einlöst, steht beim Knopf,
                 # der zu ihm führt — sonst ginge er im Bericht ganz verloren.
-                advice = unhandled_advice(as_error(finding, self._document), handlers)
+                advice = dialogs.unhandled_advice(as_error(finding, self._document), handlers)
                 if advice:
                     button.setToolTip("\n".join([str(finding.message), *advice]))
             effect = side_effect(action.id)

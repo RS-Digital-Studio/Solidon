@@ -979,7 +979,7 @@ def test_a_feature_scene_without_its_selection_turns_red(
     darauf der Auswahlweg — das ist rot, nicht still leer."""
     scenes = fscenes.load_scenes()
     scenes["merkmal.hole.exakt"] = dataclasses.replace(scenes["merkmal.hole.exakt"], select="")
-    monkeypatch.setattr(fl, "load_scenes", lambda path=fscenes.SCENES: scenes)
+    monkeypatch.setattr(fscenes, "load_scenes", lambda path=fscenes.SCENES: scenes)
 
     found = fl.problems()
 

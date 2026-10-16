@@ -64,13 +64,10 @@ def test_cancelling_the_file_dialog_keeps_project_selection_and_star(window, mon
 
 def test_declining_the_recognition_question_imports_every_file_once(session, monkeypatch, tmp_path):
     """NM 2: Wer die Frage zur Vollerkennung schließt, bekommt alle Dateien, gefragt einmal."""
-    import importlib
 
-    from app.ui import session as session_module
+    from app.core.perceive import local
 
-    evaluation = importlib.import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
-    monkeypatch.setattr(session_module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(local, "FEATURE_LIMIT_TRIANGLES", 1)
     asked = []
 
     def decline(request):

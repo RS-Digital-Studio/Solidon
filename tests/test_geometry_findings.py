@@ -184,16 +184,16 @@ def test_the_enclosed_cavity_costs_no_second_boolean(monkeypatch: pytest.MonkeyP
     Hohlraum heraus, nur eine Sekunde später (RM-045). Gezählt wird deshalb,
     was gerechnet wird.
     """
-    from app.core.geom import hollow as module
+    from app.core.geom import boolean as geom_boolean
 
     kinds: list[str] = []
-    original = module.boolean
+    original = geom_boolean.boolean
 
     def counted(kind: str, meshes: list[Any], **kwargs: Any) -> Any:
         kinds.append(kind)
         return original(kind, meshes, **kwargs)
 
-    monkeypatch.setattr(module, "boolean", counted)
+    monkeypatch.setattr(geom_boolean, "boolean", counted)
     hollow(turned_cube(angle=0.0), 3.0, vents=0)
 
     assert "intersection" not in kinds, kinds

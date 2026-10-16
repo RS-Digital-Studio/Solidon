@@ -49,6 +49,7 @@ from app.core.types import PrinterProfile
 from app.core.units import DISPLAY_UNITS
 from app.i18n import TranslatableText, _, language_name, tr
 from app.i18n.catalog import available_languages
+from app.ui import settings as ui_settings
 from app.ui.ai_disclosure import clear_disclosure
 from app.ui.dialogs import align_to_the_front
 from app.ui.first_run import (
@@ -74,7 +75,6 @@ from app.ui.leash import WAIT_TIMEOUT_MS, WorkerLeash
 from app.ui.palette import DIFF_PALETTES
 from app.ui.panels import collapsible, open_section
 from app.ui.print_settings_dialog import _SlicerWorker
-from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import SCHEMES
 from app.ui.style import (
     NORMAL,
@@ -177,7 +177,7 @@ def section(title: TranslatableText, content: QWidget, **options: Any) -> QWidge
     return wrapper
 
 
-def searchable_options(settings: UiSettings) -> dict[str, str]:
+def searchable_options(settings: ui_settings.UiSettings) -> dict[str, str]:
     """Was die Suche aus diesem Dialog anbietet — nur sichtbare Zeilen.
 
     „Richtung umkehren" allein sagt in der Suche nicht, wessen Richtung;
@@ -199,7 +199,7 @@ class SettingsDialog(QDialog):
 
     def __init__(
         self,
-        settings: UiSettings,
+        settings: ui_settings.UiSettings,
         parent: QWidget | None = None,
         *,
         slicer_path: str | None = None,
@@ -947,7 +947,7 @@ class SettingsDialog(QDialog):
         if chosen and chosen != self.settings.language:
             self.done(LANGUAGE_CHANGED)
 
-    def apply_to(self, settings: UiSettings) -> UiSettings:
+    def apply_to(self, settings: ui_settings.UiSettings) -> ui_settings.UiSettings:
         """Schreibt die Antworten zurück. Nur beim Annehmen aufgerufen."""
         settings.language = str(self.language.currentData())
         settings.display_unit = str(self.unit.currentData())

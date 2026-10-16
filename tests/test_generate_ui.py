@@ -1814,7 +1814,7 @@ def test_an_unexpected_error_does_not_leave_the_generator_waiting(
         def text_to_mesh(self, prompt: str, *, seed: int = 0, progress: object = None) -> object:
             raise KeyError("outputs")
 
-    monkeypatch.setattr("app.ui.generate_dialog.show_error", lambda *args: None)
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda *args: None)
     dialog = GenerateDialog(backend=Bricht())
     wait_for_readiness(dialog, qt_app)
     dialog.prompt.setText("ein Halter")
@@ -3070,6 +3070,7 @@ def test_taking_a_generation_that_is_refused_keeps_the_mesh_and_names_the_way(
 
     from app.core import activation
     from app.core.errors import STOP_INSERTING
+    from app.ui import dialogs as ui_dialogs
     from app.ui import main_window as main_window_module
     from tests.ui_helpers import expire_trial
 
@@ -3092,7 +3093,7 @@ def test_taking_a_generation_that_is_refused_keeps_the_mesh_and_names_the_way(
         if answer == "way" and STOP_INSERTING.id in {a.id for a in error.suggestions}:
             handlers[STOP_INSERTING.id](error)
 
-    monkeypatch.setattr(main_window_module, "show_error", fake_show_error)
+    monkeypatch.setattr(ui_dialogs, "show_error", fake_show_error)
     seen: dict[str, object] = {}
 
     class Scripted(GenerateDialog):
@@ -3174,6 +3175,7 @@ def test_generating_is_checked_before_the_dialog_opens(
     from PySide6.QtGui import QImage
 
     from app.core.errors import STOP_INSERTING
+    from app.ui import dialogs as ui_dialogs
     from app.ui import main_window as main_window_module
     from tests.ui_helpers import expire_trial
 
@@ -3212,7 +3214,7 @@ def test_generating_is_checked_before_the_dialog_opens(
             handlers[STOP_INSERTING.id](error)
 
     monkeypatch.setattr(main_window_module, "GenerateDialog", Recorded)
-    monkeypatch.setattr(main_window_module, "show_error", fake_show_error)
+    monkeypatch.setattr(ui_dialogs, "show_error", fake_show_error)
     if entry == "chat":
         window.chat.imageDropped.emit(str(picture))
     elif cause == "licence":

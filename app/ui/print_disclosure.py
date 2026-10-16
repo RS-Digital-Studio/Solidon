@@ -36,7 +36,8 @@ from PySide6.QtWidgets import (
 
 from app.core.log import get_logger
 from app.i18n import tr
-from app.ui.settings import UiSettings, is_utc_timestamp, save_settings, utc_timestamp
+from app.ui import settings as ui_settings
+from app.ui.settings import is_utc_timestamp, save_settings, utc_timestamp
 from app.ui.style import ROOMY, TIGHT, WIDE, make_primary, set_level
 
 #: Fassung des Hinweistextes. Ändert sich der Text inhaltlich, steigt sie, und
@@ -219,7 +220,7 @@ class PrintDisclosureDialog(QDialog):
 
 
 def ensure_print_disclosure(
-    settings: UiSettings, parent: QWidget | None = None
+    settings: ui_settings.UiSettings, parent: QWidget | None = None
 ) -> PrintDisclosureResult:
     """Zeigt den Hinweis, falls diese Textfassung noch nicht gesehen wurde.
 

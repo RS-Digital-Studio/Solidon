@@ -45,7 +45,8 @@ import numpy as np
 from app.core import units
 from app.core.deferred import cKDTree
 from app.core.geom.mesh import MeshData, stable_normals
-from app.core.perceive.surfaces import PATCH_BLOCK, clipped_patches, planar_patch
+from app.core.perceive import surfaces
+from app.core.perceive.surfaces import clipped_patches
 from app.core.types import Feature, FeatureId, MeasureSource, SurfacePatch, Vec3
 from app.core.units import EPS_GEOM, positive_axis, weld_tolerance
 
@@ -1241,14 +1242,14 @@ def _flank_surfaces(
         # Dieselbe Quelle wie die erkannten ebenen Flächen (features._face_candidates).
         normal = stable_normals(body)[0][first] + 0.0
         planar: list[int] = []
-        for start in range(0, len(chosen), PATCH_BLOCK):
+        for start in range(0, len(chosen), surfaces.PATCH_BLOCK):
             if check_cancelled is not None:
                 check_cancelled()
-            block = chosen[start : start + PATCH_BLOCK]
+            block = chosen[start : start + surfaces.PATCH_BLOCK]
             corners = np.asarray(body.vertices)[np.asarray(body.faces)[block]]
             on_plane = np.max(np.abs((corners - origin) @ normal), axis=1) <= EPS_GEOM
             planar.extend(int(index) for index in block[on_plane])
-        part = planar_patch(
+        part = surfaces.planar_patch(
             mesh,
             planar,
             _point(body.triangles_center[first]),
@@ -1283,10 +1284,10 @@ def _stadium_surfaces(
     # EPS_GEOM deckt ausschließlich Rundungsfehler genau auf der vorhandenen
     # Naht ab. Überschneidende Besitzer werden unten ausdrücklich verworfen.
     groups: list[list[int]] = [[], [], [], []]
-    for start in range(0, len(numbers), PATCH_BLOCK):
+    for start in range(0, len(numbers), surfaces.PATCH_BLOCK):
         if check_cancelled is not None:
             check_cancelled()
-        block = numbers[start : start + PATCH_BLOCK]
+        block = numbers[start : start + surfaces.PATCH_BLOCK]
         triangles = np.asarray(mesh.raw.vertices)[np.asarray(mesh.raw.faces)[block]]
         along = (triangles - centre) @ direction
         sides = (triangles - centre) @ across

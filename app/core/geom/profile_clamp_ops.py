@@ -11,9 +11,10 @@ import numpy as np
 
 from app.core import expressions
 from app.core.errors import ValidationError
-from app.core.geom.attributes import counts, transfer
-from app.core.geom.boolean import BooleanKind, boolean, deepest
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom import attributes, boolean
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.attributes import counts
+from app.core.geom.boolean import BooleanKind, deepest
 from app.core.geom.sketch_solid import outline_points
 from app.core.geom.transform import apply as moved_mesh
 from app.core.knowledge import profiles, standards
@@ -591,7 +592,7 @@ def _check_liner_frame(
             "grip": -float(binding["counter_press"]),
         },
     )
-    expected = as_mesh_data(
+    expected = geom_mesh.as_mesh_data(
         clamps.build_liner(
             params,
             _section(binding["counter"]),
@@ -599,11 +600,11 @@ def _check_liner_frame(
             cancelled=ctx.cancelled,
         ).mesh
     )
-    actual = moved_mesh(as_mesh_data(source.mesh), np.linalg.inv(frame))
+    actual = moved_mesh(geom_mesh.as_mesh_data(source.mesh), np.linalg.inv(frame))
     budget = EPS_GEOM * (expected.area + actual.area)
     solvers = []
     for index, (first, second) in enumerate(((expected, actual), (actual, expected))):
-        difference = boolean(
+        difference = boolean.boolean(
             "difference",
             [first, second],
             allow_empty=True,
@@ -672,7 +673,9 @@ def replace_profile_liners(ctx: OpContext) -> OpResult:
     seat = _section(base["seat"])
     solvers = []
     for index, half in enumerate(("lower", "upper")):
-        body = moved_mesh(as_mesh_data(ctx.inputs[index].mesh), np.linalg.inv(frames[index]))
+        body = moved_mesh(
+            geom_mesh.as_mesh_data(ctx.inputs[index].mesh), np.linalg.inv(frames[index])
+        )
         _end_planes(ctx.inputs[index], body, known[index][0], settings)
         empty, wall = clamps.seat_probes(
             _shell_params(settings, half, hard),
@@ -685,7 +688,7 @@ def replace_profile_liners(ctx: OpContext) -> OpResult:
             ("difference", [wall, body]),
         )
         for kind, meshes in probes:
-            result = boolean(
+            result = boolean.boolean(
                 kind, meshes, quality="fine", allow_empty=True, cancelled=ctx.cancelled
             )
             solvers.append(result.solver)
@@ -728,16 +731,16 @@ def replace_profile_liners(ctx: OpContext) -> OpResult:
             _liner_params(settings, half, soft), counter, outside=outside, cancelled=ctx.cancelled
         )
         part = _bound_part(part, binding, ROLES[index])
-        mesh = moved_mesh(as_mesh_data(part.mesh), frames[index])
+        mesh = moved_mesh(geom_mesh.as_mesh_data(part.mesh), frames[index])
         source = ctx.inputs[index]
         slots = source.material_slots
         if source.material == soft.material.id:
-            old_mesh = as_mesh_data(source.mesh)
+            old_mesh = geom_mesh.as_mesh_data(source.mesh)
             previous = counts(old_mesh)
             cut_slot = max(previous, key=lambda key: (previous[key], -key))
-            mesh = transfer(mesh, [old_mesh], cut_slot=cut_slot)
+            mesh = attributes.transfer(mesh, [old_mesh], cut_slot=cut_slot)
         else:
-            released_filaments |= bool(slots or as_mesh_data(source.mesh).slots)
+            released_filaments |= bool(slots or geom_mesh.as_mesh_data(source.mesh).slots)
             slots = []
         outputs.append(
             replace(

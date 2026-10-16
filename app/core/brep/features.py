@@ -30,6 +30,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
+from app.core.brep import kernel, properties
 from app.core.brep.canonical import (
     ConeSurface,
     CylinderSurface,
@@ -38,8 +39,7 @@ from app.core.brep.canonical import (
     Surface,
     TorusSurface,
 )
-from app.core.brep.kernel import Solid, boolean_builder, face_sources, listed, nearest_distance
-from app.core.brep.properties import properties
+from app.core.brep.kernel import Solid, face_sources, listed, nearest_distance
 from app.core.log import get_logger
 from app.core.types import (
     CancelToken,
@@ -711,7 +711,7 @@ def _void_features(solid: Solid, *, cancelled: CancelToken | None = None) -> lis
                 cut = None
                 air = positive
                 if bodies.Extent() > 1:
-                    cut = boolean_builder("difference", positive, solid.shape)
+                    cut = kernel.boolean_builder("difference", positive, solid.shape)
                     check()
                     cut.Build()
                     check()
@@ -752,7 +752,7 @@ def _void_features(solid: Solid, *, cancelled: CancelToken | None = None) -> lis
                     if selection in seen:
                         continue
                     seen.add(selection)
-                    volume = properties(region, "volume", cancelled=cancelled).mass
+                    volume = properties.properties(region, "volume", cancelled=cancelled).mass
                     check()
                     bounds = Solid(region).bounds
                     check()

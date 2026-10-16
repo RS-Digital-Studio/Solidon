@@ -17,8 +17,9 @@ from dataclasses import replace
 from itertools import pairwise
 from typing import Any, Final, Literal
 
+from app.core.brep import kernel
 from app.core.brep.canonical import PlaneSurface
-from app.core.brep.kernel import DEFLECTION, Solid, boolean_builder, box_limits, require
+from app.core.brep.kernel import DEFLECTION, Solid, box_limits, require
 from app.core.errors import (
     CANCEL,
     CHANGE_FACES,
@@ -1561,7 +1562,7 @@ def _fuzzy_boolean(
     Gewindes …"), und ein Loch im Durchzug scheiterte mit einem Satz über ein
     Gewinde, das es nicht gab.
     """
-    operation = boolean_builder(kind, first.shape, second.shape, tolerance=tolerance)
+    operation = kernel.boolean_builder(kind, first.shape, second.shape, tolerance=tolerance)
     return _finished(
         operation,
         sentence,
@@ -1746,7 +1747,7 @@ def face_boolean(kind: str, first: Any, second: Any) -> Any:
     from OCP.TopExp import TopExp_Explorer
     from OCP.TopoDS import TopoDS
 
-    operation = boolean_builder(kind, first, second)
+    operation = kernel.boolean_builder(kind, first, second)
     try:
         operation.Build()
         done = operation.IsDone()
@@ -2116,7 +2117,9 @@ def push_faces(
             cancelled.raise_if_cancelled()
         reach = gp_Vec(*(value * abs(distance) for value in normal))
         prism = BRepPrimAPI_MakePrism(face, reach if distance > 0 else reach.Reversed()).Shape()
-        joined = boolean_builder("union" if distance > 0 else "difference", outcome.shape, prism)
+        joined = kernel.boolean_builder(
+            "union" if distance > 0 else "difference", outcome.shape, prism
+        )
         # ``_finished`` statt blindem ``Shape()``: Ein Schritt ohne ``IsDone``
         # lieferte sonst wortlos irgendetwas — bis hin zu gar nichts.
         outcome = _finished(

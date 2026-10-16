@@ -206,6 +206,7 @@ def test_the_download_build_stops_at_a_note_from_a_former_release(
     tun ist (Regel 17). Angehalten wird, bevor der Lauf ein Paket nach
     ``dl/`` kopiert, einen Kasten schreibt oder die Versionsdatei anfasst.
     """
+    from app import branding
     from app.core import changes
     from tests.helpers import release_version_file
     from tools import make_download, sign_release
@@ -214,7 +215,7 @@ def test_the_download_build_stops_at_a_note_from_a_former_release(
     notes.mkdir()
     for language, lead in (("de", "Die Demo läuft länger."), ("en", "The demo runs longer.")):
         (notes / f"{language}.md").write_text(
-            f"## {make_download.APP_VERSION}\n\n- {lead}\n\n### Zeichnen\n\n- Gezeichnet.\n",
+            f"## {branding.APP_VERSION}\n\n- {lead}\n\n### Zeichnen\n\n- Gezeichnet.\n",
             encoding="utf-8",
         )
     changes.forget_cache()
@@ -251,7 +252,7 @@ def test_the_download_build_stops_at_a_note_from_a_former_release(
 
     said = str(stopped.value)
     if problem == "former_release":
-        assert "0.3.0" in said and make_download.APP_VERSION in said
+        assert "0.3.0" in said and branding.APP_VERSION in said
         assert "notes_version" in said, "ohne den Feldnamen sucht der Leser"
     else:
         assert "keinen Hinweis für it" in said and "notes_by_language" in said, said

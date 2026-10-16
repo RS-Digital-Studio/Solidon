@@ -65,6 +65,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.core import bootstrap
 from app.core.agent.offer import ToolOffer
 from app.core.agent.prompt import system_prompt
 from app.core.backends.llm import (
@@ -75,7 +76,6 @@ from app.core.backends.llm import (
     prompt_was_cut,
     request_length,
 )
-from app.core.bootstrap import load_operations
 from app.core.discover import opener_for
 from app.core.http import apply_header_deadline, deadline_after, read_limited
 from app.core.json_boundary import StrictJsonError
@@ -383,7 +383,7 @@ def main() -> int:
 
     # Ohne das ist das Register leer und das Angebot enthält nur die
     # Zusatzwerkzeuge — eine Messung gegen eine Nutzlast, die es nicht gibt.
-    load_operations()
+    bootstrap.load_operations()
     schemas = base_tools()
     if arguments.tools >= 0:
         schemas = schemas[: arguments.tools]

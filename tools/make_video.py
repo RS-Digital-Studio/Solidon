@@ -59,8 +59,9 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from PySide6.QtWidgets import QApplication, QWidget
 
+from app import i18n
 from app.core.activation import store as activation_store
-from app.i18n import install_catalog, set_language
+from app.i18n import install_catalog
 from app.i18n.catalog import read_catalog
 
 #: Den OpenGL-Kontext freigeben, bevor das nächste Fenster kommt.
@@ -3067,7 +3068,7 @@ def main() -> int:
         for language in chosen_languages:
             print(f"\n=== {language} ===")
             install_catalog(language, read_catalog(language))
-            set_language(language)
+            i18n.set_language(language)
             if qt_translator is not None:
                 app.removeTranslator(qt_translator)
             qt_translator = install_qt_translations(app, language)
@@ -3207,7 +3208,7 @@ def main() -> int:
             raise SystemExit(f"Kein Drehbuch für {language!r} — vorhanden: {', '.join(script)}")
         print(f"\n=== {language} ===")
         install_catalog(language, read_catalog(language))
-        set_language(language)
+        i18n.set_language(language)
         # Auch Qt selbst spricht die Sprache der Aufnahme, sonst steht
         # „Cancel" auf einem Dialog, der in der Anwendung „Abbrechen" sagt.
         if qt_translator is not None:

@@ -19,9 +19,9 @@ from functools import partial
 from typing import TYPE_CHECKING, Any, Final
 
 from app.core.errors import CHECK_UPDATES, KEEP_SAVED_PARTS, PROGRAMMING_ERRORS
+from app.core.knowledge.parts import registry as parts_registry
 from app.core.knowledge.parts.registry import (
     LIBRARY_VERSION,
-    PARTS,
     PartChange,
     PartRegistry,
     _as_number,
@@ -78,7 +78,7 @@ def changed_parts(
     document: Document, registry: PartRegistry | None = None
 ) -> tuple[ChangedPart, ...]:
     """Die benutzten Bausteine mit Änderungen seit dem gespeicherten Stand, samt Verlauf."""
-    source = registry or PARTS
+    source = registry or parts_registry.PARTS
     saved = document.parts_version
     since = int(saved) if saved.isdecimal() else 0
     found: list[ChangedPart] = []
@@ -109,7 +109,7 @@ def normalise_legacy_placement(
 
     if not document.parts_version.isdecimal() or int(document.parts_version) >= 16:
         return
-    source = registry or PARTS
+    source = registry or parts_registry.PARTS
 
     def migrated(operation: Operation) -> Operation:
         if not operation.op.startswith("insert_"):
@@ -165,7 +165,7 @@ def normalise_legacy_placement(
 
 def check(document: Document, registry: PartRegistry | None = None) -> list[Finding]:
     """Befunde für den Prüfbericht, wenn ein Projekt hereinkommt."""
-    source = registry or PARTS
+    source = registry or parts_registry.PARTS
     used = used_parts(document.ops)
     if not used:
         return []
@@ -401,7 +401,7 @@ def saved_states(document: Document, registry: PartRegistry | None = None) -> di
     """
     from app.core.knowledge.parts import recipe as part_recipes
 
-    source = registry or PARTS
+    source = registry or parts_registry.PARTS
     travelled = [
         spec
         for spec in source.all()
@@ -490,7 +490,7 @@ def changed_own_parts(
     Falschbefund bei jedem alten Projekt wäre schlimmer als die Lücke, die er
     schließen soll.
     """
-    source = registry or PARTS
+    source = registry or parts_registry.PARTS
     changed: list[str] = []
     for name in sorted(set(used)):
         before = document.libs.get(f"{FINGERPRINT_KEY}{name}")

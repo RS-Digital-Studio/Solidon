@@ -313,14 +313,14 @@ def test_native_air_recognition_cancels_without_changing_the_source(
     before_work: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Abbruch vor dem Start oder innerhalb der Materialtrennung lässt einen Neustart zu."""
-    from app.core.brep import features as native
+    from app.core.brep import kernel
     from app.core.errors import OperationCancelled
     from app.core.scene.cancel import CancelSignal
 
     source = _pocket(island=True)
     before = brep_bytes(source.shape)
     signal = CancelSignal()
-    original = native.boolean_builder
+    original = kernel.boolean_builder
 
     def stop(*args: Any, **kwargs: Any) -> Any:
         """Der echte Materialtrennungsweg verlangt während der Arbeit den Abbruch."""
@@ -331,11 +331,11 @@ def test_native_air_recognition_cancels_without_changing_the_source(
     if before_work:
         signal.cancel()
     else:
-        monkeypatch.setattr(native, "boolean_builder", stop)
+        monkeypatch.setattr(kernel, "boolean_builder", stop)
     with pytest.raises(OperationCancelled):
         features_of(source, cancelled=signal)
     assert brep_bytes(source.shape) == before
-    monkeypatch.setattr(native, "boolean_builder", original)
+    monkeypatch.setattr(kernel, "boolean_builder", original)
     found = [feature for feature in features_of(source).values() if feature.kind == "void"]
     assert len(found) == 1
     assert found[0].params["volume"] == pytest.approx(72 * math.pi - 4 * math.pi / 3)

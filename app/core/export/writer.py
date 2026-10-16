@@ -50,9 +50,10 @@ from app.core.export.slicer_keys import (
     reads_assembly_file,
     takes_mesh_settings,
 )
-from app.core.geom import transform
-from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
-from app.core.geom.prepare import arrange_on_bed, check_build_volume
+from app.core.geom import mesh as geom_mesh
+from app.core.geom import prepare, transform
+from app.core.geom.mesh import MeshData, concatenated
+from app.core.geom.prepare import check_build_volume
 from app.core.knowledge.print_settings import read_path, same_value
 from app.core.log import get_logger
 from app.core.types import (
@@ -720,7 +721,7 @@ def _first_layer_outline(mesh: MeshData, settings: PrintSettings) -> BaseGeometr
     """
     from app.core.slice.analysis import cross_sections
 
-    data = as_mesh_data(mesh)
+    data = geom_mesh.as_mesh_data(mesh)
     height = float(data.bounds.minimum[2]) + settings.layers.first_layer_height / 2.0
     section = cross_sections(data, [height])[0]
     if section is None or section.is_empty:
@@ -959,7 +960,7 @@ def check_before_export(
     meshes = []
     for entry in objects:
         token.raise_if_cancelled()
-        meshes.append(as_mesh_data(entry.mesh))
+        meshes.append(geom_mesh.as_mesh_data(entry.mesh))
     token.raise_if_cancelled()
 
     if export_format in SOLID_ONLY_FORMATS:
@@ -1209,13 +1210,13 @@ def mesh_for_export(body: Mesh, profile: Profile) -> MeshData:
     das hier ist die Datei, und die geht in den Slicer.
     """
     if not isinstance(body, BRepBody):
-        return as_mesh_data(body)
+        return geom_mesh.as_mesh_data(body)
     wanted = profile.export_deflection
     if wanted >= body.deflection - EPS_GEOM:
-        return as_mesh_data(body)
+        return geom_mesh.as_mesh_data(body)
     tessellated = body.to_mesh(deflection=wanted)
     if not isinstance(tessellated, MeshData):
-        return as_mesh_data(body)
+        return geom_mesh.as_mesh_data(body)
     _log.info(
         "tessellated an exact body for export at %.4f mm instead of %.4f mm",
         wanted,
@@ -2410,7 +2411,7 @@ def _arrange_for_cli(
         if len(ready) == len(meshes) and not arrangement_holds(ready, profile):
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
-            ready = arrange_on_bed(
+            ready = prepare.arrange_on_bed(
                 ready, profile, plates=1, object_ids=[entry.id for entry in entries]
             ).meshes
         if cancelled is not None:
@@ -2763,7 +2764,8 @@ def write_assembly(
             for slot in threemf.merge_slots(
                 [
                     threemf.AssemblyPart(
-                        mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                        mesh=geom_mesh.as_mesh_data(entry.mesh),
+                        slots=threemf.slots_for_object(entry),
                     )
                     for entry in chosen
                 ]
@@ -2825,7 +2827,7 @@ def write_assembly(
             slots = threemf.merge_slots(
                 [
                     threemf.AssemblyPart(
-                        as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                        geom_mesh.as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
                     )
                     for entry in chosen
                 ]
@@ -2930,7 +2932,7 @@ def write_assembly(
     # ``objects`` und nicht aus ``chosen``: Letzteres *ist* die Platte.
     whole_job = [
         threemf.AssemblyPart(
-            mesh=as_mesh_data(entry.mesh),
+            mesh=geom_mesh.as_mesh_data(entry.mesh),
             name=source_text(entry.name),
             slots=threemf.slots_for_object(entry),
         )
@@ -3228,7 +3230,9 @@ def _assembly_plates(bodies: Sequence[SceneObject]) -> dict[int, list[threemf.As
     plates: dict[int, list[threemf.AssemblyPart]] = {}
     for body in bodies:
         plates.setdefault(body.plate, []).append(
-            threemf.AssemblyPart(mesh=as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
+            threemf.AssemblyPart(
+                mesh=geom_mesh.as_mesh_data(body.mesh), slots=threemf.slots_for_object(body)
+            )
         )
     return plates
 

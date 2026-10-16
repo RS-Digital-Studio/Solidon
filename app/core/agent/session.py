@@ -29,9 +29,10 @@ from math import isfinite
 from typing import TYPE_CHECKING, Any, Final, cast
 
 from app.core import activation, expressions
-from app.core.agent import checks
+from app.core import scene as core_scene
+from app.core.agent import checks, context
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
-from app.core.agent.context import CONDENSE_ABOVE_CHARS, build_messages
+from app.core.agent.context import build_messages
 from app.core.agent.offer import ToolOffer
 from app.core.agent.prompt import PROMPT_VERSION
 from app.core.agent.proposal import Proposal, Question
@@ -68,7 +69,7 @@ from app.core.log import get_logger
 from app.core.perceive.digest import digest, new_feature_lines
 from app.core.registry import REGISTRY, Registry, validate
 from app.core.scene.cache import ResultCache
-from app.core.scene.evaluate import EvaluationResult, evaluate
+from app.core.scene.evaluate import EvaluationResult
 from app.core.scene.fits import numbered_name
 from app.core.scene.history import History, OperationDraft
 from app.core.types import (
@@ -690,7 +691,11 @@ class AgentSession:
             # der Weg, den der verdichtete Steckbrief des lokalen Modells
             # nennt. Ohne Auswahl dieselbe Grenze wie im Kontext.
             text = digest(scene, working, self.selection, only=wanted or None)
-            if not wanted and self.backend.id == "ollama" and len(text) > CONDENSE_ABOVE_CHARS:
+            if (
+                not wanted
+                and self.backend.id == "ollama"
+                and len(text) > context.CONDENSE_ABOVE_CHARS
+            ):
                 text = digest(scene, working, self.selection, condensed=True)
             return text, scene
         if name == READ_STANDARD:
@@ -1113,7 +1118,7 @@ class AgentSession:
         """§26.5: der Agent arbeitet in Entwurfsqualität und schaltet erst am
         Ende um.
         """
-        return evaluate(
+        return core_scene.evaluate(
             document,
             self.profile,
             quality="draft",

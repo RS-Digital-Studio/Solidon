@@ -29,6 +29,7 @@ from app.core.knowledge import print_settings, profiles
 from app.core.scene.cancel import CancelSignal
 from app.core.types import Finding, MaterialSlot, SceneObject
 from app.i18n import _, source_text
+from app.ui import dialogs
 from app.ui import main_window as mw
 from app.ui import print_settings_dialog as pd
 from app.ui.settings import UiSettings
@@ -456,7 +457,7 @@ def test_old_or_cancelled_first_layer_failure_is_not_displayed(monkeypatch, job,
         reported=SignalLog(),
         state=SimpleNamespace(setText=lambda text: events.append(("state", text))),
     )
-    monkeypatch.setattr(pd, "show_error", lambda error, _: events.append(("error", error)))
+    monkeypatch.setattr(dialogs, "show_error", lambda error, _: events.append(("error", error)))
     pd.PrintSettingsDialog._slice_failed(host, problem(), [Finding("kept", "info", "Befund")])
     valid = job == ("new",) and not settling
     assert len(events) == (2 if valid else 0)
@@ -472,7 +473,7 @@ def test_file_write_error_still_displays_without_slice_context(monkeypatch):
         _failed_save_copies=None,
         state=SimpleNamespace(setText=lambda text: None),
     )
-    monkeypatch.setattr(pd, "show_error", lambda error, _: events.append(error))
+    monkeypatch.setattr(dialogs, "show_error", lambda error, _: events.append(error))
     error = FileWriteError()
     pd.PrintSettingsDialog._slice_failed(host, error)
     assert events == [error]
@@ -491,7 +492,7 @@ def test_queued_first_layer_failure_after_cancel_button_is_suppressed(monkeypatc
         _failed_save_copies=None,
         state=SimpleNamespace(setText=lambda text: events.append(text)),
     )
-    monkeypatch.setattr(pd, "show_error", lambda error, _: events.append(error))
+    monkeypatch.setattr(dialogs, "show_error", lambda error, _: events.append(error))
     refusal = problem()
     refusal.values["constraint"] = constraint
     pd.PrintSettingsDialog._slice_failed(host, refusal)

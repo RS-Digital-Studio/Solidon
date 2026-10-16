@@ -26,11 +26,10 @@ from shapely import get_coordinates
 from shapely.affinity import translate as shift_polygon
 from shapely.geometry import box
 
-from app.core import units
+from app.core import build_area, units
 from app.core.build_area import (
     fits_on_bed,
     fits_xy,
-    footprint,
     placement_offset,
     printable_area,
     printable_height,
@@ -44,18 +43,12 @@ from app.core.errors import (
     SHOW_HISTORY,
     ValidationError,
 )
-from app.core.geom import kernel_process, lathe, transform
-from app.core.geom.boolean import (
-    BOOLEAN_OVERLAP,
-    BooleanKind,
-    boolean,
-    shared_volume,
-    without_effect,
-)
+from app.core.geom import boolean, kernel_process, lathe, transform
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, shared_volume, without_effect
 from app.core.geom.measure import surface_gap
 from app.core.geom.mesh import (
     MeshData,
-    as_mesh_data,
     concatenated,
     ray_hit_distances,
     row_dots,
@@ -1014,7 +1007,7 @@ def resize_bore(
     transform.moved(tool, to_world)
     if capped:
         tool.vertices = _onto_planes(np.asarray(tool.vertices, dtype=np.float64), capped)
-    outcome = boolean(
+    outcome = boolean.boolean(
         kind,
         [mesh, MeshData.of(tool)],
         quality=quality,
@@ -1218,7 +1211,7 @@ def slot_bore(
     # Hin- und Rückweg des ganzen Körpers versetzte jede Ecke, die das
     # Langloch nicht berührt.
     transform.moved(tool, _in_world(frame))
-    outcome = boolean(
+    outcome = boolean.boolean(
         "difference",
         [mesh, MeshData.of(tool)],
         quality=quality,
@@ -2027,7 +2020,7 @@ def drill(
         cylinder = tool.raw.copy()
         shift_body(cylinder, (0.0, 0.0, mouth))
         transform.moved(cylinder, _in_world(frame))
-        outcome = boolean(
+        outcome = boolean.boolean(
             "difference",
             [mesh, MeshData.of(cylinder)],
             quality=quality,
@@ -2110,7 +2103,7 @@ def drill(
             to_the_middle = into * height / 2.0
         shift_body(cylinder, offset)
 
-    outcome = boolean(
+    outcome = boolean.boolean(
         "difference",
         [mesh, MeshData.of(cylinder)],
         quality=quality,
@@ -2209,7 +2202,7 @@ def countersink(
     transform.moved(cone, transform.rotation_between(np.array([0.0, 0.0, -1.0]), narrows))
     shift_body(cone, at)
 
-    outcome = boolean(
+    outcome = boolean.boolean(
         "difference",
         [mesh, MeshData.of(cone)],
         quality=quality,
@@ -2456,13 +2449,13 @@ def plug(
 
     # Erst verschneiden: der Stopfen darf nicht aus dem Körper herauswachsen,
     # den er füllt.
-    inner = boolean(
+    inner = boolean.boolean(
         "intersection",
         [mesh.replacing(cylinder), shell(mesh)],
         quality=quality,
         cancelled=cancelled,
     )
-    outcome = boolean(
+    outcome = boolean.boolean(
         "union",
         [mesh, inner.mesh],
         quality=quality,
@@ -2723,7 +2716,7 @@ def compensate_elephant_foot(
 
     collar = concatenated(parts)
     shift_body(collar, [0.0, 0.0, bottom - BOOLEAN_OVERLAP / 2.0])
-    outcome = boolean("difference", [mesh, mesh.replacing(collar)], quality=quality)
+    outcome = boolean.boolean("difference", [mesh, mesh.replacing(collar)], quality=quality)
     findings = list(outcome.findings)
     findings.append(
         Finding(
@@ -2837,7 +2830,7 @@ def _fits_after_shift(mesh: MeshData, shift: tuple[float, float], allowed: Any) 
     rectangle = box(low[0] + shift[0], low[1] + shift[1], high[0] + shift[0], high[1] + shift[1])
     if allowed.covers(rectangle):
         return True
-    moved = shift_polygon(footprint(mesh), xoff=shift[0], yoff=shift[1])
+    moved = shift_polygon(build_area.footprint(mesh), xoff=shift[0], yoff=shift[1])
     return bool(allowed.covers(moved))
 
 
@@ -3045,7 +3038,7 @@ def arrange_on_bed(
             if allowed.covers(rectangle):
                 return spot
             if projected is None:
-                projected = footprint(mesh)
+                projected = build_area.footprint(mesh)
             moved = shift_polygon(
                 projected,
                 xoff=spot.left - mesh.bounds.minimum[0],
@@ -3512,7 +3505,7 @@ def _foreign_filament_plates(
     from app.core.geom.attributes import used_slots
 
     def filaments(entry: SceneObject) -> set[SlotKey]:
-        mesh = as_mesh_data(entry.mesh)
+        mesh = geom_mesh.as_mesh_data(entry.mesh)
         active = set(used_slots(mesh))
         part = AssemblyPart(mesh=mesh, slots=slots_for_object(entry))
         return {slot_identity(slot) for slot in assembly_slots(part) if slot.index in active}
@@ -3736,7 +3729,7 @@ def back_onto_bed(
     bewegen.
     """
     area = printable_area(profile.printer)
-    body = as_mesh_data(mesh)
+    body = geom_mesh.as_mesh_data(mesh)
     if fits_xy(body, area):
         return (0.0, 0.0, 0.0), []
 

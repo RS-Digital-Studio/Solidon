@@ -63,6 +63,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
+from app.core import paths
 from app.core.errors import (
     CANCEL,
     CORRECT_INPUT,
@@ -72,7 +73,7 @@ from app.core.errors import (
 )
 from app.core.knowledge.parts.registry import PartRegistry, PartSpec
 from app.core.log import get_logger
-from app.core.paths import ensure_dir, user_parts_dir
+from app.core.paths import ensure_dir
 from app.core.registry import Registry, op_params, param
 from app.core.scene.migrations import migrate
 from app.core.scene.serialise import document_from_data, document_to_data, has_lone_surrogate
@@ -1005,7 +1006,7 @@ def _default_profile() -> Profile:
 
 def recipes_dir(base: Path | None = None) -> Path:
     """Wo die Rezepte liegen: ein Unterordner des Bausteinordners."""
-    return (base or user_parts_dir()) / RECIPES_DIRNAME
+    return (base or paths.user_parts_dir()) / RECIPES_DIRNAME
 
 
 def _encoded_file(recipe: Recipe) -> bytes:

@@ -538,16 +538,16 @@ def test_refresh_only_visits_each_whole_body_slot_array_once(
     picker: QuickFilamentPicker, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Text und Entfernen-Knopf teilen denselben vollständigen Flächendurchlauf."""
-    from app.ui import filament_assignment
+    from app.core.geom import attributes
 
     calls = []
-    original = filament_assignment.used_slots
+    original = attributes.used_slots
 
     def counted(mesh):
         calls.append(mesh)
         return original(mesh)
 
-    monkeypatch.setattr(filament_assignment, "used_slots", counted)
+    monkeypatch.setattr(attributes, "used_slots", counted)
     first = _body("one", "Teil", [MaterialSlot(1, "Rot")])
     second = _body("two", "Anderes Teil")
     picker.set_context([first, second])

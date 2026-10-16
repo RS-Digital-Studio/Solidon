@@ -693,10 +693,10 @@ def test_a_rigid_motion_keeps_a_feature_when_detection_misses_it(
     assert previous, "the fixture must expose a feature before it moves"
     matrix = translation((480.0, -125.0, 0.0))
     moved = apply(mesh, matrix)
-    import importlib
 
-    evaluation = importlib.import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(evaluation, "detect", lambda _mesh, **_kwargs: {})
+    from app.core.perceive import features as perceive_features
+
+    monkeypatch.setattr(perceive_features, "detect", lambda _mesh, **_kwargs: {})
     findings = []
 
     result = _with_features(
@@ -732,7 +732,6 @@ def test_arranging_keeps_a_feature_when_detection_misses_it(monkeypatch) -> None
     nicht wiedererkanntes Merkmal muss deshalb um den Versatz seines Körpers
     mitgenommen werden.
     """
-    import importlib
 
     from app.core.scene.evaluate import _with_features
     from app.core.types import Operation, SceneObject
@@ -741,8 +740,9 @@ def test_arranging_keeps_a_feature_when_detection_misses_it(monkeypatch) -> None
     previous = holes_of(mesh)
     matrix = translation((-120.0, 45.0, 0.0))
     moved = apply(mesh, matrix)
-    evaluation = importlib.import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(evaluation, "detect", lambda _mesh, **_kwargs: {})
+    from app.core.perceive import features as perceive_features
+
+    monkeypatch.setattr(perceive_features, "detect", lambda _mesh, **_kwargs: {})
     findings = []
 
     result = _with_features(
@@ -937,20 +937,19 @@ def _counted_recognitions(monkeypatch) -> list[int]:
     den der Merker vorher nichts wusste. Rechnet er an einem bewegten Netz, ist
     die Übertragung ausgefallen.
     """
-    import importlib
 
+    from app.core.perceive import features as perceive_features
     from app.core.perceive.features import known_detection
 
-    evaluation = importlib.import_module("app.core.scene.evaluate")
     runs: list[int] = []
-    original = evaluation.detect
+    original = perceive_features.detect
 
     def counted(mesh, **kwargs):
         if known_detection(mesh) is None:
             runs.append(1)
         return original(mesh, **kwargs)
 
-    monkeypatch.setattr(evaluation, "detect", counted)
+    monkeypatch.setattr(perceive_features, "detect", counted)
     return runs
 
 
@@ -1464,7 +1463,8 @@ def test_the_evaluation_carries_features_across_a_refinement(
     from app.core.types import Source
 
     features = importlib.import_module("app.core.perceive.features")
-    evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import local as perceive_local
+
     forget_cache()
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source(
@@ -1486,7 +1486,7 @@ def test_the_evaluation_carries_features_across_a_refinement(
     )
     if above_the_limit:
         # Der Eingang liegt darunter, das feinere Netz darüber.
-        monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", source_mesh.triangle_count)
+        monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", source_mesh.triangle_count)
         monkeypatch.setattr(
             local, "_recognise_region", lambda *_a, **_k: pytest.fail("örtlich nachgemessen")
         )
@@ -1535,7 +1535,8 @@ def test_a_refinement_keeps_its_features_when_the_project_is_opened_again(
     from app.core.types import Source
 
     features = importlib.import_module("app.core.perceive.features")
-    evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import local as perceive_local
+
     forget_cache()
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source(
@@ -1553,7 +1554,7 @@ def test_a_refinement_keeps_its_features_when_the_project_is_opened_again(
     if above_the_limit:
         # Der Eingang liegt darunter, das feinere Netz darüber.
         monkeypatch.setattr(
-            evaluation, "FEATURE_LIMIT_TRIANGLES", body("plate_holes.stl").triangle_count
+            perceive_local, "FEATURE_LIMIT_TRIANGLES", body("plate_holes.stl").triangle_count
         )
         monkeypatch.setattr(
             local, "_recognise_region", lambda *_a, **_k: pytest.fail("örtlich nachgemessen")
@@ -2053,7 +2054,7 @@ def test_scaling_generated_bores_keeps_only_current_circular_measures(
         import importlib
 
         monkeypatch.setattr(
-            importlib.import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1
+            importlib.import_module("app.core.perceive.local"), "FEATURE_LIMIT_TRIANGLES", 1
         )
     mesh = one_hole_plate()
     bore = next(iter(holes_of(mesh).values()))

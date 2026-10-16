@@ -1413,12 +1413,12 @@ def test_the_first_hollowing_vent_forwards_the_original_kernel_process_error(
     failure_type, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein Prozessfehler in der ersten Entlüftung ist kein Auftrag für die nächste Stelle."""
-    from importlib import import_module
 
-    hollow_module = import_module("app.core.geom.hollow")
+    from app.core.geom import boolean
+
     body = block()
     original_vertices, original_faces = body.raw.vertices.copy(), body.raw.faces.copy()
-    original_boolean = hollow_module.boolean
+    original_boolean = boolean.boolean
     original_run = kernel_process.run
     injected_error = failure_type()
     vent_phase = False
@@ -1456,7 +1456,7 @@ def test_the_first_hollowing_vent_forwards_the_original_kernel_process_error(
             raise injected_error
         return original_run(job, arrays, values, **kwargs)
 
-    monkeypatch.setattr(hollow_module, "boolean", counted_boolean)
+    monkeypatch.setattr(boolean, "boolean", counted_boolean)
     monkeypatch.setattr(kernel_process, "run", failing_vent)
     try:
         with pytest.raises(failure_type) as caught:
@@ -1537,6 +1537,7 @@ def test_the_hull_is_named_at_every_boolean_of_the_hollowing(
     import inspect
 
     from app.core.errors import BooleanFailedError, NotManifoldError
+    from app.core.geom import boolean
     from app.core.geom import hollow as module
     from app.core.geom.boolean import BooleanOutcome
 
@@ -1566,7 +1567,7 @@ def test_the_hull_is_named_at_every_boolean_of_the_hollowing(
     def rips(*args: object, **kwargs: object) -> object:
         raise failure
 
-    monkeypatch.setattr(module, "boolean", passes)
+    monkeypatch.setattr(boolean, "boolean", passes)
     monkeypatch.setattr(module, "_vent", rips)
     with pytest.raises(NotManifoldError) as at_the_vent:
         hollow(figure, 2.0, vents=1)
@@ -1592,7 +1593,14 @@ def test_the_hull_is_named_at_every_boolean_of_the_hollowing(
         seen = set() if seen is None else seen
         found: list[str] = []
         for call in ast.walk(start):
-            if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Name):
+            if not isinstance(call, ast.Call):
+                continue
+            # ``boolean.boolean(…)``: Seit ``hollow`` die Kette über ihr Modul liest
+            # (CS-11), zählt der Name hinter dem Modul wie ein eigener.
+            if isinstance(call.func, ast.Attribute) and isinstance(call.func.value, ast.Name):
+                found.append(call.func.attr)
+                continue
+            if not isinstance(call.func, ast.Name):
                 continue
             name = call.func.id
             found.append(name)

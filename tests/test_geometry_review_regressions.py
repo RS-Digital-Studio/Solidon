@@ -1623,8 +1623,11 @@ def test_p0_deformed_thread_does_not_hide_a_real_spherical_surface(monkeypatch):
     )
     # Die Messung selbst wird hier nicht geprüft, sondern die nachfolgende
     # Unterdrückung. Ihre Fläche ist durch die unabhängige Radiusprobe belegt.
-    evaluation = importlib.import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(evaluation, "detect", lambda *_args, **_kwargs: {measured.id: measured})
+    from app.core.perceive import features as perceive_features
+
+    monkeypatch.setattr(
+        perceive_features, "detect", lambda *_args, **_kwargs: {measured.id: measured}
+    )
     findings = []
     result = _with_features(
         SceneObject("obj_1", "Gewinde mit Außenfläche", moved, features=previous),
@@ -1684,10 +1687,12 @@ def test_p0_rotated_tetrahedral_void_keeps_measured_bounds(monkeypatch, recognit
     )
     assert known.id not in transformed_features(previous, transform).exact
     evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import local
+
     if recognition == "budget":
         monkeypatch.setattr(evaluation, "FEATURE_LIMIT_COUNT", 1)
     elif recognition == "local":
-        monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
+        monkeypatch.setattr(local, "FEATURE_LIMIT_TRIANGLES", 1)
     findings = []
     result = _with_features(
         SceneObject("obj_1", "Tetraeder im Material", moved, features=previous),

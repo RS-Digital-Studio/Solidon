@@ -41,6 +41,7 @@ from app.core.errors import (
     GeometryError,
     ValidationError,
 )
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.boolean import BooleanOutcome, HasVolume
 from app.core.geom.edges import (
     EDGE_CHOICES,
@@ -56,7 +57,7 @@ from app.core.geom.edges import (
     reference_first,
     round_edges,
 )
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
     BaseParams,
@@ -619,7 +620,7 @@ def bead_edges_op(ctx: OpContext) -> OpResult:
     """
     params = cast(BeadParams, ctx.params)
     source = ctx.inputs[0]
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     outcome = bead_edges(
         body,
         params.radius,
@@ -686,7 +687,7 @@ def _worked(
             progress=ctx.progress,
         )
 
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     if not rounded:
         outcome = bevel_edges(
             body,
@@ -1016,7 +1017,7 @@ def _group_that_fits(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     solid = cast(Solid, source.mesh)
-    mesh = as_mesh_data(solid)
+    mesh = geom_mesh.as_mesh_data(solid)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     entries = edges_of(mesh)
@@ -1245,7 +1246,7 @@ def _why_it_does_not_fit(
     if selected_edges is not None:
         return None
     varying = law if law is not None and not law.constant else None
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     entries = edges_of(mesh)
     try:
         chosen = wanted(entries, choice, keys, rings_by_plane=rings_by_plane)

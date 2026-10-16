@@ -40,7 +40,8 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.branding import APP_ID, APP_NAME, APP_VENDOR, APP_VERSION, MACOS_MINIMUM, WEBSITE_URL
+from app import branding
+from app.branding import APP_ID, APP_NAME, APP_VENDOR, MACOS_MINIMUM, WEBSITE_URL
 from tools import asset_rights
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -109,7 +110,7 @@ def distribution(architecture: str) -> str:
         '<?xml version="1.0" encoding="utf-8"?>\n'
         "<!-- Erzeugt von tools/make_macos_package.py — Werte aus app/branding.py. -->\n"
         '<installer-gui-script minSpecVersion="2">\n'
-        f"    <title>{APP_NAME} {APP_VERSION}</title>\n"
+        f"    <title>{APP_NAME} {branding.APP_VERSION}</title>\n"
         f"    <organization>{APP_ID.rsplit('.', 1)[0]}</organization>\n"
         f'    <license file="eula.txt" mime-type="text/plain" />\n'
         f'    <conclusion file="conclusion.txt" mime-type="text/plain" />\n'
@@ -121,12 +122,12 @@ def distribution(architecture: str) -> str:
         "    <volume-check>\n"
         f'        <allowed-os-versions><os-version min="{MACOS_MINIMUM}" /></allowed-os-versions>\n'
         "    </volume-check>\n"
-        f'    <pkg-ref id="{APP_ID}" version="{APP_VERSION}">component.pkg</pkg-ref>\n'
+        f'    <pkg-ref id="{APP_ID}" version="{branding.APP_VERSION}">component.pkg</pkg-ref>\n'
         "    <choices-outline>\n"
         f'        <line choice="{APP_ID}" />\n'
         "    </choices-outline>\n"
         f'    <choice id="{APP_ID}" title="{APP_NAME}" visible="true"'
-        f' description="{APP_NAME} {APP_VERSION} — {APP_VENDOR}">\n'
+        f' description="{APP_NAME} {branding.APP_VERSION} — {APP_VENDOR}">\n'
         f'        <pkg-ref id="{APP_ID}" />\n'
         "    </choice>\n"
         "</installer-gui-script>\n"
@@ -258,7 +259,7 @@ def component_command(root: Path, plist: Path, component: Path) -> list[str]:
         "--identifier",
         APP_ID,
         "--version",
-        APP_VERSION,
+        branding.APP_VERSION,
         str(component),
     ]
 
@@ -381,7 +382,7 @@ def build(architecture: str, identity: str = "") -> int:
         return completed.returncode
     shutil.rmtree(payload)
 
-    target = OUTPUT_DIR / f"{APP_NAME}-{APP_VERSION}-macos-{architecture}.pkg"
+    target = OUTPUT_DIR / f"{APP_NAME}-{branding.APP_VERSION}-macos-{architecture}.pkg"
     command = [
         "productbuild",
         "--distribution",

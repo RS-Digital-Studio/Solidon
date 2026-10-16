@@ -36,14 +36,13 @@ import numpy as np
 
 from app.core import units
 from app.core.errors import BooleanFailedError
-from app.core.geom import transform
-from app.core.geom.autosplit import sections_across, upright_normal
-from app.core.geom.boolean import boolean, deepest
+from app.core.geom import autosplit, boolean, transform
+from app.core.geom.autosplit import upright_normal
+from app.core.geom.boolean import deepest
 from app.core.geom.mesh import MeshData, ray_hit_distances
 from app.core.geom.section import SectionPlane
 from app.core.geom.transform import apply, translation
-from app.core.knowledge.parts import shapes
-from app.core.knowledge.parts.registry import PARTS
+from app.core.knowledge.parts import registry, shapes
 from app.core.log import get_logger
 from app.core.types import (
     CancelToken,
@@ -290,7 +289,7 @@ def plan_pins(
     4,5 mm ein, wo 6,0 nötig gewesen wären — ohne ein Wort.
     """
     normal = _unit(plane.normal)
-    section = sections_across(mesh, normal, np.array([plane.position]))[0]
+    section = autosplit.sections_across(mesh, normal, np.array([plane.position]))[0]
     if section is None or section.is_empty:
         return PinPlan((), 0.0, 0.0, normal, ROUND if shape == AUTO else shape, (_no_face(),))
 
@@ -774,14 +773,14 @@ def _add_connector_geometry(
     """
     if batch and len(placed_pins) > 1:
         try:
-            raised = boolean(
+            raised = boolean.boolean(
                 "union",
                 [pair.first, *placed_pins],
                 quality=quality,
                 stages=("direct",),
                 cancelled=cancelled,
             )
-            drilled = boolean(
+            drilled = boolean.boolean(
                 "difference",
                 [pair.second, *placed_bores],
                 quality=quality,
@@ -805,8 +804,10 @@ def _add_connector_geometry(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
 
-        raised = boolean("union", [pair.first, placed_pin], quality=quality, cancelled=cancelled)
-        drilled = boolean(
+        raised = boolean.boolean(
+            "union", [pair.first, placed_pin], quality=quality, cancelled=cancelled
+        )
+        drilled = boolean.boolean(
             "difference", [pair.second, placed_bore], quality=quality, cancelled=cancelled
         )
         pair.first, pair.second = raised.mesh, drilled.mesh
@@ -821,7 +822,7 @@ def _part(name: str, **values: Any) -> MeshData:
     """Ein Körper aus der Bibliothek. Bausteine vor Primitiven (§39), auch hier."""
     from app.core.geom.mesh import as_mesh_data
 
-    spec = PARTS.get(name)
+    spec = registry.PARTS.get(name)
     return as_mesh_data(spec.fn(spec.params(**values)).mesh)
 
 

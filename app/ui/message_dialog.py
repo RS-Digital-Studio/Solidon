@@ -52,7 +52,8 @@ from PySide6.QtWidgets import (
 
 from app.core import guides
 from app.i18n import tr
-from app.ui.icons import svg_pixmap, svg_source
+from app.ui import icons, style
+from app.ui.icons import svg_source
 from app.ui.leash import weak_slot
 from app.ui.palette import SEVERITY_ENCODING, text_colour
 from app.ui.style import (
@@ -63,7 +64,6 @@ from app.ui.style import (
     WIDE,
     DialogScrollArea,
     _hidden_height,
-    fit_dialog_to_screen,
     make_primary,
     no_primary,
     set_level,
@@ -136,7 +136,7 @@ class MessageDialog(QDialog):
         self.symbol = QLabel(self)
         background = self.palette().window().color().name()
         colour = text_colour(kind, background)
-        self.symbol.setPixmap(svg_pixmap(svg_source(f"severity-{kind}", colour), SYMBOL_SIZE))
+        self.symbol.setPixmap(icons.svg_pixmap(svg_source(f"severity-{kind}", colour), SYMBOL_SIZE))
         self.symbol.setFixedSize(SYMBOL_SIZE, SYMBOL_SIZE)
         # Das Wort ist die zweite Kodierung neben Form und Farbe (Regel 18), aus
         # derselben Quelle wie im Prüfbericht und im Chat.
@@ -415,7 +415,7 @@ def _grow_by_hidden(window: QWidget, scroll: DialogScrollArea) -> None:
     if hidden <= 0:
         return
     window.resize(window.width(), window.height() + hidden)
-    fit_dialog_to_screen(window)
+    style.fit_dialog_to_screen(window)
 
 
 def inform(

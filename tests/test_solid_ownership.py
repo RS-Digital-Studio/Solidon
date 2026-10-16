@@ -15,6 +15,7 @@ from tests.helpers import exact_kernel
 exact_kernel()
 
 from app.core.brep import edit, profiles  # noqa: E402
+from app.core.brep import kernel as brep_kernel  # noqa: E402
 from app.core.brep.features import features_of  # noqa: E402
 from app.core.brep.kernel import Solid, tessellate  # noqa: E402
 
@@ -1006,7 +1007,7 @@ def test_direct_native_selection_cancellation_after_real_build_keeps_the_source(
     copies: list[Any] = []
     original_copy = kernel.copy_shape
     original_builder = (
-        profiles.boolean_builder if operation == "push" else brep_api.BRepAlgoAPI_Defeaturing
+        brep_kernel.boolean_builder if operation == "push" else brep_api.BRepAlgoAPI_Defeaturing
     )
 
     def cancel_after_result_copy(
@@ -1033,7 +1034,7 @@ def test_direct_native_selection_cancellation_after_real_build_keeps_the_source(
 
     monkeypatch.setattr(kernel, "copy_shape", cancel_after_result_copy)
     if operation == "push":
-        monkeypatch.setattr(profiles, "boolean_builder", CancelAfterBuild)
+        monkeypatch.setattr(brep_kernel, "boolean_builder", CancelAfterBuild)
     else:
         monkeypatch.setattr(brep_api, "BRepAlgoAPI_Defeaturing", CancelAfterBuild)
     with pytest.raises(OperationCancelled):

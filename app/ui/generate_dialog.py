@@ -57,14 +57,16 @@ from app.core.geom.mesh import only_a_skin
 from app.core.log import get_logger
 from app.core.types import Document, Mesh, SourceOrigin
 from app.i18n import format_decimal, tr
+from app.ui import dialogs
+from app.ui import settings as ui_settings
 from app.ui.ai_disclosure import DisclosureResult, ensure_ai_disclosure
-from app.ui.dialogs import align_to_the_front, show_error, spoken_values
+from app.ui.dialogs import align_to_the_front, spoken_values
 from app.ui.form_fields import explain_row
 from app.ui.grouped_spin import IdentifierIntSpin
 from app.ui.labels import UNEXPECTED_CRASH, volume, wheel_needs_focus
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
-from app.ui.settings import UiSettings, load_settings
+from app.ui.settings import load_settings
 from app.ui.style import (
     NORMAL,
     SPACE,
@@ -387,7 +389,7 @@ class GenerateDialog(QDialog):
         backend: MeshBackend | None = None,
         parent: QWidget | None = None,
         *,
-        settings: UiSettings | None = None,
+        settings: ui_settings.UiSettings | None = None,
     ) -> None:
         super().__init__(parent)
         self.backend: MeshBackend = backend or ComfyBackend()
@@ -1453,7 +1455,7 @@ class GenerateDialog(QDialog):
         _log.warning("generation crashed: %s", detail)
         error = InternalError(detail=detail)
         self._on_failed(error)
-        show_error(error, self)
+        dialogs.show_error(error, self)
 
     def _on_failed(self, problem: object) -> None:
         """Was nicht ging, warum, und was jetzt hilft — alle drei (§2.7).

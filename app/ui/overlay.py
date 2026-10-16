@@ -72,7 +72,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.i18n import tr
-from app.ui.cursors import cursor
+from app.ui import cursors
 from app.ui.icons import icon
 from app.ui.layout_lifetime import layout_parts
 from app.ui.leash import stop_watching_the_dying
@@ -2203,7 +2203,7 @@ class CardGrip(QToolButton):
         self.setIcon(icon("grip", self))
         self.setAutoRaise(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setCursor(cursor("move", self))
+        self.setCursor(cursors.cursor("move", self))
         self.setAccessibleName(name)
         self.setToolTip(tr("Karte verschieben. Doppelklick legt sie zurück."))
         self.describe()

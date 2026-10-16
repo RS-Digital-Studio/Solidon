@@ -23,14 +23,14 @@ from __future__ import annotations
 from collections.abc import Collection
 from typing import Final
 
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom import mesh
 from app.core.knowledge import profiles
 from app.core.knowledge.print_settings import resolve, stored
 from app.core.slice import advise as advise_module
+from app.core.slice import analysis
 from app.core.slice.analysis import (
     island_layers,
     narrowest_measured,
-    slice_body,
     total_overhang,
     worst_overhang,
 )
@@ -146,8 +146,8 @@ def _printability(chosen: dict[str, SceneObject], profile: Profile) -> list[str]
         # verwendeten Materialien und ihr kleinster Überhangwinkel. Die Wand
         # ist zugleich die Brückenbreite — zwei Extrusionsbahnen (Regel 7).
         wall, angle = profiles.analysis_limits(profile, entry)
-        result = slice_body(
-            as_mesh_data(entry.mesh),
+        result = analysis.slice_body(
+            mesh.as_mesh_data(entry.mesh),
             layer_height=profile.printer.layer_height,
             overhang_angle=angle,
             bridge_from=wall,
@@ -216,8 +216,8 @@ def _advice(
         result = None
     else:
         wall, angle = profiles.analysis_limits(profile, first)
-        result = slice_body(
-            as_mesh_data(first.mesh),
+        result = analysis.slice_body(
+            mesh.as_mesh_data(first.mesh),
             layer_height=profile.printer.layer_height,
             overhang_angle=angle,
             bridge_from=wall,
@@ -255,7 +255,7 @@ def _orientation(
         # nennt der Zug eine feinere Zahl, als der Befund der Op danach
         # meldet, und braucht dafür das Vier- bis Fünffache der Zeit.
         found = search(
-            as_mesh_data(entry.mesh),
+            mesh.as_mesh_data(entry.mesh),
             count=ORIENTATION_CANDIDATES,
             profile=profile,
             overhang_angle=profiles.analysis_limits(profile, entry)[1],

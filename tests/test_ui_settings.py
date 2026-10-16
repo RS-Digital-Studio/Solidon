@@ -36,7 +36,7 @@ def test_a_slicer_path_write_error_reopens_the_settings_draft(monkeypatch, retry
     from types import SimpleNamespace
 
     from app.core.errors import FileWriteError
-    from app.ui import main_window, settings_dialog
+    from app.ui import dialogs, main_window, settings_dialog
     from app.ui.settings import UiSettings
 
     opened = []
@@ -85,7 +85,7 @@ def test_a_slicer_path_write_error_reopens_the_settings_draft(monkeypatch, retry
     monkeypatch.setattr(settings_dialog.discover, "remembered_path", lambda _key: "")
     monkeypatch.setattr(settings_dialog.discover, "remember_path", remember)
     monkeypatch.setattr(main_window, "SettingsDialog", DraftDialog)
-    monkeypatch.setattr(main_window, "show_error", lambda error, _parent: problems.append(error))
+    monkeypatch.setattr(dialogs, "show_error", lambda error, _parent: problems.append(error))
     monkeypatch.setattr("app.i18n.catalog.install_language", lambda _chosen: None)
     monkeypatch.setattr("app.i18n.set_language", lambda _chosen: None)
     window = SimpleNamespace(

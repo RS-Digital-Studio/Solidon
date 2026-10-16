@@ -37,11 +37,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app import branding
 from app.branding import (
     APP_ID,
     APP_NAME,
     APP_VENDOR,
-    APP_VERSION,
     DISTRIBUTION_NAME,
     PART_FILE_MIME_TYPE,
     PART_FILE_SUFFIX,
@@ -773,7 +773,7 @@ def metainfo() -> str:
         "    </p>\n"
         "  </description>\n"
         "  <releases>\n"
-        f'    <release version="{APP_VERSION}" />\n'
+        f'    <release version="{branding.APP_VERSION}" />\n'
         "  </releases>\n"
         "</component>\n"
     )
@@ -848,7 +848,7 @@ def install_script() -> str:
     return (
         _INSTALL_TEMPLATE.replace("@APP_NAME@", APP_NAME)
         .replace("@SHORT_NAME@", DISTRIBUTION_NAME)
-        .replace("@VERSION@", APP_VERSION)
+        .replace("@VERSION@", branding.APP_VERSION)
         .replace("@IDENTIFIER@", APP_ID)
         .replace("@WEBSITE@", WEBSITE_URL)
     )
@@ -891,7 +891,7 @@ def build_tarball() -> int:
         print("packaging/eula.txt fehlt — zuerst: python tools/make_legal.py")
         return 1
 
-    stem = f"{APP_NAME}-{APP_VERSION}-linux-x86_64"
+    stem = f"{APP_NAME}-{branding.APP_VERSION}-linux-x86_64"
     staging = OUTPUT_DIR / stem
     if staging.exists():
         shutil.rmtree(staging)
@@ -998,7 +998,7 @@ def build_appimage() -> int:
     )
     run.chmod(0o755)
 
-    target = OUTPUT_DIR / f"{APP_NAME}-{APP_VERSION}-x86_64.AppImage"
+    target = OUTPUT_DIR / f"{APP_NAME}-{branding.APP_VERSION}-x86_64.AppImage"
     completed = subprocess.run(
         [tool, "--runtime-file", str(runtime.resolve()), str(appdir), str(target)],
         check=False,
@@ -1039,7 +1039,7 @@ def build_flatpak() -> int:
         print("flatpak-builder ist gescheitert — die Ausgabe darüber sagt, woran.")
         return completed.returncode
 
-    bundle = OUTPUT_DIR / f"{APP_NAME}-{APP_VERSION}-x86_64.flatpak"
+    bundle = OUTPUT_DIR / f"{APP_NAME}-{branding.APP_VERSION}-x86_64.flatpak"
     completed = subprocess.run(
         ["flatpak", "build-bundle", str(repository), str(bundle), APP_ID],
         check=False,

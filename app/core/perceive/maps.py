@@ -28,11 +28,13 @@ from shapely.geometry import Polygon as ShapelyPolygon
 
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, DECIMATE_MESH, UserError
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
 from app.core.knowledge.profiles import analysis_limits
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
 from app.core.perceive.features import CURVATURE_LIMIT, pair_radii
-from app.core.slice.analysis import cross_sections, slice_body
+from app.core.slice import analysis as slice_analysis
+from app.core.slice.analysis import cross_sections
 from app.core.types import (
     CancelToken,
     Feature,
@@ -607,7 +609,7 @@ def _mesh_of(entry: SceneObject) -> MeshData:
     ``as_mesh_data`` weist einen Körper, der wirklich keiner der beiden Kerne
     ist, mit einer lesbaren Meldung ab — nicht mit einem ``TypeError``.
     """
-    return as_mesh_data(entry.mesh)
+    return geom_mesh.as_mesh_data(entry.mesh)
 
 
 # --- Das Voxelfeld, auf dem beide Abstandskarten leben --------------------------
@@ -1305,7 +1307,7 @@ def support_map(
     # → ``_eroded`` — der morphologischen Öffnung, mit der die kleinste
     # Struktur je Schicht gesucht wird. 916 Aufrufe für 136 Schichten, und
     # kein einziger für eine Zahl, die hier jemand liest.
-    result = slice_body(
+    result = slice_analysis.slice_body(
         mesh, layer_height, detail="support", cancelled=cancelled, overhang_angle=overhang_angle
     )
     if cancelled is not None:

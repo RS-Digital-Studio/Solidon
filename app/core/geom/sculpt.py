@@ -41,6 +41,7 @@ import numpy as np
 
 from app.core.deferred import cKDTree, csr_matrix, trimesh
 from app.core.errors import CANCEL, SHOW_LOCATION, TAKE_BACK_STROKE, ValidationError
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.intersections import (
     box_groups,
     boxes_around,
@@ -48,13 +49,7 @@ from app.core.geom.intersections import (
     face_bounds,
     faces_touching,
 )
-from app.core.geom.mesh import (
-    MeshData,
-    as_mesh_data,
-    ray_hits_batch,
-    read_mesh,
-    stable_vertex_normals_at,
-)
+from app.core.geom.mesh import MeshData, read_mesh, stable_vertex_normals_at
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
     CONVERGENT_TOOLS,
@@ -2083,7 +2078,7 @@ def sculpt_strokes(ctx: OpContext) -> OpResult:
     """Eine ganze Sitzung als ein Schritt (Regel 2, seit P16.1)."""
     params = cast(SculptParams, ctx.params)
     source = ctx.inputs[0]
-    before = as_mesh_data(source.mesh)
+    before = geom_mesh.as_mesh_data(source.mesh)
     strokes = strokes_from_text(params.strokes)
 
     if params.baked:
@@ -2553,7 +2548,7 @@ def _rays_near(
             near = mine[
                 np.all(low[mine] <= box_high, axis=1) & np.all(high[mine] >= box_low, axis=1)
             ]
-            travel, _hit = ray_hits_batch(
+            travel, _hit = geom_mesh.ray_hits_batch(
                 corners[near],
                 origins[members],
                 directions[members],

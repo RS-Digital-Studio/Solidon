@@ -26,7 +26,8 @@ import re
 from dataclasses import dataclass
 from typing import Final
 
-from app.core.manual import FIGURE_PATTERN, Page, Part, pages
+from app.core import manual
+from app.core.manual import FIGURE_PATTERN, Page, Part
 from app.core.markup import unlinked
 from app.core.registry.registry import REGISTRY, Registry
 from app.core.registry.search import (
@@ -196,7 +197,7 @@ class SearchIndex:
         self._registry = registry or REGISTRY
         entries = []
         vocabulary: set[str] = set()
-        for order, page in enumerate(pages(registry) if source is None else source):
+        for order, page in enumerate(manual.pages(registry) if source is None else source):
             title = str(page.title)
             # Von einem Seitenverweis zählt, was der Leser sieht, nicht sein Ziel.
             body = unlinked(FIGURE_PATTERN.sub(" ", str(page.body)))

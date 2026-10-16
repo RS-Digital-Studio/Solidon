@@ -32,6 +32,7 @@ from app.core.filament_usage import UsageLine, UsageRequest, costs_for, from_sto
 from app.core.knowledge import filaments
 from app.core.scene.hashing import digest
 from app.i18n import source_text, tr
+from app.ui import settings as ui_settings
 from app.ui.dialogs import ErrorNotice, problem_text
 from app.ui.filament_picker import (
     NewFilamentDialog,
@@ -44,7 +45,6 @@ from app.ui.filament_picker import (
 )
 from app.ui.labels import NumberSpin, local_timestamp, localised
 from app.ui.leash import RELEASE_RETRY_MS, Worker, WorkerLeash, weak_slot
-from app.ui.settings import UiSettings
 from app.ui.style import (
     NORMAL,
     ROOMY,
@@ -1113,7 +1113,7 @@ class UsageNotice(QWidget):
 
     changed = Signal()
 
-    def __init__(self, settings: UiSettings, parent: QWidget | None = None) -> None:
+    def __init__(self, settings: ui_settings.UiSettings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.settings = settings
         self.requests: dict[str, UsageRequest] = {}

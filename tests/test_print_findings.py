@@ -19,7 +19,7 @@ from app.core.errors import OperationCancelled
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
 from app.core.perceive import maps
-from app.core.slice import advise, findings
+from app.core.slice import advise, analysis, findings
 from app.core.slice.findings import print_findings
 from app.core.types import Scene, SceneObject
 from tests.helpers import brick, chin, chin_over_chest, on_bed
@@ -354,13 +354,13 @@ def test_the_analysis_is_kept_with_the_mesh(petg, monkeypatch: pytest.MonkeyPatc
     scene = _scene(_floating_cube())
     print_findings(scene, profile, settings)
     calls: list[int] = []
-    original = findings.slice_body
+    original = analysis.slice_body
 
     def counting(*args, **kwargs):
         calls.append(1)
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(findings, "slice_body", counting)
+    monkeypatch.setattr(analysis, "slice_body", counting)
     again = print_findings(scene, profile, settings)
 
     assert not calls

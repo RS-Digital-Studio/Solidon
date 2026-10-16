@@ -634,7 +634,7 @@ def test_plate_comparison_uses_exported_angles_despite_material_calibration(
 ):
     """Wirksame Teilwinkel erreichen den Schnitt; Materialproben bestimmen weiter die Wand."""
     from app.core.export import handover
-    from app.core.slice import findings
+    from app.core.slice import analysis
     from app.core.slice.estimate import plate_comparison
 
     profile = profiles.make_profile()
@@ -678,13 +678,13 @@ def test_plate_comparison_uses_exported_angles_despite_material_calibration(
         parts.append((entry, mesh, effective))
 
     calls = []
-    original_slice = findings.slice_body
+    original_slice = analysis.slice_body
 
     def actual_slice(mesh, *args, **kwargs):
         calls.append((mesh.triangle_count, kwargs["overhang_angle"], kwargs["bridge_from"]))
         return original_slice(mesh, *args, **kwargs)
 
-    monkeypatch.setattr(findings, "slice_body", actual_slice)
+    monkeypatch.setattr(analysis, "slice_body", actual_slice)
     result = plate_comparison(0, parts, profile, keep_arrangement=True, separate_objects=True)
     expected = [(12 * len(parts), thresholds[0], 0.93 if len(parts) > 1 else 0.73)]
     if len(set(thresholds)) > 1:

@@ -51,9 +51,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app import branding
 from app.branding import (
     APP_NAME,
-    APP_VERSION,
     COPYRIGHT,
     DONATION_URL,
     GOFUNDME_URL,
@@ -83,6 +83,8 @@ from app.core.registry.registry import FEATURE_TITLES
 from app.core.types import Finding
 from app.core.units import UNIT_NAMES
 from app.i18n import format_decimal, get_language, tr
+from app.ui import settings as ui_settings
+from app.ui import style
 from app.ui.ai_disclosure import (
     DisclosureResult,
     ensure_ai_disclosure,
@@ -117,7 +119,7 @@ from app.ui.parameter_dialog import ParameterDialog as ParameterDialog
 # Seit der Codestruktur ein eigenes Modul; das Fenster holt den Dialog weiter hier.
 from app.ui.refusal_details import StepValuesDialog as StepValuesDialog
 from app.ui.refusal_details import field_ways, input_dialog_of, silent_ways, where_lines
-from app.ui.settings import UiSettings, load_settings
+from app.ui.settings import load_settings
 from app.ui.style import (
     NORMAL,
     ROOMY,
@@ -130,7 +132,6 @@ from app.ui.style import (
     DialogScrollArea,
     WrappedNote,
     expanded_width,
-    fit_dialog_to_screen,
     fit_height_after_show,
     leading_action,
     make_danger,
@@ -549,7 +550,7 @@ class KeyDialog(QDialog):
         self,
         account: str = "anthropic",
         parent: QWidget | None = None,
-        settings: UiSettings | None = None,
+        settings: ui_settings.UiSettings | None = None,
     ) -> None:
         super().__init__(parent)
         self.account = account
@@ -1391,7 +1392,7 @@ class KeyDialog(QDialog):
         result_height = self.probe_result.heightForWidth(self.probe_result.width())
         self.probe_result.setMinimumHeight(max(0, result_height))
         self._scroll.updateGeometry()
-        fit_dialog_to_screen(self)
+        style.fit_dialog_to_screen(self)
         # Erst die neue Höhe in den Rollbereich bringen: Die Layout-Anfrage
         # dafür wartet in der Schlange, und ohne sie war die Rollweite noch
         # die alte — ``ensureWidgetVisible`` rollte nicht, und die Warnung
@@ -3324,7 +3325,7 @@ class AboutDialog(QDialog):
         self.setWindowTitle(tr("Über"))
         self.setMinimumSize(520, 460)
 
-        heading = QLabel(f"{APP_NAME} {APP_VERSION}", self)
+        heading = QLabel(f"{APP_NAME} {branding.APP_VERSION}", self)
         set_level(heading, "title")
 
         rights = QLabel(f"{COPYRIGHT}. {tr('Alle Rechte vorbehalten.')}", self)

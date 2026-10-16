@@ -18,8 +18,9 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from app.core.errors import InternalError
-from app.core.geom.boolean import boolean
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import boolean
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts.shapes import Form, ThreadProfile
 from app.core.types import BRepBody, Feature, FeatureId, MeasureSource, PartResult, Vec3
 from app.core.units import exact_atan_degrees
@@ -57,7 +58,7 @@ def union(*meshes: Form) -> Form:
         from app.core.knowledge.parts import exact as twins
 
         return twins.union(*_solids(bodies))
-    return boolean("union", plain, quality="fine").mesh
+    return boolean.boolean("union", plain, quality="fine").mesh
 
 
 def subtract(base: Form, *cutters: Form) -> Form:
@@ -66,7 +67,7 @@ def subtract(base: Form, *cutters: Form) -> Form:
         from app.core.knowledge.parts import exact as twins
 
         return twins.subtract(*_solids([base, *cutters]))
-    return boolean("difference", plain, quality="fine").mesh
+    return boolean.boolean("difference", plain, quality="fine").mesh
 
 
 def intersect(first: Form, second: Form) -> Form:
@@ -76,7 +77,7 @@ def intersect(first: Form, second: Form) -> Form:
         from app.core.knowledge.parts import exact as twins
 
         return twins.intersect(*_solids([first, second]))
-    return boolean("intersection", plain, quality="fine").mesh
+    return boolean.boolean("intersection", plain, quality="fine").mesh
 
 
 def threaded(
@@ -169,7 +170,7 @@ def threaded(
                 taper=taper,
                 reference=level,
             )
-        return as_mesh_data(solid)
+        return geom_mesh.as_mesh_data(solid)
     depth = shapes.ridge_depth(pitch, profile)
     lead = starts * pitch
     core_diameter = diameter if internal else diameter - 2.0 * depth
@@ -252,7 +253,7 @@ def compound(*parts: Form) -> Form:
         from app.core.knowledge.parts import exact as twins
 
         return twins.compound(*_solids(bodies))
-    return boolean("union", plain, quality="fine").mesh
+    return boolean.boolean("union", plain, quality="fine").mesh
 
 
 def form_of(produced: PartResult) -> Form:
@@ -267,7 +268,7 @@ def form_of(produced: PartResult) -> Form:
         return mesh
     if isinstance(mesh, BRepBody):
         return cast("Solid", mesh)
-    return as_mesh_data(mesh)
+    return geom_mesh.as_mesh_data(mesh)
 
 
 def bore(

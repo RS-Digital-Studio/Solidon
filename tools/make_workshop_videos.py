@@ -3872,6 +3872,7 @@ def main() -> int:
     if args.inputs_only:
         print([str(path) for path in make_inputs(folder / "sources", args.story)], flush=True)
         return 0
+    from app import i18n
     from tools import make_longform_video
 
     lf = make_longform_video
@@ -3890,7 +3891,7 @@ def main() -> int:
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     lf.install_catalog(LANGUAGE, lf.read_catalog(LANGUAGE))
-    lf.set_language(LANGUAGE)
+    i18n.set_language(LANGUAGE)
     lf.install_qt_translations(app, LANGUAGE)
     lf.apply_theme(app, "dark")
     if args.encode_only:

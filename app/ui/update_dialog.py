@@ -32,14 +32,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_VERSION, WEBSITE_URL, website_page_url
+from app import branding
+from app.branding import WEBSITE_URL, website_page_url
 from app.core import changes, guides, updates
 from app.core.changes import Group
 from app.core.errors import AppError, OperationCancelled
 from app.core.scene.cancel import CancelSignal
 from app.i18n import get_language, tr
+from app.ui import dialogs
 from app.ui.changes_dialog import groups_html, lead_box, lead_html
-from app.ui.dialogs import open_link
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.scroll_areas import ReadingScrollArea
 from app.ui.style import NORMAL, SPACE, WIDE, make_primary
@@ -145,7 +146,7 @@ class UpdateDialog(QDialog):
         self.headline.setWordWrap(True)
         self.headline.setText(
             tr("Solidon {new} ist da — Sie haben {old}.").format(
-                new=release.version, old=APP_VERSION
+                new=release.version, old=branding.APP_VERSION
             )
         )
 
@@ -425,7 +426,7 @@ class UpdateDialog(QDialog):
         super().reject()
 
     def open_page(self) -> None:
-        open_link(self._release.url or WEBSITE_URL, self)
+        dialogs.open_link(self._release.url or WEBSITE_URL, self)
 
     # --- was der Arbeiter meldet ----------------------------------------------------
 

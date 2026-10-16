@@ -1035,7 +1035,10 @@ def test_a_filesystem_without_posix_rename_still_saves_the_inventory(
     """
     import ctypes
 
-    real = filaments._windows_file_api
+    # Der Austausch liegt seit dem gemeinsamen Helfer in ``paths``.
+    from app.core import paths
+
+    real = paths.windows_file_api
 
     class Refusing:
         """Eine Gegenstelle, die genau diesen einen Aufruf nicht kennt."""
@@ -1054,9 +1057,6 @@ def test_a_filesystem_without_posix_rename_still_saves_the_inventory(
             return refuse
 
     first = spool()
-    # Der Austausch liegt seit dem gemeinsamen Helfer in ``paths``.
-    from app.core import paths
-
     monkeypatch.setattr(paths, "windows_file_api", lambda: Refusing(real()))
     second = filaments.save(filaments.CatalogueFilament("PLA Blau", "#2040d0"))
 

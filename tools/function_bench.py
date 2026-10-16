@@ -32,6 +32,7 @@ from typing import Any, Final
 
 from app.ui.motion import ACCENT_MS, MEDIUM_MS, SHORT_MS
 from tools import function_prediction as prediction
+from tools import function_scenes, function_walk
 from tools import function_surface as surfaces
 from tools import function_tooltips as tooltips
 from tools.function_capture import run_reference_factor
@@ -69,7 +70,6 @@ from tools.function_protocol import (
     unmeasured,
 )
 from tools.function_revision import RevisionPhase
-from tools.function_scenes import load_scenes
 from tools.function_setup import (
     EMPTY_SCENE,
     PHASES,
@@ -100,7 +100,6 @@ from tools.function_walk import (
     click_button,
     focus_arrived,
     focus_check,
-    focus_inside,
     place_of,
     typed_number,
     with_modifier,
@@ -631,7 +630,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
             # Mit Nachweis: Die zugesagten Befunde stehen im Prüfbericht, sonst
             # ist die Vorbereitung nicht hergestellt — kein Fund an der Anwendung
             # (Durchsicht welle4 C-L3).
-            scene = load_scenes().get(self.setup.key)
+            scene = function_scenes.load_scenes().get(self.setup.key)
             promised = tuple(scene.promises.get("findings", ())) if scene is not None else ()
             steps += [
                 self.until_step(
@@ -834,7 +833,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
             )
             self.ports.keys(keys)
 
-        arrived = focus_arrived(lambda: focus_inside(self.widget(target)))
+        arrived = focus_arrived(lambda: function_walk.focus_inside(self.widget(target)))
         return Step(f"alles markieren {target}", act, ready=arrived, settle_ms=SETTLE_MS)
 
     def _type(self, target: str, text: str, *, decision: bool = False) -> None:

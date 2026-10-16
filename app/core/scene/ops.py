@@ -14,7 +14,7 @@ from dataclasses import replace
 from typing import Any, cast
 
 from app.core.errors import CORRECT_INPUT, SPLIT_MODEL, ValidationError
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom import mesh
 from app.core.geom.transform import pattern_centre_param
 from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.types import (
@@ -374,7 +374,7 @@ def _check_ring_volume(ctx: OpContext, source: SceneObject, steps: list[Any]) ->
     import numpy as np
 
     volume = ctx.profile.printer.build_volume
-    bounds = as_mesh_data(source.mesh).bounds
+    bounds = mesh.as_mesh_data(source.mesh).bounds
     corners = np.array(
         [
             (x, y, z, 1.0)
@@ -414,7 +414,7 @@ def _check_volume(
     die Richtung dort hat.
     """
     volume = ctx.profile.printer.build_volume
-    size = as_mesh_data(source.mesh).bounds.size
+    size = mesh.as_mesh_data(source.mesh).bounds.size
     for axis in range(3):
         needed = size[axis] + abs(unit[axis]) * reach
         if needed > volume[axis] + EPS_GEOM:

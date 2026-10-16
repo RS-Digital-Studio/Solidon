@@ -1242,7 +1242,7 @@ def test_draft_shaping_keeps_every_boolean_in_draft(
     operation: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Die Nutzeroperation reicht den Entwurf bis zum letzten Geometrieschritt durch."""
-    from app.core.geom import edges, faces
+    from app.core.geom import boolean as geom_boolean
 
     body = block()
     params: dict[str, Any] = {}
@@ -1273,8 +1273,7 @@ def test_draft_shaping_keeps_every_boolean_in_draft(
         seen.append(kwargs.get("quality", "fine"))
         return boolean(*args, **kwargs)
 
-    monkeypatch.setattr(edges, "boolean", measured)
-    monkeypatch.setattr(faces, "boolean", measured)
+    monkeypatch.setattr(geom_boolean, "boolean", measured)
 
     result = run(operation, source, quality="draft", **params)
 

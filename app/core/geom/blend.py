@@ -45,10 +45,10 @@ from app.core.errors import (
     NotManifoldError,
     ValidationError,
 )
+from app.core.geom import mesh as geom_mesh
 from app.core.geom import mesh_edits
 from app.core.geom.mesh import (
     MeshData,
-    as_mesh_data,
     face_components,
     row_dots,
     signed_volume_of,
@@ -823,7 +823,7 @@ class BlendParams(BaseParams):
 def blend_union(ctx: OpContext) -> OpResult:
     """Zwei Körper hinein, einer heraus — mit einem Wulst in der Naht."""
     params = cast(BlendParams, ctx.params)
-    first, second = (as_mesh_data(entry.mesh) for entry in ctx.inputs[:2])
+    first, second = (geom_mesh.as_mesh_data(entry.mesh) for entry in ctx.inputs[:2])
     grid = (
         draft_grid(first, second, params.radius, params.grid)
         if ctx.quality == "draft"

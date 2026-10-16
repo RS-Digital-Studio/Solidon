@@ -15,12 +15,14 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import errors
+from app.core.export import writer
 from app.core.scene import OperationDraft
 from app.core.types import (
     Finding,
     SceneObject,
 )
 from app.i18n import tr
+from app.ui import dialogs as ui_dialogs
 from app.ui import main_window as main_window_module
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
@@ -65,7 +67,7 @@ def test_an_unreadable_gcode_file_says_so(
     )
     monkeypatch.setattr(dialogs, "show_error", lambda error, *args, **kwargs: gezeigt.append(error))
     monkeypatch.setattr(
-        "app.ui.main_window.show_error", lambda error, *args, **kwargs: gezeigt.append(error)
+        "app.ui.dialogs.show_error", lambda error, *args, **kwargs: gezeigt.append(error)
     )
 
     window.action_check_gcode()
@@ -770,18 +772,18 @@ def test_the_export_leaves_the_window_usable(
 
     from PySide6.QtWidgets import QFileDialog
 
-    from app.ui import main_window as module
+    from app.core.export import writer
 
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
 
-    real_write = module.write_plan
+    real_write = writer.write_plan
 
     def slow_write(*args: Any, **kwargs: Any) -> Any:
         time.sleep(0.4)
         return real_write(*args, **kwargs)
 
-    monkeypatch.setattr(module, "write_plan", slow_write)
+    monkeypatch.setattr(writer, "write_plan", slow_write)
     target = tmp_path / "langsam.stl"
     monkeypatch.setattr(
         QFileDialog,
@@ -830,7 +832,7 @@ def test_cancel_export_preflight_never_starts_a_file(
     monkeypatch.setattr(main_window_module, "check_before_export", checking)
     monkeypatch.setattr(main_window_module._ExportWorker, "_files", writing)
     monkeypatch.setattr(main_window_module._ExportWorker, "_assembly", writing)
-    monkeypatch.setattr(main_window_module, "show_error", lambda *args: failures.append(args))
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda *args: failures.append(args))
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
     window._start_export(tmp_path / f"abgebrochen.{export_format}", export_format)
@@ -867,7 +869,7 @@ def test_a_queued_export_report_is_discarded_after_cancel(
 
     monkeypatch.setattr(main_window_module, "check_before_export", checking)
     monkeypatch.setattr(main_window_module, "confirm_export", lambda *args: offered.append(args))
-    monkeypatch.setattr(main_window_module, "show_error", lambda *args: offered.append(args))
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda *args: offered.append(args))
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
     target = tmp_path / "abgebrochen.stl"
@@ -933,7 +935,7 @@ def test_ending_the_window_cancels_the_export_preflight(
 
     monkeypatch.setattr(main_window_module, "check_before_export", checking)
     monkeypatch.setattr(main_window_module, "confirm_export", lambda *args: dialogs.append(args))
-    monkeypatch.setattr(main_window_module, "show_error", lambda *args: dialogs.append(args))
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda *args: dialogs.append(args))
     monkeypatch.setattr(window, "_may_discard", lambda: True)
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
@@ -973,7 +975,7 @@ def test_late_export_signals_do_not_touch_a_deleted_window(
 
     entered, resume = threading.Event(), threading.Event()
     failures = []
-    real_write = main_window_module.write_plan
+    real_write = writer.write_plan
 
     def checking(*args: Any, cancelled: Any, **kwargs: Any) -> list[Finding]:
         if phase == "checking":
@@ -988,8 +990,8 @@ def test_late_export_signals_do_not_touch_a_deleted_window(
         return real_write(*args, **kwargs)
 
     monkeypatch.setattr(main_window_module, "check_before_export", checking)
-    monkeypatch.setattr(main_window_module, "write_plan", writing)
-    monkeypatch.setattr(main_window_module, "show_error", lambda *args: failures.append(args))
+    monkeypatch.setattr(writer, "write_plan", writing)
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda *args: failures.append(args))
     monkeypatch.setattr(sys, "excepthook", lambda *args: failures.append(args))
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
@@ -1066,7 +1068,7 @@ def test_a_retried_export_keeps_its_worker_when_the_previous_thread_finishes(
         retried.append(owner._export_worker)
 
     monkeypatch.setattr(main_window_module, "check_before_export", checking)
-    monkeypatch.setattr(main_window_module, "show_error", retrying)
+    monkeypatch.setattr(ui_dialogs, "show_error", retrying)
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
     target = tmp_path / "wiederholt.stl"
@@ -1092,7 +1094,7 @@ def test_export_closes_cancellation_before_the_first_file_of_a_batch(
 ) -> None:
     """Ein noch nicht zugestelltes Phasensignal erlaubt keinen halben Mehrdateiexport."""
     entered, resume = threading.Event(), threading.Event()
-    real_write = main_window_module.write_plan
+    real_write = writer.write_plan
 
     def writing(*args: Any, **kwargs: Any) -> Any:
         entered.set()
@@ -1100,7 +1102,7 @@ def test_export_closes_cancellation_before_the_first_file_of_a_batch(
         return real_write(*args, **kwargs)
 
     monkeypatch.setattr(main_window_module, "check_before_export", lambda *args, **kwargs: [])
-    monkeypatch.setattr(main_window_module, "write_plan", writing)
+    monkeypatch.setattr(writer, "write_plan", writing)
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
     assert window.session.apply(
@@ -1138,7 +1140,8 @@ def test_a_failed_export_reports_in_the_main_thread(
     """
     from PySide6.QtWidgets import QFileDialog
 
-    from app.ui import main_window as module
+    from app.core.export import writer
+    from app.ui import dialogs as ui_dialogs
 
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
@@ -1150,8 +1153,10 @@ def test_a_failed_export_reports_in_the_main_thread(
         )
 
     shown: list[Any] = []
-    monkeypatch.setattr(module, "write_plan", refuse)
-    monkeypatch.setattr(module, "show_error", lambda error, *args, **kwargs: shown.append(error))
+    monkeypatch.setattr(writer, "write_plan", refuse)
+    monkeypatch.setattr(
+        ui_dialogs, "show_error", lambda error, *args, **kwargs: shown.append(error)
+    )
     monkeypatch.setattr(
         QFileDialog,
         "getSaveFileName",
@@ -1177,7 +1182,7 @@ def test_a_failed_save_offers_both_ways_out(
     anderen Programm offen (dann hilft derselbe Weg noch einmal), oder das
     Laufwerk ist voll (dann hilft ein anderer Ort).
     """
-    from app.ui import main_window as module
+    from app.ui import dialogs as ui_dialogs
     from app.ui.dialogs import offered_actions
 
     window.open_path(MESHES / "cube_clean.stl")
@@ -1194,7 +1199,7 @@ def test_a_failed_save_offers_both_ways_out(
         return real_save(session, path)
 
     monkeypatch.setattr(type(window.session), "save_project", busy)
-    monkeypatch.setattr(module, "show_error", lambda error, *args, **kwargs: None)
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *args, **kwargs: None)
 
     window._save_to(target)
 
@@ -1216,7 +1221,7 @@ def test_a_failed_save_can_choose_another_place(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Der zweite Weg: ein anderer Ort, über den Dialog, den es dafür gibt."""
-    from app.ui import main_window as module
+    from app.ui import dialogs as ui_dialogs
 
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
@@ -1225,7 +1230,7 @@ def test_a_failed_save_can_choose_another_place(
         raise errors.FileWriteError(target=str(path), detail="Kein Platz.")
 
     monkeypatch.setattr(type(window.session), "save_project", refuse)
-    monkeypatch.setattr(module, "show_error", lambda error, *args, **kwargs: None)
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *args, **kwargs: None)
     window._save_to(tmp_path / "voll.p3d")
 
     # Gefragt wird der **Dateidialog** und nicht die Methode: ``_WriteFailure``
@@ -1263,7 +1268,8 @@ def test_a_failed_export_can_be_repeated_without_choosing_the_file_again(
     """
     from PySide6.QtWidgets import QFileDialog
 
-    from app.ui import main_window as module
+    from app.core.export import writer
+    from app.ui import dialogs as ui_dialogs
     from app.ui.dialogs import offered_actions
 
     window.open_path(MESHES / "cube_clean.stl")
@@ -1272,7 +1278,7 @@ def test_a_failed_export_can_be_repeated_without_choosing_the_file_again(
     target = tmp_path / "belegt.stl"
     assert "retry" not in window.error_handlers(), "ohne Fehlschlag gibt es nichts zu wiederholen"
 
-    real_write = module.write_plan
+    real_write = writer.write_plan
     attempts: list[int] = []
 
     def busy_file(*args: Any, **kwargs: Any) -> Any:
@@ -1281,8 +1287,8 @@ def test_a_failed_export_can_be_repeated_without_choosing_the_file_again(
             raise errors.FileWriteError(target=str(target), detail="Die Datei ist in Benutzung.")
         return real_write(*args, **kwargs)
 
-    monkeypatch.setattr(module, "write_plan", busy_file)
-    monkeypatch.setattr(module, "show_error", lambda error, *args, **kwargs: None)
+    monkeypatch.setattr(writer, "write_plan", busy_file)
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *args, **kwargs: None)
     monkeypatch.setattr(
         QFileDialog,
         "getSaveFileName",

@@ -26,16 +26,12 @@ e) Ziel und Name lösen sich nach der Konstantenfaltung statisch auf. Was sich
 Die roten Fälle der Attrappe und die Bekanntfälle stehen in
 ``test_code_index.py``.
 
-**Scharf schalten.** Die Regeln, deren heutige Funde andere Pakete von Schritt 0
-beheben, tragen ``xfail(strict=True)`` mit dem Paket im Grund. Wird eine Regel
-grün, macht ``strict`` den Lauf rot (XPASS); wer sie grün gemacht hat, streicht
-im selben Commit die Markierung. ``raises=AssertionError`` hält einen Absturz
-des Auflösers rot.
+Alle fünf Regeln sind scharf: Jeder Fund macht den Lauf rot. Eine Kopfkopie
+eines gepatchten Namens stellt ``tools/move_names.py`` im Modus ``copies`` auf
+Modulzugriff um (CS-11, Entscheidung E1).
 """
 
 from __future__ import annotations
-
-import pytest
 
 from tools.code_index import Finding, Index, shared
 
@@ -76,12 +72,6 @@ def test_rule_b_no_raising_false_on_an_own_module() -> None:
     assert not findings, _report(findings)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="scharf mit K: move_names copies stellt die Kopfkopien gepatchter Namen auf "
-    "Modulzugriff um (CS-11, Entscheidung E1)",
-)
 def test_rule_c_no_head_copy_of_a_name_patched_at_its_original() -> None:
     """Eine Kopfkopie hält den alten Wert; der Patch am Original erreicht sie nie."""
     findings = _index().patch_findings()["c"]

@@ -52,6 +52,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import ENVIRONMENT_PREFIX
+from app.core.geom import mesh as geom_mesh
+from app.core.geom import mesh_ops
 from app.core.geom.measure import (
     CORNER_EDGES,
     Measurement,
@@ -64,14 +66,12 @@ from app.core.geom.measure import (
 )
 from app.core.geom.mesh import (
     MeshData,
-    as_mesh_data,
     distance_to_triangles,
     face_components,
     hull_planes,
     planar_outlines,
     ray_span_in_hull,
 )
-from app.core.geom.mesh_ops import decimate_for_display
 from app.core.geom.section import SectionPlane, clip_triangles, cut, plane_patch
 from app.core.geom.transform import (
     Axis,
@@ -83,14 +83,10 @@ from app.core.geom.transform import (
     snap_to_step,
 )
 from app.core.log import get_logger
-from app.core.perceive.actions import actions_for
+from app.core.perceive import actions, relations
 from app.core.perceive.features import CURVATURE_LIMIT, EPS_ANGLE, copy_with_answers
 from app.core.perceive.maps import AnalysisMap
-from app.core.perceive.relations import (
-    cavity_chain_at,
-    cavity_chain_state_at,
-    cavity_surface_indices,
-)
+from app.core.perceive.relations import cavity_chain_at, cavity_surface_indices
 from app.core.scene import EdgeTarget, EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.sketch.planes import (
@@ -122,7 +118,7 @@ from app.core.units import (
     to_mm,
 )
 from app.i18n import tr
-from app.ui import app_events, cursors
+from app.ui import app_events, cursors, motion
 from app.ui.bed_scale import bed_grid, bed_scale
 from app.ui.change_lock import change_refusal
 from app.ui.icons import icon
@@ -138,7 +134,7 @@ from app.ui.labels import (
     read_number,
 )
 from app.ui.leash import Worker, WorkerLeash, stop_watching_the_dying, weak_slot
-from app.ui.motion import ACCENT_MS, animations_enabled, mix, tween
+from app.ui.motion import ACCENT_MS, mix, tween
 from app.ui.overlay import hold_above_the_view, keep_widgets_alien
 from app.ui.palette import (
     DIFF_PALETTES,
@@ -4459,7 +4455,7 @@ class _SceneMeshWorker(Worker):
             object_id, cache_key = task.object_id, task.cache_key
             mesh = task.mesh
             if cache_key is not None:
-                mesh = decimate_for_display(mesh, DISPLAY_DECIMATION_TARGET)
+                mesh = mesh_ops.decimate_for_display(mesh, DISPLAY_DECIMATION_TARGET)
                 if self._was_cancelled():
                     return
                 cached[cache_key] = mesh
@@ -8537,7 +8533,7 @@ class Viewport(QWidget):
         key = _display_key(object_id, mesh, identity)
         found = self._display_cache.pop(key, None)
         if found is None:
-            found = decimate_for_display(mesh, DISPLAY_DECIMATION_TARGET)
+            found = mesh_ops.decimate_for_display(mesh, DISPLAY_DECIMATION_TARGET)
         # Die zuletzt gezeigten behalten, den ältesten verdrängen: ein
         # dezimiertes Netz ist teuer zu halten — aber genau eines zu halten
         # hieß, dass zwei große Körper einander bei jedem Aufbau verdrängten.
@@ -8744,7 +8740,7 @@ class Viewport(QWidget):
         # dann ein zweites Bild je Auswahl — in der Suite hunderte, und die
         # Datei riss beim Aufräumen. Ein Bild, das niemand sieht, ist keine
         # Vorsicht, sondern Arbeit.
-        moving = animations_enabled()
+        moving = motion.animations_enabled()
 
         def step(fraction: float) -> None:
             renderer = self.renderer
@@ -9737,7 +9733,7 @@ class Viewport(QWidget):
         mesh = self._preview_meshes.get(hit.object_id) or (entry.mesh if entry else None)
         if mesh is None:
             return None
-        raw = as_mesh_data(mesh).raw
+        raw = geom_mesh.as_mesh_data(mesh).raw
         faces = np.asarray(raw.faces)
         vertices = np.asarray(raw.vertices, dtype=float)
         if hit.object_id in self._original_pick_cells and 0 <= hit.cell < len(faces):
@@ -12392,7 +12388,7 @@ class Viewport(QWidget):
                 continue
             entry = self._shown_feature_body(entry)
             feature_ids = [key for key in feature_ids if key in entry.features]
-            mesh = as_mesh_data(entry.mesh)
+            mesh = geom_mesh.as_mesh_data(entry.mesh)
             raw = getattr(entry.mesh, "raw", None)
             if raw is None:
                 continue
@@ -13868,7 +13864,7 @@ class Viewport(QWidget):
                 if body is None or (role not in ("added", "removed") and self._map is not None):
                     continue
                 mesh = body.mesh if role in ("result", "recoloured") else body
-                sources[f"{role}:{entry.object_id}"] = as_mesh_data(mesh)
+                sources[f"{role}:{entry.object_id}"] = geom_mesh.as_mesh_data(mesh)
         plane, second = self._section_planes()
         key = (id(self._difference), plane, second, tuple(sources))
         if key == self._difference_key:
@@ -14037,7 +14033,7 @@ class Viewport(QWidget):
             elif (result := getattr(entry, "result", None)) is not None:
                 self._cover_body(
                     entry.object_id,
-                    as_mesh_data(result.mesh),
+                    geom_mesh.as_mesh_data(result.mesh),
                     shift,
                     None,
                     painted_as=result,
@@ -14593,8 +14589,8 @@ class Viewport(QWidget):
         }:
             return None
 
-        mesh = as_mesh_data(entry.mesh)
-        state = cavity_chain_state_at(feature, entry.features, mesh)
+        mesh = geom_mesh.as_mesh_data(entry.mesh)
+        state = relations.cavity_chain_state_at(feature, entry.features, mesh)
         linked = state.chain is not None and selected_ids.issubset(
             {member.id for member in state.chain}
         )
@@ -14605,7 +14601,7 @@ class Viewport(QWidget):
         action = next(
             (
                 item
-                for item in actions_for(
+                for item in actions.actions_for(
                     feature,
                     entry.features,
                     mesh=mesh,
@@ -18952,7 +18948,7 @@ def _detached(mesh: Any) -> MeshData:
     Ecken, Dreiecke und Farben werden kopiert; die Slots reisen als
     unveränderliche Folge mit. Die exakte Form bleibt unangetastet.
     """
-    source = as_mesh_data(mesh)
+    source = geom_mesh.as_mesh_data(mesh)
     return source.replacing(source.raw.copy())
 
 

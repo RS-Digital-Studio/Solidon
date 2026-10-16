@@ -38,23 +38,25 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.expressions import resolve as resolve_parameters
+from app.core.geom import boolean
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     BooleanKind,
     body_split,
-    boolean,
     deepest,
     fell_apart,
     pieces,
     without_effect,
 )
-from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
+from app.core.geom.mesh import MeshData, concatenated
 from app.core.geom.transform import along as lying_along
 from app.core.geom.transform import composed, rotation, rotation_about, translation
-from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
+from app.core.knowledge import profiles
+from app.core.knowledge.parts import registry as parts_registry
+from app.core.knowledge.parts.registry import PartRegistry, PartSpec
 from app.core.knowledge.parts.shapes import Kernel, building
 from app.core.knowledge.parts.through import with_shown_bores
-from app.core.knowledge.profiles import for_object
 from app.core.knowledge.strength import spring_load
 from app.core.log import get_logger
 from app.core.registry import Registry, op_params, param, register_op
@@ -274,7 +276,7 @@ def creator_name(part: str) -> str:
 
 def creation_name(part: str) -> str:
     """Die Operation, die diesen Baustein ohne Träger anlegt — sonst die, die ihn einsetzt."""
-    spec = PARTS.get(part)
+    spec = parts_registry.PARTS.get(part)
     return creator_name(part) if spec.standalone else op_name(part)
 
 
@@ -296,7 +298,7 @@ def catalog_operation(part: str, *, at: Sequence[str] = ()) -> str:
     Erzeugerschritt wählt seinen neuen Körper, und der zweite Kabelclip hinge
     sonst am ersten. Die übrigen Bausteine werden immer eingesetzt.
     """
-    spec = PARTS.get(part)
+    spec = parts_registry.PARTS.get(part)
     fits = fitting_places(part)
     if not spec.standalone or (at and all(_PLACES.get(kind) in fits for kind in at)):
         return op_name(part)
@@ -305,7 +307,7 @@ def catalog_operation(part: str, *, at: Sequence[str] = ()) -> str:
 
 def fitting_places(part: str) -> tuple[str, ...]:
     """Die Arten von Stellen, an die dieser Baustein gehört — ``face``, ``hole``."""
-    return tuple(_applies_to(PARTS.get(part)))
+    return tuple(_applies_to(parts_registry.PARTS.get(part)))
 
 
 def footprint_at_once(part: str) -> bool:
@@ -316,7 +318,7 @@ def footprint_at_once(part: str) -> bool:
     Stapel, mit dem Rezept wachsend — das gehört nicht vor einen Dialog in den
     Hauptthread.
     """
-    return PARTS.get(part).source == "shipped"
+    return parts_registry.PARTS.get(part).source == "shipped"
 
 
 def free_spot_for(
@@ -338,7 +340,7 @@ def free_spot_for(
 
     if not objects:
         return {}
-    spec = PARTS.get(part)
+    spec = parts_registry.PARTS.get(part)
     if rough or any(entry.required for entry in spec.params.spec()):
         footprint = BoundingBox(minimum=(-5.0, -5.0, 0.0), maximum=(5.0, 5.0, 10.0))
     else:
@@ -361,8 +363,8 @@ def part_of(operation: str) -> PartSpec | None:
     for prefix in (_PREFIX, "create_"):
         if operation.startswith(prefix):
             name = operation[len(prefix) :]
-            if PARTS.has(name):
-                spec = PARTS.get(name)
+            if parts_registry.PARTS.has(name):
+                spec = parts_registry.PARTS.get(name)
                 if prefix == _PREFIX or spec.standalone:
                     return spec
     return None
@@ -513,7 +515,7 @@ def register_all(
     parts: PartRegistry | None = None, registry: Registry | None = None
 ) -> tuple[str, ...]:
     """Deklariert eine Operation je Baustein. Gibt die Operationsnamen zurück."""
-    source = parts or PARTS
+    source = parts or parts_registry.PARTS
     made: list[str] = []
     for spec in source.all():
         name = op_name(spec.name)
@@ -610,7 +612,7 @@ def operation_names(part: str, parts: PartRegistry | None = None) -> tuple[str, 
     ``create_box``, der keinem Baustein gehört — dieselbe Zugehörigkeit, die
     :func:`part_of` liest. Deshalb vor dem Abmelden des Katalogeintrags fragen.
     """
-    source = parts or PARTS
+    source = parts or parts_registry.PARTS
     if source.has(part) and source.get(part).standalone:
         return op_name(part), creator_name(part)
     return (op_name(part),)
@@ -723,7 +725,9 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
         placed: Mesh = (
             _place_solid(solid, ctx.params, sink=sink, direction=turned, cancelled=ctx.cancelled)
             if solid is not None
-            else _place(as_mesh_data(produced.mesh), ctx.params, sink=sink, direction=turned)
+            else _place(
+                geom_mesh.as_mesh_data(produced.mesh), ctx.params, sink=sink, direction=turned
+            )
         )
         features = _placed_features(
             produced, spec, ctx.params, (0.0, 0.0, 0.0), sink, turned, spec.keeps_up, False
@@ -890,12 +894,14 @@ def _cuts_no_layer(
     """
     if profile is None:
         return None
-    tool = as_mesh_data(built)
+    tool = geom_mesh.as_mesh_data(built)
     length = float(tool.bounds.maximum[2]) - float(tool.bounds.minimum[2])
     if length <= EPS_GEOM:
         return None
     section = abs(float(tool.volume)) / length
-    removed = float(as_mesh_data(before).volume) - float(as_mesh_data(after).volume)
+    removed = float(geom_mesh.as_mesh_data(before).volume) - float(
+        geom_mesh.as_mesh_data(after).volume
+    )
     if removed > section * profile.printer.layer_height:
         return None
     return Finding(
@@ -969,7 +975,7 @@ def _in_a_wider_bore(spec: PartSpec, bore: Feature, built: Mesh) -> Finding | No
     import numpy as np
 
     diameter = float(bore.params["diameter"])
-    corners = np.asarray(as_mesh_data(built).raw.vertices, dtype=np.float64)
+    corners = np.asarray(geom_mesh.as_mesh_data(built).raw.vertices, dtype=np.float64)
     reach = float(np.max(corners[:, 0] * corners[:, 0] + corners[:, 1] * corners[:, 1]))
     radius = diameter / 2.0
     if reach > radius * radius:
@@ -1223,9 +1229,9 @@ def _read_exactly(ctx: OpContext, outcome: OpResult) -> OpResult:
         matched = settled_twins(
             matched,
             {name: entry for name, entry in host.features.items() if name in carried},
-            as_mesh_data(host.mesh),
+            geom_mesh.as_mesh_data(host.mesh),
             remaining,
-            as_mesh_data(solid),
+            geom_mesh.as_mesh_data(solid),
             bounds.diagonal,
         )
     features = {
@@ -1264,7 +1270,7 @@ def _aimed_at(params: Any, target: str) -> Any:
 def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     """Baut den Baustein, setzt ihn an seinen Platz und verbindet oder schneidet."""
     source = ctx.inputs[0]
-    profile = for_object(ctx.profile, source) if ctx.profile is not None else None
+    profile = profiles.for_object(ctx.profile, source) if ctx.profile is not None else None
     parameters = resolve_parameters(ctx.scene.parameters)
     if _builds_exactly(spec, source):
         # Ein exakter Träger bekommt einen exakten Baustein (P2.7): dieselbe
@@ -1277,7 +1283,7 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     part_params, produced = _built_part(
         spec, ctx.params, profile, ctx.quality, parameters=parameters
     )
-    built = as_mesh_data(produced.mesh)
+    built = geom_mesh.as_mesh_data(produced.mesh)
     anchor, direction = _anchor(source, ctx.params, spec, built)
     flat = _lying_flat(spec, ctx.params, direction)
     on_edge = _standing_on_edge(spec, ctx.params, direction)
@@ -1295,7 +1301,7 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     sink = 0.0 if subtractive or spec.separate_from_host else BOOLEAN_OVERLAP
     flip = subtractive and _builds_upward_on_a_face(source, ctx.params, built)
     placed = _place(built, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     original_body = body
     lip = None
     rim = None
@@ -1322,7 +1328,7 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
             "mesh",
         )
         if reaching is not built:
-            built = as_mesh_data(reaching)
+            built = geom_mesh.as_mesh_data(reaching)
             placed = _place(built, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
         lip = _lip_on_a_slant(spec, part_params, body, ctx.params, anchor, direction, spec.keeps_up)
@@ -1332,11 +1338,17 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     addition_solver = None
     if addition is not None:
         placed_addition = _place(
-            as_mesh_data(addition.mesh), ctx.params, anchor, 0.0, direction, spec.keeps_up, False
+            geom_mesh.as_mesh_data(addition.mesh),
+            ctx.params,
+            anchor,
+            0.0,
+            direction,
+            spec.keeps_up,
+            False,
         )
-        joined = boolean("union", [body, placed_addition], quality=ctx.quality)
+        joined = boolean.boolean("union", [body, placed_addition], quality=ctx.quality)
         addition_solver = joined.solver
-        body = as_mesh_data(joined.mesh)
+        body = geom_mesh.as_mesh_data(joined.mesh)
         added_findings = [*addition.findings, *joined.findings]
         added_features = _placed_features(
             addition, spec, ctx.params, anchor, 0.0, direction, spec.keeps_up, False
@@ -1354,7 +1366,7 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
             # Beides wird hier innerhalb **derselben Operation** gerechnet:
             # ein Undo nimmt Schraube und Senkung gemeinsam zurück, und Agent,
             # Menü sowie Kommandozeile benutzen denselben Vertrag.
-            cutter = as_mesh_data(host_cut.mesh)
+            cutter = geom_mesh.as_mesh_data(host_cut.mesh)
             placed_cutter = _place(
                 cutter,
                 ctx.params,
@@ -1364,8 +1376,8 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
                 spec.keeps_up,
                 False,
             )
-            cut = boolean("difference", [body, placed_cutter], quality=ctx.quality)
-            prepared = as_mesh_data(cut.mesh)
+            cut = boolean.boolean("difference", [body, placed_cutter], quality=ctx.quality)
+            prepared = geom_mesh.as_mesh_data(cut.mesh)
             solver = cut.solver
             findings.extend(cut.findings)
             findings.extend(host_cut.findings)
@@ -1390,8 +1402,8 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     else:
         host_features = {}
         kind: BooleanKind = "difference" if subtractive else "union"
-        outcome = boolean(kind, [body, placed], quality=ctx.quality)
-        mesh = as_mesh_data(outcome.mesh)
+        outcome = boolean.boolean(kind, [body, placed], quality=ctx.quality)
+        mesh = geom_mesh.as_mesh_data(outcome.mesh)
         solver = outcome.solver
         findings = outcome.findings
         # Ein Baustein, der den Körper nicht getroffen hat, sagt das. Hier und
@@ -1426,15 +1438,17 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     features, enclosed = _through_bores_in_the_body(
         features,
         set(features) - set(source.features),
-        as_mesh_data(body),
-        as_mesh_data(mesh),
-        as_mesh_data(original_body),
-        as_mesh_data(placed),
+        geom_mesh.as_mesh_data(body),
+        geom_mesh.as_mesh_data(mesh),
+        geom_mesh.as_mesh_data(original_body),
+        geom_mesh.as_mesh_data(placed),
         only_cuts=subtractive and spec.host_add is None,
         measured=_measured_names(spec, features),
     )
     thicker = (
-        _wall_thicker(spec, part_params, enclosed, as_mesh_data(original_body), mouth, outward)
+        _wall_thicker(
+            spec, part_params, enclosed, geom_mesh.as_mesh_data(original_body), mouth, outward
+        )
         if subtractive and spec.host_add is not None
         else None
     )
@@ -1514,7 +1528,7 @@ def _surface_at_anchor(source: SceneObject, anchor: Vec3) -> Feature | None:
 
     from app.core.geom.mesh import on_surface
 
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     _points, distances, triangles = on_surface(body.raw, np.asarray([anchor], dtype=np.float64))
     if float(distances[0]) > MAX_FACET_SAG:
         return None
@@ -1578,7 +1592,7 @@ def _over_the_rim(
         return None
     normal = normal / length
     origin = np.asarray(anchor, dtype=float)
-    points = np.asarray(as_mesh_data(tool).raw.vertices, dtype=float)
+    points = np.asarray(geom_mesh.as_mesh_data(tool).raw.vertices, dtype=float)
     depth = np.sum((points - origin) * normal, axis=1)
     below = depth <= EPS_GEOM
     if not below.any():
@@ -1586,7 +1600,7 @@ def _over_the_rim(
     footprint = points[below] - depth[below][:, None] * normal
     # Ein Werkzeug kann über die Mündung hinausreichen. Seine Kanten tragen
     # dann den Umriss an der Ebene, auch ohne einen Eckpunkt genau bei null.
-    edges = np.asarray(as_mesh_data(tool).raw.edges_unique)
+    edges = np.asarray(geom_mesh.as_mesh_data(tool).raw.edges_unique)
     edge_depth = depth[edges]
     crossing = (edge_depth[:, 0] < 0.0) & (edge_depth[:, 1] > 0.0)
     crossing |= (edge_depth[:, 1] < 0.0) & (edge_depth[:, 0] > 0.0)
@@ -1599,7 +1613,7 @@ def _over_the_rim(
         footprint = footprint[~_inside_the_bore(footprint, bore)]
         if not len(footprint):
             return None
-    host = as_mesh_data(body)
+    host = geom_mesh.as_mesh_data(body)
     low, high = host.bounds.minimum, host.bounds.maximum
     reach = float(np.sqrt(np.sum((np.asarray(high) - np.asarray(low)) ** 2))) + float(
         np.max(-depth[below])
@@ -2465,7 +2479,7 @@ def _insert_at_exact(
             spec,
             produced,
             built,
-            as_mesh_data(body),
+            geom_mesh.as_mesh_data(body),
             _matrix(ctx.params, anchor, sink, direction, spec.keeps_up, flip),
             bore,
             "brep",
@@ -2567,15 +2581,17 @@ def _insert_at_exact(
     features, enclosed = _through_bores_in_the_body(
         features,
         set(features) - set(source.features),
-        as_mesh_data(body),
-        as_mesh_data(mesh),
-        as_mesh_data(original_body),
-        as_mesh_data(placed),
+        geom_mesh.as_mesh_data(body),
+        geom_mesh.as_mesh_data(mesh),
+        geom_mesh.as_mesh_data(original_body),
+        geom_mesh.as_mesh_data(placed),
         only_cuts=subtractive and spec.host_add is None,
         measured=_measured_names(spec, features),
     )
     thicker = (
-        _wall_thicker(spec, part_params, enclosed, as_mesh_data(original_body), mouth, outward)
+        _wall_thicker(
+            spec, part_params, enclosed, geom_mesh.as_mesh_data(original_body), mouth, outward
+        )
         if subtractive and spec.host_add is not None
         else None
     )
@@ -2684,13 +2700,13 @@ def _opened_to_the_face(
     frame = np.asarray(_matrix(params, anchor, 0.0, direction, keeps_up, False), dtype=np.float64)
     mouth = frame[:3, 3]
     outward = frame[:3, 2] / math.hypot(*(float(value) for value in frame[:3, 2]))
-    shape = as_mesh_data(tool)
+    shape = geom_mesh.as_mesh_data(tool)
     points = np.asarray(shape.raw.vertices, dtype=np.float64)
     heights = along_axis(points, outward) - dot3(mouth, outward)
     top = float(heights.max())
     if not EPS_GEOM < top <= BOOLEAN_OVERLAP + EPS_GEOM:
         return tool
-    ground = as_mesh_data(host)
+    ground = geom_mesh.as_mesh_data(host)
     face = _face_under_mouth(ground, mouth, outward)
     if face is None:
         return tool
@@ -2787,7 +2803,7 @@ def _lip_on_a_slant(
     frame = np.asarray(_matrix(params, anchor, 0.0, direction, keeps_up, False), dtype=np.float64)
     mouth = frame[:3, 3]
     outward = frame[:3, 2] / math.hypot(*(float(value) for value in frame[:3, 2]))
-    face = _face_under_mouth(as_mesh_data(host), mouth, outward)
+    face = _face_under_mouth(geom_mesh.as_mesh_data(host), mouth, outward)
     if face is None:
         return None
     closest, facing, along = face
@@ -2918,14 +2934,14 @@ def placed_tool(
     Merkmal muss dort stehen. Ein Trägeraufbau (``host_add``) ist nicht Teil
     des Werkzeugs, er wächst mit.
     """
-    profile = for_object(profile, source) if profile is not None else None
+    profile = profiles.for_object(profile, source) if profile is not None else None
     _part_params, produced = _built_part(spec, params, profile, "fine", parameters=parameters)
-    built = as_mesh_data(produced.mesh)
+    built = geom_mesh.as_mesh_data(produced.mesh)
     anchor, direction = _anchor(source, params, spec, built)
     subtractive = cuts(spec, params)
     sink = 0.0 if subtractive or spec.separate_from_host else BOOLEAN_OVERLAP
     flip = subtractive and _builds_upward_on_a_face(source, params, built)
-    shown = as_mesh_data(with_shown_bores(spec, produced, built))
+    shown = geom_mesh.as_mesh_data(with_shown_bores(spec, produced, built))
     return _place(shown, params, anchor, sink, direction, spec.keeps_up, flip)
 
 
@@ -2939,12 +2955,12 @@ def lands_on(host: Mesh, tool: MeshData) -> bool:
     aufgesetzter Baustein sinkt ein Hundertstel ein und überdeckt damit
     einen dünnen Streifen — auch das zählt.
     """
-    body = as_mesh_data(host)
+    body = geom_mesh.as_mesh_data(host)
     low = [max(a, b) for a, b in zip(body.bounds.minimum, tool.bounds.minimum, strict=True)]
     high = [min(a, b) for a, b in zip(body.bounds.maximum, tool.bounds.maximum, strict=True)]
     if any(top < bottom - EPS_GEOM for bottom, top in zip(low, high, strict=True)):
         return False
-    overlap = boolean("intersection", [body, tool], quality="fine", allow_empty=True)
+    overlap = boolean.boolean("intersection", [body, tool], quality="fine", allow_empty=True)
     return float(overlap.mesh.volume) > EPS_GEOM
 
 
@@ -2988,11 +3004,11 @@ def placement_tools(
     local.update(zip(normal_fields(schema), (0.0, 0.0, 1.0), strict=True))
     params = validate(schema, local)
     part_params, produced = _built_part(spec, params, profile, "fine", parameters=parameters)
-    mesh = as_mesh_data(produced.mesh)
+    mesh = geom_mesh.as_mesh_data(produced.mesh)
     subtractive = cuts(spec, params)
     sink = 0.0 if standalone or subtractive or spec.separate_from_host else BOOLEAN_OVERLAP
     flip = subtractive and _extends_above_mouth(mesh)
-    mesh = as_mesh_data(with_shown_bores(spec, produced, mesh))
+    mesh = geom_mesh.as_mesh_data(with_shown_bores(spec, produced, mesh))
     primary = _place(
         mesh, params, sink=sink, direction=(0.0, 0.0, 1.0), keeps_up=spec.keeps_up, flip=flip
     )
@@ -3001,7 +3017,10 @@ def placement_tools(
         None
         if extra is None
         else _place(
-            as_mesh_data(extra.mesh), params, direction=(0.0, 0.0, 1.0), keeps_up=spec.keeps_up
+            geom_mesh.as_mesh_data(extra.mesh),
+            params,
+            direction=(0.0, 0.0, 1.0),
+            keeps_up=spec.keeps_up,
         )
     )
     return primary, addition
@@ -3318,7 +3337,7 @@ def _air_above(source: SceneObject, params: Any) -> bool:
     position = np.asarray(
         [float(_placement_value(params, name, 0.0)) for name in ("x", "y", "z")], dtype=np.float64
     )
-    triangles = np.asarray(as_mesh_data(source.mesh).raw.triangles, dtype=np.float64)
+    triangles = np.asarray(geom_mesh.as_mesh_data(source.mesh).raw.triangles, dtype=np.float64)
     if not len(triangles):
         return False
     point = position + np.asarray(up, dtype=np.float64) * reach

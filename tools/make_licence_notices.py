@@ -23,7 +23,8 @@ from urllib.parse import unquote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.branding import APP_NAME, APP_VERSION, SUPPORT_ADDRESS
+from app import branding
+from app.branding import APP_NAME, SUPPORT_ADDRESS
 from app.core.knowledge import licences
 from tools.make_sbom import ARTIFACT_SBOM_NAME
 
@@ -435,7 +436,7 @@ def render_notices(components: tuple[ComponentNotice, ...]) -> str:
     lines = [
         "# Drittanbieter-Lizenzen",
         "",
-        f"Erzeugt für {APP_NAME} {APP_VERSION} auf `{sysconfig.get_platform()}`.",
+        f"Erzeugt für {APP_NAME} {branding.APP_VERSION} auf `{sysconfig.get_platform()}`.",
         provenance,
         "",
         "| Paket | Version | SPDX-Ausdruck | Quelle |",
@@ -602,7 +603,7 @@ def render_manifest(components: tuple[ComponentNotice, ...]) -> str:
     policies = _runtime_policies()
     payload = {
         "schema": 2,
-        "product": {"name": APP_NAME, "version": APP_VERSION},
+        "product": {"name": APP_NAME, "version": branding.APP_VERSION},
         "target": sysconfig.get_platform(),
         "components": [
             {
@@ -773,7 +774,7 @@ def write_release_evidence(
     ]
     evidence: dict[str, Any] = {
         "schema": 1,
-        "product_version": APP_VERSION,
+        "product_version": branding.APP_VERSION,
         "target": target,
         "release_date": released.isoformat(),
         "packages": package_entries,
@@ -806,7 +807,7 @@ def _verify_release_evidence(
     Linux-Releaseakte war damit ohne Ausweg rot.
     """
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-    if evidence.get("schema") != 1 or evidence.get("product_version") != APP_VERSION:
+    if evidence.get("schema") != 1 or evidence.get("product_version") != branding.APP_VERSION:
         raise RuntimeError("Release-Evidenzschema oder Produktversion passt nicht.")
     target = str(evidence.get("target", ""))
     sbom_target = next(
@@ -820,7 +821,7 @@ def _verify_release_evidence(
     if not sbom_target or target != sbom_target:
         raise RuntimeError("Zielplattform von Release-Evidenz und Endartefakt-SBOM weicht ab.")
     sbom_product = sbom.get("metadata", {}).get("component", {})
-    if sbom_product.get("version") != APP_VERSION:
+    if sbom_product.get("version") != branding.APP_VERSION:
         raise RuntimeError("Produktversion der Endartefakt-SBOM passt nicht.")
     root = evidence_path.parent
     package_entries = evidence.get("packages", [])

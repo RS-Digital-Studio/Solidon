@@ -26,8 +26,9 @@ from app.core.errors import (
     CORRECT_INPUT,
     ValidationError,
 )
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.colour_ops import colour_from, colours_from, merged_slots
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData
 from app.core.knowledge.filaments import profile_name
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -250,7 +251,7 @@ def paint_slot(ctx: OpContext) -> OpResult:
 
     params = cast(PaintParams, ctx.params)
     source = ctx.inputs[0]
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
 
     # **Nur noch die Füllung** (Konzept Filamente, 26.08.2026): Ein Klick auf
     # „Oberseite" färbt die Oberseite — die Dreiecke kommen aus dem Merkmal.

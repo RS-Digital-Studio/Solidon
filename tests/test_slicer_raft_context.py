@@ -8,6 +8,7 @@ from app.core.errors import AppError, ExternalToolError, FileWriteError
 from app.core.export import handover
 from app.core.knowledge import print_settings, profiles
 from app.core.scene.cancel import CancelSignal
+from app.ui import dialogs
 from app.ui import print_settings_dialog as dialog
 
 
@@ -35,7 +36,7 @@ def test_raft_failure_is_shown_only_for_current_job(monkeypatch, state):
         _failed_save_copies=None,
         state=SimpleNamespace(setText=lambda text: calls.append(text)),
     )
-    monkeypatch.setattr(dialog, "show_error", lambda error, owner: calls.append(error))
+    monkeypatch.setattr(dialogs, "show_error", lambda error, owner: calls.append(error))
     dialog.PrintSettingsDialog._slice_failed(host, refusal())
     assert len(calls) == (2 if state == "current" else 0)
 
@@ -83,7 +84,7 @@ def test_file_save_error_keeps_its_existing_context_free_route(monkeypatch):
         state=SimpleNamespace(setText=lambda text: None),
     )
     problem = FileWriteError()
-    monkeypatch.setattr(dialog, "show_error", lambda error, owner: calls.append(error))
+    monkeypatch.setattr(dialogs, "show_error", lambda error, owner: calls.append(error))
     dialog.PrintSettingsDialog._slice_failed(host, problem)
     assert calls == [problem]
 

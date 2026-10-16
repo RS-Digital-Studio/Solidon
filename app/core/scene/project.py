@@ -38,7 +38,8 @@ from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 from typing import Any, BinaryIO, Final, get_args
 
-from app.branding import APP_VERSION, PROJECT_SUFFIX
+from app import branding
+from app.branding import PROJECT_SUFFIX
 from app.core import examples
 from app.core.errors import (
     CANCEL,
@@ -48,12 +49,7 @@ from app.core.errors import (
     FileWriteError,
     ValidationError,
 )
-from app.core.ingest.loader import (
-    MAX_ARCHIVE_ENTRIES,
-    MAX_COMPRESSION_RATIO,
-    MAX_FILE_BYTES,
-    MIN_RATIO_ENTRY_BYTES,
-)
+from app.core.ingest import loader
 from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts import recipe as part_recipes
 from app.core.log import get_logger
@@ -81,12 +77,12 @@ AUTOSAVE_SUFFIX: Final = ".autosave"
 
 #: Grenzen für fremde Projektcontainer (§32). Die Nutzlast folgt derselben
 #: Staffelung wie ein direkter Import: Je Eintrag gilt die Obergrenze eines
-#: direkten Modellimports; die Summe darf das Doppelte tragen, sonst wären
-#: zwei einzeln erlaubte Modelle zusammen nicht mehr speicherbar (Review
-#: 02.09.2026). Die äußere Datei bekommt nur den notwendigen Spielraum für
-#: ZIP-Verzeichnis und Kompressionskopfzeilen.
-MAX_ARCHIVE_ENTRY_BYTES: Final = MAX_FILE_BYTES
-MAX_ARCHIVE_UNPACKED_BYTES: Final = 2 * MAX_FILE_BYTES
+#: direkten Modellimports (:func:`_entry_limit` liest ``MAX_FILE_BYTES`` zur
+#: Aufrufzeit, keine Kopie unter eigenem Namen); die Summe darf das Doppelte
+#: tragen, sonst wären zwei einzeln erlaubte Modelle zusammen nicht mehr
+#: speicherbar (Review 02.09.2026). Die äußere Datei bekommt nur den
+#: notwendigen Spielraum für ZIP-Verzeichnis und Kompressionskopfzeilen.
+MAX_ARCHIVE_UNPACKED_BYTES: Final = 2 * loader.MAX_FILE_BYTES
 MAX_PROJECT_FILE_BYTES: Final = MAX_ARCHIVE_UNPACKED_BYTES + 16 * 1024 * 1024
 
 #: Strukturierte Beilagen sind um Größenordnungen kleiner als ein Quellnetz.
@@ -265,7 +261,7 @@ def new_project(printer: str = "", material: str = "") -> Project:
     return Project(
         document=Document(
             format_version=FORMAT_VERSION,
-            app_version=APP_VERSION,
+            app_version=branding.APP_VERSION,
             printer=printer,
             material=material,
         )
@@ -372,7 +368,7 @@ def _read_linked_source(
                     values={**values, "path": source.path},
                 ) from problem
             size = os.fstat(stream.fileno()).st_size
-            if size > MAX_FILE_BYTES:
+            if size > loader.MAX_FILE_BYTES:
                 raise ValidationError(
                     field=field,
                     detail=_("Die Datei ist größer, als diese Anwendung verarbeitet."),
@@ -381,10 +377,10 @@ def _read_linked_source(
                         **values,
                         "path": source.path,
                         "size": size,
-                        "limit": MAX_FILE_BYTES,
+                        "limit": loader.MAX_FILE_BYTES,
                     },
                 )
-            payload = stream.read(MAX_FILE_BYTES + 1)
+            payload = stream.read(loader.MAX_FILE_BYTES + 1)
     except OSError as problem:
         # **Ein ``OSError`` ist nicht „beschädigt"** (RM-097). So hieß der Satz
         # hier, und er behauptete damit etwas über den Inhalt der Datei, wo das
@@ -405,7 +401,7 @@ def _read_linked_source(
             constraint="unreadable",
             values={**values, "path": source.path, "reason": problem.strerror or str(problem)},
         ) from problem
-    if len(payload) > MAX_FILE_BYTES:
+    if len(payload) > loader.MAX_FILE_BYTES:
         raise ValidationError(
             field=field,
             detail=_("Die Datei ist größer, als diese Anwendung verarbeitet."),
@@ -414,7 +410,7 @@ def _read_linked_source(
                 **values,
                 "path": source.path,
                 "size": len(payload),
-                "limit": MAX_FILE_BYTES,
+                "limit": loader.MAX_FILE_BYTES,
             },
         )
     actual = checksum(payload)
@@ -496,7 +492,7 @@ def _entry_limit(name: str) -> int:
         return MAX_GATHERED_BYTES
     if name.startswith(part_recipes.CONTAINER_PREFIX):
         return MAX_RECIPE_BYTES
-    return MAX_ARCHIVE_ENTRY_BYTES
+    return loader.MAX_FILE_BYTES
 
 
 def _too_large(detail: TranslatableText, **values: object) -> ValidationError:
@@ -524,11 +520,11 @@ def _check_outer_size(path: Path) -> None:
 def _preflight_archive(container: zipfile.ZipFile) -> dict[str, zipfile.ZipInfo]:
     """Prüft das ZIP-Verzeichnis vollständig vor dem ersten Inhaltslesezug."""
     infos = container.infolist()
-    if len(infos) > MAX_ARCHIVE_ENTRIES:
+    if len(infos) > loader.MAX_ARCHIVE_ENTRIES:
         raise _too_large(
             _("Die Datei ist größer, als diese Anwendung verarbeitet."),
             entries=len(infos),
-            limit=MAX_ARCHIVE_ENTRIES,
+            limit=loader.MAX_ARCHIVE_ENTRIES,
         )
 
     by_name: dict[str, zipfile.ZipInfo] = {}
@@ -562,23 +558,23 @@ def _preflight_archive(container: zipfile.ZipFile) -> dict[str, zipfile.ZipInfo]
                 limit=MAX_ARCHIVE_UNPACKED_BYTES,
             )
 
-        if info.file_size < MIN_RATIO_ENTRY_BYTES:
+        if info.file_size < loader.MIN_RATIO_ENTRY_BYTES:
             continue
         ratio = info.file_size / max(info.compress_size, 1)
-        if ratio > MAX_COMPRESSION_RATIO:
+        if ratio > loader.MAX_COMPRESSION_RATIO:
             raise _too_large(
                 _("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
                 entry=info.filename,
                 ratio=round(ratio, 1),
-                limit=MAX_COMPRESSION_RATIO,
+                limit=loader.MAX_COMPRESSION_RATIO,
             )
-    if unpacked >= MIN_RATIO_ENTRY_BYTES:
+    if unpacked >= loader.MIN_RATIO_ENTRY_BYTES:
         ratio = unpacked / max(compressed, 1)
-        if ratio > MAX_COMPRESSION_RATIO:
+        if ratio > loader.MAX_COMPRESSION_RATIO:
             raise _too_large(
                 _("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
                 ratio=round(ratio, 1),
-                limit=MAX_COMPRESSION_RATIO,
+                limit=loader.MAX_COMPRESSION_RATIO,
             )
     return by_name
 
@@ -626,11 +622,11 @@ def _payload_size(payload: str | bytes) -> int:
 
 def _check_output_entries(entries: list[tuple[str, str | bytes]]) -> None:
     """Verhindert, dass Solidon selbst einen später unlesbaren Container baut."""
-    if len(entries) > MAX_ARCHIVE_ENTRIES:
+    if len(entries) > loader.MAX_ARCHIVE_ENTRIES:
         raise _too_large(
             _("Die Datei ist größer, als diese Anwendung verarbeitet."),
             entries=len(entries),
-            limit=MAX_ARCHIVE_ENTRIES,
+            limit=loader.MAX_ARCHIVE_ENTRIES,
         )
     seen: set[str] = set()
     unpacked = 0
@@ -682,23 +678,23 @@ def _check_written_ratios(infos: list[zipfile.ZipInfo]) -> None:
     for info in infos:
         unpacked += info.file_size
         compressed += info.compress_size
-        if info.file_size < MIN_RATIO_ENTRY_BYTES:
+        if info.file_size < loader.MIN_RATIO_ENTRY_BYTES:
             continue
         ratio = info.file_size / max(info.compress_size, 1)
-        if ratio > MAX_COMPRESSION_RATIO:
+        if ratio > loader.MAX_COMPRESSION_RATIO:
             raise _too_large(
                 _("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
                 entry=info.filename,
                 ratio=round(ratio, 1),
-                limit=MAX_COMPRESSION_RATIO,
+                limit=loader.MAX_COMPRESSION_RATIO,
             )
-    if unpacked >= MIN_RATIO_ENTRY_BYTES:
+    if unpacked >= loader.MIN_RATIO_ENTRY_BYTES:
         ratio = unpacked / max(compressed, 1)
-        if ratio > MAX_COMPRESSION_RATIO:
+        if ratio > loader.MAX_COMPRESSION_RATIO:
             raise _too_large(
                 _("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
                 ratio=round(ratio, 1),
-                limit=MAX_COMPRESSION_RATIO,
+                limit=loader.MAX_COMPRESSION_RATIO,
             )
 
 
@@ -1409,7 +1405,7 @@ def save(project: Project, path: Path) -> Path:
     """
     document = project.document
     document.format_version = FORMAT_VERSION
-    document.app_version = APP_VERSION
+    document.app_version = branding.APP_VERSION
     # §24.4: der Stand der Bausteinbibliothek gehört zu der Art, wie das
     # gerechnet wurde. Für die **eigenen** Bausteine reicht die Version nicht —
     # sie bewegt sich nicht, wenn der Nutzer seine Datei ändert (§24.5). Darum

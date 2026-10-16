@@ -587,14 +587,14 @@ def test_the_warning_about_a_fine_mesh_holds_at_the_limit_it_names() -> None:
     darüber stand mit denselben Knöpfen darunter.
     """
     from app.core.ingest import loader
-    from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES
+    from app.core.perceive import maps
+    from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES
     from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
-    from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
 
     kleiner = min(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES)
     zuerst_die_karten = MAP_LIMIT_TRIANGLES < FEATURE_LIMIT_TRIANGLES
 
-    assert kleiner == loader.HEAVY_TRIANGLES
+    assert kleiner == maps.MAP_LIMIT_TRIANGLES
     assert loader._too_fine(kleiner) is None, "an der Grenze ist noch alles möglich"
 
     dazwischen = loader._too_fine(kleiner + 1)

@@ -55,18 +55,11 @@ from app.core.knowledge.parts.registry import PartSpec
 from app.core.registry.registry import FEATURE_TITLES
 from app.core.registry.surfaces import choice_label
 from app.i18n import tr
+from app.ui import style
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import ROLES
 from app.ui.panels import collapsible, open_section
-from app.ui.style import (
-    NORMAL,
-    SPACE,
-    TIGHT,
-    WIDE,
-    DialogScrollArea,
-    fit_dialog_to_screen,
-    make_primary,
-)
+from app.ui.style import NORMAL, SPACE, TIGHT, WIDE, DialogScrollArea, make_primary
 
 #: Was den gescheiterten oder fehlenden Bereichstest in Worten anführt (§24.5)
 #: — in Detailspalte und Kurzhilfe. Auf der Kachel steht dafür ein Warndreieck.
@@ -1011,7 +1004,7 @@ class PartCatalog(QDialog):
         holt der Filter unten nach.
         """
         super().showEvent(event)
-        fit_dialog_to_screen(self)
+        style.fit_dialog_to_screen(self)
         self._stretch_headings()
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen

@@ -13,6 +13,7 @@ import trimesh
 from app.core import activation
 from app.core.errors import ExternalToolError, OperationCancelled
 from app.core.export import handover, writer
+from app.core.geom import prepare
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
 from app.core.scene.cancel import CancelSignal
@@ -49,7 +50,7 @@ def test_cancellation_after_the_last_fit_does_not_start_the_packer(tmp_path, mon
     token = CancelSignal()
     entries = [body("one"), body("two")]
     original_fit = writer._fit_cli_mesh
-    original_pack = writer.arrange_on_bed
+    original_pack = prepare.arrange_on_bed
     counts = {"fit": 0, "pack": 0}
 
     def fitted(*args, **kwargs):
@@ -64,7 +65,7 @@ def test_cancellation_after_the_last_fit_does_not_start_the_packer(tmp_path, mon
         return original_pack(*args, **kwargs)
 
     monkeypatch.setattr(writer, "_fit_cli_mesh", fitted)
-    monkeypatch.setattr(writer, "arrange_on_bed", packed)
+    monkeypatch.setattr(prepare, "arrange_on_bed", packed)
     with pytest.raises(OperationCancelled):
         writer.prepare_slicer_meshes(entries, profile, setup, cancelled=token)
     assert counts == {"fit": 2, "pack": 0}

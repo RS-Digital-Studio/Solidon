@@ -130,12 +130,13 @@ def test_local_part_file_runs_through_the_ui_buttons(
 
     from PySide6.QtWidgets import QFileDialog
 
+    from app.core import paths
     from app.core.knowledge.parts import PARTS
     from app.core.knowledge.parts import recipe as recipe_module
     from app.core.knowledge.parts.recipe import Recipe, register, save
     from app.core.scene.migrations import FORMAT_VERSION
     from app.core.types import Document, Operation
-    from app.ui import main_window as main_window_module
+    from app.ui import dialogs
     from app.ui.catalog import PartCatalog, detail
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -143,7 +144,7 @@ def test_local_part_file_runs_through_the_ui_buttons(
 
     name = "local_part_file_ui_probe"
     storage = tmp_path / "user-parts"
-    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: storage)
 
     document = Document(
         format_version=FORMAT_VERSION,
@@ -195,7 +196,7 @@ def test_local_part_file_runs_through_the_ui_buttons(
     )
     troubles: list[object] = []
     monkeypatch.setattr(
-        main_window_module,
+        dialogs,
         "show_error",
         lambda problem, parent=None, handlers=None: troubles.append(problem),
     )

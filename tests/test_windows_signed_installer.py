@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from app import branding
 from tools import sign_release
 from tools import windows_signed_installer as tool
 
@@ -84,7 +85,7 @@ def test_a_real_release_tag_reaches_only_its_own_installer_commit(
     monkeypatch: pytest.MonkeyPatch, annotated: bool, same_commit: bool
 ) -> None:
     """Auch der Tag-Hauptbau bleibt an den identischen Installer-Quellstand gebunden."""
-    tag = f"v{tool.APP_VERSION}"
+    tag = f"v{branding.APP_VERSION}"
     run = {**_run_record(), "event": "push", "head_branch": tag}
     replies = {
         f"repos/{REPOSITORY}/actions/runs/{RUN_ID}": run,
@@ -170,7 +171,7 @@ def test_untrusted_identifiers_never_reach_the_transport(
         "repository": REPOSITORY,
         "run_id": RUN_ID,
         "commit": COMMIT,
-        "version": tool.APP_VERSION,
+        "version": branding.APP_VERSION,
         "release_id": RELEASE_ID,
         "digest": DIGEST,
     }
@@ -193,7 +194,7 @@ def test_workflow_code_is_bound_to_the_actual_main_checkout(
     monkeypatch.setattr(tool, "_checkout_commit", lambda: COMMIT)
     monkeypatch.setenv(key, value)
     with pytest.raises(sign_release.SigningError):
-        tool.validate_request(REPOSITORY, RUN_ID, COMMIT, tool.APP_VERSION, RELEASE_ID, DIGEST)
+        tool.validate_request(REPOSITORY, RUN_ID, COMMIT, branding.APP_VERSION, RELEASE_ID, DIGEST)
 
 
 @pytest.fixture
@@ -214,7 +215,7 @@ def ci_input(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     signed_digest = hashlib.sha256(signed).hexdigest()
     record = {
         "schema_version": 1,
-        "app_version": tool.APP_VERSION,
+        "app_version": branding.APP_VERSION,
         "source_run_id": RUN_ID,
         "source_commit": COMMIT,
         "source_archive_sha256": sign_release._sha256(archive),
@@ -282,7 +283,7 @@ def ci_input(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "repository": REPOSITORY,
         "run_id": RUN_ID,
         "commit": COMMIT,
-        "version": tool.APP_VERSION,
+        "version": branding.APP_VERSION,
         "release_id": RELEASE_ID,
         "signed_digest": signed_digest,
         "work": tmp_path / "work",
@@ -324,7 +325,7 @@ def test_only_the_exe_changes_and_the_return_contains_exactly_three_files(
     monkeypatch.setattr(sign_release, "build_installer", compiler)
     output = tmp_path / "output"
     tool.build(work, Path("ISCC.exe"), output)
-    setup_name = f"Solidon3D-Setup-{tool.APP_VERSION}.exe"
+    setup_name = f"Solidon3D-Setup-{branding.APP_VERSION}.exe"
     assert {path.name for path in output.iterdir()} == {
         setup_name,
         setup_name + ".sha256",

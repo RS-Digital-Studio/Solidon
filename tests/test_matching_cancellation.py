@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 from dataclasses import replace
 from importlib import import_module
-from types import ModuleType
 
 import numpy as np
 import pytest
@@ -58,13 +57,16 @@ def _geometry_bytes(source: SceneObject) -> bytes:
 
 def _cancel_at_match(
     monkeypatch: pytest.MonkeyPatch,
-    module: ModuleType,
     signal: CancelSignal,
     *,
     at: int = 1,
 ) -> list:
-    """Erst am tatsächlichen Zuordnungseintritt abbrechen; der echte Matcher läuft weiter."""
-    original = module.match
+    """Erst am tatsächlichen Zuordnungseintritt abbrechen; der echte Matcher läuft weiter.
+
+    Ersetzt wird ``match`` im Modul der Zuordnung: Die Auswertung und die örtliche Erkennung
+    lesen es dort zur Aufrufzeit (CS-11) — derselbe Ersatz für jeden Weg.
+    """
+    original = matching.match
     calls = []
 
     def stopped(*args, check_cancelled=None, **kwargs):
@@ -74,13 +76,10 @@ def _cancel_at_match(
             signal.cancel()
         return original(*args, check_cancelled=check_cancelled, **kwargs)
 
-    monkeypatch.setattr(module, "match", stopped)
     # Die erklärten Merkmale suchen ihren Partner über ``matching.declared_partners``
     # (Durchsicht 0.5.1, derselbe Weg für Netz und exakten Baustein) — die
     # Zuordnung beginnt dort, im Modul der Zuordnung.
-    matching = import_module("app.core.perceive.matching")
-    if module is not matching:
-        monkeypatch.setattr(matching, "match", stopped)
+    monkeypatch.setattr(matching, "match", stopped)
     return calls
 
 
@@ -106,7 +105,7 @@ def test_evaluation_matching_keeps_the_original_cancellation(
         )
         previous = {}
     signal = CancelSignal()
-    calls = _cancel_at_match(monkeypatch, module, signal)
+    calls = _cancel_at_match(monkeypatch, signal)
 
     with pytest.raises(OperationCancelled):
         module._with_features(
@@ -227,7 +226,7 @@ def test_registered_bore_changes_keep_cancellation_through_matching(
         else {"diameter": 4.0, "entrance_mode": "follow" if entrance else "keep"}
     )
     signal = CancelSignal()
-    calls = _cancel_at_match(monkeypatch, matching, signal, at=at)
+    calls = _cancel_at_match(monkeypatch, signal, at=at)
 
     with pytest.raises(OperationCancelled):
         spec.fn(
@@ -264,7 +263,7 @@ def test_local_known_feature_passes_cancellation_to_its_boundary_match(
     bore = next(feature for feature in found.values() if feature.kind == "hole")
     vertices, faces = mesh.raw.vertices.copy(), mesh.raw.faces.copy()
     signal = CancelSignal()
-    calls = _cancel_at_match(monkeypatch, local, signal)
+    calls = _cancel_at_match(monkeypatch, signal)
 
     with pytest.raises(OperationCancelled):
         local.detect_known(mesh, {bore.id: bore}, check_cancelled=signal.raise_if_cancelled)

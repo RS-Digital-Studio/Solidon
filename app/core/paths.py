@@ -17,7 +17,8 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any, BinaryIO, Final
 
-from app.branding import APP_NAME, APP_VENDOR, APP_VERSION, ENVIRONMENT_PREFIX
+from app import branding
+from app.branding import APP_NAME, APP_VENDOR, ENVIRONMENT_PREFIX
 
 #: Die Umgebungsvariablen, aus denen dieses Modul die Nutzerordner liest. Wer
 #: sie vor dem Start auf einen leeren Ordner setzt, hat ein frisches Profil:
@@ -149,7 +150,9 @@ def results_cache_dir() -> Path:
     (:func:`_own_parts_stamp`). Beides ist Code, der ein Ergebnis rechnet und
     den keine Fassungsnummer begleitet.
     """
-    return user_cache_dir() / "results" / (APP_VERSION + _build_stamp() + _own_parts_stamp())
+    return (
+        user_cache_dir() / "results" / (branding.APP_VERSION + _build_stamp() + _own_parts_stamp())
+    )
 
 
 def _build_stamp() -> str:

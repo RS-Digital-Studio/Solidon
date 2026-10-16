@@ -91,10 +91,8 @@ from PySide6.QtWidgets import (
 
 from app.core import guides, tools
 from app.core.errors import AppError, InternalError
-from app.core.export import slicer_keys, slicer_profiles, threemf
-from app.core.export.handover import detect
-from app.core.geom.attributes import used_slots
-from app.core.geom.mesh import as_mesh_data
+from app.core.export import handover, slicer_keys, slicer_profiles, threemf
+from app.core.geom import attributes, mesh
 from app.core.knowledge import filaments, profiles
 from app.core.types import CancelToken, MaterialSlot, PrintSettings, SceneObject
 from app.i18n import tr
@@ -583,7 +581,7 @@ def slicer_filaments() -> tuple[slicer_profiles.SlicerProfile, ...]:
     if chosen is None:
         return ()
     try:
-        flavour = detect(chosen).flavour
+        flavour = handover.detect(chosen).flavour
         return tuple(slicer_profiles.find_profiles(chosen, flavour, kinds=("filament",)))
     except Exception:  # ein fremder Bestand scheitert auf viele Arten
         _log.exception("Der Filamentprofilbestand lässt sich nicht lesen.")
@@ -1976,7 +1974,7 @@ class FilamentPanel(QWidget):
         for entry in objects:
             declared = {slot.index: slot for slot in threemf.slots_for_object(entry)}
             counted: set[threemf.SlotKey | None] = set()
-            for index in used_slots(as_mesh_data(entry.mesh)):
+            for index in attributes.used_slots(mesh.as_mesh_data(entry.mesh)):
                 slot = declared.get(index)
                 key = threemf.slot_identity(slot) if slot is not None else None
                 if key in counted:

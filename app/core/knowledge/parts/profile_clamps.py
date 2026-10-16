@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING, Final, cast
 import numpy as np
 from shapely.geometry import LineString
 
-from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom import boolean
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import subtract, union
@@ -163,7 +164,7 @@ def _features(body: Form, front: float, back: float) -> dict[str, Feature]:
     """
     from app.core.perceive.surfaces import planar_patch
 
-    mesh = as_mesh_data(body)
+    mesh = geom_mesh.as_mesh_data(body)
     found: dict[str, Feature] = {}
     for name, height, sign in (("front", front, -1.0), ("back", back, 1.0)):
         raw = mesh.raw
@@ -384,9 +385,9 @@ def build_shell(
     else:
         # Am Netz geht der Schnitt durch die Rückfallkette, und ihre Stufe wird
         # gemeldet (``operationen.md``); der exakte Kern kennt keine Stufen.
-        outcome = boolean(
+        outcome = boolean.boolean(
             "difference",
-            [as_mesh_data(body), *(as_mesh_data(tool) for tool in tools)],
+            [geom_mesh.as_mesh_data(body), *(geom_mesh.as_mesh_data(tool) for tool in tools)],
             quality=quality,
             cancelled=cancelled,
         )

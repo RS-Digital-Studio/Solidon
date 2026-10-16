@@ -32,7 +32,8 @@ from collections.abc import Callable, Mapping
 from typing import Any, Final, Protocol
 from urllib.parse import urlsplit
 
-from app.branding import APP_NAME, APP_VERSION
+from app import branding
+from app.branding import APP_NAME
 from app.core.agent.tools import (
     ADD_FIT,
     ASK_USER,
@@ -439,7 +440,7 @@ def handle(
             {
                 "protocolVersion": PROTOCOL_VERSION,
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": APP_NAME, "version": APP_VERSION},
+                "serverInfo": {"name": APP_NAME, "version": branding.APP_VERSION},
             },
         )
     if method in ("notifications/initialized", "ping"):

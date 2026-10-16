@@ -1,11 +1,13 @@
 """Gemessene Fertigungszusagen der Bausteine an den Review-Gegenfällen."""
 
 import math
+import sys
 
 import numpy as np
 import pytest
 from shapely.geometry import LineString, Polygon
 
+from app.core.geom import boolean as geom_boolean
 from app.core.geom.mesh import on_surface
 from app.core.knowledge import profiles, standards
 from app.core.knowledge.parts import PARTS, ops
@@ -402,13 +404,16 @@ def test_nonround_surface_preview_matches_the_actual_boolean_tool(name, values, 
     body.apply_translation((0, 0, -15))
     source = SceneObject(id="obj_1", name="Träger", mesh=apply(MeshData.of(body), matrix))
     captured = []
-    original = ops.boolean
+    original = geom_boolean.boolean
 
     def capture(kind, meshes, **kwargs):
-        captured.append(meshes[1])
+        # Das Werkzeug der Op, nicht der Bau des Bausteins in der Bibliothek — die Kette
+        # liest beide zur Aufrufzeit (CS-11).
+        if sys._getframe(1).f_globals.get("__name__") != "app.core.knowledge.parts.build":
+            captured.append(meshes[1])
         return original(kind, meshes, **kwargs)
 
-    monkeypatch.setattr(ops, "boolean", capture)
+    monkeypatch.setattr(geom_boolean, "boolean", capture)
     profile = profiles.make_profile()
     entered = {**values, "angle": 37.0}
     preview = apply(ops.placement_tool(PARTS.get(name), entered, profile), matrix)
@@ -708,16 +713,19 @@ def test_cable_addition_keeps_the_deepest_solver(profile, monkeypatch, stage):
 
     from app.core.types import SolverInfo
 
-    original = ops.boolean
+    original = geom_boolean.boolean
     calls = []
 
     def controlled(kind, meshes, **kwargs):
         result = original(kind, meshes, **kwargs)
+        # Wie oben: nur die Booleschen der Op, nicht der Bau des Bausteins (CS-11).
+        if sys._getframe(1).f_globals.get("__name__") == "app.core.knowledge.parts.build":
+            return result
         calls.append(kind)
         solver = SolverInfo(stage, ("direct", stage)) if len(calls) == 1 else SolverInfo("direct")
         return dataclasses.replace(result, solver=solver)
 
-    monkeypatch.setattr(ops, "boolean", controlled)
+    monkeypatch.setattr(geom_boolean, "boolean", controlled)
     project = new_project("centauri-carbon-2", "petg")
     History(project.document).apply(
         "Durchführung",

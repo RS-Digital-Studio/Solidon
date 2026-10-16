@@ -50,8 +50,9 @@ from time import monotonic, sleep
 from typing import Any, BinaryIO, Final, cast
 from urllib.parse import urlsplit
 
-from app.branding import APP_ID, APP_VERSION
-from app.core import discover
+from app import branding
+from app.branding import APP_ID
+from app.core import discover, install
 from app.core.activation import ed25519
 from app.core.backends.llm import Transport
 from app.core.changes import Group
@@ -75,7 +76,6 @@ from app.core.http import (
     same_origin,
     validate_http_url,
 )
-from app.core.install import packaged
 from app.core.json_boundary import StrictJsonError
 from app.core.json_boundary import loads as load_json
 from app.core.log import get_logger, redact_external, redact_url
@@ -441,7 +441,7 @@ class Release:
     weggelassenen (Wayland in 0.3.0, gemeldet aus dem Feld).
     """
 
-    def newer_than(self, current: str = APP_VERSION) -> bool:
+    def newer_than(self, current: str = branding.APP_VERSION) -> bool:
         return _as_tuple(self.version) > _as_tuple(current)
 
     def points(self, language: str = "") -> tuple[str, ...]:
@@ -550,7 +550,7 @@ def install_kind(system: str = "") -> str:
     drei Wege überall messen, und ``mypy --platform`` sieht alle drei.
     """
     chosen = system or sys.platform
-    if not packaged():
+    if not install.packaged():
         return KIND_SOURCE
     if chosen == "win32":
         return KIND_WINDOWS_SETUP
@@ -677,8 +677,8 @@ def _user_agent() -> str:
     ``SOLIDON_UPDATE_TEST=1``; gewöhnliche Installationen behalten ihren
     bisherigen Absender.
     """
-    internal = not packaged() or os.environ.get("SOLIDON_UPDATE_TEST") == "1"
-    return f"{'Solidon-Test' if internal else 'Solidon'}/{APP_VERSION}"
+    internal = not install.packaged() or os.environ.get("SOLIDON_UPDATE_TEST") == "1"
+    return f"{'Solidon-Test' if internal else 'Solidon'}/{branding.APP_VERSION}"
 
 
 def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | None:

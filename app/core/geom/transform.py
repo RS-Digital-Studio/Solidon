@@ -19,7 +19,8 @@ from typing import Any, Final, Literal, cast
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
 from app.core.types import BoundingBox, CancelToken, Mesh, SceneObject, Transform, Vec3
 from app.core.units import (
     EPS_DISPLAY,
@@ -612,7 +613,7 @@ def moved_body(mesh: Mesh, matrix: np.ndarray, *, cancelled: CancelToken | None 
         rows = np.asarray(matrix, dtype=float)
         cells = cast(Transform, tuple(tuple(float(value) for value in row) for row in rows))
         return edit.transformed(mesh, cells, cancelled=cancelled)
-    return apply(as_mesh_data(mesh), matrix)
+    return apply(geom_mesh.as_mesh_data(mesh), matrix)
 
 
 #: Eine Fläche ohne Dreiecke — der Vorgabewert der Umkehrabbildung.
@@ -702,7 +703,10 @@ def moved_object(
                 new = after.get(face_map[face], _NO_TRIANGLES)
                 images[face] = None
                 if len(old) == len(new):
-                    old_mesh, new_mesh = as_mesh_data(source.mesh).raw, as_mesh_data(solid).raw
+                    old_mesh, new_mesh = (
+                        geom_mesh.as_mesh_data(source.mesh).raw,
+                        geom_mesh.as_mesh_data(solid).raw,
+                    )
                     rows = np.asarray(matrix, dtype=np.float64)
                     moved = old_mesh.vertices[old_mesh.faces[old]] @ rows[:3, :3].T + rows[:3, 3]
                     placed = new_mesh.vertices[new_mesh.faces[new]]
@@ -773,7 +777,7 @@ def moved_object(
     else:
         body = moved_body(source.mesh, matrix, cancelled=cancelled)
     mapped = transformed_features(
-        features, cells, mesh=as_mesh_data(body), check_cancelled=check_cancelled
+        features, cells, mesh=geom_mesh.as_mesh_data(body), check_cancelled=check_cancelled
     )
     return replace(
         source,

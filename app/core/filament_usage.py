@@ -28,7 +28,7 @@ from app.core.export.handover import (
     override_for,
     settings_for_slot,
 )
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom import mesh as geom_mesh
 from app.core.knowledge import print_settings, profiles
 from app.core.scene.hashing import digest, profile_key
 from app.core.scene.migrations import SAVED_IRONING
@@ -846,14 +846,18 @@ def prepare(
     stored_bodies = inputs.bodies() if inputs is not None else None
     step_materials = _step_materials(profile, inputs.document) if inputs is not None else []
     whole_job = [
-        threemf.AssemblyPart(as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
+        threemf.AssemblyPart(
+            geom_mesh.as_mesh_data(body.mesh), slots=threemf.slots_for_object(body)
+        )
         for body in objects
     ]
     requests = []
     for plate in sorted({entry.plate for entry in objects}):
         bodies = [entry for entry in objects if entry.plate == plate]
         parts = [
-            threemf.AssemblyPart(as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
+            threemf.AssemblyPart(
+                geom_mesh.as_mesh_data(body.mesh), slots=threemf.slots_for_object(body)
+            )
             for body in bodies
         ]
         supplied = slots_by_plate.get(plate) if slots_by_plate is not None else None
@@ -874,7 +878,7 @@ def prepare(
         geometry = []
         stored_geometry = []
         for body in bodies:
-            mesh = as_mesh_data(body.mesh)
+            mesh = geom_mesh.as_mesh_data(body.mesh)
             checksum = hashlib.sha256(mesh.raw.vertices.tobytes())
             checksum.update(mesh.raw.faces.tobytes())
             used = set(mesh.slots) if mesh.slots else {0}
