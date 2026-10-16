@@ -18,11 +18,14 @@ from tools import file_acceptance as acceptance
 
 HELPER = """import json, os, subprocess, sys, time
 from pathlib import Path
+import keyring
 out = Path(sys.argv[sys.argv.index('--out') + 1])
 stop = out / 'stop'
 deadline = time.monotonic() + 20
+chosen = type(keyring.get_keyring())
+backend = chosen.__module__ + '.' + chosen.__name__
 if '--leaf' in sys.argv:
-    (out / 'leaf.json').write_text(json.dumps({'pid': os.getpid()}))
+    (out / 'leaf.json').write_text(json.dumps({'pid': os.getpid(), 'leaf_keyring': backend}))
     while not stop.exists() and time.monotonic() < deadline:
         time.sleep(0.01)
 else:
@@ -31,7 +34,8 @@ else:
     while not (out / 'leaf.json').exists() and time.monotonic() < deadline:
         time.sleep(0.01)
     data = json.loads((out / 'leaf.json').read_text())
-    data.update(parent=os.getpid(), launcher=child.pid, cwd=os.getcwd(), profiles={
+    data.update(parent=os.getpid(), launcher=child.pid, cwd=os.getcwd(), keyring=backend,
+                profiles={
         key: os.environ.get(key) for key in ('APPDATA', 'LOCALAPPDATA',
         'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME')})
     print('echte Standardausgabe', flush=True)
@@ -45,6 +49,20 @@ else:
     stop.touch()
     child.wait(timeout=10)
     sys.exit(7 if mode == 'nonzero' else 0)
+"""
+
+
+#: Was ein Fall und jedes seiner Kinder als Schlüsselbund bekommen (RC-12).
+NULL_KEYRING = "keyring.backends.null.Keyring"
+#: Ein Backend, das nicht die Attrappe ist und überall lädt: steht für das des Nutzers.
+FOREIGN_KEYRING = "keyring.backends.fail.Keyring"
+
+#: Ein Kind, das sein Backend nennt und sein eigenes Kind dasselbe fragen lässt.
+ASK_KEYRING = """import keyring, subprocess, sys
+chosen = type(keyring.get_keyring())
+print(chosen.__module__ + '.' + chosen.__name__, flush=True)
+if 'enkel' not in sys.argv:
+    subprocess.run([sys.executable, __file__, 'enkel'], check=True, timeout=60)
 """
 
 
@@ -70,6 +88,8 @@ def test_real_case_process_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     monkeypatch.setattr(acceptance, "read_cases", lambda _out: [acceptance.Case(1, "Fall", "", "")])
     monkeypatch.setattr(acceptance, "summary", lambda *_args: {})
     monkeypatch.setenv("FD59_MODE", mode)
+    # Ein fremdes Backend im Aufseher: Der Fall bekommt trotzdem die Attrappe (RC-12).
+    monkeypatch.setenv("PYTHON_KEYRING_BACKEND", FOREIGN_KEYRING)
     expected_profiles = {}
     for key in (
         "APPDATA",
@@ -132,6 +152,8 @@ def test_real_case_process_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
         data = json.loads((tmp_path / "ready.json").read_text())
         assert sys.path[0] == str(acceptance.ROOT)
         assert data["profiles"] == expected_profiles
+        # Fallprozess und sein Kind fragen nie den Schlüsselbund des Nutzers (RC-12).
+        assert data["keyring"] == data["leaf_keyring"] == NULL_KEYRING
         assert not alive(data["pid"]), f"Helfer {data['pid']} lebt nach {mode} weiter"
         assert all(not alive(pid) for pid in {data["parent"], data["launcher"], children[0].pid})
         folder = tmp_path / "cases" / "001"
@@ -162,3 +184,35 @@ def test_real_case_process_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
             while alive(data["pid"]) and time.monotonic() < until:
                 time.sleep(0.05)
             assert not alive(data["pid"]), "Eigener Helfer nach Gegenprobe nicht beendet"
+
+
+@pytest.mark.parametrize("isolate", ["file_acceptance", "window_bench"])
+def test_isolation_hands_the_keyring_of_the_user_to_no_child(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolate: str
+) -> None:
+    """RC-12: Ein isolierter Prozess, sein Kind und dessen Kind bekommen die Attrappe.
+
+    *Chat einrichten* fragte im Fall den Windows-Tresor des Nutzers; Text und
+    Knöpfe hingen davon ab, ob dort ein Schlüssel lag. Die Nutzerordner allein
+    reichen nicht: Der Schlüsselbund liegt in keinem von ihnen.
+    """
+    from tools import window_bench
+
+    for name in (*acceptance.PROFILE_VARIABLES, "HOME"):
+        monkeypatch.setenv(name, str(tmp_path / "vorher"))
+    monkeypatch.setenv("PYTHON_KEYRING_BACKEND", FOREIGN_KEYRING)
+    {"file_acceptance": acceptance.isolate, "window_bench": window_bench.isolate}[isolate](
+        tmp_path / "profil"
+    )
+    script = tmp_path / "frage.py"
+    script.write_text(ASK_KEYRING, encoding="utf-8")
+    answer = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert answer.returncode == 0, answer.stderr
+    assert answer.stdout.split() == [NULL_KEYRING, NULL_KEYRING], answer.stderr

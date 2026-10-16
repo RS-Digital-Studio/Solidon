@@ -57,7 +57,10 @@ EVENT_DRAIN_ROUNDS = 20
 
 
 def isolate(profile: Path) -> None:
-    """Biegt die Nutzerverzeichnisse in das Messprofil um (§38)."""
+    """Nutzerverzeichnisse ins Messprofil (§38), Schlüsselbund auf die Attrappe (RC-12)."""
+    from tools.native_binding import ISOLATED_KEYRING
+
+    os.environ.update(ISOLATED_KEYRING)
     profile.mkdir(parents=True, exist_ok=True)
     for variable in (
         "APPDATA",
@@ -281,8 +284,8 @@ def main() -> int:
         help="Messprofil für die Nutzerverzeichnisse (bleibt zwischen Läufen)",
     )
     arguments = parser.parse_args()
-    isolate(arguments.profile)
     sys.path.insert(0, str(ROOT))
+    isolate(arguments.profile)
 
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication

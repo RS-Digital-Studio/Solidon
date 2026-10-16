@@ -348,10 +348,11 @@ PROFILE_VARIABLES: tuple[str, ...] = (
 
 
 def isolate(profile: Path) -> None:
-    """Legt die Nutzerordner dieses Prozesses auf ``profile``, vor dem ersten ``import app``."""
+    """Nutzerordner auf ``profile``, Schlüsselbund auf die Attrappe — vor ``import app``."""
+    from tools.native_binding import ISOLATED_KEYRING as KEYRING
+
     profile.mkdir(parents=True, exist_ok=True)
-    for key in PROFILE_VARIABLES:
-        os.environ[key] = str(profile)
+    os.environ.update({**dict.fromkeys(PROFILE_VARIABLES, str(profile)), **KEYRING})
 
 
 # --- Funktionsfälle (RM-737) -----------------------------------------------------
@@ -541,12 +542,14 @@ def menubar(out: Path) -> Path:
     Ein eigener Prozess, weil das Inventar selbst kein Fenster baut und ein
     Fenster im selben Prozess die Fälle danach nicht stören soll.
     """
+    from tools.native_binding import ISOLATED_KEYRING as KEYRING
+
     target = out / "menubar.json"
     try:
         finished = subprocess.run(
             [sys.executable, str(Path(__file__).resolve()), "menubar", "--out", str(out)],
             cwd=out,
-            env={**os.environ, "PYTHONUTF8": "1", "QT_QPA_PLATFORM": "offscreen"},
+            env={**os.environ, "PYTHONUTF8": "1", "QT_QPA_PLATFORM": "offscreen", **KEYRING},
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -1007,6 +1010,7 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
     sys.path.insert(0, str(ROOT))
     from app.core.process import no_error_dialogs, process_group_options, terminate_process_tree
     from tools.function_cases import RESTART_EXIT, most_restarts, prediction_wait_s
+    from tools.native_binding import ISOLATED_KEYRING as KEYRING
 
     cases = read_cases(out)
     if any(case.kind in ("function", "language") for case in cases):
@@ -1055,7 +1059,7 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
                     stdout=stdout,
                     stderr=stderr,
                     cwd=folder,
-                    env={**os.environ, "PYTHONUTF8": "1"},
+                    env={**os.environ, "PYTHONUTF8": "1", **KEYRING},
                     **process_group_options(no_window=True),
                 )
                 try:

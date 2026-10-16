@@ -63,6 +63,14 @@ PROFILE_VARIABLES: Final = (
     "TMP",
 )
 
+#: Der Schlüsselbund eines Falls und jedes seiner Kinder (RC-12). ``keyring``
+#: wählt sein Backend aus dieser Variable, und die Attrappe antwortet auf jede
+#: Frage mit nichts. Der Schlüsselbund des Nutzers (Windows-Tresor,
+#: macOS-Schlüsselbund, Secret Service) liegt in keinem der Ordner oben; ein
+#: Fall, der ihn fragte, hinge an fremden Daten und läse sie. Eine Quelle für
+#: ``file_acceptance``, ``window_bench`` und die nativen Läufe.
+ISOLATED_KEYRING: Final = {"PYTHON_KEYRING_BACKEND": "keyring.backends.null.Keyring"}
+
 #: Fassung des Bindungsformats. Die Bindungen der Sitzungswerkzeuge trugen 1.
 SCHEMA: Final = 2
 
@@ -360,6 +368,13 @@ def enter(
                 f"{name} zeigt nicht auf das Fallprofil {wanted}.",
                 "Starten Sie den Kindprozess nur über `tools/native_runs.py`; er legt alle"
                 " acht Nutzerordner auf das Fallprofil.",
+            )
+    for name, value in ISOLATED_KEYRING.items():
+        if os.environ.get(name) != value:
+            raise SealError(
+                f"{name} ist nicht {value}: Der Lauf erreichte den Schlüsselbund des Nutzers.",
+                "Starten Sie den Kindprozess nur über `tools/native_runs.py`; er setzt den"
+                " Schlüsselbund des Falls.",
             )
     # Im Belegordner, nie im Baum: Ein Speicherdialog, der nur einen Dateinamen
     # vorschlägt, schreibt in den Arbeitsordner (RC-10). ``app`` kommt über den Pfad.

@@ -454,6 +454,7 @@ def profile_environment(base: Mapping[str, str], profile: Path) -> dict[str, str
     )
     for name in THREAD_VARIABLES:
         env[name] = "1"
+    env.update(native_binding.ISOLATED_KEYRING)
     return env
 
 

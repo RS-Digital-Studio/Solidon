@@ -271,18 +271,28 @@ def test_the_child_checks_seal_and_profile_before_qt(tree: Path, tmp_path: Path)
     profile = {
         name: str(evidence / "profile" / name.lower()) for name in native_binding.PROFILE_VARIABLES
     }
+    allowed = {**profile, **native_binding.ISOLATED_KEYRING}
+    # Gegenprobe Schlüsselbund: ein fremdes Backend — kein Start, kein Beleg (RC-12).
+    foreign = run_tool(
+        tree,
+        *child_arguments(binding, evidence, tmp_path),
+        env={**profile, "PYTHON_KEYRING_BACKEND": "keyring.backends.fail.Keyring"},
+    )
+    assert foreign.returncode == 2, foreign.stderr
+    assert "Schlüsselbund des Nutzers" in foreign.stderr
+    assert not (evidence / "seal-enter.json").exists()
     # Gegenprobe Profil: Ein Nutzerordner zeigt woanders hin — kein Start, kein Beleg.
     stray = run_tool(
         tree,
         *child_arguments(binding, evidence, tmp_path),
-        env={**profile, "TEMP": str(tmp_path / "fremd")},
+        env={**allowed, "TEMP": str(tmp_path / "fremd")},
     )
     assert stray.returncode == 2, stray.stderr
     assert "TEMP zeigt nicht auf das Fallprofil" in stray.stderr
     assert not (evidence / "seal-enter.json").exists()
     # Mit Profil: Siegel und Einstieg tragen; dann scheitert erst der Weg an der
     # kleinen Anwendung — und das Siegel wird beim Abbau trotzdem geprüft.
-    entered = run_tool(tree, *child_arguments(binding, evidence, tmp_path), env=profile)
+    entered = run_tool(tree, *child_arguments(binding, evidence, tmp_path), env=allowed)
     assert entered.returncode == 1, entered.stderr
     record = json.loads((evidence / "seal-enter.json").read_text(encoding="utf-8"))
     assert record["pyside_imported"] is False
@@ -300,7 +310,7 @@ def test_the_child_checks_seal_and_profile_before_qt(tree: Path, tmp_path: Path)
     shutil.rmtree(evidence)
     with (tree / "tools" / "native_binding.py").open("a", encoding="utf-8") as stream:
         stream.write("# geändert\n")
-    broken = run_tool(tree, *child_arguments(binding, evidence, tmp_path), env=profile)
+    broken = run_tool(tree, *child_arguments(binding, evidence, tmp_path), env=allowed)
     assert broken.returncode == 2
     assert "Siegel gebrochen" in broken.stderr
     assert not (evidence / "seal-enter.json").exists()
@@ -344,8 +354,11 @@ def test_the_child_gets_its_own_profile_and_platform(tmp_path: Path) -> None:
         "SOLIDON3D_MOTION": "aus",
         "PYSIDE6_OPTION_LAZY": "1",
         "PATH": "P",
+        "PYTHON_KEYRING_BACKEND": "keyring.backends.fail.Keyring",
     }
     env = profile_environment(base, tmp_path / "profil")
+    # Kein Kind fragt den Schlüsselbund des Nutzers (RC-12).
+    assert env["PYTHON_KEYRING_BACKEND"] == "keyring.backends.null.Keyring"
     for name in native_binding.PROFILE_VARIABLES:
         assert env[name] == str(tmp_path / "profil" / name.lower())
     assert env["HOME"] == "H" and env["PATH"] == "P"
