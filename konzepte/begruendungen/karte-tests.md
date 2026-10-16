@@ -496,6 +496,8 @@ offen lässt, wird an sich selbst rot, nicht am nächsten im selben Arbeiter;
 Sichtbarkeit wird über die Klasse gefragt, weil Fälle `isVisible` ersetzen.
 Geprüft in `test_window_leftovers.py`.
 
+`resize_watchdog.py`: `ResizeWatchdog` zählt die Größenänderungen eines Ausschnitts und verbirgt den Dialog über `RESIZES_PER_STATUS` — eine Größenschleife wird ein roter Fall statt eines Hängers (`test_generate_ui.py`, L3).
+
 `plane_refusals.py` gibt `sketch_plane_refusal`: die echte Ebenenabsage einer
 Skizzenoperation für `test_plane_refusal_field.py` und
 `test_refusal_field_ways_window.py` (FD-182), statt eines privaten Helfers aus

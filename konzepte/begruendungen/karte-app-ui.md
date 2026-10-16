@@ -2344,7 +2344,8 @@ Beschriftung; die `min-height` des Stylesheets wird sonst zur ausdrücklichen
 Mindesthöhe von 26 Punkten, und ein enges Layout staucht die Schrift, FD-185) ·
 `style_follow.py` (der eine Zuhörer dazu: setzt bei `ApplicationFontChange`
 den Stil neu, nur über Solidons eigenem Stylesheet, und hebt Knöpfe nach
-Polieren, Stil- und Schriftwechsel, FD-194) · `toolbar_follow.py` (die
+Polieren, Stil- und Schriftwechsel, FD-194; ein `style.WrappedNote` misst nach
+einem Schriftwechsel neu, M1) · `toolbar_follow.py` (die
 Hauptleiste wählt Wörter oder Zeichen nach einem Schriftwechsel neu, L1) ·
 `theme.py`
 (hell und dunkel) · `window_chrome.py` (die Titelleiste trägt die Farben der

@@ -10,8 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from PySide6.QtCore import QEvent, QObject
-from PySide6.QtWidgets import QApplication, QDialogButtonBox, QPushButton, QWidget
+from PySide6.QtWidgets import QApplication, QDialogButtonBox, QPushButton
 
 from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import OperationCancelled
@@ -20,6 +19,7 @@ from app.core.scene.project import new_project
 from app.ui.generate_dialog import GenerateDialog
 from app.ui.session import Session
 from tests.helpers import FakeMesh
+from tests.resize_watchdog import RESIZES_PER_STATUS, ResizeWatchdog
 from tests.scripted_backend import ScriptedMeshBackend
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
@@ -847,33 +847,6 @@ def test_the_main_button_stays_the_default_through_the_run(qt_app: QApplication)
     qt_app.processEvents()
 
 
-#: So oft darf der Ausschnitt seine Größe ändern, während ein Status ankommt —
-#: weit über dem, was ein Wachsen braucht. Darüber schaltet der Dialog ohne Ende.
-_RESIZES_PER_STATUS = 200
-
-
-class _Watchdog(QObject):
-    """Zählt die Größenänderungen des Ausschnitts und hält eine Endlosschleife an.
-
-    Schaltet der Dialog seinen Balken ohne Ende hin und her, käme ``processEvents``
-    nie zurück, und der Fall hinge bis zur Zeitgrenze der CI. Über der Grenze
-    verbirgt der Wachhund den Dialog — verborgen misst er nicht mehr —, und der
-    Fall wird an der Zählung rot (Nachprüfung, L3).
-    """
-
-    def __init__(self, dialog: QWidget) -> None:
-        super().__init__(dialog)
-        self.dialog = dialog
-        self.count = 0
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
-        if event.type() == QEvent.Type.Resize:
-            self.count += 1
-            if self.count > _RESIZES_PER_STATUS and self.dialog.isVisible():
-                self.dialog.hide()
-        return False
-
-
 def test_status_text_grows_the_dialog_once_and_stays_reachable(qt_app: QApplication) -> None:
     """Ein langer Status vergrößert den Rahmen bis zum Bildschirm, der Rest rollt;
     ein kurzer danach gibt nichts zurück, damit der Rahmen nicht springt (RM-487)."""
@@ -886,11 +859,11 @@ def test_status_text_grows_the_dialog_once_and_stays_reachable(qt_app: QApplicat
         _settle(qt_app)
         before = dialog.size()
 
-        watchdog = _Watchdog(dialog)
+        watchdog = ResizeWatchdog(dialog)
         dialog._scroll.viewport().installEventFilter(watchdog)
         dialog.state.setText(long_text)
         _settle(qt_app)
-        assert watchdog.count <= _RESIZES_PER_STATUS, (
+        assert watchdog.count <= RESIZES_PER_STATUS, (
             f"der Ausschnitt änderte {watchdog.count}-mal seine Größe, "
             "der Dialog schaltet ohne Ende"
         )
