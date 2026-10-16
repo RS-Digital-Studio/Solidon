@@ -812,6 +812,17 @@ class FileRewrite:
                 if not any((id(w.stmt), w.number) == key for w in self.watches):
                     self.watches.append(Watch(binder, number, module, plain))
 
+    def _watch_loader(self, assign: ast.Assign) -> None:
+        """Der Import, über den die wegfallende Zuweisung ``x = importlib.import_module("H")``
+        lud (``import importlib`` oder ``from importlib import import_module``), fällt mit ihr
+        weg, wenn ihn danach niemand mehr liest — sonst bliebe er ungelesen stehen (ruff F401,
+        Trockenprobe Paket K: 29 Stellen in zehn Testdateien)."""
+        root: ast.expr | None = assign.value.func if isinstance(assign.value, ast.Call) else None
+        while isinstance(root, ast.Attribute):
+            root = root.value
+        if isinstance(root, ast.Name):
+            self._watch(import_binders(self.source, root.id, root), root.id, "", plain=False)
+
     def rebind(self, stmt: ast.ImportFrom, number: int, module: str, name: str, rule: str) -> None:
         """Ein Eintrag ``from M import N [as b]`` wird ``from module import name as b``; der
         gebundene Name bleibt, damit kein Leser in der Datei umbenannt werden muss."""
@@ -824,8 +835,25 @@ class FileRewrite:
     # ---- Abschluss
 
     def finish(self) -> list[Edit]:
-        """Die gesammelten Zeilen samt Importänderungen; ungelesene Importe fallen weg."""
+        """Die gesammelten Zeilen samt Importänderungen; ungelesene Importe fallen weg — auch
+        der, über den eine wegfallende Zuweisung ``x = importlib.import_module(…)`` lud."""
         self._place_requests()
+        dropped: list[ast.Assign] = []
+        for assign_watch in self.assign_watches:
+            stmt = assign_watch.stmt
+            if any(s is stmt for s in dropped) or self._assignment_used(assign_watch):
+                continue
+            if self._only_statement(stmt):
+                self.ctx.problem(
+                    f"{self.path}:{stmt.lineno}: die Zuweisung ist die einzige Anweisung ihres "
+                    "Blocks und fiele weg — Block vorher umschreiben"
+                )
+                continue
+            dropped.append(stmt)
+        for stmt in dropped:
+            start, end = self._range(stmt)
+            self._ranges.append((start, end, ""))
+            self._watch_loader(stmt)
         for watch in self.watches:
             plan = self.plan(watch.stmt)
             if watch.number in plan.replace or watch.number in plan.drop:
@@ -837,16 +865,7 @@ class FileRewrite:
             plan.drop.add(watch.number)
             plan.rules.append("Import ohne Leser fällt weg")
         out = list(self.edits)
-        for assign_watch in self.assign_watches:
-            if self._assignment_used(assign_watch):
-                continue
-            stmt = assign_watch.stmt
-            if self._only_statement(stmt):
-                self.ctx.problem(
-                    f"{self.path}:{stmt.lineno}: die Zuweisung ist die einzige Anweisung ihres "
-                    "Blocks und fiele weg — Block vorher umschreiben"
-                )
-                continue
+        for stmt in dropped:
             old = " ".join(self.source.node_text(stmt).split())
             out.append(
                 Edit.at(
@@ -944,7 +963,26 @@ class FileRewrite:
                 f"{self.path}:{stmt.lineno}: Kommentar in einer mehrzeiligen Importanweisung, die "
                 "umgebaut wird — Kommentar vorher hinter die Anweisung stellen"
             )
+        if not statements and self._first_statement(stmt) and stmt.end_lineno is not None:
+            # Fällt die erste Anweisung eines Blocks ganz weg, gehen die Leerzeilen dahinter mit:
+            # Eine Leerzeile direkt unter ``def …:`` lässt ruff format stehen.
+            last = stmt.end_lineno
+            while last < len(self.source.lines) and not self.source.lines[last].strip():
+                last += 1
+            return Edit(self.path, "lines", rules, detail, "", stmt.lineno, 0, last, 0)
         return Edit.at(self.path, "stmt", stmt, "\n".join(statements), rules, detail)
+
+    def _first_statement(self, stmt: ast.stmt) -> bool:
+        """Ob ``stmt`` die erste Anweisung seines Blocks ist (in einer Funktion, Klasse, einem
+        Zweig — nicht auf Modulebene, wo ruff format die Leerzeilen ordnet)."""
+        parent = self.source.parent(stmt)
+        if isinstance(parent, ast.Module):
+            return False
+        for name in ("body", "orelse", "finalbody"):
+            body = getattr(parent, name, None)
+            if isinstance(body, list) and body and body[0] is stmt:
+                return True
+        return False
 
     def _original(self, stmt: ast.stmt) -> str:
         text = self.source.node_text(stmt)

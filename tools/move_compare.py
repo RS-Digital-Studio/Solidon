@@ -735,6 +735,21 @@ class ReaderComparison(Comparison):
             kept_old.append(stmt)
         old_items = list(_blocks(kept_old))
         new_items = list(_blocks(new))
+        if len(old_items) > len(new_items):
+            # Ein Importblock, dessen Einträge alle wegfallen (etwa ``from importlib import
+            # import_module`` hinter einer wegfallenden Modulzuweisung): Jede Streichung prüft
+            # ``imports`` wie sonst — vorher gelesen, erklärt.
+            present = {ast.dump(s) for s in new}
+            excess = len(old_items) - len(new_items)
+            kept_items: list[ast.stmt | list[ast.stmt]] = []
+            for item in old_items:
+                gone = isinstance(item, list) and not {ast.dump(s) for s in item} & present
+                if excess and gone and isinstance(item, list):
+                    excess -= 1
+                    self.imports(owner, item, [])
+                    continue
+                kept_items.append(item)
+            old_items = kept_items
         if len(new_items) > len(old_items):
             old_dumps = {ast.dump(s) for s in old}
             kept_new: list[ast.stmt | list[ast.stmt]] = []

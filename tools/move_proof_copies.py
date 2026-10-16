@@ -24,6 +24,7 @@ er nicht mehr bindet.
 from __future__ import annotations
 
 import ast
+from collections import Counter
 from collections.abc import Iterator
 
 from tools.code_index import Index, PatchSite
@@ -245,6 +246,16 @@ class CopiesProof:
                 )
 
 
+#: Die Importe, über die ein Test ein Modul hinter einem gleichnamigen trägen Export lädt
+#: (``x = importlib.import_module("H")``).
+_LOADERS = frozenset(
+    {
+        ImportBinding("import", "importlib", "", "importlib"),
+        ImportBinding("from", "importlib", "import_module", "import_module"),
+    }
+)
+
+
 class CopiesReaderComparison(ReaderComparison):
     """Eine geänderte Datei im Modus ``copies``: Halter, Leser einer Kopie oder Test."""
 
@@ -259,6 +270,7 @@ class CopiesReaderComparison(ReaderComparison):
         self.new_top = TopLevel(self.new)
         self.old_scopes = FileScopes(self.old) if self.local else None
         self.new_scopes = FileScopes(self.new) if self.local else None
+        self._loaders: set[str] | None = None
 
     # ---- Anweisungen
 
@@ -355,7 +367,38 @@ class CopiesReaderComparison(ReaderComparison):
             return True
         module = _bound_module(binding, self.index_old)
         assigned = {c.head.module for c in self.local.values() if c.head.kind == "assign"}
-        return module is not None and (module in self.owner.holders or module in assigned)
+        if module is not None and (module in self.owner.holders or module in assigned):
+            return True
+        return binding in _LOADERS and binding.bound in self._dropped_loaders()
+
+    def _dropped_loaders(self) -> set[str]:
+        """Die Namen (``importlib``, ``import_module``), über die eine Zuweisung ``x =
+        importlib.import_module("H")`` eines Halters lud, die nachher fehlt (``blocks`` der
+        Grundklasse erklärt sie). Ihr Import darf mit ihr fallen; liest danach noch jemand den
+        Namen, vergleicht ``_reference`` die Stelle über R und findet ihn ungebunden."""
+        if self._loaders is None:
+            remaining = Counter(
+                ast.dump(n) for n in ast.walk(self.new.tree) if isinstance(n, ast.Assign)
+            )
+            self._loaders = set()
+            for node in ast.walk(self.old.tree):
+                if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+                    continue
+                if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+                    continue
+                if remaining[ast.dump(node)] > 0:
+                    remaining[ast.dump(node)] -= 1
+                    continue
+                values = self.index_old.resolve(self.path, node.value)
+                modules = {v.ref for v in values if v.kind == "module" and v.data != "loaded"}
+                if len(values) != 1 or len(modules) != 1 or not self.removable_module(*modules):
+                    continue
+                root: ast.expr = node.value.func
+                while isinstance(root, ast.Attribute):
+                    root = root.value
+                if isinstance(root, ast.Name):
+                    self._loaders.add(root.id)
+        return self._loaders
 
     def allowed_module_alias(self, binding: ImportBinding) -> bool:
         module = _bound_module(binding, self.index_new)

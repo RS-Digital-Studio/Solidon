@@ -11,6 +11,7 @@ Schreiben abgewiesen, mit Stelle und Ausweg.
 
 from __future__ import annotations
 
+import shutil
 import tomllib
 from pathlib import Path
 
@@ -207,6 +208,82 @@ def test_a_local_import_falls_away_only_where_nobody_reads_it(tmp_path: Path) ->
         "def test_other():\n    from app.core import consumer\n\n"
         "    assert consumer.LIMIT == 3\n"
     )
+
+
+LOADER_TEST = '''\
+"""Tests, die den Halter nur für seine Kopien laden."""
+
+from importlib import import_module
+
+
+def test_local(monkeypatch):
+    import importlib
+
+    holder = importlib.import_module("app.core.consumer")
+    monkeypatch.setattr(holder, "scale", len)
+
+
+def test_head(monkeypatch):
+    holder = import_module("app.core.consumer")
+    monkeypatch.setattr(holder, "operation", len)
+'''
+
+LOADER_TEST_NEW = '''\
+"""Tests, die den Halter nur für seine Kopien laden."""
+
+
+def test_local(monkeypatch):
+    from app.core import engine
+
+    monkeypatch.setattr(engine, "scale", len)
+
+
+def test_head(monkeypatch):
+    from app.core import engine
+
+    monkeypatch.setattr(engine, "compute", len)
+'''
+
+
+def test_the_loader_of_a_dropped_module_assignment_falls_away_with_it(tmp_path: Path) -> None:
+    """Trockenprobe K: Fällt ``x = importlib.import_module("H")`` weg, weil ``x`` nur Kopien
+    las, fällt auch der Import, über den es lud — lokal ``import importlib`` wie auf Modulebene
+    ``from importlib import import_module``. Vorher blieb er ungelesen stehen, und ruff hielt den
+    Schnitt an 29 Stellen in zehn Testdateien an (F401)."""
+    root, result = _run(tmp_path, fx.COPIES_OLD | {"tests/test_loader.py": LOADER_TEST})
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    assert (root / "tests/test_loader.py").read_text(encoding="utf-8") == LOADER_TEST_NEW
+    assert result.proof is not None
+    text = result.proof.text()
+    assert "entfällt import importlib" in text, text
+    assert "entfällt from importlib import import_module" in text, text
+
+
+def test_a_loader_read_elsewhere_stays(tmp_path: Path) -> None:
+    """Liest den Import danach noch jemand, bleibt er — und der Beweis weist einen Baum ab, der
+    ihn trotzdem streicht: Der übrige Leser fände ``importlib`` dann nicht mehr."""
+    reader = '    assert importlib.import_module("app.core.engine").LIMIT == 3\n'
+    old = LOADER_TEST.replace(
+        '    monkeypatch.setattr(holder, "scale", len)\n',
+        '    monkeypatch.setattr(holder, "scale", len)\n' + reader,
+    )
+    root, result = _run(tmp_path, fx.COPIES_OLD | {"tests/test_loader.py": old})
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    kept = LOADER_TEST_NEW.replace(
+        "def test_local(monkeypatch):\n    from app.core import engine\n\n"
+        '    monkeypatch.setattr(engine, "scale", len)\n',
+        "def test_local(monkeypatch):\n    import importlib\n\n    from app.core import engine\n\n"
+        '    monkeypatch.setattr(engine, "scale", len)\n' + reader,
+    )
+    assert (root / "tests/test_loader.py").read_text(encoding="utf-8") == kept
+    stripped = kept.replace("    import importlib\n\n", "", 1)
+    assert stripped != kept
+    new = shutil.copytree(root, tmp_path / "new")
+    (new / "tests/test_loader.py").write_bytes(stripped.encode("utf-8"))
+    old_tree = fx.write_tree(tmp_path / "old", fx.COPIES_OLD | {"tests/test_loader.py": old})
+    proof = move_proof.prove(move_cut.load(tmp_path / "cut.toml"), old_tree, new)
+    assert not proof.ok, proof.text()
+    assert "tests/test_loader.py:8 (Leser): importlib meint vorher" in proof.text(), proof.text()
 
 
 def test_a_new_import_joins_the_statement_of_its_module(tmp_path: Path) -> None:
