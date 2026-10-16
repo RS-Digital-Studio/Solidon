@@ -6244,8 +6244,16 @@ def test_the_answer_to_the_recognition_question_is_told_at_once(monkeypatch, pro
     assert told == [(1, {"object_id": "obj_1", "scope": told[0][1]["scope"], "allowed": True})]
 
 
-def _detect_failing_once(module, monkeypatch):
-    """Der erste Aufruf von ``detect`` läuft in den Speicher, jeder weitere rechnet."""
+def _detect_failing_once(monkeypatch):
+    """Der erste Aufruf von ``detect`` läuft in den Speicher, jeder weitere rechnet.
+
+    Ersetzt wird ``detect`` in der Auswertung, als Import gebunden: Dort ist es eine
+    Kopfkopie aus ``features`` (CS-11), und so stellt der erzeugte Schnitt Zugriff und
+    Ersatz auf das Original um.
+    """
+    from importlib import import_module
+
+    module = import_module("app.core.scene.evaluate")
     real = module.detect
     calls: list[int] = []
 
@@ -6280,7 +6288,7 @@ def test_a_new_decision_after_running_out_of_memory_tries_again(monkeypatch, pro
     project, history = _loaded_box_with(
         OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
     )
-    calls = _detect_failing_once(module, monkeypatch)
+    calls = _detect_failing_once(monkeypatch)
 
     def run():
         result = evaluate(
@@ -6323,7 +6331,7 @@ def test_the_same_mesh_in_another_project_is_a_new_decision(monkeypatch, profile
     first, _history = _loaded_box_with(
         OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
     )
-    calls = _detect_failing_once(module, monkeypatch)
+    calls = _detect_failing_once(monkeypatch)
     evaluate(
         first.document,
         profile,
