@@ -544,6 +544,7 @@ def menubar(out: Path) -> Path:
     """
     from tools.native_binding import ISOLATED_KEYRING as KEYRING
 
+    out.mkdir(parents=True, exist_ok=True)  # cwd des Kindes (RC-10)
     target = out / "menubar.json"
     try:
         finished = subprocess.run(

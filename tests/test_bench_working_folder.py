@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -77,3 +78,30 @@ def test_the_scan_sees_a_start_in_the_tree() -> None:
         "supervise(command, cwd=ROOT, env=env)\n"
     )
     assert starts_in_the_tree(planted) == [1, 2, 5]
+
+
+def test_the_menubar_starts_in_a_run_folder_that_exists(tmp_path: Path, monkeypatch: Any) -> None:
+    """Das Inventar fragt die Menüleiste, bevor es den Laufordner anlegt.
+
+    Mit ``cwd=out`` (RC-10) scheiterte das an einem neuen Ordner mit
+    „Der Verzeichnisname ist ungültig“ (Offscreen-Probe der Matrix).
+    """
+    import subprocess
+    from types import SimpleNamespace
+
+    from tools import file_acceptance
+
+    out = tmp_path / "neuer-lauf"
+    seen: list[bool] = []
+
+    def run(command: list[str], **named: Any) -> Any:
+        seen.append(Path(named["cwd"]).is_dir())
+        if not seen[-1]:
+            raise NotADirectoryError(267, "Der Verzeichnisname ist ungültig")
+        (out / "menubar.json").write_text("{}", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr(file_acceptance.subprocess, "run", run)
+    assert subprocess.run is run
+    assert file_acceptance.menubar(out) == out / "menubar.json"
+    assert seen == [True]
