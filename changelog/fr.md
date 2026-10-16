@@ -101,6 +101,7 @@ dans `website/version.json`.
 - Si un champ obligatoire comme le texte de *Inscription comme corps* est vide, le champ indique ce qu'il attend et le bouton patiente. La version 0.6.0 y affichait une erreur à l'ouverture.
 - Pour modifier une étape, on confirme avec *Appliquer*. Le bouton reste grisé tant que rien n'a changé et nomme le champ à modifier.
 - Le dialogue *Calibrer le matériau* affiche jeu, serrage, compensation des trous, patte d'éléphant et paroi dans l'unité choisie, pouces compris, et garde la troisième décimale.
+- Un bouton long sous un refus passe à la ligne en grande police, au lieu d'élargir le dialogue.
 
 ### Imprimer et transmettre au slicer
 
@@ -129,6 +130,7 @@ dans `website/version.json`.
 - Dans l'onglet *Sélection*, *Appliquer* reste grisé tant qu'aucune valeur ne change, et indique le premier champ. Pivoter ou dupliquer avec leurs valeurs prévues reste immédiat.
 - Perçage, rebouchage, trous oblongs et champs de trous nomment le réglage « Compenser les écarts d'impression », comme le groupe de cotes. Il ajoute la compensation des trous.
 - À l'ouverture d'une étape existante, le bouton dit *Appliquer* au lieu d'*Insérer*. Il reste grisé tant qu'aucune valeur ne change, et indique le champ.
+- Après un plan de dessin illisible, *Choisir un autre plan* ouvre l'étape avec le curseur dans son esquisse.
 
 ## 0.6.0
 

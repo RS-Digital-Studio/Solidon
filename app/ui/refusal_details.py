@@ -12,7 +12,8 @@ Eine Absage spricht in den Wörtern des Fensters, nicht in denen des Kerns.
   Feldnamen und misst seine Höhe am Inhalt.
 * *Eingabe korrigieren* stand im offenen Operationsdialog als Satz, obwohl der
   Dialog selbst die Eingabe ist (FD-95). :func:`field_ways` macht daraus den
-  Sprung ins Feld, das der Kern nennt; ohne Feld fällt der Satz weg.
+  Sprung ins Feld, das der Kern nennt, wo der Dialog es führt (FD-182);
+  sonst fällt der Satz weg.
 """
 
 from __future__ import annotations
@@ -57,6 +58,9 @@ newline = chr(10)
 #: Ebene wählen* ist am Skizzenschritt derselbe Weg zum Ebenenfeld.
 FIELD_WAYS: Final = frozenset({CORRECT_INPUT.id, PICK_PLANE.id})
 
+#: Was davon ohne erreichbares Feld wegfällt, statt als Rat zu stehen.
+QUIET_WITHOUT_FIELD: Final = frozenset({CORRECT_INPUT.id})
+
 #: Wie breit das Wertefenster höchstens von selbst wird; längere Zeilen brechen um.
 STEP_VALUES_WIDTH: Final = (420, 720)
 
@@ -80,11 +84,16 @@ def input_dialog_of(widget: QWidget | None) -> Any | None:
 def field_ways(error: AppError, owner: Any | None) -> dict[str, Callable[[AppError], None]]:
     """*Eingabe korrigieren* als Sprung ins genannte Feld des offenen Dialogs.
 
+    Nur, wo der Sprung landet: *Objekt umbenennen* bot auf eine Ebenenabsage
+    „Eine andere Ebene wählen“ an, ohne Ebenenfeld — ein Knopf, der nichts
+    tat und den Dialog verbreiterte (FD-182). Gefragt wird ``focus_field``
+    selbst, damit Angebot und Sprung dieselbe Antwort geben.
+
     Der Rückruf hält den Dialog nur schwach: Er hängt am Hinweis, und der
     Hinweis ist ein Kind des Dialogs (``wartezeit.md``, Rückrufe).
     """
     field = str(error.values.get("field") or "")
-    if owner is None or not field:
+    if not _reaches(owner, field):
         return {}
     held = weakref.ref(owner)
     wanted = {action.id for action in error.suggestions}
@@ -97,11 +106,21 @@ def field_ways(error: AppError, owner: Any | None) -> dict[str, Callable[[AppErr
     return dict.fromkeys(FIELD_WAYS & wanted, jump)
 
 
+def _reaches(owner: Any | None, field: str) -> bool:
+    """Ob der offene Dialog den Cursor in ``field`` setzen könnte."""
+    return owner is not None and bool(field) and bool(owner.focus_field(field, check_only=True))
+
+
 def silent_ways(error: AppError, owner: Any | None) -> frozenset[str]:
-    """Die Wege, die im offenen Eingabedialog ohne Feld nichts zu sagen haben."""
-    if owner is None or error.values.get("field"):
+    """Die Wege, die im offenen Eingabedialog ohne sein Feld nichts zu sagen haben.
+
+    Das ist nur *Eingabe korrigieren*: Die Eingabe steht darüber (FD-95).
+    *Eine andere Ebene wählen* sagt dagegen auch ohne Ebenenfeld, was zu tun
+    ist, und bleibt als Rat stehen — ohne Knopf, der nichts täte (FD-182).
+    """
+    if owner is None or _reaches(owner, str(error.values.get("field") or "")):
         return frozenset()
-    return frozenset(FIELD_WAYS & {action.id for action in error.suggestions})
+    return frozenset(QUIET_WITHOUT_FIELD & {action.id for action in error.suggestions})
 
 
 def _session_of(widget: QWidget | None) -> Any | None:

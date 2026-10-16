@@ -163,6 +163,12 @@ Rückseite; eine ausdrückliche Feldübergabe öffnet sie vor dem Fokuswechsel.
 - **Jede Zeile trägt ihren Namen** (FD-94): `name_rows` nach jedem Aufbau, das
   Ausdrucksfeld heißt „{Zeile} · Ausdruck“; Wächter
   `tests/test_operation_dialog_names.py` öffnet jede Operation.
+- **Ein Feldweg in der Absage ist ein Knopf nur, wo er landet** (FD-182):
+  `refusal_details.field_ways` fragt `focus_field(…, check_only=True)`. Sonst
+  fällt *Eingabe korrigieren* weg (die Eingabe steht darüber), jeder andere
+  Weg bleibt als Rat im Text. Knöpfe unter der Absage brechen um
+  (`WrappingButton`), statt den Dialog zu verbreitern; Wächter
+  `tests/test_refusal_field_ways_window.py` über jede Operation.
 
 ## Die linken Karten zeigen nur, was gilt (RM-519)
 

@@ -101,6 +101,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un campo obligatorio como el texto de *Rótulo como cuerpo* está vacío, el campo dice qué va dentro y el botón espera. La versión 0.6.0 mostraba ahí un error al abrir.
 - Quien cambia un paso confirma con *Aplicar*. El botón sigue gris hasta que algo cambia y nombra el campo que hay que cambiar.
 - El diálogo *Calibrar material* muestra holgura, apriete, compensación de agujeros, pie de elefante y pared en la unidad elegida, también en pulgadas, y conserva el tercer decimal.
+- Un botón largo bajo un rechazo se divide en varias líneas con letra grande, en lugar de ensanchar el diálogo.
 
 ### Imprimir y entregar al slicer
 
@@ -129,6 +130,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la pestaña *Selección*, *Aplicar* sigue en gris hasta que cambia un valor e indica el primer campo. Girar o duplicar con sus valores previstos sigue siendo inmediato.
 - Al taladrar, tapar, en ranuras y en campos de agujeros, el ajuste se llama «Compensar desviaciones de impresión», como en el grupo de cotas, y suma la compensación de agujeros.
 - Al abrir un paso existente, el botón dice *Aplicar* en lugar de *Insertar*. Sigue en gris hasta que cambia un valor e indica el campo.
+- Tras un plano de dibujo ilegible, *Elegir otro plano* abre el paso con el cursor en su boceto.
 
 ## 0.6.0
 

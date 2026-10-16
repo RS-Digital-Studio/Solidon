@@ -100,6 +100,7 @@ it into `website/version.json`.
 - If a required field such as the text of *Lettering as a body* is empty, the field says what goes in and the button waits. Version 0.6.0 showed an error there on opening.
 - When you change a step, you confirm with *Apply*. The button stays grey until something has changed and names the field to change.
 - The *Calibrate material* dialog shows clearance, interference, hole compensation, elephant foot and wall in the chosen unit, inches included, and keeps the third decimal place.
+- A long button under a refusal wraps at large font sizes instead of widening the dialog.
 
 ### Printing and slicer handover
 
@@ -128,6 +129,7 @@ it into `website/version.json`.
 - In the *Selection* tab, *Apply* stays grey until a value changes and names the first field. Rotating or duplicating with their preset values still works right away.
 - Drilling, filling, slots and hole fields call the adjustment “Compensate for printing deviations” as the dimension group does, and it adds the material's hole compensation.
 - Opening an existing step offers *Apply* instead of *Insert*. The button stays grey until a value changes and names the field.
+- After an unreadable drawing plane, *Pick a different plane* opens the step with the cursor in its sketch.
 
 ## 0.6.0
 

@@ -100,6 +100,7 @@ scrive in `website/version.json`.
 - Se un campo obbligatorio come il testo di *Scritta come corpo* è vuoto, il campo dice cosa va inserito e il pulsante attende. La versione 0.6.0 mostrava lì un errore all'apertura.
 - Chi modifica un passo conferma con *Applica*. Il pulsante resta grigio finché qualcosa non cambia e indica il campo da cambiare.
 - La finestra *Calibra il materiale* mostra gioco, interferenza, compensazione dei fori, piede d'elefante e parete nell'unità scelta, anche in pollici, e conserva la terza decimale.
+- Un pulsante lungo sotto un rifiuto va a capo con caratteri grandi, invece di allargare la finestra.
 
 ### Stampare e passare allo slicer
 
@@ -128,6 +129,7 @@ scrive in `website/version.json`.
 - Nella linguetta *Selezione*, *Applica* resta grigio finché non cambia un valore e indica il primo campo. Ruotare o duplicare con i valori predefiniti resta immediato.
 - Foratura, chiusura, asole e campi di fori chiamano la correzione «Compensare gli scostamenti di stampa», come il gruppo di quote, e aggiungono la compensazione dei fori.
 - Aprendo un passaggio esistente, il pulsante dice *Applica* invece di *Inserisci*. Resta grigio finché non cambia un valore e indica il campo.
+- Dopo un piano di disegno illeggibile, *Scegli un altro piano* apre il passaggio con il cursore nel suo schizzo.
 
 ## 0.6.0
 

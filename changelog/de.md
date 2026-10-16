@@ -125,6 +125,7 @@ Nutzen da und sonst nichts.
 - Ist ein Pflichtfeld wie der Text von *Schriftzug als Körper* leer, sagt das Feld, was hineingehört, und der Knopf wartet. Version 0.6.0 zeigte dort beim Öffnen einen Fehler.
 - Wer einen Schritt ändert, bestätigt mit *Übernehmen*. Der Knopf bleibt grau, bis sich etwas geändert hat, und nennt das Feld dafür.
 - Der Dialog *Material kalibrieren* zeigt Spiel, Übermaß, Lochkorrektur, Elefantenfuß und Wand in der gewählten Einheit, auch in Zoll, und behält die dritte Nachkommastelle.
+- Ein langer Knopf unter einer Absage bricht bei großer Schrift um, statt den Dialog zu verbreitern.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -153,6 +154,7 @@ Nutzen da und sonst nichts.
 - Im Reiter *Auswahl* bleibt *Übernehmen* grau, bis sich ein Wert ändert, und nennt das erste Feld. Drehen oder Verdoppeln mit ihrer Vorgabe gehen weiter sofort.
 - Beim Bohren, Verschließen, Langloch und Lochfeld heißt der Ausgleich „Druckabweichung ausgleichen“ wie in der Maßgruppe und gibt die Lochkorrektur des Materials zu.
 - Wer einen vorhandenen Schritt öffnet, übernimmt mit *Übernehmen* statt *Einsetzen*. Der Knopf bleibt grau, bis sich ein Wert ändert, und nennt das Feld.
+- Nach einer unlesbaren Zeichenebene öffnet *Eine andere Ebene wählen* den Schritt mit dem Cursor in seiner Skizze.
 
 ## 0.6.0
 

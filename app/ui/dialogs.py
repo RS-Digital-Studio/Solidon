@@ -138,6 +138,7 @@ from app.ui.style import (
     set_role,
 )
 from app.ui.wrapped_caption import keep_whole_lines
+from app.ui.wrapping_button import WrappingButton
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
 #: schlechter lesbar als ein Wort. Der Name ist englisch wie jeder andere in
@@ -2897,7 +2898,7 @@ class ErrorNotice(QWidget):
         # die Reihenfolge: die führende oben.
         lead = leading_action(actions)
         for action in sorted(actions, key=lambda action: action is not lead):
-            button = QPushButton(str(action.label), self)
+            button = WrappingButton(str(action.label), self)
             button.clicked.connect(weak_slot(self, ErrorNotice._activate, action.id))
             self._layout.addWidget(button)
             self._buttons.append(button)

@@ -100,6 +100,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um campo obrigatório como o texto de *Inscrição como corpo* estiver vazio, o campo diz o que lá vai e o botão espera. A versão 0.6.0 mostrava ali um erro ao abrir.
 - Quem altera um passo confirma com *Aplicar*. O botão fica cinzento até algo mudar e indica o campo a alterar.
 - O diálogo *Calibrar material* mostra folga, interferência, compensação de furos, pé de elefante e parede na unidade escolhida, também em polegadas, e mantém a 3.ª casa decimal.
+- Um botão longo por baixo de uma recusa quebra a linha com letra grande, em vez de alargar o diálogo.
 
 ### Imprimir e entregar ao slicer
 
@@ -128,6 +129,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No separador *Seleção*, *Aplicar* fica cinzento até mudar um valor e indica o primeiro campo. Rodar ou duplicar com os valores predefinidos continua imediato.
 - Furar, tapar, furos oblongos e campos de furos chamam ao ajuste «Compensar desvios de impressão», como o grupo de cotas, e acrescentam a compensação de furos.
 - Ao abrir um passo existente, o botão diz *Aplicar* em vez de *Inserir*. Fica cinzento até mudar um valor e indica o campo.
+- Após um plano de desenho ilegível, *Escolher outro plano* abre o passo com o cursor no seu esboço.
 
 ## 0.6.0
 

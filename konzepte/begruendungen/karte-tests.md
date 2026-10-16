@@ -230,9 +230,14 @@ Leiste, ein Maß ohne Einheit bleibt eine Zahl), `test_parameter_unit_switch_win
 Halt grau), `test_history_change_rows.py` (Doppelklick auf Drucker-, Material-
 und Passungsänderung), `test_step_values_copy.py` (*Kopieren* gibt gespeicherte
 Werte), `test_literal_shared.py` (ein Literal für TOML und OpenSCAD),
-`test_rename_dialog.py` (Vorgabe des Namens, Übernehmen erst nach einer
-Änderung) und `test_foundation_crash_window.py` (nach einem Absturz des
-Grundlagenarbeiters die Tabelle, nichts Vorläufiges).
+`test_rename_dialog.py` (Vorgabe des Namens, markiert beim ersten Fokus,
+Übernehmen erst nach einer Änderung) und `test_foundation_crash_window.py`
+(nach einem Absturz des Grundlagenarbeiters die Tabelle, nichts Vorläufiges).
+Zu FD-182: `test_refusal_field_ways_window.py` (Wächter über jeden
+Operationsdialog und jedes Feld: ein Feldweg ist Knopf mit Sprung oder
+kein Knopf, *Eingabe korrigieren* dann still, die Ebene als Rat; der
+umbrechende Knopf) und `test_plane_refusal_field.py`
+(die Ebenenabsage einer Skizzenoperation nennt `sketch`).
 
 Der Operationsdialog hat je Fund eine eigene Datei:
 `test_operation_dialog_names.py` öffnet jede registrierte Operation und
@@ -424,6 +429,11 @@ gewählter Bohrung in einer bestimmten Größe (`hole_window`) und `settle`, das
 wartet, bis die Karte nach ihrer Öffnungsbewegung steht
 (`test_feature_footer_window.py`, `test_feature_footer_low_window.py`,
 `test_card_tab_chain.py`).
+
+`plane_refusals.py` gibt `sketch_plane_refusal`: die echte Ebenenabsage einer
+Skizzenoperation für `test_plane_refusal_field.py` und
+`test_refusal_field_ways_window.py` (FD-182), statt eines privaten Helfers aus
+`test_sketch_planes.py`.
 
 ## Stolperfallen
 

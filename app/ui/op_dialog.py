@@ -4251,7 +4251,7 @@ class OperationDialog(QDialog):
             return object_id is not None
         return object_id is None or not self.source_objects or object_id in self.source_objects
 
-    def focus_field(self, name: str) -> bool:
+    def focus_field(self, name: str, *, check_only: bool = False) -> bool:
         """Den Cursor in ein bestimmtes Feld setzen — und es aufklappen, wenn es
         hinten liegt.
 
@@ -4264,6 +4264,10 @@ class OperationDialog(QDialog):
         Ein Feld hinter „Weitere Einstellungen" wird mitgeöffnet: Fokus in
         etwas Zugeklapptem ist kein Fokus, sondern ein Cursor, den niemand
         findet (§2.4).
+
+        ``check_only`` fragt nur, ob der Sprung ginge, und rührt nichts an:
+        Ein Feldweg in einer Absage steht nur, wo er landet (FD-182,
+        ``refusal_details.field_ways``).
         """
         if self.spec.name == "create_seal" and name in _SEAL_PATH_COMPANIONS:
             name = "path_sketch"
@@ -4273,6 +4277,8 @@ class OperationDialog(QDialog):
             # (``_couple_dependent_fields``); ``setFocus`` täte dort nichts,
             # und ein „erledigt" dafür wäre gelogen.
             return False
+        if check_only:
+            return True
         entry = next((item for item in self.spec.params.spec() if item.name == name), None)
         if entry is not None and (entry.kind in ("feature", "features") or entry.targets_feature):
             self._feature_focus = name
