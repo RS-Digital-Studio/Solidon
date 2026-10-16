@@ -244,47 +244,108 @@ def test_the_posix_shell_is_found_beside_git_when_the_search_path_lacks_it(
 #: Die Shells, die allein ``tests/shell_helpers.py`` sucht.
 SHELLS: Final = frozenset({"bash", "sh"})
 
-#: Je Schreibweise einer Suche ein gepflanzter Aufruf und was der Wächter darin finden muss;
-#: ``shell`` ist in der gepflanzten Datei an ``"sh"`` gebunden.
+#: Je Schreibweise einer Suche der Kopf der gepflanzten Datei, der Aufruf und was der Wächter
+#: darin finden muss; ``shell`` ist in der gepflanzten Datei an ``"sh"`` gebunden. Die letzte
+#: ist eine eigene Funktion ``which``, keine Suche.
 LOOKUPS: Final = [
-    ('shutil.which("sh")', ["sh"]),
-    ('which("bash")', ["bash"]),
-    ('shutil.which("sh.exe")', ["sh"]),
-    ('shutil.which("Bash.EXE")', ["bash"]),
-    ("shutil.which(shell)", ["sh"]),
-    ('shutil.which(cmd="sh")', ["sh"]),
-    ('shutil.which("git")', []),
+    ("import shutil", 'shutil.which("sh")', ["sh"]),
+    ("from shutil import which", 'which("bash")', ["bash"]),
+    ("from shutil import which as find", 'find("sh")', ["sh"]),
+    ("import shutil", 'getattr(shutil, "which")("bash")', ["bash"]),
+    ("import shutil\n\nlook = shutil.which", 'look("sh")', ["sh"]),
+    ("import shutil", 'shutil.which("sh.exe")', ["sh"]),
+    ("import shutil", 'shutil.which("Bash.EXE")', ["bash"]),
+    ("import shutil", 'shutil.which("/usr/bin/sh")', ["sh"]),
+    ("import shutil", r'shutil.which(r"C:\Program Files\Git\bin\bash.exe")', ["bash"]),
+    ("import shutil", "shutil.which(shell)", ["sh"]),
+    ("import shutil", 'shutil.which(cmd="sh")', ["sh"]),
+    ("import shutil", 'shutil.which("git")', []),
+    ("def which(name: str) -> str:\n    return name", 'which("sh")', []),
 ]
+
+#: Was eine Suche aufruft, gefaltet.
+WHICH: Final = ("ext", "shutil.which")
+
+
+def _is_which(node: ast.expr | None, aliases: set[str]) -> bool:
+    """Ob der Ausdruck selbst ``which`` sein kann: ``x.which``, der Name ``which`` oder einer
+    der ``aliases``, ``getattr(x, "which")``."""
+    if isinstance(node, ast.Attribute):
+        return node.attr == "which"
+    if isinstance(node, ast.Name):
+        return node.id == "which" or node.id in aliases
+    return isinstance(node, ast.Call) and any(
+        isinstance(argument, ast.Constant) and argument.value == "which" for argument in node.args
+    )
+
+
+def _which_calls(tree: ast.Module) -> list[ast.Call]:
+    """Die Aufrufe, die ``shutil.which`` sein können: Das Aufgerufene ist ``which``
+    (:func:`_is_which`) oder ein Name, den die Datei aus einem Import von ``which`` oder aus
+    einem solchen Ausdruck bindet (``find = shutil.which``, auch über weitere Zuweisungen). Nur
+    ihr Aufgerufenes fragt der Wächter den Auflöser: ``resolve`` über jeden Aufruf faltete
+    Testhelfer und zöge dafür die Auszüge des ganzen Baums nach (gemessen: 1 097 Auszüge,
+    50 s, 850 MB je Prozess)."""
+    aliases: set[str] = set()
+    bindings: list[tuple[list[ast.expr], ast.expr | None]] = []
+    calls: list[ast.Call] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.alias) and node.name == "which":
+            aliases.add(node.asname or node.name)
+        elif isinstance(node, ast.Assign):
+            bindings.append((node.targets, node.value))
+        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
+            bindings.append(([node.target], node.value))
+        elif isinstance(node, ast.Call):
+            calls.append(node)
+    known = -1
+    while len(aliases) != known:
+        known = len(aliases)
+        for targets, value in bindings:
+            if _is_which(value, aliases):
+                aliases.update(target.id for target in targets if isinstance(target, ast.Name))
+    return [call for call in calls if _is_which(call.func, aliases)]
 
 
 def _shell_lookups(index: code_index.Index, path: str, source: str) -> list[str]:
-    """Jede Suche nach ``bash`` oder ``sh`` über ``which``, auch als ``shutil.which``.
+    """Jede Suche nach ``bash`` oder ``sh`` über ``shutil.which``.
 
     Gelesen werden Aufrufe, nicht Text: Ein Docstring, der die Suche beschreibt,
-    ist keine Suche. Was gesucht wird, faltet der Auflöser — das erste Argument
-    oder ``cmd=``, als Text oder als Name —, und ``sh.exe`` sucht dieselbe Shell
-    wie ``sh`` (RCS-1).
+    ist keine Suche. Beides faltet der Auflöser (RCS-1, RCS-2): was aufgerufen
+    wird — ``shutil.which``, auch importiert unter anderem Namen, über
+    ``getattr`` oder einen Alias — und was gesucht wird, das erste Argument
+    oder ``cmd=``, als Text oder als Name. Gezählt wird der letzte Teil eines
+    Pfads ohne ``.exe``: ``/usr/bin/sh`` und ``sh.exe`` suchen die ``sh``.
+    Einen Namen für ``which`` aus einem anderen Modul verfolgt der Wächter so
+    wenig wie eine Hülle um die Suche (:func:`_which_calls`).
     """
+    if "which" not in source:
+        # Jede Form aus :func:`_which_calls` nennt ``which`` im Text; die übrigen Dateien
+        # brauchen keinen Syntaxbaum (gemessen: 8 s für alle ``tests/*.py``).
+        return []
     found = []
-    for node in ast.walk(ast.parse(source)):
-        if not (
-            isinstance(node, ast.Call)
-            and "which" in (getattr(node.func, "attr", None), getattr(node.func, "id", None))
-        ):
+    for node in _which_calls(ast.parse(source)):
+        if not any((value.kind, value.ref) == WHICH for value in index.resolve(path, node.func)):
             continue
         named = [keyword.value for keyword in node.keywords if keyword.arg == "cmd"]
         for argument in [*node.args[:1], *named]:
             values = {value.data for value in index.resolve(path, argument)}
-            names = {value.lower().removesuffix(".exe") for value in values if type(value) is str}
+            names = {
+                re.split(r"[\\/]", value)[-1].lower().removesuffix(".exe")
+                for value in values
+                if type(value) is str
+            }
             found.extend(names & SHELLS)
     return sorted(found)
 
 
-@pytest.mark.parametrize(("call", "expected"), LOOKUPS)
-def test_the_shell_guard_finds_every_way_of_looking(call: str, expected: list[str]) -> None:
+@pytest.mark.parametrize(("head", "call", "expected"), LOOKUPS)
+def test_the_shell_guard_finds_every_way_of_looking(
+    head: str, call: str, expected: list[str]
+) -> None:
     """Gegenprobe zum Wächter: je Schreibweise eine gepflanzte Suche, über denselben Leser."""
     planted = "tests/test_planted.py"
-    source = f'import shutil\n\n\ndef find():\n    shell = "sh"\n    return {call}\n'
+    source = f'{head}\n\n\ndef probe():\n    shell = "sh"\n    return {call}\n'
     assert _shell_lookups(build_index({planted: source}), planted, source) == expected
 
 
