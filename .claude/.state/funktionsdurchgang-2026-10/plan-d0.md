@@ -341,9 +341,12 @@ Fallprozess, nicht danach (`tools/function_prediction.py`):
 5. Das Protokoll trägt `prediction.bound` (`cases/<nr>/v4/prediction-before-click.json <sha256>`).
    Das Urteil übernimmt ihn wörtlich als `prediction_bound`, die Vorhersage
    als `prediction`, und vergleicht mit dem Bild danach. `report` nimmt eine
-   Bindung an diesen Lauf nur, wenn sein Tor genau sie freigab
-   (`release_problems`); aus einer anderen Runde mit deren Kennung davor
-   (`v4:cases/…`). Ohne gültige Vorhersage fällt der Klick nach der Frist
+   Bindung nur, wenn das Tor ihres Laufs genau sie freigab, die Datei am Pfad
+   der Bindung noch diesen SHA256 hat und ihre Vorhersage die des Urteils ist
+   (`release_problems`, Leerraum zählt nicht). Aus einer anderen Runde steht
+   deren Kennung davor (`v4:cases/…`); sie braucht ihren `[[run]]`, und
+   `report --runs <Ablage der Läufe>` liest dort Protokolle und Siegeldatei.
+   Ohne gültige Vorhersage fällt der Klick nach der Frist
    trotzdem, `prediction.reason` sagt warum, und V4 bleibt *offen*.
 
 Jede Runde (Kopfkommentar eines Prüfers) nennt vor ihren Urteilen den Lauf, an
@@ -404,7 +407,7 @@ Jedes Skill erhält eine Tabelle mit den Spalten `Kennung | Zählgröße | Schwe
 |---|---|
 | `inventory --functions --out <ordner> [--package D4] [--rows …] [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel,bewegung,vorhersage]` | Fälle aus Funktionsliste und Spezifikationen, Szenen nach `<out>/scenes/`, Menüleiste nach `<out>/menubar.json`; `vorhersage` hält vor dem Handlungsklick am Vorhersagetor an, auch die Sprachfälle daneben (§2.9) |
 | `run --out … [--first --last --again --timeout] [--screen <name oder index>]` | je Fall ein Prozess mit eigenem Profil; wieder aufnehmbar |
-| `report --out … [--package] [--verdicts <pfad>] [--checklist <pfad>]` | Zusammenfassung, Ergebnisse je Prüfpunkt, Abhakliste; Ausgang 1 nur bei ungültigen Eingaben |
+| `report --out … [--package] [--verdicts <pfad>] [--checklist <pfad>] [--runs <ablage>]` | Zusammenfassung, Ergebnisse je Prüfpunkt, Abhakliste; `--runs` ist die Ablage der Läufe (Siegeldateien der Vorhersagen, §2.9); Ausgang 1 nur bei ungültigen Eingaben |
 
 ## 3 Prüfpunkte und Kriterien: wer misst, welche Gegenprobe
 

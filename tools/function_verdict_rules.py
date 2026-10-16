@@ -11,16 +11,24 @@ eines Belegs machen (Konzept §4, „Urteil und Schwere“):
 * **V4 nur mit gebundener Vorhersage** (FD-148): ``prediction_bound`` nennt
   die Datei, die vor dem Klick freigegeben wurde, mit ihrem SHA256. Eine
   Vorhersage, die erst nach dem Lauf entstand, ist ein Teilbeleg und kein
-  „gut“. Nennt die Bindung diesen Lauf, muss sein Vorhersagetor genau sie
-  freigegeben haben (FD-168, ``tools/function_prediction.py``).
+  „gut“. Die Bindung muss eine sein, die das Vorhersagetor ihres Laufs
+  freigab (FD-168, ``tools/function_prediction.py``), und das Urteil prüft die
+  Vorhersage selbst (RC-1): Die Datei am Pfad der Bindung hat noch den
+  gebundenen SHA256, und ihre Vorhersage ist die des Urteils. Eine
+  Rundenkennung davor (``v4:cases/…``) nennt einen ``[[run]]`` der
+  Urteilsdatei; gelesen wird dann dessen Lauf.
 
 Aufgerufen aus ``function_report._verdict_problems``.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from tools.function_checks import CHECKPOINTS, DESIGN_PARTS
@@ -50,11 +58,31 @@ UNBOUND_PREDICTION: Final = "V4 ohne vor dem Klick gebundene Vorhersage (predict
 UNRELEASED_PREDICTION: Final = (
     "prediction_bound nennt keine Vorhersage, die das Vorhersagetor dieses Laufs freigab"
 )
+UNKNOWN_ROUND: Final = "prediction_bound nennt eine Runde ohne [[run]] in der Urteilsdatei"
+SEAL_MISSING: Final = (
+    "die versiegelte Vorhersage fehlt im Lauf — report im Lauf selbst fahren oder mit"
+    " --runs <Ablage der Läufe>"
+)
+SEAL_CHANGED: Final = "die versiegelte Vorhersage ist nicht mehr die gebundene (SHA256 weicht ab)"
+PREDICTION_DIFFERS: Final = "prediction ist nicht die versiegelte Vorhersage"
 
 _SHA256: Final = re.compile(r"\b[0-9a-f]{64}\b")
 _MACHINE_PATH: Final = re.compile(r"(?<!\w)[A-Za-z]:[\\/]")
 #: Eine Rundenkennung vor dem Pfad (``v4:cases/…``, Plan D0 §2.9) — kein Laufwerk.
-_ROUND_KEY: Final = re.compile(r"^[A-Za-z]\w+:")
+_ROUND_KEY: Final = re.compile(r"^(?P<key>[A-Za-z]\w+):")
+
+
+@dataclass(frozen=True)
+class RunSeals:
+    """Ein Lauf, an dem eine Bindung gelten kann (RC-1).
+
+    ``folders`` sind die Orte, an denen seine Dateien liegen können — der erste
+    mit der Siegeldatei gilt; ``releases`` je Zeile die Bindungen, die sein
+    Vorhersagetor freigab (:func:`releases_of` über seine Protokolle).
+    """
+
+    folders: tuple[Path, ...]
+    releases: Mapping[str, frozenset[str]]
 
 
 def covered(subject: int | str | None) -> frozenset[int | str]:
@@ -135,21 +163,57 @@ def releases_of(protocols: Iterable[Mapping[str, Any]]) -> dict[str, frozenset[s
 def release_problems(
     entry: Mapping[str, Any],
     subject: int | str | None,
-    releases: Mapping[str, frozenset[str]] | None,
+    seals: Mapping[str | None, RunSeals] | None,
 ) -> list[str]:
-    """Eine Bindung an diesen Lauf muss eine sein, die sein Vorhersagetor freigab (FD-168).
+    """Eine Bindung gilt nur mit dem Tor und der Siegeldatei ihres Laufs (FD-168, RC-1).
 
-    Eine Bindung mit Rundenkennung davor (``v4:cases/…``) gehört einem anderen
-    Lauf; sie prüft hier nur ihre Form (:func:`prediction_problems`). Ohne die
-    Protokolle des Laufs (``releases`` ``None``) wird nichts geprüft.
+    Ohne Kennung ist es der Laufordner, mit Kennung (``v4:cases/…``) der
+    ``[[run]]`` dieser Kennung. Die Bindung muss eine sein, die sein Tor
+    freigab; die Datei am Pfad der Bindung hat noch ihren SHA256, und ihre
+    Vorhersage ist die des Urteils (Leerraum zählt nicht). Ohne die Läufe der
+    Urteilsdatei (``seals`` ``None``) wird nichts geprüft.
     """
     bound = " ".join(str(entry.get("prediction_bound") or "").split())
-    if subject != "V4" or releases is None or not bound:
+    if subject != "V4" or seals is None or not bound:
         return []
-    if _ROUND_KEY.match(bound):
-        return []
-    if bound not in releases.get(str(entry.get("row") or ""), frozenset()):
+    found = _ROUND_KEY.match(bound)
+    key = found.group("key") if found else None
+    rest = bound[found.end() :] if found else bound
+    run = seals.get(key)
+    if run is None:
+        return [f"{UNKNOWN_ROUND}: {key}"]
+    if not run.folders:
+        return [SEAL_MISSING]
+    if rest not in run.releases.get(str(entry.get("row") or ""), frozenset()):
         return [UNRELEASED_PREDICTION]
+    return sealed_problems(entry, rest, run.folders)
+
+
+def sealed_problems(entry: Mapping[str, Any], bound: str, folders: Iterable[Path]) -> list[str]:
+    """Ob die Datei der Bindung noch die gebundene ist und die Vorhersage des Urteils trägt."""
+    path, *_rest = bound.split(" ")
+    hashes = _SHA256.findall(bound)
+    parts = path.split("/")
+    if not hashes or _MACHINE_PATH.search(path) or any(p in {"", ".", ".."} for p in parts):
+        return [SEAL_MISSING]
+    for folder in folders:
+        try:
+            raw = folder.joinpath(*parts).read_bytes()
+        except OSError:
+            continue
+        break
+    else:
+        return [SEAL_MISSING]
+    if hashlib.sha256(raw).hexdigest() != hashes[-1]:
+        return [SEAL_CHANGED]
+    try:
+        sealed = json.loads(raw.decode("utf-8-sig"))
+    except ValueError:
+        return [PREDICTION_DIFFERS]
+    written = sealed.get("prediction") if isinstance(sealed, Mapping) else None
+    said = " ".join(str(entry.get("prediction") or "").split())
+    if not said or " ".join(str(written or "").split()) != said:
+        return [PREDICTION_DIFFERS]
     return []
 
 

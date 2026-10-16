@@ -29,7 +29,13 @@ from tools import (
 )
 from tools.function_machine import PHASE_TIMEOUT_S, Step
 from tools.function_prediction import PredictionGate
-from tools.function_verdict_rules import UNRELEASED_PREDICTION, release_problems, releases_of
+from tools.function_verdict_rules import (
+    UNKNOWN_ROUND,
+    UNRELEASED_PREDICTION,
+    RunSeals,
+    release_problems,
+    releases_of,
+)
 
 
 def _gate(tmp_path: Path, timer: FakeTimer, *, wait_s: float = 60.0) -> PredictionGate:
@@ -327,27 +333,45 @@ def _bound(sha: str = "a" * 64) -> str:
     return f"cases/001/v4/prediction-before-click.json {sha}"
 
 
-def test_a_bound_prediction_must_be_one_the_gate_of_this_run_released() -> None:
+def _sealed(out: Path, text: str) -> str:
+    """Eine versiegelte Vorhersage unter ``out`` wie das Tor; ihre Bindung."""
+    raw = json.dumps({"prediction": text}, ensure_ascii=False).encode("utf-8")
+    sealed = out / "cases" / "001" / "v4" / "prediction-before-click.json"
+    sealed.parent.mkdir(parents=True, exist_ok=True)
+    sealed.write_bytes(raw)
+    return _bound(hashlib.sha256(raw).hexdigest())
+
+
+def test_a_bound_prediction_must_be_one_the_gate_of_this_run_released(tmp_path: Path) -> None:
+    bound = _sealed(tmp_path, "Hebt.")
     protocols = [
-        {"row": {"id": "resize_hole"}, "prediction": {"bound": _bound()}},
+        {"row": {"id": "resize_hole"}, "prediction": {"bound": bound}},
         {"row": {"id": "report"}, "prediction": {"bound": None, "reason": "keine"}},
         {"row": {"id": "drill_hole"}},
     ]
     releases = releases_of(protocols)
-    assert releases == {"resize_hole": frozenset({_bound()})}
-    entry = {"row": "resize_hole", "criterion": "V4", "prediction_bound": _bound()}
-    assert release_problems(entry, "V4", releases) == []
+    assert releases == {"resize_hole": frozenset({bound})}
+    seals = {None: RunSeals((tmp_path,), releases)}
+    entry = {
+        "row": "resize_hole",
+        "criterion": "V4",
+        "prediction": "Hebt.",
+        "prediction_bound": bound,
+    }
+    assert release_problems(entry, "V4", seals) == []
     other = {**entry, "prediction_bound": _bound("b" * 64)}
-    assert release_problems(other, "V4", releases) == [UNRELEASED_PREDICTION]
+    assert release_problems(other, "V4", seals) == [UNRELEASED_PREDICTION]
     elsewhere = {**entry, "row": "report"}
-    assert release_problems(elsewhere, "V4", releases) == [UNRELEASED_PREDICTION]
-    # Eine Bindung an eine andere Runde prüft hier nur ihre Form.
-    rounded = {**other, "prediction_bound": f"v4:{_bound('c' * 64)}"}
-    assert release_problems(rounded, "V4", releases) == []
+    assert release_problems(elsewhere, "V4", seals) == [UNRELEASED_PREDICTION]
+    # Eine Rundenkennung braucht ihren ``[[run]]`` (RC-1) — und dessen Tor.
+    rounded = {**entry, "prediction_bound": f"v4:{bound}"}
+    assert release_problems(rounded, "V4", seals) == [f"{UNKNOWN_ROUND}: v4"]
+    seals["v4"] = RunSeals((tmp_path,), {})
+    assert release_problems(rounded, "V4", seals) == [UNRELEASED_PREDICTION]
     assert release_problems(other, "V4", None) == []
 
 
-def test_report_takes_a_good_v4_only_with_the_binding_the_gate_released() -> None:
+def test_report_takes_a_good_v4_only_with_the_binding_the_gate_released(tmp_path: Path) -> None:
     """Durch ``check_verdicts``: die Bindung aus dem Protokoll angenommen, eine andere nicht."""
     import copy
 
@@ -355,20 +379,16 @@ def test_report_takes_a_good_v4_only_with_the_binding_the_gate_released() -> Non
     from tools.function_report import check_verdicts
     from tools.function_samples import _verdict, sample_context, sample_protocol
 
+    said = "Übernehmen vergrößert nur Bohrung 1."
     protocol = copy.deepcopy(sample_protocol())
+    protocol["prediction"]["bound"] = bound = _sealed(tmp_path, said)
     case = judge_case(protocol, sample_context())
-    released = releases_of([protocol])
-    bound = protocol["prediction"]["bound"]
-    good = _verdict(
-        criterion="V4",
-        point=None,
-        prediction="Übernehmen vergrößert nur Bohrung 1.",
-        prediction_bound=bound,
-    )
-    checked = check_verdicts([good], outcomes={case.row_id: case}, releases=released)
+    seals = {None: RunSeals((tmp_path,), releases_of([protocol]))}
+    good = _verdict(criterion="V4", point=None, prediction=said, prediction_bound=bound)
+    checked = check_verdicts([good], outcomes={case.row_id: case}, seals=seals)
     assert checked.rejected == (), checked.rejected
     other = {**good, "prediction_bound": _bound("d" * 64)}
-    checked = check_verdicts([other], outcomes={case.row_id: case}, releases=released)
+    checked = check_verdicts([other], outcomes={case.row_id: case}, seals=seals)
     assert [reasons for _entry, reasons in checked.rejected] == [(UNRELEASED_PREDICTION,)]
 
 

@@ -37,6 +37,7 @@ import functools
 import hashlib
 import json
 import re
+import sys
 import tomllib
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -77,6 +78,7 @@ from tools.function_list import NOT_APPLICABLE_REASONS, ROW_KINDS
 from tools.function_points import judge_case, judge_design, judge_licence
 from tools.function_samples import BrokenSample, sample_context, sample_protocol
 from tools.function_verdict_rules import (
+    RunSeals,
     bound_problems,
     fix_problems,
     prediction_problems,
@@ -663,7 +665,7 @@ def check_verdicts(
     rows: Iterable[str] | None = None,
     findings: Mapping[str, Finding] | None = None,
     round_rules: bool = True,
-    releases: Mapping[str, frozenset[str]] | None = None,
+    seals: Mapping[str | None, RunSeals] | None = None,
 ) -> Checked:
     """Prüft Urteile gegen das Format, die Messung der Stufe A und die Funddatei.
 
@@ -675,8 +677,9 @@ def check_verdicts(
     Funde nicht mehr trägt, steht als abgewiesen in der Abhakliste und wird
     nachgeurteilt. Der Wächter über die versionierten Urteile prüft ihre Form
     ohne sie: Die Funddatei wächst und wird behoben, die Urteile einer Runde
-    bleiben, was sie zu ihrer Zeit waren. ``releases`` sind die Bindungen, die
-    das Vorhersagetor des Laufs freigab (``releases_of``, FD-168).
+    bleiben, was sie zu ihrer Zeit waren. ``seals`` sind die Läufe der
+    Urteilsdatei mit den Bindungen, die ihr Vorhersagetor freigab, und dem Ort
+    ihrer Siegeldateien (:func:`seals_of`, FD-168, RC-1).
     """
     known = frozenset(rows) if rows is not None else None
     accepted: list[dict[str, Any]] = []
@@ -687,7 +690,7 @@ def check_verdicts(
         if round_rules:
             subject = subject_of(entry)
             problems += prediction_problems(entry, subject)
-            problems += release_problems(entry, subject, releases)
+            problems += release_problems(entry, subject, seals)
             problems += fix_problems(entry, subject, findings)
         key = (str(entry.get("row")), str(subject_of(entry)), str(entry.get("reviewer")))
         if key in seen:
@@ -1540,6 +1543,61 @@ def _rows_of(out: Path, protocols: Sequence[Mapping[str, Any]]) -> list[dict[str
     return list(rows.values())
 
 
+def seals_of(
+    out: Path,
+    runs: Iterable[Mapping[str, Any]],
+    released: Mapping[str, frozenset[str]],
+    store: Path | None = None,
+) -> dict[str | None, RunSeals]:
+    """Die Läufe einer Urteilsdatei, an denen eine Bindung an V4 gelten kann (RC-1).
+
+    Der Laufordner ist ``out`` mit den Bindungen seiner Protokolle; liest
+    ``report`` aus einer bildlosen Kopie, liegt die Siegeldatei im Lauf selbst
+    unter ``store`` (``--runs``, die Ablage der Läufe, in der ``[[run]].name``
+    steht). Ein Lauf mit Kennung liegt nur dort; seine Bindungen kommen aus
+    seinen eigenen Protokollen.
+    """
+    listed = list(runs)
+    main = run_folder(listed)
+    seals: dict[str | None, RunSeals] = {
+        None: RunSeals(
+            (out, *((store / main,) if store is not None and main else ())), dict(released)
+        )
+    }
+    for run in listed:
+        if run.get("key") is None:
+            continue
+        folder = store / str(run.get("name") or "") if store is not None else None
+        protocols = [p for _where, p in read_protocols(folder)[0]] if folder else []
+        seals[str(run["key"])] = RunSeals((folder,) if folder else (), releases_of(protocols))
+    return seals
+
+
+def write_all(
+    out: Path,
+    *,
+    packages: Sequence[str],
+    verdicts: Path | None,
+    checklist: Path | None,
+    runs: Path | None,
+) -> int:
+    """``file_acceptance.py report`` je genanntem Paket oder für alle.
+
+    Ausgang 1 nur bei ungültigen Eingaben: ein Urteil ohne Bild, ein fremder
+    Grund, ein ungültiges Protokoll — Funde nicht.
+    """
+    if (verdicts or checklist) and len(packages) != 1:
+        print(
+            "--verdicts und --checklist verlangen genau ein --package.", file=sys.stderr, flush=True
+        )
+        return 1
+    codes = [
+        write(out, package=package, verdicts=verdicts, checklist=checklist, runs=runs)
+        for package in (packages or [None])
+    ]
+    return 1 if any(codes) else 0
+
+
 def write(
     out: Path,
     *,
@@ -1554,8 +1612,12 @@ def write(
     solutions: Mapping[str, bool] | None = None,
     common_goals: Mapping[str, str] | None = None,
     state: Path = STATE,
+    runs: Path | None = None,
 ) -> int:
     """Beurteilt einen Lauf und schreibt Ergebnisse und Abhakliste je Paket.
+
+    ``runs`` ist die Ablage der Läufe, in der die ``[[run]]`` der Urteile
+    liegen; dort liest ``report`` die Siegeldateien der Vorhersagen (RC-1).
 
     Ausgang 1 nur bei ungültigen Eingaben (Kommandozeile des Prüfstands,
     ``file_acceptance.py report``): kein Protokoll, ein unlesbares oder
@@ -1636,7 +1698,11 @@ def write(
         given = verdicts if verdicts is not None and packages == [name] else None
         read[name] = read_verdict_file(given or state / f"urteile-{package_slug(name)}.toml")
         checked_of[name] = check_verdicts(
-            read[name][0], outcomes=cases_of[name], rows=ids, findings=found, releases=released
+            read[name][0],
+            outcomes=cases_of[name],
+            rows=ids,
+            findings=found,
+            seals=seals_of(out, read[name][1], released, runs),
         )
         run = run_folder(read[name][1]) or str(out)
         rounds.setdefault(run, {})[name] = checked_of[name].accepted

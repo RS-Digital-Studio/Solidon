@@ -8,7 +8,7 @@
     .venv\\Scripts\\python.exe tools/file_acceptance.py run --out <ordner> [--first 1] [--last 9]
         [--again] [--timeout <s>] [--screen <name oder nummer>]
     .venv\\Scripts\\python.exe tools/file_acceptance.py report --out <ordner>
-        [--package D4] [--verdicts <toml>] [--checklist <md>]
+        [--package D4] [--verdicts <toml>] [--checklist <md>] [--runs <ablage>]
 
 ``--manifest`` nimmt das Manifest des Dateiaudits
 (``ui-audit/2026-09-15-files/manifest.json``: 187 Fälle in seiner Zählung),
@@ -1909,6 +1909,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     reporting.add_argument("--package", action="append", default=[])
     reporting.add_argument("--verdicts", type=Path, default=None)
     reporting.add_argument("--checklist", type=Path, default=None)
+    reporting.add_argument("--runs", type=Path, default=None)
     arguments = parser.parse_args(list(argv) if argv is not None else None)
     # Dieser Baum vorn: Als Skript steht sonst ``tools/`` an erster Stelle, und
     # ``import app`` träfe die Installation der ``.venv`` — womöglich ein
@@ -1977,21 +1978,13 @@ def main(argv: Iterable[str] | None = None) -> int:
         return 0
     from tools import function_report
 
-    # Ausgang 1 nur bei ungültigen Eingaben (Plan D0, Abschnitt 2.13) — ein
-    # Urteil ohne Bild, ein fremder Grund, ein ungültiges Protokoll; Funde
-    # nicht. write sagt es über seinen Rückgabewert, je Paket oder für alle.
-    if (arguments.verdicts or arguments.checklist) and len(arguments.package) != 1:
-        print(
-            "--verdicts und --checklist verlangen genau ein --package.", file=sys.stderr, flush=True
-        )
-        return 1
-    codes = [
-        function_report.write(
-            out, package=package, verdicts=arguments.verdicts, checklist=arguments.checklist
-        )
-        for package in (arguments.package or [None])
-    ]
-    return 1 if any(codes) else 0
+    return function_report.write_all(
+        out,
+        packages=arguments.package,
+        verdicts=arguments.verdicts,
+        checklist=arguments.checklist,
+        runs=arguments.runs,
+    )
 
 
 if __name__ == "__main__":
