@@ -86,3 +86,14 @@ route = [
   { target = "field:path_sketch" },
   { target = "sketch.new_plane" },
 ]
+
+# *Fertig* im Zeichenmodus im Raum, erreicht aus dem Verlauf: *Zeichnung
+# weiterverwenden* am Schritt der gezeichneten Tasche öffnet ihre Zeichnung im
+# Bild (Plan Schluss §6.4). Offscreen erreicht, ohne Bild der Ansicht; ihr Bild
+# belegt der Lauf am echten Fenster.
+[row."sketch.done"]
+start_scene = "skizzentasche.exakt"
+route = [
+  { target = "history.row:2", button = "right" },
+  { target = "history:reuse_drawing" },
+]

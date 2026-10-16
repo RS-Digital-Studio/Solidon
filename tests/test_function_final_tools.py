@@ -211,3 +211,28 @@ def test_the_slot_row_names_its_grip() -> None:
 
     assert "drag" in SPEC_KEYS
     assert load_specs()["slot_hole"].values["drag"] == "handle:slot.end"
+
+
+# --- Werkzeug 4: der Zeichenmodus aus dem Verlauf ---------------------------------------
+
+
+def test_the_drawing_mode_is_reached_from_the_history() -> None:
+    """*Fertig* im Zeichenmodus über *Zeichnung weiterverwenden* am Verlaufsschritt (§6.4).
+
+    Vorher führte jeder D7-Weg über den Dichtweg-Editor; der Zeichenmodus im
+    Raum stand in keiner Spezifikation.
+    """
+    from tools.function_list import load_specs, rows, validate_specs
+    from tools.function_scenes import load_scenes
+
+    spec = load_specs()["sketch.done"].values
+    assert [step["target"] for step in spec["route"]] == [
+        "history.row:2",
+        "history:reuse_drawing",
+    ]
+    scenes = load_scenes()
+    scene = scenes[spec["start_scene"]]
+    assert [step.op for step in scene.ops][-1] == "sketch_pocket"
+    assert '"plane"' in str(scene.ops[-1].params["sketch"])
+    only = {"sketch.done": load_specs()["sketch.done"]}
+    assert validate_specs(rows(with_specs=False), only, scenes) == []

@@ -514,6 +514,16 @@ op = "sketch_pocket"
 inputs = ["obj_1"]
 params = { depth = 2.0, sketch = '{"plane": "through:0,0,20;10,0,20;20,0,20", "elements": [{"kind": "line", "points": [[0, 0], [20, 0]]}, {"kind": "line", "points": [[20, 0], [20, 10]]}, {"kind": "line", "points": [[20, 10], [0, 10]]}, {"kind": "line", "points": [[0, 10], [0, 0]]}], "constraints": []}' }
 
+[scene."skizzentasche.exakt"]
+summary = "Der exakte Quader mit einer gezeichneten Tasche 20 × 10 × 2 mm in der Deckfläche: ein Verlaufsschritt mit Zeichnung."
+kernel = "exakt"
+base = "quader.exakt"
+promises = { objects = 1 }
+[[scene."skizzentasche.exakt".ops]]
+op = "sketch_pocket"
+inputs = ["obj_1"]
+params = { depth = 2.0, sketch = '{"plane": "through:0,0,20;10,0,20;0,10,20", "elements": [{"kind": "line", "points": [[0, 0], [20, 0]]}, {"kind": "line", "points": [[20, 0], [20, 10]]}, {"kind": "line", "points": [[20, 10], [0, 10]]}, {"kind": "line", "points": [[0, 10], [0, 0]]}], "constraints": []}' }
+
 [scene."ebene_durch_linie.exakt"]
 summary = "Dasselbe am exakten Quader."
 kernel = "exakt"
