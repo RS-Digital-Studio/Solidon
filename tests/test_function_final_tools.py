@@ -11,6 +11,7 @@ Fenster; die Fälle mit ``qt_app`` laufen offscreen.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -236,3 +237,148 @@ def test_the_drawing_mode_is_reached_from_the_history() -> None:
     assert '"plane"' in str(scene.ops[-1].params["sketch"])
     only = {"sketch.done": load_specs()["sketch.done"]}
     assert validate_specs(rows(with_specs=False), only, scenes) == []
+
+
+# --- Werkzeug 5: Kurzhilfe am grauen Übernehmen, Tab ab der Reiterleiste, Weg in Schritten -
+
+
+def test_the_reason_of_a_grey_apply_is_pictured_on_the_main_path(
+    qt_app: Any, tmp_path: Any
+) -> None:
+    """FD-99: Der Grund stand nur im Protokoll; das Bild entstand nur im Fehlfall."""
+    import inspect
+
+    from PySide6.QtWidgets import QPushButton
+
+    from tools import function_bench, function_tooltips
+
+    apply = QPushButton("Übernehmen")
+    apply.setToolTip("Erst „Durchmesser“ ändern, dann übernehmen.")
+    apply.setEnabled(False)
+    apply.show()
+    qt_app.processEvents()
+    folder = tmp_path / "cases" / "001"
+    folder.mkdir(parents=True)
+    flow = SimpleNamespace(
+        widget={"feature.apply": apply}.get,
+        folder=folder,
+        out=tmp_path,
+        data={"images": []},
+    )
+    try:
+        function_tooltips.grey_apply_step(flow, "feature.apply").act(None)
+        assert flow.data["images"] == ["cases/001/02-uebernehmen-grund-1.png"]
+        apply.setEnabled(True)
+        function_tooltips.grey_apply_step(flow, "feature.apply").act(None)
+        assert len(flow.data["images"]) == 1, "ein offener Knopf hat kein Grundbild"
+    finally:
+        apply.close()
+    # Angeschlossen: Der Hauptweg nimmt den Schritt vor den Eingaben.
+    source = inspect.getsource(function_bench.FunctionFlow.phase_main)
+    assert source.index("grey_apply_step") < source.index("self.input_steps(inputs)")
+
+
+def test_the_keyboard_way_starts_at_the_tab_bar(qt_app: Any) -> None:
+    """FD-177: Von der Reiterleiste führt Tab auf die vordere Seite — gemessen wird es jetzt.
+
+    Die Kette des Hauptwegs beginnt am ersten Feld der Fläche; den Weg von der
+    Leiste ging sie nie.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication, QLineEdit, QTabWidget, QVBoxLayout, QWidget
+
+    from tools import function_bench, function_capture
+
+    tabs = QTabWidget()
+    page = QWidget()
+    first, second = QLineEdit(page), QLineEdit(page)
+    first.setAccessibleName("Erstes Feld")
+    layout = QVBoxLayout(page)
+    layout.addWidget(first)
+    layout.addWidget(second)
+    tabs.addTab(page, "Prüfbericht")
+    tabs.addTab(QWidget(), "Chat")
+    tabs.show()
+    qt_app.processEvents()
+
+    def press(sequence: str) -> None:
+        backwards = sequence == "Shift+Tab"
+        key = Qt.Key.Key_Backtab if backwards else Qt.Key.Key_Tab
+        modifier = (
+            Qt.KeyboardModifier.ShiftModifier if backwards else Qt.KeyboardModifier.NoModifier
+        )
+        QTest.keyClick(QApplication.focusWidget(), key, modifier)
+
+    try:
+        chain = function_capture.bar_chain(first, press)
+        assert chain[0]["class"] == "QTabBar" and not chain[0]["inside"]
+        assert chain[1]["name"] == "Erstes Feld" and chain[1]["inside"], chain
+        assert function_capture.bar_chain(QLineEdit(), press) == []
+    finally:
+        tabs.close()
+    import inspect
+
+    assert "bar_chain" in inspect.getsource(function_bench.FunctionFlow.phase_main)
+
+
+def test_a_way_in_two_steps_is_walked_to_its_end(qt_app: Any) -> None:
+    """FD-36: „zuerst „Abbrechen“, danach „Merkmal entfernen““ — beide Schritte, der zweite wirkt.
+
+    Gelesen wurde der Satz, geklickt höchstens die erste Handlung; ob
+    *Merkmal entfernen* danach frei ist, prüfte niemand.
+    """
+    import time
+
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from tools import function_bench
+    from tools.function_machine import Step
+    from tools.function_walk import QtPorts, Walk
+
+    window = QWidget()
+    cancel = QPushButton("Abbrechen", window)
+    remove = QPushButton("Merkmal entfernen", window)
+    remove.setEnabled(False)
+    cancel.clicked.connect(lambda: (cancel.hide(), remove.setEnabled(True)))
+    removed: list[bool] = []
+    remove.clicked.connect(lambda: (removed.append(True), remove.hide()))
+    layout = QVBoxLayout(window)
+    layout.addWidget(cancel)
+    layout.addWidget(remove)
+    window._op_dialog = None  # wie am Hauptfenster: kein Operationsdialog offen
+    window.show()
+    qt_app.processEvents()
+    flow = object.__new__(function_bench.FunctionFlow)
+    flow.window = window
+    flow.ports = QtPorts(window, time.perf_counter())
+    flow.walker = Walk(flow.ports, [], time.perf_counter())
+    flow.scene_now = dict
+    flow.pump = qt_app.processEvents
+
+    def run_steps(label: str, steps: list[Step], timeout_s: float | None = None) -> bool:
+        for step in steps:
+            assert step.ready is not None and step.ready(), step.name
+            step.act(SimpleNamespace(insert=lambda more: None))
+            qt_app.processEvents()
+        return True
+
+    flow.run_steps = run_steps
+    text = (
+        "0,10 mm liegt unter der Grenze. "
+        "Zum Entfernen zuerst „Abbrechen“ wählen, danach „Merkmal entfernen“."
+    )
+    messages = [{"text": text, "actions": [], "kind": "grenzablehnung", "way_out": True}]
+    try:
+        flow.walk_ways(messages)
+    finally:
+        window.close()
+    assert messages[0]["way"] == [
+        {"title": "Abbrechen", "clicked": True, "effect": True},
+        {"title": "Merkmal entfernen", "clicked": True, "effect": True},
+    ]
+    assert removed == [True]
+    # Eine Meldung mit einem Knopf oder ohne Ausweg geht keinen Weg.
+    single = [{"text": "Mit „Abbrechen“ zurück.", "actions": [], "way_out": True}]
+    flow.walk_ways(single)
+    assert "way" not in single[0]

@@ -388,10 +388,12 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     "windows": ProtocolField("liste", _keys("class", "title")),
     # ``kind`` ist die Art der Absage wie ``fault_case.expected`` (Prüfpunkt 7),
     # ``way_out`` sagt bei einem Sperrgrund, ob er einen Ausweg nennt (V5),
-    # ``phase`` steht an den Meldungen des Fehlfalls.
+    # ``phase`` steht an den Meldungen des Fehlfalls, ``way`` an einer Meldung, die
+    # einen Weg in Schritten nennt: je genanntem Knopf ``title``, ``clicked``,
+    # ``effect`` (``function_way``, FD-36).
     "messages": ProtocolField(
         "liste",
-        _keys("text", "actions", "kind", "way_out", "phase"),
+        _keys("text", "actions", "kind", "way_out", "phase", "way"),
         {"kind": FAULT_KINDS},
     ),
     # ``axis``: Woran ein Text gemessen ist — ``breite`` (Bedarf gegen Breite)
@@ -410,6 +412,13 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     # ``name`` liest ein Bildschirmleser, ``class`` steht daneben; ``mark``
     # und ``primary`` erkennen die Zielhandlung (FD-141).
     "tab_chain": ProtocolField(
+        "liste",
+        _keys("name", "rect", "inside", "class", "mark", "primary"),
+        types={"primary": bool, "class": str, "mark": str},
+    ),
+    # Die Kette ab der Reiterleiste über der Fläche (FD-177): erstes Glied die
+    # Leiste, ``inside`` gegen die vordere Seite; leer ohne Reiter.
+    "tab_from_bar": ProtocolField(
         "liste",
         _keys("name", "rect", "inside", "class", "mark", "primary"),
         types={"primary": bool, "class": str, "mark": str},

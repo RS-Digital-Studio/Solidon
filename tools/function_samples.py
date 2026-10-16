@@ -282,6 +282,8 @@ def sample_protocol() -> dict[str, Any]:
             # Die Zielhandlung: der Hauptknopf der Fläche (Prüfpunkt 10, FD-141).
             _link("Übernehmen", [12, 120, 96, 28], "QPushButton", "feature.apply", primary=True),
         ],
+        # Ab der Reiterleiste über der Fläche (FD-177): leer, wenn keine darüber steht.
+        "tab_from_bar": [],
         "names": ["Durchmesser", "Tiefe", "Übernehmen"],
         "focus_return": True,
         "matrix": {

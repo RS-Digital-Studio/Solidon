@@ -53,6 +53,8 @@ BENCH_MODULES: Final[tuple[str, ...]] = (
     "function_spot",
     "function_prediction",
     "function_fonts",
+    "function_way",
+    "function_tooltips",
 )
 
 #: Die Namen, über die eine Bedienung umgangen wird (Konzept §12 „Die Abkürzungen

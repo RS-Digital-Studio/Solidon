@@ -9,7 +9,8 @@ angezeigtes Bild: :func:`reason_picture` zeigt die Kurzhilfe, wie Qt sie beim
 Überfahren zeigt, und nimmt sie auf.
 
 Aufgerufen aus dem Fehlfall des Prüfstands (``function_bench``) neben dem Bild
-``04-fehlfall`` über :func:`reason_pictures`.
+``04-fehlfall`` über :func:`reason_pictures`, und auf dem Hauptweg vor den
+Eingaben am grauen *Übernehmen* (:func:`grey_apply_step`, FD-99).
 """
 
 from __future__ import annotations
@@ -18,10 +19,14 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Final
 
+from tools.function_machine import Step, StepMachine
+
 #: Die Klasse, als die Qt eine Kurzhilfe zeigt (``QToolTip``).
 TIP_CLASS: Final = "QTipLabel"
 #: Grund in ``unmeasured``: grau, aber ohne Kurzhilfe — beim Überfahren zeigt Qt nichts.
 NO_VISIBLE_REASON: Final = "kein sichtbarer Sperrgrund: grau ohne Kurzhilfe"
+#: Das Bild der Kurzhilfe am grauen *Übernehmen*, bevor der Kunde etwas ändert (FD-99).
+GREY_APPLY_PICTURE: Final = "02-uebernehmen-grund"
 
 
 def _shown_tip() -> Any | None:
@@ -69,6 +74,7 @@ def reason_pictures(
     out: Path,
     *,
     silent: Callable[[str], None] = lambda target: None,
+    prefix: str = "04-fehlfall-grund",
 ) -> list[str]:
     """Je graues Ziel der Zeile das Bild seines Sperrgrunds, relativ zu ``out``.
 
@@ -79,7 +85,7 @@ def reason_pictures(
     images = []
     for number, target in enumerate(targets, 1):
         widget = find(target)
-        path = folder / f"04-fehlfall-grund-{number}.png"
+        path = folder / f"{prefix}-{number}.png"
         if widget is None:
             continue
         if reason_picture(widget, path):
@@ -87,3 +93,27 @@ def reason_pictures(
         elif widget.isVisible() and not widget.isEnabled() and not str(widget.toolTip() or ""):
             silent(target)
     return images
+
+
+def grey_apply_step(flow: Any, target: str) -> Step:
+    """FD-99: der Grund am grauen *Übernehmen*, bevor eine Eingabe ihn aufhebt.
+
+    Ein Änderungsweg öffnet sein Formular mit grauem *Übernehmen* („Erst
+    „{Feld}“ ändern, dann übernehmen.“); die Kurzhilfe sah bisher nur der
+    Fehlfall. Der Schritt nimmt sie auf dem Hauptweg auf, solange der Knopf
+    grau steht — sonst kein Bild. ``flow`` ist ein ``FunctionFlow``, ``target`` sein
+    Übernehmen.
+    """
+
+    def act(machine: StepMachine) -> None:
+        flow.data["images"].extend(
+            reason_pictures(
+                flow.widget,
+                [target],
+                flow.folder,
+                flow.out,
+                prefix=GREY_APPLY_PICTURE,
+            )
+        )
+
+    return Step("grund am grauen übernehmen", act)

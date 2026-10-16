@@ -271,13 +271,14 @@ In `app/core/guides.py`: `TARGET_PROPERTY = "guideTarget"`, `menubar_name(msgid,
 | `timing` | total_s, first_feedback_s, progress_shown_s, cancel_shown_s, main_gap_ms, budget_s |
 | `frames` | Bildverzug beim Ziehen in ms, Referenzfaktor |
 | `modals[]`, `raw_windows[]` | Klasse, Titel, erlaubt; Instanzen von `QMessageBox`, `QInputDialog`, `QColorDialog` |
-| `messages[]` | Text und Handlungen (label, target, clicked, effect) |
+| `messages[]` | Text und Handlungen (label, target, clicked, effect); `way` je Knopf, den eine Meldung als Weg in Schritten nennt (`title`, `clicked`, `effect`; `tools/function_way.py`, FD-36). Bilder der Kurzhilfe an grauen Zielen: `04-fehlfall-grund-<n>` im Fehlfall, `02-uebernehmen-grund-1` am grauen *Übernehmen* vor den Eingaben (FD-99) |
 | `texts[]`, `fields[]` | sichtbarer Text, Träger, Bedarf und verfügbare Breite in px, abgeschnitten; Felder mit Beschriftung, accessibleName, Beschreibung, Tooltip, vorn |
 | `tab_chain[]`, `names[]`, `focus_return` | Prüfpunkt 10 |
 | `matrix{}` | sechs Auswahlstufen: angeboten, grau mit Grund oder fehlt; Klick wirksam |
 | `search{}` | je Probe Rang und Treffer |
 | `place` | Ort (karte, menue, werkzeugleiste, kuerzel, kontext), Pfad |
 | `spot` | E4: an Merkmal oder Kante `point` und `covered_by` vor dem Übernehmen; an einer Handlung am ganzen Körper `frame` der geänderten `bodies` im Ergebnisbild, `view`, `inside`, `covered_by` (`tools/function_spot.py`) |
+| `tab_from_bar` | Kette ab der Reiterleiste über der Fläche: der Reiter geklickt, dann Tab; Glieder wie `tab_chain`, `inside` gegen die vordere Seite, leer ohne Reiter (FD-177) |
 | `font_change` | Schriftwechsel zur Laufzeit je Stufe: `points` (wirksam), `wanted`, `window`, `still`, `image`, `cut` (abgeschnittene Texte; `tools/function_fonts.py`) |
 | `prediction` | V4 mit Vorhersagetor: `ready`, `target`, `bound` (Pfad und SHA256), `step_index`, `image_index`, `reason` ohne Bindung, `rejected`, `after` (§2.9) |
 | `layout[]`, `fonts[]`, `state_images[]`, `contrast[]`, `icons[]`, `animations[]`, `scrollbars[]` | G1–G8, Z6 |

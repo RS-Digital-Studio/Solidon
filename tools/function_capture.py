@@ -1035,6 +1035,54 @@ def tab_chain(
     return chain
 
 
+def bar_chain(root: Any, press: Callable[[str], None], limit: int = 40) -> list[dict[str, Any]]:
+    """FD-177: der Tastaturweg ab der Reiterleiste, die die Fläche ``root`` trägt.
+
+    Liegt ``root`` auf einer Seite mit Reitern (``QTabWidget``), klickt der
+    Prüfstand ihren Reiter und geht mit Umschalt+Tab zurück, bis die Leiste den
+    Fokus hat — so kommt ein Kunde mit der Tastatur an sie. Dann drückt er Tab:
+    Die Kette beginnt an der Leiste und zeigt, ob der nächste Halt auf der
+    vorderen Seite liegt (``inside`` gegen diese Seite). Sie endet mit dem
+    Glied, das wiederkommt, oder dem, das die Reiterkarte verlässt. Ohne Reiter
+    über der Fläche: leer; erreicht die Tastatur die Leiste nicht:
+    ``LookupError``. ``press`` drückt eine Taste am Fokuswidget (``QtPorts.keys``).
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication, QTabWidget
+
+    holder = root
+    while holder is not None and not isinstance(holder, QTabWidget):
+        holder = holder.parentWidget()
+    if holder is None or not holder.tabBar().isVisible():
+        return []
+    bar, page = holder.tabBar(), holder.currentWidget()
+    point = bar.tabRect(bar.currentIndex()).center()
+    QTest.mouseClick(bar, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
+    QApplication.processEvents()
+    for _press in range(limit):
+        if QApplication.focusWidget() is bar:
+            break
+        press("Shift+Tab")
+        QApplication.processEvents()
+    else:
+        raise LookupError("die Tastatur erreicht die Reiterleiste nicht")
+    chain: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    current = QApplication.focusWidget()
+    for _press in range(limit):
+        if current is None:
+            break
+        chain.append(focus_entry(current, page))
+        if id(current) in seen or not (current is holder or holder.isAncestorOf(current)):
+            break
+        seen.add(id(current))
+        press("Tab")
+        QApplication.processEvents()
+        current = QApplication.focusWidget()
+    return chain
+
+
 # --- Layout, Schrift, Kontrast, Symbole, Animationen, Rollleisten (G1 bis G8, Z6) ---------
 
 

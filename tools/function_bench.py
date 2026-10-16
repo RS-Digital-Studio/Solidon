@@ -101,6 +101,7 @@ from tools.function_walk import (
     typed_number,
     with_modifier,
 )
+from tools.function_way import WayPhase
 
 #: Wie lange eine Fläche stillstehen muss, bevor sie aufgenommen wird (Sekunden):
 #: die längste Bewegung der Oberfläche (``app.ui.motion``) und ein Takt mehr — eine
@@ -153,7 +154,7 @@ def surface_signature(root: Any) -> tuple[Any, ...]:
     return (root, place(root), shown)
 
 
-class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontPhase):
+class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontPhase, WayPhase):
     """Ein Funktionsfall am echten Fenster: Phasen nach der Variante, jede mit Abdruck.
 
     Jede Phase beginnt an der Startszene (:meth:`reset`) und endet ohne offenes
@@ -1090,6 +1091,11 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
             self.data["names"] = [entry["name"] for entry in chain if entry["inside"]]
             if not chain:
                 unmeasured(self.data, "tab_chain", "Tab brachte den Fokus nicht in die Fläche")
+            # Ab der Reiterleiste, wenn die Fläche auf einer Seite mit Reitern liegt (FD-177).
+            try:
+                self.data["tab_from_bar"] = capture.bar_chain(root, self.ports.keys)
+            except LookupError as error:
+                unmeasured(self.data, "tab_from_bar", str(error))
             if apply_button is not None and apply_button.isVisible():
                 self.data["state_images"] = [
                     {
@@ -1134,6 +1140,11 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
                 PATH_PHASE,
                 [
                     *route,
+                    *(
+                        [tooltips.grey_apply_step(self, self.apply_target)]
+                        if self.apply_target and inputs
+                        else []
+                    ),
                     *self.input_steps(inputs),
                     *(self.preview_steps() if inputs else [self.wait_step("ruhe", self.idle)]),
                     self.still_step("fläche steht still", self.surface),
@@ -1590,6 +1601,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
                 or len(self.watch.modals) > modal_before
                 or surfaces.open_dialog(self.window) is not None
             )
+        self.walk_ways(messages)  # Ein Weg in mehreren Schritten, ganz gegangen (FD-36).
         for message in messages:
             message["phase"] = FAULT_PHASE
         self.data["messages"] = [*(self.data.get("messages") or []), *messages]
