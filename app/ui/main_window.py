@@ -26903,7 +26903,16 @@ class MainWindow(QMainWindow):
         Maßgruppe, und die übernimmt nur ein gezeigtes Bild
         (``QuietHost.requires_displayed_preview``) — das gilt auch hier, wo
         die Maßgruppe nicht mehr steht.
+
+        **Die Uhr des Neuaufbaus fällt.** Er meldete die Werte des Schritts
+        als Änderung (``show_texture``) und stellte die Entprellung; lief sie
+        ab, bevor die Vorschau dieses Klicks stand, band sie die alten Werte,
+        und der Klick verfiel still (CI macOS Intel, Lauf 38815410592). Eine
+        Eingabe des Kunden hätte den wartenden Klick schon vorher mit Satz
+        verworfen (:meth:`_check_waiting_order`).
         """
+        self._feature_pending = None
+        self._feature_preview.stop()
         if displayed:
             approval = self._set_preview_order(self.feature_panel, order)
             if approval.required is False:

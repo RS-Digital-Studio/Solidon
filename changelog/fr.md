@@ -82,6 +82,7 @@ dans `website/version.json`.
 - Si un perçage ou un récipient ne réussit qu'avec des sommets déplacés d'un rien, l'ouverture reste libre. En version 0.6.0, une peau très fine pouvait rester par-dessus.
 - Pour les trous, vue et *Sélection* montrent la même action. Dimension, profondeur et entrée liée sont devant ; compensation d’impression et réglages fins, dans « Autres valeurs ».
 - Les champs du perçage et la case de modification simultanée des éléments similaires expliquent leur effet. « Compenser les écarts d'impression » précise la correction issue du profil du matériau.
+- Un clic sur *Appliquer* d'une texture pendant un calcul garde désormais la modification, même avec un aperçu lent. En version 0.6.0, elle se perdait parfois sans avertissement sur les gros modèles.
 
 ## 0.6.0
 

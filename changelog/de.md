@@ -106,6 +106,7 @@ Nutzen da und sonst nichts.
 - Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
 - Bei Bohrungen zeigen Bild und *Auswahl* dieselbe Änderung. Zielmaß, Tiefe und mitgehender Einlauf stehen vorn; Druckkorrektur und Feinwerte unter „Weitere Werte“.
 - Bohrungsfelder und der Haken zum gemeinsamen Ändern gleichartiger Merkmale erklären ihre Wirkung. „Druckabweichung ausgleichen“ beschreibt die Korrektur aus dem Materialprofil verständlicher.
+- Ein Klick auf *Übernehmen* an einer Textur während einer Berechnung behält die Änderung jetzt auch bei langsamer Vorschau. In Version 0.6.0 ging sie an größeren Modellen ohne Hinweis verloren.
 
 ## 0.6.0
 
