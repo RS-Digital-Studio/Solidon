@@ -38,6 +38,7 @@ import numpy as np
 from app.core import units
 from app.core.errors import (
     CANCEL,
+    CHANGE_EDGES,
     CHANGE_SELECTION,
     CORRECT_INPUT,
     REPAIR_AND_RETRY,
@@ -729,7 +730,7 @@ def named_edges[AnyEdge: SelectableEdge](
             raise GeometryError(
                 detail=_("Die gewählte Kante ist nicht eindeutig — wählen Sie sie am Körper neu."),
                 values={"key": key, "matches": len(matches)},
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_EDGES, CANCEL),
             )
         if matches:
             selected.append(matches[0])
@@ -802,7 +803,7 @@ def wanted[AnyEdge: SelectableEdge](
         raise GeometryError(
             detail=_("Für diese Auswahl ist noch keine Kante benannt — wählen Sie eine aus."),
             values={"choice": choice},
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_EDGES, CANCEL),
         )
     if keys:
         chosen = named_edges(edges, keys)
@@ -813,7 +814,7 @@ def wanted[AnyEdge: SelectableEdge](
                     "ein Schritt davor hat sie verändert. Wählen Sie die Kanten neu."
                 ),
                 values={"edges": len(keys), "missing": len(keys) - len(chosen)},
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_EDGES, CANCEL),
             )
         return chosen
     chosen = choose(edges, choice, rings_by_plane=rings_by_plane)
@@ -821,7 +822,7 @@ def wanted[AnyEdge: SelectableEdge](
         raise GeometryError(
             detail=_("Zu dieser Auswahl gehört keine Kante."),
             values={"choice": choice},
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_EDGES, CANCEL),
         )
     return chosen
 
@@ -1227,7 +1228,7 @@ def check_varying_radius(
                         "vorn am Ring. Geben Sie beiden denselben Radius, und legen Sie den "
                         "Verlauf über Zwischenstellen."
                     ),
-                    suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+                    suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
                     values={
                         "radius_mm": round(radius_first, 3),
                         "largest_mm": round(radius_last, 3),
@@ -1243,7 +1244,7 @@ def check_varying_radius(
                 "eine Innenkante zusammentreffen. Wählen Sie einen gleichbleibenden Radius, "
                 "oder lassen Sie eine dieser Kanten aus."
             ),
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
         )
     for radii in radii_at.values():
         if len(radii) > 1 and max(radii) - min(radii) > EPS_GEOM:
@@ -1252,7 +1253,7 @@ def check_varying_radius(
                     "An einer Ecke treffen gewählte Kanten mit verschiedenen Radien zusammen. "
                     "Geben Sie ihnen dort denselben Radius, oder verrunden Sie sie einzeln."
                 ),
-                suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+                suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
                 values={"radius_mm": round(min(radii), 3), "largest_mm": round(max(radii), 3)},
             )
 
@@ -1729,7 +1730,7 @@ def _without_an_angle(radius: float) -> GeometryError:
             "zusammen — das Netz ist dort gefaltet oder eben. Reparieren Sie "
             "das Modell, oder wählen Sie eine andere Kante."
         ),
-        suggestions=(REPAIR_AND_RETRY, CHANGE_SELECTION, CANCEL),
+        suggestions=(REPAIR_AND_RETRY, CHANGE_EDGES, CANCEL),
         values={"radius": radius},
     )
 
@@ -2719,7 +2720,7 @@ def _check_corner_region(
             # Der Satz nennt zwei Wege, und beide sind Handlungen am Schritt —
             # nicht „Reparieren", die Vorgabe des Geometriefehlers: Am Netz ist
             # hier nichts kaputt, die Ecke ist nur zu eng für das Maß.
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
         )
     return clipped
 
@@ -3324,7 +3325,7 @@ def too_large_for_the_faces(
                 "der größte unter {largest} bleibt, oder bearbeiten Sie weniger Kanten.",
                 largest=shown,
             ),
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
             values={"size_mm": round(size, 3), "largest_mm": largest},
         )
     if second:
@@ -3335,7 +3336,7 @@ def too_large_for_the_faces(
                 "unter {largest}, oder bearbeiten Sie weniger Kanten.",
                 largest=shown,
             ),
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
             values={"size_mm": round(size, 3), "largest_mm": largest, "field": "second_distance"},
         )
     return GeometryError(
@@ -3354,7 +3355,7 @@ def too_large_for_the_faces(
                 largest=shown,
             )
         ),
-        suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+        suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
         values={"size_mm": round(size, 3), "largest_mm": largest},
     )
 
@@ -3459,7 +3460,7 @@ def _grouped_edge_work(
                 "eine Außen- und eine Innenkante zusammentreffen. Wählen Sie gleiche "
                 "Breiten, oder lassen Sie eine der Kanten an dieser Ecke aus."
             ),
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
         )
     if len(groups) == 1 or not mixed:
         return _placed_edge_work(

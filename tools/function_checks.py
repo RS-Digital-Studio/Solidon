@@ -160,6 +160,19 @@ BENCH_FINDINGS: Final = (COVERED, NOT_FOUND, NO_RESPONSE)
 #: Wert, den man nachträglich ändern könnte (Prüfpunkt 12, *entfällt* ohne Dialog).
 WITHOUT_DIALOG: Final = "die Zeile öffnet keinen Dialog"
 STEP_WITHOUT_VALUES: Final = "der Schritt hat keinen Wert, der sich ändern ließe"
+#: Die Zeile hat keinen Entwurf, den Escape verwerfen könnte (Prüfpunkt 5,
+#: ``function_bench.phase_escape``). Ohne Entwurf und ohne Dialog verlangt der
+#: Rückweg nur Rückgängig und Wiederholen (FD-128).
+NO_DRAFT: Final = "keine Eingaben, kein Entwurf zum Verwerfen"
+#: Lagen des Projektwechsels, die die Zeile nicht hat (Prüfpunkt 16, FD-128):
+#: ohne Eingaben kein Entwurf und keine Vorschau, eine Zeile ohne Vorschau, und
+#: eine Rechnung, die vorbei war, bevor der Kunde wechseln konnte — in sie
+#: kann niemand wechseln. ``function_switch`` schreibt sie je Lage als
+#: ``<lage>: <grund>`` unter ``unmeasured.switch``.
+SWITCH_WITHOUT_INPUTS: Final = "keine Eingaben"
+SWITCH_WITHOUT_PREVIEW: Final = "die Zeile zeigt keine Vorschau"
+SWITCH_RUN_OVER: Final = "die Rechnung war vor dem ersten Wechselklick fertig"
+SWITCH_ABSENT: Final = (SWITCH_WITHOUT_INPUTS, SWITCH_WITHOUT_PREVIEW, SWITCH_RUN_OVER)
 
 #: Rohe Qt-Fenster, die im Kundenweg nicht erscheinen (Z5).
 RAW_CLASSES: Final = ("QMessageBox", "QInputDialog", "QColorDialog")
@@ -242,8 +255,10 @@ SMALLEST_AVAILABLE: Final = (SMALLEST_SCREEN[0], SMALLEST_SCREEN[1] - TASKBAR_HE
 #: diese Innenfläche.
 SMALLEST_WINDOW: Final = (SMALLEST_AVAILABLE[0], SMALLEST_AVAILABLE[1] - CAPTION_HEIGHT)
 #: Z6: Die Skalierungen — eine ist nur ein Fall, solange die logische Fläche
-#: des Schirms dabei mindestens :data:`SMALLEST_AVAILABLE` bleibt.
-SCALES: Final = (1.0, 1.5, 2.0)
+#: des Schirms dabei mindestens :data:`SMALLEST_AVAILABLE` bleibt. 125 % ist am
+#: Messschirm 2560 x 1440 der eine gültige Fall über 100 % (2048 x 1152 logisch,
+#: FD-109); 150 und 200 % drücken ihn unter die kleinste Fläche.
+SCALES: Final = (1.0, 1.25, 1.5, 2.0)
 #: I3: Anteil der häufigsten Kundenziele, die ohne Suche dastehen.
 GOAL_SHARE: Final = 0.8
 #: Prüfpunkt 1 und I6: höchster Rang eines Suchtreffers.
@@ -331,7 +346,8 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         "tabelle",
         _keys(
             "language", "theme", "unit", "licence", "preconditions", "platform", "screen",
-            "scale", "window_size", "motion", "set", "phases", "placed",
+            "scale", "window_size", "motion", "set", "phases", "placed", "predict",
+            "font", "font_change",
         ),
         {"theme": ("light", "dark"), "unit": DISPLAY_UNITS, "licence": VARIANT_LICENCES},
         required=True,
@@ -340,11 +356,13 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     # ``names``: was die Szene selbst benennt (Projekt, Körper aus ihren Dateien) —
     # Text des Kunden, nicht der Anwendung; V1 nimmt es aus der Prüfung.
     "scene": ProtocolField("tabelle", _keys("key", "triangles", "build_s", "eval_s", "names")),
+    # ``wheel_angle`` und ``moved`` an einem Rollschritt: Radmenge und ob ein
+    # Rollbereich weiterrückte (FD-131, ``function_walk``).
     "steps": ProtocolField(
         "liste",
         _keys(
             "target", "why", "button", "rect", "point", "widget_at", "hit", "zone", "typed",
-            "key", "decision", "t", "phase", "finding", "detail",
+            "key", "decision", "t", "phase", "finding", "detail", "wheel_angle", "moved",
         ),
         {"why": WHY, "zone": ZONES, "finding": BENCH_FINDINGS},
         needs=_keys("phase"),
@@ -372,25 +390,60 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     "windows": ProtocolField("liste", _keys("class", "title")),
     # ``kind`` ist die Art der Absage wie ``fault_case.expected`` (Prüfpunkt 7),
     # ``way_out`` sagt bei einem Sperrgrund, ob er einen Ausweg nennt (V5),
-    # ``phase`` steht an den Meldungen des Fehlfalls.
+    # ``phase`` steht an den Meldungen des Fehlfalls, ``way`` an einer Meldung, die
+    # einen Weg in Schritten nennt: je genanntem Knopf ``title``, ``clicked``,
+    # ``effect`` (``function_way``, FD-36).
     "messages": ProtocolField(
         "liste",
-        _keys("text", "actions", "kind", "way_out", "phase"),
+        _keys("text", "actions", "kind", "way_out", "phase", "way"),
         {"kind": FAULT_KINDS},
     ),
-    "texts": ProtocolField("liste", _keys("text", "carrier", "need_px", "width_px", "cut", "lead")),
+    # ``axis``: Woran ein Text gemessen ist — ``breite`` (Bedarf gegen Breite)
+    # oder ``hoehe`` (umbrochene Zeile einer Liste gegen die Höhe ihrer Zelle,
+    # FD-110). Fehlt es, ist es die Breite.
+    "texts": ProtocolField(
+        "liste",
+        _keys("text", "carrier", "need_px", "width_px", "cut", "lead", "axis"),
+        {"axis": ("breite", "hoehe")},
+    ),
     "fields": ProtocolField(
         "liste", _keys("label", "accessible_name", "description", "tooltip", "front")
     ),
     # Die Kette, wie Tab sie geht; ihr letztes Glied ist das Widget, das
     # wiederkommt, oder das, das den Dialog verlässt (``inside: false``).
-    "tab_chain": ProtocolField("liste", _keys("name", "rect", "inside")),
+    # ``name`` liest ein Bildschirmleser, ``class`` steht daneben; ``mark``
+    # und ``primary`` erkennen die Zielhandlung (FD-141).
+    "tab_chain": ProtocolField(
+        "liste",
+        _keys("name", "rect", "inside", "class", "mark", "primary"),
+        types={"primary": bool, "class": str, "mark": str},
+    ),
+    # Die Kette ab der Reiterleiste über der Fläche (FD-177): erstes Glied die
+    # Leiste, ``inside`` gegen die vordere Seite; leer ohne Reiter.
+    "tab_from_bar": ProtocolField(
+        "liste",
+        _keys("name", "rect", "inside", "class", "mark", "primary"),
+        types={"primary": bool, "class": str, "mark": str},
+    ),
+    # FD-99: je aufgenommener Fläche ihr Hauptknopf, grau oder frei, mit dem Bild
+    # seiner Kurzhilfe; ``reason``, wenn keiner dastand (``function_tooltips``).
+    "grey_apply": ProtocolField(
+        "liste",
+        _keys("where", "target", "grey", "image", "reason"),
+        needs=_keys("where"),
+        types={"grey": bool},
+    ),
     "names": ProtocolField("texte"),
     "focus_return": ProtocolField("wahr"),
     "matrix": ProtocolField("tabelle", frozenset(SELECTION_STAGES)),
     "search": ProtocolField("tabelle"),
     "place": ProtocolField("tabelle", _keys("where", "path", "error"), {"where": PLACES}),
-    "spot": ProtocolField("tabelle", _keys("point", "covered_by")),
+    # E4: ``point`` an Merkmal und Kante vor dem Übernehmen; an einer Handlung am
+    # ganzen Körper ``frame`` der geänderten ``bodies`` im Ergebnisbild, ``view``
+    # die Ansicht und ``inside``, ob er ganz darin liegt (FD-169).
+    "spot": ProtocolField(
+        "tabelle", _keys("point", "covered_by", "frame", "view", "inside", "bodies")
+    ),
     # G2: ``group`` ist das eine Layout, ``items`` zählt seine sichtbaren
     # Elemente — ein Abstand gilt erst zwischen zweien. ``spacing`` ist bei
     # Raster und Formular der senkrechte Abstand, ``horizontal`` der waagerechte
@@ -414,6 +467,12 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         ),
         types={"primary": bool, "family": str, "base_family": str},
     ),
+    # Der Schriftwechsel zur Laufzeit (FD-57, FD-58, ``function_fonts``): je Stufe
+    # die wirksame und die verlangte Schrift, die Innenfläche, ob die Fläche zur
+    # Ruhe kam, ihr Bild und die abgeschnittenen Texte.
+    "font_change": ProtocolField(
+        "liste", _keys("points", "wanted", "window", "still", "image", "cut")
+    ),
     "state_images": ProtocolField("liste", _keys("surface", "widget", "states")),
     "contrast": ProtocolField(
         "liste",
@@ -436,6 +495,8 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         "liste", _keys("surface", "window_size", "front", "vertical", "horizontal")
     ),
     "hover_labels": ProtocolField("liste", _keys("kind", "label")),
+    # I1: die Merkmalsarten, die die Erkennung an der Szene liefert (FD-152).
+    "recognized_kinds": ProtocolField("texte"),
     "empty_states": ProtocolField("liste", _keys("surface", "sentence", "button", "intended")),
     "licence_runs": ProtocolField("tabelle", frozenset(LICENCE_STATES)),
     "halt": ProtocolField("tabelle", _keys("text", "step")),
@@ -456,6 +517,16 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     # Szene), nicht die Ladezeit der Startszene — *Abbrechen* erscheint nach
     # der Uhr dieses Rechners.
     "abort": ProtocolField("tabelle", _keys("eval_s", "cancel_shown_s", "clicked")),
+    # V4: das Vorhersagetor vor dem Handlungsklick (``function_prediction``,
+    # FD-168). ``bound`` ist Pfad relativ zum Lauf und SHA256 der freigegebenen
+    # Vorhersage; ohne Bindung sagt ``reason`` warum.
+    "prediction": ProtocolField(
+        "tabelle",
+        _keys(
+            "ready", "target", "bound", "path", "sha256", "step_index", "image_index",
+            "reason", "rejected", "after",
+        ),
+    ),
     "findings": ProtocolField(
         "liste", _keys("phase", "kind", "target", "detail"), {"kind": BENCH_FINDINGS}
     ),
@@ -538,16 +609,21 @@ class Context:
     frozen_texts: frozenset[str]
     #: Prüfpunkt 3: der Satz der groben Vorschau in einer Sprache.
     coarse_note: Callable[[str], str]
-    #: Prüfpunkt 11: Seite und Stelle im Handbuch, ``None`` ohne Stelle.
+    #: Prüfpunkt 11: Seite und Stelle im Handbuch, ``None`` ohne Stelle. Die
+    #: Zeile kommt mit ihrer Spezifikation (``spec``), die Fundstellen nennen kann.
     manual_place: Callable[[Mapping[str, Any]], str | None]
     #: Prüfpunkt 11: Website-Seiten, die die Funktion nennen.
     website_hits: Callable[[Mapping[str, Any]], tuple[str, ...]]
     #: Prüfpunkt 17: Ort laut Agentenwerkzeug (``menue``, ``karte``,
-    #: ``katalog``) und sein Menüpfad, ``None`` ohne Werkzeug.
+    #: ``katalog``, ``leiste``) und sein Weg, ``None`` ohne Werkzeug — auch an
+    #: Zeilen außerhalb des Registers, die ein Zusatzwerkzeug nennt (FD-129).
     agent_place: Callable[[Mapping[str, Any]], tuple[str, str] | None]
     #: I3: die Ziele (``target``) der häufigsten Kundenziele. Nur an ihren
     #: Zeilen wird I3 gemessen; der Anteil steht in den Paketwerten.
     common_goal_targets: frozenset[str] = frozenset()
+    #: Prüfpunkt 11: was an den Fundstellen einer Zeilenspezifikation nicht
+    #: stimmt (``function_promises.reference_problems``) — leer, wenn alles trifft.
+    promise_problems: Callable[[Mapping[str, Any]], list[str]] = field(default=lambda spec: [])
 
 
 @dataclass(frozen=True)
@@ -749,13 +825,15 @@ CRITERIA: Final[dict[str, Criterion]] = {
             "A",
             ("fields",),
         ),
+        # ``prediction``: das Vorhersagetor im Protokoll (FD-168); die
+        # Vorhersage selbst steht im Urteil.
         _criterion(
             "V4",
             "Vorhersage vor dem Übernehmen",
             "Abweichung vom Ergebnis ist ein Fund",
             (),
             "B",
-            (),
+            ("prediction",),
         ),
         _criterion("V5", "Meldungen", "jede Handlung löst das Problem", (), "AB", ("messages",)),
         _criterion(
@@ -899,7 +977,7 @@ CRITERIA: Final[dict[str, Criterion]] = {
             "ja an jeder erkannten Art",
             (),
             "AB",
-            ("hover_labels",),
+            ("hover_labels", "recognized_kinds"),
             design=True,
             promised=True,
         ),

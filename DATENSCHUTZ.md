@@ -1,6 +1,6 @@
 # Datenschutzerklärung
 
-Stand: 23. September 2026
+Stand: 15. Oktober 2026
 
 
 ## Diese Website
@@ -18,6 +18,8 @@ sind davon getrennt und werden unten beschrieben.
 Gezählt wird trotzdem, aber auf dem eigenen Server und ohne Cookie: Beim Öffnen einer Seite meldet der Browser den aufgerufenen Pfad an `/api/count.php`, und ein Download läuft über dieselbe Stelle. Gespeichert werden Zeitpunkt, Pfad beziehungsweise Dateiname, die Domain der verweisenden Seite — nicht deren vollständige Adresse — und ein Tageskennzeichen. Dieses Kennzeichen ist ein mit privatem Tageswert gebildetes HMAC-Pseudonym aus IP-Adresse und Browserkennung. IP-Adresse und Browserkennung selbst werden nicht in die Anwendungsstatistik geschrieben. Der Tageswert wechselt täglich; dadurch lässt sich das Kennzeichen nicht tageübergreifend zu einem Profil verbinden. Die Reichweitenzeilen des laufenden und des unmittelbar vorherigen UTC-Kalendermonats bleiben erhalten, höchstens 62 Kalendertage; ältere Monatsdateien werden gelöscht. Jahresvergleiche und stille Langzeitaggregate werden nicht gebildet. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO — das berechtigte Interesse, zu verstehen, ob und worüber diese Seiten gefunden werden. Wer im Browser *Do Not Track* oder *Global Privacy Control* eingeschaltet hat, wird nicht gezählt.
 
 Zum Schutz vor automatisiertem Missbrauch bilden Website-Zähler, Aktivierungsdienst, Supportversand und die Anmeldung zur privaten Auswertungsseite aus der IP-Adresse jeweils ein privates, zweckgetrenntes und zeitlich wechselndes HMAC-Pseudonym. Das ist Pseudonymisierung, keine Anonymisierung. Die zugehörigen Anforderungszeiten werden im Anwendungszustand beim Website-Zähler 60 Sekunden, bei Aktivierung und Statistik-Anmeldung 15 Minuten sowie beim Supportversand eine Stunde benötigt und anschließend bereinigt. Die IP-Adresse selbst wird nicht in diese Anwendungsdateien geschrieben. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO — die berechtigten Interessen an Verfügbarkeit und Missbrauchsabwehr. Auf dem Endgerät wird dafür nichts gespeichert und nichts ausgelesen; § 25 TDDDG verlangt für diese rein serverseitige Verarbeitung keine Einwilligung.
+
+Auf der deutschen Startseite bietet ein Hinweis die passende Sprachfassung an, wenn Ihr Browser eine andere Sprache als Deutsch bevorzugt. Welche Sprache das ist, prüft die Seite in Ihrem Browser; an uns wird dafür nichts übermittelt. Schließen Sie den Hinweis oder wechseln Sie aus einer anderen Sprachfassung zur deutschen, legt Ihr Browser diese Wahl im lokalen Speicher (`localStorage`) als einzelnen Eintrag ohne Kennung ab, damit der Hinweis nicht wiederkommt. Der Eintrag verlässt Ihr Gerät nicht; Sie entfernen ihn, indem Sie die Websitedaten von solidon3d.de in Ihrem Browser löschen. Speichern und Auslesen dieses Eintrags sind für die von Ihnen gewählte Funktion unbedingt erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG).
 
 Beim Abruf der Seiten verarbeitet der Hosting-Anbieter — die netcup GmbH, Emmy-Noether-Straße 10, 76131 Karlsruhe, Deutschland — die technisch notwendigen Verbindungsdaten (IP-Adresse, Zeitpunkt, abgerufene Datei) in seinen Server-Protokollen. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO — das berechtigte Interesse am technischen Betrieb und an der Abwehr von Angriffen.
 

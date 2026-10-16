@@ -3855,18 +3855,24 @@ def main() -> int:
     folder = args.output.resolve() / args.story / LANGUAGE
     folder.mkdir(parents=True, exist_ok=True)
     profile = folder / "profile"
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from app.core.paths import drawing_profile_variables, isolate_secrets
+
+    # ``HOME`` nur unter macOS (RCI-10), wie jeder Fall des Prüfstands.
+    home = (("HOME", "home"),) if "HOME" in drawing_profile_variables() else ()
     for name, child in (
         ("APPDATA", "roaming"),
         ("LOCALAPPDATA", "local"),
         ("XDG_CONFIG_HOME", "config"),
         ("XDG_CACHE_HOME", "cache"),
+        *home,
     ):
         target = profile / child
         target.mkdir(parents=True, exist_ok=True)
         os.environ[name] = str(target)
     os.environ.pop("QT_QPA_PLATFORM", None)
-    if str(ROOT) not in sys.path:
-        sys.path.insert(0, str(ROOT))
+    isolate_secrets(os.environ)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     if args.inputs_only:

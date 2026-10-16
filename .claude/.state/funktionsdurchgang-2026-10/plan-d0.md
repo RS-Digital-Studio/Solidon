@@ -104,7 +104,7 @@ Parallel innerhalb von W: Schritt 1 und 2 zuerst (ein halber Tag). Danach laufen
    - Herzschlag-Zeitgeber, Bildzähler, Modale und rohe Qt-Fenster;
    - Texte mit Breitenbedarf, Felder, Tab-Kette, Layoutmaße, Schriften, Zustandsbilder, Kontraste, Symbole, Animationen, Rollleisten;
    - Matrix der Auswahlstufen, Suchränge, Meldungen und Handlungen.
-4. **Sprachfälle:** je Sprache und Paket ein Prozess, der die Flächen aller Zeilen abgeht. Sechs Sprachen in einem Prozess brechen ab (tools/CLAUDE.md); wieder aufnehmbar je Fläche.
+4. **Sprachfälle:** je Sprache und Paket ein Prozess, der die Flächen aller Zeilen abgeht. Sechs Sprachen in einem Prozess brechen ab (tools/CLAUDE.md); wieder aufnehmbar je Fläche. Die Zeile des Startablaufs (`startup.expired_demo`) läuft stattdessen je Sprache als Startfall; keine Zeile bleibt ohne erreichte Fläche (`tests/test_function_rows_reach.py`).
 5. **Tests** nach §4.3.
 
 ### 1.4 D0-U Urteile – Schritte
@@ -207,14 +207,16 @@ In `app/core/guides.py`: `TARGET_PROPERTY = "guideTarget"`, `menubar_name(msgid,
 |---|---|---|
 | `[row."<id>"]` | ja | muss eine erzeugte `id` treffen, sonst rot im Tor |
 | `start_scene` | nein | weicht von der Tabelle ab |
-| `route` | nein | Schritte `{target, button}` für das, was `next_click` allein nicht findet (Rechtsklick auf `tree.row:…`, dann `menu:…`) |
+| `route` | nein | Schritte `{target, button, modifier}` für das, was `next_click` allein nicht findet (Rechtsklick auf `tree.row:…`, dann `menu:…`); ein Feld auf dem Weg, das erst eine Eingabe freigibt, trägt `text` (hinklicken, alles markieren, tippen) |
 | `example_goal`, `inputs` | ja für Stufe A | Satz („Bohrung auf 5 mm“) und getippte Werte `{feature.field:… = 5.0}` |
 | `search_probes` | ja für Prüfpunkt 1 | `[{word, origin}]`, `origin` ∈ slicer, cad, fragebogen; dazu `questions` für I6; keine Kundenkennungen (der Korpus wird veröffentlicht) |
 | `expectation` | ja für Prüfpunkt 4 | Kennzahlen mit `tolerance` und `origin` (Konstruktion oder Formel, `tests.md` „Korpus“) |
 | `fault_case` | ja für Prüfpunkt 7 | Eingabe oder Auswahl und erwartete Art der Absage |
-| `preconditions` | nein | ki, comfyui, slicer: vorhanden oder fehlt; licence: demo, gekauft, abgelaufen; printer: filament oder resin |
+| `preconditions` | nein | ki, comfyui, slicer: vorhanden oder fehlt; licence: ein Zustand aus `licence_states()` (der Sprachfall läuft dann darin); printer: filament oder resin; druckhinweis: gesehen (Vorgabe im Profil jedes Falls) oder offen (nur die Zeile des Hinweises, ohne Gegenlauf). Zustände, die keine Maschine liefert, über die Nähte aus `tools/function_seams.py`, ohne Gegenlauf und ohne Weg nach draußen: update, browser, installation, slicerlauf, slicerfilamente, sicherung, chatmodell, aktivierung, erzeugung |
 | `not_applicable` | nein | `{prüfpunkt = grund}`, Grund aus der geschlossenen Liste |
 | `budget_s`, `budget_ref` | nein | nur mit §31-Beleg, sonst „kein Budget“ |
+| `drag` | nein | der Griff (`handle:…`), an dem Z1 zieht, wenn erst die Handlung der Zeile ihn zeigt; der Weg geht bis zur Handlung, das Bild `05-zug-gehalten` entsteht vor dem Loslassen, im Satz `dunkel` zieht nur eine Zeile mit `drag` (FD-73) |
+| `manual`, `website` | ja für Prüfpunkt 11 außerhalb des Registers | Handbuchseite (`<seite>` oder `<ref-seite>#<anker>`) und Abschnitte der Funktionsseite (`["funktionen.html#<anker>"]`, die Übersetzungen an derselben Stelle); eine Stelle, die es nicht gibt, macht P11 nicht prüfbar (`tools/function_promises.py`) |
 
 ### 2.5 Szenenkatalog und Anforderung → Szene
 
@@ -269,12 +271,16 @@ In `app/core/guides.py`: `TARGET_PROPERTY = "guideTarget"`, `menubar_name(msgid,
 | `timing` | total_s, first_feedback_s, progress_shown_s, cancel_shown_s, main_gap_ms, budget_s |
 | `frames` | Bildverzug beim Ziehen in ms, Referenzfaktor |
 | `modals[]`, `raw_windows[]` | Klasse, Titel, erlaubt; Instanzen von `QMessageBox`, `QInputDialog`, `QColorDialog` |
-| `messages[]` | Text und Handlungen (label, target, clicked, effect) |
+| `messages[]` | Text und Handlungen (label, target, clicked, effect); `way` je Knopf, den eine Meldung als Weg in Schritten nennt (`title`, `clicked`, `effect`; `tools/function_way.py`, FD-36). Bilder der Kurzhilfe an grauen Zielen: `04-fehlfall-grund-<n>` im Fehlfall, `02-uebernehmen-grund-1` am grauen *Übernehmen* vor den Eingaben (FD-99) |
 | `texts[]`, `fields[]` | sichtbarer Text, Träger, Bedarf und verfügbare Breite in px, abgeschnitten; Felder mit Beschriftung, accessibleName, Beschreibung, Tooltip, vorn |
 | `tab_chain[]`, `names[]`, `focus_return` | Prüfpunkt 10 |
 | `matrix{}` | sechs Auswahlstufen: angeboten, grau mit Grund oder fehlt; Klick wirksam |
 | `search{}` | je Probe Rang und Treffer |
 | `place` | Ort (karte, menue, werkzeugleiste, kuerzel, kontext), Pfad |
+| `spot` | E4: an Merkmal oder Kante `point` und `covered_by` vor dem Übernehmen; an einer Handlung am ganzen Körper `frame` der geänderten `bodies` im Ergebnisbild, `view`, `inside`, `covered_by` (`tools/function_spot.py`) |
+| `tab_from_bar` | Kette ab der Reiterleiste über der Fläche: der Reiter geklickt, dann Tab; Glieder wie `tab_chain`, `inside` gegen die vordere Seite, leer ohne Reiter (FD-177) |
+| `font_change` | Schriftwechsel zur Laufzeit je Stufe: `points` (wirksam), `wanted`, `window`, `still`, `image`, `cut` (abgeschnittene Texte; `tools/function_fonts.py`) |
+| `prediction` | V4 mit Vorhersagetor: `ready`, `target`, `bound` (Pfad und SHA256), `step_index`, `image_index`, `reason` ohne Bindung, `rejected`, `after` (§2.9) |
 | `layout[]`, `fonts[]`, `state_images[]`, `contrast[]`, `icons[]`, `animations[]`, `scrollbars[]` | G1–G8, Z6 |
 | `hover_labels[]`, `empty_states[]` | I1, Z4 |
 | `licence_runs{}`, `halt`, `insertion`, `switch` | Prüfpunkte 18, 15, 16 |
@@ -310,6 +316,41 @@ Ein Eintrag `[[verdict]]` je Urteil. Die Schlüssel sind englisch (Schemata), di
 | `not_applicable` | bei *entfällt* | Grund aus der Liste |
 | `design_judgement` | bei G9, Z3, Z4, I1–I6 und Vergleich | `true`: Gestaltungsurteil, kein bewiesener Fehler |
 | `prediction` | bei V4 | vor dem Übernehmen geschriebene Vorhersage |
+| `prediction_bound` | bei V4 *gut* | Pfad (relativ zum Lauf) und SHA256 der vor dem Klick freigegebenen Vorhersagedatei; ohne Bindung ist V4 *offen* (`tools/function_verdict_rules.py`) |
+
+**Wie ein Prüfer die Vorhersage schreibt (V4, FD-168).** Gebunden wird im
+Fallprozess, nicht danach (`tools/function_prediction.py`):
+
+1. Inventar mit dem Variantensatz `vorhersage` (je Zeile ein Hauptweg mit Tor
+   vor dem Übernehmen); steht `sprachen` daneben, halten auch die Sprachfälle
+   vor jeder Soforthandlung an. Gefahren wird wie jeder Lauf (`run`); ein Fall
+   wartet je Klick höchstens `PREDICTION_WAIT_S` (600 s), der Elternprozess
+   rechnet die Frist dazu.
+2. Vor dem Klick legt der Fall `cases/<nr>/v4/ready.json` an (im Sprachfall
+   `cases/<nr>/v4/<zeile>/ready.json`; `stdout.log` nennt den Pfad mit
+   „V4 wartet“): Bilder vor dem Klick mit SHA256, die sichtbaren Texte,
+   `nonce`, `commit`, `row`, `target`, `before_sha256`.
+3. Der Prüfer sieht nur diese Bilder an — kein Ergebnisbild, keinen anderen
+   Fall — und schreibt mit dem Schreibwerkzeug `prediction.json` daneben
+   (UTF-8): `nonce`, `commit`, `row`, `before_sha256` unverändert aus
+   `ready.json`; `title`, `first_sentence`, `preview`, wie er sie liest;
+   `prediction`, was der Klick seiner Erwartung nach tut.
+4. Das Tor prüft die Bindung; gehört die Datei nicht zum Bild oder ist ein
+   Feld leer, steht der Grund in `prediction.rejected` des Protokolls, und es
+   wartet weiter auf eine gültige. Eine gültige kopiert es unverändert nach
+   `prediction-before-click.json`, schreibt `release.json` (SHA256, Zeit,
+   Schritt- und Bildindex) und gibt den Klick frei; danach `after.json` mit dem
+   Bild nach dem Klick.
+5. Das Protokoll trägt `prediction.bound` (`cases/<nr>/v4/prediction-before-click.json <sha256>`).
+   Das Urteil übernimmt ihn wörtlich als `prediction_bound`, die Vorhersage
+   als `prediction`, und vergleicht mit dem Bild danach. `report` nimmt eine
+   Bindung nur, wenn das Tor ihres Laufs genau sie freigab, die Datei am Pfad
+   der Bindung noch diesen SHA256 hat und ihre Vorhersage die des Urteils ist
+   (`release_problems`, Leerraum zählt nicht). Aus einer anderen Runde steht
+   deren Kennung davor (`v4:cases/…`); sie braucht ihren `[[run]]`, und
+   `report --runs <Ablage der Läufe>` liest dort Protokolle und Siegeldatei.
+   Ohne gültige Vorhersage fällt der Klick nach der Frist
+   trotzdem, `prediction.reason` sagt warum, und V4 bleibt *offen*.
 
 Jede Runde (Kopfkommentar eines Prüfers) nennt vor ihren Urteilen den Lauf, an
 dem sie urteilt, als `[[run]]`, eine Runde wiederholt ihn gleich lautend.
@@ -334,7 +375,7 @@ unberührt).
 | Kopf | Paket, Commit, Datum, Laufordner außerhalb des Baums (Name aus `[[run]]` der Urteile, sonst `--out`), Zahl der Zeilen; *gut*, *gut nach Fix*, *offen* mit RM, *nicht geprüft* |
 | Tabelle 1 | eine Zeile je Funktion: Kennung · Art · Szene · Spalten 1–19 mit `ja`, `FD-n`, `—` (entfällt), `B`, `C`, `?` (nicht gelaufen), `n.p.` (nicht prüfbar) · Urteil · Funde |
 | Tabelle 2 | Kriterien, die nicht erfüllt sind, je Zeile (Kennung, Messwert, Schwelle, FD) |
-| Paketwerte | E2-Anteil, I3-Anteil, I4-Zahl, Übereinstimmung der Prüfer je Prüfpunkt (Schwelle 90 %) |
+| Paketwerte | E2-Anteil, I3-Anteil, I4-Zahl; Übereinstimmung der Prüfer je Prüfpunkt über die Runde (alle Pakete mit demselben Laufordner, Schwelle 90 %, bindend), je Paket als Auskunft, Zellen ohne Gegenurteil markiert (`tools/function_agreement.py`) |
 
 ### 2.11 Funddatei: `.claude/.state/funktionsdurchgang-2026-10/funde.md`
 
@@ -367,9 +408,9 @@ Jedes Skill erhält eine Tabelle mit den Spalten `Kennung | Zählgröße | Schwe
 
 | Befehl | Wirkung |
 |---|---|
-| `inventory --functions --out <ordner> [--package D4] [--rows …] [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel]` | Fälle aus Funktionsliste und Spezifikationen, Szenen nach `<out>/scenes/`, Menüleiste nach `<out>/menubar.json` |
-| `run --out … [--first --last --again --timeout] [--screen <name oder index>]` | je Fall ein Prozess mit eigenem Profil; wieder aufnehmbar |
-| `report --out … [--package] [--verdicts <pfad>] [--checklist <pfad>]` | Zusammenfassung, Ergebnisse je Prüfpunkt, Abhakliste; Ausgang 1 nur bei ungültigen Eingaben |
+| `inventory --functions --out <ordner> [--package D4] [--rows …] [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel,bewegung,vorhersage,schrift,schriftwechsel]` | Fälle aus Funktionsliste und Spezifikationen, Szenen nach `<out>/scenes/`, Menüleiste nach `<out>/menubar.json`; `vorhersage` hält vor dem Handlungsklick am Vorhersagetor an, auch die Sprachfälle daneben (§2.9); `skalierung` fährt 1920 × 1009 und 125, 150, 200 % (unter 1920 × 1080 logisch kein Fall); `schrift` setzt die Inhaltsschrift 14 und 18 pt vor dem Fenster, `schriftwechsel` wechselt an der offenen Fläche 9 → 14 → 9 pt, schmal und groß im Wechsel (`tools/function_fonts.py`) |
+| `run --out … [--first --last --again --timeout] [--screen <name oder index>] [--total <s>] [--binding <bindung.json>]` | je Fall ein Prozess mit eigenem Profil; wieder aufnehmbar; `--total` ist die Gesamtfrist (kein Fall beginnt mit weniger als 60 s Rest, jeder höchstens mit der Restzeit), `--binding` prüft vor jedem Fall das Siegel (`tools/acceptance_guard.py`) — bricht eins, endet der Lauf mit Grund und Ausgang 1 |
+| `report --out … [--package] [--verdicts <pfad>] [--checklist <pfad>] [--runs <ablage>]` | Zusammenfassung, Ergebnisse je Prüfpunkt, Abhakliste; `--runs` ist die Ablage der Läufe (Siegeldateien der Vorhersagen, §2.9); Ausgang 1 nur bei ungültigen Eingaben |
 
 ## 3 Prüfpunkte und Kriterien: wer misst, welche Gegenprobe
 
@@ -383,21 +424,26 @@ Alle Gegenproben laufen ohne Fenster in `tests/test_function_report.py`. Sie spe
 | 2 Weg | A zählt, B urteilt | `steps`: Klicks inklusive Wegklicks, Tasten, getippte Felder, Entscheidungen, Zonenfolge | 4 Klicks an einer Körperhandlung (E1 über der Schwelle); fehlende `steps` ergeben „nicht gemessen“, nie „gut“ |
 | 3 Vorschau | A | `preview`: Abdruck gegen Übernommenes; über `COARSE_PREVIEW_ABOVE` der Satz im Band | ungleiche Abdrücke; grobe Szene ohne Bandsatz |
 | 4 Ergebnis | A | `result` gegen `expectation`; `cli` druckgleich | Volumen außerhalb der Toleranz; Kommandozeilennetz mit verschobener Ecke; Erwartung ohne Herkunft |
-| 5 Rückweg | A | `states`: Rückgängig = vorher, Wiederholen = übernommen, Escape und Abbrechen = vorher bei gleich langem Verlauf; Tasten aus `shortcut_schemes` | Rückgängig ≠ vorher; Escape mit gewachsenem Verlauf. Nur die Auswahl verschieden: Vermerk, nicht rot |
+| 5 Rückweg | A | `states`: Rückgängig = vorher, Wiederholen = übernommen, Escape und Abbrechen = vorher bei gleich langem Verlauf, nur an Zeilen mit Entwurf oder Dialog (`unmeasured`: `NO_DRAFT` und `WITHOUT_DIALOG`); Tasten aus `shortcut_schemes` | Rückgängig ≠ vorher; Escape mit gewachsenem Verlauf. Nur die Auswahl verschieden: Vermerk, nicht rot |
 | 6 Rückmeldung und Zeit | A | `timing`: Lücke ≤ 100 ms; ab 0,2 s Zeiger, ab 2 s Balken und *Abbrechen*; Budget überschritten = Verdacht | Lücke 150 ms; Lauf von 3 s ohne sichtbares *Abbrechen* |
 | 7 Fehlerweg | A misst, B (V5-Wortlaut) | `fault_case`, `messages[].actions` geklickt und wirksam | Meldung ohne Handlung; Handlung ohne Wirkung |
 | 8 Verständlich | A (V1–V3, V6 Handbuch), B (V4–V6, Gesamturteil) | `texts`, `fields`, Handbuchfenster geöffnet | Negativwort; Feld ohne eigenen Satz; B „gut“ trotz V1-Treffer |
-| 9 Sprachen und Darstellung | A (Textpassung in sechs Sprachen, Zoll), B (Regel 18 am Bild) | Sprachfälle: `texts` mit Bedarf und Platz; Zolllauf; Bilder auf Deutsch hell und in der längsten Übersetzung | Bedarf über Platz; „mm“ an einem Längenwert im Zolllauf |
-| 10 Tastatur | A | `tab_chain` per Tastendruck und `focusWidget()`, `names`, `focus_return`; Bildschirmleser wird als „ungeprüft“ vermerkt | Rücksprung in der Kette; doppelter Name; Fokus kommt nicht zurück |
-| 11 Versprechen | A (Fundstellen), B (Inhalt) | `manual.help_for`, Treffer auf `website/funktionen.html` und `website/{en,es,fr,it,pt}/` | Operation ohne Handbuchstelle; B-Urteil ohne Bild oder Stelle wird abgewiesen |
-| 12 Nachträglich ändern | A | `menu:history.edit` und Doppelklick auf `history.row:<n>`; Felder = Parameter; Verlaufslänge gleich | Verlauf gewachsen; Feldwert ≠ Parameter |
+| 9 Sprachen und Darstellung | A (Textpassung in sechs Sprachen, Zoll), B (Regel 18 am Bild, jeder sichtbare Text im ganzen Fenster) | Sprachfälle: `texts` mit Bedarf und Platz (umbrochene Listenzeile: `axis` Höhe); Zolllauf; Bilder auf Deutsch hell und in der längsten Übersetzung | Bedarf über Platz; umbrochene Zeile höher als ihre Zelle; „mm“ an einem Längenwert im Zolllauf |
+| 10 Tastatur | A | `tab_chain` per Tastendruck und `focusWidget()` mit `name` (wie ein Bildschirmleser liest), `class`, `mark`, `primary`; `names`, `focus_return`; Bildschirmleser wird als „ungeprüft“ vermerkt | Rücksprung in der Kette; doppelter Name; Klassenname als Name; Kette ohne Zielhandlung (Hauptknopf oder Ziel der Zeile); leere Kette ergibt „nicht gemessen“; Fokus kommt nicht zurück |
+| 11 Versprechen | A (Fundstellen), B (Inhalt) | `manual.help_for`, Treffer auf `website/funktionen.html` und `website/{en,es,fr,it,pt}/` samt `alt` und `title`; außerhalb des Registers `spec.manual`, `spec.website` | Operation ohne Handbuchstelle; Fundstelle der Spezifikation, die es nicht gibt; B-Urteil ohne Bild oder Stelle wird abgewiesen |
+| 12 Nachträglich ändern | A | `menu:history.edit` und Doppelklick auf `history.row:<n>`; an einer Zeile, die einen Projektparameter anlegt, `parameters.first.label` rechts mit `menu:parameters.edit` und Doppelklick auf `history.last`, Verlaufslänge dort die Zahl der Parameter; Felder = Parameter; Verlaufslänge gleich | Verlauf gewachsen; Feldwert ≠ Parameter; ein Weg öffnet nichts |
 | 13 Auswahlstufen | A misst, B (gegen `grenzen.md`) | `matrix` über sechs Stufen | grau mit leerem Grund; angeboten ohne Wirkung |
 | 14 Abbruch | A | `langsam_2s`: *Abbrechen* sichtbar, Klick auf `progress.cancel`, Stand = vorher, wartendes Übernehmen verfällt | Abdruck nach Abbruch ≠ vorher; Szene unter 2 s ergibt „nicht prüfbar“, nie grün |
 | 15 Halt und Einfügemarke | A | `halt`: Grund mit Schrittnummer; Einfügen über `menu:history.insert`: Ergebnis davor oder Absage mit *Einfügen beenden* | Grund ohne Nummer; Absage ohne Handlung |
-| 16 Projektwechsel | A | Wechsel über *Datei → Zuletzt geöffnet* während Vorschau, Entwurf und Rechnung; `switch.late_events` | ein später Befund oder Dialog nach dem Wechsel |
-| 17 Agentenweg | A ohne Fenster | `menu_path` aus `tool_schemas()` gegen `place`; Rücknahme des Vorschlags über die Agenten-Suite (Skriptmodell), nur verwiesen | Menüpfad „Datei → …“ bei Ort Karte |
+| 16 Projektwechsel | A | Wechsel über *Datei → Zuletzt geöffnet* während Vorschau, Entwurf und Rechnung, soweit die Zeile die Lage hat (`function_checks.SWITCH_ABSENT` je Lage unter `unmeasured.switch`; keine Lage: *entfällt* ohne Rechnung); `switch.late_events` | ein später Befund oder Dialog nach dem Wechsel |
+| 17 Agentenweg | A ohne Fenster | `menu_path` aus `tool_schemas()` gegen `place`, an Zeilen außerhalb des Registers Ort und Weg des Zusatzwerkzeugs, das sie nennt (`agent.tools.extra_tool_rows`, `extra_tool_place`; Ort `leiste` gegen Karte oder Kontextmenü); Rücknahme des Vorschlags über die Agenten-Suite (Skriptmodell), nur verwiesen | Menüpfad „Datei → …“ bei Ort Karte |
 | 18 Lizenzzustand | A | `licence_runs`: Demo abgelaufen, Testlauf abgelaufen, gekauft | schreibendes Ziel freigegeben trotz Ablauf; grau ohne Grund |
 | 19 Gestaltung | A, B und C nach §3.3 | | je Kriterium nach §3.3 |
+
+Auslegung nach der Zweitprüfung am finalen Lauf (Abweichungsbericht §4.1):
+Prüfpunkte 9 und 11 und *gut nach Fix* im Konzept §4 (Tabelle der Prüfpunkte,
+„Urteil und Schwere“), E1–E4, V1 und V4 unter der Kriterientabelle im Skill
+`ux-review`, Z3, I1 und I4 unter der im Skill `ui-design`.
 
 ### 3.2 Einfachheit und Verständlichkeit
 
@@ -435,7 +481,7 @@ Alle Gegenproben laufen ohne Fenster in `tests/test_function_report.py`. Sie spe
 | Z3 Am Objekt | A misst (kein Wegklick nach der Auswahl), B urteilt | Protokoll mit Klappenklick, B sagt „ja“: Widerspruch |
 | Z4 Leere Zustände | B; A listet sie mit und ohne Knopf | ohne Knopf, B sagt „ja“: Widerspruch |
 | Z5 Rohe Qt-Fenster = 0 | A: Instanzen im Weg | `QInputDialog` |
-| Z6 Größen und Skalierung | A: 1280 × 820 und 1366 × 728 ohne Rollleiste vorn; 100/150/200 % `devicePixelRatio`; hell und dunkel gleiche Zahl Akzente | Rollleiste bei 1366 × 728; Pixmap 1,0 bei 200 % |
+| Z6 Größen und Skalierung | A: 1280 × 820 und 1366 × 728 ohne Rollleiste vorn; 100/125/150/200 % `devicePixelRatio`; hell und dunkel gleiche Zahl Akzente | Rollleiste bei 1366 × 728; Pixmap 1,0 bei 200 % |
 | Z7 Erste fünf Minuten | C (Protokoll) | Protokoll ohne Fehlklickzahl wird abgewiesen |
 | I1 Name und Maß beim Überfahren | A: Überfahren über `view:` je Art; B; Bauplanzusage, Fehlen ist ein Fund | Art ohne Beschriftung, Urteil „gut“ |
 | I2 Druckfolge im Band | A: Text von `preview.banner`; B | gerechnete Vorschau ohne Bandaufnahme ergibt „nicht gemessen“ |

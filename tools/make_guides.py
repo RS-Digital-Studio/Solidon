@@ -97,6 +97,7 @@ from PySide6.QtWidgets import (
 from app.branding import APP_NAME, APP_VERSION
 from app.core import figures, guides
 from app.core.bootstrap import load_operations
+from app.core.paths import isolate_secrets
 from app.i18n import install_catalog, set_language, tr
 from app.i18n.catalog import read_catalog
 from tools import make_figures as shots
@@ -1902,8 +1903,7 @@ def _take(language: str, keys: list[str], target: Path, film_target: Path) -> No
     """Eine Sprache in einem eigenen Prozess mit eigenen Nutzerverzeichnissen."""
     with tempfile.TemporaryDirectory(prefix="solidon-anleitungen-") as room:
         environment = dict(os.environ)
-        for name in ISOLATED_VARIABLES:
-            environment[name] = room
+        isolate_secrets(environment).update(dict.fromkeys(ISOLATED_VARIABLES, room))
         environment[ROOM_VARIABLE] = room
         environment.pop("QT_QPA_PLATFORM", None)
         environment.pop("QT_SCALE_FACTOR", None)

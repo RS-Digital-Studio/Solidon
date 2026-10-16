@@ -85,7 +85,8 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
 `tests/conftest.py` hält die Maschine aus dem Ergebnis: Offscreen-Qt,
 Nutzerverzeichnisse im Temp-Ordner (§38), kein gefundenes Fremdprogramm, kein
 erreichbares Modell (`_the_network_stays_out_of_it` leert die Liste der
-Backends). Einstellungen, Profile und eigene Bausteine kehren nach jedem
+Backends), kein Schlüsselbund des Nutzers (`SuiteKeyring`, je Fall leer).
+Einstellungen, Profile und eigene Bausteine kehren nach jedem
 Test zum vorherigen Dateiabbild zurück; Abbaufehler bleiben rot. Wer diese
 Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
 

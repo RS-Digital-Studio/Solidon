@@ -51,8 +51,9 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 | `run_agent_suite.py` | 39 Referenzanfragen an den Agenten — **kostet Geld**, das Ergebnis ist eine Quote |
 | `run_model_suite.py` · `run_ui_audit.py` | Die Kette über einen Ordner echter Modelle · der ganze Bestand durch die laufende Oberfläche |
 | `matrix_driver.py` · `matrix_unit.py` · `matrix_report.py` | Die Slicer-Matrix (Releasearbeit, RM-281): jedes Modell über Solidons Übergabe an jeden Slicer und Drucker, mit dem Code des Druckdialogs statt eines Nachbaus · eine Einheit je Modell als eigener Prozess, wieder aufnehmbar und an den Codestand gebunden · der Bericht als Markdown. Die Code-Wurzel ist ein Argument und darf ein anderer Stand sein; die Geschwister `matrix_config.py` (installierte Slicer, Heimdrucker) und `matrix_gcode.py` (was eine Druckdatei tut) kommen aus diesem Ordner |
-| `file_acceptance.py` | Einziger Einstieg der Abnahme im echten Fenster (Releasearbeit): Einzeldateiabnahme je Fall in eigenem Prozess und Profil, Import bis Redo, je Schritt Bild und Netzabdruck; ebenso die Fälle des Funktionsdurchgangs (`inventory --functions`, `run --screen`, `report`). Ausgabe nur außerhalb des Repositorys, Bericht als JSON und Markdown |
-| `function_*.py` | Funktionsdurchgang: `_list`/`_scan`, `_scenes`, `_checks`, `_points`/`_judges`, `_samples`, `_report`; Prüfstand: `_bench`, `_machine`/`_walk`, `_setup`/`_start`, `_protocol`, `_guard`, `_language`, `_capture`/`_surface`, `_gestures`, `_switch`, `_revision`. Einstieg nur `file_acceptance`, Klicks über `guide_targets.next_click`; Rollen/Messverträge: `karte-tools.md`. `Walk.step`/`stable`: anfahren→`False`, Folgetakt Ziel/Rechteck/Freigabe/Treffer neu (`button=getter`). Direktes `click_button` bleibt synchron mit letztem Guard. `place_window` belässt maximierte Clientmaße ohne Ziel-/Größenwechsel. |
+| `file_acceptance.py` | Einziger Einstieg der Abnahme im echten Fenster (Releasearbeit): Einzeldateiabnahme je Fall in eigenem Prozess und Profil, Import bis Redo, je Schritt Bild und Netzabdruck; ebenso die Fälle des Funktionsdurchgangs (`inventory --functions`, `run --screen`, `seal`, `report`). Ausgabe nur außerhalb des Repositorys, Bericht als JSON und Markdown (`acceptance_summary.py`); `run --total`/`--binding`: Gesamtfrist und Siegel vor und nach jedem Fall (`acceptance_guard.py`); `seal`: SHA256 jeder Datei unter `cases/` für `[[run]].seal`, das `report` an V4 nachrechnet (`function_verdict_rules.py`) |
+| `function_*.py` | Funktionsdurchgang: `_list`/`_scan`, `_scenes`, `_cases`, `_checks`, `_points`/`_judges`, `_samples`, `_report`/`_agreement`/`_verdict_rules`/`_promises`; Prüfstand: `_bench`, `_machine`/`_walk`, `_setup`/`_seams`/`_start`, `_protocol`, `_guard`, `_language`, `_capture`/`_surface`/`_tooltips`/`_spot`, `_prediction`, `_gestures`, `_switch`, `_revision`, `_matrix`/`_fonts`/`_way`. Einstieg nur `file_acceptance`, Klicks über `guide_targets.next_click`; Rollen/Messverträge: `karte-tools.md`. `Walk.step`/`stable`: anfahren→`False`, Folgetakt Ziel/Rechteck/Freigabe/Treffer neu (`button=getter`). |
+| `native_runs.py` · `native_binding.py` · `native_measure_card.py` | Native Nachweise am echten Fenster: `bind` hält Kopf, Baum und den Hash jeder Datei unter `app/` und `tools/`, die drei Läufer als Siegel; `case` fährt einen Fall eines Inventars neu, `measure-card` die Maßkartenfolge je Sprache. Siegel vor dem Start, im Kind vor Qt und danach; Start nur mit `--native`, eigenes Profil, Frist und Abbau des eigenen Prozessbaums. Zeiger am nativen Fenster des Druckempfängers. Befehle: `/erzeugen` |
 | `check_local_model.py` · `measure_local_model.py` | Ruft ein lokales Modell die Werkzeuge wirklich auf? · Wie lange (kalt/warm getrennt, Median und Spanne, am Ende `keep_alive: 0`); `--count-tokens` zählt genau einen Auftrag ohne Geschwindigkeit |
 | `window_bench.py` · `window_memory.py` | Beispiel im **echten** Fenster, Wartezeit in Posten (`--drag-frames`, `--shot`) · was Fenster- und Sprachwechsel liegen lassen: Steigung des Arbeitssatzes über die **zweite** Hälfte der Runden |
 | `count_new_windows.py` | Welche Fenster während eines Befehls aufgehen (`EnumWindows`); Exit 1 bei einem neuen Konsolenfenster |
@@ -144,21 +145,9 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
   Begründung; die umgebenden Maus- und Tastaturbilder behalten ihre Rohdauer.
   Lange native Hinweiszeilen dürfen mit `wide_focus` mehr Bildbreite erhalten,
   während die vollständige Karte daneben als Kontext sichtbar bleibt.
-- **Sprache und Musik bleiben nachprüfbar.** Satzzeiten stammen aus den
-  tatsächlich erzeugten WAV-Dateien. Shorts erhalten dieselben Zeiten als
-  eingebrannte Untertitel; Tutorials zusätzlich als SRT. Jede Themenmusik
-  hat ein eigenes prozedurales Arrangement. Der Mix senkt Musik unter Sprache
-  ab und prüft den fertigen H.264/AAC-Film vollständig. Eine technische
-  Prüfung ersetzt keine Sicht- oder Hörprüfung.
-  Externe Musik wird nur mit Dateihash, Quelle und Lizenznachweis gemischt;
-  die Sprachclips werden einzeln angeglichen, die Musik wird unter Sprache
-  abgesenkt. Tempo und Tonhöhe der Stimmen bleiben erhalten.
-  Zusammenhängende Sprecherabschnitte bleiben eine WAV-Datei. Eine separate
-  akustische Satzzuordnung kann die Untertitel verfeinern; ihr Dateihash, der
-  WAV-Hash, der unveränderte Text und die Zeitgrenzen werden vor Nutzung geprüft.
-  Nach allen Audiofiltern wird jeder Abschnitt auf seine genaue Zahl von
-  48-kHz-Samples gebracht. Die absolute Platzierung und Dateihashes stehen in
-  `narration-placement.json`; Lautheitsfilter dürfen keine Zeitdrift ansammeln.
+- **Sprache und Musik bleiben nachprüfbar**: Satzzeiten aus den erzeugten
+  WAV-Dateien, fremde Musik nur mit Hash, Quelle und Lizenz, jeder Abschnitt
+  auf seine genaue Samplezahl; Einzelheiten in `karte-tools.md`.
 - **Lageraufnahmen schreiben ausschließlich in ein eigenes Profil.** Der
   Inventarhelfer prüft den tatsächlich verwendeten Katalogpfad vor dem ersten
   Zugriff. KI-Aufnahmen binden echte Anfrage, Backend, Antwort und gespeichertes

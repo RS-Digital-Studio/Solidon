@@ -1277,9 +1277,36 @@ def test_tree_walls_change_the_print_only_where_the_program_reads_them(
         ignored = "support.tree_walls" in handover.ignored_under_trees(
             style, organic, program, hollow=handover.hollow_trees(setup)
         )
-        assert (moves[1] == moves[2]) is ignored, (
-            f"{program}, {style}: Wände {'überlesen' if moves[1] == moves[2] else 'gedruckt'}, "
-            f"die Tabelle sagt {'überlesen' if ignored else 'gedruckt'}"
+        # **Organische Bäume legt OrcaSlicer nicht immer gleich** (CS-39): Mit
+        # derselben Platte und denselben Einstellungen kam unter Last einmal
+        # ein Lauf mit 84 Bewegungen weniger (13 087 statt 13 171, 3MF und
+        # Konfigurationsblock gleich). „Überlesen“ heißt deshalb: Ein Lauf mit
+        # zwei Wänden gleicht einem mit einer. Nur bei Abweichung wird auf
+        # beiden Seiten bis zu zweimal nachgeschnitten (Nachprüfung R2-5) —
+        # die seltene Abweichung kann jeden der beiden Läufe treffen.
+        runs = {walls: [moves[walls]] for walls in (1, 2)}
+        for again in range(2 if ignored else 0):
+            if any(one == two for one in runs[1] for two in runs[2]):
+                break
+            for walls in (1, 2):
+                runs[walls].append(
+                    _sliced_tower(
+                        printer,
+                        installed_slicer,
+                        tmp_path / f"{style}-{walls}-{again + 2}",
+                        {
+                            "support.style": style,
+                            "support.placement": "build_plate",
+                            "support.tree_walls": walls,
+                        },
+                    )[0]
+                )
+        same = any(one == two for one in runs[1] for two in runs[2])
+        counts = {walls: [len(run) for run in runs[walls]] for walls in runs}
+        assert same is ignored, (
+            f"{program}, {style}: Wände {'überlesen' if same else 'gedruckt'}, "
+            f"die Tabelle sagt {'überlesen' if ignored else 'gedruckt'}; "
+            f"Bewegungen je Lauf mit einer und zwei Wänden: {counts}"
         )
 
 

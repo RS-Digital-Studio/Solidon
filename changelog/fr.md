@@ -68,6 +68,14 @@ dans `website/version.json`.
 - La carte de sélection suit contenu et police, gardant textes et colonnes. Les onglets détachés gardent leur taille. Si une modification est proposée, « Appliquer » est l’action principale.
 - Les contreparties demandent paire et taille et expliquent les deux moitiés. Forme et ajustement sont dans « Autres réglages ». La hauteur initiale du dialogue suit le contenu.
 - Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
+- Pour les paramètres, les ajustements, l'imprimante, le matériau et l'annulation, le chat indique l'endroit de la fenêtre où faire de même soi-même.
+- Le rapport de contrôle nomme les corps d'un ajustement au lieu d'afficher un identifiant interne.
+- L'anglais et le portugais distinguent désormais le dépassement d'un crochet, ou d'un corps sous le plateau, du surplomb à l'impression.
+- En espagnol et en portugais, le menu, la recherche et la boîte de dialogue n'affichent de nouveau que la première phrase de *Goupille pour perçage* et *Orienter pour l'impression*.
+- Plusieurs traductions se lisent plus clairement, dont l'introduction de *Créer un paramètre …*. Le tenon commence par une majuscule dans toutes les langues.
+- Dans la fenêtre *Déverrouiller Solidon …*, *Acheter Solidon* reste disponible sur un ordinateur activé. Les boutons grisés indiquent leur raison, *Vérifier la clé* aussi la voie vers une nouvelle clé.
+- Le premier jour du mois s'écrit désormais « 1er », par exemple « 1er décembre 2026 ».
+- Sans pilote graphique, par exemple dans une machine virtuelle, Solidon se termine désormais de façon fiable à la fermeture. En version 0.6.0, il pouvait y continuer à tourner sans être vu.
 
 ### Imprimer et transmettre au slicer
 
@@ -84,6 +92,10 @@ dans `website/version.json`.
 - Si un perçage ou un récipient ne réussit qu'avec des sommets déplacés d'un rien, l'ouverture reste libre. En version 0.6.0, une peau très fine pouvait rester par-dessus.
 - Pour les trous, vue et *Sélection* montrent la même action. Dimension, profondeur et entrée liée sont devant ; compensation d’impression et réglages fins, dans « Autres valeurs ».
 - Les champs du perçage et la case de modification simultanée des éléments similaires expliquent leur effet. « Compenser les écarts d'impression » précise la correction issue du profil du matériau.
+- S'il ne reste que des éclats à côté d'une pièce imprimable, *Diviser en pièces distinctes* les nomme et propose *Garder les éclats*. Avant, le corps était dit d'un seul tenant.
+- Si le rayon d'un congé ou la largeur d'un chanfrein est trop grand pour les arêtes, le message propose *Choisir d'autres arêtes*.
+- Un clic sur *Appliquer* d'un élément pendant un calcul garde la modification, même si l'aperçu prend plus de temps. En version 0.6.0, elle se perdait sans avertissement sur les gros modèles.
+- Une texture affichée ne calcule plus d'aperçu sans modification et ne propose plus *Annuler*.
 
 ## 0.6.0
 

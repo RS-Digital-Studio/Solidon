@@ -57,6 +57,7 @@ from tests.packaging_helpers import (
     stays_in_linux_bundle,
     workflow_shell,
 )
+from tests.process_helpers import run_bounded
 from tests.shell_helpers import posix_shell
 from tests.workflow_helpers import (
     MAIN_PUSH,
@@ -1001,7 +1002,7 @@ printf 'gh workflow run fenster-auswahl.yml --ref main\\n'""",
         newline="\n",
     )
     git.chmod(0o755)
-    done = subprocess.run(
+    done = run_bounded(
         [shell, "-c", _step_environment(step, _PUSHED) + step_script(step)],
         cwd=folder,
         env=dict(
@@ -1432,7 +1433,7 @@ def test_each_ci_window_group_is_executed_only_at_release_and_once(
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     calls = tmp_path / "calls.txt"
-    done = subprocess.run(
+    done = run_bounded(
         [shell, "-c", script],
         cwd=tmp_path,
         env=dict(
@@ -1685,7 +1686,7 @@ def _calls_of(
             f'{{ echo "Skript {index} ({runner_os}): Exit $?" >&2; exit 1; }}'
             for index, (runner_os, script) in enumerate(fresh)
         ]
-        done = subprocess.run(
+        done = run_bounded(
             [shell, "-c", "\n".join(parts)],
             cwd=folder,
             env=dict(
@@ -2183,7 +2184,7 @@ def test_window_failures_block_the_package_on_every_platform(
     shell = workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
-    done = subprocess.run(
+    done = run_bounded(
         [shell, "-c", script],
         cwd=tmp_path,
         env=dict(
@@ -2232,7 +2233,7 @@ exit 0
     calls = tmp_path / "calls.txt"
     # Im eigenen Ordner: Der Block legt seinen Berichtsordner an, und im
     # Repository blieb sonst nach jedem Lauf ein leeres ``reports/`` zurück.
-    done = subprocess.run(
+    done = run_bounded(
         [shell, "-c", script],
         cwd=tmp_path,
         env=dict(
@@ -3841,7 +3842,7 @@ def test_the_linux_installer_never_deletes_a_shared_directory(tmp_path: Path) ->
         import pytest
 
         pytest.skip("ohne POSIX-Shell lässt sich ein sh-Skript nicht ausführen")
-    done = subprocess.run(
+    done = run_bounded(
         [
             sh,
             "-c",
@@ -3878,7 +3879,7 @@ def test_the_linux_installer_keeps_its_own_directory_as_it_is() -> None:
         import pytest
 
         pytest.skip("ohne POSIX-Shell lässt sich ein sh-Skript nicht ausführen")
-    done = subprocess.run(
+    done = run_bounded(
         [
             sh,
             "-c",

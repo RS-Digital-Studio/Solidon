@@ -57,6 +57,16 @@ class Quantisation:
         return len(self.centres)
 
 
+def carries_colour(mesh: trimesh.Trimesh) -> bool:
+    """Ob der Körper Farbinformation trägt — Textur, Flächen- oder Eckfarben.
+
+    Die erste Frage von :func:`face_colours`, ohne ein Bild zu lesen: Das Menü
+    fragt sie bei jeder Auswahl (``requires_body="colour"``, FD-135). Wo sie
+    ja sagt und die Farben trotzdem nicht passen, sagt es die Operation.
+    """
+    return getattr(mesh.visual, "kind", None) is not None
+
+
 def face_colours(mesh: trimesh.Trimesh) -> np.ndarray | None:
     """Eine Farbe je Dreieck, in 0..1 — oder ``None``, wenn der Körper keine
     hat.
@@ -65,10 +75,10 @@ def face_colours(mesh: trimesh.Trimesh) -> np.ndarray | None:
     der Grenze zwischen zwei Farben erfindet der Eckmittelwert eine dritte,
     die es weder in der Textur noch in der Filamentschublade gibt.
     """
+    if not carries_colour(mesh):
+        return None
     visual: Any = mesh.visual
     kind = getattr(visual, "kind", None)
-    if kind is None:
-        return None
 
     if kind == "texture":
         sampled = _sample_texture(mesh)

@@ -900,6 +900,7 @@ def test_what_a_person_types_into_an_address_field_is_checked_there() -> None:
         "/home/jemand/modelle",
         "~/modelle",
         "file:///c:/modelle",
+        "C:",
         "http://host:keinport",
         "http://:11434",
     )
@@ -911,10 +912,35 @@ def test_what_a_person_types_into_an_address_field_is_checked_there() -> None:
         "http://127.0.0.1:8188",
         "127.0.0.1:11434",
         "https://werkstatt.lan:11434/api/chat",
+        # Ein Doppelpunkt an zweiter Stelle ist noch kein Laufwerk (Review RCI-7).
+        "[::1]:11434",
+        "a:8080",
         "",
     )
     for eingabe in brauchbar:
         assert discover.unusable_address(eingabe) is None, eingabe
+
+
+@pytest.mark.parametrize("flavour", ["system", "posix"])
+def test_a_windows_folder_is_named_a_folder_on_every_platform(
+    flavour: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Laufwerkspfad ist überall ein Ordner, nicht ein kaputter Port.
+
+    Erkannt wurde er über ``Path(...).drive``, und das kennt nur unter Windows
+    Laufwerke. Unter Linux und macOS las ``urlparse`` alles hinter ``C:`` als
+    Port, und der Kunde bekam den Satz zur Portnummer statt den zum Ordner
+    (CI-Lauf 38781742486). ``posix`` stellt den Pfadtyp von Linux und macOS nach.
+    """
+    from pathlib import PurePosixPath
+
+    if flavour == "posix":
+        monkeypatch.setattr(discover, "Path", PurePosixPath)
+    folder_reason = discover.unusable_address("/home/jemand/modelle")
+    assert folder_reason is not None and "Ordner" in str(folder_reason)
+
+    for eingabe in (r"C:\Users\Jemand\.ollama\models", "D:/Modelle", r"c:\modelle"):
+        assert discover.unusable_address(eingabe) == folder_reason, eingabe
 
 
 def test_an_empty_address_is_no_complaint_but_a_reset() -> None:

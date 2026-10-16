@@ -1061,44 +1061,54 @@ def test_the_key_dialog_separates_cloud_and_local_paths(
     Die beiden Wege stehen als benannte Abschnitte da — flache Überschriften
     wie in jedem Dialog (RM-518); der Cloud-Weg nennt Anbieter, Datengrenze und
     das Feld selbst, der lokale Weg bleibt davon sichtbar getrennt.
+
+    Die Breite misst der Fall in der Betriebslage und mit echter Schrift
+    (``tests/bundled_fonts.py``): Offscreen unter Windows misst jede Familie
+    synthetisch, und der Hinweis kam dort auf 980 statt seiner wirklichen Breite.
     """
     from PySide6.QtWidgets import QLabel, QToolButton
 
     from app.core.backends import keys
     from app.ui.dialogs import KeyDialog
+    from app.ui.style import apply_style
+    from app.ui.theme import apply_theme
+    from tests.bundled_fonts import bundled_font
 
-    monkeypatch.setattr(keys, "_keyring", lambda: None)
-    dialog = KeyDialog()
+    with bundled_font(qt_app, 9):
+        apply_theme(qt_app, "light")
+        apply_style(qt_app, "light")
+        monkeypatch.setattr(keys, "_keyring", lambda: None)
+        dialog = KeyDialog()
 
-    headings = {
-        button.text(): button
-        for button in dialog.findChildren(QToolButton)
-        if button.objectName() == "sectionHeading"
-    }
-    assert {"Cloud-Modell", "Lokales Modell"} <= set(headings)
-    assert dialog.field.accessibleName() == "API-Schlüssel"
-    cloud = dialog.cloud_model_section
-    assert cloud.isAncestorOf(headings["Cloud-Modell"])
-    assert not cloud.isAncestorOf(headings["Lokales Modell"]), "die Wege sind getrennt"
-    text = " ".join(label.text() for label in cloud.findChildren(QLabel))
-    assert "Anthropic" in text, "der Schlüssel nennt seinen Anbieter"
-    for disclosed in (
-        "Chatnachrichten",
-        "Textzusammenfassung",
-        "Namen",
-        "Maße",
-        "Positionen",
-        "Formen wie Bohrungen",
-        "Parameter",
-        "Druckeinstellungen",
-        "Bearbeitungsschritte",
-        "Prüfhinweise",
-        "Quelldateinamen",
-        "Vorschaubilder",
-    ):
-        assert disclosed in text, f"die Cloud-Auskunft verschweigt {disclosed}"
-    assert "Bleibt lokal: die eigentliche Projektdatei" in text
-    assert dialog.sizeHint().width() <= 760, "der Hinweis sprengt kleine Bildschirme"
+        headings = {
+            button.text(): button
+            for button in dialog.findChildren(QToolButton)
+            if button.objectName() == "sectionHeading"
+        }
+        assert {"Cloud-Modell", "Lokales Modell"} <= set(headings)
+        assert dialog.field.accessibleName() == "API-Schlüssel"
+        cloud = dialog.cloud_model_section
+        assert cloud.isAncestorOf(headings["Cloud-Modell"])
+        assert not cloud.isAncestorOf(headings["Lokales Modell"]), "die Wege sind getrennt"
+        text = " ".join(label.text() for label in cloud.findChildren(QLabel))
+        assert "Anthropic" in text, "der Schlüssel nennt seinen Anbieter"
+        for disclosed in (
+            "Chatnachrichten",
+            "Textzusammenfassung",
+            "Namen",
+            "Maße",
+            "Positionen",
+            "Formen wie Bohrungen",
+            "Parameter",
+            "Druckeinstellungen",
+            "Bearbeitungsschritte",
+            "Prüfhinweise",
+            "Quelldateinamen",
+            "Vorschaubilder",
+        ):
+            assert disclosed in text, f"die Cloud-Auskunft verschweigt {disclosed}"
+        assert "Bleibt lokal: die eigentliche Projektdatei" in text
+        assert dialog.sizeHint().width() <= 760, "der Hinweis sprengt kleine Bildschirme"
 
 
 def test_the_key_dialog_remembers_the_model_without_a_key(

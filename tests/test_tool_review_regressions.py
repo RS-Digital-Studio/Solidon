@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
 
 from tests.helpers import bash_executable
+from tests.process_helpers import run_bounded
 from tools import affected_tests, link_memory, make_linux_packages
 
 
@@ -105,7 +105,7 @@ def test_r24_generated_menu_entry_preserves_the_full_launcher_path(tmp_path, par
         "APP_DIR": applications.as_posix(),
         "IDENTIFIER": "fixture",
     }
-    completed = subprocess.run(
+    completed = run_bounded(
         [str(bash), str(script)],
         env=environment,
         capture_output=True,
@@ -138,7 +138,7 @@ def test_r24_the_generated_shell_launcher_preserves_literal_target(tmp_path, par
         "NAME": "Solidon3D",
         "SHORT": "solidon3d",
     }
-    completed = subprocess.run(
+    completed = run_bounded(
         [str(bash), str(script)],
         env=environment,
         capture_output=True,
@@ -149,7 +149,7 @@ def test_r24_the_generated_shell_launcher_preserves_literal_target(tmp_path, par
     assert completed.returncode == 0, completed.stderr
     # Ein eigener Ersatz für exec protokolliert das Argument, ohne irgendein
     # Programm unter dem absichtlich ungewöhnlichen Zielpfad auszuführen.
-    observed = subprocess.run(
+    observed = run_bounded(
         [
             str(bash),
             "-c",
@@ -192,7 +192,7 @@ def test_r24_uninstall_paths_are_literal_saved_values(tmp_path) -> None:
             for name in ("BIN_DIR", "APP_DIR", "ICON_DIR", "META_DIR", "MIME_DIR")
         }
     )
-    completed = subprocess.run(
+    completed = run_bounded(
         [str(bash), str(script)],
         env=environment,
         capture_output=True,
@@ -205,7 +205,7 @@ def test_r24_uninstall_paths_are_literal_saved_values(tmp_path) -> None:
     header = generated[: generated.index("set -eu")]
     header += 'printf "%s\\n" "$BIN_DIR" "$APP_DIR" "$ICON_DIR" "$META_DIR" "$MIME_DIR"\n'
     script.write_text(header, encoding="utf-8", newline="\n")
-    observed = subprocess.run(
+    observed = run_bounded(
         [str(bash), str(script)], capture_output=True, text=True, encoding="utf-8", timeout=20
     )
     assert observed.returncode == 0, observed.stderr

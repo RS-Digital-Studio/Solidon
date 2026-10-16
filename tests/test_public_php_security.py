@@ -2159,6 +2159,15 @@ def _write_stats_rows(stats: Path, rows: list[dict]) -> None:
         _chmod_private(path)
 
 
+#: Öffentlich für ``test_public_php_stats_language.py``: Die Fälle zum Wechsel von
+#: der deutschen Startseite stehen dort (Regel 6, Datei über 2 000 Zeilen).
+stats_request = _request
+display_today = _display_today
+stats_row = _stats_row
+write_stats_rows = _write_stats_rows
+stats_test_access = _stats_test_access
+
+
 def _stats_sample(anchor: datetime) -> list[dict]:
     """Zwei Tage Zählzeilen: Besuche mit und ohne Download, Direktlink,
     Herkunft, drei Sprachen und drei Versionen — an ``anchor`` und dem Tag davor."""
@@ -2215,13 +2224,29 @@ def test_stats_rolling_windows_compare_with_the_period_before(tmp_path: Path) ->
     assert anonymous_status == 401, "die JSON-Ausgabe liegt hinter derselben Anmeldung"
     report = json.loads(body)
 
-    assert report["now"]["today"] == {"p": 4, "d": 2, "u": 2, "visits": 3}
+    # Heute beginnt ein Besuch auf / und bleibt bei Deutsch (reddit, aaaa0001).
+    assert report["now"]["today"] == {
+        "p": 4,
+        "d": 2,
+        "u": 2,
+        "visits": 3,
+        "home": 1,
+        "switched": 0,
+    }
     week, month = report["now"]["windows"]
     assert (week["days"], week["now"], week["before"]) == (
         7,
-        {"p": 7, "d": 3, "u": 3, "visits": 6},
-        {"p": 6, "d": 1, "u": 6, "visits": 6},
+        # Auf / beginnen heute aaaa0001, gestern bbbb0001 und davor die sechs
+        # dddd-Besuche; keiner wechselt die Sprache.
+        {"p": 7, "d": 3, "u": 3, "visits": 6, "home": 2, "switched": 0},
+        {"p": 6, "d": 1, "u": 6, "visits": 6, "home": 6, "switched": 0},
     )
+    # Zwei bzw. sechs Besuche auf / sind zu wenig für eine Wechselquote.
+    assert not [
+        item
+        for item in report["findings"]
+        if item["text"].startswith("Von der deutschen Startseite")
+    ]
     # Dreißig Tage ohne Vergleich: Die Daten reichen nicht sechzig Tage zurück,
     # und eine Veränderung gegen einen halb vorhandenen Zeitraum wäre gelogen.
     assert (month["days"], month["before"]) == (30, None)
@@ -3083,6 +3108,8 @@ def test_the_month_comparison_carries_its_completeness(tmp_path: Path) -> None:
                 "entries",
                 "month_rows",
                 "visits_of",
+                "language_of",
+                "language_switch",
                 "per_day",
                 "window_sum",
                 "month_totals",

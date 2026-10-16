@@ -232,6 +232,25 @@ nächste Lauf sofort — dann wird kein `False` gemeldet, sonst flackert die
 Anzeige beim Ziehen an einem Schieber im Sekundentakt. Dieselbe Begründung,
 aus der `evaluationCancelled` einen ersetzten Lauf nicht meldet.
 
+### Ein Neuaufbau ohne Eingabe hält den wartenden Klick
+
+*Übernehmen* vor dem Bild wartet an seiner Freigabe (`_PreviewApproval.pending_click`).
+Baut das Merkmalfenster in dieser Zeit neu auf — die Antwort des
+Merkmalsarbeiters an Körpern ab `ANSWERS_IN_WORKER_FROM` Dreiecken samt neuer
+Maßgruppe, eine wiederhergestellte Auswahl, die Meldung beider Merkmale einer
+Bohrung mit Senkung —, räumte der Aufbau die Vorschau ab und band die Werte
+des Schritts neu: kein Schritt, kein Satz (Review 1 des CI-Fixes, RCI-2; seit
+0.6.0). Entscheidung: Ein Neuaufbau ohne Eingabe des Kunden ersetzt und räumt
+keine noch gültige Freigabe mit wartendem Klick (`app/ui/waiting_click.py`,
+`kept_through_rebuild`; Stellen `_set_preview_order` und `_clear_preview`),
+die Vorschau rechnet weiter, und Maßgruppe und Merkmalfenster zeigen danach die
+Werte des Klicks (`show_waiting_values`, Nachprüfung R2-2) — sonst glaubte der
+Kunde dem Feld, tippte seinen Wert noch einmal und verlor den Klick. Ein
+anderer Wert verwirft ihn mit `_not_applied("values")`. Gültig heißt
+`_preview_is_current`: dasselbe Dokument, Ergebnis und dieselbe Auswahl — ein
+anderes Merkmal räumt wie bisher ab. Belegt in
+`tests/test_waiting_click_rebuild.py`.
+
 ### Umbau und Export rechnen im Arbeiter
 
 **Ein Umbau des Verlaufs rechnet im Arbeiter und übernimmt im Hauptfaden**

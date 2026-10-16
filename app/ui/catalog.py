@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import guides
 from app.core.knowledge.parts import GROUPS, PARTS
 from app.core.knowledge.parts.ops import (
     catalog_operation,
@@ -545,6 +546,7 @@ class PartCatalog(QDialog):
         # gerechneten Körpers. Der Katalog kennt das Dokument nicht und soll es
         # nicht kennen.
         self.save_part = QPushButton(tr("Auswahl als Baustein speichern …"), self)
+        self.save_part.setProperty(guides.TARGET_PROPERTY, "parts.save")
         self.save_part.clicked.connect(self.saveRequested.emit)
         self.set_can_save(False, "")
 

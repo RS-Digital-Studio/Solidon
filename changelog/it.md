@@ -67,6 +67,14 @@ scrive in `website/version.json`.
 - La scheda di selezione segue contenuto e carattere, mantenendo testo e colonne. Le schede separate mantengono le dimensioni. Se è proposta una modifica, «Applica» è l’azione principale.
 - Le controparti chiedono coppia e dimensioni e spiegano entrambe le metà. Forma e accoppiamento sono in «Altre impostazioni». L’altezza iniziale del dialogo segue il contenuto.
 - Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
+- Per parametri, accoppiamenti, stampante, materiale e annulla, la chat indica il punto della finestra in cui fare lo stesso da sé.
+- Il rapporto di verifica nomina i corpi di un accoppiamento invece di mostrare un identificativo interno.
+- L'inglese e il portoghese distinguono ora la sporgenza di un gancio, o di un corpo sotto il piatto, dallo sbalzo in stampa.
+- In spagnolo e portoghese menu, ricerca e finestra di dialogo mostrano di nuovo solo la prima frase di *Perno per foro* e *Orienta per la stampa*.
+- Diverse traduzioni si leggono con più chiarezza, tra cui l'introduzione di *Crea parametro …*. Il perno inizia con la maiuscola in tutte le lingue.
+- Nella finestra *Sblocca Solidon …*, *Acquista Solidon* resta disponibile su un computer attivato. I pulsanti in grigio indicano il motivo, *Verifica chiave* anche la via per una nuova chiave.
+- In francese il primo giorno del mese si scrive ora «1er», ad esempio «1er décembre 2026».
+- Senza driver grafico, ad esempio in una macchina virtuale, Solidon ora termina in modo affidabile alla chiusura. Nella versione 0.6.0 il programma poteva continuare a girare lì senza essere visto.
 
 ### Stampare e passare allo slicer
 
@@ -83,6 +91,10 @@ scrive in `website/version.json`.
 - Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
 - Per i fori, vista e *Selezione* mostrano la stessa modifica. Misura, profondità e imbocco collegato sono davanti; compensazione di stampa e regolazioni fini, in «Altri valori».
 - I campi del foro e la casella per modificare insieme elementi uguali spiegano il loro effetto. «Compensare gli scostamenti di stampa» chiarisce la correzione del profilo del materiale.
+- Se accanto a un pezzo stampabile restano solo schegge, *Dividi in pezzi distinti* le nomina e offre *Tieni le schegge*. Prima diceva che il corpo era di un solo pezzo.
+- Se il raggio di un raccordo o la larghezza di uno smusso è troppo grande per gli spigoli, il messaggio offre *Scegli altri spigoli*.
+- Un clic su *Applica* su un elemento durante un calcolo mantiene la modifica, anche se l'anteprima richiede più tempo. Nella versione 0.6.0 andava persa senza avviso sui modelli grandi.
+- Una texture visualizzata non calcola più un'anteprima senza modifiche e non offre più *Annulla*.
 
 ## 0.6.0
 

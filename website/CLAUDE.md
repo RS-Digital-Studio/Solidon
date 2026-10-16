@@ -122,6 +122,13 @@ MCP-Werkzeuglisten gehören nicht ins Bedienhandbuch.
   sich. Strukturänderungen an `index.html` (Abschnitte, Klassen, Bänder,
   Kapitel) werden deshalb **über alle sechs Fassungen gezählt**, bevor sie als
   fertig gelten.
+- **Der Sprachhinweis steht nur auf der deutschen Startseite** — sie ist
+  `x-default` und Ziel der fremdsprachigen Presse. Seine Vorlage
+  (`template[data-language-hint]`) führt eine Fassung je `hreflang`-Sprache
+  der Seite; wer eine Sprache ergänzt, ergänzt dort ihre Fassung. `site.js`
+  bietet an und leitet nie um, damit Suchmaschinen und die Wahl des Lesers
+  die deutsche Adresse behalten. Sein Verhalten prüft
+  `tests/test_website_browser.py` in QtWebEngine.
 - **Keine Stilregel hängt an einem Sprungziel.** Die Anker heißen je Sprache
   anders (`#unterstuetzen` gegen `#support`, `#generiert` gegen
   `#generated`); gestaltet wird über Klassen, ein Anker ist ein Sprungziel und

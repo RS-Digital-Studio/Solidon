@@ -1,0 +1,27 @@
+# Zeilenspezifikationen für D11 — Baum, Verlauf, Ansicht.
+# Format: Bauplan D0 §2.4. Eine Zeile ohne Eintrag hier ist „ungeprüft“.
+
+# Mehr als ein zurückgenommener Schritt: Wer davor einfügt, verwirft sie, und
+# die Nachfrage nennt das (FD-175). Die Szene trägt vier Schritte.
+[row."meldung:confirm_discard"]
+start_scene = "kasten_runden.exakt"
+route = [
+  { target = "menu:menubar.rueckgaengig" },
+  { target = "menu:menubar.rueckgaengig" },
+  { target = "history.row:2", button = "right" },
+  { target = "history:insert" },
+]
+
+# *Schritt löschen …* im Kontextmenü einer Verlaufszeile fragt nach (Ausnahme zu
+# Regel 19).
+[row."meldung:remove_history_operations"]
+route = [{ target = "history.row:1", button = "right" }, { target = "history:delete" }]
+
+# Ein Reiter der rechten Karte in eigenem Fenster: Rechtsklick auf die
+# Reiterleiste, *In eigenem Fenster öffnen*; *Zurück in Solidon* im Fenster holt
+# ihn zurück (FD-175).
+[row."dialog:panel_window"]
+route = [{ target = "tabs.bar", button = "right" }, { target = "menu:tabs.detach" }]
+
+[row."tabs.return"]
+route = [{ target = "tabs.bar", button = "right" }, { target = "menu:tabs.detach" }]
