@@ -450,3 +450,41 @@ def test_the_run_stops_before_the_next_case_and_caps_its_deadline(
     assert waited == [123.0]
     out = capsys.readouterr().out
     assert "HALT vor [002]: Siegel gebrochen" in out and "START [002]" not in out
+
+
+def test_the_run_asks_the_seal_after_its_last_case_too(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """RC2-7: Bricht das Siegel im letzten oder einzigen Fall, endet ``run`` nicht mit 0."""
+    import subprocess
+
+    from tools import acceptance_guard
+    from tools import file_acceptance as acceptance
+
+    class Process:
+        pid = 4711
+
+        def __init__(self, *args: Any, **named: Any) -> None:
+            pass
+
+        def wait(self, timeout: float | None = None) -> int:
+            return 0
+
+    monkeypatch.setattr(acceptance, "read_cases", lambda out: [acceptance.Case(1, "eins", "", "")])
+    monkeypatch.setattr(acceptance, "summary", lambda *args: {})
+    monkeypatch.setattr(
+        acceptance,
+        "subprocess",
+        SimpleNamespace(Popen=Process, TimeoutExpired=subprocess.TimeoutExpired),
+    )
+    answers = iter(["", "Siegel gebrochen: tools/x.py weicht ab"])
+
+    def seal() -> str:
+        return next(answers)
+
+    guard = SimpleNamespace(stop_reason=seal, seal_reason=seal, case_limit=lambda wanted: wanted)
+    assert acceptance.run(tmp_path, 1, 9, False, 10.0, "", guard) == 1
+    out = capsys.readouterr().out
+    assert "HALT nach [001]: Fall 001 lief unter geändertem Stand" in out
+    with pytest.raises(ValueError, match="Handlungsvorschlag"):
+        acceptance_guard.RunGuard(total_s=0.0)

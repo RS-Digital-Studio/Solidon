@@ -954,6 +954,7 @@ def run(
 
         print(f"Referenzfaktor {measure_reference(out):.3f}", flush=True)
     failures = 0
+    ran: int | None = None  # der zuletzt gelaufene Fall — ihn trifft ein Siegelbruch (RC2-7)
     for case in cases:
         if not first <= case.number <= last:
             continue
@@ -963,7 +964,9 @@ def run(
             continue
         if guard is not None and (stop := guard.stop_reason()):
             print(f"HALT vor [{case.number:03d}]: {stop}", flush=True)
-            failures += 1
+            if getattr(guard, "broken", False) and ran is not None:
+                print(f"Fall {ran:03d} lief unter geändertem Stand; seine Belege gelten nicht.")
+            failures, ran = failures + 1, None  # gesagt; nach der Schleife nicht noch einmal
             break
         folder.mkdir(parents=True, exist_ok=True)
         print(f"START [{case.number:03d}] {case.relative}", flush=True)
@@ -1029,6 +1032,10 @@ def run(
         failures += int(code != 0 or timed_out)
         wall = time.perf_counter() - began
         print(f"END [{case.number:03d}] exit={code} timeout={timed_out} {wall:.1f}s", flush=True)
+        ran = case.number
+    if guard is not None and ran is not None and (broken := guard.seal_reason()):
+        print(f"HALT nach [{ran:03d}]: Fall {ran:03d} lief unter geändertem Stand. {broken}")
+        failures += 1
     summary(out, cases)
     return 1 if failures else 0
 

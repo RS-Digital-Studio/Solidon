@@ -39,7 +39,11 @@ class RunGuard:
         root: Path = native_binding.ROOT,
     ) -> None:
         if total_s is not None and not total_s > 0:
-            raise ValueError(f"Gesamtfrist {total_s} s ist nicht positiv")
+            raise ValueError(
+                f"Gesamtfrist {total_s:g} s ist nicht positiv."
+                "\nHandlungsvorschlag: Geben Sie `--total` in Sekunden größer als 0 an"
+                " oder lassen Sie es weg — dann gilt nur die Frist je Fall."
+            )
         self.total_s = total_s
         self.binding: dict[str, Any] | None = (
             native_binding.read_binding(binding) if binding is not None else None
@@ -47,6 +51,8 @@ class RunGuard:
         self.clock = clock
         self.root = root
         self.began = clock()
+        #: Ob das Siegel gebrochen ist — dann gelten die Belege des zuletzt gelaufenen Falls nicht.
+        self.broken = False
 
     def remaining(self) -> float | None:
         """Was von der Gesamtfrist übrig ist; ``None`` ohne Gesamtfrist."""
@@ -64,11 +70,21 @@ class RunGuard:
                 "\nHandlungsvorschlag: Setzen Sie den Lauf mit `run --first <nächster Fall>`"
                 " fort oder geben Sie eine längere `--total`."
             )
-        if self.binding is not None:
-            try:
-                native_binding.verify(self.binding, self.root)
-            except SealError as problem:
-                return str(problem)
+        return self.seal_reason()
+
+    def seal_reason(self) -> str:
+        """Warum der Stand nicht mehr der gebundene ist — leer ohne Bindung oder wenn er es ist.
+
+        Gefragt vor jedem Fall und nach dem letzten (RC2-7): Bricht das Siegel
+        während eines Falls, stehen dessen Belege unter einem anderen Stand.
+        """
+        if self.binding is None:
+            return ""
+        try:
+            native_binding.verify(self.binding, self.root)
+        except SealError as problem:
+            self.broken = True
+            return str(problem)
         return ""
 
     def case_limit(self, wanted: float) -> float:
