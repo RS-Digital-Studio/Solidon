@@ -33,6 +33,7 @@ from app.core import discover
 from app.core.activation import Activation
 from app.core.export.slicer_profiles import model_name
 from app.core.geom.mesh import MeshData, face_components
+from app.core.geom.texture import carries_colour
 from app.core.knowledge.profiles import shown_printer_title
 from app.core.perceive.actions import measure_explanation, measure_qualifier
 from app.core.perceive.groups import FunctionalGroup, GroupMeasure
@@ -2356,7 +2357,7 @@ BODY_FACTS_LIMIT: Final = 100_000
 
 @dataclass(frozen=True, slots=True)
 class BodyFacts:
-    """Was ein Körper mitbringt — die drei Fragen aus ``requires_body``.
+    """Was ein Körper mitbringt — die Fragen aus ``requires_body``.
 
     ``None`` heißt „nicht gerechnet": ein Netz über :data:`BODY_FACTS_LIMIT`
     oder ein exakter Körper, dessen Tessellation hier niemand anstoßen will.
@@ -2366,6 +2367,10 @@ class BodyFacts:
     closed: bool | None
     pieces: int | None
     cavity: bool | None
+    #: Ob der Körper Farbinformation trägt (``texture.carries_colour``, FD-135):
+    #: Die Frage kostet nichts und gilt auch über der Grenze; ein exakter
+    #: Körper trägt nie eine.
+    colour: bool | None = None
 
 
 def body_facts(entry: SceneObject) -> BodyFacts:
@@ -2395,10 +2400,11 @@ def body_facts(entry: SceneObject) -> BodyFacts:
     )
     mesh = entry.mesh
     if not isinstance(mesh, MeshData):
-        return BodyFacts(closed=None, pieces=None, cavity=True if hollow else None)
+        return BodyFacts(closed=None, pieces=None, cavity=True if hollow else None, colour=False)
     hollow = hollow or mesh.cavity is not None
+    colour = carries_colour(mesh.raw)
     if mesh.triangle_count > BODY_FACTS_LIMIT:
-        return BodyFacts(closed=None, pieces=None, cavity=True if hollow else None)
+        return BodyFacts(closed=None, pieces=None, cavity=True if hollow else None, colour=colour)
     pieces = len(face_components(mesh.raw))
     # **Ohne Hohlraum ist nur, was aus einem Stück besteht.** Eine Innenschale
     # ist eine zweite Komponente; wo es zwei gibt und die Wahrnehmung keinen
@@ -2421,7 +2427,9 @@ def body_facts(entry: SceneObject) -> BodyFacts:
         known = False if bores_lead_outside(mesh, entry.features) else None
     else:
         known = False
-    return BodyFacts(closed=bool(mesh.raw.is_watertight), pieces=pieces, cavity=known)
+    return BodyFacts(
+        closed=bool(mesh.raw.is_watertight), pieces=pieces, cavity=known, colour=colour
+    )
 
 
 def body_requirement(spec: Any, facts: BodyFacts | None) -> str | None:
@@ -2455,6 +2463,10 @@ def body_requirement(spec: Any, facts: BodyFacts | None) -> str | None:
         from app.core.geom.lattice import NO_CAVITY
 
         return str(NO_CAVITY)
+    if wanted == "colour" and facts.colour is False:
+        from app.core.geom.colour_ops import NO_COLOUR
+
+        return str(NO_COLOUR)
     return None
 
 

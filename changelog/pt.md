@@ -107,6 +107,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Quando o tamanho de letra do sistema muda, o Solidon acompanha de imediato, também nos diálogos abertos. A versão 0.6.0 só o aplicava depois de reiniciar.
 - Uma linha agrupada do relatório de verificação nomeia na dica no máximo quinze afetados, com tipo e corpo. Na versão 0.6.0, um leitor de ecrã lia ali cada frase.
 - A legenda *Acrescentado* e *Removido* só aparece na barra de pré-visualização quando a pré-visualização acrescenta ou retira material. Por isso, *Mudar o nome do objeto* não a mostra.
+- Num corpo sem cor, *Converter a textura em filamentos* fica a cinzento e indica o motivo, em vez de recusar só na pré-visualização.
 - Para parâmetros, ajustes, impressora, material e desfazer, o chat indica o lugar da janela onde se faz o mesmo à mão.
 - O relatório de verificação e a verificação antes da exportação nomeiam os corpos de um ajuste em vez de mostrar um identificador interno, também um corpo entretanto removido.
 - As mensagens indicam uma característica por tipo e número, como «Furo 2», em vez de um identificador interno. Na contraparte de uma rosca, diâmetro e passo aparecem na unidade escolhida.

@@ -107,6 +107,7 @@ it into `website/version.json`.
 - When the system font size changes, Solidon follows at once, open dialogs included. Version 0.6.0 only picked it up after a restart.
 - A combined line in the check report names at most fifteen of those affected, by kind and body, in its tooltip. In version 0.6.0 a screen reader read every sentence there.
 - The *Added* and *Removed* legend appears in the preview bar only when the preview adds or removes material. *Rename object* therefore shows none.
+- On a body without colour, *Convert texture to filaments* is greyed out and gives the reason, instead of refusing only in the preview.
 - For parameters, fits, printer, material and undo, the chat names the place in the window where you can do the same yourself.
 - The check report and the check before export name the bodies of a fit instead of showing an internal identifier, including a body that has since been removed.
 - Messages name a feature by kind and number, such as “Hole 2”, instead of an internal identifier. For the counterpart to a thread, diameter and pitch are given in the chosen unit.

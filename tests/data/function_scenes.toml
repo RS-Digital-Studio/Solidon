@@ -186,6 +186,15 @@ op = "drill_hole"
 inputs = ["obj_1"]
 params = { diameter = 5.0, z = 20.0 }
 
+[scene."farbig.netz"]
+summary = "Ein Würfel 20 mm mit Eckfarben, unten rot, oben blau: ein Körper mit Farbinformation."
+kernel = "netz"
+sources = { src_1 = "meshes/painted_cube.ply" }
+promises = { objects = 1, body = "closed" }
+[[scene."farbig.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "mm" }
+
 [scene."ohne_farbe.netz"]
 summary = "Ein Netzquader ohne Farbe: Textur in Filamente umrechnen findet nichts und rät zu einem anderen Objekt."
 kernel = "netz"
