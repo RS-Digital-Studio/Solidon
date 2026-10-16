@@ -617,7 +617,9 @@ def _matched_thread(
                 )
             ),
             value=feature.id,
-            values={"feature": feature.id, "diameter": diameter, "pitch": pitch},
+            # Längen mit Einheit und keine Kennung: Der Satz nennt das Gewinde
+            # schon, „Merkmal: thread_1“ sagte nichts dazu (FD-186).
+            values={"diameter_mm": diameter, "pitch_mm": pitch},
             constraint="thread_shape",
             suggestions=(CHANGE_FEATURE, CANCEL),
         )
@@ -641,7 +643,7 @@ def _matched_thread(
                 finest=format_length(FINEST_PITCH),
                 coarsest=format_length(COARSEST_PITCH),
             ),
-            values={"feature": feature.id, "diameter": diameter, "pitch": pitch},
+            values={"diameter_mm": diameter, "pitch_mm": pitch},
             constraint="beyond_threads",
             suggestions=(CHANGE_FEATURE, CANCEL),
         )

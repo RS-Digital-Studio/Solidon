@@ -571,6 +571,24 @@ FEATURE_TITLES: Final[dict[str, TranslatableText]] = {
     "torus": _("Ringfläche"),
 }
 
+
+def feature_title_of(feature_id: str) -> str:
+    """Eine Merkmalskennung, wie der Kunde sie liest: „hole_2“ ist „Bohrung 2“ (FD-186).
+
+    Absagen und Befunde legen die Kennung in ``values["feature"]`` ab, denn
+    Agent und Handler lesen sie dort; im Fenster stand sie roh („Merkmal:
+    thread_1“). Die Art steht vorn in der Kennung (``<art>_<nummer>``), ein
+    Körper davor (``obj_1:``) fällt weg. Eine Kennung ohne bekannte Art bleibt,
+    wie sie ist — dann ist sie ein Name, den jemand vergeben hat.
+    """
+    bare = feature_id.rsplit(":", 1)[-1]
+    kind, _sep, number = bare.rpartition("_")
+    title = FEATURE_TITLES.get(kind)
+    if title is None:
+        return feature_id
+    return f"{title} {number}" if number.isdigit() else str(title)
+
+
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 
 #: ``produces=VARIABLE``: so viele Objekte heraus wie hinein.

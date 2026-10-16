@@ -39,7 +39,7 @@ from app.core.perceive.groups import FunctionalGroup, GroupMeasure
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import REGISTRY
 from app.core.registry import group_title as group_title
-from app.core.registry.registry import FEATURE_TITLES
+from app.core.registry.registry import FEATURE_TITLES, feature_title_of
 from app.core.registry.surfaces import _CHOICE_NAMES as _CHOICE_NAMES
 from app.core.registry.surfaces import SIDE_NAMES
 from app.core.registry.surfaces import choice_label as _choice_label
@@ -2056,6 +2056,11 @@ def value_text(key: str, value: object) -> str:
         # Die Art eines Merkmals heißt, wie Karte, Handbuch und Agent sie nennen
         # (Review I, M3): Im Bericht stand „Art: hole“.
         return str(FEATURE_TITLES[value])
+    if key == "feature" and isinstance(value, str | list | tuple):
+        # Die Kennung bleibt in den Werten für Agent und Handler; zu lesen ist
+        # sie wie in der Merkmalsliste (FD-186): „Merkmal: thread_1“.
+        found = value.split(", ") if isinstance(value, str) else [str(entry) for entry in value]
+        return ", ".join(feature_title_of(entry) for entry in found)
     if key in ("solver", "attempted") and isinstance(value, str) and value in _METHOD_NAMES:
         return str(_METHOD_NAMES[value])
     if key in ("solver", "attempted") and isinstance(value, (list, tuple)):

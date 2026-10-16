@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import pytest
 from PySide6.QtWidgets import QApplication
 
 from app.core.errors import (
@@ -70,6 +71,64 @@ def test_the_thread_counterpart_names_its_way_without_a_step() -> None:
     assert "Anderes Merkmal wählen" in problem_text(error, HANDLERS)
     # Neben dem Rat ein Knopf, der mehr zeigt, nicht nur *Schließen*.
     assert offered_actions(error, HANDLERS) == [SHOW_DETAILS]
+
+
+@pytest.mark.parametrize(("unit", "suffix"), [("mm", " mm"), ("in", " in")])
+def test_the_thread_refusals_say_lengths_in_the_display_unit_without_an_identifier(
+    unit: str, suffix: str
+) -> None:
+    """FD-186: Unter der Absage stand „Merkmal: thread_1“, „Durchmesser: 37,0“, „Steigung: 0,9“.
+
+    Beide Absagen des Gegenstücks (kegelig ohne Tabellengröße, außerhalb der
+    Reihen): Längen in der Anzeigeeinheit, keine Kennung — der Satz nennt das
+    Gewinde schon.
+    """
+    from app.core.counterpart import thread_values_for
+    from app.core.knowledge import standards
+    from app.core.types import Feature
+    from app.ui import labels
+    from app.ui.dialogs import spoken_values
+
+    refusals = [_tapered_thread_refusal()]
+    huge = Feature(
+        id="thread_1",
+        kind="thread",
+        provenance="detected",
+        params={"diameter": 1500.0, "pitch": 6.0, "length": 10.0},
+    )
+    try:
+        thread_values_for(huge, None, standards.shown_thread_families())
+    except AppError as error:
+        refusals.append(error)
+    assert [error.values.get("constraint") for error in refusals] == [
+        "thread_shape",
+        "beyond_threads",
+    ]
+    labels.set_display_unit(unit)  # type: ignore[arg-type]
+    try:
+        for error in refusals:
+            lines = spoken_values(error)
+            assert not [line for line in lines if "thread_1" in line], lines
+            measured = [line for line in lines if line.startswith(("Durchmesser:", "Steigung:"))]
+            assert len(measured) == 2, lines
+            assert all(line.endswith(suffix) for line in measured), lines
+    finally:
+        labels.set_display_unit("mm")
+
+
+def test_a_feature_identifier_reads_as_kind_and_number() -> None:
+    """Die Zwillinge: Jede andere Absage legt ``values["feature"]`` für Agent und Handler ab.
+
+    Angezeigt wird sie wie in der Merkmalsliste, „Bohrung 2“ statt „hole_2“;
+    ein Körper davor fällt weg, eine Liste bleibt eine Liste, ein Name ohne
+    bekannte Art bleibt, wie er ist.
+    """
+    from app.ui.labels import value_line
+
+    assert value_line("feature", "hole_2") == "Merkmal: Bohrung 2"
+    assert value_line("feature", "obj_1:thread_1") == "Merkmal: Gewinde 1"
+    assert value_line("feature", "hole_1, fillet_3") == "Merkmal: Bohrung 1, Verrundung 3"
+    assert value_line("feature", "mating") == "Merkmal: mating"
 
 
 def test_with_a_step_the_way_is_a_button_and_no_sentence() -> None:
