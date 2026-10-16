@@ -192,7 +192,6 @@ def test_the_answering_generator_reaches_no_address(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(generate_dialog, "ComfyBackend", generate_dialog.ComfyBackend)
     for owner, name in (
-        (mesh, "fetch"),
         (mesh, "reachable"),
         (urllib.request, "urlopen"),
         (socket, "create_connection"),
@@ -200,6 +199,9 @@ def test_the_answering_generator_reaches_no_address(monkeypatch: pytest.MonkeyPa
         monkeypatch.setattr(owner, name, outside)
     function_seams.generator_answers()
     backend = generate_dialog.ComfyBackend()
+    # Ein Backend holt über sein ``transport``, das die Klasse beim Bau an ``mesh.fetch``
+    # band; ein Patch auf ``mesh.fetch`` erreichte es nie (W2 d, Lesermenge leer).
+    monkeypatch.setattr(backend, "transport", outside)
     assert isinstance(backend, mesh.ComfyBackend)
     assert generate_dialog._look(backend, "text_to_mesh") is mesh.Readiness.READY
     assert generate_dialog._look(backend) is mesh.Readiness.READY

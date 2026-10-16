@@ -743,3 +743,69 @@ def test_known_case_the_spool_ban_sits_on_the_binding_the_inventory_reads() -> N
     found = index.patch_findings()
     named = [f for rule in "cd" for f in found[rule] if f.name == "configured_spools"]
     assert not named, named
+
+
+def _waiting_tree(tmp_path: Path) -> Path:
+    """Nachtrag welle5: ``test_waiting_click_rebuild`` importiert die Fixture ``window`` auf
+    Modulebene, also ist ``window.open_path(…)`` im Helfer ``_measured_hole(window, …)`` ein
+    Aufruf, den die Tabelle der Aufrufstellen faltet — und diese Faltung fragt nach den
+    Aufrufstellen von ``_measured_hole``, bevor dessen Aufruf eingetragen war. Der Baum stellt
+    das nach."""
+    root = tmp_path / "baum"
+    for path, source in {
+        "app/__init__.py": "",
+        "app/view.py": "class Viewport:\n    def applied(self):\n        return True\n",
+        # Eine frühere Patch-Stelle mit Parameter baut die Tabelle, bevor die Datei unten an der
+        # Reihe ist — wie am echten Baum.
+        "tests/test_aaa.py": (
+            "from app.view import Viewport\n\n\n"
+            "def _first(thing, monkeypatch):\n"
+            '    monkeypatch.setattr(thing, "applied", lambda: False)\n\n\n'
+            "def test_first(monkeypatch):\n    _first(Viewport(), monkeypatch)\n"
+        ),
+        "tests/ui_fakes.py": (
+            "import pytest\n\nfrom app.view import Viewport\n\n\n"
+            "class Window:\n    viewport = Viewport()\n\n    def open_path(self):\n"
+            "        return self.viewport.applied()\n\n\n"
+            "@pytest.fixture\ndef window():\n    return Window()\n"
+        ),
+        "tests/test_waiting.py": (
+            "from tests.ui_fakes import window\n\n\n"
+            "def _measured(window, monkeypatch):\n"
+            "    window.open_path()\n"
+            '    monkeypatch.setattr(window.viewport, "applied", lambda: True)\n\n\n'
+            "def test_measured(window, monkeypatch):\n"
+            "    _measured(window, monkeypatch)\n"
+        ),
+    }.items():
+        (root / path).parent.mkdir(parents=True, exist_ok=True)
+        (root / path).write_text(source, encoding="utf-8")
+    return root
+
+
+def test_rule_e_folds_a_parameter_that_the_call_table_needs_while_it_is_built(
+    tmp_path: Path,
+) -> None:
+    """Die Antwort aus dem halben Stand der Tabelle blieb gemerkt, und W2 e) meldete
+    „Parameter window ohne Aufrufstelle“ (:func:`_waiting_tree`)."""
+    index = Index.build(_waiting_tree(tmp_path), cache=False)
+
+    # Das Ziel ist das Objekt hinter der Fixture, nicht bloß „kein Fund“: Stille allein hieße
+    # nicht, dass W2 der Aufrufstelle folgt.
+    (site,) = [s for s in index.patch_sites() if s.path == "tests/test_waiting.py"]
+    targets = [(t.status, t.module, t.name) for t in site.targets]
+    assert targets == [("object", "obj tests.ui_fakes:Window().viewport", "applied")], targets
+    findings = [f for f in index.patch_findings()["e"] if f.path == "tests/test_waiting.py"]
+    assert findings == [], findings
+
+
+def test_a_call_table_that_does_not_settle_stops_the_guard(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Steht die Tabelle nach ``_SITE_ROUNDS`` Runden nicht, urteilt W2 nicht über einen
+    halben Stand, sondern hält an; der Baum aus :func:`_waiting_tree` braucht zwei."""
+    monkeypatch.setattr(code_index, "_SITE_ROUNDS", 1)
+    index = Index.build(_waiting_tree(tmp_path), cache=False)
+
+    with pytest.raises(RuntimeError, match="Tabelle der Aufrufstellen steht nach 1 Runden nicht"):
+        index.patch_findings()

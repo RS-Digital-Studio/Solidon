@@ -141,6 +141,9 @@ CACHE = Path("tools") / "__pycache__" / "code_index.data"
 #: Tiefenmarke ohne Schnitt (siehe :meth:`Index._cached`).
 _NO_CYCLE = 1 << 30
 
+#: Runden, in denen die Tabelle der Aufrufstellen stehen muss (der Baum braucht drei).
+_SITE_ROUNDS = 8
+
 #: Namen, die jedes Modul hat, ohne sie zu binden.
 _MODULE_DUNDERS = frozenset(
     {"__name__", "__file__", "__doc__", "__spec__", "__loader__", "__package__", "__dict__"}
@@ -227,6 +230,18 @@ Res = list[tuple[Env, Val]]
 Names = tuple[frozenset[str], frozenset[str], bool]
 
 
+def _same_sites(
+    one: dict[str, list[tuple[Facts, Site]]], other: dict[str, list[tuple[Facts, Site]]] | None
+) -> bool:
+    """Ob zwei Tabellen der Aufrufstellen dieselben Stellen je Helfer tragen."""
+    if other is None or one.keys() != other.keys():
+        return False
+    return all(
+        [(f.path, id(s)) for f, s in one[key]] == [(f.path, id(s)) for f, s in other[key]]
+        for key in one
+    )
+
+
 def _merge(first: Env, second: Env) -> Env | None:
     """Zwei Zeilen vereinen; widersprechen sie sich in einer Quelle, gibt es die Zeile nicht."""
     if not first or first == second:
@@ -305,6 +320,9 @@ class Index:
         self._active: dict[tuple[object, ...], int] = {}
         self._low = _NO_CYCLE
         self._sites: dict[str, list[tuple[Facts, Site]]] | None = None
+        #: Was eine Frage nach Aufrufstellen bekommt, solange die Tabelle entsteht.
+        self._building: dict[str, list[tuple[Facts, Site]]] | None = None
+        self._asked_while_building = False
         self._numbers: dict[tuple[object, ...], int] = {}
         self._analysed = False
         self._readers: dict[tuple[str, str], dict[tuple[str, str, str], tuple[str, int]]] = {}
@@ -1230,17 +1248,55 @@ class Index:
         return out
 
     def _call_sites(self) -> dict[str, list[tuple[Facts, Site]]]:
-        if self._sites is None:
+        """Je Testhelfer seine Aufrufstellen.
+
+        Die Tabelle entsteht über die Faltung jedes Aufrufziels, und die kann über einen
+        Parameter wieder nach Aufrufstellen fragen. Die erste Runde gab dann den halben Stand,
+        und was daran hing, blieb gemerkt — „Parameter window ohne Aufrufstelle“ für einen
+        Helfer, dessen Aufruf erst danach eingetragen wurde. Fragt eine Runde so nach, vergisst
+        der Index das Gemerkte und baut neu, mit der vorigen ganzen Tabelle als Antwort, bis
+        zwei Runden dieselbe Tabelle ergeben.
+        """
+        if self._sites is not None:
+            return self._sites
+        if self._building is not None:
+            self._asked_while_building = True
+            return self._building
+        previous: dict[str, list[tuple[Facts, Site]]] | None = None
+        previous_numbers: dict[tuple[object, ...], int] = {}
+        for _round in range(_SITE_ROUNDS):
             sites: dict[str, list[tuple[Facts, Site]]] = {}
-            self._sites = sites
-            for facts in self.files.values():
-                for site in facts.calls:
-                    targets = {v.ref for _e, v in self._fold(facts, site.func) if v.kind == "def"}
-                    for target in sorted(targets):
-                        found = sites.setdefault(target, [])
-                        where = (facts.path, site.func, site.args, site.keywords, target)
-                        self._numbers[where] = len(found)
-                        found.append((facts, site))
+            numbers: dict[tuple[object, ...], int] = {}
+            # Gefragt wird, was die vorige Runde ganz hatte, in der ersten der halbe Stand.
+            self._building = sites if previous is None else previous
+            self._numbers = numbers if previous is None else previous_numbers
+            self._asked_while_building = False
+            try:
+                for facts in self.files.values():
+                    for site in facts.calls:
+                        targets = {
+                            v.ref for _e, v in self._fold(facts, site.func) if v.kind == "def"
+                        }
+                        for target in sorted(targets):
+                            found = sites.setdefault(target, [])
+                            numbers[(facts.path, site.func, site.args, site.keywords, target)] = (
+                                len(found)
+                            )
+                            found.append((facts, site))
+            finally:
+                self._building = None
+            if not self._asked_while_building or _same_sites(sites, previous):
+                break
+            previous, previous_numbers = sites, numbers
+            self._memo.clear()
+        else:
+            # Ein halber Stand urteilte still falsch; lieber steht der Wächter.
+            raise RuntimeError(
+                f"Die Tabelle der Aufrufstellen steht nach {_SITE_ROUNDS} Runden nicht;"
+                " _SITE_ROUNDS erhöhen oder die Faltung prüfen, die nach ihr fragt."
+            )
+        self._numbers = numbers
+        self._sites = sites
         return self._sites
 
     def _site_number(self, facts: Facts, ir: Call, function: Val) -> Env:
