@@ -103,3 +103,31 @@ def test_the_scope_alone_is_a_change(selected_hole, qt_app):
     assert window.session.wait_for_idle(30_000)
     settle_measure_layout(qt_app)
     assert not apply.isEnabled(), "zurückgeschaltet ist wieder nichts geändert"
+
+
+def test_the_bench_reads_ticks_and_lists_as_fields_like_the_sentence(qt_app):
+    """Der Prüfstand liest dieselben Feldarten wie der Satz am Knopf, auch Haken und Listen.
+
+    ``surface_field_titles`` fragt ``first_change.is_field`` (Review F2a, R4); eine
+    eigene Liste nur mit Zahl-, Text- und Auswahlfeldern ließe *Ganzer Körper* und
+    die Flächenliste aus, und der Satz am grauen Knopf stünde ohne Ausweg da
+    (Review 2 F2a/D, D4).
+    """
+    from PySide6.QtWidgets import QCheckBox, QFormLayout, QListWidget, QPushButton, QWidget
+
+    surface = QWidget()
+    form = QFormLayout(surface)
+    form.addRow("Ganzer Körper", QCheckBox(surface))
+    faces = QListWidget(surface)
+    faces.setAccessibleName("Flächen")
+    form.addRow(faces)
+    apply = QPushButton("Übernehmen", surface)
+    apply.setEnabled(False)
+    form.addRow(apply)
+    surface.show()
+    try:
+        titles = surface_field_titles(apply)
+        assert "Ganzer Körper" in titles and "Flächen" in titles, titles
+    finally:
+        surface.close()
+        surface.deleteLater()

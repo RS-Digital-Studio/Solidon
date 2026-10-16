@@ -190,12 +190,16 @@ def test_a_source_and_an_image_field_name_a_missing_value(qt_app: QApplication) 
         if any(entry.kind == "source" and not entry.internal for entry in spec.params.spec())
     ]
     assert image_ops and source_ops
-    for spec, kind, identifier in (
-        (image_ops[0], "image", "src_4"),
-        (source_ops[0], "source", "src_3"),
+    # Das Hauptfenster gibt dem Quellenfeld immer seinen Dateiwähler mit
+    # (``pick_source``); dann ist es ein Bildwähler, der „Datei“ sagen muss,
+    # nicht „Bild“ (Review 2 F2a/D, D4 zu FD-187).
+    for spec, kind, identifier, extra in (
+        (image_ops[0], "image", "src_4", {}),
+        (source_ops[0], "source", "src_3", {}),
+        (source_ops[0], "source", "src_3", {"pick_source": lambda: None}),
     ):
         name = next(entry.name for entry in spec.params.spec() if entry.kind == kind)
-        with _dialog(spec.name, {name: identifier}, images={}) as dialog:
+        with _dialog(spec.name, {name: identifier}, images={}, **extra) as dialog:
             qt_app.processEvents()
             texts = _visible_texts(dialog)
             assert unlisted_text(identifier, kind) in texts, (spec.name, texts)

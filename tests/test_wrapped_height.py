@@ -13,26 +13,30 @@ from __future__ import annotations
 
 import pytest
 import trimesh
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
 from app.core.geom.mesh import MeshData
 from app.core.perceive import features
 from app.core.types import Feature
+from tests.bundled_fonts import bundled_font
 
 LANGUAGES = ("de", "en", "es", "fr", "it", "pt")
 
 
 def _needed(label: QLabel) -> int:
-    """Was der Text in der Breite des Satzes braucht, ohne die gepinnte Höhe.
+    """Was der Text in der Breite des Satzes braucht, ohne die gepinnten Höhen.
 
     ``QLabel.heightForWidth`` meldet nie weniger als die eigene Mindesthöhe.
     """
-    pinned = label.minimumHeight()
+    least, most = label.minimumHeight(), label.maximumHeight()
     label.setMinimumHeight(0)
+    label.setMaximumHeight(16_777_215)
     try:
         return max(label.heightForWidth(label.width()), 0)
     finally:
-        label.setMinimumHeight(pinned)
+        label.setMinimumHeight(least)
+        label.setMaximumHeight(most)
 
 
 def _settle(qt_app: QApplication) -> None:
@@ -157,6 +161,73 @@ def test_a_shorter_sentence_gives_its_line_back(qt_app: QApplication) -> None:
         label.setText(" ".join(["Ein langer Satz, der umbricht."] * 8))
         _settle(qt_app)
         assert label.height() == _needed(label), "wächst auch wieder, an der neuen Breite"
+    finally:
+        host.hide()
+        host.deleteLater()
+
+
+def test_a_new_font_alone_measures_the_sentence_again(qt_app: QApplication) -> None:
+    """Breite und Text bleiben, nur die Schrift wächst — der Satz misst neu (D4 zu FD-133).
+
+    Der Folger vergleicht Breite, Text **und Schrift**; ohne die Schrift im
+    Vergleich behielte der Satz die Höhe der kleinen Schrift und schnitte ab.
+    """
+    from app.ui.panels import fit_wrapped
+
+    with bundled_font(qt_app, 9):
+        host = QWidget()
+        try:
+            column = QVBoxLayout(host)
+            label = QLabel(" ".join(["Ein langer Satz, der umbricht."] * 4), host)
+            label.setWordWrap(True)
+            fit_wrapped(label)
+            column.addWidget(label)
+            column.addStretch(1)
+            host.resize(300, 600)
+            host.show()
+            _settle(qt_app)
+            small = label.minimumHeight()
+            assert small == _needed(label) > 0
+
+            font = QFont(label.font())
+            font.setPointSize(18)
+            label.setFont(font)
+            _settle(qt_app)
+            assert label.minimumHeight() == _needed(label) > small, (
+                f"{label.minimumHeight()} gepinnt, der Text braucht {_needed(label)}"
+            )
+        finally:
+            host.hide()
+            host.deleteLater()
+
+
+def test_a_note_still_says_that_it_grew(qt_app: QApplication) -> None:
+    """``WrappedNote`` folgt sich selbst und meldet ``grown`` (D4 zu FD-133).
+
+    ``fit_wrapped`` hängt ihm keinen zweiten Folger an: Der käme vor dem Zeichnen
+    zuvor, und der Satz sähe beim eigenen Messen keine Änderung mehr — das
+    Fenster darum wüchse nicht nach, etwa um den Satz unter leeren Parametern.
+    """
+    from app.ui.panels import fit_wrapped
+    from app.ui.style import WrappedNote
+
+    host = QWidget()
+    try:
+        column = QVBoxLayout(host)
+        note = WrappedNote(host)
+        note.setText("Kurz.")
+        fit_wrapped(note)
+        column.addWidget(note)
+        column.addStretch(1)
+        host.resize(300, 600)
+        host.show()
+        _settle(qt_app)
+        grew: list[bool] = []
+        note.grown.connect(lambda: grew.append(True))
+        note.setText(" ".join(["Ein langer Satz, der umbricht."] * 6))
+        _settle(qt_app)
+        assert grew, "der Satz sagt nicht mehr, dass er gewachsen ist"
+        assert note.minimumHeight() == _needed(note)
     finally:
         host.hide()
         host.deleteLater()

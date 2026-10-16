@@ -252,6 +252,30 @@ def test_an_identifier_is_written_without_groups_and_read_with_them(
         field.deleteLater()
 
 
+def test_seed_and_port_stand_without_groups_in_their_dialogs(qt_app: QApplication) -> None:
+    """Startwert und Port so, wie man sie abschreibt — im Dialog, nicht nur in der Bauart.
+
+    Die Bauart prüft der Fall davor; hier steht fest, dass *Modell erzeugen* und
+    die Einstellungen sie nehmen. Als ``GroupedIntSpin`` stünden dort
+    „1 234 567“ und „8 765“ (Review 2 F2a/D, D4 zu R5).
+    """
+    from app.ui.generate_dialog import GenerateDialog
+    from app.ui.settings import UiSettings
+    from app.ui.settings_dialog import SettingsDialog
+    from tests.scripted_backend import ScriptedMeshBackend
+
+    generate = GenerateDialog(backend=ScriptedMeshBackend())
+    settings = SettingsDialog(UiSettings(remote_port=8765))
+    try:
+        generate.seed.setValue(1_234_567)
+        assert generate.seed.lineEdit().text() == "1234567"
+        assert settings.remote_port.lineEdit().text() == "8765"
+    finally:
+        generate.release()
+        generate.deleteLater()
+        settings.deleteLater()
+
+
 def test_every_computed_number_of_places_is_known() -> None:
     _bare, computed = _scan()
     unknown = sorted(
