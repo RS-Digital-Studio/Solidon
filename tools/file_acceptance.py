@@ -7,6 +7,7 @@
         [--variants basis,sprachen,…,vorhersage,schrift,schriftwechsel] (function_setup.PHASES)
     .venv\\Scripts\\python.exe tools/file_acceptance.py run --out <ordner> [--first 1] [--last 9]
         [--again] [--timeout <s>] [--screen <name oder nummer>] [--total <s>] [--binding <json>]
+    .venv\\Scripts\\python.exe tools/file_acceptance.py seal --out <ordner>
     .venv\\Scripts\\python.exe tools/file_acceptance.py report --out <ordner>
         [--package D4] [--verdicts <toml>] [--checklist <md>] [--runs <ablage>]
 
@@ -1860,6 +1861,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     one.add_argument("--screen", default="")
     bar = commands.add_parser("menubar")
     bar.add_argument("--out", required=True, type=Path)
+    sealing = commands.add_parser("seal")
+    sealing.add_argument("--out", required=True, type=Path)
     reporting = commands.add_parser("report")
     reporting.add_argument("--out", required=True, type=Path)
     reporting.add_argument("--package", action="append", default=[])
@@ -1935,6 +1938,16 @@ def main(argv: Iterable[str] | None = None) -> int:
         return child(out, arguments.case, arguments.screen)
     if arguments.command == "menubar":
         return menubar_child(out)
+    if arguments.command == "seal":
+        # Das Siegel des Laufs für ``[[run]].seal`` der Urteile (RC2-1).
+        from tools.function_verdict_rules import seal_run
+
+        try:
+            print(seal_run(out), flush=True)
+        except OSError as problem:
+            print(problem, file=sys.stderr, flush=True)
+            return 2
+        return 0
     cases = read_cases(out)
     data = summary(out, cases)
     print(f"{data['passed']} von {data['cases']} Dateifällen bestanden", flush=True)

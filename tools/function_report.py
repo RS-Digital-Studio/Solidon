@@ -1551,9 +1551,12 @@ def seals_of(
     """
     listed = list(runs)
     main = run_folder(listed)
+    sealed = next((str(run.get("seal") or "") for run in listed if run.get("key") is None), "")
     seals: dict[str | None, RunSeals] = {
         None: RunSeals(
-            (out, *((store / main,) if store is not None and main else ())), dict(released)
+            (out, *((store / main,) if store is not None and main else ())),
+            dict(released),
+            sealed,
         )
     }
     for run in listed:
@@ -1561,7 +1564,9 @@ def seals_of(
             continue
         folder = store / str(run.get("name") or "") if store is not None else None
         protocols = [p for _where, p in read_protocols(folder)[0]] if folder else []
-        seals[str(run["key"])] = RunSeals((folder,) if folder else (), releases_of(protocols))
+        seals[str(run["key"])] = RunSeals(
+            (folder,) if folder else (), releases_of(protocols), str(run.get("seal") or "")
+        )
     return seals
 
 

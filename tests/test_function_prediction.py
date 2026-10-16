@@ -35,6 +35,7 @@ from tools.function_verdict_rules import (
     RunSeals,
     release_problems,
     releases_of,
+    seal_run,
 )
 
 
@@ -353,7 +354,8 @@ def test_a_bound_prediction_must_be_one_the_gate_of_this_run_released(tmp_path: 
     ]
     releases = releases_of(protocols)
     assert releases == {"resize_hole": frozenset({bound})}
-    seals = {None: RunSeals((tmp_path,), releases)}
+    seal = seal_run(tmp_path)
+    seals = {None: RunSeals((tmp_path,), releases, seal)}
     entry = {
         "row": "resize_hole",
         "criterion": "V4",
@@ -368,7 +370,7 @@ def test_a_bound_prediction_must_be_one_the_gate_of_this_run_released(tmp_path: 
     # Eine Rundenkennung braucht ihren ``[[run]]`` (RC-1) — und dessen Tor.
     rounded = {**entry, "prediction_bound": f"v4:{bound}"}
     assert release_problems(rounded, "V4", seals) == [f"{UNKNOWN_ROUND}: v4"]
-    seals["v4"] = RunSeals((tmp_path,), {})
+    seals["v4"] = RunSeals((tmp_path,), {}, seal)
     assert release_problems(rounded, "V4", seals) == [UNRELEASED_PREDICTION]
     assert release_problems(other, "V4", None) == []
 
@@ -385,7 +387,7 @@ def test_report_takes_a_good_v4_only_with_the_binding_the_gate_released(tmp_path
     protocol = copy.deepcopy(sample_protocol())
     protocol["prediction"]["bound"] = bound = _sealed(tmp_path, said)
     case = judge_case(protocol, sample_context())
-    seals = {None: RunSeals((tmp_path,), releases_of([protocol]))}
+    seals = {None: RunSeals((tmp_path,), releases_of([protocol]), seal_run(tmp_path))}
     good = _verdict(criterion="V4", point=None, prediction=said, prediction_bound=bound)
     checked = check_verdicts([good], outcomes={case.row_id: case}, seals=seals)
     assert checked.rejected == (), checked.rejected

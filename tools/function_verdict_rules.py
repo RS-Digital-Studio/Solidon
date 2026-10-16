@@ -17,6 +17,11 @@ eines Belegs machen (Konzept §4, „Urteil und Schwere“):
   gebundenen SHA256, und ihre Vorhersage ist die des Urteils. Eine
   Rundenkennung davor (``v4:cases/…``) nennt einen ``[[run]]`` der
   Urteilsdatei; gelesen wird dann dessen Lauf.
+* **Der Lauf ist versiegelt** (RC2-1): ``[[run]].seal`` nennt die Siegeldatei
+  des Laufs mit ihrem SHA256 (:func:`seal_run`, ``file_acceptance.py seal``),
+  und jede Datei unter ``cases/`` hat noch den SHA256 aus ihr. Sonst ließen
+  sich Siegeldatei der Vorhersage und Bindung im Protokoll nach dem Lauf
+  gemeinsam neu schreiben — beide liegen im selben Laufordner.
 
 Aufgerufen aus ``function_report._verdict_problems``.
 """
@@ -27,7 +32,7 @@ import hashlib
 import json
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -64,6 +69,21 @@ SEAL_MISSING: Final = (
     " --runs <Ablage der Läufe>"
 )
 SEAL_CHANGED: Final = "die versiegelte Vorhersage ist nicht mehr die gebundene (SHA256 weicht ab)"
+RUN_UNSEALED: Final = (
+    "der Lauf ist nicht versiegelt — nach dem Lauf `file_acceptance.py seal --out <lauf>`"
+    " fahren und seine Ausgabe als seal des [[run]] eintragen"
+)
+RUN_SEAL_CHANGED: Final = (
+    "die Siegeldatei des Laufs ist nicht die des [[run]] (SHA256 weicht ab) —"
+    " Lauf und Urteile gehören nicht zusammen"
+)
+RUN_FILE_CHANGED: Final = "eine Datei des Laufs ist nicht mehr die versiegelte"
+RUN_FILE_UNSEALED: Final = "eine Datei des Laufs steht nicht in seiner Siegeldatei"
+
+#: Die Siegeldatei eines Laufs, neben ``cases/`` (:func:`seal_run`).
+RUN_SEAL_FILE: Final = "seal.json"
+#: Was eine bildlose Kopie eines Laufs weglassen darf, ohne das Siegel zu brechen.
+_PICTURES: Final = frozenset({".png"})
 PREDICTION_DIFFERS: Final = "prediction ist nicht die versiegelte Vorhersage"
 
 _SHA256: Final = re.compile(r"\b[0-9a-f]{64}\b")
@@ -78,11 +98,99 @@ class RunSeals:
 
     ``folders`` sind die Orte, an denen seine Dateien liegen können — der erste
     mit der Siegeldatei gilt; ``releases`` je Zeile die Bindungen, die sein
-    Vorhersagetor freigab (:func:`releases_of` über seine Protokolle).
+    Vorhersagetor freigab (:func:`releases_of` über seine Protokolle);
+    ``seal`` das Siegel aus seinem ``[[run]]`` (RC2-1).
     """
 
     folders: tuple[Path, ...]
     releases: Mapping[str, frozenset[str]]
+    seal: str = ""
+    #: Ergebnis von :func:`run_seal_problems` je Lauf, einmal gerechnet.
+    checked: dict[str, tuple[Path | None, tuple[str, ...]]] = field(
+        default_factory=dict, compare=False, hash=False
+    )
+
+
+def _files_of(folder: Path) -> dict[str, str]:
+    """SHA256 jeder Datei unter ``cases/`` des Laufs, nach Pfad relativ zum Lauf."""
+    cases = folder / "cases"
+    return {
+        path.relative_to(folder).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(cases.rglob("*"))
+        if path.is_file()
+    }
+
+
+def seal_run(folder: Path) -> str:
+    """Versiegelt einen Lauf und gibt den Wert für ``[[run]].seal`` zurück (RC2-1).
+
+    Schreibt :data:`RUN_SEAL_FILE` mit dem SHA256 jeder Datei unter ``cases/``.
+    Ein Lauf wird einmal versiegelt: Gibt es die Datei schon, endet es mit
+    :class:`FileExistsError`.
+    """
+    target = folder / RUN_SEAL_FILE
+    files = _files_of(folder)
+    if not files:
+        raise FileNotFoundError(
+            f"Unter {folder / 'cases'} liegt keine Datei — {folder} ist kein Lauf.\n"
+            "Handlungsvorschlag: `--out` auf den Laufordner von `file_acceptance.py run` setzen."
+        )
+    if target.exists():
+        raise FileExistsError(
+            f"{target} gibt es schon: Ein Lauf wird einmal versiegelt.\n"
+            "Handlungsvorschlag: Das Siegel steht im [[run]] der Urteile; nach weiteren"
+            " Fällen einen neuen Laufordner versiegeln."
+        )
+    raw = (json.dumps({"files": files}, indent=1, sort_keys=True) + "\n").encode("utf-8")
+    target.write_bytes(raw)
+    return f"{RUN_SEAL_FILE} {hashlib.sha256(raw).hexdigest()}"
+
+
+def run_seal_problems(run: RunSeals) -> tuple[Path | None, tuple[str, ...]]:
+    """Der Ordner des versiegelten Laufs und warum sein Siegel nicht hält (RC2-1).
+
+    ``[[run]].seal`` nennt die Siegeldatei (ohne Pfad :data:`RUN_SEAL_FILE`) und
+    ihren SHA256. Gilt der erste Ordner, in dem sie liegt; ihr SHA256 ist der
+    genannte, jede Datei unter ``cases/`` steht darin mit ihrem SHA256. Einer
+    bildlosen Kopie dürfen nur Bilder fehlen.
+    """
+    if run.seal in run.checked:
+        return run.checked[run.seal]
+    hashes = _SHA256.findall(run.seal)
+    named = [part for part in run.seal.split() if part not in hashes and part != "SHA256"]
+    name = named[0] if named else RUN_SEAL_FILE
+    parts = name.split("/")
+    result: tuple[Path | None, tuple[str, ...]] = (None, (RUN_UNSEALED,))
+    if hashes and not _MACHINE_PATH.search(name) and not {"", ".", ".."} & set(parts):
+        for folder in run.folders:
+            try:
+                raw = folder.joinpath(*parts).read_bytes()
+            except OSError:
+                continue
+            result = (folder, tuple(_seal_differences(folder, raw, hashes[-1])))
+            break
+    run.checked[run.seal] = result
+    return result
+
+
+def _seal_differences(folder: Path, raw: bytes, expected: str) -> list[str]:
+    """Was am Lauf ``folder`` von seiner Siegeldatei ``raw`` abweicht."""
+    if hashlib.sha256(raw).hexdigest() != expected:
+        return [RUN_SEAL_CHANGED]
+    try:
+        sealed = json.loads(raw.decode("utf-8")).get("files")
+    except ValueError, AttributeError:
+        sealed = None
+    if not isinstance(sealed, dict) or not sealed:
+        return [RUN_UNSEALED]
+    present = _files_of(folder)
+    problems = [
+        f"{RUN_FILE_CHANGED}: {name}"
+        for name, digest in sorted(sealed.items())
+        if present.get(name, digest if Path(name).suffix in _PICTURES else "") != digest
+    ]
+    problems += [f"{RUN_FILE_UNSEALED}: {name}" for name in sorted(set(present) - set(sealed))]
+    return problems
 
 
 def covered(subject: int | str | None) -> frozenset[int | str]:
@@ -184,9 +292,12 @@ def release_problems(
         return [f"{UNKNOWN_ROUND}: {key}"]
     if not run.folders:
         return [SEAL_MISSING]
+    folder, broken = run_seal_problems(run)
+    if broken:
+        return list(broken)
     if rest not in run.releases.get(str(entry.get("row") or ""), frozenset()):
         return [UNRELEASED_PREDICTION]
-    return sealed_problems(entry, rest, run.folders)
+    return sealed_problems(entry, rest, (folder,) if folder is not None else ())
 
 
 def sealed_problems(entry: Mapping[str, Any], bound: str, folders: Iterable[Path]) -> list[str]:

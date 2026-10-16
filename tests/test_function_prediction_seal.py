@@ -30,12 +30,33 @@ HONEST = "Übernehmen vergrößert nur Bohrung 1 auf 8 mm."
 SEAL = f"seal.json {'e' * 64}"
 
 
-def _run(folder: Path, text: str = HONEST) -> str:
-    """Ein Lauf mit einem Fall, dessen Tor ``text`` freigab; die Bindung des Protokolls."""
+def _seal_of(folder: Path) -> str:
+    """``[[run]].seal`` für den Lauf ``folder``: seine Siegeldatei, sonst ein erfundenes Siegel."""
+    try:
+        raw = (folder / rules.RUN_SEAL_FILE).read_bytes()
+    except OSError:
+        return SEAL
+    return f"{rules.RUN_SEAL_FILE} {hashlib.sha256(raw).hexdigest()}"
+
+
+def _forge(folder: Path, text: str) -> str:
+    """Nach dem Lauf: Vorhersage neu und ``prediction.bound`` nachgezogen (RC2-1 F1)."""
     raw = json.dumps({"prediction": text}, ensure_ascii=False).encode("utf-8")
-    sealed = folder / SEALED
-    sealed.parent.mkdir(parents=True)
-    sealed.write_bytes(raw)
+    (folder / SEALED).write_bytes(raw)
+    bound = f"{SEALED} {hashlib.sha256(raw).hexdigest()}"
+    path = folder / "cases" / "1" / "function.json"
+    protocol = json.loads(path.read_text(encoding="utf-8"))
+    protocol["prediction"] = {**protocol["prediction"], "bound": bound}
+    path.write_text(json.dumps(protocol, ensure_ascii=False), encoding="utf-8")
+    return bound
+
+
+def _run(folder: Path, text: str = HONEST, *, seal: bool = True) -> str:
+    """Ein versiegelter Lauf mit einem Fall, dessen Tor ``text`` freigab; die Bindung."""
+    raw = json.dumps({"prediction": text}, ensure_ascii=False).encode("utf-8")
+    prediction = folder / SEALED
+    prediction.parent.mkdir(parents=True)
+    prediction.write_bytes(raw)
     bound = f"{SEALED} {hashlib.sha256(raw).hexdigest()}"
     protocol = copy.deepcopy(sample_protocol())
     protocol["prediction"] = {**protocol["prediction"], "bound": bound, "path": SEALED}
@@ -43,13 +64,19 @@ def _run(folder: Path, text: str = HONEST) -> str:
         json.dumps(protocol, ensure_ascii=False), encoding="utf-8"
     )
     (folder / "rows.json").write_text(json.dumps([ROWS[1]]), encoding="utf-8")
+    if seal:
+        rules.seal_run(folder)
     return bound
 
 
-def _verdict_file(path: Path, entry: dict[str, Any], *, rounds: dict[str, str]) -> None:
-    lines = [f'[[run]]\nname = "lauf"\nhead = "a280ee8f5"\nseal = "{SEAL}"\n']
+def _verdict_file(
+    path: Path, entry: dict[str, Any], *, rounds: dict[str, str], runs: Path | None
+) -> None:
+    main = _seal_of(path.parent.parent / "lauf")
+    lines = [f'[[run]]\nname = "lauf"\nhead = "a280ee8f5"\nseal = "{main}"\n']
     lines += [
-        f'[[run]]\nkey = "{key}"\nname = "{name}"\nhead = "a280ee8f5"\nseal = "{SEAL}"\n'
+        f'[[run]]\nkey = "{key}"\nname = "{name}"\nhead = "a280ee8f5"\n'
+        f'seal = "{_seal_of(runs / name) if runs is not None else SEAL}"\n'
         for key, name in rounds.items()
     ]
     lines.append("[[verdict]]")
@@ -68,7 +95,7 @@ def _reasons(
     """Die Gründe, aus denen ``report`` das Urteil an V4 abweist — leer, wenn es zählt."""
     state = tmp_path / "state"
     state.mkdir(exist_ok=True)
-    _verdict_file(state / "urteile-d04.toml", entry, rounds=rounds or {})
+    _verdict_file(state / "urteile-d04.toml", entry, rounds=rounds or {}, runs=runs)
     capsys.readouterr()
     write(
         tmp_path / "lauf",
@@ -114,7 +141,10 @@ def test_a_seal_overwritten_after_the_run_is_rejected(
     bound = _run(tmp_path / "lauf")
     (tmp_path / "lauf" / SEALED).write_text('{"prediction": "nachher geschrieben"}', "utf-8")
     reasons = _reasons(tmp_path, capsys, _v4(bound))
-    assert any(rules.SEAL_CHANGED in reason for reason in reasons), reasons
+    assert f"{rules.RUN_FILE_CHANGED}: {SEALED}" in "; ".join(reasons), reasons
+    # Ohne Siegel des Laufs hält die Bindung selbst: Ihr SHA256 weicht ab.
+    unsealed = rules.RunSeals((tmp_path / "lauf",), {})
+    assert rules.sealed_problems(_v4(bound), bound, unsealed.folders) == [rules.SEAL_CHANGED]
 
 
 def test_a_missing_seal_is_rejected(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -122,7 +152,88 @@ def test_a_missing_seal_is_rejected(tmp_path: Path, capsys: pytest.CaptureFixtur
     bound = _run(tmp_path / "lauf")
     (tmp_path / "lauf" / SEALED).unlink()
     reasons = _reasons(tmp_path, capsys, _v4(bound))
-    assert any(rules.SEAL_MISSING in reason for reason in reasons), reasons
+    assert f"{rules.RUN_FILE_CHANGED}: {SEALED}" in "; ".join(reasons), reasons
+
+
+def test_seal_and_binding_rewritten_together_after_the_run_are_rejected(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """RC2-1 F1: Vorhersage und ``prediction.bound`` gemeinsam neu — das Siegel des Laufs hält."""
+    _run(tmp_path / "lauf")
+    said = "Nachher geschrieben, nach dem Bild danach."
+    forged = _forge(tmp_path / "lauf", said)
+    reasons = _reasons(tmp_path, capsys, _v4(forged, said))
+    assert f"{rules.RUN_FILE_CHANGED}: {SEALED}" in "; ".join(reasons), reasons
+    assert f"{rules.RUN_FILE_CHANGED}: cases/1/function.json" in "; ".join(reasons), reasons
+
+
+def test_a_round_rewritten_after_its_run_is_rejected(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """RC2-1 F2: dasselbe über ``v4:`` mit ``[[run]] key="v4"`` und ``--runs``."""
+    store = tmp_path / "ablage"
+    _run(store / "runde")
+    said = "Auch nachher geschrieben."
+    forged = _forge(store / "runde", said)
+    _run(tmp_path / "lauf")
+    reasons = _reasons(
+        tmp_path, capsys, _v4(f"v4:{forged}", said), rounds={"v4": "runde"}, runs=store
+    )
+    assert f"{rules.RUN_FILE_CHANGED}: cases/1/function.json" in "; ".join(reasons), reasons
+
+
+def test_a_run_without_its_seal_carries_no_v4(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ohne Siegeldatei, mit fremdem Siegel, mit Datei außerhalb des Siegels: abgewiesen."""
+    bound = _run(tmp_path / "lauf", seal=False)
+    assert _reasons(tmp_path, capsys, _v4(bound)) == [rules.RUN_UNSEALED]
+    seal = rules.seal_run(tmp_path / "lauf")
+    assert _reasons(tmp_path, capsys, _v4(bound)) == []
+    # Ein Lauf wird einmal versiegelt.
+    with pytest.raises(FileExistsError, match="Handlungsvorschlag"):
+        rules.seal_run(tmp_path / "lauf")
+    # Siegeldatei neu geschrieben, [[run]] nennt die alte: Lauf und Urteile trennen sich.
+    other = rules.RunSeals((tmp_path / "lauf",), {}, f"seal.json {'f' * 64}")
+    assert rules.run_seal_problems(other)[1] == (rules.RUN_SEAL_CHANGED,)
+    # Eine Datei, die nach dem Siegel dazukam, ist nicht versiegelt.
+    added = tmp_path / "lauf" / "cases" / "1" / "v4" / "after.json"
+    added.write_text("{}", encoding="utf-8")
+    reasons = _reasons(tmp_path, capsys, _v4(bound))
+    assert reasons == [f"{rules.RUN_FILE_UNSEALED}: cases/1/v4/after.json"], reasons
+    added.unlink()
+    # Einer bildlosen Kopie dürfen nur Bilder fehlen.
+    assert rules.run_seal_problems(rules.RunSeals((tmp_path / "lauf",), {}, seal))[1] == ()
+
+
+def test_a_copy_without_pictures_keeps_the_seal(tmp_path: Path) -> None:
+    """Bilder darf eine Kopie weglassen, jede andere Datei nicht."""
+    folder = tmp_path / "lauf"
+    _run(folder, seal=False)
+    picture = folder / "cases" / "1" / "01-vorher.png"
+    picture.write_bytes(b"png")
+    seal = rules.seal_run(folder)
+    picture.unlink()
+    assert rules.run_seal_problems(rules.RunSeals((folder,), {}, seal))[1] == ()
+    (folder / "cases" / "1" / "function.json").unlink()
+    found = rules.run_seal_problems(rules.RunSeals((folder,), {}, seal))[1]
+    assert found == (f"{rules.RUN_FILE_CHANGED}: cases/1/function.json",)
+
+
+def test_the_seal_command_prints_the_value_for_the_run_entry(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from tools import file_acceptance
+
+    folder = tmp_path / "lauf"
+    _run(folder, seal=False)
+    capsys.readouterr()
+    assert file_acceptance.main(["seal", "--out", str(folder)]) == 0
+    assert capsys.readouterr().out.strip() == _seal_of(folder)
+    assert file_acceptance.main(["seal", "--out", str(folder)]) == 2
+    assert "Handlungsvorschlag" in capsys.readouterr().err
+    assert file_acceptance.main(["seal", "--out", str(tmp_path / "leer")]) == 2
+    assert "kein Lauf" in capsys.readouterr().err
 
 
 def test_an_invented_round_is_rejected(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
