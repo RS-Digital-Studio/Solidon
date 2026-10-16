@@ -18,16 +18,11 @@ Folger ihm zuvor und das Signal bliebe aus.
 
 from __future__ import annotations
 
-from typing import Final
-
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtWidgets import QLabel
 
 from app.ui.leash import stop_watching_the_dying
-from app.ui.style import WrappedNote
-
-#: Was Qt als „keine Obergrenze“ kennt (``QWIDGETSIZE_MAX``).
-_UNBOUNDED: Final = 16_777_215
+from app.ui.style import UNBOUNDED, WrappedNote
 
 
 def claim_wrapped_height(label: QLabel, width: int) -> None:
@@ -43,7 +38,7 @@ def claim_wrapped_height(label: QLabel, width: int) -> None:
     höher als sein Text; die Höchsthöhe begrenzt den Wunsch auf den Bedarf.
     """
     label.setMinimumHeight(0)
-    label.setMaximumHeight(_UNBOUNDED)
+    label.setMaximumHeight(UNBOUNDED)
     needed = label.heightForWidth(width)
     if needed < 0:
         return

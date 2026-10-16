@@ -121,6 +121,7 @@ from app.ui.style import (
     ROOMY,
     SPACE,
     TIGHT,
+    UNBOUNDED,
     WIDE,
     ContentFitIntent,
     ContentHeight,
@@ -148,9 +149,6 @@ from app.ui.wrapping_button import WrappingButton
 newline = chr(10)
 
 _log = get_logger(__name__)
-
-#: Was Qt als „keine Obergrenze“ für eine Breite kennt (``QWIDGETSIZE_MAX``).
-_UNBOUNDED = 16_777_215
 
 
 def _form_labels(forms: Sequence[QFormLayout]) -> list[QWidget]:
@@ -211,7 +209,7 @@ def align_to_the_front(
         return
     for widget in (*leading, *trailing):
         widget.setMinimumWidth(0)
-        widget.setMaximumWidth(_UNBOUNDED)
+        widget.setMaximumWidth(UNBOUNDED)
     widest = max(widget.sizeHint().width() for widget in leading)
     for widget in leading:
         widget.setMinimumWidth(widest)

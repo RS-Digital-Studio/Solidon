@@ -75,6 +75,9 @@ WIDE = SPACE * 4
 #: markierter Einstieg nimmt dieses Maß ein.
 TARGET_SIZE = 44
 
+#: Was Qt als „keine Obergrenze“ für Breite oder Höhe kennt (``QWIDGETSIZE_MAX``).
+UNBOUNDED: Final = 16_777_215
+
 #: Die vier Stufen, in absteigender Lautstärke.
 LEVELS = ("title", "section", "body", "caption")
 
