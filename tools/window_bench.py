@@ -59,17 +59,10 @@ EVENT_DRAIN_ROUNDS = 20
 def isolate(profile: Path) -> None:
     """Nutzerverzeichnisse ins Messprofil (§38), Schlüsselbund auf die Attrappe (RC-12)."""
     profile.mkdir(parents=True, exist_ok=True)
-    for variable in (
-        "APPDATA",
-        "LOCALAPPDATA",
-        "HOME",
-        "XDG_DATA_HOME",
-        "XDG_CONFIG_HOME",
-        "XDG_CACHE_HOME",
-    ):
-        os.environ[variable] = str(profile)
-    from app.core.paths import isolate_secrets
+    # Die Ordner eines zeichnenden Profils, eine Quelle mit dem Prüfstand (C-1).
+    from app.core.paths import drawing_profile_variables, isolate_secrets
 
+    os.environ.update(dict.fromkeys(drawing_profile_variables(), str(profile)))
     isolate_secrets(os.environ)
 
 

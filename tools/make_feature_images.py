@@ -259,16 +259,10 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="solidon-feature-image-") as directory:
         from app.core.paths import drawing_profile_variables, isolate_secrets
 
-        # ``HOME`` nur unter macOS (RCI-10), wie jeder Fall des Prüfstands.
-        home = (("HOME", "home"),) if "HOME" in drawing_profile_variables() else ()
-        for name, child in (
-            ("APPDATA", "roaming"),
-            ("LOCALAPPDATA", "local"),
-            ("XDG_CONFIG_HOME", "config"),
-            ("XDG_CACHE_HOME", "cache"),
-            *home,
-        ):
-            target = Path(directory) / child
+        # Jeder Nutzerordner eines zeichnenden Profils, je einer für sich
+        # (``HOME`` nur unter macOS); eine Quelle mit dem Prüfstand (C-1).
+        for name in drawing_profile_variables():
+            target = Path(directory) / name.lower()
             target.mkdir()
             os.environ[name] = str(target)
         isolate_secrets(os.environ)
