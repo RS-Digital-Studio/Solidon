@@ -8,16 +8,11 @@ sieht aus wie ein grüner Wächter. Geprüft wird deshalb an einer Attrappe in
 ``tmp_path`` jede Form, an der ein Textverfahren gescheitert ist (Plan 2.5 und
 4: verschattetes Alias, Alias je Funktion, Lazy-Export, ``__getattr__``,
 ``.pyi``, ``type``, ``TYPE_CHECKING``, Konstantenfaltung), und je Regel von W2
-ein roter Fall. Am echten Baum stehen die Bekanntfälle aus Plan 2.2 und die
-Grundmengen mit den Zahlen aus dem Plan.
-
-Die Bekanntfälle am echten Baum gelten, **solange ihre Fixes fehlen** (Plan
-2.2): Wer einen behebt, streicht seinen Fall hier im selben Commit; die
-Meldung des Tests nennt dann das Paket und die Regel von W2, die ihn ab da
-hält. Trägt diese Regel noch ``xfail`` und hält den behobenen Stand sonst kein
-Test ohne Fenster, wird der Fall umgekehrt statt gestrichen, bis sie scharf ist
-(CS-9a); hält ihn ein solcher Test, wird gestrichen (CS-9b,
-``test_spatial_matching.py``).
+ein roter Fall. Am echten Baum stehen die Grundmengen mit den Zahlen aus dem
+Plan. Die Bekanntfälle aus Plan 2.2 (``detect`` in der Auswertung, CS-11;
+``_cost_matrix``, CS-9b; ``configured_spools``, CS-9a) sind behoben, und W2
+(``test_patch_targets.py``) hält jede Regel scharf — ein Bekanntfall hier
+prüfte nur noch, was W2 schon prüft.
 """
 
 from __future__ import annotations
@@ -679,70 +674,6 @@ def test_the_ground_sets_of_the_real_tree_are_not_empty() -> None:
     imports = index.import_count()
     assert len(index.patch_sites()) > LEAST_PATCH_SITES, len(index.patch_sites())
     assert imports > LEAST_IMPORTS, imports
-
-
-def test_known_case_head_copy_of_detect_in_evaluate() -> None:
-    """``scene/evaluate.py`` hält ``detect`` aus ``perceive.features`` als Kopfkopie, und
-    ``test_bore_mouth_resize.py`` patcht das Original (Konzept, CS-11). Paket K behebt es;
-    dann wird dieser Fall gestrichen, W2 c) hält es."""
-    index = _real()
-    copies = [
-        copy
-        for copy in index.head_copies()
-        if copy.holder == "app.core.scene.evaluate" and copy.bound == "detect"
-    ]
-    assert copies, "Kopie von detect in evaluate.py fehlt: K hat CS-11 behoben, Fall streichen"
-    assert ("app.core.perceive.features", "detect") in copies[0].chain
-    assert ("app.core.perceive.features", "detect") in index.patched_names()
-    rules = [f for f in index.patch_findings()["c"] if f.path == "app/core/scene/evaluate.py"]
-    assert any(f.name == "detect" for f in rules)
-
-
-#: Wo das Lager die Spulensuche zur Aufrufzeit liest.
-SPOOL_READER = ("app.ui.filament_inventory", "InventoryView._import")
-
-#: Die zwei Bindungen, über die es sie lesen kann: heute die Kopfkopie in
-#: ``filament_inventory``, nach Paket K (Entscheidung E1) das Original.
-SPOOL_BINDINGS = (
-    ("app.ui.filament_inventory", "configured_spools"),
-    ("app.ui.filament_picker", "configured_spools"),
-)
-
-
-def test_known_case_the_spool_ban_sits_on_the_binding_the_inventory_reads() -> None:
-    """CS-9a, behoben und umgekehrt gehalten: ``test_first_run.py`` verbietet
-    ``configured_spools`` an der Bindung, die das Lager zur Aufrufzeit liest — heute
-    die Kopfkopie in ``filament_inventory``, nach K das Original in ``filament_picker``.
-    Welche es ist, sagt der Index über den Leser ``InventoryView._import``: Der Fall
-    hält die Zusage, nicht die heutige Bindung, und bleibt beim Schnitt von K grün.
-    Solange W2 c) ``xfail`` trägt, hält er das ohne Fenster; ist sie scharf, wird er
-    gestrichen. W2 d) allein genügt nicht: Es sieht, dass jemand die verbotene
-    Bindung liest, nicht, dass es das Lager ist."""
-    index = _real()
-    read = [
-        binding
-        for binding in SPOOL_BINDINGS
-        if any((r.module, r.qualname) == SPOOL_READER for r in index.readers(*binding))
-    ]
-    assert len(read) == 1, f"{'.'.join(SPOOL_READER)} liest {read}, erwartet genau eine Bindung"
-    binding = read[0]
-    (other,) = (candidate for candidate in SPOOL_BINDINGS if candidate != binding)
-    bans = [
-        site
-        for site in index.patch_sites()
-        if site.path == "tests/test_first_run.py"
-        and any(target.name == "configured_spools" for target in site.targets)
-    ]
-    assert bans, "kein Patch auf configured_spools in test_first_run.py"
-    for site in bans:
-        targets = {(target.module, target.name) for target in site.targets}
-        assert targets == {binding}, f"Zeile {site.line} verbietet an {targets}"
-    assert other not in index.patched_names(), (
-        f"{'.'.join(other)} gepatcht, das Lager liest es nicht"
-    )
-    found = index.patch_findings()
-    named = [f for rule in "cd" for f in found[rule] if f.name == "configured_spools"]
-    assert not named, named
 
 
 def _waiting_tree(tmp_path: Path) -> Path:
