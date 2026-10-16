@@ -27,6 +27,7 @@ from typing import IO
 
 import pytest
 
+from app.core.process import start_bounded, terminate_process_tree
 from tests.shell_helpers import bash_executable
 
 SCRIPT = Path(__file__).parent.parent / ".claude" / "scripts" / "suite-getrennt.sh"
@@ -78,7 +79,9 @@ def run_while_moving(
     Ausgabe geht in Dateien außerhalb von ``cwd``, gelesen wie ``text=True``.
     """
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
-        child = subprocess.Popen(command, stdout=out, stderr=err, env=env, cwd=cwd)
+        # Eine Prozessgrenze um den ganzen Baum: Unter Windows ist die bash von Git ein
+        # Starter mit der Shell als Kind, und ein Abbruch trifft beide (CS-35).
+        child = start_bounded(command, stdout=out, stderr=err, env=env, cwd=cwd)
         seen: tuple[object, ...] | None = None
         begun = moved = time.monotonic()
         try:
@@ -102,8 +105,7 @@ def run_while_moving(
                 )
         finally:
             if child.poll() is None:
-                child.kill()
-                child.wait()
+                terminate_process_tree(child)
 
         def text(stream: IO[bytes]) -> str:
             stream.seek(0)
@@ -125,19 +127,37 @@ def test_a_run_that_neither_calls_nor_writes_is_stopped_as_hanging(
     with pytest.raises(AssertionError, match="hängt"):
         run_while_moving([BASH or "bash", "-c", "sleep 30"], cwd=tmp_path, calls=tmp_path / "c")
     # Die Schleife allein: Stille darf hier unter Last nicht zuerst anschlagen.
+    # Sie endet nach etwa einer Minute von selbst: Ein Nachkomme, den der Abbruch
+    # verfehlt, wird nicht zur ewigen Schreibschleife (CS-35).
     monkeypatch.setattr(sys.modules[__name__], "STALL_SECONDS", 600.0)
     monkeypatch.setattr(sys.modules[__name__], "MOST_CALLS", 5)
     calls = tmp_path / "aufrufe.txt"
-    endless = f'while true; do echo x >> "{calls.as_posix()}"; done'
+    endless = f'for i in $(seq 1200); do echo x >> "{calls.as_posix()}"; sleep 0.05; done'
     with pytest.raises(AssertionError, match="Schleife"):
         run_while_moving([BASH or "bash", "-c", endless], cwd=tmp_path, calls=calls)
+    assert_nothing_writes(calls)
     # Ausgabe ohne Aufruf und ohne Ende: Nur die Gesamtgrenze hält sie an. Die
     # Schleife endet nach 20 s von selbst, damit eine fehlende Grenze rot statt
-    # ewig wird.
+    # ewig wird; ihr Herzschlag liegt außerhalb von ``cwd``.
     monkeypatch.setattr(sys.modules[__name__], "MOST_SECONDS", 1.0)
-    talking = "for i in $(seq 200); do echo x; sleep 0.1; done"
+    beat = tmp_path.parent / f"{tmp_path.name}-herzschlag.txt"
+    talking = f'for i in $(seq 200); do echo x; echo x >> "{beat.as_posix()}"; sleep 0.1; done'
     with pytest.raises(AssertionError, match="Gesamtgrenze"):
         run_while_moving([BASH or "bash", "-c", talking], cwd=tmp_path, calls=tmp_path / "keine")
+    assert_nothing_writes(beat)
+
+
+def assert_nothing_writes(trace: Path) -> None:
+    """Nach dem Abbruch lebt kein Nachkomme mehr, der in ``trace`` schreibt (CS-35).
+
+    ``child.kill()`` traf unter Windows nur den Starter ``Git\\bin\\bash.exe``; die
+    Shell ``usr\\bin\\bash.exe`` darunter schrieb weiter, je Lauf eine ewige
+    Schleife mit 200–250 MB. Gemessen wird, ob die Datei noch wächst.
+    """
+    before = trace.stat().st_size if trace.is_file() else 0
+    time.sleep(1.5)
+    after = trace.stat().st_size if trace.is_file() else 0
+    assert after == before, f"{trace.name} wächst nach dem Abbruch weiter: {before} → {after} Byte"
 
 
 def test_the_script_lies_where_the_house_rules_point() -> None:
@@ -579,3 +599,20 @@ def test_the_final_exit_does_not_wrap_after_256_failures(tmp_path: Path, failure
     )
     result = run_while_moving([BASH or "bash", str(probe)], cwd=tmp_path, calls=tmp_path / "keine")
     assert result.returncode == (0 if failures == 0 else 1)
+
+
+def test_a_bounded_run_ends_the_whole_tree_at_its_timeout(tmp_path: Path) -> None:
+    """``process_helpers.run_bounded``: Die Zeitgrenze trifft Starter und Shell (CS-35).
+
+    Dieselbe Falle wie ``run_while_moving`` hatte jeder Lauf über die bash von Git
+    mit ``subprocess.run(…, timeout=…)``; die Fälle dafür nehmen ``run_bounded``.
+    """
+    from tests.process_helpers import run_bounded
+
+    trace = tmp_path / "spur.txt"
+    loop = f'for i in $(seq 1200); do echo x >> "{trace.as_posix()}"; sleep 0.05; done'
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_bounded([BASH or "bash", "-c", loop], timeout=1.0, capture_output=True)
+    assert_nothing_writes(trace)
+    done = run_bounded([BASH or "bash", "-c", "echo fertig"], timeout=60, capture_output=True)
+    assert done.returncode == 0 and done.stdout.strip() == b"fertig"

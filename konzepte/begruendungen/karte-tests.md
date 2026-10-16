@@ -378,6 +378,13 @@ Rückfall neben Git, unter `ProgramFiles` und in der Installation je Nutzer. Es
 lädt nur die Standardbibliothek. Dass keine Testdatei selbst per `which` sucht,
 hält `test_packaging_platform.py::test_only_the_shell_helpers_look_for_bash_or_sh`.
 
+`process_helpers.py` trägt `run_bounded`: wie `subprocess.run`, aber die
+Zeitgrenze beendet den ganzen Prozessbaum (`process.start_bounded`,
+`terminate_process_tree`). Wer die bash aus Git mit Zeitgrenze fährt, nimmt es
+— der Starter `Git\bin\bash.exe` hat die Shell als Kind, und `kill()` ließ sie
+weiterlaufen; mit `capture_output` wartete `subprocess.run` danach bis zu ihrem
+Ende (CS-35).
+
 `guide_window.py` gehört allein `test_guide_targets.py`: die Fixture
 `prepared_window` für den Wortschatz des Funktionsdurchgangs (Quader mit
 Bohrung unter dem Bett, im Kundenthema) und `settle`, das nach festen Runden
