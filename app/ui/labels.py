@@ -2990,20 +2990,14 @@ def edge_label(entry: Any) -> str:
     """
     # Die Lage fragt der Kern (``edges.edge_lie_of``): An einem Ring ist die
     # Richtung null, und ``flat`` galt an jedem — die Mündung einer quer
-    # liegenden Bohrung hieß „Waagerecht“ (RM-269). Erst hier geladen: Die
-    # Kantenrechnung zieht die Boolesche Kette nach, und ``labels`` lädt früh.
-    from app.core.geom.edges import edge_lie_of
+    # liegenden Bohrung hieß „Waagerecht“ (RM-269). Wörter und Ort stehen in
+    # ``unlisted_choice``, damit eine Kante aus ihrem Schlüssel (FD-189)
+    # genauso heißt. Erst hier geladen: Die Kantenrechnung zieht die Boolesche
+    # Kette nach, und ``labels`` lädt früh.
+    from app.ui.unlisted_choice import edge_lie_word, edge_place
 
-    shown = edge_lie_of(entry)
-    if shown == "upright":
-        lie = tr("Senkrecht")
-    elif shown == "flat":
-        lie = tr("Waagerecht")
-    else:
-        lie = tr("Schräg")
-    x, y, _z = entry.middle
-    place = f"x {length(x, with_unit=False)}, y {length(y, with_unit=False)}"
-    return f"{lie} · {length(float(entry.length))} · {place}"
+    lie = edge_lie_word(entry)
+    return f"{lie} · {length(float(entry.length))} · {edge_place(entry.middle)}"
 
 
 def local_timestamp(value: str) -> str:

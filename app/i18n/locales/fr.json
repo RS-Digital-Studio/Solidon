@@ -8490,6 +8490,8 @@
   "{name} · Löcher": "{name} · Trous",
   "{name} · Stifte": "{name} · Goupilles",
   "{name} · Stifte und Löcher": "{name} · Goupilles et trous",
+  "{name} · nicht im Projekt": "{name} · absent du projet",
+  "{name} · passt hier nicht": "{name} · ne convient pas ici",
   "{name} · {bound}: {before} → {after}": "{name} · {bound} : {before} → {after}",
   "{name} · {count} Dreiecke": "{name} · {count} triangles",
   "{name} · {role}": "{name} · {role}",

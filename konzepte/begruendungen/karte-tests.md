@@ -229,7 +229,8 @@ verlangt je Eingabefeld einen Namen, keinen doppelt;
 Sprache beim Öffnen und nach dem Aufklappen;
 `test_grouped_count_field.py` Dreiergruppen im Ganzzahlfeld;
 `test_operation_dialog_change.py` den Änderungsweg (*Übernehmen*, grau bis zur
-ersten Änderung). Ohne Fenster: `test_hole_compensation_words.py` (der Name des
+ersten Änderung); `test_unlisted_choices.py` Namen statt Kennungen für Werte,
+die eine Liste nicht führt. Ohne Fenster: `test_hole_compensation_words.py` (der Name des
 Ausgleichs an jeder Bohrung, in jeder Sprache). `test_calibration_units.py`
 prüft *Material kalibrieren* in Zoll. `test_wrapped_captions.py` verlangt jede
 Zeile jeder umgebrochenen Beschriftung bei Grund- und großer Schrift,

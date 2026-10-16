@@ -81,6 +81,7 @@ scrive in `website/version.json`.
 - Se un campo obbligatorio come il testo di *Scritta come corpo* è vuoto, il campo dice cosa va inserito e il pulsante attende. La versione 0.6.0 mostrava lì un errore all'apertura.
 - Chi modifica un passo conferma con *Applica*. Il pulsante resta grigio finché qualcosa non cambia e indica il campo da cambiare.
 - La finestra *Calibra il materiale* mostra gioco, interferenza, compensazione dei fori, piede d'elefante e parete nell'unità scelta, anche in pollici, e conserva la terza decimale.
+- Un campo di scelta chiama per nome un valore assente dal suo elenco, come «Faccia 1 · qui non è adatto», e uno spigolo per orientamento e posizione. La versione 0.6.0 mostrava un codice interno.
 
 ### Stampare e passare allo slicer
 

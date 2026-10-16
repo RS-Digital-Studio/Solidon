@@ -106,6 +106,7 @@ from app.ui.style import (
     make_primary,
     set_level,
 )
+from app.ui.unlisted_choice import UnlistedKind, unlisted_text
 
 if TYPE_CHECKING:
     from app.core.types import SceneObject
@@ -1252,6 +1253,7 @@ class ImageSourceField(QWidget):
         start: str = "",
         parent: QWidget | None = None,
         button_text: str | None = None,
+        unlisted: UnlistedKind = "image",
     ) -> None:
         super().__init__(parent)
         self._pending = False
@@ -1262,8 +1264,9 @@ class ImageSourceField(QWidget):
             index = self.combo.findData(str(start))
             if index < 0:
                 # Ein Wert, den die Liste nicht kennt, wird gezeigt statt
-                # ersetzt — wie beim Quellenwähler darunter.
-                self.combo.addItem(str(start), str(start))
+                # ersetzt — wie beim Quellenwähler darunter, mit Namen statt
+                # Kennung (FD-187).
+                self.combo.addItem(unlisted_text(str(start), unlisted), str(start))
                 index = self.combo.count() - 1
             self.combo.setCurrentIndex(index)
         self.button = QPushButton(button_text or tr("Bild wählen …"), self)
@@ -1610,7 +1613,10 @@ class EdgeSetField(QWidget):
         # verschwände die Wahl eines gespeicherten Schritts beim Öffnen, ohne
         # dass jemand sie zurückgenommen hätte (§15.4).
         for identifier in dict.fromkeys((*choices, *chosen)):
-            item = QListWidgetItem(choices.get(identifier, identifier), self.list)
+            # Eine Kante ohne Eintrag (an einem Netz nur die markierten) heißt
+            # nach Lage und Ort, nicht nach ihrem Schlüssel (FD-189).
+            shown = choices.get(identifier) or unlisted_text(identifier, "edges")
+            item = QListWidgetItem(shown, self.list)
             item.setData(Qt.ItemDataRole.UserRole, identifier)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(
@@ -4109,7 +4115,9 @@ class OperationDialog(QDialog):
             if start:
                 index = combo.findData(str(start))
                 if index < 0:
-                    combo.addItem(str(start), str(start))
+                    # Der abgelehnte Wert nach *Anderes Merkmal wählen* steht
+                    # mit Namen da, nicht als „face_1“ (FD-187).
+                    combo.addItem(unlisted_text(str(start), "feature"), str(start))
                     index = combo.count() - 1
                 combo.setCurrentIndex(index)
             return combo
@@ -4143,6 +4151,7 @@ class OperationDialog(QDialog):
                 str(start or ""),
                 self,
                 button_text=tr("Datei wählen …"),
+                unlisted="source",
             )
         if entry.kind in ("object", "source"):
             # Der Name steht da, die Kennung reist mit. Ein frei beschreibbares
@@ -4158,8 +4167,9 @@ class OperationDialog(QDialog):
                     # Ein Wert, den die Liste nicht kennt, wird gezeigt statt
                     # ersetzt: eine Datei aus einem Projekt, dessen Quellen
                     # hier gerade nicht vorliegen, darf nicht stillschweigend
-                    # zu einer anderen werden.
-                    combo.addItem(str(start), str(start))
+                    # zu einer anderen werden. Mit Namen statt Kennung (FD-187).
+                    unlisted: UnlistedKind = "source" if entry.kind == "source" else "object"
+                    combo.addItem(unlisted_text(str(start), unlisted), str(start))
                     index = combo.count() - 1
                 combo.setCurrentIndex(index)
             return combo

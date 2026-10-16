@@ -177,6 +177,10 @@ Rückseite; eine ausdrückliche Feldübergabe öffnet sie vor dem Fokuswechsel.
   (`FeatureList.fit_now`) — sonst bliebe über den Knöpfen ein Streifen, den
   das passive Nachmessen nie zurückgibt. Wächter für jede Operation in jeder
   Sprache: `tests/test_operation_dialog_flap_height.py`.
+- **Ein Wert, den die Liste nicht führt, steht mit Namen da** (FD-187, FD-189):
+  Merkmal, Objekt, Datei, Bild und Kante gehen über
+  `unlisted_choice.unlisted_text` — „Fläche 1 · passt hier nicht“, eine Kante
+  mit Lage und Ort wie `labels.edge_label` —, nie als Kennung; der Wert bleibt.
 - **Jede Zeile trägt ihren Namen** (FD-94): `name_rows` nach jedem Aufbau, das
   Ausdrucksfeld heißt „{Zeile} · Ausdruck“; Wächter
   `tests/test_operation_dialog_names.py` öffnet jede Operation.

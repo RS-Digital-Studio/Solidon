@@ -82,6 +82,7 @@ dans `website/version.json`.
 - Si un champ obligatoire comme le texte de *Inscription comme corps* est vide, le champ indique ce qu'il attend et le bouton patiente. La version 0.6.0 y affichait une erreur à l'ouverture.
 - Pour modifier une étape, on confirme avec *Appliquer*. Le bouton reste grisé tant que rien n'a changé et nomme le champ à modifier.
 - Le dialogue *Calibrer le matériau* affiche jeu, serrage, compensation des trous, patte d'éléphant et paroi dans l'unité choisie, pouces compris, et garde la troisième décimale.
+- Un champ de sélection nomme une valeur absente de sa liste, comme « Face 1 · ne convient pas ici », et une arête par orientation et position. La version 0.6.0 affichait un code interne.
 
 ### Imprimer et transmettre au slicer
 

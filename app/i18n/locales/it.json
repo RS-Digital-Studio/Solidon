@@ -8490,6 +8490,8 @@
   "{name} · Löcher": "{name} · Fori",
   "{name} · Stifte": "{name} · Spine",
   "{name} · Stifte und Löcher": "{name} · Spine e fori",
+  "{name} · nicht im Projekt": "{name} · non è nel progetto",
+  "{name} · passt hier nicht": "{name} · qui non è adatto",
   "{name} · {bound}: {before} → {after}": "{name} · {bound}: {before} → {after}",
   "{name} · {count} Dreiecke": "{name} · {count} triangoli",
   "{name} · {role}": "{name} · {role}",

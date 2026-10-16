@@ -81,6 +81,7 @@ it into `website/version.json`.
 - If a required field such as the text of *Lettering as a body* is empty, the field says what goes in and the button waits. Version 0.6.0 showed an error there on opening.
 - When you change a step, you confirm with *Apply*. The button stays grey until something has changed and names the field to change.
 - The *Calibrate material* dialog shows clearance, interference, hole compensation, elephant foot and wall in the chosen unit, inches included, and keeps the third decimal place.
+- A selection field names a value its list does not offer, such as “Face 1 · not suitable here”, and an edge by direction and position. Version 0.6.0 showed an internal identifier.
 
 ### Printing and slicer handover
 

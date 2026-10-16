@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QCheckBox, QLabel, QListWidgetItem, QVBoxLayout, Q
 from app.i18n import tr
 from app.ui.feature_list import FeatureList
 from app.ui.style import TIGHT, set_level
+from app.ui.unlisted_choice import unlisted_text
 
 
 class FeatureSetField(QWidget):
@@ -59,7 +60,9 @@ class FeatureSetField(QWidget):
         self.list = FeatureList(self)
         self.list.setAccessibleName(name or tr("Flächen auswählen"))
         for identifier in dict.fromkeys((*choices, *selected)):
-            item = QListWidgetItem(choices.get(identifier, identifier), self.list)
+            # Ein Wert ohne Eintrag heißt wie die Einträge, nicht „fillet_1“ (FD-187).
+            shown = choices.get(identifier) or unlisted_text(identifier, "feature")
+            item = QListWidgetItem(shown, self.list)
             item.setData(Qt.ItemDataRole.UserRole, identifier)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(
@@ -115,7 +118,7 @@ class FeatureSetField(QWidget):
                 None,
             )
             if item is None:
-                item = QListWidgetItem(label or identifier, self.list)
+                item = QListWidgetItem(label or unlisted_text(identifier, "feature"), self.list)
                 item.setData(Qt.ItemDataRole.UserRole, identifier)
                 item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             if self.whole is not None:

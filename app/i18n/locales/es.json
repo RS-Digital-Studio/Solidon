@@ -8490,6 +8490,8 @@
   "{name} · Löcher": "{name} · Agujeros",
   "{name} · Stifte": "{name} · Pasadores",
   "{name} · Stifte und Löcher": "{name} · Pasadores y agujeros",
+  "{name} · nicht im Projekt": "{name} · no está en el proyecto",
+  "{name} · passt hier nicht": "{name} · no sirve aquí",
   "{name} · {bound}: {before} → {after}": "{name} · {bound}: {before} → {after}",
   "{name} · {count} Dreiecke": "{name} · {count} triángulos",
   "{name} · {role}": "{name} · {role}",

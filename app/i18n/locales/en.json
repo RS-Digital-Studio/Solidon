@@ -8490,6 +8490,8 @@
   "{name} · Löcher": "{name} · Holes",
   "{name} · Stifte": "{name} · Pins",
   "{name} · Stifte und Löcher": "{name} · Pins and holes",
+  "{name} · nicht im Projekt": "{name} · not in the project",
+  "{name} · passt hier nicht": "{name} · not suitable here",
   "{name} · {bound}: {before} → {after}": "{name} · {bound}: {before} → {after}",
   "{name} · {count} Dreiecke": "{name} · {count} triangles",
   "{name} · {role}": "{name} · {role}",

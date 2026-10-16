@@ -82,6 +82,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un campo obligatorio como el texto de *Rótulo como cuerpo* está vacío, el campo dice qué va dentro y el botón espera. La versión 0.6.0 mostraba ahí un error al abrir.
 - Quien cambia un paso confirma con *Aplicar*. El botón sigue gris hasta que algo cambia y nombra el campo que hay que cambiar.
 - El diálogo *Calibrar material* muestra holgura, apriete, compensación de agujeros, pie de elefante y pared en la unidad elegida, también en pulgadas, y conserva el tercer decimal.
+- Un campo de selección nombra un valor que su lista no ofrece, como «Cara 1 · no sirve aquí», y una arista por orientación y posición. La versión 0.6.0 mostraba un código interno.
 
 ### Imprimir y entregar al slicer
 
