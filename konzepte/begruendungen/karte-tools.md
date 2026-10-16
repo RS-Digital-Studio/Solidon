@@ -362,6 +362,21 @@ baut und prüft den Szenenkatalog `tests/data/function_scenes.toml`. Beide
 importieren kein anderes `function_*`-Modul; so bleibt die Liste ohne Kreis mit den
 Urteilsmodulen, die aus ihr importieren.
 
+Werkzeug für den Schlusslauf am echten Fenster (Plan Schluss, Entscheidungen
+des Koordinators): Die Sätze `schrift` (14 und 18 pt, gesetzt vor dem Fenster)
+und `schriftwechsel` (9 → 14 → 9 pt, schmal und groß im Wechsel) stellen die
+Inhaltsschrift über die Schrift der Anwendung und ihren Stilweg her
+(`function_fonts.py`) — die Anwendung hat keine Schriftgröße im Profil, sie
+folgt der des Systems. `skalierung` kennt 125 %. Eine Spezifikation nennt mit
+`drag` den Griff, den erst ihre Handlung zeigt; `phase_drag` nimmt den Zug
+gehalten auf (`05-zug-gehalten`). Der Hauptweg nimmt die Kurzhilfe am grauen
+*Übernehmen* auf (`function_tooltips.grey_apply_step`) und die Tastenkette ab
+der Reiterleiste (`function_capture.bar_chain`, `tab_from_bar`); der Fehlfall
+geht den Weg einer Meldung mit mehreren genannten Knöpfen zu Ende
+(`function_way.py`, `messages[].way`). `run --total` und `--binding` halten
+Gesamtfrist und Siegel vor jedem Fall (`acceptance_guard.py`), die Tabelle des
+Berichts steht in `acceptance_summary.py`.
+
 ## Erzeugen
 
 *HEAD-Fassung, früher unter „Die Familien“.*
