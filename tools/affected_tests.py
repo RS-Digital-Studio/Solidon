@@ -184,7 +184,7 @@ def imports_of(tree: ast.Module, name: str, *, initializer: bool) -> set[str]:
 
 
 #: Woran ein Modul einen verzögerten Import tragen kann.
-_LAZY_WORDS = re.compile(r"\bimport_module\s*\(|\binstall\s*\(")
+_LAZY_WORDS = re.compile(r"\bimport_module\s*\(|\binstall\(\s*__name__")
 
 
 def lazy_imports(
