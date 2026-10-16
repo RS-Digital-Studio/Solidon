@@ -6467,6 +6467,9 @@ def test_a_too_fine_refinement_offers_the_length_that_goes_inside_the_dialog(
     }
     take = buttons.get(str(tr("Die kleinste Kantenlänge nehmen, die noch geht.")))
     assert take is not None, list(buttons)
+    # Der Weg steht als Knopf und nicht noch einmal als Satz darüber (RB2-2).
+    said = dialog._refusal.text().splitlines()
+    assert not [label for label in buttons if label in said], said
     take.click()
     QTest.qWait(350)
     assert window.session.wait_for_idle()

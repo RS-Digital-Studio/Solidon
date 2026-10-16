@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from PySide6.QtWidgets import QApplication
+
 from app.core.errors import (
     CANCEL,
     CHANGE_FEATURE,
@@ -21,7 +23,12 @@ from app.core.errors import (
     AppError,
     UserError,
 )
+from app.core.types import Action
 from app.ui.dialogs import offered_actions, problem_text, unhandled_advice
+
+#: Der Weg der Vorabzählung (``mesh_ops._too_fine``): steht in ``NEEDS_OP``,
+#: der Operationsdialog löst ihn trotzdem ohne Schritt ein.
+REACHABLE = Action(id="use_reachable", label="Die kleinste Kantenlänge nehmen, die noch geht.")
 
 
 def _nothing(_error: AppError) -> None:
@@ -69,6 +76,44 @@ def test_with_a_step_the_way_is_a_button_and_no_sentence() -> None:
     error = UserError(detail="nein", suggestions=(CHANGE_FEATURE, CANCEL), op_id=4)
     assert offered_actions(error, HANDLERS) == [CHANGE_FEATURE]
     assert unhandled_advice(error, HANDLERS) == []
+
+
+def test_what_stands_as_a_button_is_left_out_of_the_advice() -> None:
+    """``left_out`` nimmt die Wege, die der Ort selbst als Knopf zeigt (RB2-2)."""
+    error = UserError(detail="zu fein", suggestions=(REACHABLE, CHANGE_FEATURE, CANCEL))
+    local = {**HANDLERS, REACHABLE.id: _nothing}
+    assert str(REACHABLE.label) in problem_text(error, local)
+    text = problem_text(error, local, left_out={REACHABLE.id})
+    assert str(REACHABLE.label) not in text
+    assert "Anderes Merkmal wählen" in text, "was kein Knopf ist, bleibt Rat"
+
+
+def test_the_notice_shows_a_way_without_a_step_once_as_its_button(qt_app: QApplication) -> None:
+    """Im Operationsdialog ist ein örtlicher Weg ohne Schritt ein Knopf, kein Satz (RB2-2).
+
+    Die Vorabzählung von *Kanten verfeinern* sagt ohne Schrittkennung ab
+    (RESTVERLAUF-04); der Dialog hat für *Die kleinste Kantenlänge nehmen*
+    einen eigenen Handler. ``show_error`` zeigte den Weg ohne Schritt als
+    Satz (RB-3), ``ErrorNotice`` als Knopf — beides zugleich stand doppelt da.
+    """
+    from PySide6.QtWidgets import QPushButton
+
+    from app.ui.dialogs import ErrorNotice
+
+    notice = ErrorNotice()
+    try:
+        error = UserError(detail="zu fein", suggestions=(REACHABLE, CANCEL))
+        assert error.op_id is None
+        notice.set_error(error, {REACHABLE.id: _nothing})
+        buttons = [button.text() for button in notice.findChildren(QPushButton)]
+        assert buttons == [str(REACHABLE.label)]
+        assert str(REACHABLE.label) not in notice.text().splitlines()
+        # Ohne örtlichen Handler bleibt der Weg Rat (RB-3).
+        notice.set_error(UserError(detail="kegelig", suggestions=(CHANGE_FEATURE, CANCEL)), {})
+        assert "Anderes Merkmal wählen" in notice.text().splitlines()
+    finally:
+        notice.deleteLater()
+        qt_app.processEvents()
 
 
 def test_other_objects_without_a_step_is_advice_not_a_dead_button() -> None:

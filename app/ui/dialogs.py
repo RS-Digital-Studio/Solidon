@@ -8,7 +8,7 @@ nie in den Dialog.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -3244,7 +3244,9 @@ def offered_actions(
 
 
 def unhandled_advice(
-    error: AppError, handlers: Mapping[str, Callable[[AppError], None]]
+    error: AppError,
+    handlers: Mapping[str, Callable[[AppError], None]],
+    left_out: Collection[str] = (),
 ) -> list[str]:
     """Die Vorschläge ohne Handler — als Sätze zum Lesen statt als Knopf.
 
@@ -3272,11 +3274,17 @@ def unhandled_advice(
     vor jedem Schritt — verlor *Anderes Merkmal wählen* als Knopf
     (:data:`NEEDS_OP`) und übersprang es als Satz, weil es einen Handler gibt.
     Der Dialog endete dann mit *Schließen* und ohne Weg (Regel 17).
+
+    **Als Rat zählt nur, was nicht als Knopf steht** (``left_out``, RB2-2):
+    Der Hinweis im Operationsdialog löst einen Weg ohne Schritt über seinen
+    eigenen Handler ein (*Die kleinste Kantenlänge nehmen*) und nennt seine
+    Knöpfe hier, sonst stünde der Satz über seinem Knopf.
     """
     return [
         str(action.label)
         for action in error.suggestions
         if action.id != CANCEL.id
+        and action.id not in left_out
         and (action.id not in handlers or (action.id in NEEDS_OP and error.op_id is None))
     ]
 
@@ -3334,7 +3342,9 @@ ADDRESS_VALUES: Final = frozenset(
 
 
 def problem_text(
-    problem: object, handlers: Mapping[str, Callable[[AppError], None]] | None = None
+    problem: object,
+    handlers: Mapping[str, Callable[[AppError], None]] | None = None,
+    left_out: Collection[str] = (),
 ) -> str:
     """Ein eingebetteter Fehler bewahrt Angaben und nicht ausführbare Vorschläge."""
     if not isinstance(problem, AppError):
@@ -3345,7 +3355,8 @@ def problem_text(
     head = [str(problem.title)]
     if problem.detail:
         head.append(str(problem.detail))
-    return "\n".join([*head, *spoken_values(problem), *unhandled_advice(problem, handlers or {})])
+    advice = unhandled_advice(problem, handlers or {}, left_out)
+    return "\n".join([*head, *spoken_values(problem), *advice])
 
 
 class ErrorNotice(QWidget):
@@ -3404,9 +3415,10 @@ class ErrorNotice(QWidget):
             if name in inherited
         }
         known.update(handlers or {})
-        self.setText(problem_text(problem, known))
         actions = [action for action in problem.suggestions if action.id in known]
         actions = actions or offered_actions(problem, known)
+        # Was hier Knopf ist, steht nicht noch einmal als Satz (RB2-2).
+        self.setText(problem_text(problem, known, {action.id for action in actions}))
         if not actions:
             return
         # Der Fehlerrahmen kann seinen Qt-Besitzer halten; gespeichert werden
