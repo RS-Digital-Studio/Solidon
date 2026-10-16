@@ -101,6 +101,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un campo obligatorio como el texto de *Rótulo como cuerpo* está vacío, el campo dice qué va dentro y el botón espera. La versión 0.6.0 mostraba ahí un error al abrir.
 - Quien cambia un paso confirma con *Aplicar*. El botón sigue gris hasta que algo cambia y nombra el campo que hay que cambiar.
 - El diálogo *Calibrar material* muestra holgura, apriete, compensación de agujeros, pie de elefante y pared en la unidad elegida, también en pulgadas, y conserva el tercer decimal.
+- Las explicaciones de las tarjetas ocupan solo las líneas de su texto, también en una tarjeta ancha. La versión 0.6.0 dejaba líneas vacías en algunos idiomas, como bajo dos caras seleccionadas.
 
 ### Imprimir y entregar al slicer
 

@@ -125,6 +125,7 @@ Nutzen da und sonst nichts.
 - Ist ein Pflichtfeld wie der Text von *Schriftzug als Körper* leer, sagt das Feld, was hineingehört, und der Knopf wartet. Version 0.6.0 zeigte dort beim Öffnen einen Fehler.
 - Wer einen Schritt ändert, bestätigt mit *Übernehmen*. Der Knopf bleibt grau, bis sich etwas geändert hat, und nennt das Feld dafür.
 - Der Dialog *Material kalibrieren* zeigt Spiel, Übermaß, Lochkorrektur, Elefantenfuß und Wand in der gewählten Einheit, auch in Zoll, und behält die dritte Nachkommastelle.
+- Erklärungen in den Karten sind so hoch wie ihr Text, auch in einer breiten Karte. In Version 0.6.0 standen dort je nach Sprache leere Zeilen, etwa unter zwei gewählten Flächen.
 
 ### Drucken und Übergabe an den Slicer
 

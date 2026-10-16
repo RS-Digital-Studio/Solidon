@@ -100,6 +100,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um campo obrigatório como o texto de *Inscrição como corpo* estiver vazio, o campo diz o que lá vai e o botão espera. A versão 0.6.0 mostrava ali um erro ao abrir.
 - Quem altera um passo confirma com *Aplicar*. O botão fica cinzento até algo mudar e indica o campo a alterar.
 - O diálogo *Calibrar material* mostra folga, interferência, compensação de furos, pé de elefante e parede na unidade escolhida, também em polegadas, e mantém a 3.ª casa decimal.
+- As explicações nos painéis ocupam só as linhas de que o texto precisa, também num painel largo. Na versão 0.6.0 ficavam linhas vazias em algumas línguas, por exemplo sob duas faces selecionadas.
 
 ### Imprimir e entregar ao slicer
 

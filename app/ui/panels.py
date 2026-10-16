@@ -262,6 +262,7 @@ from app.ui.style import (
 )
 from app.ui.tab_signal import count_phrases
 from app.ui.theme import THEMES, UNDONE_COLOUR, current_theme
+from app.ui.wrapped_height import follow_wrapped_height
 
 _log = get_logger(__name__)
 
@@ -8203,11 +8204,15 @@ def fit_wrapped(label: QLabel) -> None:
     Ein ``QLabel`` mit Zeilenumbruch meldet seine Höhe über
     ``heightForWidth``, und diese Kette reißt in einem Layout ohne
     Streckfaktor: der Satz „Noch keine Parameter …" bekam siebzehn Pixel und
-    war nach anderthalb Zeilen abgeschnitten. Die Breite steht fest — die
-    linke Spalte ist so breit, wie das Überlagerungsschema sie macht.
+    war nach anderthalb Zeilen abgeschnitten.
+
+    **Gemessen an der Breite, die der Satz hat**, und neu bei jeder anderen
+    Breite, jedem neuen Text und jeder Schrift (FD-133): Die rechte Karte ist
+    breiter als die Grundbreite der linken Spalte, und ein Satz, der dort in
+    eine Zeile passt, behielt die zweite als Leerraum. Die Grundbreite gilt
+    nur, bis ein Layout ihm eine Breite gibt.
     """
-    inner = LEFT_WIDTH - 2 * NORMAL
-    label.setMinimumHeight(label.heightForWidth(inner))
+    follow_wrapped_height(label, LEFT_WIDTH - 2 * NORMAL)
 
 
 def view_chrome(view: QAbstractItemView) -> int:
