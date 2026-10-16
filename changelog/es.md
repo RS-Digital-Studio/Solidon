@@ -68,7 +68,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La tarjeta de selección sigue contenido y letra, conservando texto y columnas. Las pestañas separadas mantienen su tamaño. Si se ofrece editar una característica, «Aplicar» es la acción principal.
 - Los elementos correspondientes piden par y tamaño y explican ambas mitades. Forma y ajuste están en «Más ajustes». La altura inicial del diálogo se adapta al contenido.
 - Tras rechazarse una vista previa, los textos de la siguiente siguen siendo totalmente legibles.
-- En equipos sin tarjeta gráfica propia, Solidon termina ahora de forma fiable al cerrarlo. En la versión 0.6.0 el programa podía seguir ejecutándose sin verse.
+- Sin controlador gráfico, por ejemplo en una máquina virtual, Solidon termina ahora de forma fiable al cerrarlo. En la versión 0.6.0 el programa podía seguir ejecutándose allí sin verse.
 
 ### Imprimir y entregar al slicer
 

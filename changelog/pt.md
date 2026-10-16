@@ -67,7 +67,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O painel de seleção segue conteúdo e letra, mantendo texto e colunas. Os separadores destacados conservam o tamanho. Se houver uma alteração proposta, «Aplicar» é a ação principal.
 - Os elementos correspondentes pedem par e tamanho e explicam ambas as metades. Forma e ajuste ficam em «Mais definições». A altura inicial do diálogo adapta-se ao conteúdo.
 - Após a recusa de uma pré-visualização, os textos da seguinte continuam totalmente legíveis.
-- Em computadores sem placa gráfica dedicada, o Solidon termina agora de forma fiável ao fechar. Na versão 0.6.0 o programa podia continuar a correr de forma invisível.
+- Sem controlador gráfico, por exemplo numa máquina virtual, o Solidon termina agora de forma fiável ao fechar. Na versão 0.6.0 o programa podia continuar a correr aí sem ser visto.
 
 ### Imprimir e entregar ao slicer
 
