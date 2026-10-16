@@ -77,7 +77,8 @@ def test_the_named_places_outside_the_menu_bar_exist() -> None:
     panels = (UI / "panels.py").read_text(encoding="utf-8")
     assert 'setObjectName("parameters.edit")' in panels
     assert 'tr("Passung anlegen")' in panels
-    assert "class ParameterDialog(" in (UI / "dialogs.py").read_text(encoding="utf-8")
+    # Seit F2b ein eigenes Modul (Codestruktur, Regel 6), nicht mehr ``dialogs.py``.
+    assert "class ParameterDialog(" in (UI / "parameter_dialog.py").read_text(encoding="utf-8")
     assert "class PartCatalog(" in (UI / "catalog.py").read_text(encoding="utf-8")
 
 
