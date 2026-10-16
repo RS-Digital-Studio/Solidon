@@ -11,6 +11,7 @@ aussieht.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -1068,19 +1069,24 @@ def test_a_new_filament_computes_no_geometry_again(
 
     counted: Counter[str] = Counter()
 
-    def counting(module: object, name: str) -> None:
-        original = getattr(module, name)
-
+    def counting(name: str, original: Callable[..., object]) -> Callable[..., object]:
         def wrapper(*args: object, **kwargs: object) -> object:
             counted[name] += 1
             return original(*args, **kwargs)
 
-        monkeypatch.setattr(module, name, wrapper)
+        return wrapper
 
-    counting(brep_kernel, "tessellate")
-    counting(brep_kernel, "copy_shape")
-    counting(brep_properties, "properties")
-    counting(slice_findings, "slice_body")
+    # Jede Ersetzung mit festem Text: ``slice_body`` ist in ``findings`` eine
+    # Kopfkopie aus ``analysis`` (CS-11), und der erzeugte Schnitt stellt Zugriff
+    # und Ersatz auf das Original um.
+    monkeypatch.setattr(brep_kernel, "tessellate", counting("tessellate", brep_kernel.tessellate))
+    monkeypatch.setattr(brep_kernel, "copy_shape", counting("copy_shape", brep_kernel.copy_shape))
+    monkeypatch.setattr(
+        brep_properties, "properties", counting("properties", brep_properties.properties)
+    )
+    monkeypatch.setattr(
+        slice_findings, "slice_body", counting("slice_body", slice_findings.slice_body)
+    )
 
     params: dict[str, object] = {"slot": 1, "name": "Rot", "colour": "#ff0000"}
     if scope == "face":
