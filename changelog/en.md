@@ -71,6 +71,8 @@ it into `website/version.json`.
 ### Printing and slicer handover
 
 - If the chosen slicer is a file that is not a program, Solidon now says so at once and offers to choose another slicer. In version 0.6.0 slicing waited until someone closed a Windows message.
+- The *Flow on bridges* field shows 100 % and accepts 50 to 150 %. In version 0.6.0 it showed 2 %, and changing it sent 1 or 2 % bridge flow to the slicer.
+- A project from version 0.6.0 with 1 or 2 % bridge flow opens with the value from the manufacturer profile.
 
 ### Editing and sketching
 

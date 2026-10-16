@@ -71,6 +71,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Imprimir e entregar ao slicer
 
 - Se o slicer escolhido não for um programa, o Solidon diz-o agora de imediato e propõe escolher outro. Na versão 0.6.0, o fatiamento esperava que alguém fechasse uma mensagem do Windows.
+- O campo *Fluxo em pontes* mostra 100 % e aceita de 50 a 150 %. Na versão 0.6.0, mostrava 2 %, e quem o alterava enviava ao slicer um fluxo em pontes de 1 ou 2 %.
+- Um projeto da versão 0.6.0 com um fluxo em pontes de 1 ou 2 % abre com o valor do perfil do fabricante.
 
 ### Editar e esboçar
 

@@ -27,7 +27,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 52
+FORMAT_VERSION: Final = 53
 
 #: Unter diesem Schlüssel steht während der Kette, mit welcher Version die Datei
 #: gespeichert wurde — für einen Schritt, der davon abhängt, ob das Projekt mit
@@ -1599,6 +1599,58 @@ def _ironing_choice(value: object) -> str:
     return str(value) if value in ("none", "topmost", "top_surfaces") else "none"
 
 
+#: Der kleinste Brückenfluss, den ein richtiger Weg je schrieb: die Untergrenze des
+#: Felds in 0.6.0 in seiner eigenen Lesart (0,5 als Anteil). Darunter liegt nur, was
+#: das Feld selbst falsch umrechnete — Qt rundete die Spanne auf 1 bis 2 %, und
+#: gespeichert wurden 0,01 oder 0,02 (FD-197). Fest hier, nicht aus der Feldtabelle:
+#: Ein Schritt rechnet, wie er geschrieben wurde.
+_LEAST_SAVED_BRIDGE_FLOW: Final = 0.5
+
+
+def _bridge_flow_leaves_the_percent_slip(data: dict[str, Any]) -> dict[str, Any]:
+    """Ein Brückenfluss von 1 oder 2 % aus dem Druckdialog von 0.6.0 gilt nicht mehr (FD-197).
+
+    Das Feld zeigte Prozent und trug seine Grenzen als Anteil; wer es anfasste,
+    speicherte 0,01 oder 0,02 als eigene Wahl — oder, unter einem übernommenen
+    Vorschlag je Teil, als Wahl der Platte. Gemeint war damit nichts, was sich
+    zurückrechnen ließe: Das Hundertfache wäre 100 oder 200 %. Der Schritt nimmt
+    die Wahl deshalb zurück, und es gilt wieder der Wert des Herstellerprofils
+    (``print_settings.on_base``), wie bei jedem Pfad ohne eigene Wahl. Ein
+    übernommener Vorschlag bleibt; der Rat schreibt nie unter 0,5. Festgehalten an
+    ``tests/data/projects/bridge_flow_v52.p3d``, geschrieben vom Stand davor.
+    """
+    stored = data.get("print_settings")
+    if not isinstance(stored, dict):
+        return data
+    path = "shell.bridge_flow"
+    shell = stored.get("shell")
+    chosen = stored.get("chosen")
+    if (
+        isinstance(shell, dict)
+        and _slipped(shell.get("bridge_flow"))
+        and isinstance(chosen, list)
+        and path in chosen
+    ):
+        stored["chosen"] = [entry for entry in chosen if entry != path]
+        # Ohne Herkunft ist der Wert nur Grundlage und kommt beim Öffnen neu aus
+        # dem Profil; hier steht die Vorgabe der Programme, damit die Datei selbst
+        # keine 0,01 mehr trägt.
+        shell["bridge_flow"] = 1.0
+    choices = stored.get("plate_choices")
+    if isinstance(choices, dict) and _slipped(choices.get(path)):
+        del choices[path]
+    return data
+
+
+def _slipped(value: object) -> bool:
+    """Eine Zahl unter dem kleinsten Brückenfluss, den ein richtiger Weg schrieb."""
+    return (
+        isinstance(value, int | float)
+        and not isinstance(value, bool)
+        and value < _LEAST_SAVED_BRIDGE_FLOW
+    )
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1652,6 +1704,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=49, to_version=50, apply=_keep_sketch_solutions_as_they_were),
     Step(from_version=50, to_version=51, apply=_keep_split_splinters_as_they_were),
     Step(from_version=51, to_version=52, apply=_ironing_becomes_a_choice),
+    Step(from_version=52, to_version=53, apply=_bridge_flow_leaves_the_percent_slip),
 )
 
 

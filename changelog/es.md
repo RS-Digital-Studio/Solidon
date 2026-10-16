@@ -72,6 +72,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Imprimir y entregar al slicer
 
 - Si el slicer elegido no es un programa, Solidon lo dice ahora al momento y ofrece elegir otro. En la versión 0.6.0 el laminado esperaba a que alguien cerrara un aviso de Windows.
+- El campo *Flujo en puentes* muestra 100 % y admite de 50 a 150 %. En la versión 0.6.0 mostraba 2 %, y quien lo cambiaba enviaba al slicer un flujo de puentes del 1 o del 2 %.
+- Un proyecto de la versión 0.6.0 con un flujo de puentes del 1 o del 2 % se abre con el valor del perfil del fabricante.
 
 ### Editar y dibujar
 

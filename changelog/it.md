@@ -71,6 +71,8 @@ scrive in `website/version.json`.
 ### Stampare e passare allo slicer
 
 - Se lo slicer scelto non è un programma, Solidon ora lo dice subito e propone di sceglierne un altro. Nella versione 0.6.0 lo slicing aspettava che qualcuno chiudesse un messaggio di Windows.
+- Il campo *Flusso sui ponti* mostra 100 % e accetta da 50 a 150 %. Nella versione 0.6.0 mostrava 2 %, e chi lo cambiava mandava allo slicer un flusso sui ponti dell'1 o del 2 %.
+- Un progetto della versione 0.6.0 con un flusso sui ponti dell'1 o del 2 % si apre con il valore del profilo del produttore.
 
 ### Modificare e disegnare
 

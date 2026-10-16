@@ -31,8 +31,15 @@ class Field:
     kind: FieldKind = "float"
     unit: str = ""
     minimum: float = 0.0
+    """Untergrenze **in Anzeigeeinheit**, wie das Feld sie zeigt — bei einem
+    Prozentfeld 50, nicht 0,5. Der Dialog setzt sie unverändert als Spanne; ein
+    Anteil hier stand in 0.6.0 als „2 %“ im Brückenfluss (FD-197).
+    ``tests/test_print_field_units.py`` hält Grenzen, Schritt und Vorgabe
+    jeder Zeile zusammen."""
     maximum: float = 1000.0
+    """Obergrenze in Anzeigeeinheit, wie ``minimum``."""
     step: float = 0.1
+    """Pfeilschritt in Anzeigeeinheit, wie ``minimum``."""
     decimals: int = 2
     choices: tuple[str, ...] = ()
     front: bool = False
@@ -329,9 +336,9 @@ FIELDS: tuple[Field, ...] = (
         _("Fluss bei Brücken"),
         "shell",
         unit="%",
-        minimum=0.5,
-        maximum=1.5,
-        step=0.05,
+        minimum=50.0,
+        maximum=150.0,
+        step=5.0,
         decimals=0,
         factor=100.0,
         note=_(

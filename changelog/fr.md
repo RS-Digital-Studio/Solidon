@@ -72,6 +72,8 @@ dans `website/version.json`.
 ### Imprimer et transmettre au slicer
 
 - Si le slicer choisi n'est pas un programme, Solidon le dit désormais aussitôt et propose d'en choisir un autre. En version 0.6.0, le tranchage attendait qu'on ferme un message de Windows.
+- Le champ *Débit sur les ponts* affiche 100 % et accepte de 50 à 150 %. En version 0.6.0, il affichait 2 %, et le modifier envoyait au slicer un débit de pont de 1 ou 2 %.
+- Un projet de la version 0.6.0 avec un débit de pont de 1 ou 2 % s'ouvre avec la valeur du profil du fabricant.
 
 ### Modifier et esquisser
 
