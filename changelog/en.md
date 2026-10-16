@@ -97,6 +97,7 @@ it into `website/version.json`.
 - The same applies to *Hollow out*, *Seal groove with gasket* and *Apply texture*. If a fillet cannot be traced back to an edge, the message offers *Pick a different feature*.
 - If a selected feature does not fit, such as a hole, a thread, a chamber or a closure, the message offers *Pick a different feature*.
 - The buttons *Pick different edges*, *Pick different faces* and *Pick a different feature* open the step with the cursor in the matching field, also behind *More settings*.
+- If a message belongs to no step, as with *Counterpart to the thread*, it gives its way as a sentence, for example *Pick a different feature*, and shows only buttons that do something there.
 
 ## 0.6.0
 

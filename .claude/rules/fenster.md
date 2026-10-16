@@ -231,10 +231,10 @@ Stellen halten das, beide sind nötig:
   solche mit `_object_of`/`error.object_id` in `panels.NEEDS_LIVE_BODY`.
   Nur nackte `=@breite`-Bindungen (`expressions.bound_name`) führen in die
   Parameterleiste.
-- Bleibt nach `error_handlers` kein Knopf, bietet `handled_actions` *Eingabe
-  korrigieren* mit Rat als Tooltip; der Fehlerdialog zeigt Räte über
-  `dialogs.unhandled_advice` als Sätze. Knopfzeile, Kontextmenü und Vorwahl
-  benutzen denselben Abgleich.
+- Ohne Knopf nach `error_handlers` bietet `handled_actions` *Eingabe
+  korrigieren* mit Rat im Tooltip. Satz statt Knopf (`unhandled_advice`): ohne
+  Handler, `NEEDS_OP` ohne Schritt, nicht `left_out`. Knopfzeile, Kontextmenü
+  und Vorwahl teilen den Abgleich.
 - Vorgewählt werden nur Fehler und Warnungen mit Handlung (`_preselect`). Nach
   einer Befundhandlung bleibt der Fokus im Bericht (`_focus_parked`): an der
   nächsten Befundzeile, sonst an der Übergabe.

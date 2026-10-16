@@ -98,6 +98,7 @@ dans `website/version.json`.
 - Il en va de même pour *Évidement*, *Rainure avec joint* et *Appliquer une texture*. Si un congé ne peut pas être ramené à une arête, le message propose *Choisir une autre caractéristique*.
 - Si une caractéristique sélectionnée ne convient pas, par exemple un perçage, un filetage, une chambre ou une fermeture, le message propose *Choisir une autre caractéristique*.
 - Les boutons *Choisir d'autres arêtes*, *Choisir d'autres faces* et *Choisir une autre caractéristique* ouvrent l'étape avec le curseur dans le champ concerné, même derrière *Autres réglages*.
+- Un message sans étape, comme avec *Contrepartie du filetage*, donne la marche à suivre en une phrase, par exemple *Choisir une autre caractéristique*, et n'affiche que des boutons qui agissent.
 
 ## 0.6.0
 

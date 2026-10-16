@@ -97,6 +97,7 @@ scrive in `website/version.json`.
 - Lo stesso vale per *Svuota*, *Scanalatura con guarnizione* e *Applica texture*. Se un raccordo non si può ricondurre a uno spigolo, il messaggio offre *Scegli un'altra caratteristica*.
 - Se una caratteristica selezionata non va bene, per esempio un foro, una filettatura, una camera o una chiusura, il messaggio offre *Scegli un'altra caratteristica*.
 - I pulsanti *Scegli altri spigoli*, *Scegli altre facce* e *Scegli un'altra caratteristica* aprono il passaggio con il cursore nel campo corrispondente, anche dietro *Altre impostazioni*.
+- Un messaggio senza passaggio, come con *Controparte della filettatura*, indica la via in una frase, ad esempio *Scegli un'altra caratteristica*, e mostra solo pulsanti che lì hanno effetto.
 
 ## 0.6.0
 

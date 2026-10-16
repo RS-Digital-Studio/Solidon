@@ -122,6 +122,7 @@ Nutzen da und sonst nichts.
 - Dasselbe gilt für *Aushöhlen*, *Dichtnut mit Dichtung* und *Textur aufbringen*. Lässt sich eine Rundung nicht auf eine Kante zurückführen, bietet die Meldung *Anderes Merkmal wählen* an.
 - Passt ein gewähltes Merkmal nicht, etwa eine Bohrung, ein Gewinde, eine Kammer oder ein Verschluss, bietet die Meldung *Anderes Merkmal wählen* an.
 - Die Knöpfe *Andere Kanten wählen*, *Andere Flächen wählen* und *Anderes Merkmal wählen* öffnen den Schritt mit dem Cursor im passenden Feld, auch hinter *Weitere Einstellungen*.
+- Gehört eine Meldung zu keinem Schritt, etwa bei *Gegenstück zum Gewinde*, nennt sie ihren Weg als Satz, zum Beispiel *Anderes Merkmal wählen*, und zeigt nur Knöpfe, die dort etwas bewirken.
 
 ## 0.6.0
 

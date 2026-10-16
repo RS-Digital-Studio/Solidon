@@ -97,6 +97,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O mesmo vale para *Esvaziar*, *Ranhura com vedação* e *Aplicar textura*. Se um arredondamento não puder ser reduzido a uma aresta, a mensagem oferece *Escolher outra característica*.
 - Se uma característica selecionada não servir, por exemplo um furo, uma rosca, uma câmara ou um fecho, a mensagem oferece *Escolher outra característica*.
 - Os botões *Escolher outras arestas*, *Escolher outras faces* e *Escolher outra característica* abrem o passo com o cursor no campo correspondente, também atrás de *Mais definições*.
+- Se uma mensagem não pertence a nenhum passo, como em *Contraparte da rosca*, indica o caminho numa frase, por exemplo *Escolher outra característica*, e só mostra botões que ali têm efeito.
 
 ## 0.6.0
 

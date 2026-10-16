@@ -98,6 +98,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Lo mismo vale para *Vaciar*, *Ranura de sellado con junta* y *Aplicar textura*. Si un redondeo no puede reducirse a una arista, el mensaje ofrece *Elegir otra característica*.
 - Si una característica seleccionada no sirve, por ejemplo un taladro, una rosca, una cámara o un cierre, el mensaje ofrece *Elegir otra característica*.
 - Los botones *Elegir otras aristas*, *Elegir otras caras* y *Elegir otra característica* abren el paso con el cursor en el campo correspondiente, también tras *Más ajustes*.
+- Si un mensaje no pertenece a ningún paso, como con *Contraparte de la rosca*, indica su camino con una frase, por ejemplo *Elegir otra característica*, y solo muestra botones que allí hacen algo.
 
 ## 0.6.0
 
