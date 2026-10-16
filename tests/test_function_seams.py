@@ -172,3 +172,38 @@ def test_the_activation_request_needs_no_key_and_reaches_no_server(
     function_seams.activation_request()
     assert activation.remember("") is activation.state()
     assert json.loads(activation.create_activation_request("Prüfstand")) == {"device": "Prüfstand"}
+
+
+def test_the_answering_generator_reaches_no_address(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``erzeugung = antwortet``: bereit, ohne Auswahl, ein Würfel — und keine Anfrage (RC-9).
+
+    Was der Erzeugungsdialog am Backend fragt (``_look``, ``_choices``, beide
+    Würfe), läuft an der Naht vorbei an ComfyUI; jeder Weg nach draußen fiele
+    hier auf.
+    """
+    import socket
+    import urllib.request
+
+    from app.core.backends import mesh
+    from app.ui import generate_dialog
+
+    def outside(*_args: Any, **_named: Any) -> Any:
+        raise AssertionError("die Naht ging nach draußen")
+
+    monkeypatch.setattr(generate_dialog, "ComfyBackend", generate_dialog.ComfyBackend)
+    for owner, name in (
+        (mesh, "fetch"),
+        (mesh, "reachable"),
+        (urllib.request, "urlopen"),
+        (socket, "create_connection"),
+    ):
+        monkeypatch.setattr(owner, name, outside)
+    function_seams.generator_answers()
+    backend = generate_dialog.ComfyBackend()
+    assert isinstance(backend, mesh.ComfyBackend)
+    assert generate_dialog._look(backend, "text_to_mesh") is mesh.Readiness.READY
+    assert generate_dialog._look(backend) is mesh.Readiness.READY
+    assert generate_dialog._choices(backend, "text_to_mesh") == {}
+    for made in (backend.text_to_mesh("Würfel", seed=3), backend.image_to_mesh(b"png", seed=4)):
+        assert made.suffix == ".stl" and made.payload
+        assert list(made.mesh.bounds.size) == pytest.approx([function_seams.GENERATED_EDGE] * 3)
