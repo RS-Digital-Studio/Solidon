@@ -95,7 +95,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A partir de um separador do cartão da direita, a tecla Tab entra na página da frente e percorre-a de cima para baixo.
 - Uma medida do projeto sem unidade continua a ser um número no histórico e na barra de parâmetros, também em polegadas. A versão 0.6.0 acrescentava «mm» no histórico.
 - Um leitor de ecrã nomeia cada campo de cada diálogo de operação, incluindo listas pendentes, caixas de seleção e listas de características.
-- Um texto que o diálogo já preenche, como um nome, fica selecionado ao abrir. Escrever substitui-o.
 - Os números inteiros grandes aparecem também nos campos em grupos de três algarismos, como 1 051 736 triângulos ou 10 000 mm/s² de *Aceleração*. Escrevem-se com ou sem separadores.
 - Os nomes longos de campos em *Mais definições* mostram todas as linhas, também com letra grande. Na versão 0.6.0, *Abrir furo* perdia a última palavra de um deles.
 - Os diálogos de operação têm a altura do conteúdo, também depois de expandir *Mais definições*. Na versão 0.6.0, *Repetir característica* deixava uma faixa vazia por cima dos botões.
@@ -105,6 +104,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um botão longo por baixo de uma recusa quebra a linha com letra grande, em vez de alargar o diálogo.
 - Os botões já não ficam esmagados com letra grande. Na versão 0.6.0, as ações de uma constatação no relatório de verificação ficavam cortadas em cima e em baixo.
 - Quando o tamanho de letra do sistema muda, o Solidon acompanha de imediato, também nos diálogos abertos. A versão 0.6.0 só o aplicava depois de reiniciar.
+- Uma linha agrupada do relatório de verificação nomeia na dica no máximo quinze afetados, com tipo e corpo. Na versão 0.6.0, um leitor de ecrã lia ali cada frase.
 - A legenda *Acrescentado* e *Removido* só aparece na barra de pré-visualização quando a pré-visualização acrescenta ou retira material. Por isso, *Mudar o nome do objeto* não a mostra.
 - Para parâmetros, ajustes, impressora, material e desfazer, o chat indica o lugar da janela onde se faz o mesmo à mão.
 - O relatório de verificação e a verificação antes da exportação nomeiam os corpos de um ajuste em vez de mostrar um identificador interno, também um corpo entretanto removido.
@@ -138,10 +138,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No cartão de medidas, *Aplicar* fica cinzento até mudar um valor ou a caixa dos elementos iguais, e indica o primeiro campo. Antes bastava um clique num campo, sem efeito.
 - Se o cartão de medidas recusar um valor, o motivo aparece uma só vez, logo abaixo do campo. Antes a mesma frase repetia-se acima dos botões e na barra de estado.
 - Se um aviso fizer crescer o cartão de medidas, fica no lugar e só se desloca o que o limite ou a pega exigirem, com um movimento curto. Antes saltava para outro sítio.
-- O diálogo *Mudar o nome do objeto* começa com o nome atual selecionado, e escrever substitui-o. Sem um nome novo, não se cria nenhum passo.
+- Um texto que o diálogo já preenche fica selecionado ao abrir, e escrever substitui-o. Assim, *Mudar o nome do objeto* começa com o nome atual e, sem um nome novo, não se cria nenhum passo.
 - No separador *Seleção*, *Aplicar* fica cinzento até mudar um valor e indica o primeiro campo. Rodar ou duplicar com os valores predefinidos continua imediato.
 - Furar, tapar, furos oblongos e campos de furos chamam ao ajuste «Compensar desvios de impressão», como o grupo de cotas, e acrescentam a compensação de furos.
-- Ao abrir um passo existente, o botão diz *Aplicar* em vez de *Inserir*. Fica cinzento até mudar um valor e indica o campo.
 - Após um plano de desenho ilegível, *Escolher outro plano* abre o passo com o cursor no seu esboço.
 - Quando um botão do relatório de verificação leva ao modo de esboço, o teclado fica onde o trabalho continua: no campo *Plano de desenho* se o plano faltar e, caso contrário, na vista.
 - Se junto a uma peça imprimível só restarem lascas, *Dividir em peças soltas* nomeia-as e oferece *Manter as lascas*. Antes dizia que o corpo era de uma só peça.

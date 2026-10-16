@@ -96,7 +96,6 @@ dans `website/version.json`.
 - Depuis un onglet de la carte de droite, la touche Tab entre dans la page affichée et la parcourt de haut en bas.
 - Une cote de projet sans unité reste un nombre dans l'historique et la barre des paramètres, même en pouces. La version 0.6.0 y ajoutait « mm » dans l'historique.
 - Un lecteur d'écran nomme chaque champ de chaque dialogue d'opération, y compris les listes déroulantes, les cases à cocher et les listes de caractéristiques.
-- Un texte déjà rempli par un dialogue, comme un nom, est sélectionné à l'ouverture. La frappe le remplace.
 - Les grands nombres entiers s'affichent aussi dans les champs par groupes de trois chiffres, comme 1 051 736 triangles ou 10 000 mm/s² d'*Accélération*. On les saisit avec ou sans séparateurs.
 - Les noms de champs longs sous *Autres réglages* affichent chaque ligne, même en grande police. Dans la version 0.6.0, *Percer un trou* en perdait le dernier mot.
 - Les dialogues d'opération ont la hauteur de leur contenu, même après avoir déplié *Autres réglages*. En version 0.6.0, *Répéter la caractéristique* laissait une bande vide au-dessus des boutons.
@@ -106,6 +105,7 @@ dans `website/version.json`.
 - Un bouton long sous un refus passe à la ligne en grande police, au lieu d'élargir le dialogue.
 - Les boutons ne sont plus écrasés en grande police. Dans la version 0.6.0, les actions d'un constat du rapport de contrôle étaient coupées en haut et en bas.
 - Quand la taille de police du système change, Solidon suit aussitôt, y compris dans les dialogues ouverts. La version 0.6.0 ne la reprenait qu'après un redémarrage.
+- Une ligne regroupée du rapport de contrôle nomme dans son info-bulle au plus quinze éléments, avec type et corps. Dans la version 0.6.0, un lecteur d'écran y lisait chaque phrase.
 - La légende *Ajouté* et *Retiré* n'apparaît dans le bandeau d'aperçu que si l'aperçu ajoute ou retire de la matière. *Renommer l'objet* ne l'affiche donc pas.
 - Pour les paramètres, les ajustements, l'imprimante, le matériau et l'annulation, le chat indique l'endroit de la fenêtre où faire de même soi-même.
 - Le rapport de contrôle et le contrôle avant l'export nomment les corps d'un ajustement au lieu d'afficher un identifiant interne, y compris un corps supprimé entre-temps.
@@ -139,10 +139,9 @@ dans `website/version.json`.
 - Dans la carte de cotes, *Appliquer* reste grisé tant qu'aucune valeur ni la case des éléments similaires ne change, et indique le premier champ. Avant, un clic dans un champ l'activait, sans effet.
 - Si la carte de cotes refuse une valeur, la raison apparaît une seule fois, juste sous le champ. Auparavant, la même phrase se répétait au-dessus des boutons et dans la barre d'état.
 - Si un message agrandit la carte de cotes, elle reste en place et ne se déplace que de ce qu'exigent le bord ou la poignée, avec un mouvement bref. Avant, elle sautait ailleurs.
-- Le dialogue *Renommer l'objet* s'ouvre avec le nom actuel sélectionné, et la saisie le remplace. Sans nouveau nom, aucune étape n'est créée.
+- Un texte déjà rempli par un dialogue est sélectionné à l'ouverture, et la frappe le remplace. *Renommer l'objet* s'ouvre ainsi avec le nom actuel, et sans nouveau nom aucune étape n'est créée.
 - Dans l'onglet *Sélection*, *Appliquer* reste grisé tant qu'aucune valeur ne change, et indique le premier champ. Pivoter ou dupliquer avec leurs valeurs prévues reste immédiat.
 - Perçage, rebouchage, trous oblongs et champs de trous nomment le réglage « Compenser les écarts d'impression », comme le groupe de cotes. Il ajoute la compensation des trous.
-- À l'ouverture d'une étape existante, le bouton dit *Appliquer* au lieu d'*Insérer*. Il reste grisé tant qu'aucune valeur ne change, et indique le champ.
 - Après un plan de dessin illisible, *Choisir un autre plan* ouvre l'étape avec le curseur dans son esquisse.
 - Quand un bouton du rapport de contrôle mène au mode esquisse, le clavier arrive là où le travail continue : dans le champ *Plan de dessin* si le plan manque, sinon dans la vue.
 - S'il ne reste que des éclats à côté d'une pièce imprimable, *Diviser en pièces distinctes* les nomme et propose *Garder les éclats*. Avant, le corps était dit d'un seul tenant.

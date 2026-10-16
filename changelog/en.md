@@ -95,7 +95,6 @@ it into `website/version.json`.
 - From a tab of the card on the right, the Tab key goes into the page in front and moves through it from top to bottom.
 - A project dimension without a unit stays a plain number in the history and the parameter bar, also in inches. Version 0.6.0 added “mm” to it in the history.
 - A screen reader names every field of every operation dialog, including drop-down lists, checkboxes and feature lists.
-- Text that a dialog fills in, such as a name, is selected when it opens. Typing replaces it.
 - Large whole numbers appear in groups of three in input fields too, such as 1 051 736 triangles or 10 000 mm/s² *Acceleration*. You can type them with or without separators.
 - Long field names under *More settings* show every line, even with a large font. In version 0.6.0, *Drill a bore* for example lost the last word of a wrapped field name.
 - Operation dialogs are as tall as their content, also after expanding *More settings*. In version 0.6.0, *Repeat feature* for example left an empty strip above the buttons.
@@ -105,6 +104,7 @@ it into `website/version.json`.
 - A long button under a refusal wraps at large font sizes instead of widening the dialog.
 - Buttons are no longer squashed at large font sizes. In version 0.6.0 the actions of a finding in the check report were cut off at the top and bottom.
 - When the system font size changes, Solidon follows at once, open dialogs included. Version 0.6.0 only picked it up after a restart.
+- A combined line in the check report names at most fifteen of those affected, by kind and body, in its tooltip. In version 0.6.0 a screen reader read every sentence there.
 - The *Added* and *Removed* legend appears in the preview bar only when the preview adds or removes material. *Rename object* therefore shows none.
 - For parameters, fits, printer, material and undo, the chat names the place in the window where you can do the same yourself.
 - The check report and the check before export name the bodies of a fit instead of showing an internal identifier, including a body that has since been removed.
@@ -138,10 +138,9 @@ it into `website/version.json`.
 - In the measurement card, *Apply* stays grey until a value or the checkbox for matching features changes, and names the first field. Previously one click into a field enabled it, to no effect.
 - When the measurement card rejects a value, the reason appears once, directly below the field. Previously the same sentence was repeated above the buttons and in the status bar.
 - When a note makes the measurement card taller, it stays put and moves only as far as the view edge or handle requires, with a short movement. Previously it jumped elsewhere.
-- The *Rename object* dialog starts with the current name selected, so typing replaces it. Without a new name, no step is added.
+- Text that a dialog fills in is selected when it opens, and typing replaces it. *Rename object* thus starts with the current name, and without a new name no step is added.
 - In the *Selection* tab, *Apply* stays grey until a value changes and names the first field. Rotating or duplicating with their preset values still works right away.
 - Drilling, filling, slots and hole fields call the adjustment “Compensate for printing deviations” as the dimension group does, and it adds the material's hole compensation.
-- Opening an existing step offers *Apply* instead of *Insert*. The button stays grey until a value changes and names the field.
 - After an unreadable drawing plane, *Pick a different plane* opens the step with the cursor in its sketch.
 - When a button in the check report leads into sketch mode, the keyboard lands where the work continues: in the *Drawing plane* field if the plane is missing, otherwise in the view.
 - If only slivers remain beside one printable part, *Split into separate parts* names them and offers *Keep slivers*. Before, it said the body was all one piece.

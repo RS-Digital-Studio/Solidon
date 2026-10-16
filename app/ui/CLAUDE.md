@@ -296,7 +296,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   Tiefenstufe sammelt `place` nichts. Tiefenfeld und Wandzahl gehören zu den
   angehobenen Kantenmaßen, sonst liegen sie unter der Leiste. Projektparameter
   gehören in den Werkzeugschlüssel, auch bei unverändertem Skizzentext.
-  Neue Layoutzeilen ausdrücklich über `_set_shown` verbergen;
+- Neue Layoutzeilen ausdrücklich über `_set_shown` verbergen;
   `_q_showIfNotHidden` beachtet `WA_WState_ExplicitShowHide`.
 - Kontextmenü je Klick, nach `exec` `deleteLater`; Baumkoordinaten in `karte-app-ui.md`.
 - Wahldialoge (Filament, Slicerprofil, Körper) und Katalog nach Antwort im

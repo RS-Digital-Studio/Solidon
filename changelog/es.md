@@ -96,7 +96,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Desde una pestaña de la tarjeta de la derecha, la tecla Tab entra en la página visible y la recorre de arriba abajo.
 - Una medida del proyecto sin unidad sigue siendo un número en el historial y en la barra de parámetros, también en pulgadas. La versión 0.6.0 le añadía «mm» en el historial.
 - Un lector de pantalla nombra cada campo de cada diálogo de operación, también listas desplegables, casillas y listas de características.
-- Un texto que el diálogo ya trae, como un nombre, aparece seleccionado al abrir. Al escribir se sustituye.
 - Los números enteros grandes aparecen también en los campos en grupos de tres cifras, como 1 051 736 triángulos o 10 000 mm/s² de *Aceleración*. Se escriben con o sin separadores.
 - Los nombres largos de campos en *Más ajustes* muestran todas sus líneas, también con letra grande. En la versión 0.6.0, *Hacer un taladro* perdía la última palabra de uno.
 - Los diálogos de operación tienen la altura de su contenido, también al desplegar *Más ajustes*. En la versión 0.6.0, *Repetir característica* dejaba una franja vacía sobre los botones.
@@ -106,6 +105,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un botón largo bajo un rechazo se divide en varias líneas con letra grande, en lugar de ensanchar el diálogo.
 - Los botones ya no se aplastan con letra grande. En la versión 0.6.0, las acciones de un hallazgo en el informe de comprobación quedaban cortadas por arriba y por abajo.
 - Si cambia el tamaño de letra del sistema, Solidon lo sigue al instante, también en los diálogos abiertos. La versión 0.6.0 solo lo aplicaba tras reiniciar.
+- Una línea agrupada del informe de comprobación nombra en su sugerencia como máximo quince afectados, con tipo y cuerpo. En la versión 0.6.0 un lector de pantalla leía cada frase.
 - La leyenda *Añadido* y *Eliminados* aparece en la barra de vista previa solo cuando la vista previa añade o quita material. Por eso *Renombrar objeto* no la muestra.
 - Para parámetros, ajustes, impresora, material y deshacer, el chat indica el lugar de la ventana donde se hace lo mismo a mano.
 - El informe de comprobación y la comprobación antes de exportar nombran los cuerpos de un ajuste en lugar de mostrar un identificador interno, también un cuerpo ya eliminado.
@@ -139,10 +139,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la tarjeta de medidas, *Aplicar* sigue en gris hasta que cambia un valor o la casilla de características iguales, e indica el primer campo. Antes bastaba un clic en un campo, sin efecto.
 - Si la tarjeta de medidas rechaza un valor, el motivo aparece una sola vez, justo debajo del campo. Antes la misma frase se repetía encima de los botones y en la barra de estado.
 - Si un aviso hace crecer la tarjeta de medidas, se queda en su sitio y solo se desplaza lo que exigen el borde o el tirador, con un movimiento breve. Antes saltaba a otro lugar.
-- El diálogo *Renombrar objeto* empieza con el nombre actual seleccionado, y al escribir se reemplaza. Sin un nombre nuevo no se crea ningún paso.
+- Un texto que el diálogo ya trae aparece seleccionado al abrir, y al escribir se sustituye. Así *Renombrar objeto* empieza con el nombre actual, y sin un nombre nuevo no se crea ningún paso.
 - En la pestaña *Selección*, *Aplicar* sigue en gris hasta que cambia un valor e indica el primer campo. Girar o duplicar con sus valores previstos sigue siendo inmediato.
 - Al taladrar, tapar, en ranuras y en campos de agujeros, el ajuste se llama «Compensar desviaciones de impresión», como en el grupo de cotas, y suma la compensación de agujeros.
-- Al abrir un paso existente, el botón dice *Aplicar* en lugar de *Insertar*. Sigue en gris hasta que cambia un valor e indica el campo.
 - Tras un plano de dibujo ilegible, *Elegir otro plano* abre el paso con el cursor en su boceto.
 - Cuando un botón del informe de comprobación lleva al modo de boceto, el teclado queda donde sigue el trabajo: en el campo *Plano de dibujo* si falta el plano y, si no, en la vista.
 - Si junto a una pieza imprimible solo quedan astillas, *Dividir en piezas sueltas* las nombra y ofrece *Conservar las astillas*. Antes decía que el cuerpo era de una sola pieza.

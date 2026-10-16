@@ -95,7 +95,6 @@ scrive in `website/version.json`.
 - Da una linguetta del riquadro a destra, il tasto Tab entra nella pagina in primo piano e la percorre dall'alto in basso.
 - Una misura di progetto senza unità resta un numero nella cronologia e nella barra dei parametri, anche in pollici. La versione 0.6.0 aggiungeva «mm» nella cronologia.
 - Un lettore di schermo nomina ogni campo di ogni finestra di operazione, anche elenchi a discesa, caselle di spunta ed elenchi di caratteristiche.
-- Un testo che la finestra propone, come un nome, è selezionato all'apertura. Digitando lo si sostituisce.
 - I numeri interi grandi compaiono anche nei campi a gruppi di tre cifre, come 1 051 736 triangoli o 10 000 mm/s² di *Accelerazione*. Si scrivono con o senza separatori.
 - I nomi lunghi dei campi in *Altre impostazioni* mostrano ogni riga, anche con caratteri grandi. Nella versione 0.6.0 *Pratica un foro* ne perdeva l'ultima parola.
 - Le finestre di operazione sono alte quanto il contenuto, anche dopo aver aperto *Altre impostazioni*. Nella versione 0.6.0 *Ripeti caratteristica* lasciava una striscia vuota sopra i pulsanti.
@@ -105,6 +104,7 @@ scrive in `website/version.json`.
 - Un pulsante lungo sotto un rifiuto va a capo con caratteri grandi, invece di allargare la finestra.
 - I pulsanti non vengono più schiacciati con caratteri grandi. Nella versione 0.6.0 le azioni di un rilievo nel rapporto di verifica erano tagliate in alto e in basso.
 - Se cambia la dimensione dei caratteri di sistema, Solidon la segue subito, anche nelle finestre aperte. La versione 0.6.0 la applicava solo dopo un riavvio.
+- Una riga raggruppata del rapporto di verifica nomina nel suggerimento al massimo quindici elementi, con tipo e corpo. Nella versione 0.6.0 un lettore di schermo vi leggeva ogni frase.
 - La legenda *Aggiunto* e *Rimosso* compare nella barra dell'anteprima solo quando l'anteprima aggiunge o toglie materiale. Per questo *Rinomina oggetto* non la mostra.
 - Per parametri, accoppiamenti, stampante, materiale e annulla, la chat indica il punto della finestra in cui fare lo stesso da sé.
 - Il rapporto di verifica e il controllo prima dell'esportazione nominano i corpi di un accoppiamento invece di mostrare un identificativo interno, anche un corpo nel frattempo rimosso.
@@ -138,10 +138,9 @@ scrive in `website/version.json`.
 - Nella scheda delle misure *Applica* resta grigio finché non cambia un valore o la casella degli elementi uguali, e indica il primo campo. Prima bastava un clic in un campo, senza effetto.
 - Se la scheda delle misure rifiuta un valore, il motivo compare una sola volta, subito sotto il campo. Prima la stessa frase si ripeteva sopra i pulsanti e nella barra di stato.
 - Se un avviso fa crescere la scheda delle misure, resta al suo posto e si sposta solo quanto richiedono il bordo o la maniglia, con un breve movimento. Prima saltava altrove.
-- La finestra *Rinomina oggetto* parte dal nome attuale selezionato, così scrivendo lo si sostituisce. Senza un nome nuovo non nasce alcun passaggio.
+- Un testo che la finestra propone è selezionato all'apertura, e digitando lo si sostituisce. Così *Rinomina oggetto* parte dal nome attuale, e senza un nome nuovo non nasce alcun passaggio.
 - Nella linguetta *Selezione*, *Applica* resta grigio finché non cambia un valore e indica il primo campo. Ruotare o duplicare con i valori predefiniti resta immediato.
 - Foratura, chiusura, asole e campi di fori chiamano la correzione «Compensare gli scostamenti di stampa», come il gruppo di quote, e aggiungono la compensazione dei fori.
-- Aprendo un passaggio esistente, il pulsante dice *Applica* invece di *Inserisci*. Resta grigio finché non cambia un valore e indica il campo.
 - Dopo un piano di disegno illeggibile, *Scegli un altro piano* apre il passaggio con il cursore nel suo schizzo.
 - Quando un pulsante del rapporto di verifica porta alla modalità schizzo, la tastiera si trova dove si prosegue: nel campo *Piano di disegno* se il piano manca, altrimenti nella vista.
 - Se accanto a un pezzo stampabile restano solo schegge, *Dividi in pezzi distinti* le nomina e offre *Tieni le schegge*. Prima diceva che il corpo era di un solo pezzo.

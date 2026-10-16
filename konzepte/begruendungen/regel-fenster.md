@@ -1061,7 +1061,7 @@ mit Maßen bei Bohrungen ist gut, bei anderen Merkmalen fehlen sie“.
 
 **Welche Wege hinter einem Halt gehen, sagt der haltende Befund** (RA-3,
 Review 1 Restpaket A). Eine Liste von Kennungen (`change_lock.CHAIN_WAYS`:
-`change_params`, `repair_and_retry`, `split_and_retry`, `recount_and_retry`,
+`correct_input`, `repair_and_retry`, `split_and_retry`, `recount_and_retry`,
 `decimate_and_retry`, `remesh_and_retry` und weitere) graute am Halt „braucht
 einen ausgeschalteten Schritt“ dessen beide Wege und gab hinter einem fremden
 Halt Wege frei, die die Sitzung danach ablehnte. Seither antwortet

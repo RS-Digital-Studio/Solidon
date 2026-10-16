@@ -6118,7 +6118,7 @@ class HistoryPanel(QWidget):
             self.noteRequested.emit(
                 tr(
                     "Eine Passung hat keinen eigenen Dialog. Ob sie hält, zeigt der Prüfbericht, "
-                    "und Strg+Z nimmt sie zurück."
+                    "und Strg+Z nimmt sie mit allem Späteren zurück."
                 )
             )
             return

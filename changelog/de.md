@@ -120,7 +120,6 @@ Nutzen da und sonst nichts.
 - Von einem Reiter der rechten Karte führt die Tabulatortaste in die Seite, die vorn steht, und geht sie von oben nach unten durch.
 - Ein Projektmaß ohne Einheit bleibt im Verlauf und in der Parameterleiste eine Zahl, auch bei Zoll. Version 0.6.0 schrieb im Verlauf „mm“ dazu.
 - Ein Bildschirmleser nennt in jedem Operationsdialog jedes Feld beim Namen, auch Auswahllisten, Haken und Merkmalslisten.
-- Ein vorgegebener Text in einem Dialog, etwa ein Name, ist beim Öffnen markiert. Tippen ersetzt ihn.
 - Große ganze Zahlen stehen auch in Eingabefeldern in Dreiergruppen, etwa 1 051 736 Dreiecke oder 10 000 mm/s² *Beschleunigung*. Getippt werden sie mit oder ohne Trennzeichen.
 - Lange Feldnamen unter *Weitere Einstellungen* zeigen jede Zeile, auch bei großer Schrift. In Version 0.6.0 fehlte etwa bei *Bohrung setzen* das letzte Wort von „Durchmesser der Aufweitung“.
 - Operationsdialoge sind so hoch wie ihr Inhalt, auch nach dem Aufklappen von *Weitere Einstellungen*. In Version 0.6.0 blieb etwa bei *Merkmal vervielfachen* ein Streifen über den Knöpfen leer.
@@ -130,6 +129,7 @@ Nutzen da und sonst nichts.
 - Ein langer Knopf unter einer Absage bricht bei großer Schrift um, statt den Dialog zu verbreitern.
 - Knöpfe werden bei großer Schrift nicht mehr gestaucht. Im Prüfbericht waren die Handlungen eines Befunds in Version 0.6.0 oben und unten abgeschnitten.
 - Ändert sich die Schriftgröße des Systems, folgt Solidon sofort, auch in offenen Dialogen. Version 0.6.0 übernahm sie erst nach einem Neustart.
+- Eine Sammelzeile im Prüfbericht nennt in der Kurzhilfe höchstens fünfzehn Betroffene mit Art und Körper. In Version 0.6.0 las ein Bildschirmleser dort jeden Satz einzeln.
 - Die Legende *Hinzugefügt* und *Entfernt* steht im Vorschauband nur, wenn die Vorschau Material hinzufügt oder entfernt. Bei *Objekt umbenennen* fehlt sie deshalb.
 - Der Chat nennt bei Parametern, Passungen, Drucker, Material und Rückgängig den Ort im Fenster, an dem man dasselbe selbst tut.
 - Der Prüfbericht und die Prüfung vor dem Export nennen die Körper einer Passung beim Namen statt mit einer internen Kennung, auch einen inzwischen entfernten Körper.
@@ -163,10 +163,9 @@ Nutzen da und sonst nichts.
 - In der Maßkarte bleibt *Übernehmen* grau, bis sich ein Wert oder der Haken für gleichartige Merkmale ändert, und nennt das erste Feld. Bisher genügte ein Klick ins Feld, ohne Wirkung.
 - Lehnt die Maßkarte einen Wert ab, steht der Grund einmal, direkt unter dem Feld. Bisher stand derselbe Satz noch einmal über den Knöpfen und in der Statusleiste.
 - Wird die Maßkarte durch einen Hinweis höher, bleibt sie stehen und rückt nur so weit, wie Bildrand oder Griff es verlangen, mit kurzer Bewegung. Bisher sprang sie an eine andere Stelle.
-- Der Dialog *Objekt umbenennen* beginnt mit dem jetzigen Namen, markiert, sodass Tippen ihn ersetzt. Ohne neuen Namen entsteht kein Schritt.
+- Ein vorgegebener Text in einem Dialog ist beim Öffnen markiert, und Tippen ersetzt ihn. So beginnt *Objekt umbenennen* mit dem jetzigen Namen, und ohne neuen Namen entsteht kein Schritt.
 - Im Reiter *Auswahl* bleibt *Übernehmen* grau, bis sich ein Wert ändert, und nennt das erste Feld. Drehen oder Verdoppeln mit ihrer Vorgabe gehen weiter sofort.
 - Beim Bohren, Verschließen, Langloch und Lochfeld heißt der Ausgleich „Druckabweichung ausgleichen“ wie in der Maßgruppe und gibt die Lochkorrektur des Materials zu.
-- Wer einen vorhandenen Schritt öffnet, übernimmt mit *Übernehmen* statt *Einsetzen*. Der Knopf bleibt grau, bis sich ein Wert ändert, und nennt das Feld.
 - Nach einer unlesbaren Zeichenebene öffnet *Eine andere Ebene wählen* den Schritt mit dem Cursor in seiner Skizze.
 - Führt ein Knopf im Prüfbericht in den Skizzenmodus, steht die Tastatur dort, wo es weitergeht: im Feld *Zeichenebene*, wenn die Ebene fehlt, sonst in der Ansicht.
 - Bleiben neben einem druckbaren Teil nur Splitter, nennt *In Einzelteile aufteilen* sie und bietet *Splitter behalten* an. Bisher hieß es, der Körper bestehe aus einem Stück.
