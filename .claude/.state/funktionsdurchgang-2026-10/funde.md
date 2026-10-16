@@ -2592,3 +2592,22 @@ eingefroren“). Ihr Registerpunkt ist RM-812.
 - Vorschlag: Das Feld misst nach einem Schriftwechsel neu, wie `WrappedNote` seit `546b0e891`.
 - Wirkung beim Kunden: Nach kleinerer Schrift bleibt das Schlüsselfeld zu hoch.
 - Stand: offen RM-812
+
+## Regressionen aus Fixen nach dem Einfrieren (ab FD-212)
+
+Was ein Fix des eingefrorenen Umfangs kaputt macht, ist kein neuer Fund für
+nach 0.6.1, sondern Teil dieses Fixes und wird vor 0.6.1 behoben
+(`output/konsolidierung-2026-10-12/AUFTRAG-1016-claude.md`, „Umfang
+eingefroren“).
+
+### FD-212 Nach dem Formatschritt 52 → 53 bietet ein geänderter eigener Baustein seinen gespeicherten Stand nicht mehr an
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:keep_saved_parts`
+- Prüfpunkt: 7, V5
+- Beleg: `tests/test_function_list.py::test_a_light_mesh_scene_keeps_its_promises[baustein_geaendert.netz]` und `::test_a_scene_leaves_nothing_behind` mit „Handlung keep_saved_parts fehlt an parts.own_changed, angeboten []“, gepinnt rot (EXIT=1) an welle5 `1f8346073`, `3f84a4c3c`, `780ea7dd7` und auf dem FD-197-Zweig an `b736da48f` und `5212ca45f`, grün (EXIT=0) an `364367294` (Elter von `5212ca45f`), `b8f8296a1` und `068ebf2b7` (`output/konsolidierung-2026-10-12/funde-w5-claude.md`). Regression aus FD-197 (Formatschritt 52 → 53).
+- Ursache: offen; am Code gelesen, nicht per Sonde belegt: `knowledge/parts/check.saved_states` vergleicht den beim Speichern abgelegten Abdruck mit `recipe.fingerprint` des mitgereisten Rezepts, und dieser hasht `to_data` samt `document_to_data` mit `document.format_version` (`scene/serialise.py:1075`); nach jeder Formaterhöhung trägt das mitgereiste Rezept die neue Version, der Abdruck passt nicht, und `kept` bleibt leer.
+- Vorschlag: den Abdruck unabhängig von der Formatversion des Dokuments rechnen oder das mitgereiste Rezept in der Version vergleichen, in der es gespeichert wurde; Test mit einem Projekt der Vorversion und geändertem eigenem Baustein.
+- Wirkung beim Kunden: Für jedes Projekt aus 0.6.0 mit geändertem eigenem Baustein sagt der Prüfbericht „ihr alter Stand liegt nicht mehr vor“, obwohl er mitgereist ist, und *Gespeicherten Stand verwenden* fehlt.
+- Stand: offen RM-737; in Arbeit
