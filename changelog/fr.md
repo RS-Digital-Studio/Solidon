@@ -74,11 +74,11 @@ dans `website/version.json`.
 - Le dialogue *Calibrer le matériau* indique « pas encore calibré » pour un matériau non mesuré, aussi en ligne de commande. Avant, on y lisait « valeurs de départ ».
 - Un refus dans un dialogue ne répète plus son titre en dessous. *Corriger la saisie* place le curseur dans le champ concerné.
 - La fenêtre *Détails* nomme le corps et l'étape et donne l'emplacement dans l'unité choisie. *Afficher les valeurs* montre le nom des champs et n'est pas plus haut que nécessaire.
-- Un lecteur d'écran nomme chaque champ de chaque dialogue de fonction, y compris les listes déroulantes, les cases à cocher et les listes de caractéristiques.
+- Un lecteur d'écran nomme chaque champ de chaque dialogue d'opération, y compris les listes déroulantes, les cases à cocher et les listes de caractéristiques.
 - Un texte déjà rempli par un dialogue, comme un nom, est sélectionné à l'ouverture. La frappe le remplace.
 - Les grands nombres entiers s'affichent aussi dans les champs par groupes de trois chiffres, comme 1 051 736 triangles ou 10 000 mm/s² d'*Accélération*. On les saisit avec ou sans séparateurs.
 - Les noms de champs longs sous *Autres réglages* affichent chaque ligne, même en grande police. Dans la version 0.6.0, *Percer un trou* en perdait le dernier mot.
-- Les dialogues de fonction ont la hauteur de leur contenu, même après avoir déplié *Autres réglages*. En version 0.6.0, *Répéter la caractéristique* laissait une bande vide au-dessus des boutons.
+- Les dialogues d'opération ont la hauteur de leur contenu, même après avoir déplié *Autres réglages*. En version 0.6.0, *Répéter la caractéristique* laissait une bande vide au-dessus des boutons.
 - Si un champ obligatoire comme le texte de *Inscription comme corps* est vide, le champ indique ce qu'il attend et le bouton patiente. La version 0.6.0 y affichait une erreur à l'ouverture.
 - Pour modifier une étape, on confirme avec *Appliquer*. Le bouton reste grisé tant que rien n'a changé et nomme le champ à modifier.
 - Le dialogue *Calibrer le matériau* affiche jeu, serrage, compensation des trous, patte d'éléphant et paroi dans l'unité choisie, pouces compris, et garde la troisième décimale.
