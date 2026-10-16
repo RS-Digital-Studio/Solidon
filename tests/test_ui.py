@@ -11499,6 +11499,9 @@ def test_closing_is_no_advice_either(window: MainWindow) -> None:
             continue
         error = errors.AppError.__new__(value)
         object.__setattr__(error, "suggestions", list(suggestions))
+        # Ohne ``__init__`` fehlt auch die Schrittkennung; ``unhandled_advice``
+        # fragt sie seit RB-3 für Wege, die einen Schritt brauchen.
+        object.__setattr__(error, "op_id", None)
         assert str(CANCEL.label) not in unhandled_advice(error, known), (
             f"{name} schreibt das Abbrechen als Ratschlag in den Text"
         )
