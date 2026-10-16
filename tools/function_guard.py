@@ -28,7 +28,7 @@ bedient oder aufgerufen wird.
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Final
 
 #: Die Module des Prüfstands unter ``tools/`` — jedes trägt Bedienung am Fenster
@@ -146,7 +146,17 @@ READERS: Final[tuple[str, ...]] = (
     "itemAt",
     "widget",
     "findChild",
+    "findChildren",
     "values",
+    "boundingRect",
+    "center",
+    "x",
+    "y",
+    "property",
+    "mapToGlobal",
+    "visibleRegion",
+    "toolTip",
+    "accessibleDescription",
 )
 
 #: Die öffentliche Schnittstelle eines ``NamedTuple``: Sie heißt mit ``_``, damit
@@ -172,8 +182,30 @@ def _reader(name: str) -> bool:
     return False
 
 
-def _through_private(expression: ast.expr) -> bool:
-    """Ob ein Ausdruck über ein privates Attribut eines fremden Objekts läuft."""
+def _through_private(
+    expression: ast.expr, resolve: Callable[[ast.expr], ast.expr] | None = None
+) -> bool:
+    """Ob ein Ausdruck über ein privates Attribut eines fremden Objekts läuft.
+
+    Mit ``resolve`` (``_Bindings.resolve``) auch über einen Namen, der an einen
+    solchen Ausdruck gebunden ist: ``box = window._placement._box`` und danach
+    ``box.setGeometry(…)`` ist derselbe Umweg wie direkt geschrieben (RC2-11).
+    """
+    seen: set[int] = set()
+
+    def follow(expression: ast.expr) -> ast.expr:
+        # ``x = x.y`` bindet einen Namen an sich selbst: jeder Knoten nur einmal.
+        while isinstance(expression, ast.Name) and resolve is not None:
+            if id(expression) in seen:
+                return ast.Constant(None)
+            seen.add(id(expression))
+            found = resolve(expression)
+            if found is expression:
+                break
+            expression = found
+        return expression
+
+    expression = follow(expression)
     while isinstance(expression, (ast.Attribute, ast.Call, ast.Subscript)):
         if isinstance(expression, ast.Attribute):
             receiver = ast.unparse(expression.value)
@@ -189,6 +221,7 @@ def _through_private(expression: ast.expr) -> bool:
             expression = expression.func
         else:
             expression = expression.value
+        expression = follow(expression)
     return False
 
 
@@ -280,6 +313,13 @@ def _names_of(argument: ast.expr, values: dict[str, set[str] | None]) -> tuple[l
     return [], True
 
 
+def _bound_at(target: ast.AST, value: ast.expr | None) -> tuple[float, int]:
+    """Ab welcher Stelle eine Bindung gilt: hinter ihrem Wert, sonst an ihrem Ziel."""
+    if value is None:
+        return (target.lineno, target.col_offset)
+    return (value.end_lineno or value.lineno, value.end_col_offset or value.col_offset)
+
+
 class _Bindings:
     """Lexikalische Bindungen für Aliase, mit Reihenfolge und verdeckenden Parametern.
 
@@ -330,10 +370,12 @@ class _Bindings:
                 while isinstance(scope, ast.ClassDef) and scope in self.parents:
                     scope = self.parents[scope]
                 before = (float("inf"), 0)
+            # Eine Zuweisung bindet erst nach ihrem Wert: In ``x = x.y`` meint das
+            # rechte ``x`` die Bindung davor, nicht sich selbst.
             candidates = [
                 (target, value)
                 for target, value in self.values[scope].get(expression.id, [])
-                if (target.lineno, target.col_offset) < before
+                if _bound_at(target, value) <= before
             ]
             if not candidates:
                 break
@@ -509,7 +551,7 @@ def forbidden_calls(
                     and isinstance(node.func, ast.Attribute)
                     and not _private(node.func.attr)
                     and not _reader(node.func.attr)
-                    and _through_private(node.func.value)
+                    and _through_private(node.func.value, bindings.resolve)
                 ):
                     # Was über Privates erreicht ist, wird nur gelesen.
                     found.add((node.lineno, label))

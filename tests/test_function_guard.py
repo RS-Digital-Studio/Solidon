@@ -286,7 +286,16 @@ def test_the_reading_exception_still_finds_every_detour() -> None:
         "button.click()\n": "button.click",
         "window.measure.setValue(3)\n": "window.measure.setValue",
         "from tools.function_setup import apply_scene\n": "import apply_scene",
+        # Über einen Namen: derselbe Umweg wie direkt geschrieben (RC2-11).
+        "box = window._placement._box\nbox.setGeometry(1)\n": "box.setGeometry",
+        "drag = window._placement._drag\ndrag.press(1)\n": "drag.press",
+        "item = window._placement._box\nitem = item.parent()\nitem.setGeometry(1)\n": (
+            "item.setGeometry"
+        ),
     }
+    # Ein Name, der an sich selbst gebunden ist, endet — kein Umweg, keine Schleife.
+    looped = "row = row.next\nrow.geometry()\n"
+    assert function_guard.forbidden_calls(looped, private_reads=True) == []
     for source, detour in detours.items():
         found = [call for _line, call in function_guard.forbidden_calls(source, private_reads=True)]
         assert detour in found, (source, found)
