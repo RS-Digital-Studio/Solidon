@@ -363,13 +363,13 @@ def test_late_slicer_profile_outcomes_keep_the_outer_frame(
 
     dialog = PrintSettingsDialog(session, UiSettings())
     queued: list[ContentFitIntent] = []
-    queue_refit = dialog._queue_refit
+    queue_refit = dialog.queue_refit
 
     def record_intent(intent: ContentFitIntent) -> None:
         queued.append(intent)
         queue_refit(intent)
 
-    monkeypatch.setattr(dialog, "_queue_refit", record_intent)
+    monkeypatch.setattr(dialog, "queue_refit", record_intent)
     dialog.show()
     try:
         # Warten, nicht schließen: ``wait_for_workers`` setzt den Dialog auf
@@ -7450,7 +7450,7 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     # „0 >= 23" ist kein Befund über Stauchung, sondern über ein Layout, das
     # es noch nicht gibt (dieselbe Falle wie `isVisible` vor dem Anzeigen).
     dialog.show()
-    # Gemessen wird gesammelt im nächsten Umlauf (``_queue_refit``): Ein
+    # Gemessen wird gesammelt im nächsten Umlauf (``queue_refit``): Ein
     # einzelnes ``processEvents`` sah die Anfangsgröße noch nicht, und das
     # Aufklappen ging in der noch wartenden Anfangsmessung auf.
     for _ in range(8):

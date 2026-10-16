@@ -245,7 +245,7 @@ class DialogScrollArea(PassingScrollArea):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._content_hint: QSize | None = None
-        self._content_height: object | None = None
+        self.content_height: object | None = None
         self._screen_window: QWindow | None = None
         self._screen: QScreen | None = None
         self.setWidgetResizable(True)
@@ -287,8 +287,8 @@ class DialogScrollArea(PassingScrollArea):
             height = min(height, max(0, self.sizeHint().height()))
         if (
             self.isVisible()
-            and isinstance(self._content_height, ContentHeight)
-            and self._content_height.initial_fit_done
+            and isinstance(self.content_height, ContentHeight)
+            and self.content_height.initial_fit_done
         ):
             # Der Ausschnitt gibt Platz an größere äußere Knöpfe ab. Seine
             # alte Höhe ist keine Untergrenze; eine lesbare Inhaltszeile samt
@@ -328,7 +328,7 @@ class DialogScrollArea(PassingScrollArea):
             handle = window.windowHandle()
             if handle is not None:
                 self._watch_screen(handle)
-            height = self._content_height
+            height = self.content_height
             if isinstance(height, ContentHeight):
                 height.fit_to_screen(window)
             else:
@@ -385,7 +385,9 @@ def fit_dialog_to_screen(dialog: QWidget) -> None:
         dialog.move(x, y)
 
 
-ContentFitIntent = Literal["initial", "explicit", "passive"]
+#: ``font``: Die Schrift der Anwendung hat gewechselt (``style_follow``); der
+#: Dialog misst wie beim Aufklappen und darf dabei kleiner werden (FD-195).
+ContentFitIntent = Literal["initial", "explicit", "passive", "font"]
 
 
 def _natural_item_width(item: QLayoutItem | None) -> int:
@@ -530,7 +532,7 @@ def _content_size_for_intent(
         if height <= current.height():
             return None
         return QSize(current.width(), height)
-    if intent == "explicit":
+    if intent in ("explicit", "font"):
         height = natural.height()
         if available_height is not None:
             height = min(height, available_height)
@@ -722,7 +724,7 @@ class ContentHeight:
         Ausdrückliches Klappen hält die Überschrift unter dem Zeiger; danach
         rückt auch nachgereichter Inhalt den Dialog nicht mehr hinauf.
         """
-        return intent == "explicit" or (intent == "passive" and self._anchored)
+        return intent in ("explicit", "font") or (intent == "passive" and self._anchored)
 
     def fit(
         self,
@@ -737,7 +739,10 @@ class ContentHeight:
         """Misst Inhalt nach dem Anlass, der ihn geändert hat.
 
         ``initial`` passt die Anfangsgröße an; ``explicit`` hält Breite und
-        Anker; ``passive`` — nachgereichter Inhalt, Status, Suche — hält die
+        Anker; ``font`` misst nach einem Schriftwechsel wie ``explicit``,
+        darf also auch Höhe zurückgeben, ohne den Anker für spätere passive
+        Messungen festzuhalten, und lässt eine Größe des Kunden stehen
+        (FD-195); ``passive`` — nachgereichter Inhalt, Status, Suche — hält die
         Breite und wächst höchstens auf die Bildschirmhöhe; fehlt unter dem
         Dialog Platz, rückt er nur so weit hinauf wie nötig, nach einem
         ausdrücklichen Klappen nicht mehr (RM-487). Vor der Anfangsmessung
@@ -747,7 +752,7 @@ class ContentHeight:
         die Bildschirmgrenze gilt weiterhin.
         """
         if isinstance(scroll, DialogScrollArea):
-            scroll._content_height = self
+            scroll.content_height = self
         layout = dialog.layout()
         if layout is None or not dialog.isVisible():
             return
@@ -759,7 +764,7 @@ class ContentHeight:
         # aufgeklappte Inhalt, und die Einstellungen gaben ihre Höhe nicht zurück.
         QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
         floor = self.floor(dialog)
-        if intent == "passive" and (self.user is not None or not self._initialized):
+        if intent in ("passive", "font") and (self.user is not None or not self._initialized):
             return
         if (
             (intent == "initial" and natural_size is None)

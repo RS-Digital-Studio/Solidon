@@ -2173,7 +2173,7 @@ class OperationDialog(QDialog):
         layout.setSpacing(NORMAL)
         self._scroll.setWidget(contents)
         self._scroll.contentSizeChanged.connect(
-            weak_slot(self, OperationDialog._queue_refit, "passive")
+            weak_slot(self, OperationDialog.queue_refit, "passive")
         )
         outer.addWidget(self._scroll, 1)
         # **Wer im Bild zielen muss, erfährt es im Dialog — als erste Zeile**
@@ -2494,7 +2494,7 @@ class OperationDialog(QDialog):
         self._refit.setSingleShot(True)
         self._refit_intent: ContentFitIntent = "passive"
         self._refit.timeout.connect(self._run_queued_refit)
-        buttons.geometryChanged.connect(weak_slot(self, OperationDialog._queue_refit, "passive"))
+        buttons.geometryChanged.connect(weak_slot(self, OperationDialog.queue_refit, "passive"))
         self._couple_dependent_fields()
         self._couple_surface_binding()
         self._install_rotation_centre(given)
@@ -2972,7 +2972,7 @@ class OperationDialog(QDialog):
             if self._aligned:
                 self._align_to_the_front()
             if self.isVisible():
-                self._queue_refit("passive")
+                self.queue_refit("passive")
 
     def _place_face(self, values: Mapping[str, Any]) -> str:
         """Woran die Stelle liegt: das gewählte Merkmal, sonst die Seite ihrer Richtung."""
@@ -3119,7 +3119,7 @@ class OperationDialog(QDialog):
             return
         self._refusal.set_error(problem, handlers)
         self._refusal.setVisible(bool(self._refusal.text()))
-        self._queue_refit("passive")
+        self.queue_refit("passive")
 
     def take_value(self, name: str, value: Any) -> bool:
         """Einen Wert in ein Zahlenfeld schreiben, als hätte der Kunde ihn getippt.
@@ -3341,7 +3341,7 @@ class OperationDialog(QDialog):
             legacy = self._editors.get("about")
             if legacy is not None:
                 self._rows["about"].setRowVisible(legacy, False)
-            self._queue_refit("passive")
+            self.queue_refit("passive")
 
         def apply_choice() -> None:
             point = (0.0, 0.0, 0.0) if mode.currentData() == "origin" else target.currentData()
@@ -3545,7 +3545,7 @@ class OperationDialog(QDialog):
             if changed:
                 self._refresh_advanced_summary()
             if changed and self.isVisible():
-                self._queue_refit("passive")
+                self.queue_refit("passive")
             self._follow_source_pending()
 
         self.valuesChanged.connect(follow)
@@ -4544,7 +4544,7 @@ class OperationDialog(QDialog):
         if not event.spontaneous() and not self._first_focus_given:
             self._first_focus_given = True
             self._focus_first_empty_feature()
-        self._queue_refit("initial")
+        self.queue_refit("initial")
 
     def place_beside(self, anchor: QWidget | None) -> None:
         """Setzt den Dialog an den Rand statt in die Bildmitte.
@@ -4610,7 +4610,7 @@ class OperationDialog(QDialog):
         danach eines, das dasteht, statt bis zur nächsten Änderung den alten
         Satz zu tragen (Review F2a, R4).
         """
-        self._queue_refit("explicit")
+        self.queue_refit("explicit")
         if self._opened_with is not None:
             self._follow_source_pending()
 
@@ -4659,9 +4659,9 @@ class OperationDialog(QDialog):
         align_to_the_front(self._front, self._advanced_form)
         self._aligned = True
 
-    def _queue_refit(self, intent: ContentFitIntent) -> None:
+    def queue_refit(self, intent: ContentFitIntent) -> None:
         """Fasst gleichzeitige Größenwünsche mit Vorrang der bewussten Aktion zusammen."""
-        priority = {"passive": 0, "explicit": 1, "initial": 2}
+        priority = {"passive": 0, "font": 1, "explicit": 2, "initial": 3}
         if priority[intent] > priority[self._refit_intent]:
             self._refit_intent = intent
         self._refit.start(0)

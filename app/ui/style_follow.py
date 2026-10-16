@@ -63,6 +63,34 @@ def restyle() -> None:
     if not sheet or sheet != application.property(_OWN_SHEET):
         return
     apply_style(application, current_theme())
+    # Die offenen Dialoge messen nach, sobald die neue Schrift im Layout steht.
+    QTimer.singleShot(0, refit_dialogs)
+
+
+def refit_dialogs() -> None:
+    """Jeder offene Dialog mit Inhaltshöhe misst sich in der neuen Schrift (FD-195).
+
+    Ein Schriftwechsel ist kein nachgereichter Inhalt: Er darf Höhe auch
+    zurückgeben (Absicht ``font``). Eine Größe, die der Kunde aufgezogen hat,
+    bleibt (``ContentHeight``).
+    """
+    from PySide6.QtWidgets import QDialog
+
+    from app.ui.style import ContentHeight, DialogScrollArea
+
+    for window in QApplication.topLevelWidgets():
+        if not isinstance(window, QDialog) or not window.isVisible():
+            continue
+        queue = getattr(window, "queue_refit", None)
+        if callable(queue):
+            # Ein Dialog mit eigener Messung (Operationsdialog, Druckeinstellungen)
+            # legt vorher Breite, Beschreibung und Listen zurecht.
+            queue("font")
+            continue
+        for scroll in window.findChildren(DialogScrollArea):
+            height = scroll.content_height
+            if isinstance(height, ContentHeight):
+                height.fit(window, scroll, intent="font")
 
 
 class StyleFollower(QObject):

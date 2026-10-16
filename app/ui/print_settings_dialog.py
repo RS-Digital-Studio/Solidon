@@ -4751,21 +4751,21 @@ class PrintSettingsDialog(QDialog):
 
     def _unfold_tabs(self, _open_now: bool) -> None:
         """Die Tiefe wächst mit ihrer aktuellen Seite und gibt den Platz wieder frei."""
-        self._queue_refit("passive" if self._search_revealing else "explicit")
+        self.queue_refit("passive" if self._search_revealing else "explicit")
 
     def _unfold_sections(self, _open_now: bool) -> None:
         """Vorn und Vorschläge passen sich nur nach einer bewussten Klappe an."""
-        self._queue_refit("passive" if self._search_revealing else "explicit")
+        self.queue_refit("passive" if self._search_revealing else "explicit")
 
     def _refit_sections(self, _state: bool | int = False) -> None:
         """Passiv aktualisieren, etwa nach Reiter-, Such- oder Statusänderung."""
-        self._queue_refit("passive")
+        self.queue_refit("passive")
 
-    def _queue_refit(self, intent: ContentFitIntent) -> None:
+    def queue_refit(self, intent: ContentFitIntent) -> None:
         """Fasst gleichzeitige Größenwünsche mit Vorrang der bewussten Klappe zusammen."""
         if not self._built:
             return
-        priority = {"passive": 0, "explicit": 1, "initial": 2}
+        priority = {"passive": 0, "font": 1, "explicit": 2, "initial": 3}
         if priority[intent] > priority[self._size_refit_intent]:
             self._size_refit_intent = intent
         self._size_refit.start(0)
@@ -4779,7 +4779,7 @@ class PrintSettingsDialog(QDialog):
     def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
         """Passt die natürliche Dialoggröße genau beim ersten Anzeigen ein."""
         super().showEvent(event)
-        self._queue_refit("initial")
+        self.queue_refit("initial")
 
     def _resize_to_content(self, intent: ContentFitIntent = "passive") -> None:
         """Misst den Inhalt je nach Anlass, ohne passive Außenrahmensprünge."""
@@ -5198,7 +5198,7 @@ class PrintSettingsDialog(QDialog):
 
     def _unfold_slicer(self, _open_now: bool) -> None:
         """Nur eine bewusste Klappe darf den äußeren Rahmen anpassen."""
-        self._queue_refit(self._slicer_toggle_fit_intent or "explicit")
+        self.queue_refit(self._slicer_toggle_fit_intent or "explicit")
 
     def _forget_result(self) -> None:
         """Das Ergebnis des vorigen Slicers verwerfen.
@@ -8088,7 +8088,7 @@ class PrintSettingsDialog(QDialog):
                 refusal = self._refusals.get(path)
                 if isinstance(editor, BoundedSpin) and refusal is not None:
                     form.setRowVisible(refusal, active and bool(editor.refusal()))
-        self._queue_refit("passive")
+        self.queue_refit("passive")
 
     def _editor_changed(self, path: str) -> None:
         """Ein Feld hat sich geändert: **genau dieses** wird eigene Wahl — und
