@@ -521,10 +521,8 @@ def test_every_plate_row_carries_the_support_limit_of_its_nozzle(
         )
         return SimpleNamespace(findings=[], gcode_path=tmp_path / "p.gcode", metrics=metrics)
 
-    # Ersetzt wird das Original im Dialog, und zwar vor dem Laden: Das über den
-    # Pfad geladene Werkzeug holt ``_prepare_plate`` beim Import (Kopfkopie,
-    # CS-11) und nach dem erzeugten Schnitt zur Aufrufzeit — beides erreicht der
-    # Ersatz so.
+    # Ersetzt wird das Original im Dialog; das über den Pfad geladene Werkzeug
+    # liest ``_prepare_plate`` dort zur Aufrufzeit (CS-11).
     monkeypatch.setattr(print_settings_dialog, "_prepare_plate", prepared)
     unit = _matrix_unit_for_flags(tmp_path, monkeypatch)
     monkeypatch.setattr(unit.handover, "slice_model", sliced)

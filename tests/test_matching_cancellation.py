@@ -63,9 +63,8 @@ def _cancel_at_match(
 ) -> list:
     """Erst am tatsächlichen Zuordnungseintritt abbrechen; der echte Matcher läuft weiter.
 
-    Ersetzt wird ``match`` an jeder Stelle, die es liest, mit festem Text: im Modul der
-    Zuordnung und in den Kopfkopien der Auswertung und der örtlichen Erkennung (CS-11, bis
-    zum erzeugten Schnitt) — derselbe Ersatz für jeden Weg, wie nach dem Schnitt.
+    Ersetzt wird ``match`` im Modul der Zuordnung: Die Auswertung und die örtliche Erkennung
+    lesen es dort zur Aufrufzeit (CS-11) — derselbe Ersatz für jeden Weg.
     """
     original = matching.match
     calls = []
@@ -80,10 +79,6 @@ def _cancel_at_match(
     # Die erklärten Merkmale suchen ihren Partner über ``matching.declared_partners``
     # (Durchsicht 0.5.1, derselbe Weg für Netz und exakten Baustein) — die
     # Zuordnung beginnt dort, im Modul der Zuordnung.
-    monkeypatch.setattr(matching, "match", stopped)
-    from app.core.perceive import matching as perceive_matching
-
-    monkeypatch.setattr(perceive_matching, "match", stopped)
     monkeypatch.setattr(matching, "match", stopped)
     return calls
 

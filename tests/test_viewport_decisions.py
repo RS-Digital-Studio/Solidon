@@ -6650,7 +6650,6 @@ def test_extending_selection_finishes_every_running_colour_transition(
     from app.ui.viewport import ACCENT_MS, SELECTED_COLOUR, Viewport
 
     monkeypatch.setattr(motion, "animations_enabled", lambda: True)
-    monkeypatch.setattr(motion, "animations_enabled", lambda: True)
     viewport = Viewport()
     viewport.renderer = RecordingRenderer()
     viewport.show_scene(_scene_with_two_bodies())
@@ -7820,9 +7819,8 @@ def test_scene_worker_owns_its_mesh_and_evicts_the_least_recently_used_display(
         from app.core.geom.section import SectionPlane
 
         viewport._section = SectionPlane.along("z", 0.0)
-    # Je Vorbereitung eine Ersetzung mit festem Text: ``decimate_for_display`` ist
-    # im Viewport eine Kopfkopie aus ``mesh_ops`` (CS-11), und der erzeugte Schnitt
-    # stellt sie auf das Original um.
+    # ``decimate_for_display`` liest der Viewport zur Aufrufzeit aus ``mesh_ops``
+    # (CS-11), ``cut`` aus seinem eigenen Namensraum.
     if preparation == "decimation":
         monkeypatch.setattr(mesh_ops, "decimate_for_display", inspect)
     else:

@@ -607,9 +607,8 @@ def test_cancelled_final_checks_publish_neither_cache_nor_completion(
         signal.cancel()
         return result
 
-    # ``check_fits`` ist die Passungsprüfung aus ``fits`` unter neuem Namen (eine
-    # Kopfkopie, CS-11): Sie steht mit festem Text da, damit der erzeugte Schnitt
-    # Zugriff und Ersatz auf das Original umstellt.
+    # Die Passungsprüfung ist ``fits.check``; die Auswertung liest sie dort zur
+    # Aufrufzeit (CS-11). Die drei übrigen Schlussprüfungen stehen in ihr selbst.
     if finish == "check_fits":
         original = scene_fits.check
         monkeypatch.setattr(scene_fits, "check", cancel)

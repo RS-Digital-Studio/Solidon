@@ -1353,7 +1353,6 @@ def test_the_creator_of_a_loaded_recipe_counts_among_the_user_operations(
     from app.core import bootstrap, paths
 
     monkeypatch.setattr(paths, "user_parts_dir", lambda: tmp_path)
-    monkeypatch.setattr(paths, "user_parts_dir", lambda: tmp_path)
     monkeypatch.setattr(bootstrap, "_user_loaded", False)
     monkeypatch.setattr(bootstrap, "_user_findings", ())
     monkeypatch.setattr(bootstrap, "_user_operations", ())

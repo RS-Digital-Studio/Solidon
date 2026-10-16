@@ -1337,9 +1337,8 @@ def test_every_project_payload_has_its_own_limit(
         _append_archive_entry(path, entry, payload)
     with zipfile.ZipFile(path) as container:
         size = container.getinfo(entry).file_size
-    # Eine Quelle hat keine eigene Grenze, sondern die eines direkten Imports — in
-    # ``project`` eine Kopfkopie aus ``loader`` (CS-11). Sie steht mit festem Text
-    # da, damit der erzeugte Schnitt den Ersatz auf das Original umstellt.
+    # Eine Quelle hat keine eigene Grenze, sondern die eines direkten Imports
+    # (``loader.MAX_FILE_BYTES``, zur Aufrufzeit gelesen).
     if limit_name == "MAX_FILE_BYTES":
         monkeypatch.setattr(loader, "MAX_FILE_BYTES", size - 1)
     else:

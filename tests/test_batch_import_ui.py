@@ -68,7 +68,6 @@ def test_declining_the_recognition_question_imports_every_file_once(session, mon
     from app.core.perceive import local
 
     monkeypatch.setattr(local, "FEATURE_LIMIT_TRIANGLES", 1)
-    monkeypatch.setattr(local, "FEATURE_LIMIT_TRIANGLES", 1)
     asked = []
 
     def decline(request):

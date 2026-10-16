@@ -618,14 +618,12 @@ def test_saving_a_project_really_records_the_own_parts(
     Funktion, die die Oberfläche ruft. Was danach in der Datei steht,
     entscheidet.
 
-    Gepatcht ist nur das Register, und zwar dort, wo die Frage sitzt: in den
-    Modulen, die ``PARTS`` bereits importiert haben. Ein Patch auf
-    ``registry.PARTS`` ginge daran vorbei, weil ``from … import PARTS`` eine
-    eigene Referenz hält — der Fall, den §35 unter „wer messen will, wickelt
-    dort ein, wo die Frage sitzt" beschreibt.
+    Gepatcht ist nur das Register, am Original ``registry.PARTS``: Die Prüfung
+    und der Abdruck lesen es dort zur Aufrufzeit (CS-11), der Ersatz erreicht
+    also, wo die Frage sitzt (§35, „wer messen will, wickelt dort ein, wo die
+    Frage sitzt").
     """
     registry = _own_part_registry(tmp_path, monkeypatch)
-    monkeypatch.setattr(parts_registry, "PARTS", registry)
     monkeypatch.setattr(parts_registry, "PARTS", registry)
 
     project = new_project("centauri-carbon-2", "petg")

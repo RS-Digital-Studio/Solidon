@@ -6283,11 +6283,9 @@ def test_the_answer_to_the_recognition_question_is_told_at_once(monkeypatch, pro
 def _detect_failing_once(monkeypatch):
     """Der erste Aufruf von ``detect`` läuft in den Speicher, jeder weitere rechnet.
 
-    Ersetzt wird ``detect`` in der Auswertung, als Import gebunden: Dort ist es eine
-    Kopfkopie aus ``features`` (CS-11), und so stellt der erzeugte Schnitt Zugriff und
-    Ersatz auf das Original um.
+    Ersetzt wird ``detect`` in ``perceive.features``; die Auswertung liest es dort zur
+    Aufrufzeit (CS-11).
     """
-
     from app.core.perceive import features as perceive_features
 
     real = perceive_features.detect

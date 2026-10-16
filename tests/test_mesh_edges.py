@@ -1274,7 +1274,6 @@ def test_draft_shaping_keeps_every_boolean_in_draft(
         return boolean(*args, **kwargs)
 
     monkeypatch.setattr(geom_boolean, "boolean", measured)
-    monkeypatch.setattr(geom_boolean, "boolean", measured)
 
     result = run(operation, source, quality="draft", **params)
 

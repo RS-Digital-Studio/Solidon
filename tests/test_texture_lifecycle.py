@@ -475,9 +475,8 @@ def test_generated_texture_remains_selectable_with_bounded_recognition(
     evaluation = import_module("app.core.scene.evaluate")
     from app.core.perceive import local
 
-    # Je Grenze eine Ersetzung mit festem Text: Die Dreiecksgrenze ist in der
-    # Auswertung eine Kopfkopie aus ``perceive.local`` (CS-11), und der erzeugte
-    # Schnitt stellt sie auf das Original um.
+    # Die Dreiecksgrenze steht in ``perceive.local`` (die Auswertung liest sie dort
+    # zur Aufrufzeit, CS-11), die Zahlgrenze in der Auswertung selbst.
     if boundary == "triangles":
         monkeypatch.setattr(local, "FEATURE_LIMIT_TRIANGLES", 1)
     else:

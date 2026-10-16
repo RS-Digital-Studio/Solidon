@@ -1076,9 +1076,8 @@ def test_a_new_filament_computes_no_geometry_again(
 
         return wrapper
 
-    # Jede Ersetzung mit festem Text: ``slice_body`` ist in ``findings`` eine
-    # Kopfkopie aus ``analysis`` (CS-11), und der erzeugte Schnitt stellt Zugriff
-    # und Ersatz auf das Original um.
+    # Ersetzt wird je am Original: Auch die Befundstufe liest ``slice_body`` zur
+    # Aufrufzeit aus ``analysis`` (CS-11).
     monkeypatch.setattr(brep_kernel, "tessellate", counting("tessellate", brep_kernel.tessellate))
     monkeypatch.setattr(brep_kernel, "copy_shape", counting("copy_shape", brep_kernel.copy_shape))
     monkeypatch.setattr(

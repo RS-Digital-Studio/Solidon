@@ -24665,7 +24665,6 @@ def test_batch_import_groups_recognition_permission_with_total_estimate(session,
     from app.ui import session as session_module
 
     monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
-    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     monkeypatch.setattr(session_module, "recognition_minutes", lambda *_a, **_kw: (4, 9))
     monkeypatch.setattr(session_module, "recognition_gigabytes", lambda *_: 3)
     asked = []
