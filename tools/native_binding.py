@@ -361,7 +361,10 @@ def enter(
                 "Starten Sie den Kindprozess nur über `tools/native_runs.py`; er legt alle"
                 " acht Nutzerordner auf das Fallprofil.",
             )
-    os.chdir(ROOT)
+    # Im Belegordner, nie im Baum: Ein Speicherdialog, der nur einen Dateinamen
+    # vorschlägt, schreibt in den Arbeitsordner (RC-10). ``app`` kommt über den Pfad.
+    evidence.mkdir(parents=True, exist_ok=True)
+    os.chdir(evidence)
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
     sys.dont_write_bytecode = True
@@ -402,6 +405,7 @@ def enter(
             "pyside_imported": False,
             "pyside_lazy": os.environ["PYSIDE6_OPTION_LAZY"],
             "sys_path_first": sys.path[0],
+            "cwd": str(Path.cwd()),
             "head": binding["head"],
             "tree": binding["tree"],
             "binding_sha256": sha256_of(Path(binding_path)),

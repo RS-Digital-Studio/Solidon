@@ -1366,6 +1366,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
         (fein) durch den einen Vergleich der Suite (``tests/print_equal``). Der
         Prozess erbt die umgebogenen Nutzerordner dieses Falls.
         """
+        import os
         import shutil
         import subprocess
         from copy import deepcopy
@@ -1390,8 +1391,16 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
             return None
         copy = self.folder / "cli.p3d"
         shutil.copyfile(scene, copy)
+        # Im Fallordner wie der Fall selbst (RC-10); ``app`` kommt dann über den
+        # Pfad aus diesem Baum, nicht aus dem Arbeitsordner.
+        tree = str(Path(__file__).resolve().parent.parent)
         finished = subprocess.run(
             [sys.executable, "-m", "app.cli.main", *cli_command(arguments, str(copy))],
+            cwd=self.folder,
+            env={
+                **os.environ,
+                "PYTHONPATH": os.pathsep.join(filter(None, [tree, os.environ.get("PYTHONPATH")])),
+            },
             capture_output=True,
             text=True,
             encoding="utf-8",

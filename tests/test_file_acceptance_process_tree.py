@@ -31,7 +31,7 @@ else:
     while not (out / 'leaf.json').exists() and time.monotonic() < deadline:
         time.sleep(0.01)
     data = json.loads((out / 'leaf.json').read_text())
-    data.update(parent=os.getpid(), launcher=child.pid, profiles={
+    data.update(parent=os.getpid(), launcher=child.pid, cwd=os.getcwd(), profiles={
         key: os.environ.get(key) for key in ('APPDATA', 'LOCALAPPDATA',
         'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME')})
     print('echte Standardausgabe', flush=True)
@@ -137,7 +137,10 @@ def test_real_case_process_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
         folder = tmp_path / "cases" / "001"
         assert "echte Standardausgabe" in (folder / "stdout.log").read_text(encoding="utf-8")
         assert "echte Fehlerausgabe" in (folder / "stderr.log").read_text(encoding="utf-8")
-        assert options[0]["cwd"] == acceptance.ROOT
+        # Im Fallordner, nie im Baum: Ein Speicherdialog, der nur einen Dateinamen
+        # vorschlägt, schriebe sonst ins Repository (RC-10).
+        assert options[0]["cwd"] == folder
+        assert Path(data["cwd"]).resolve() == folder.resolve()
         for name, value in process_group_options(no_window=True).items():
             assert options[0][name] == value
         if mode != "exception":

@@ -755,7 +755,7 @@ def run_case(arguments: argparse.Namespace) -> int:
             command,
             restarts=restarts,
             restart_exit=RESTART_EXIT,
-            cwd=ROOT,
+            cwd=folder,
             env=profile_environment(os.environ, out / "profile"),
             deadline_s=limit,
             folder=folder,
@@ -896,7 +896,7 @@ def run_measure_card(arguments: argparse.Namespace) -> int:
             )
             record = supervise(
                 command,
-                cwd=ROOT,
+                cwd=folder,
                 env=profile_environment(os.environ, folder / "profile"),
                 deadline_s=deadline,
                 folder=folder,

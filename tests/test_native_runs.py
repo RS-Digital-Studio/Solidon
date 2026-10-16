@@ -289,6 +289,8 @@ def test_the_child_checks_seal_and_profile_before_qt(tree: Path, tmp_path: Path)
     assert record["pyside_lazy"] == "0"
     assert record["head"] == git(tree, "rev-parse", "HEAD").strip()
     assert record["environment"] == profile
+    # Im Belegordner, nie im Baum (RC-10).
+    assert Path(record["cwd"]).resolve() == evidence.resolve()
     left = json.loads((evidence / "seal-leave.json").read_text(encoding="utf-8"))
     assert left["same"] is True
     observation = json.loads((evidence / "observation.json").read_text(encoding="utf-8"))

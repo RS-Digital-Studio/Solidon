@@ -545,7 +545,7 @@ def menubar(out: Path) -> Path:
     try:
         finished = subprocess.run(
             [sys.executable, str(Path(__file__).resolve()), "menubar", "--out", str(out)],
-            cwd=ROOT,
+            cwd=out,
             env={**os.environ, "PYTHONUTF8": "1", "QT_QPA_PLATFORM": "offscreen"},
             capture_output=True,
             text=True,
@@ -1048,11 +1048,13 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
                 (folder / "stderr.log").open(mode, encoding="utf-8") as stderr,
                 no_error_dialogs(),
             ):
+                # Im Fallordner, nie im Baum: Ein Speicherdialog, der nur einen
+                # Dateinamen vorschlägt, schreibt in den Arbeitsordner (RC-10).
                 process = subprocess.Popen(
                     command,
                     stdout=stdout,
                     stderr=stderr,
-                    cwd=ROOT,
+                    cwd=folder,
                     env={**os.environ, "PYTHONUTF8": "1"},
                     **process_group_options(no_window=True),
                 )
