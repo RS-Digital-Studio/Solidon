@@ -749,12 +749,12 @@ def test_no_bar_nails_a_length_field_to_millimetres() -> None:
     Der Einstellungsdialog darf die Tabelle weiter lesen — er baut daraus die
     Auswahl, und das ist ihr Zweck.
     """
-    import app.ui
+    from tests import source_tree
 
-    erlaubt = {"settings_dialog.py"}
+    erlaubt = source_tree.definition_file("SettingsDialog", "app/ui")
     schuldig: list[str] = []
-    for path in sorted(Path(app.ui.__file__).parent.glob("*.py")):
-        if path.name in erlaubt:
+    for path in source_tree.python_files("app/ui"):
+        if path == erlaubt:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
@@ -762,7 +762,7 @@ def test_no_bar_nails_a_length_field_to_millimetres() -> None:
                 continue
             target = node.value
             if isinstance(target, ast.Name) and target.id == "DISPLAY_UNITS":
-                schuldig.append(f"{path.name}:{node.lineno}")
+                schuldig.append(f"{source_tree.relative(path)}:{node.lineno}")
     assert not schuldig, (
         "Längenfeld auf Millimeter festgenagelt — LengthSpin nehmen:\n" + "\n".join(schuldig)
     )

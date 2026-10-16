@@ -257,17 +257,20 @@ def main() -> int:
     args.output.mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, str(ROOT))
     with tempfile.TemporaryDirectory(prefix="solidon-feature-image-") as directory:
+        from app.core.paths import drawing_profile_variables, isolate_secrets
+
+        # ``HOME`` nur unter macOS (RCI-10), wie jeder Fall des Prüfstands.
+        home = (("HOME", "home"),) if "HOME" in drawing_profile_variables() else ()
         for name, child in (
             ("APPDATA", "roaming"),
             ("LOCALAPPDATA", "local"),
             ("XDG_CONFIG_HOME", "config"),
             ("XDG_CACHE_HOME", "cache"),
+            *home,
         ):
             target = Path(directory) / child
             target.mkdir()
             os.environ[name] = str(target)
-        from app.core.paths import isolate_secrets
-
         isolate_secrets(os.environ)
         os.environ.pop("QT_QPA_PLATFORM", None)
         render(args.motif, args.output.resolve())

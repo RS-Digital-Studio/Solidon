@@ -65,7 +65,7 @@ def test_a_flap_below_the_edge_is_rolled_into_view_before_it_is_clicked(
     # Voraussetzung, nicht Annahme: Die Klappe ist zu und steht unter dem Rand.
     assert heading.isVisible() and not heading.isChecked()
     centre = heading.mapToGlobal(heading.rect().center())
-    assert not guide_targets._unclipped(window.selection_operations).contains(centre)
+    assert not guide_targets.unclipped(window.selection_operations).contains(centre)
     ports = QtPorts(window, 0.0)
     reasons: list[str] = []
     for _step in range(60):

@@ -75,6 +75,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Varias traducciones se leen con más claridad, entre ellas la introducción de *Crear parámetro …*. La espiga empieza con mayúscula en todos los idiomas.
 - En la ventana *Desbloquear Solidon …*, *Comprar Solidon* sigue disponible en un ordenador activado. Los botones en gris indican su motivo, y *Comprobar clave* también el camino a una clave nueva.
 - En francés, el primer día del mes se escribe ahora «1er», por ejemplo «1er décembre 2026».
+- Sin controlador gráfico, por ejemplo en una máquina virtual, Solidon termina ahora de forma fiable al cerrarlo. En la versión 0.6.0 el programa podía seguir ejecutándose allí sin verse.
 
 ### Imprimir y entregar al slicer
 
@@ -91,6 +92,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
 - Si junto a una pieza imprimible solo quedan astillas, *Dividir en piezas sueltas* las nombra y ofrece *Conservar las astillas*. Antes decía que el cuerpo era de una sola pieza.
 - Si el radio de un redondeo o el ancho de un chaflán es demasiado grande para las aristas, el mensaje ofrece *Elegir otras aristas*.
+- Pulsar *Aplicar* en una característica durante un cálculo conserva el cambio, aunque la vista previa tarde más. En la versión 0.6.0 se perdía sin aviso en modelos grandes.
+- Una textura mostrada ya no calcula una vista previa sin cambios ni ofrece *Cancelar*.
 
 ## 0.6.0
 

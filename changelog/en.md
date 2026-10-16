@@ -74,6 +74,7 @@ it into `website/version.json`.
 - Several translations read more clearly, among them the introduction of *Create parameter …*. The peg starts with a capital in every language.
 - In the *Unlock Solidon …* window, *Buy Solidon* stays available on an activated computer. Greyed-out buttons state their reason, and *Check key* also the way to a new key.
 - In French, the first day of a month now reads “1er”, as in “1er décembre 2026”.
+- Without a graphics driver, for example in a virtual machine, Solidon now reliably exits after closing. In version 0.6.0 the program could keep running there invisibly.
 
 ### Printing and slicer handover
 
@@ -90,6 +91,8 @@ it into `website/version.json`.
 - Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
 - If only slivers remain beside one printable part, *Split into separate parts* names them and offers *Keep slivers*. Before, it said the body was all one piece.
 - If a fillet radius or chamfer width is too large for the edges, the message offers *Pick different edges*.
+- Clicking *Apply* on a feature during a calculation keeps the change, even when the preview takes longer. In version 0.6.0 it was silently lost on larger models.
+- A displayed texture no longer computes a preview without a change and no longer offers *Cancel*.
 
 ## 0.6.0
 

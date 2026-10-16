@@ -99,6 +99,7 @@ Nutzen da und sonst nichts.
 - Einige Übersetzungen lesen sich klarer, darunter die Einleitung von *Parameter anlegen …*. Der Zapfen beginnt in allen Sprachen groß.
 - Im Fenster *Solidon freischalten …* bleibt *Solidon kaufen* auch auf einem freigeschalteten Rechner bedienbar. Graue Knöpfe nennen ihren Grund, *Schlüssel prüfen* auch den Weg zum neuen Schlüssel.
 - Auf Französisch heißt der Erste eines Monats jetzt „1er“, etwa „1er décembre 2026“.
+- Ohne Grafiktreiber, etwa in einer virtuellen Maschine, endet Solidon nach dem Schließen jetzt zuverlässig. In Version 0.6.0 konnte das Programm dort unsichtbar weiterlaufen.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -115,6 +116,8 @@ Nutzen da und sonst nichts.
 - Bohrungsfelder und der Haken zum gemeinsamen Ändern gleichartiger Merkmale erklären ihre Wirkung. „Druckabweichung ausgleichen“ beschreibt die Korrektur aus dem Materialprofil verständlicher.
 - Bleiben neben einem druckbaren Teil nur Splitter, nennt *In Einzelteile aufteilen* sie und bietet *Splitter behalten* an. Bisher hieß es, der Körper bestehe aus einem Stück.
 - Ist der Radius einer Rundung oder die Breite einer Fase für die Kanten zu groß, bietet die Meldung *Andere Kanten wählen* an.
+- Ein Klick auf *Übernehmen* an einem Merkmal während einer Berechnung behält die Änderung, auch wenn die Vorschau länger braucht. In Version 0.6.0 ging sie an größeren Modellen still verloren.
+- Eine angezeigte Textur rechnet ohne Änderung keine Vorschau mehr und bietet kein *Abbrechen* an.
 
 ## 0.6.0
 

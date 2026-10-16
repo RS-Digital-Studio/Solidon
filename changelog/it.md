@@ -74,6 +74,7 @@ scrive in `website/version.json`.
 - Diverse traduzioni si leggono con più chiarezza, tra cui l'introduzione di *Crea parametro …*. Il perno inizia con la maiuscola in tutte le lingue.
 - Nella finestra *Sblocca Solidon …*, *Acquista Solidon* resta disponibile su un computer attivato. I pulsanti in grigio indicano il motivo, *Verifica chiave* anche la via per una nuova chiave.
 - In francese il primo giorno del mese si scrive ora «1er», ad esempio «1er décembre 2026».
+- Senza driver grafico, ad esempio in una macchina virtuale, Solidon ora termina in modo affidabile alla chiusura. Nella versione 0.6.0 il programma poteva continuare a girare lì senza essere visto.
 
 ### Stampare e passare allo slicer
 
@@ -90,6 +91,8 @@ scrive in `website/version.json`.
 - I campi del foro e la casella per modificare insieme elementi uguali spiegano il loro effetto. «Compensare gli scostamenti di stampa» chiarisce la correzione del profilo del materiale.
 - Se accanto a un pezzo stampabile restano solo schegge, *Dividi in pezzi distinti* le nomina e offre *Tieni le schegge*. Prima diceva che il corpo era di un solo pezzo.
 - Se il raggio di un raccordo o la larghezza di uno smusso è troppo grande per gli spigoli, il messaggio offre *Scegli altri spigoli*.
+- Un clic su *Applica* su un elemento durante un calcolo mantiene la modifica, anche se l'anteprima richiede più tempo. Nella versione 0.6.0 andava persa senza avviso sui modelli grandi.
+- Una texture visualizzata non calcola più un'anteprima senza modifiche e non offre più *Annulla*.
 
 ## 0.6.0
 

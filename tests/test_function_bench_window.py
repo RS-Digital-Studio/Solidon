@@ -1164,6 +1164,12 @@ def test_a_scroll_click_covers_its_scroll_area_and_not_a_list_over_it(qt_app: An
     Sichtfläche — gedeckt, ob der Klick die ganze Sichtfläche oder nur ihren
     sichtbaren Teil nennt. Eine Liste darüber ist auch eine Rollfläche, aber
     nicht die mit diesem Rechteck: verdeckt.
+
+    **Der Inhalt füllt die Sichtfläche**, wie in jeder Rollfläche von Solidon.
+    Der sichtbare Teil ist der, den die Eltern nicht abschneiden — wie W ihn
+    nennt (``guide_targets.unclipped``). Über ``visibleRegion`` gefragt, zog
+    der Inhalt sich selbst ab: Unter macOS war die Fläche leer, unter Windows
+    ein Streifen von vier Punkten neben dem Inhalt (CI-Lauf 38781742486).
     """
     from types import SimpleNamespace
 
@@ -1179,17 +1185,21 @@ def test_a_scroll_click_covers_its_scroll_area_and_not_a_list_over_it(qt_app: An
     area = QScrollArea(root)
     # Unten ragt die Rollfläche aus dem Fenster: Ihr sichtbarer Teil ist kleiner.
     area.setGeometry(20, 20, 300, 400)
+    area.setWidgetResizable(True)
     inner = QLabel("lang")
-    inner.setMinimumSize(280, 900)
+    inner.setMinimumHeight(900)
     area.setWidget(inner)
     root.show()
     settle()
     try:
         ports = function_walk.QtPorts(None, 0.0)
         viewport = area.viewport()
+        assert inner.width() == viewport.width(), "premise: der Inhalt füllt die Sichtfläche"
         whole = QRect(viewport.mapToGlobal(QPoint(0, 0)), viewport.size())
         shown = function_walk._shown(viewport)
         assert shown != whole and whole.contains(shown), (shown, whole)
+        window = QRect(root.mapToGlobal(QPoint(0, 0)), root.size())
+        assert shown == whole.intersected(window), "alles, was das Fenster nicht abschneidet"
 
         def roll(rect: QRect) -> Any:
             return SimpleNamespace(

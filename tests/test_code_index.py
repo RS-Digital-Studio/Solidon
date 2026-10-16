@@ -676,7 +676,7 @@ LEAST_IMPORTS = 13000
 def test_the_ground_sets_of_the_real_tree_are_not_empty() -> None:
     """Mehr als 3 000 Patch-Stellen (Plan 2.2) und mehr als 13 000 Importe (Plan 2.5)."""
     index = _real()
-    imports = sum(len(facts.imports) for facts in index.files.values())
+    imports = index.import_count()
     assert len(index.patch_sites()) > LEAST_PATCH_SITES, len(index.patch_sites())
     assert imports > LEAST_IMPORTS, imports
 

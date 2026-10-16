@@ -51,7 +51,8 @@ CLEAN_TREES: Final = ("app", "tools", "tests")
 
 #: Die Nutzerordner, die ein nativer Lauf auf sein eigenes Profil legt. Nie
 #: ``HOME`` oder ``USERPROFILE``: Grafiktreiber und ihre Zwischenspeicher
-#: hängen daran (``file_acceptance.PROFILE_VARIABLES``).
+#: hängen daran (``app.core.paths.drawing_profile_variables``). Native Läufe
+#: fahren nur unter Windows.
 PROFILE_VARIABLES: Final = (
     "APPDATA",
     "LOCALAPPDATA",

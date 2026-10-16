@@ -75,6 +75,7 @@ dans `website/version.json`.
 - Plusieurs traductions se lisent plus clairement, dont l'introduction de *Créer un paramètre …*. Le tenon commence par une majuscule dans toutes les langues.
 - Dans la fenêtre *Déverrouiller Solidon …*, *Acheter Solidon* reste disponible sur un ordinateur activé. Les boutons grisés indiquent leur raison, *Vérifier la clé* aussi la voie vers une nouvelle clé.
 - Le premier jour du mois s'écrit désormais « 1er », par exemple « 1er décembre 2026 ».
+- Sans pilote graphique, par exemple dans une machine virtuelle, Solidon se termine désormais de façon fiable à la fermeture. En version 0.6.0, il pouvait y continuer à tourner sans être vu.
 
 ### Imprimer et transmettre au slicer
 
@@ -91,6 +92,8 @@ dans `website/version.json`.
 - Les champs du perçage et la case de modification simultanée des éléments similaires expliquent leur effet. « Compenser les écarts d'impression » précise la correction issue du profil du matériau.
 - S'il ne reste que des éclats à côté d'une pièce imprimable, *Diviser en pièces distinctes* les nomme et propose *Garder les éclats*. Avant, le corps était dit d'un seul tenant.
 - Si le rayon d'un congé ou la largeur d'un chanfrein est trop grand pour les arêtes, le message propose *Choisir d'autres arêtes*.
+- Un clic sur *Appliquer* d'un élément pendant un calcul garde la modification, même si l'aperçu prend plus de temps. En version 0.6.0, elle se perdait sans avertissement sur les gros modèles.
+- Une texture affichée ne calcule plus d'aperçu sans modification et ne propose plus *Annuler*.
 
 ## 0.6.0
 

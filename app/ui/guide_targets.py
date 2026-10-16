@@ -1666,10 +1666,10 @@ def _scroll_needed(widget: QWidget, name: str) -> Click | None:
     reach = QRect(centre, QSize(1, 1))
     if all(widget.height() <= area.viewport().height() for area in areas):
         reach = QRect(centre.x(), widget.mapToGlobal(QPoint(0, 0)).y(), 1, widget.height())
-    if all(_unclipped(area.viewport()).contains(reach) for area in areas):
+    if all(unclipped(area.viewport()).contains(reach) for area in areas):
         return None
     for area in areas:
-        seen = _unclipped(area.viewport())
+        seen = unclipped(area.viewport())
         if seen.height() < reach.height():
             # Erst einen ausreichend hohen Innenausschnitt freilegen, dann sein Feld.
             nominal = _global(area.viewport())
@@ -1696,7 +1696,7 @@ def _scroll_needed(widget: QWidget, name: str) -> Click | None:
         while hit is not None and hit is not area and not takes_wheel(hit, direction):
             hit = hit.parentWidget()
         use_bar = bar.isVisible() and (angle != 120 or area is not areas[0] or hit is not area)
-        surface = _unclipped(bar.parentWidget() or bar) if use_bar else seen
+        surface = unclipped(bar.parentWidget() or bar) if use_bar else seen
         if (widget_under(surface.center()) is not bar) if use_bar else (hit is not area):
             continue
         return Click(surface, Qt.MouseButton.NoButton, "rollen", name, direction, angle)
@@ -1705,7 +1705,7 @@ def _scroll_needed(widget: QWidget, name: str) -> Click | None:
     )
 
 
-def _unclipped(widget: QWidget) -> QRect:
+def unclipped(widget: QWidget) -> QRect:
     """Der Teil des Widgets, den seine Eltern bis zum Fenster nicht abschneiden — global.
 
     Anders als ``visibleRegion`` zählen Kinder und Geschwister darüber nicht:

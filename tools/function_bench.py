@@ -57,7 +57,7 @@ from tools.function_machine import (
     qt_schedule,
     until_step,
 )
-from tools.function_matrix import MatrixPhase, is_window
+from tools.function_matrix import MatrixPhase
 from tools.function_protocol import (
     abort_entry,
     bodies_digest,
@@ -98,7 +98,9 @@ from tools.function_walk import (
     QtPorts,
     Walk,
     click_button,
+    focus_arrived,
     focus_check,
+    focus_inside,
     place_of,
     typed_number,
     with_modifier,
@@ -824,16 +826,16 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
         """Alles markieren im Feld des Ziels — erst, wenn der Fokus dort liegt (Review M13)."""
         from PySide6.QtGui import QKeySequence
 
-        keys = QKeySequence(QKeySequence.StandardKey.SelectAll)
-
         def act(machine: StepMachine) -> None:
+            keys = QKeySequence(QKeySequence.StandardKey.SelectAll)
             focus_check(self.widget(target), target)
             self.walker.record(
                 {"target": "alles markieren", "key": keys.toString(), "button": None}
             )
             self.ports.keys(keys)
 
-        return Step(f"alles markieren {target}", act, settle_ms=SETTLE_MS)
+        arrived = focus_arrived(lambda: focus_inside(self.widget(target)))
+        return Step(f"alles markieren {target}", act, ready=arrived, settle_ms=SETTLE_MS)
 
     def _type(self, target: str, text: str, *, decision: bool = False) -> None:
         """Tippt ins Feld des Ziels; eines, das erst beim Verlassen übernimmt, bekommt Tab.
@@ -1815,79 +1817,6 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
                 }
                 return
         unmeasured(self.data, "halt", "der Prüfbericht nennt keinen Befund am angehaltenen Schritt")
-
-    def phase_licence(self) -> None:
-        """Prüfpunkt 18: Wie das Ziel im Lizenzzustand dasteht, und ob Schreiben gesperrt ist.
-
-        Steht das Ziel offen, geht der Kunde den ganzen Weg — Eingaben,
-        Übernehmen —, denn erst dort zeigt sich, ob die Funktion schreibt: Sie
-        ändert das Dokument, oder der Kern lehnt an der Lizenzgrenze ab
-        (``function_surface.licence_refusal``). Vorher klickte der Lauf nur das
-        Ziel, und eine Befundhandlung, deren Absage als Meldungsfenster kam,
-        galt als lesend (Probelauf F-35).
-
-        Der Lauf trägt ``state`` — ``angeboten``, ``grau`` oder ``fehlt``
-        (``function_points.LICENCE_RUN_STATES``) — und den Grund des grauen Ziels.
-        """
-        target = walk_target(self.row)
-        inputs = list(self.spec.get("inputs") or {})
-        before = self.scene_now()
-        refused: list[str] = []
-
-        def note(error: object) -> None:
-            if surfaces.licence_refusal(error):
-                refused.append(type(error).__name__)
-
-        def standing() -> bool:
-            head = self.widget(target)
-            return (head is not None and head.isVisible()) or surfaces.in_view(self.window, inputs)
-
-        selection = [
-            self.walker.step(name, button) for name, button in route_of(self.row) if name != target
-        ]
-        read: dict[str, Any] = {}  # Ein Fenster als Ziel: gelesen, solange es steht (RC-4).
-        if is_window(target):
-            selection.append(self.window_step(target, read))
-        if target.startswith("feature:"):
-            # Die Handlung am Merkmal steht nach der Auswahl erst im Fenster oder
-            # im Bild — gefragt wird danach, nicht im selben Augenblick (F-20).
-            selection.append(self.until_step("handlung steht", standing))
-        self.session.failed.connect(note)
-        try:
-            if not self.run_steps(PATH_PHASE, selection):
-                unmeasured(
-                    self.data, f"licence_runs.{self.variant.licence}", "Auswahlweg abgebrochen"
-                )
-                return
-            state, reason = self.licence_state(target, inputs, read)
-            if state == "angeboten" and not read:
-                acting = [
-                    self.action_step(target)
-                    if target.startswith("feature:")
-                    else self.walker.step(target),
-                    Step("eigene fläche", self.mark_own),
-                    *self.input_steps(self.spec.get("inputs") or {}),
-                ]
-                if self.apply_target is not None:
-                    acting.append(self.apply_step())
-                effect, _done = self.effect_steps("lizenz")
-                if not self.run_steps("lizenz", [effect[0], *acting, *effect[1:]]):
-                    unmeasured(
-                        self.data,
-                        f"licence_runs.{self.variant.licence}",
-                        "Lizenzhandlung abgebrochen",
-                    )
-                    return
-        finally:
-            self.session.failed.disconnect(note)
-        writes = (
-            self.row.get("kind") == "operation"
-            or bool(refused)
-            or compare_prints(before, self.scene_now())["same"] is False
-        )
-        self.data["licence_runs"] = {
-            self.variant.licence: {"writes": writes, "state": state, "reason": reason}
-        }
 
     def phase_surface(self) -> None:
         """Zoll, Skalierung, Thema, Bewegung: Weg bis zur offenen Fläche, dann ihre Aufnahmen."""

@@ -21,6 +21,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtWidgets import QApplication
 
 from app.ui.leash import Worker, WorkerLeash
+from tests import source_tree
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -251,7 +252,6 @@ def test_a_full_collection_waits_for_the_drag_and_keeps_what_arrives_meanwhile(
         leash_module,
         "QGuiApplication",
         SimpleNamespace(instance=lambda: object(), mouseButtons=lambda: pressed[0]),
-        raising=False,
     )
     late = 4096
     starts: list[str] = []
@@ -450,7 +450,7 @@ def test_wait_all_also_waits_for_a_worker_that_has_not_finished(qt_app: QApplica
         worker.wait(2000)
 
 
-def test_no_worker_is_started_past_the_leash(qt_app: QApplication) -> None:
+def test_no_worker_is_started_past_the_leash() -> None:
     """Was an der Leine vorbei startet, sieht ``wait_for_all`` nicht — und
     damit verspricht jede Zusicherung darüber mehr, als sie halten kann.
 
@@ -469,20 +469,21 @@ def test_no_worker_is_started_past_the_leash(qt_app: QApplication) -> None:
 
     Geprüft wird am Quelltext und nicht am Verhalten, weil das Verhalten es
     nicht zeigt: Ein Arbeiter an der Leine vorbei läuft völlig normal, bis das
-    Fenster unter ihm weggeräumt wird.
+    Fenster unter ihm weggeräumt wird. Deshalb braucht der Fall auch keine
+    Anwendung und läuft im Kernlauf.
     """
     import re
-    from pathlib import Path
 
     # Vom Testverzeichnis aus, nicht vom Arbeitsverzeichnis: ein Wächter, der
     # nur beim Aufruf aus dem Projektstamm etwas findet, ist keiner.
+    leine = source_tree.definition_file("WorkerLeash", "app/ui")
     verstoesse = []
-    for pfad in sorted((Path(__file__).parent.parent / "app" / "ui").glob("*.py")):
-        if pfad.name == "leash.py":
+    for pfad in source_tree.python_files("app/ui"):
+        if pfad == leine:
             continue  # dort steht der eine richtige Aufruf
         for nummer, zeile in enumerate(pfad.read_text(encoding="utf-8").splitlines(), 1):
             if re.fullmatch(r"\s*\w*worker\.start\(\)\s*", zeile, re.IGNORECASE):
-                verstoesse.append(f"{pfad.as_posix()}:{nummer}")
+                verstoesse.append(f"{source_tree.relative(pfad)}:{nummer}")
 
     assert not verstoesse, (
         "diese Arbeiter starten an der Leine vorbei und sind damit für "
@@ -1048,17 +1049,17 @@ def test_every_worker_in_the_surface_uses_the_base_class() -> None:
     die Regel und nicht die Zahl — wer einen neuen anlegt, erbt.
     """
     import ast
-    from pathlib import Path
 
+    leash = source_tree.definition_file("Worker", "app/ui")
     strays: list[str] = []
-    for path in sorted((Path(__file__).resolve().parent.parent / "app" / "ui").glob("*.py")):
+    for path in source_tree.python_files("app/ui"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef):
                 continue
             bases = {getattr(base, "id", getattr(base, "attr", "")) for base in node.bases}
-            if "QThread" in bases and path.name != "leash.py":
-                strays.append(f"{path.name}:{node.name}")
+            if "QThread" in bases and path != leash:
+                strays.append(f"{source_tree.relative(path)}:{node.name}")
 
     assert not strays, "erbt von QThread statt von leash.Worker: " + ", ".join(strays)
 
@@ -1189,9 +1190,6 @@ def test_every_worker_has_somebody_listening_for_its_crash() -> None:
     Helferparameter übergeben. Rückgebende Fabriken werden an ihren Aufrufern geprüft.
     """
     import ast
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parent.parent / "app" / "ui"
 
     def worker_classes(tree: ast.AST) -> set[str]:
         return {
@@ -1202,7 +1200,8 @@ def test_every_worker_has_somebody_listening_for_its_crash() -> None:
         }
 
     trees = {
-        path: ast.parse(path.read_text(encoding="utf-8")) for path in sorted(root.glob("*.py"))
+        path: ast.parse(path.read_text(encoding="utf-8"))
+        for path in source_tree.python_files("app/ui")
     }
     known = set().union(*(worker_classes(tree) for tree in trees.values()))
     assert known, "keine Worker-Klassen gefunden — dann prüft der Lauf nichts"
@@ -1231,27 +1230,34 @@ def test_every_worker_has_somebody_listening_for_its_crash() -> None:
                 for call in ast.walk(node)
             )
             if not listens and not _delegates_crash_connection(tree, builds):
-                deaf.append(f"{path.name}:{node.name}")
+                deaf.append(f"{source_tree.relative(path)}:{node.name}")
 
     assert sites >= 10, f"nur {sites} Startstellen gefunden — dann prüft der Lauf zu wenig"
     assert not deaf, "baut Arbeiter, hört aber nicht auf crashed: " + ", ".join(deaf)
 
 
 def test_the_sweep_over_the_surface_finds_files_to_read() -> None:
-    """Drei Prüfungen hier lesen ``app/ui/*.py`` und sichern zu, dass sie
-    nichts Verbotenes finden.
+    """Drei Prüfungen hier lesen ``app/ui`` und sichern zu, dass sie nichts
+    Verbotenes finden.
 
     Eine Zusicherung auf „nichts gefunden" ist auch dann grün, wenn nichts
     gelesen wurde: Zieht der Ordner um oder wird eine Datei zum Paket, liefert
-    der Glob eine leere Liste, und die Schleife läuft nie. Die Prüfung meldet
-    dann „kein Verstoß" und meint „nicht nachgesehen".
+    ein flacher Glob eine leere oder eine halbe Liste, und die Schleife läuft
+    an genau den Dateien vorbei. Die Prüfung meldet dann „kein Verstoß" und
+    meint „nicht nachgesehen". Eine Mindestzahl Dateien fing das nicht: Würde
+    ``main_window.py`` ein Paket, blieben über zwanzig übrig (CS-12).
+
+    Verlangt werden deshalb die Dateien, um die es geht — die Definitionen von
+    ``MainWindow``, ``Viewport`` und des Renderervertrags aus ``render/``, wo
+    immer sie liegen — und mindestens eine Datei in einem Unterpaket. Die Zahl
+    bleibt nur als Beleg der Grundmenge.
     """
-    from pathlib import Path
+    files = source_tree.python_files("app/ui")
 
-    files = sorted((Path(__file__).resolve().parent.parent / "app" / "ui").glob("*.py"))
-
-    # Weit unter dem Stand (52) — das soll einen Zusammenbruch fangen, nicht
-    # jede neue oder gelöschte Datei melden.
+    for name in ("MainWindow", "Viewport", "Renderer"):
+        assert source_tree.definition_file(name, "app/ui") in files, f"{name} wird nicht gelesen"
+    top = source_tree.ROOT / "app" / "ui"
+    assert any(path.parent != top for path in files), "kein Unterpaket von app/ui wird gelesen"
     assert len(files) >= 20, f"nur {len(files)} Dateien unter app/ui — falscher Pfad?"
 
 

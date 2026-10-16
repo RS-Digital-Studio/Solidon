@@ -196,9 +196,10 @@ def test_isolation_hands_the_keyring_of_the_user_to_no_child(
     Knöpfe hingen davon ab, ob dort ein Schlüssel lag. Die Nutzerordner allein
     reichen nicht: Der Schlüsselbund liegt in keinem von ihnen.
     """
+    from app.core.paths import PROFILE_VARIABLES
     from tools import window_bench
 
-    for name in (*acceptance.PROFILE_VARIABLES, "HOME"):
+    for name in PROFILE_VARIABLES:
         monkeypatch.setenv(name, str(tmp_path / "vorher"))
     monkeypatch.setenv("PYTHON_KEYRING_BACKEND", FOREIGN_KEYRING)
     {"file_acceptance": acceptance.isolate, "window_bench": window_bench.isolate}[isolate](

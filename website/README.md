@@ -36,8 +36,9 @@ von außen, kein Zählpixel. `site.js` markiert in der Funktionsseite den gerade
 gelesenen Block, zählt auf der Startseite die Zeit bis zur Demo herunter,
 spielt die Loops erst ab, wenn sie im Bild sind, lässt die Schrittmarken unter
 dem Aufmacher-Loop mitlaufen (die Zeitmarken stehen als `data-at` im Markup und
-folgen `make_video.web_loop_chapter_starts`) und baut nach dem Klick den
-GoFundMe-Rahmen; alles davon ist Zugabe — ohne Skript steht jeder Inhalt da. `activation.js` gehört ausschließlich zur bewusst
+folgen `make_video.web_loop_chapter_starts`), baut nach dem Klick den
+GoFundMe-Rahmen und bietet auf der deutschen Startseite Lesern mit anderer
+Browsersprache ihre Fassung an; alles davon ist Zugabe — ohne Skript steht jeder Inhalt da. `activation.js` gehört ausschließlich zur bewusst
 aufgerufenen Offline-Aktivierungsseite und sendet erst nach einem Klick die
 vom Kunden gewählte Anfragedatei. `tests/test_website.py` prüft den Teil, der
 die Zusage der Seite trägt: **nichts von außen** und kein versteckter
@@ -62,7 +63,7 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 | `funktionen.html`, `<sprache>/features.html` | Funktionsseite — sechs Einstiege nach Kundenaufgabe, bebilderte Beispiele und aufklappbare Werkzeuggruppen |
 | `ki-modelle.html`, `en/ai-models.html` | Was ein Modell aus Meshy, Tripo oder Rodin noch braucht |
 | `changelog.html`, `<sprache>/changelog.html` | Versionsverlauf mit Auswahl — erzeugt von `tools/make_changelog.py` aus derselben Quelle wie das App-Fenster |
-| `site.js` | Markiert Sprungliste und Changelog-Auswahl und zählt im Download-Kasten die Zeit bis zur Demo |
+| `site.js` | Markiert Sprungliste und Changelog-Auswahl, zählt im Download-Kasten die Zeit bis zur Demo und zeigt auf der deutschen Startseite den Sprachhinweis |
 | `offline-aktivierung.html`, `activation.js` | Drei-Schritt-Seite für die Aktivierung eines Rechners ohne eigenen Netzzugang; sendet dieselbe Anfragedatei an denselben Endpunkt wie die Anwendung |
 | `security.html`, `<sprache>/security.html` | Sicherheitsmeldeweg und Unterstützungsdauer der Verkaufsversion |
 | `api/activation.php`, `api/deactivation.php` | Aktiviert genau einen Geräteplatz beziehungsweise gibt ihn mit signiertem Gerätenachweis wieder frei |
@@ -272,7 +273,8 @@ Zielsystem fehlt. Danach vier Blöcke, die dem Weg eines Kunden folgen:
 langen Zeitraum davor — über die Monatsgrenze hinweg, und ohne Vergleich, wo
 die Löschfrist die Daten nicht so weit zurückreichen lässt), **Reichweite**
 (Tag für Tag als Säulen mit aufklappbarer Tabelle, Monate im Vergleich,
-Herkunft und Sprache je Besuch mit Anteil und Konversion, Seiten mit Einstieg,
+Herkunft und Sprache je Besuch mit Anteil und Konversion, Wechsel von der
+deutschen Startseite in eine andere Sprachfassung, Seiten mit Einstieg,
 Ausstieg und Ausstiegsquote, ungelesene Seiten aus `sitemap.xml`, Tiefe und
 Dauer, Uhrzeit und Wochentag), **Konversion** (Besuche mit Download,
 Direktdownloads ohne Seitenaufruf, Version mal Zielsystem mit Anteil, die
@@ -288,6 +290,15 @@ Datenabdeckung nicht bis dorthin, bleiben diese Kennzahlen leer.
 Update-Prüfungen vor diesem Tag werden in allen Ansichten ausgeblendet;
 die Rohdaten bleiben unverändert. Frühe Testaufrufe nach dem Release sind
 rückwirkend nicht unterscheidbar.
+
+Den Sprachhinweis der deutschen Startseite misst, was ohnehin gezählt wird:
+Ein Besuch, der auf `/` beginnt und danach eine andere Sprachfassung öffnet,
+ist ein Wechsel. Ob über den Hinweis oder die Sprachverweise in Kopf- und
+Fußzeile, trennt der Zähler nicht — alle führen auf dieselbe Adresse, und für
+die Statistik wird im Browser nichts abgelegt. Die Wirkung zeigt der Befund in **Auf einen
+Blick**, der die Wechselquote der letzten sieben Tage neben die der sieben
+davor stellt (ab 20 Besuchen auf `/` je Fenster); eine Woche nach dem
+Hochladen ist das der Vorher-nachher-Vergleich.
 
 Der Update-Client kennzeichnet Quellenstarts automatisch mit
 `Solidon-Test/<Version>`. Bei Paketproben setzt `SOLIDON_UPDATE_TEST=1`

@@ -99,6 +99,7 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 | Ort / Frage | Vertrag |
 |---|---|
 | `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export samt `_warm_the_slicer`, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
+| `waiting_click.py` | Ein Neuaufbau ohne Eingabe hält die Freigabe, an der ein Klick wartet (`kept_through_rebuild`, `waiting_approval`) |
 
 *Früher unter „Die Karte › Rahmen und Einstieg“, HEAD-Fassung.*
 
@@ -2309,11 +2310,13 @@ Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.
 ### Hilfe und Bedienung
 
 `guide_targets` teilt `widget_under`, `zone_of`, `search_hits`,
-`menubar_entries`, `point_for` und `next_click` zwischen Tour, Bildanleitungen
-und Prüfstand. Den Wrapper des zuletzt geholten modalen Dialogs und des
-zuletzt getroffenen Fensters hält es (`_HELD`, `_PROBED`), damit die Wrapper
-ihrer Kinder nicht verfallen; `release_held` gibt beide frei, am Ende jeder
-Fläche und jedes Falls des Prüfstands. `area_for` deckt die Zielfläche einschließlich verschachtelter
+`menubar_entries`, `point_for`, `next_click` und `unclipped` (der sichtbare,
+von keinem Elternteil abgeschnittene Teil eines Widgets; `function_walk._shown`
+misst damit Rollflächen) zwischen Tour, Bildanleitungen und Prüfstand. Den
+Wrapper des zuletzt geholten modalen Dialogs und des zuletzt getroffenen
+Fensters hält es (`_HELD`, `_PROBED`), damit die Wrapper ihrer Kinder nicht
+verfallen; `release_held` gibt beide frei, am Ende jeder Fläche und jedes
+Falls des Prüfstands. `area_for` deckt die Zielfläche einschließlich verschachtelter
 Rollbereiche auf; `next_click` geht den tatsächlichen Kundenweg ohne solches
 Aufdecken. Es rollt mit Radereignissen am tatsächlichen Rollbereich, bis ein
 Feld, das hineinpasst, mit beiden Kanten frei steht; ein kurzer Restschritt
@@ -2430,6 +2433,13 @@ leere Vorschau — ihr Befund ist die Auskunft, kein Grund
 endgültigen Platzierungswerten geprüft. Ein früher Klick wartet auf das Bild
 seiner eigenen Freigabe — nie auf ein älteres: eine geänderte Zahl, ein
 geändertes Dokument oder ein Projektwechsel entwerten die Freigabe samt Klick.
+Ein Neuaufbau ohne Eingabe des Kunden entwertet sie nicht: Während
+`waiting_click.kept_through_rebuild` (Merkmalswahl, Bohrung mit Senkung,
+Antwort des Merkmalsarbeiters) und bei `_set_preview_order(..., rebuilt=True)`
+(Maßgruppe vor ihrem ersten Zug) bleibt eine noch gültige Freigabe mit
+wartendem Klick stehen — samt laufender Vorschau —, und Maßgruppe und
+Merkmalfenster zeigen danach seine Werte. Ein anderer Wert verwirft ihn mit
+Satz. Begründung in `regel-wartezeit.md`.
 Identische Platzierungswerte lösen keine erneute Änderung aus. Die Revision
 und der geprüfte Auftrag gehören dem Hauptfenster, die Träger halten keine
 zweite Vorschauverwaltung. Auch Chat-Übernehmen und die Rückkehr zu einem

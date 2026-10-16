@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from tests import move_fixtures as fx
-from tools import move_cut, move_names, move_proof
+from tools import move_cut, move_names, move_proof, move_refs
 
 MODULE_EXPECTED = fx.changed_tree(fx.MODULE_OLD, fx.MODULE_NEW)
 COPIES_EXPECTED = fx.changed_tree(fx.COPIES_OLD, fx.COPIES_NEW)
@@ -119,6 +119,57 @@ def test_a_query_through_a_detour_follows_the_cut(
     assert expected in text, (label, text)
 
 
+#: Dazu die Formen, die der Auflöser selbst als Bezug nennt (CS-27): ``hasattr`` und
+#: ``getattr`` mit Vorgabe über den eingebauten Namen.
+SINGLE_FORMS = [
+    *MODULE_FORMS,
+    (
+        "hasattr",
+        {
+            QUERY: "from app.core import legacy\n\n\ndef test_has():\n"
+            '    assert hasattr(legacy, "bump")\n'
+        },
+        'hasattr(state, "bump")',
+    ),
+    (
+        "getattr-mit-vorgabe",
+        {
+            QUERY: "from app.core import legacy\n\n\ndef test_get():\n"
+            '    assert getattr(legacy, "bump", None) is not None\n'
+        },
+        'getattr(state, "bump", None)',
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("label", "extra", "expected"), SINGLE_FORMS, ids=[form[0] for form in SINGLE_FORMS]
+)
+def test_every_query_is_rewritten_by_exactly_one_way(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    label: str,
+    extra: dict[str, str],
+    expected: str,
+) -> None:
+    """Was der Auflöser als Bezug nennt (``getattr``, ``hasattr``, auch über einen Alias derselben
+    Datei), stellt die Bezugsschleife um; die Aufrufsuche nur, was er nicht nennt (``setattr``,
+    ein Alias aus einem anderen Modul). Jede Stelle wird genau einmal umgestellt — zwei Wege für
+    dieselbe Form liefen sonst auseinander (Zwilling)."""
+    seen: list[tuple[str, int]] = []
+    original = move_refs.FileRewrite.retarget_getattr
+
+    def counted(self: move_refs.FileRewrite, line: int, col: int, *rest: str) -> None:
+        seen.append((self.path, line))
+        original(self, line, col, *rest)
+
+    monkeypatch.setattr(move_refs.FileRewrite, "retarget_getattr", counted)
+    root, result = _run(tmp_path, fx.MODULE_OLD | extra, fx.MODULE_CUT)
+    assert result.status == "written", (label, result.problems)
+    assert expected in (root / QUERY).read_text(encoding="utf-8"), label
+    assert len([line for path, line in seen if path == QUERY]) == 1, (label, seen)
+
+
 @pytest.mark.parametrize(("label", "extra", "expected"), MODULE_FORMS, ids=MODULE_IDS)
 def test_a_query_through_a_detour_left_standing_is_red(
     tmp_path: Path, label: str, extra: dict[str, str], expected: str
@@ -185,6 +236,25 @@ def test_a_holder_read_through_a_detour_is_rejected(
     assert fx.tree_bytes(root) == {p: fx.text_of(t).encode("utf-8") for p, t in files.items()}
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        COPIES_FORMS[0][1],
+        COPIES_FORMS[4][1],
+        "from app.core import consumer\n\n\ndef test_has():\n"
+        '    assert hasattr(consumer, "operation")\n',
+    ],
+    ids=["builtins-attribut", "alias", "hasattr"],
+)
+def test_a_query_on_a_copy_is_rejected_by_one_way(tmp_path: Path, text: str) -> None:
+    """``hasattr`` auf eine Kopie nennt der Auflöser als Bezug (CS-27): Die Bezugsschleife weist
+    es ab, die Aufrufsuche nicht noch einmal — eine Stelle, ein Fund."""
+    _root, result = _run(tmp_path, fx.COPIES_OLD | {QUERY: text}, fx.COPIES_CUT)
+    found = [p for p in result.problems if p.startswith(f"{QUERY}:")]
+    assert len(found) == 1, result.problems
+    assert "fragt nach der Kopie" in found[0], found
+
+
 @pytest.mark.parametrize(("label", "text", "plan", "proof"), COPIES_FORMS, ids=COPIES_IDS)
 def test_a_holder_read_through_a_detour_left_standing_is_red(
     tmp_path: Path, label: str, text: str, plan: str, proof: str
@@ -229,3 +299,103 @@ def test_an_open_holder_read_declared_in_open_names_passes(tmp_path: Path) -> No
     _root, result = _run(tmp_path / "leer", fx.COPIES_OLD, declared)
     assert result.status == "rejected", result.problems
     assert any(f"open_names ({QUERY}, pick) trifft keinen" in p for p in result.problems)
+
+
+# ------------------------------------------------------------------ Skripte für python -c
+
+#: Ein Test, der ``app.core.legacy.bump`` und die Kopie ``app.core.consumer.operation`` nur im
+#: Text eines Skripts für ``python -c`` liest (CS-18).
+SCRIPT_TEXT = (
+    "import subprocess\nimport sys\n\n\ndef test_script():\n"
+    "    subprocess.run([sys.executable, '-c', {script!r}])\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("label", "old", "cut", "script", "expected"),
+    [
+        (
+            "modul",
+            fx.MODULE_OLD,
+            fx.MODULE_CUT,
+            "from app.core.legacy import bump\nbump()\n",
+            "Skript für python -c liest app.core.legacy.bump — vor dem Schnitt im Skripttext "
+            "auf app.core.legacy.state.bump umschreiben",
+        ),
+        (
+            "kopie",
+            fx.COPIES_OLD,
+            fx.COPIES_CUT,
+            "from app.core.consumer import operation\noperation(1)\n",
+            "Skript für python -c liest die Kopie app.core.consumer.operation — vor dem Schnitt "
+            "im Skripttext auf app.core.engine.compute umschreiben",
+        ),
+    ],
+    ids=["modul", "kopie"],
+)
+def test_a_reference_in_a_script_names_the_script_text(
+    tmp_path: Path, label: str, old: dict[str, str], cut: str, script: str, expected: str
+) -> None:
+    """RR2-7: Im Skripttext ist der Bezug schon ein Import; die Handlung nennt das Skript und
+    das Ziel, nicht „als Import oder Attribut schreiben“, und der Baum bleibt, wie er war."""
+    files = old | {QUERY: SCRIPT_TEXT.format(script=script)}
+    root, result = _run(tmp_path, files, cut)
+    assert result.status == "rejected", (label, result.status, result.problems)
+    found = [p for p in result.problems if p.startswith(f"{QUERY}:")]
+    # Daneben nennt die Zeichenkette im Modus module die alte Quelle — eine eigene Prüfung.
+    assert f"{QUERY}:6: {expected}" in found, (label, result.problems)
+    assert not [p for p in found if "als Import oder Attribut" in p], (label, found)
+    assert fx.tree_bytes(root) == {p: fx.text_of(t).encode("utf-8") for p, t in files.items()}
+
+
+#: ``getattr(M, "N")`` ohne Vorgabe, über den eingebauten Namen und über einen Alias derselben
+#: Datei: Bezug oder W5-Fund entscheidet der Auflöser (CS-27, RR2-8).
+GETATTR_WITHOUT_DEFAULT = [
+    "from app.core import legacy\n\n\ndef test_get():\n    assert getattr(legacy, 'bump')\n",
+    "from app.core import legacy\n\nlook = getattr\n\n\ndef test_get():\n"
+    "    assert look(legacy, 'bump')\n",
+]
+
+
+@pytest.mark.parametrize("text", GETATTR_WITHOUT_DEFAULT, ids=["eingebaut", "alias"])
+def test_a_getattr_without_default_left_standing_is_reported_once(
+    tmp_path: Path, text: str
+) -> None:
+    """RR2-8: Die Leere von ``getattr(M, "N")`` ohne Vorgabe meldet der Auflöser als W5, über
+    den eingebauten Namen wie über einen Alias derselben Datei (CS-27); der Beweis meldet sie
+    nicht noch einmal als Abfrage."""
+    extra = {QUERY: text}
+    proof = _prove(tmp_path, fx.MODULE_OLD | extra, MODULE_EXPECTED | extra, fx.MODULE_CUT)
+    found = [error for error in proof.errors if QUERY in error]
+    assert len(found) == 1, found
+    assert "getattr-Bezug app.core.legacy.bump" in found[0] and "(W5)" in found[0], found
+
+
+@pytest.mark.parametrize(
+    ("text", "counted"),
+    [
+        *((text, 0) for text in GETATTR_WITHOUT_DEFAULT),
+        (
+            "from app.core import legacy\n\n\ndef test_get():\n"
+            "    assert getattr(legacy, 'bump', None)\n",
+            1,
+        ),
+        (
+            "from app.core import legacy\n\n\ndef test_has():\n"
+            "    assert hasattr(legacy, 'bump')\n",
+            1,
+        ),
+    ],
+    ids=["eingebaut", "alias", "mit-vorgabe", "hasattr"],
+)
+def test_the_query_ground_set_leaves_a_getattr_without_default_to_the_resolver(
+    tmp_path: Path, text: str, counted: int
+) -> None:
+    """RR2-8, RR2-15: Nach dem Schnitt gibt es ``state.bump``; ein ``getattr`` ohne Vorgabe darauf
+    führt der Auflöser als Bezug, auch über einen Alias — die Grundmenge ``queries`` des
+    Beweises zählt es nicht ein zweites Mal. Gegenprobe: ``getattr`` mit Vorgabe und ``hasattr``
+    zählt sie, deren Leere meldet der Auflöser nicht."""
+    _root, result = _run(tmp_path, fx.MODULE_OLD | {QUERY: text}, fx.MODULE_CUT)
+    assert result.status == "written", result.problems
+    assert result.proof is not None and result.proof.ok, result.proof and result.proof.text()
+    assert result.proof.counts["queries"] == counted, result.proof.text()

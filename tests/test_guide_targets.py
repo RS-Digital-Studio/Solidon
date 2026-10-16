@@ -112,7 +112,7 @@ NEW_RESOLVERS = (
     "_obstacle_click",
     "_widget_click",
     "_scroll_needed",
-    "_unclipped",
+    "unclipped",
     "_row_click",
     "_visible_row_click",
     "_expander_click",

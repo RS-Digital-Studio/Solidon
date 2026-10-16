@@ -5938,6 +5938,14 @@ class Viewport(QWidget):
             return
         self.renderer = None
         self._navigator = None
+        # **Und nichts hier hält ihn danach** (FD-193): Griffe und die
+        # Vergleichsschlüssel der Merkmalsflächen (``_Same(self.renderer)``)
+        # hielten den geschlossenen Renderer bis zum Ende des Fensters — nach
+        # einem Sprachwechsel lag der alte mit seinen Puffern im Speicher. Ihre
+        # Elemente gehen mit dem Renderer; abgeräumt wird ohne ihn nichts.
+        self._gizmo = self._preview_gizmo = self._placement_grip = None
+        self._scale_handle = self._slot_handle = None
+        self._feature_patch_drawn = self._hover_patch_drawn = self._bed_built = None
         try:
             renderer.close()
         except Exception as problem:  # pragma: no cover - hängt am nativen Treiber

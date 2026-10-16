@@ -336,24 +336,18 @@ def read_cases(out: Path) -> list[Case]:
     return [Case(**entry) for entry in json.loads((out / "cases.json").read_text(encoding="utf-8"))]
 
 
-#: Die Nutzerordner, die ein Fall auf sein Profil legt. Nie ``HOME`` oder
-#: ``USERPROFILE``: Grafiktreiber und ihre Zwischenspeicher hängen daran, und die
-#: Adapterfrage der Ansicht hing dann (Erinnerung „sonden-bauen“).
-PROFILE_VARIABLES: tuple[str, ...] = (
-    "APPDATA",
-    "LOCALAPPDATA",
-    "XDG_CONFIG_HOME",
-    "XDG_DATA_HOME",
-    "XDG_CACHE_HOME",
-)
-
-
 def isolate(profile: Path) -> None:
-    """Nutzerordner auf ``profile``, Schlüsselbund auf die Attrappe — vor ``import app``."""
-    profile.mkdir(parents=True, exist_ok=True)
-    os.environ.update(dict.fromkeys(PROFILE_VARIABLES, str(profile)))
-    from app.core.paths import isolate_secrets  # nach den Ordnern: app liest sie
+    """Nutzerordner auf ``profile``, Schlüsselbund auf die Attrappe — vor ``import app``.
 
+    Welche Ordner, sagt ``app.core.paths.drawing_profile_variables``: ``HOME`` nur
+    unter macOS (RCI-10).
+    """
+    profile.mkdir(parents=True, exist_ok=True)
+    # ``app.core.paths`` liest die Ordner beim Aufruf, nicht beim Import
+    # (``test_the_user_folders_are_read_when_asked_not_when_imported``).
+    from app.core.paths import drawing_profile_variables, isolate_secrets
+
+    os.environ.update(dict.fromkeys(drawing_profile_variables(), str(profile)))
     isolate_secrets(os.environ)
 
 
@@ -1056,12 +1050,11 @@ def child(out: Path, number: int, screen: str = "") -> int:
     crash_records(folder)
     # Dasselbe Dateiprotokoll wie ``app.main``, im Profil des Falls (FD-163):
     # Ohne es stand die Wartezeile des Abbaus (FD-154) in keinem Protokoll. Unter
-    # macOS liegt es sonst in ``~/Library/Logs``, außerhalb des Profils.
+    # macOS liegt ``~/Library/Logs`` im Profil, seit ``HOME`` dorthin zeigt.
     from app.core.log import configure
     from app.core.paths import user_log_dir
 
-    mac = sys.platform == "darwin"
-    configure(to_console=False, directory=folder / "profile" / "logs" if mac else user_log_dir())
+    configure(to_console=False, directory=user_log_dir())
     if case.kind == "start":
         return start_child(out, case, folder)
     if case.kind != "file":
@@ -1755,7 +1748,7 @@ class WindowFlow:
         from app.ui import guide_targets
         from app.ui.labels import display_unit
         from tools.function_machine import SETTLE_MS, Step
-        from tools.function_walk import focus_check, typed_number
+        from tools.function_walk import focus_arrived, focus_check, focus_inside, typed_number
 
         text = typed_number(value, display_unit())
 
@@ -1776,9 +1769,10 @@ class WindowFlow:
             self.walker.record({"target": target, "typed": text})
             self.ports.type_text(text)
 
+        arrived = focus_arrived(lambda: focus_inside(field()))
         return [
             self.walker.step(target),
-            Step("alles markieren", mark, settle_ms=SETTLE_MS),
+            Step("alles markieren", mark, ready=arrived, settle_ms=SETTLE_MS),
             Step(f"tippen {text}", type_it, settle_ms=SETTLE_MS),
         ]
 

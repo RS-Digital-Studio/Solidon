@@ -14,8 +14,13 @@ Funktionen und unter ``TYPE_CHECKING``:
 - jedes ``getattr(alias, "N")`` ohne Vorgabe. Mit Vorgabe und ``hasattr`` fragt
   der Code nach einer Abwesenheit; das ist kein Fund.
 
+Dieselben Regeln gelten in jedem Skript, das ein Test oder Werkzeug als Text an
+``python -c`` gibt (``script:<art>``, CS-18, ein eigener Test): Ein verschobener
+Name bräche dort erst im Kindprozess.
+
 Lazy-Exporte, Literale eines ``__getattr__``, Stubs (``.pyi``) und ``type``
-lösen auf; die Gegenproben dazu stehen in ``test_code_index.py``.
+lösen auf; die Gegenproben dazu stehen in ``test_code_index.py``, die der
+Skripte in ``test_code_scripts.py``.
 """
 
 from __future__ import annotations
@@ -42,7 +47,7 @@ def _of(*kinds: str) -> list[Unresolved]:
 
 def test_the_ground_set_holds_every_import() -> None:
     """Ohne Importe wäre jede Regel grün, weil nichts geprüft wurde."""
-    imports = sum(len(facts.imports) for facts in _index().files.values())
+    imports = _index().import_count()
     assert imports > LEAST_IMPORTS, imports
 
 
@@ -61,4 +66,10 @@ def test_every_attribute_of_an_own_module_resolves() -> None:
 
 def test_every_getattr_without_default_on_an_own_module_resolves() -> None:
     found = _of("getattr")
+    assert not found, _report(found)
+
+
+def test_every_reference_in_a_script_for_python_c_resolves() -> None:
+    """Jede Art (``script:from``, ``script:attribute`` …) in einem Skript als Text (CS-18)."""
+    found = [item for item in _index().unresolved() if item.kind.startswith("script:")]
     assert not found, _report(found)

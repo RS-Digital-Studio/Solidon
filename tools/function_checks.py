@@ -356,11 +356,13 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     # ``names``: was die Szene selbst benennt (Projekt, Körper aus ihren Dateien) —
     # Text des Kunden, nicht der Anwendung; V1 nimmt es aus der Prüfung.
     "scene": ProtocolField("tabelle", _keys("key", "triangles", "build_s", "eval_s", "names")),
+    # ``wheel_angle`` und ``moved`` an einem Rollschritt: Radmenge und ob ein
+    # Rollbereich weiterrückte (FD-131, ``function_walk``).
     "steps": ProtocolField(
         "liste",
         _keys(
             "target", "why", "button", "rect", "point", "widget_at", "hit", "zone", "typed",
-            "key", "decision", "t", "phase", "finding", "detail",
+            "key", "decision", "t", "phase", "finding", "detail", "wheel_angle", "moved",
         ),
         {"why": WHY, "zone": ZONES, "finding": BENCH_FINDINGS},
         needs=_keys("phase"),

@@ -18,7 +18,8 @@ Phase.
 **Ein Fenster als Ziel wird gelesen, solange es steht** (RC-4,
 :meth:`MatrixPhase.window_step`): Der Automat räumt ein modales Fenster am Ende
 des Laufs mit Escape ab, danach gefragt hieß jede Fensterzeile „fehlt“. Auch
-der Lizenzlauf (Prüfpunkt 18) liest so.
+der Lizenzlauf (Prüfpunkt 18) liest so; er steht deshalb hier
+(:meth:`MatrixPhase.phase_licence`, aus ``function_bench`` gezogen, RCI-11).
 """
 
 from __future__ import annotations
@@ -29,8 +30,9 @@ from typing import TYPE_CHECKING, Any, Final
 from tools import function_surface as surfaces
 from tools.function_checks import MATRIX_UNREACHABLE, SELECTION_STAGES
 from tools.function_machine import Step, StepMachine
-from tools.function_protocol import compare_prints
+from tools.function_protocol import compare_prints, unmeasured
 from tools.function_setup import route_of, selected_feature, walk_target
+from tools.function_walk import PATH_PHASE
 
 if TYPE_CHECKING:
     from tools.function_bench import FunctionFlow
@@ -166,6 +168,79 @@ class MatrixPhase:
                 read if is_window(target) else self.offer_state(target, f"matrix {stage}")
             )
         self.data["matrix"] = matrix
+
+    def phase_licence(self: FunctionFlow) -> None:
+        """Prüfpunkt 18: Wie das Ziel im Lizenzzustand dasteht, und ob Schreiben gesperrt ist.
+
+        Steht das Ziel offen, geht der Kunde den ganzen Weg — Eingaben,
+        Übernehmen —, denn erst dort zeigt sich, ob die Funktion schreibt: Sie
+        ändert das Dokument, oder der Kern lehnt an der Lizenzgrenze ab
+        (``function_surface.licence_refusal``). Vorher klickte der Lauf nur das
+        Ziel, und eine Befundhandlung, deren Absage als Meldungsfenster kam,
+        galt als lesend (Probelauf F-35).
+
+        Der Lauf trägt ``state`` — ``angeboten``, ``grau`` oder ``fehlt``
+        (``function_points.LICENCE_RUN_STATES``) — und den Grund des grauen Ziels.
+        """
+        target = walk_target(self.row)
+        inputs = list(self.spec.get("inputs") or {})
+        before = self.scene_now()
+        refused: list[str] = []
+
+        def note(error: object) -> None:
+            if surfaces.licence_refusal(error):
+                refused.append(type(error).__name__)
+
+        def standing() -> bool:
+            head = self.widget(target)
+            return (head is not None and head.isVisible()) or surfaces.in_view(self.window, inputs)
+
+        selection = [
+            self.walker.step(name, button) for name, button in route_of(self.row) if name != target
+        ]
+        read: dict[str, Any] = {}  # Ein Fenster als Ziel: gelesen, solange es steht (RC-4).
+        if is_window(target):
+            selection.append(self.window_step(target, read))
+        if target.startswith("feature:"):
+            # Die Handlung am Merkmal steht nach der Auswahl erst im Fenster oder
+            # im Bild — gefragt wird danach, nicht im selben Augenblick (F-20).
+            selection.append(self.until_step("handlung steht", standing))
+        self.session.failed.connect(note)
+        try:
+            if not self.run_steps(PATH_PHASE, selection):
+                unmeasured(
+                    self.data, f"licence_runs.{self.variant.licence}", "Auswahlweg abgebrochen"
+                )
+                return
+            state, reason = self.licence_state(target, inputs, read)
+            if state == "angeboten" and not read:
+                acting = [
+                    self.action_step(target)
+                    if target.startswith("feature:")
+                    else self.walker.step(target),
+                    Step("eigene fläche", self.mark_own),
+                    *self.input_steps(self.spec.get("inputs") or {}),
+                ]
+                if self.apply_target is not None:
+                    acting.append(self.apply_step())
+                effect, _done = self.effect_steps("lizenz")
+                if not self.run_steps("lizenz", [effect[0], *acting, *effect[1:]]):
+                    unmeasured(
+                        self.data,
+                        f"licence_runs.{self.variant.licence}",
+                        "Lizenzhandlung abgebrochen",
+                    )
+                    return
+        finally:
+            self.session.failed.disconnect(note)
+        writes = (
+            self.row.get("kind") == "operation"
+            or bool(refused)
+            or compare_prints(before, self.scene_now())["same"] is False
+        )
+        self.data["licence_runs"] = {
+            self.variant.licence: {"writes": writes, "state": state, "reason": reason}
+        }
 
     def licence_state(
         self: FunctionFlow, target: str, inputs: list[str], read: Mapping[str, Any]

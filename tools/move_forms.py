@@ -92,12 +92,11 @@ class NamedCall:
     """Ein Aufruf mit einem Attributnamen an zweiter Stelle.
 
     ``kind``: ``getattr``, ``hasattr``, ``setattr``, ``delattr`` (eingebaut) oder ``patch``
-    (``monkeypatch.setattr``/``delattr``, ``patch.object``). ``plain``: über den eingebauten
-    Namen selbst gerufen — so, wie der Auflöser ``getattr`` als Bezug zählt."""
+    (``monkeypatch.setattr``/``delattr``, ``patch.object``). Welche Stellen der Auflöser als
+    Bezug nennt, sagt :func:`reported_calls`."""
 
     call: ast.Call
     kind: str
-    plain: bool
 
     @property
     def target(self) -> ast.expr:
@@ -114,6 +113,22 @@ class NamedCall:
         if isinstance(second, ast.Constant) and isinstance(second.value, str):
             return second.value
         return None
+
+
+#: Die Abfragen, die der Auflöser selbst als Bezug nennt — auch über einen Alias derselben
+#: Datei (CS-27); ``setattr``/``delattr`` und einen Alias aus einem anderen Modul nennt er nicht.
+REPORTED_QUERIES = frozenset({"getattr", "hasattr"})
+
+
+def reported_calls(index: Index, module: str, name: str) -> frozenset[tuple[str, int, int]]:
+    """Die Aufrufe auf ``module.name`` (Datei, Zeile, Spalte), die der Auflöser als Bezug der
+    Art ``getattr`` oder ``hasattr`` nennt. Sie gehören der Bezugsschleife; eine Aufrufsuche
+    nimmt nur, was er nicht nennt — so behandelt genau ein Weg jede Stelle."""
+    return frozenset(
+        (ref.path, ref.line, ref.col)
+        for ref in index.references(module, name)
+        if ref.kind in REPORTED_QUERIES
+    )
 
 
 def is_query(kind: str | None, call: ast.Call) -> bool:
@@ -164,8 +179,7 @@ class Calls:
         kind = self._function(path, call.func)
         if kind is None or kind not in ATTRIBUTE_FUNCTIONS.values():
             return None
-        plain = isinstance(call.func, ast.Name) and call.func.id == kind
-        return NamedCall(call, kind, plain)
+        return NamedCall(call, kind)
 
     def namespace(self, path: str, node: ast.AST) -> ast.expr | None:
         """Das Objekt, dessen Namensraum ``node`` als Ganzes liest (``vars(X)``, ``dir(X)``,

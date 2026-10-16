@@ -140,6 +140,123 @@ def test_a_changed_test_file_lands_in_both_lists_by_its_cases(tmp_path: Path) ->
     assert ci_selection.programs("; ".join(slicers), tmp_path) == ["cura"]
 
 
+def test_a_pure_test_change_runs_no_window_test_that_reads_only_the_application(
+    tmp_path: Path,
+) -> None:
+    """RQ-1: Eine Änderung nur an einem Test wählte über ``affected_tests`` jeden Baumleser,
+    und ``ci_selection`` fuhr dafür 47 Fenster- und 3 Slicerprozesse auf Linux und macOS.
+    Ein Fenstertest, der nur ``app/`` liest, läuft bei einer Teständerung nicht mit — bei
+    einer Änderung unter ``app/`` schon; einer, der ``tests/`` liest, läuft bei beiden."""
+    for package in ("app", "tools", "tests"):
+        (tmp_path / package).mkdir()
+    window = textwrap.dedent(
+        """
+        from pathlib import Path
+
+        import pytest
+
+        FOLDER = Path(__file__).resolve().parents[1] / {folder!r}
+
+        @pytest.mark.windowed
+        def test_window():
+            assert sorted(FOLDER.rglob("*.py")) is not None
+        """
+    )
+    (tmp_path / "tests" / "test_window_reads_app.py").write_text(
+        window.format(folder="app"), encoding="utf-8"
+    )
+    (tmp_path / "tests" / "test_window_reads_tests.py").write_text(
+        window.format(folder="tests"), encoding="utf-8"
+    )
+    changed_test = tmp_path / "tests" / "test_pure_change_probe.py"
+    changed_test.write_text("def test_pure_change_probe():\n    pass\n", encoding="utf-8")
+    changed_app = tmp_path / "app" / "module.py"
+    changed_app.write_text("VALUE = 1\n", encoding="utf-8")
+
+    windows, _slicers = ci_selection.select([changed_test], tmp_path)
+    assert {shlex.split(selection)[0] for selection in windows} == {
+        "tests/test_window_reads_tests.py"
+    }
+
+    windows, _slicers = ci_selection.select([changed_app], tmp_path)
+    assert {shlex.split(selection)[0] for selection in windows} == {
+        "tests/test_window_reads_app.py"
+    }
+
+
+def test_a_file_chosen_by_a_reading_runs_only_the_windows_that_reach_it(tmp_path: Path) -> None:
+    """F-11: Eine reine Teständerung wählte ``test_packaging``, ``test_suite_isolation`` und
+    ``test_toolchain`` über ihre Fälle ohne Fenster, die ``tests/`` lesen — und ``ci_selection``
+    fuhr ihre Fenster auf Linux und macOS. Allein über eine Lesestelle gewählt, fährt eine Datei
+    ihre Fenster und Slicer nur, wenn ein solcher Fall die lesende Einheit erreicht: selbst, über
+    eine Fixture, über seine Klasse oder weil die Modulebene liest."""
+    for package in ("app", "tools", "tests"):
+        (tmp_path / package).mkdir()
+    head = "from pathlib import Path\nimport pytest\nHERE = Path(__file__).resolve().parent\n"
+    files = {
+        "test_plain_reader": "def test_reads():\n    assert sorted(HERE.glob('test_*.py'))\n"
+        "@pytest.mark.windowed\ndef test_window():\n    pass\n"
+        "@pytest.mark.slicer('cura')\ndef test_cura():\n    pass\n",
+        "test_fixture_reader": "@pytest.fixture\ndef sources():\n"
+        "    return sorted(HERE.glob('test_*.py'))\n"
+        "@pytest.mark.windowed\ndef test_window(sources):\n    assert sources is not None\n",
+        "test_class_reader": "class TestWindows:\n"
+        "    def test_reads(self):\n        assert sorted(HERE.glob('test_*.py'))\n"
+        "    @pytest.mark.windowed\n    def test_window(self):\n        pass\n",
+        "test_module_reader": "FILES = sorted(HERE.glob('test_*.py'))\n"
+        "@pytest.mark.windowed\ndef test_window():\n    pass\n",
+    }
+    for name, body in files.items():
+        (tmp_path / "tests" / f"{name}.py").write_text(head + body, encoding="utf-8")
+    changed = tmp_path / "tests" / "test_pure_change_probe.py"
+    changed.write_text("def test_pure_change_probe():\n    pass\n", encoding="utf-8")
+
+    windows, slicers = ci_selection.select([changed], tmp_path)
+
+    assert {shlex.split(selection)[0] for selection in windows} == {
+        "tests/test_fixture_reader.py",
+        "tests/test_class_reader.py",
+        "tests/test_module_reader.py",
+    }
+    assert slicers == []
+    found = affected_tests.selection([changed], affected_tests.ImportGraph(tmp_path))
+    assert found.units[tmp_path / "tests" / "test_plain_reader.py"] == {"test_reads"}
+
+
+def test_a_data_file_runs_the_windows_whose_units_read_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Je lesender Funktion (Entscheidung Koordinator): ``plate_holes.stl`` fuhr in der CI 85
+    Fensterdateien, weil jeder Importeur von ``tests/helpers.py`` mitlief. Eine Datei unter
+    ``tests/data`` fährt die Fenster einer Testdatei nur, wenn ein Fensterfall die Einheit des
+    Helfers erreicht, die sie liest."""
+    for package in ("app", "tools", "tests"):
+        (tmp_path / package).mkdir()
+    monkeypatch.syspath_prepend(str(tmp_path))
+    plate = tmp_path / "tests" / "data" / "meshes" / "zz_plate.stl"
+    plate.parent.mkdir(parents=True)
+    plate.write_text("solid\n", encoding="utf-8")
+    (tmp_path / "tests" / "zz_plate_helpers.py").write_text(
+        "from pathlib import Path\n"
+        "MESHES = Path(__file__).parent / 'data' / 'meshes'\n"
+        "def plate():\n    return (MESHES / 'zz_plate.stl').read_bytes()\n",
+        encoding="utf-8",
+    )
+    head = "import pytest\nfrom tests.zz_plate_helpers import plate\n"
+    for name, body in {
+        "test_zz_plain_plate": "def test_plain():\n    plate()\n"
+        "@pytest.mark.windowed\ndef test_window():\n    pass\n",
+        "test_zz_window_plate": "@pytest.mark.windowed\ndef test_window():\n    plate()\n",
+    }.items():
+        (tmp_path / "tests" / f"{name}.py").write_text(head + body, encoding="utf-8")
+
+    windows, _slicers = ci_selection.select([plate], tmp_path)
+
+    assert {shlex.split(selection)[0] for selection in windows} == {"tests/test_zz_window_plate.py"}
+    files, _reasons = affected_tests.affected([plate], affected_tests.ImportGraph(tmp_path))
+    assert {path.name for path in files} == {"test_zz_plain_plate.py", "test_zz_window_plate.py"}
+
+
 def _unmarked_machine_searches(source: str, name: str) -> list[str]:
     """Stellen, die einen installierten Slicer an ``installed_slicer`` vorbei suchen."""
     tree = ast.parse(source)

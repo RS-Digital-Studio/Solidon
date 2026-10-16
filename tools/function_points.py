@@ -70,7 +70,7 @@ from tools.function_judges import (
 )
 from tools.function_list import LICENCE_STATES, NOT_APPLICABLE_REASONS, licence_states
 
-#: Wie das Ziel in einem Lizenzlauf dastand (``function_bench.phase_licence``):
+#: Wie das Ziel in einem Lizenzlauf dastand (``function_matrix.phase_licence``):
 #: offen, grau oder gar nicht — dieselben Wörter wie in der Matrix.
 LICENCE_RUN_STATES: Final = ("angeboten", "grau", "fehlt")
 LICENCE_MISSING: Final = LICENCE_RUN_STATES[2]

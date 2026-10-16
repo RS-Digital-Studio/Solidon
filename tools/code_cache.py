@@ -6,16 +6,18 @@ import ast
 import dataclasses
 import hashlib
 import marshal
-from collections.abc import Callable
+import os
+import time
+from collections.abc import Callable, Iterable, Mapping
 from itertools import chain
 from pathlib import Path
-from types import UnionType
+from types import ModuleType, UnionType
 from typing import TYPE_CHECKING, ForwardRef, cast, get_args, get_origin
 
 if TYPE_CHECKING:
     from tools.code_facts import Facts
 
-MAGIC = b"SOLIDON-CODE-INDEX-DATA-1\n"
+MAGIC = b"SOLIDON-CODE-INDEX-DATA-2\n"
 # Zusammen mit code_facts.stamp() bindet dies die statisch gelesenen Typen an
 # die tatsächlich importierten Implementierungen, auch bei Änderungen auf Platte.
 _SOURCE = Path(__file__).read_bytes()
@@ -240,8 +242,10 @@ def _unpack(
         if not all(check(item) for check, item in zip(checks, children, strict=True)):
             raise ValueError("Ungültige Feldform")
         result = cls(*children)
+        # Nur ein Bereich als Zahl verweist in die Bereichsliste einer Datei; ``PatchSite.scope``
+        # aus dem Ergebnisspeicher ist ein Name (die Feldprüfung oben hat den Typ belegt).
         reference = getattr(result, "scope", None)
-        if reference is not None and (scope_count is None or not 0 <= reference < scope_count):
+        if type(reference) is int and (scope_count is None or not 0 <= reference < scope_count):
             raise ValueError("Ungültiger Bereichsverweis")
         if tag == "Facts":
             _check_scopes(cast("Facts", result))
@@ -253,36 +257,213 @@ def _unpack(
     return result
 
 
+#: Was ein unlesbarer Speicher werfen kann; er ist eine Ableitung und wird neu gebaut. Ein
+#: beschädigter Zähler in einem Datensatz lässt ``marshal`` erst Speicher für so viele Elemente
+#: anfordern (``MemoryError``), eine beschädigte Länge sprengt den Zahlbereich
+#: (``OverflowError``, RR2-14).
+UNREADABLE = (
+    OSError,
+    ValueError,
+    TypeError,
+    EOFError,
+    KeyError,
+    RecursionError,
+    SyntaxError,
+    MemoryError,
+    OverflowError,
+)
+
+#: Länge der Längenangabe des Verzeichnisses hinter dem Kopf.
+_SIZE = 8
+
+
+def _header(current: str) -> bytes:
+    return MAGIC + current.encode("ascii") + b"\n"
+
+
+def frame(current: str, entries: Iterable[tuple[str, str, bytes]]) -> bytes:
+    """Stempel im Klartext, ein Verzeichnis ``(pfad, hash, lage, länge)`` und je Datei ein
+    eigener Marshal-Datensatz (``entries``: Pfad, Inhaltshash, Datensatz).
+
+    Je Datei ein Datensatz: Ein Bau dekodiert nur, was er braucht, die Zwischenformen einer
+    Datei sind frei, bevor die nächste kommt (ein Datensatz für den ganzen Baum hielt sie alle
+    zugleich, der Prozess wuchs um rund 1 GB über einen frischen Auszug), und ein einzelner
+    Auszug lässt sich ohne die übrigen lesen (:func:`decode_one`)."""
+    table: list[tuple[str, str, int, int]] = []
+    records: list[bytes] = []
+    offset = 0
+    for name, digest, record in entries:
+        table.append((name, digest, offset, len(record)))
+        records.append(record)
+        offset += len(record)
+    directory = marshal.dumps(tuple(table), allow_code=False)
+    size = len(directory).to_bytes(_SIZE, "little")
+    return _header(current) + size + directory + b"".join(records)
+
+
+def replace_atomically(path: Path, data: bytes) -> None:
+    """Schreibt ``data`` über eine eigene Zwischendatei und ersetzt dann ``path``: Ein Leser
+    sieht nie eine halbe Datei. Hält ein anderer Prozess sie gerade offen (Windows), bleibt
+    sie, wie sie ist — sie ist eine Ableitung, der nächste Bau schreibt sie neu. Der eine Weg
+    für den Zwischenspeicher der Auszüge und den Ergebnisspeicher (``tools/code_store.py``).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    temporary.write_bytes(data)
+    for _attempt in range(20):
+        try:
+            temporary.replace(path)
+            return
+        except PermissionError:
+            time.sleep(0.05)
+    temporary.unlink()
+
+
 def encode(current: str, files: dict[str, tuple[str, Facts]]) -> bytes:
-    """Stempel im Klartext, dahinter ausschließlich Marshal-Daten ohne Codeobjekte."""
-    return MAGIC + current.encode("ascii") + b"\n" + marshal.dumps(_pack(files), allow_code=False)
+    """Die Auszüge je Pfad mit ihrem Inhaltshash als Rahmen (:func:`frame`), nur Daten."""
+    return frame(current, ((name, digest, dumps(facts)) for name, (digest, facts) in files.items()))
 
 
-def decode(path: Path, current: str) -> dict[str, tuple[str, Facts]]:
-    """Veraltete, beschädigte und alte Pickle-Speicher werden ohne Ausführung verworfen."""
+def _directory(head: bytes, current: str, length: int) -> int:
+    """Die Länge des Verzeichnisses aus dem Kopf; ein anderer Stand ist kein Speicher. Reicht
+    sie über das Dateiende (``length``) hinaus, ist er beschädigt — gelesen wird dann nichts,
+    sonst forderte eine Länge von 2^40 so viel Speicher an (RR2-5)."""
+    header = _header(current)
+    if len(head) != len(header) + _SIZE or not head.startswith(header):
+        raise ValueError("Anderer Stand")
+    size = int.from_bytes(head[len(header) :], "little")
+    if len(head) + size > length:
+        raise ValueError("Verzeichnis über das Dateiende hinaus")
+    return size
+
+
+def _table(raw: bytes | memoryview, records_size: int) -> tuple[tuple[str, str, int, int], ...]:
+    """Das Verzeichnis, geprüft: eindeutige Pfade, jede Lage innerhalb der Datensätze."""
+    table = marshal.loads(raw, allow_code=False)
+    if not isinstance(table, tuple):
+        raise ValueError("Ungültiges Verzeichnis")
+    names: set[str] = set()
+    for entry in table:
+        if not (
+            isinstance(entry, tuple)
+            and len(entry) == 4
+            and type(entry[0]) is str
+            and type(entry[1]) is str
+            and type(entry[2]) is int
+            and type(entry[3]) is int
+            and entry[2] >= 0
+            and entry[3] >= 0
+            and entry[2] + entry[3] <= records_size
+            and entry[0] not in names
+        ):
+            raise ValueError("Ungültiger Verzeichniseintrag")
+        names.add(entry[0])
+    return cast(tuple[tuple[str, str, int, int], ...], table)
+
+
+_SCHEMAS: dict[str, Records] = {}
+
+
+def _schema(current: str) -> Records:
+    """Die Datensätze von ``code_facts``, aus der Quelle, die der Prozess geladen hat — nicht
+    der auf der Platte, die sich seitdem geändert haben kann (RR2-13); nur wenn sie zum Stand
+    passt. Geparst einmal je Inhalt."""
     from tools import code_facts
 
+    source = code_facts._SOURCE
+    if hashlib.sha256(source + _SOURCE).hexdigest() != current:
+        raise ValueError("Die Quelle des Auszugs passt nicht zum Stand")
+    key = hashlib.sha256(source).hexdigest()
+    if key not in _SCHEMAS:
+        _SCHEMAS[key] = _records(vars(code_facts), source)
+    return _SCHEMAS[key]
+
+
+def _record(raw: bytes | memoryview, records: Records, name: str) -> Facts:
+    from tools import code_facts
+
+    facts = _unpack(marshal.loads(raw, allow_code=False), records, {})
+    if not isinstance(facts, code_facts.Facts) or facts.path != name:
+        raise ValueError("Datensatz gehört zu keiner oder einer anderen Datei")
+    return facts
+
+
+def decode(
+    path: Path, current: str, wanted: Mapping[str, str] | None = None
+) -> dict[str, tuple[str, Facts]]:
+    """Die Auszüge je Pfad mit ihrem Inhaltshash; mit ``wanted`` (Pfad → Hash) nur die, deren
+    Hash dort steht. Veraltete, beschädigte und alte Pickle-Speicher werden ohne Ausführung
+    verworfen — ganz, sobald ein gelesener Datensatz nicht stimmt."""
     try:
-        data = path.read_bytes()
-        header = MAGIC + current.encode("ascii") + b"\n"
-        if not data.startswith(header):
+        if current != _stamp():
             return {}
-        source = Path(code_facts.__file__).read_bytes()
-        if hashlib.sha256(source + _SOURCE).hexdigest() != code_facts.stamp():
-            return {}
-        records = _records(vars(code_facts), source)
-        stored = _unpack(marshal.loads(data[len(header) :], allow_code=False), records, {})
-        if not isinstance(stored, dict):
-            return {}
+        records = _schema(current)
+        data = memoryview(path.read_bytes())
+        start = len(_header(current)) + _SIZE
+        size = _directory(bytes(data[:start]), current, len(data))
+        base = start + size
+        table = _table(data[start:base], len(data) - base)
         files: dict[str, tuple[str, Facts]] = {}
-        for name, entry in stored.items():
-            if not isinstance(name, str) or not isinstance(entry, tuple) or len(entry) != 2:
-                return {}
-            digest, facts = entry
-            if not isinstance(digest, str) or not isinstance(facts, code_facts.Facts):
-                return {}
-            files[name] = digest, facts
+        for name, digest, offset, length in table:
+            if wanted is not None and wanted.get(name) != digest:
+                continue
+            raw = data[base + offset : base + offset + length]
+            files[name] = digest, _record(raw, records, name)
         return files
-    except OSError, ValueError, TypeError, EOFError, KeyError, RecursionError, SyntaxError:
+    except UNREADABLE:
         # Der Cache ist eine Ableitung. Ein unlesbarer Stand wird aus dem Quelltext erneuert.
         return {}
+
+
+def decode_one(path: Path, current: str, name: str, digest: str) -> Facts | None:
+    """Der Auszug genau einer Datei mit diesem Inhaltshash, ohne die übrigen zu lesen; ``None``,
+    wenn er fehlt, zu einem anderen Inhalt gehört oder der Speicher nicht stimmt."""
+    try:
+        if current != _stamp():
+            return None
+        records = _schema(current)
+        with path.open("rb") as handle:
+            start = len(_header(current)) + _SIZE
+            head = handle.read(start)
+            length = handle.seek(0, 2)
+            size = _directory(head, current, length)
+            base = start + size
+            records_size = length - base
+            handle.seek(start)
+            table = _table(handle.read(size), records_size)
+            for entry, entry_digest, offset, length in table:
+                if entry != name:
+                    continue
+                if entry_digest != digest:
+                    return None
+                handle.seek(base + offset)
+                return _record(handle.read(length), records, name)
+        return None
+    except UNREADABLE:
+        return None
+
+
+def _stamp() -> str:
+    from tools import code_facts
+
+    return code_facts.stamp()
+
+
+def records_of(*modules: ModuleType) -> Records:
+    """Die geprüften Datensätze der NamedTuples und Datenklassen dieser Module, je aus der
+    Quelle, die das Modul beim Import las (``_SOURCE``; die Platte kann seitdem eine andere
+    tragen, RR2-13) — für einen weiteren Speicher derselben Bauart."""
+    found: Records = {}
+    for module in modules:
+        found.update(_records(vars(module), module._SOURCE))
+    return found
+
+
+def dumps(value: object) -> bytes:
+    """Ein Wert aus Daten und geprüften Datensätzen als Marshal-Bytes ohne Codeobjekte."""
+    return marshal.dumps(_pack(value), allow_code=False)
+
+
+def loads(raw: bytes | memoryview, records: Records) -> object:
+    """Das Gegenstück zu :func:`dumps`; jede Form und jedes Feld geprüft, nichts ausgeführt."""
+    return _unpack(marshal.loads(raw, allow_code=False), records, {})

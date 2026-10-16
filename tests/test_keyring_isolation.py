@@ -24,7 +24,9 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 
 #: Woran eine Funktion zu erkennen ist, die Nutzerordner nennt.
-PROFILE_NAMES = re.compile(r"""['"](?:LOCAL)?APPDATA['"]|PROFILE_VARIABLES|ISOLATED_VARIABLES""")
+PROFILE_NAMES = re.compile(
+    r"""['"](?:LOCAL)?APPDATA['"]|PROFILE_VARIABLES|ISOLATED_VARIABLES|profile_variables\("""
+)
 #: Woran sie zu erkennen ist, dass sie eine Umgebung schreibt.
 WRITES = re.compile(
     r"\b(?:os\.environ|env|environment)(?:\[[^\]\n]+\]\s*=(?!=)|\.update\(|\.setdefault\()"
@@ -170,7 +172,7 @@ def test_no_case_reads_the_chat_key_of_the_user_from_the_environment(
     monkeypatch.setenv(f"{paths.LLM_KEY_VARIABLE}_OPENAI", "ausgedacht")
     child = native_runs.profile_environment(dict(os.environ), tmp_path / "profil")
     assert not [name for name in child if name.startswith(paths.LLM_KEY_VARIABLE)]
-    for name in (*file_acceptance.PROFILE_VARIABLES, "PYTHON_KEYRING_BACKEND"):
+    for name in (*paths.PROFILE_VARIABLES, "PYTHON_KEYRING_BACKEND"):
         monkeypatch.setenv(name, os.environ.get(name, ""))
     file_acceptance.isolate(tmp_path / "fall")
     monkeypatch.setattr(keys, "_keyring", lambda: None)  # nur die Umgebung zählt hier

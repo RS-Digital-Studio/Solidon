@@ -33,6 +33,19 @@ PROFILE_VARIABLES: Final = (
     "XDG_CACHE_HOME",
 )
 
+
+def drawing_profile_variables() -> tuple[str, ...]:
+    """Die Nutzerordner eines Profils, in dem die Ansicht zeichnet (Fall, Erzeuger).
+
+    ``HOME`` nur unter macOS, wo jede Auflösung über ``Path.home()`` läuft —
+    sonst schrieb der Prozess ins echte Profil (CI-Lauf 38781742486). Unter
+    Windows und Linux bleibt es, wo es ist: Grafiktreiber und ihre
+    Zwischenspeicher hängen daran, und die Adapterfrage der Ansicht hing. Die
+    Suite biegt alle :data:`PROFILE_VARIABLES` um, sie zeichnet offscreen.
+    """
+    return tuple(name for name in PROFILE_VARIABLES if name != "HOME" or sys.platform == "darwin")
+
+
 #: Der Schlüsselbund eines frischen Profils. Er liegt in keinem der Ordner oben
 #: (Windows-Tresor, macOS-Schlüsselbund, Secret Service); ``keyring`` wählt sein
 #: Backend für einen Prozess und jedes Kind aus dieser Variable, und die
