@@ -834,7 +834,8 @@ def _sorted(
 
 #: Der atomare Austausch und die Windows-Dateiaufrufe liegen in
 #: :mod:`app.core.paths`; auch die gemerkte Wahl in ``discover`` braucht sie.
-_windows_file_api = windows_file_api
+#: Die Dateiaufrufe liest :func:`_open_snapshot` zur Aufrufzeit, ohne Kopie
+#: unter eigenem Namen: Ein Ersatz in ``paths`` erreicht sie so (CS-11).
 _replace_snapshot = replace_file
 
 
@@ -845,7 +846,7 @@ def _open_snapshot(path: Path) -> BinaryIO:
     import ctypes
     import msvcrt
 
-    kernel32 = _windows_file_api()
+    kernel32 = windows_file_api()
     handle = kernel32.CreateFileW(
         str(path),
         0x80000000,
