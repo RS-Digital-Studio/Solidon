@@ -4164,6 +4164,7 @@
   "Für einen Schnitt um eine Rundung herum, denn geteilt wird an einer geraden Ebene. Dann zweimal teilen.": "For a cut around a curve, because the split is a straight plane. Split twice instead.",
   "Für einen gedruckten Stift ist das Gewinde zu kurz: Er braucht {minimum}, die Bohrung lässt {room}. Das Gewinde in seinem Schritt verlängern.": "The thread is too short for a printed pin: it needs {minimum}, the hole leaves {room}. Lengthen the thread in its step.",
   "Für einen gedruckten Stift ist das Gewinde zu kurz: Er braucht {minimum}, die Bohrung lässt {room}. Eine Bohrung mit längerem Gewinde wählen.": "The thread is too short for a printed pin: it needs {minimum}, the hole leaves {room}. Choose a hole with a longer thread.",
+  "Für einen neuen Schlüssel zuerst „{button}“ wählen.": "For a new key, first choose “{button}”.",
   "Für hohe Lasten oder häufiges Lösen. Dafür halten Metallschrauben mit Mutternfalle oder Heat-Set-Buchse besser.": "For high loads or frequent removal. Metal screws with a nut trap or heat-set insert hold better there.",
   "Für starke Beugungen, denn an gebeugten Gelenken schnürt sich die Haut ein. Was der Druck hält, zeigt die Überhangkarte.": "For strong bends, because the skin pinches at bent joints. The overhang map shows what will print.",
   "Für unrunde oder schwankende Stäbe ohne Klemmschraube, denn die Aufnahme ist rund. Bambus an der dicksten Stelle messen.": "For out-of-round or varying rods without a clamping screw, because the socket is round. Measure bamboo at its thickest point.",

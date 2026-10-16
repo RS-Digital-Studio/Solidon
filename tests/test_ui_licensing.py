@@ -520,6 +520,13 @@ def test_an_activated_computer_can_still_buy_and_says_why_the_rest_is_closed(
             and not all(text.strip() for text in (button.toolTip(), button.accessibleDescription()))
         ]
         assert silent == [], f"gesperrt und ohne Grund: {silent}"
+        # Der Grund an *Schlüssel prüfen* nennt auch den Ausweg, mit dem Namen des
+        # offenen Knopfs daneben (RC-5, Kriterium V5).
+        way_out = dialog.forget_button
+        assert way_out.isEnabled() and way_out.text() == "Diesen Rechner deaktivieren"
+        dialog.field.setPlainText("SOLIDON3D-1-NEUER-SCHLUESSEL")
+        for told in (dialog.check_button.toolTip(), dialog.check_button.accessibleDescription()):
+            assert f"„{way_out.text()}“" in told, told
     finally:
         dialog.close()
         dialog.deleteLater()

@@ -2590,11 +2590,22 @@ class ActivationDialog(QDialog):
         # Was gerade läuft, sagt die Zeile darüber (``state_label``, gesetzt vor
         # dem Start des Arbeiters); dieselbe Auskunft gilt an den Knöpfen.
         running = self.state_label.text() if busy else ""
+        # Der aktive Schlüssel sperrt das Prüfen; der Ausweg ist der offene Knopf
+        # daneben, mit seinem Namen (Kriterium V5, RC-5).
+        replace_hint = (
+            f"{ActiveLicenceCannotBeReplaced()} "
+            + tr(
+                "Für einen neuen Schlüssel zuerst „{button}“ wählen.",
+                button=self.forget_button.text(),
+            )
+            if active
+            else ""
+        )
         check_hint = (
             locked
             or running
             or (deactivation_pending_line() if pending_deactivation else "")
-            or (str(ActiveLicenceCannotBeReplaced()) if active else "")
+            or replace_hint
             or ("" if filled else str(tr("Fügen Sie den Schlüssel aus der Bestellmail ein.")))
         )
         self.check_button.setToolTip(check_hint if not self.check_button.isEnabled() else "")

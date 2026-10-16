@@ -73,7 +73,7 @@ dans `website/version.json`.
 - L'anglais et le portugais distinguent désormais le dépassement d'un crochet, ou d'un corps sous le plateau, du surplomb à l'impression.
 - En espagnol et en portugais, le menu, la recherche et la boîte de dialogue n'affichent de nouveau que la première phrase de *Goupille pour perçage* et *Orienter pour l'impression*.
 - Plusieurs traductions se lisent plus clairement, dont l'introduction de *Créer un paramètre …*. Le tenon commence par une majuscule dans toutes les langues.
-- Dans la fenêtre *Déverrouiller Solidon …*, *Acheter Solidon* reste disponible même sur un ordinateur activé, par exemple pour un deuxième appareil. Les autres boutons grisés indiquent leur raison.
+- Dans la fenêtre *Déverrouiller Solidon …*, *Acheter Solidon* reste disponible sur un ordinateur activé. Les boutons grisés indiquent leur raison, *Vérifier la clé* aussi la voie vers une nouvelle clé.
 - Le premier jour du mois s'écrit désormais « 1er », par exemple « 1er décembre 2026 ».
 
 ### Imprimer et transmettre au slicer
