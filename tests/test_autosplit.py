@@ -8,6 +8,7 @@ geteilt, ohne dass jemand einen Parameter anfasst. Alle drei stehen hier.
 from __future__ import annotations
 
 import math
+import sys
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -1319,7 +1320,10 @@ def test_batched_connectors_equal_the_sequential_product_geometry(
     original = boolean.boolean
 
     def record(kind: str, meshes: list[MeshData], **kwargs: object):
-        calls.append(kind)
+        # Gezählt werden die Produktbooleschen, nicht der Bau des Stifts in der
+        # Bausteinbibliothek — die Kette liest beide zur Aufrufzeit (CS-11).
+        if sys._getframe(1).f_globals.get("__name__") != "app.core.knowledge.parts.build":
+            calls.append(kind)
         return original(kind, meshes, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(boolean, "boolean", record)
@@ -1359,6 +1363,9 @@ def test_failed_connector_batch_uses_the_sequential_fallback(
     calls: list[tuple[str, object]] = []
 
     def fail_the_batch_once(kind: str, meshes: list[MeshData], **kwargs: object):
+        # Wie oben: nur die Produktbooleschen, nicht der Bau des Stifts (CS-11).
+        if sys._getframe(1).f_globals.get("__name__") == "app.core.knowledge.parts.build":
+            return original(kind, meshes, **kwargs)  # type: ignore[arg-type]
         calls.append((kind, kwargs.get("stages")))
         if len(calls) == 1:
             raise BooleanFailedError(detail="erzwungene Batch-Gegenprobe", attempted=("direct",))

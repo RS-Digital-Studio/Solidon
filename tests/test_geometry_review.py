@@ -602,16 +602,16 @@ def tin() -> MeshData:
     return hollow(cube(standing=True), 3.0, vents=0, open_top=True).mesh
 
 
-#: Die Bausteinbibliothek baut ihre Formen fein und ohne Abbruch
-#: (``knowledge.parts.build``): Ein Stift ist eine Normform, keine Rechnung der Op.
-PART_LIBRARY = "app.core.knowledge.parts."
+#: Wo die Bausteinbibliothek ihre Formen baut — fein und ohne Abbruch: Ein Stift ist eine
+#: Normform, keine Rechnung der Op.
+PART_BUILD = "app.core.knowledge.parts.build"
 
 
 def _from_the_op() -> bool:
     """Ob der Aufruf der Kette, den der Ersatz gerade sieht, aus der Op kommt und nicht aus
     dem Bau eines Bausteins (zwei Rahmen tiefer: Ersatz, dann sein Aufrufer). Seit die Ops
     die Kette zur Aufrufzeit lesen (CS-11), sieht ein Ersatz am Original beides."""
-    return not str(sys._getframe(2).f_globals.get("__name__", "")).startswith(PART_LIBRARY)
+    return sys._getframe(2).f_globals.get("__name__") != PART_BUILD
 
 
 def test_a_lid_without_a_collar_has_no_collar_feature(profile: Profile) -> None:
