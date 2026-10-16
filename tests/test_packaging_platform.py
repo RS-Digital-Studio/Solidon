@@ -30,6 +30,7 @@ from typing import Final
 import pytest
 
 from tests.packaging_helpers import ROOT, SPEC, WORKFLOW, start_report, workflow_shell
+from tests.process_helpers import run_bounded
 from tests.shell_helpers import bash_executable, posix_shell
 from tests.workflow_helpers import job_block, step_block
 
@@ -170,7 +171,7 @@ def test_the_window_trial_always_writes_its_outcome_and_ends_with_the_start(
         f"python() {{ echo 'Ergebnis: Plattform cocoa'; return {started}; }}\n"
     )
     summary = tmp_path / "summary.md"
-    done = subprocess.run(
+    done = run_bounded(
         [shell, "-c", stand_ins + script],
         cwd=tmp_path,
         env=dict(

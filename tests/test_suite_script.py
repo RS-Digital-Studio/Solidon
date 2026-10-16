@@ -611,8 +611,28 @@ def test_a_bounded_run_ends_the_whole_tree_at_its_timeout(tmp_path: Path) -> Non
 
     trace = tmp_path / "spur.txt"
     loop = f'for i in $(seq 1200); do echo x >> "{trace.as_posix()}"; sleep 0.05; done'
+    began = time.monotonic()
     with pytest.raises(subprocess.TimeoutExpired):
         run_bounded([BASH or "bash", "-c", loop], timeout=1.0, capture_output=True)
+    # Die Grenze wirkt zur Grenze: Mit ``subprocess.run`` kam ``TimeoutExpired`` erst, als
+    # die verwaiste Shell ihre Schleife beendet hatte — eine Minute später (RC2-8).
+    assert time.monotonic() - began < 15.0
     assert_nothing_writes(trace)
     done = run_bounded([BASH or "bash", "-c", "echo fertig"], timeout=60, capture_output=True)
     assert done.returncode == 0 and done.stdout.strip() == b"fertig"
+
+
+def test_a_bounded_run_leaves_no_background_descendant_after_a_normal_end(tmp_path: Path) -> None:
+    """RC2-9: Was eine Shell im Hintergrund weiterlaufen lässt, endet mit ``run_bounded``.
+
+    Wie ``process.run_limited`` nach dem Ende des Starters; vorher lief ein solcher
+    Nachkomme nach dem Fall weiter (Sonde des Prüfers, Lage N).
+    """
+    from tests.process_helpers import run_bounded
+
+    trace = tmp_path / "hintergrund.txt"
+    loop = f'for i in $(seq 1200); do echo x >> "{trace.as_posix()}"; sleep 0.05; done'
+    script = f"( {loop} ) > /dev/null 2>&1 &\nsleep 0.5\necho fertig"
+    done = run_bounded([BASH or "bash", "-c", script], timeout=60, capture_output=True)
+    assert done.returncode == 0 and done.stdout.strip() == b"fertig"
+    assert_nothing_writes(trace)

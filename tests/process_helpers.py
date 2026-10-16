@@ -25,7 +25,11 @@ def run_bounded(
     check: bool = False,
     **options: Any,
 ) -> subprocess.CompletedProcess[Any]:
-    """Wie ``subprocess.run``; bei ``timeout`` endet der ganze Prozessbaum (``TimeoutExpired``)."""
+    """Wie ``subprocess.run``; bei ``timeout`` endet der ganze Prozessbaum (``TimeoutExpired``).
+
+    Auch nach einem normalen Ende bleibt kein Nachkomme: Was im Hintergrund weiterlief,
+    beendet die Prozessgrenze wie bei ``process.run_limited`` (RC2-9).
+    """
     from app.core.process import start_bounded, terminate_process_tree
 
     if capture_output:
@@ -38,6 +42,7 @@ def run_bounded(
         terminate_process_tree(process)
         process.communicate()
         raise
+    terminate_process_tree(process)  # der Starter ist fertig; übrige Nachkommen enden mit ihm
     completed = subprocess.CompletedProcess(list(command), process.returncode, output, errors)
     if check:
         completed.check_returncode()
