@@ -442,6 +442,7 @@ entfernt hat.
 | 2026-10-11 | [RM-782: Die Lochfeld-Öffnung bleibt Wabe, auch im Quadratraster (11.10.2026)](#rm-782-die-lochfeld-öffnung-bleibt-wabe-auch-im-quadratraster-11102026) |
 | 2026-10-12 | [RM-788: Ein Slicertest wartete auf ein Windows-Fenster, das niemand sah (12.10.2026)](#rm-788-ein-slicertest-wartete-auf-ein-windows-fenster-das-niemand-sah-12102026) |
 | 2026-10-12 | [RM-789: Die Einrichtung von ComfyUI startet hinter der gemeinsamen Prozessgrenze (12.10.2026)](#rm-789-die-einrichtung-von-comfyui-startet-hinter-der-gemeinsamen-prozessgrenze-12102026) |
+| 2026-10-16 | [FD-212: Der Abdruck eines eigenen Bausteins übersteht eine Formaterhöhung (16.10.2026)](#fd-212-der-abdruck-eines-eigenen-bausteins-übersteht-eine-formaterhöhung-16102026) |
 | ohne Datum | [Gegen echte Modelle geprüft](#gegen-echte-modelle-geprüft) |
 | ohne Datum | [Referenzkorpus und Passungen vervollständigt](#referenzkorpus-und-passungen-vervollständigt) |
 | ohne Datum | [Durchsicht nach P12 — was noch offen ist](#durchsicht-nach-p12--was-noch-offen-ist) |
@@ -48536,3 +48537,29 @@ Proxy-Adressen reisen ohne Zugangsdaten, wie bei pip und winget (§32, im Review
 (kein fremder Schlüssel, kein `PYTHONPATH`, `HF_ENDPOINT` da, Arbeitsordner `trusted_cwd`) und
 `test_a_cancelled_comfyui_step_ends_its_whole_tree` (ein Enkel endet mit dem Abbruch), am Stand
 davor beide rot — der Enkel schlief seine vier Minuten zu Ende.
+
+## FD-212: Der Abdruck eines eigenen Bausteins übersteht eine Formaterhöhung (16.10.2026)
+
+<a id="fd-212"></a>
+
+**FD-212 — Seit dem Formatschritt 52 → 53 bot `parts.own_changed` *Gespeicherten Stand
+verwenden* nicht mehr an.** Der Abdruck eines Rezepts (`recipe.fingerprint`, zugleich
+`PartSpec.version`) war der Hash über seine Daten samt Formatversion seines Dokuments; beim
+Lesen wird das Rezept migriert, und nach jeder Formaterhöhung passte kein gespeicherter
+Abdruck mehr. Ein unveränderter eigener Baustein galt als geändert, der mitgereiste
+gespeicherte Stand wurde nicht gefunden. 0.6.0 hatte dasselbe für Projekte aus 0.5 (Format 46
+und älter).
+**Behoben:** Der Abdruck rechnet ohne Formatversion (Rezept und Dokument, auch in den
+Abhängigkeiten); das Speichern kennzeichnet ihn mit `c:`. Ein älterer Abdruck bekommt beim
+Öffnen die Formatversion der Datei angehängt (`check.mark_stamp_formats`, vor der Migration)
+und wird mit ihr nachgerechnet (`recipe.fingerprint(..., as_format=)`, `check.stamp_means`).
+Grenze: Hat eine Migration den Inhalt eines Rezeptdokuments geändert (Marker an Schritten),
+passt der alte Abdruck weiterhin nicht.
+**Der Abdruck einer Verbrauchsbuchung kippt einmal:** `filament_usage._part_versions` nimmt
+`PartSpec.version`. Eine Buchung aus 0.6.0 für einen Körper aus einem eigenen Rezept wird nach
+dem Update nicht wiedererkannt; ohne den Fix wäre sie es nach jeder Formaterhöhung nicht, mit
+ihm bleibt sie es ab 0.6.1 über jede weitere. Buchungen ohne eigenes Rezept bleiben unberührt.
+**Nachweis:** `tests/test_part_stamps.py` (alte Datei aus 0.6.0, unverändert und mit lokal
+geändertem Baustein, Abdruck von heute gegen ein späteres Format, Abdruck aus Format 46), am
+Stand davor rot; `test_function_list.py::test_a_light_mesh_scene_keeps_its_promises[baustein_geaendert.netz]`
+wieder grün.

@@ -160,6 +160,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se uma mensagem não pertence a nenhum passo, como em *Contraparte da rosca*, indica o caminho numa frase, por exemplo *Escolher outra característica*, e só mostra botões que ali têm efeito.
 - Um clique em *Aplicar* numa característica durante um cálculo mantém a alteração, mesmo que a pré-visualização demore mais. Na versão 0.6.0 perdia-se sem aviso em modelos maiores.
 - Uma textura apresentada já não calcula uma pré-visualização sem alterações nem oferece *Cancelar*.
+- Um projeto com uma peça própria de uma versão anterior já não indica uma falsa alteração e oferece *Usar o estado guardado*. Na versão 0.6.0 faltava em projetos da 0.5.
 
 ## 0.6.0
 

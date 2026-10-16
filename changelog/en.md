@@ -160,6 +160,7 @@ it into `website/version.json`.
 - If a message belongs to no step, as with *Counterpart to the thread*, it gives its way as a sentence, for example *Pick a different feature*, and shows only buttons that do something there.
 - Clicking *Apply* on a feature during a calculation keeps the change, even when the preview takes longer. In version 0.6.0 it was silently lost on larger models.
 - A displayed texture no longer computes a preview without a change and no longer offers *Cancel*.
+- A project with your own part from an earlier version no longer reports a false change and still offers *Use the saved version*. In version 0.6.0 this was missing for projects from 0.5.
 
 ## 0.6.0
 

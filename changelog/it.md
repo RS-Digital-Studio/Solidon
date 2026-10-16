@@ -160,6 +160,7 @@ scrive in `website/version.json`.
 - Un messaggio senza passaggio, come con *Controparte della filettatura*, indica la via in una frase, ad esempio *Scegli un'altra caratteristica*, e mostra solo pulsanti che lì hanno effetto.
 - Un clic su *Applica* su un elemento durante un calcolo mantiene la modifica, anche se l'anteprima richiede più tempo. Nella versione 0.6.0 andava persa senza avviso sui modelli grandi.
 - Una texture visualizzata non calcola più un'anteprima senza modifiche e non offre più *Annulla*.
+- Un progetto con un pezzo proprio di una versione precedente non segnala più modifiche inesistenti e offre ancora *Usa lo stato salvato*. Nella versione 0.6.0 mancava per i progetti della 0.5.
 
 ## 0.6.0
 

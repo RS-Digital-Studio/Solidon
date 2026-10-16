@@ -1665,7 +1665,8 @@ def load(path: Path) -> Project:
                 raise ValueError("unicode_scalar")
             data = _validate_project_schema(data)
             notes: list[dict[str, Any]] = []
-            data = migrate(data, notes=notes)
+            # Vor der Migration: danach steht dort die heutige Version (FD-212).
+            data = migrate(part_check.mark_stamp_formats(data), notes=notes)
             # Die ausgelagerten Sammelwerte zurück ins Dokument, bevor daraus
             # eines wird: Ein Verweis, den niemand auflöst, wäre für jede
             # Operation dahinter ein Text ohne Inhalt und ein leeres Ergebnis

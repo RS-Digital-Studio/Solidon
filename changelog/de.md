@@ -185,6 +185,7 @@ Nutzen da und sonst nichts.
 - Gehört eine Meldung zu keinem Schritt, etwa bei *Gegenstück zum Gewinde*, nennt sie ihren Weg als Satz, zum Beispiel *Anderes Merkmal wählen*, und zeigt nur Knöpfe, die dort etwas bewirken.
 - Ein Klick auf *Übernehmen* an einem Merkmal während einer Berechnung behält die Änderung, auch wenn die Vorschau länger braucht. In Version 0.6.0 ging sie an größeren Modellen still verloren.
 - Eine angezeigte Textur rechnet ohne Änderung keine Vorschau mehr und bietet kein *Abbrechen* an.
+- Ein Projekt mit eigenem Baustein aus einer früheren Version meldet keine falsche Änderung und bietet *Gespeicherten Stand verwenden* weiter an. In Version 0.6.0 fehlte das bei Projekten aus 0.5.
 
 ## 0.6.0
 
