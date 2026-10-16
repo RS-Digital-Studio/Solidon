@@ -1316,7 +1316,7 @@ def test_duplicate_archive_entries_are_refused(
     ("entry", "limit_name", "payload"),
     [
         (PROJECT_ENTRY, "MAX_PROJECT_JSON_BYTES", None),
-        ("sources/halterung.stl", "MAX_ARCHIVE_ENTRY_BYTES", None),
+        ("sources/halterung.stl", "MAX_FILE_BYTES", None),
         ("sources/gathered/attack.json", "MAX_GATHERED_BYTES", b"{}"),
         ("recipes/attack.json", "MAX_RECIPE_BYTES", b"{}"),
         ("report.json", "MAX_REPORT_BYTES", None),
@@ -1336,7 +1336,13 @@ def test_every_project_payload_has_its_own_limit(
         _append_archive_entry(path, entry, payload)
     with zipfile.ZipFile(path) as container:
         size = container.getinfo(entry).file_size
-    monkeypatch.setattr(project_module, limit_name, size - 1)
+    # Eine Quelle hat keine eigene Grenze, sondern die eines direkten Imports — in
+    # ``project`` eine Kopfkopie aus ``loader`` (CS-11). Sie steht mit festem Text
+    # da, damit der erzeugte Schnitt den Ersatz auf das Original umstellt.
+    if limit_name == "MAX_FILE_BYTES":
+        monkeypatch.setattr(project_module, "MAX_FILE_BYTES", size - 1)
+    else:
+        monkeypatch.setattr(project_module, limit_name, size - 1)
 
     with pytest.raises(ValidationError) as caught:
         load(path)
@@ -1429,7 +1435,7 @@ def test_the_bounded_reader_does_not_trust_the_declared_size(
 
     info = zipfile.ZipInfo("payload.bin")
     info.file_size = 1
-    monkeypatch.setattr(project_module, "MAX_ARCHIVE_ENTRY_BYTES", 2)
+    monkeypatch.setattr(project_module, "MAX_FILE_BYTES", 2)
 
     with pytest.raises(ValidationError) as caught:
         project_module._read_archive_entry(LyingContainer(), info)  # type: ignore[arg-type]
@@ -1762,7 +1768,7 @@ def test_exact_archive_limits_still_open(
         "MAX_ARCHIVE_UNPACKED_BYTES",
         sum(info.file_size for info in infos),
     )
-    monkeypatch.setattr(project_module, "MAX_ARCHIVE_ENTRY_BYTES", source_size)
+    monkeypatch.setattr(project_module, "MAX_FILE_BYTES", source_size)
     monkeypatch.setattr(
         project_module,
         "MAX_PROJECT_JSON_BYTES",
@@ -1779,7 +1785,7 @@ def test_saving_refuses_an_oversized_embedded_source(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(project_module, "MAX_ARCHIVE_ENTRY_BYTES", len(MESH_PAYLOAD) - 1)
+    monkeypatch.setattr(project_module, "MAX_FILE_BYTES", len(MESH_PAYLOAD) - 1)
 
     with pytest.raises(ValidationError) as caught:
         save(filled, tmp_path / "projekt.p3d")

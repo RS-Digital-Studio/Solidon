@@ -81,11 +81,11 @@ AUTOSAVE_SUFFIX: Final = ".autosave"
 
 #: Grenzen für fremde Projektcontainer (§32). Die Nutzlast folgt derselben
 #: Staffelung wie ein direkter Import: Je Eintrag gilt die Obergrenze eines
-#: direkten Modellimports; die Summe darf das Doppelte tragen, sonst wären
-#: zwei einzeln erlaubte Modelle zusammen nicht mehr speicherbar (Review
-#: 02.09.2026). Die äußere Datei bekommt nur den notwendigen Spielraum für
-#: ZIP-Verzeichnis und Kompressionskopfzeilen.
-MAX_ARCHIVE_ENTRY_BYTES: Final = MAX_FILE_BYTES
+#: direkten Modellimports (:func:`_entry_limit` liest ``MAX_FILE_BYTES`` zur
+#: Aufrufzeit, keine Kopie unter eigenem Namen); die Summe darf das Doppelte
+#: tragen, sonst wären zwei einzeln erlaubte Modelle zusammen nicht mehr
+#: speicherbar (Review 02.09.2026). Die äußere Datei bekommt nur den
+#: notwendigen Spielraum für ZIP-Verzeichnis und Kompressionskopfzeilen.
 MAX_ARCHIVE_UNPACKED_BYTES: Final = 2 * MAX_FILE_BYTES
 MAX_PROJECT_FILE_BYTES: Final = MAX_ARCHIVE_UNPACKED_BYTES + 16 * 1024 * 1024
 
@@ -496,7 +496,7 @@ def _entry_limit(name: str) -> int:
         return MAX_GATHERED_BYTES
     if name.startswith(part_recipes.CONTAINER_PREFIX):
         return MAX_RECIPE_BYTES
-    return MAX_ARCHIVE_ENTRY_BYTES
+    return MAX_FILE_BYTES
 
 
 def _too_large(detail: TranslatableText, **values: object) -> ValidationError:

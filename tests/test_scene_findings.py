@@ -172,7 +172,7 @@ def test_two_linked_models_of_full_size_fit_together() -> None:
     Regel, derselbe Grund.
     """
     assert project_module.MAX_LINKED_SOURCE_BYTES == project_module.MAX_ARCHIVE_UNPACKED_BYTES
-    assert project_module.MAX_LINKED_SOURCE_BYTES >= 2 * project_module.MAX_ARCHIVE_ENTRY_BYTES
+    assert project_module.MAX_LINKED_SOURCE_BYTES >= 2 * project_module.MAX_FILE_BYTES
 
 
 # --- Der Stempel der eigenen Bausteine (paths.py) --------------------------------
