@@ -104,20 +104,6 @@ _ZIP_CENTRAL_HEADER_BYTES: Final = 46
 _MAX_ZIP_COMMENT_BYTES: Final = 65_535
 _ARCHIVE_COMPARE_BYTES: Final = 64 * 1024
 
-#: Darüber sagt die Eingangsstufe etwas. Keine Grenze — die darüber liegt eine
-#: Größenordnung höher —, sondern die Größe, ab der die Analyse aufhört helfen
-#: zu können. Ein Community-Modell mit zwei Millionen Dreiecken ist etwas, das
-#: einem normalerweise gereicht wird, und es sollte sagen, was es ist, statt
-#: nur langsam zu sein.
-#:
-#: **Keine eigene Zahl.** Hier stand 500 000, und damit gab es drei Schwellen
-#: für dieselbe Frage: Die Karten verweigern ab 120 000, die Merkmalserkennung
-#: ab 200 000 (§31) — die Meldung versprach also, was längst geschehen war,
-#: und zwischen 200 000 und 500 000 schwieg sie ganz. Sie ist die Grenze der
-#: Analysekarten: Ob die Merkmalserkennung ausgelassen wird, entscheidet seit
-#: dem 24.09.2026 die Frage beim Laden (§21.1), und das meldet der Körper.
-HEAVY_TRIANGLES: Final = MAP_LIMIT_TRIANGLES
-
 #: Was ein druckbares Teil üblicherweise misst, in Millimetern — die
 #: Untergrenze fest, die Obergrenze als Vorgabe ohne Drucker. Mit Drucker
 #: gilt :func:`plausible_reach`: das Doppelte seiner Bauraumdiagonale, wenn
@@ -1363,8 +1349,21 @@ def _too_fine(triangles: int) -> Finding | None:
     Operation *Dreiecke verringern*. Ein Weg im Text driftet, sobald jemand
     eine Kategorie verschiebt; ein Operationstitel ist derselbe String, den
     Menü, Suche und Kontextmenü zeigen, und die Suche findet ihn.
+
+    **Die Schwelle ist die Grenze der Analysekarten**
+    (:data:`app.core.perceive.maps.MAP_LIMIT_TRIANGLES`), gelesen zur Aufrufzeit
+    und **keine eigene Zahl**, auch keine Kopie unter eigenem Namen. Keine
+    Grenze — die liegt eine Größenordnung höher —, sondern die Größe, ab der die
+    Analyse aufhört helfen zu können. Ein Community-Modell mit zwei Millionen
+    Dreiecken ist etwas, das einem normalerweise gereicht wird, und es sollte
+    sagen, was es ist, statt nur langsam zu sein. Hier stand 500 000, und damit
+    gab es drei Schwellen für dieselbe Frage: Die Karten verweigern ab 120 000,
+    die Merkmalserkennung ab 200 000 (§31) — die Meldung versprach also, was
+    längst geschehen war, und zwischen 200 000 und 500 000 schwieg sie ganz. Ob
+    die Merkmalserkennung ausgelassen wird, entscheidet die Frage beim Laden
+    (§21.1), und das meldet der Körper.
     """
-    if triangles <= HEAVY_TRIANGLES:
+    if triangles <= MAP_LIMIT_TRIANGLES:
         return None
     return Finding(
         code="ingest.very_large",
@@ -1372,7 +1371,7 @@ def _too_fine(triangles: int) -> Finding | None:
         message=_(
             "Für die Analysekarten ist dieses Modell zu fein vernetzt. „Dreiecke verringern“ hilft."
         ),
-        values={"triangles": triangles, "comfortable": HEAVY_TRIANGLES},
+        values={"triangles": triangles, "comfortable": MAP_LIMIT_TRIANGLES},
     )
 
 

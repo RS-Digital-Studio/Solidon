@@ -80,10 +80,10 @@ def test_a_very_fine_model_is_told_it_is_one(monkeypatch: pytest.MonkeyPatch) ->
     """
     from app.core.ingest import loader
 
-    monkeypatch.setattr(loader, "HEAVY_TRIANGLES", 500_000)
+    monkeypatch.setattr(loader, "MAP_LIMIT_TRIANGLES", 500_000)
     result = load(HEAVY)
 
-    assert result.mesh.triangle_count > loader.HEAVY_TRIANGLES
+    assert result.mesh.triangle_count > loader.MAP_LIMIT_TRIANGLES
     codes = {entry.code for entry in result.findings}
     assert "ingest.very_large" in codes
     assert "ingest.multiple_components" in codes, "forty-one pieces, and it says so"

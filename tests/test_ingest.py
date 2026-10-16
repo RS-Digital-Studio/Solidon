@@ -594,7 +594,7 @@ def test_the_warning_about_a_fine_mesh_holds_at_the_limit_it_names() -> None:
     kleiner = min(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES)
     zuerst_die_karten = MAP_LIMIT_TRIANGLES < FEATURE_LIMIT_TRIANGLES
 
-    assert kleiner == loader.HEAVY_TRIANGLES
+    assert kleiner == loader.MAP_LIMIT_TRIANGLES
     assert loader._too_fine(kleiner) is None, "an der Grenze ist noch alles möglich"
 
     dazwischen = loader._too_fine(kleiner + 1)
