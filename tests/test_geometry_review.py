@@ -14,6 +14,7 @@ Darum prüft fast jeder Test hier **Kennzahlen** gegen erwartete Werte statt
 from __future__ import annotations
 
 import math
+import sys
 from dataclasses import replace
 from typing import Any
 
@@ -601,6 +602,18 @@ def tin() -> MeshData:
     return hollow(cube(standing=True), 3.0, vents=0, open_top=True).mesh
 
 
+#: Die Bausteinbibliothek baut ihre Formen fein und ohne Abbruch
+#: (``knowledge.parts.build``): Ein Stift ist eine Normform, keine Rechnung der Op.
+PART_LIBRARY = "app.core.knowledge.parts."
+
+
+def _from_the_op() -> bool:
+    """Ob der Aufruf der Kette, den der Ersatz gerade sieht, aus der Op kommt und nicht aus
+    dem Bau eines Bausteins (zwei Rahmen tiefer: Ersatz, dann sein Aufrufer). Seit die Ops
+    die Kette zur Aufrufzeit lesen (CS-11), sieht ein Ersatz am Original beides."""
+    return not str(sys._getframe(2).f_globals.get("__name__", "")).startswith(PART_LIBRARY)
+
+
 def test_a_lid_without_a_collar_has_no_collar_feature(profile: Profile) -> None:
     """Eine Passung misst sonst Geometrie, die es nicht gibt — und meldet sie
     als in Ordnung, denn die Zahlen im Merkmal stimmen ja."""
@@ -699,18 +712,14 @@ def test_the_quality_setting_reaches_the_boolean_chain(
     original = boolean_module.boolean
 
     def recording(kind: str, meshes: list[Any], **kwargs: Any) -> Any:
-        seen.append(str(kwargs.get("quality", "fine")))
+        if _from_the_op():
+            seen.append(str(kwargs.get("quality", "fine")))
         return original(kind, meshes, **kwargs)
 
-    # Ersetzt wird die Kette erst nach dem Bau der Vorlage und dann an jeder
-    # Stelle, die sie liest: im eigenen Modul (``lattice`` importiert sie erst im
-    # Aufruf) und in den Kopfkopien der Ops (CS-11, bis zum erzeugten Schnitt).
-    # Sonst greift der Ersatz an einem Namen, den niemand liest — und der Test
-    # wäre grün, ohne etwas zu messen.
-    monkeypatch.setattr(boolean_module, "boolean", recording)
-    monkeypatch.setattr(boolean_module, "boolean", recording)
-    monkeypatch.setattr(boolean_module, "boolean", recording)
-    monkeypatch.setattr(boolean_module, "boolean", recording)
+    # Ersetzt wird die Kette erst nach dem Bau der Vorlage, und zwar im eigenen
+    # Modul: Jede Op liest sie dort zur Aufrufzeit (CS-11) — sonst griffe der
+    # Ersatz an einem Namen, den niemand liest, und der Test wäre grün, ohne
+    # etwas zu messen.
     monkeypatch.setattr(boolean_module, "boolean", recording)
 
     spec = REGISTRY.get(op)
@@ -772,16 +781,11 @@ def test_the_cancel_token_reaches_the_boolean_chain(
     original = boolean_module.boolean
 
     def recording(kind: str, meshes: list[Any], **kwargs: Any) -> Any:
-        seen.append(kwargs.get("cancelled"))
+        if _from_the_op():
+            seen.append(kwargs.get("cancelled"))
         return original(kind, meshes, **kwargs)
 
-    # Wie oben: nach dem Bau der Vorlage, an jeder Stelle, die die Kette liest
-    # (``lattice`` und ``texture_ops`` importieren sie im Aufruf, die übrigen
-    # als Kopfkopie).
-    monkeypatch.setattr(boolean_module, "boolean", recording)
-    monkeypatch.setattr(boolean_module, "boolean", recording)
-    monkeypatch.setattr(boolean_module, "boolean", recording)
-    monkeypatch.setattr(boolean_module, "boolean", recording)
+    # Wie oben: nach dem Bau der Vorlage, im eigenen Modul der Kette.
     monkeypatch.setattr(boolean_module, "boolean", recording)
 
     spec = REGISTRY.get(op)
