@@ -1624,6 +1624,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "changes": _("Änderungen"),
     "character": _("Zeichen"),
     "choice": _("Wahl"),
+    # ``scene.choice_ways``: das Feld, das eine Auswahlhandlung öffnet.
+    "choice_field": _("Feld"),
     "choices": _("Auswahl"),
     "checked": _("Geprüft"),
     "clearance": _("Spiel"),
