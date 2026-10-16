@@ -22222,10 +22222,11 @@ class MainWindow(QMainWindow):
                 pass  # Der relative Weg bleibt offen; „nach“ erklärt seinen fehlenden Bezug.
         # **Umbenennen beginnt beim jetzigen Namen** (FD-114): Mit leerem Feld
         # tippte man für eine kleine Änderung den ganzen Namen neu.
+        current_name: str | None = None
         if spec.unchanged_effect == "name" and len(chosen) == 1 and result is not None:
             named = result.scene.objects.get(chosen[0])
             if named is not None:
-                values["name"] = named.name
+                current_name = values["name"] = str(named.name)
         # Leere Materialrollen übernehmen die Projektvorgabe. Ausdrücklich
         # mitgebrachte Werte folgen danach und behalten damit Vorrang.
         for parameter in spec.params.spec():
@@ -22485,14 +22486,12 @@ class MainWindow(QMainWindow):
                 offer_naming=offers_naming(spec) and spec.name != "create_container",
                 # Die letzte Wahl des Kunden, beim ersten Start an (RM-369).
                 naming_default=self.settings.name_dimensions,
+                # Steht der jetzige Name im Feld, wartet *Übernehmen* auf einen
+                # neuen (RA-13, FD-114): kein leerer Schritt „Objekt umbenennen“.
+                # Ein mitgebrachter anderer Name ist schon die Änderung.
+                offered=current_name is not None and values.get("name") == current_name,
             )
             dialog.spoolChosen.connect(remember_spool)
-            if spec.unchanged_effect == "name" and "name" in values:
-                # Mit dem jetzigen Namen vorgegeben, wartet *Übernehmen* auf einen
-                # neuen (RA-13, FD-114): kein leerer Schritt „Objekt umbenennen“.
-                dialog._opened_with = (spec.name, dialog.values())
-                dialog.valuesChanged.connect(dialog._follow_source_pending)
-                dialog._follow_source_pending()
             if spec.name == "apply_texture":
                 self._follow_printable_pitch(dialog, values)
             if seat is not None:

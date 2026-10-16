@@ -1926,6 +1926,7 @@ class OperationDialog(QDialog):
         front_fields: Sequence[str] = (),
         changing: bool = False,
         wait_for_change: bool = True,
+        offered: bool = False,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -1954,6 +1955,10 @@ class OperationDialog(QDialog):
         schon eine Änderung (eine Geste, eine Zeichnung aus dem Raum,
         ``edit_operation(given=…)``), oder der Schritt hält die Kette an; dann
         sagt erst die Vorschau, was gilt, mit ihrem Weg (*Gewindeschritt öffnen*).
+
+        ``offered``: Die Werte beim Öffnen sind das, was schon gilt — der
+        jetzige Name beim Umbenennen (RA-13, FD-114). Der Knopf wartet wie im
+        Änderungsweg auf die erste Änderung und heißt weiter nach der Handlung.
 
         ``extra_label`` beschriftet es. Leer für einen Haken: Der trägt
         seinen Text selbst, und eine Beschriftung daneben stünde zweimal
@@ -2515,10 +2520,11 @@ class OperationDialog(QDialog):
         # Jedes Feld trägt den Namen seiner Zeile, auch eines ohne Satz und eines,
         # das selbst der Editor ist (FD-94, ``form_fields.name_rows``).
         name_rows(front, advanced)
-        if changing and wait_for_change:
+        if (changing and wait_for_change) or offered:
             # Was beim Öffnen dastand, ist der Schritt, wie er ist; erst eine
-            # Abweichung davon ist etwas zum Übernehmen (FD-99). Ein Fokus oder
-            # dieselbe Zahl noch einmal getippt ändert nichts.
+            # Abweichung davon ist etwas zum Übernehmen (FD-99, ebenso ein
+            # vorgegebener Name, RA-13). Ein Fokus oder dieselbe Zahl noch
+            # einmal getippt ändert nichts.
             self._opened_with = (self.spec.name, self.values())
             self._follow_source_pending()
 

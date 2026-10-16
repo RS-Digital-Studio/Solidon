@@ -68,6 +68,10 @@ def test_a_given_name_still_wins(two_bodies: MainWindow, monkeypatch: pytest.Mon
     dialog = two_bodies._op_dialog
     assert dialog is not None
     assert dialog.values()["name"] == "Haube"
+    # Ein mitgebrachter neuer Name ist schon die Änderung: Der Knopf wartet
+    # nicht auf eine weitere, nur der jetzige Name wäre nichts zu tun (RA-13).
+    assert dialog._accept_button.isEnabled(), dialog._accept_button.toolTip()
+    assert dialog.can_accept()
 
 
 def test_rename_waits_for_a_new_name(
