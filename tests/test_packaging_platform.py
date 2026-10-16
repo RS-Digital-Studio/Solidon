@@ -285,8 +285,8 @@ def _which_calls(tree: ast.Module) -> list[ast.Call]:
     (:func:`_is_which`) oder ein Name, den die Datei aus einem Import von ``which`` oder aus
     einem solchen Ausdruck bindet (``find = shutil.which``, auch über weitere Zuweisungen). Nur
     ihr Aufgerufenes fragt der Wächter den Auflöser: ``resolve`` über jeden Aufruf faltete
-    Testhelfer und zöge dafür die Auszüge des ganzen Baums nach (gemessen: 1 097 Auszüge,
-    50 s, 850 MB je Prozess)."""
+    auch Aufrufe von Testhelfern, und deren Aufrufstellen lädt der Index aus den Auszügen des
+    ganzen Baums — genau das, was der Ergebnisspeicher einem Arbeiter erspart (CS-23)."""
     aliases: set[str] = set()
     bindings: list[tuple[list[ast.expr], ast.expr | None]] = []
     calls: list[ast.Call] = []
@@ -322,7 +322,7 @@ def _shell_lookups(index: code_index.Index, path: str, source: str) -> list[str]
     """
     if "which" not in source:
         # Jede Form aus :func:`_which_calls` nennt ``which`` im Text; die übrigen Dateien
-        # brauchen keinen Syntaxbaum (gemessen: 8 s für alle ``tests/*.py``).
+        # brauchen keinen Syntaxbaum.
         return []
     found = []
     for node in _which_calls(ast.parse(source)):
