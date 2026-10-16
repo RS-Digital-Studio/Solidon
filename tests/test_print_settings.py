@@ -108,7 +108,7 @@ def _old_spool_dialog_state():
         session=SimpleNamespace(
             project=project,
             profile=profiles.make_profile(),
-            last_result=SimpleNamespace(scene=scene, stopped_at=None),
+            last_result=SimpleNamespace(scene=scene, stopped_at=None, object_names={}),
             picture=None,
             base_dir=None,
         ),

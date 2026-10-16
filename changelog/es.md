@@ -74,7 +74,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras rechazarse una vista previa, los textos de la siguiente siguen siendo totalmente legibles.
 - La leyenda *Añadido* y *Eliminados* aparece en la barra de vista previa solo cuando la vista previa añade o quita material. Por eso *Renombrar objeto* no la muestra.
 - Para parámetros, ajustes, impresora, material y deshacer, el chat indica el lugar de la ventana donde se hace lo mismo a mano.
-- El informe de comprobación nombra los cuerpos de un ajuste en lugar de mostrar un identificador interno.
+- El informe de comprobación y la comprobación antes de exportar nombran los cuerpos de un ajuste en lugar de mostrar un identificador interno, también un cuerpo ya eliminado.
 - El inglés y el portugués distinguen ahora el saliente de un gancho, o de un cuerpo bajo la placa, del voladizo al imprimir.
 - En español y portugués, el menú, la búsqueda y el diálogo vuelven a mostrar solo la primera frase de *Pasador para taladro* y *Orientar para imprimir*.
 - Varias traducciones se leen con más claridad, entre ellas la introducción de *Crear parámetro …*. La espiga empieza con mayúscula en todos los idiomas.

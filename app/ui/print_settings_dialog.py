@@ -1167,6 +1167,9 @@ class _PlateJob:
     #: Export, und ihr Bericht war bis dahin um diese zwei Zeilen ärmer.
     scene: Scene | None = None
     document: Document | None = None
+    #: Die Namen derselben Auswertung: Ein entfernter Passungspartner heißt im
+    #: Bericht der Übergabe wie im Prüfbericht (RB2-5).
+    names: Mapping[str, str] | None = None
     #: Der Abbruch des Arbeiters, der diesen Auftrag schreibt. Die Stützsperre
     #: für Kanäle rechnet an einem Gitterwerk eine Viertelminute
     #: (``writer._support_blocker``); ohne ihn griff *Abbrechen* erst danach.
@@ -1341,6 +1344,7 @@ def _prepare_plates(job: _PlateJob) -> ProjectRun:
         place_on_bed=keep,
         setup=job.setup,
         scene=job.scene,
+        names=job.names,
         document=job.document,
         cancelled=job.cancelled,
         for_window=job.for_window,
@@ -1409,6 +1413,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         place_on_bed=keep,
         setup=job.setup,
         scene=job.scene,
+        names=job.names,
         document=job.document,
         cancelled=job.cancelled,
         for_window=job.for_window,
@@ -9312,6 +9317,9 @@ class PrintSettingsDialog(QDialog):
             slot_profiles=slot_profiles,
             with_settings=with_settings,
             scene=None if self.session.last_result is None else self.session.last_result.scene,
+            names=(
+                None if self.session.last_result is None else self.session.last_result.object_names
+            ),
             document=self.session.project.document,
             inputs=StoredInputs.snapshot(
                 self.session.project,

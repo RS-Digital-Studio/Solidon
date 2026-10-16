@@ -243,6 +243,7 @@ def plan_export(
     document: Document | None = None,
     checked: Sequence[Finding] | None = None,
     evaluated: Sequence[Finding] = (),
+    names: Mapping[ObjectId, str] | None = None,
 ) -> ExportPlan:
     """Ermittelt die Dateinamen und führt die Prüfung vor dem Export aus.
 
@@ -298,6 +299,7 @@ def plan_export(
             scene=scene,
             document=document,
             evaluated=evaluated,
+            names=names,
         )
     )
     if export_format != "step":
@@ -921,6 +923,7 @@ def check_before_export(
     document: Document | None = None,
     cancelled: CancelToken | None = None,
     evaluated: Sequence[Finding] = (),
+    names: Mapping[ObjectId, str] | None = None,
 ) -> list[Finding]:
     """Ein Bericht vor dem Schreiben, keine Sperre (§29).
 
@@ -943,6 +946,10 @@ def check_before_export(
     Selbstdurchdringung zu prüfen — die Auswertung hat es um die bewegten
     Stellen schon getan, und was ein späterer Schritt behoben hat, steht dort
     nicht mehr.
+
+    **Und die Namen der Auswertung** (``names``, ``EvaluationResult.object_names``):
+    Ein entfernter Passungspartner hieß hier „ein entferntes Objekt“, im
+    Prüfbericht daneben beim Namen (RB2-5).
     """
     from app.core.scene.cancel import NeverCancelled
 
@@ -1022,7 +1029,7 @@ def check_before_export(
         )
     )
     findings.extend(_licence_findings(sources))
-    findings.extend(_fits_and_walls(objects, profile, scene, document, token))
+    findings.extend(_fits_and_walls(objects, profile, scene, document, token, names))
     exported = {entry.id for entry in objects}
     findings.extend(
         finding
@@ -1044,6 +1051,7 @@ def _fits_and_walls(
     scene: Scene | None,
     document: Document | None,
     cancelled: CancelToken,
+    names: Mapping[ObjectId, str] | None = None,
 ) -> list[Finding]:
     """Die zwei Fragen aus §29, die ein einzelner Körper nicht beantwortet.
 
@@ -1073,7 +1081,9 @@ def _fits_and_walls(
     related = {fit.name for fit in scene.fits if {fit.a.object_id, fit.b.object_id} & wanted}
     findings = [
         finding
-        for finding in check_fits(scene, profile, document=document, cancelled=cancelled)
+        for finding in check_fits(
+            scene, profile, document=document, cancelled=cancelled, names=names
+        )
         if (
             finding.object_id is None
             or finding.object_id in wanted
@@ -2433,6 +2443,7 @@ def write_assembly(
     job: Sequence[SceneObject] | None = None,
     mesh_plan: tuple[dict[str, MeshData], bool] | None = None,
     before_write: Callable[[], None] | None = None,
+    names: Mapping[ObjectId, str] | None = None,
     comparison: Callable[
         [
             Sequence[tuple[SceneObject, MeshData, PrintSettings | None]],
@@ -2510,6 +2521,7 @@ def write_assembly(
             scene=scene,
             document=document,
             cancelled=cancelled,
+            names=names,
         )
     )
     if profile.printer.is_resin:

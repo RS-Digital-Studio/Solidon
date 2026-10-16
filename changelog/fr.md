@@ -74,7 +74,7 @@ dans `website/version.json`.
 - Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
 - La légende *Ajouté* et *Retiré* n'apparaît dans le bandeau d'aperçu que si l'aperçu ajoute ou retire de la matière. *Renommer l'objet* ne l'affiche donc pas.
 - Pour les paramètres, les ajustements, l'imprimante, le matériau et l'annulation, le chat indique l'endroit de la fenêtre où faire de même soi-même.
-- Le rapport de contrôle nomme les corps d'un ajustement au lieu d'afficher un identifiant interne.
+- Le rapport de contrôle et le contrôle avant l'export nomment les corps d'un ajustement au lieu d'afficher un identifiant interne, y compris un corps supprimé entre-temps.
 - L'anglais et le portugais distinguent désormais le dépassement d'un crochet, ou d'un corps sous le plateau, du surplomb à l'impression.
 - En espagnol et en portugais, le menu, la recherche et la boîte de dialogue n'affichent de nouveau que la première phrase de *Goupille pour perçage* et *Orienter pour l'impression*.
 - Plusieurs traductions se lisent plus clairement, dont l'introduction de *Créer un paramètre …*. Le tenon commence par une majuscule dans toutes les langues.

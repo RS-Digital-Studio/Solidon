@@ -836,6 +836,8 @@ def command_export(args: argparse.Namespace) -> int:
         document=project.document,
         # Was die Auswertung schon fand und der Export weitersagt (RM-419).
         evaluated=result.scene.report.findings,
+        # Ein entfernter Passungspartner beim Namen wie im Bericht (RB2-5).
+        names=result.object_names,
     )
     # Die Prüfung spricht, bevor die Dateien existieren — eine Warnung ist
     # also eine Warnung über das, was geschrieben wird, nicht über das, was

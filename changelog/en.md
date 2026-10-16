@@ -73,7 +73,7 @@ it into `website/version.json`.
 - After a preview is refused, the next preview's text remains fully readable.
 - The *Added* and *Removed* legend appears in the preview bar only when the preview adds or removes material. *Rename object* therefore shows none.
 - For parameters, fits, printer, material and undo, the chat names the place in the window where you can do the same yourself.
-- The check report names the bodies of a fit instead of showing an internal identifier.
+- The check report and the check before export name the bodies of a fit instead of showing an internal identifier, including a body that has since been removed.
 - English and Portuguese now tell the protrusion of a hook, or of a body below the plate, apart from an overhang in printing.
 - In Spanish and Portuguese, menu, search and dialog show only the first sentence again for *Pin for hole* and *Orient for printing*.
 - Several translations read more clearly, among them the introduction of *Create parameter …*. The peg starts with a capital in every language.
