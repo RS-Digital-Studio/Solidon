@@ -434,8 +434,10 @@ Arbeiter, die `wait_for_idle` nicht sieht, sowie `PlacementItem`,
 `PlacementViewport`, `placement_layout` und `scene_with_a_hole_and_a_fillet`
 für Platzierungsfälle. Für Maßkarten: `send_mouse_event` (Mausereignis mit
 festem Bildschirmbezug), `begin_card_drag`/`end_card_drag`,
-`settle_measure_layout` (Layoutaufträge zustellen) und
-`measure_more_heading`.
+`settle_measure_layout` (Layoutaufträge zustellen, dann warten, bis keine
+Seitenkarte mehr gleitet: `wait_for_resting_cards`, `cards_at_rest`; jeder
+Schritt einer gleitenden Karte setzt die Maßkarte neu und kostet ein Bild,
+FD-202) und `measure_more_heading`.
 
 `release_signing.py` hält ein eigenes Schlüsselpaar der Suite für unterschriebene
 Versionsdateien (`signed`, auch mit fremdem Schlüssel); die echten Schlüssel
@@ -465,7 +467,8 @@ Ende (CS-35).
 `guide_window.py` gehört allein `test_guide_targets.py`: die Fixture
 `prepared_window` für den Wortschatz des Funktionsdurchgangs (Quader mit
 Bohrung unter dem Bett, im Kundenthema) und `settle`, das nach festen Runden
-wartet, bis keine Seitenkarte mehr gleitet (`at_rest`) — gelesen wird die Lage,
+wartet, bis keine Seitenkarte mehr gleitet (`ui_helpers.wait_for_resting_cards`,
+dieselbe Bedingung wie im Einschwingen der Maßkarte) — gelesen wird die Lage,
 die der Kunde nach dem Gleiten sieht, nicht eine Zwischenlage, die an der
 Rechnerlast hängt (FD-157).
 
