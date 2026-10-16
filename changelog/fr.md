@@ -68,6 +68,7 @@ dans `website/version.json`.
 - La carte de sélection suit contenu et police, gardant textes et colonnes. Les onglets détachés gardent leur taille. Si une modification est proposée, « Appliquer » est l’action principale.
 - Les contreparties demandent paire et taille et expliquent les deux moitiés. Forme et ajustement sont dans « Autres réglages ». La hauteur initiale du dialogue suit le contenu.
 - Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
+- Sur les ordinateurs sans carte graphique dédiée, Solidon se termine désormais de façon fiable à la fermeture. En version 0.6.0, le programme pouvait continuer à tourner de manière invisible.
 
 ### Imprimer et transmettre au slicer
 

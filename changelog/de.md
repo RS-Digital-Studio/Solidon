@@ -92,6 +92,7 @@ Nutzen da und sonst nichts.
 - Die Auswahlkarte folgt Inhalt und Schrift; Text und Handlungsspalten bleiben erhalten. Freie Reiterfenster behalten ihre Größe. Bei angebotener Merkmaländerung ist „Übernehmen“ die Hauptaktion.
 - Gegenstücke fragen zuerst nach Paar und Größe; die Auswahl erklärt beide Hälften. Form und Passung stehen unter „Weitere Einstellungen“. Die Anfangshöhe passt zum Inhalt.
 - Nach einer Vorschauabsage bleiben die Texte der nächsten Vorschau vollständig lesbar.
+- Auf Rechnern ohne eigene Grafikkarte endet Solidon nach dem Schließen jetzt zuverlässig. In Version 0.6.0 konnte das Programm unsichtbar weiterlaufen.
 
 ### Drucken und Übergabe an den Slicer
 

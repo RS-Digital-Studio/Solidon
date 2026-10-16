@@ -67,6 +67,7 @@ scrive in `website/version.json`.
 - La scheda di selezione segue contenuto e carattere, mantenendo testo e colonne. Le schede separate mantengono le dimensioni. Se è proposta una modifica, «Applica» è l’azione principale.
 - Le controparti chiedono coppia e dimensioni e spiegano entrambe le metà. Forma e accoppiamento sono in «Altre impostazioni». L’altezza iniziale del dialogo segue il contenuto.
 - Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
+- Sui computer senza scheda grafica dedicata, Solidon ora termina in modo affidabile alla chiusura. Nella versione 0.6.0 il programma poteva continuare a girare in modo invisibile.
 
 ### Stampare e passare allo slicer
 

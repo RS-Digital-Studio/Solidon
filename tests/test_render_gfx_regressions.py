@@ -42,6 +42,42 @@ def test_closing_a_renderer_twice_keeps_another_renderer_drawable(renderer: GfxR
         other.close()
 
 
+def test_closing_releases_the_screen_surface_while_window_and_device_live(
+    renderer: GfxRenderer,
+) -> None:
+    """Die Fläche einer Bildschirmleinwand geht beim Schließen, nicht beim Prozessende.
+
+    Ohne Fenster gibt es keine Bildschirmfläche; der Fall setzt an ihre Stelle
+    einen Zeugen, der zählt, wann sie freigegeben wird. Am Windows-Runner ohne
+    Grafikkarte hing der Prozess, wenn das erst der Abbau des Interpreters tat
+    (CI-Probe 38855455034).
+    """
+    released: list[str] = []
+    surface = SimpleNamespace(_release=lambda: released.append("fläche"))
+    renderer._renderer._canvas_context = SimpleNamespace(_wgpu_context=surface)
+    renderer.close()
+    assert released == ["fläche"]
+
+
+def test_the_screen_surface_is_where_closing_releases_it() -> None:
+    """Der Weg zur Fläche geht über Interna von pygfx, rendercanvas und wgpu.
+
+    ``GfxRenderer.close`` liest ``WgpuRenderer._canvas_context._wgpu_context``
+    und ruft dessen ``_release``. Benennt eine neue Fassung eines der drei
+    Pakete das um, fiele die Freigabe still aus und der Hänger am Prozessende
+    käme zurück; dieser Fall sagt es beim Anheben der Version.
+    """
+    import inspect
+
+    from pygfx.renderers.wgpu.engine.renderer import WgpuRenderer
+    from rendercanvas.contexts.wgpucontext import WgpuContextToScreen
+    from wgpu.backends.wgpu_native._api import GPUCanvasContext
+
+    assert "self._canvas_context = self._target.get_context(" in inspect.getsource(WgpuRenderer)
+    assert "self._wgpu_context" in inspect.getsource(WgpuContextToScreen)
+    assert "wgpuSurfaceRelease" in inspect.getsource(GPUCanvasContext._release)
+
+
 def test_selection_and_background_changes_keep_filament_face_colours(renderer: GfxRenderer) -> None:
     """Die Auswahlfarbe und ein helles Thema dürfen gespeicherte Flächenfarben nicht ersetzen."""
     item = renderer.add_surface(

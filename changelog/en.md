@@ -67,6 +67,7 @@ it into `website/version.json`.
 - The selection card follows content and font, preserving text and action columns. Detached tabs keep their size. When a feature edit is offered, “Apply” is the primary action.
 - Counterparts ask for pair and size first and explain both halves. Shape and fit are under “More settings”. The initial dialog height fits its content.
 - After a preview is refused, the next preview's text remains fully readable.
+- On computers without a dedicated graphics card, Solidon now reliably exits after closing. In version 0.6.0 the program could keep running invisibly.
 
 ### Printing and slicer handover
 
