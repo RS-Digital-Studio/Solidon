@@ -48556,10 +48556,13 @@ Abhängigkeiten); das Speichern kennzeichnet ihn mit `c:`. Ein älterer Abdruck 
 und wird mit ihr nachgerechnet (`recipe.fingerprint(..., as_format=)`, `check.stamp_means`).
 Grenze: Hat eine Migration den Inhalt eines Rezeptdokuments geändert (Marker an Schritten),
 passt der alte Abdruck weiterhin nicht.
-**Der Abdruck einer Verbrauchsbuchung kippt einmal:** `filament_usage._part_versions` nimmt
-`PartSpec.version`. Eine Buchung aus 0.6.0 für einen Körper aus einem eigenen Rezept wird nach
-dem Update nicht wiedererkannt; ohne den Fix wäre sie es nach jeder Formaterhöhung nicht, mit
-ihm bleibt sie es ab 0.6.1 über jede weitere. Buchungen ohne eigenes Rezept bleiben unberührt.
+**Der Abdruck einer Verbrauchsbuchung bleibt über einen Vorabdruck (FD-232, 17.10.2026):**
+`filament_usage._part_versions` nimmt `PartSpec.version`, und der heutige Abdruck eines Körpers
+aus eigenem Rezept ist ein anderer als in 0.6.0. Der Abdruck von 0.6.0 steht deshalb in
+`former_fingerprints` (`StoredInputs.bodies_of_060`, Fassung mit Format 52 im Hash, nur wenn ein
+Schritt ein Rezept setzt); eine Buchung aus 0.6.0 ist derselbe Druck, kein zweiter Abzug.
+Belegt mit einem Projekt und einem Abdruck aus dem Code von `v0.6.0`
+(`tests/test_filament_usage_own_recipe_060.py`). Buchungen ohne eigenes Rezept bleiben unberührt.
 **Nachweis:** `tests/test_part_stamps.py` (alte Datei aus 0.6.0, unverändert und mit lokal
 geändertem Baustein, Abdruck von heute gegen ein späteres Format, Abdruck aus Format 46), am
 Stand davor rot; `test_function_list.py::test_a_light_mesh_scene_keeps_its_promises[baustein_geaendert.netz]`
