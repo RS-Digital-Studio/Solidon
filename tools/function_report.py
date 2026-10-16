@@ -52,6 +52,7 @@ from tools.function_agreement import (
     agreement,
     checklist_lines,
     round_agreement,
+    subject_of,
     unpaired,
 )
 from tools.function_agreement import subject_order as _subject_order
@@ -406,15 +407,6 @@ def finding_solutions(app_root: Path = ROOT / "app") -> dict[str, bool]:
 
 
 # --- Urteile (Konzept §5, Stufe B) ---------------------------------------------------------
-
-
-def subject_of(entry: Mapping[str, Any]) -> int | str | None:
-    """Prüfpunkt oder Kriterium eines Urteils."""
-    if "point" in entry:
-        point = entry["point"]
-        return point if isinstance(point, int) else None
-    criterion = entry.get("criterion")
-    return str(criterion) if criterion is not None else None
 
 
 def read_verdict_file(path: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:

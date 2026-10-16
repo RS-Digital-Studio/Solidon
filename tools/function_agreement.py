@@ -54,11 +54,16 @@ class Share:
         return f"{self.value:.0%} ({self.hits} von {self.total})"
 
 
-def subject_key(entry: Mapping[str, Any]) -> str:
-    """Prüfpunkt oder Kriterium eines Urteils als Text — der Schlüssel der Übereinstimmung."""
+def subject_of(entry: Mapping[str, Any]) -> int | str | None:
+    """Prüfpunkt oder Kriterium eines Urteils — die eine Quelle für Prüfung und Übereinstimmung.
+
+    Ein Prüfpunkt ist eine ganze Zahl; was keine ist, ist kein Prüfpunkt (``None``).
+    """
     if "point" in entry:
-        return str(entry["point"])
-    return str(entry.get("criterion"))
+        point = entry["point"]
+        return point if isinstance(point, int) else None
+    criterion = entry.get("criterion")
+    return str(criterion) if criterion is not None else None
 
 
 def subject_order(subject: int | str) -> tuple[int, int, str]:
@@ -74,7 +79,7 @@ def _cells(entries: Iterable[Mapping[str, Any]]) -> tuple[dict[tuple[str, str], 
     first: dict[tuple[str, str], str] = {}
     second: dict[tuple[str, str], str] = {}
     for entry in entries:
-        key = (str(entry.get("row")), subject_key(entry))
+        key = (str(entry.get("row")), str(subject_of(entry)))
         if entry.get("reviewer") == FIRST:
             first[key] = str(entry.get("verdict"))
         elif entry.get("reviewer") == SECOND:

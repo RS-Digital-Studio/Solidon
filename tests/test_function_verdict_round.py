@@ -256,3 +256,18 @@ def test_the_checklist_binds_the_round_and_informs_per_package(tmp_path: Path) -
     assert "| Ohne Gegenurteil G1 | 1 Zelle: resize_hole (nur stufe_b) |" in d08
     d04 = (state / "abhakliste-d04.md").read_text(encoding="utf-8")
     assert "| Übereinstimmung 9 in der Runde | 50% (1 von 2) | ≥ 90% | markiert |" in d04
+
+
+def test_check_and_agreement_read_the_subject_of_a_verdict_from_one_source() -> None:
+    """RC-8: ``subject_key`` der Übereinstimmung und ``subject_of`` der Prüfung waren Zwillinge.
+
+    An den Rändern lasen sie verschieden: ein Prüfpunkt als Text, beides fehlt.
+    """
+    from tools import function_report
+
+    assert function_report.subject_of is function_agreement.subject_of
+    assert not hasattr(function_agreement, "subject_key")
+    assert function_agreement.subject_of({"point": 9}) == 9
+    assert function_agreement.subject_of({"point": "9"}) is None
+    assert function_agreement.subject_of({"criterion": "V4"}) == "V4"
+    assert function_agreement.subject_of({}) is None
