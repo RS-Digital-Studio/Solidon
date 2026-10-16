@@ -161,6 +161,7 @@ dans `website/version.json`.
 - Un message sans étape, comme avec *Contrepartie du filetage*, donne la marche à suivre en une phrase, par exemple *Choisir une autre caractéristique*, et n'affiche que des boutons qui agissent.
 - Un clic sur *Appliquer* d'un élément pendant un calcul garde la modification, même si l'aperçu prend plus de temps. En version 0.6.0, elle se perdait sans avertissement sur les gros modèles.
 - Une texture affichée ne calcule plus d'aperçu sans modification et ne propose plus *Annuler*.
+- Un projet avec une pièce personnelle d'une version antérieure ne signale plus de fausse modification et propose *Utiliser l'état enregistré*. En 0.6.0, cela manquait pour les projets de 0.5.
 
 ## 0.6.0
 

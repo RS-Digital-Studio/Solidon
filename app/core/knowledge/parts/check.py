@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from functools import partial
+from typing import TYPE_CHECKING, Any, Final
 
 from app.core.errors import CHECK_UPDATES, KEEP_SAVED_PARTS, PROGRAMMING_ERRORS
 from app.core.knowledge.parts.registry import (
@@ -37,6 +38,15 @@ if TYPE_CHECKING:
     from app.core.scene.history import History
 
 _log = get_logger(__name__)
+
+#: So beginnt ein Abdruck, der ohne Formatversion gerechnet ist (FD-212). Ohne
+#: dieses Zeichen stammt er aus der Rechnung bis Format 53, in der die
+#: Formatversion des Rezeptdokuments mitgehasht war.
+CONTENT_STAMP: Final = "c:"
+
+#: Trennt einen solchen alten Abdruck von der Formatversion, mit der er genommen
+#: wurde — angehängt beim Öffnen einer älteren Datei (:func:`mark_stamp_formats`).
+STAMP_FORMAT: Final = "@"
 
 
 @dataclass(frozen=True, slots=True)
@@ -401,7 +411,7 @@ def saved_states(document: Document, registry: PartRegistry | None = None) -> di
     for name in sorted(set(used_parts(document.ops))):
         saved = document.libs.get(f"{FINGERPRINT_KEY}{name}")
         now = fingerprint(name, source)
-        if not saved or not now or saved == now:
+        if not saved or not now or stamp_means(saved, now, partial(_recipe_of, name, source)):
             continue
         for spec in travelled:
             if spec.name == name or spec.recipe_data is None:
@@ -413,8 +423,8 @@ def saved_states(document: Document, registry: PartRegistry | None = None) -> di
             except Exception as problem:  # Regel 17: keine Wahl statt eines Abbruchs
                 _log.warning("travelled recipe %s is unreadable: %s", spec.name, problem)
                 continue
-            as_saved = part_recipes.fingerprint(replace(arrived, name=name))
-            if as_saved[: len(saved)] == saved:
+            renamed = replace(arrived, name=name)
+            if stamp_means(saved, part_recipes.fingerprint(renamed), partial(_as_is, renamed)):
                 found[name] = spec.name
                 break
     return found
@@ -485,9 +495,80 @@ def changed_own_parts(
     for name in sorted(set(used)):
         before = document.libs.get(f"{FINGERPRINT_KEY}{name}")
         now = fingerprint(name, source)
-        if before and now and before != now:
+        if before and now and not stamp_means(before, now, partial(_recipe_of, name, source)):
             changed.append(name)
     return tuple(changed)
+
+
+def stamp_means(saved: str, mark: str, recipe: Callable[[], Any]) -> bool:
+    """Ob ein gespeicherter Abdruck den Stand meint, dessen Abdruck heute ``mark`` ist.
+
+    Ein Abdruck mit :data:`CONTENT_STAMP` vergleicht direkt. Ein älterer wird
+    so nachgerechnet, wie er entstand: der Hash über das Rezept mit der
+    Formatversion, die sein Dokument damals hatte (``recipe.fingerprint`` mit
+    ``as_format``) — die hängt :func:`mark_stamp_formats` beim Öffnen an; ohne
+    Angabe ist es die heutige, denn dann wurde die Datei nicht migriert.
+    ``recipe`` liefert das Rezept erst, wenn es gebraucht wird; ``None`` heißt
+    ein ``.py``-Baustein, dessen Abdruck nie eine Formatversion trug (FD-212).
+    """
+    if saved.startswith(CONTENT_STAMP):
+        return saved[len(CONTENT_STAMP) :] == mark[: len(saved) - len(CONTENT_STAMP)]
+    hashed, marked, version = saved.partition(STAMP_FORMAT)
+    found = recipe()
+    if found is None:
+        return hashed == mark[: len(hashed)]
+    from app.core.knowledge.parts import recipe as part_recipes
+    from app.core.scene.migrations import FORMAT_VERSION
+
+    taken = int(version) if marked and version.isdigit() else FORMAT_VERSION
+    return hashed == part_recipes.fingerprint(found, as_format=taken)[: len(hashed)]
+
+
+def _as_is(value: Any) -> Any:
+    """Ein schon vorliegendes Rezept als Lieferant für :func:`stamp_means`."""
+    return value
+
+
+def _recipe_of(name: str, source: PartRegistry) -> Any:
+    """Das Rezept hinter einem Baustein des Katalogs — ``None`` für einen ``.py``-Baustein."""
+    from app.core.knowledge.parts import recipe as part_recipes
+
+    if not source.has(name):
+        return None
+    spec = source.get(name)
+    if spec.recipe_data is None:
+        return None
+    return part_recipes.from_data(dict(spec.recipe_data))
+
+
+def mark_stamp_formats(data: dict[str, Any]) -> dict[str, Any]:
+    """Hängt an jeden alten Abdruck die Formatversion, mit der die Datei gespeichert wurde.
+
+    Beim Öffnen **vor** der Migration gerufen (``project.load``), denn danach
+    steht im Dokument die heutige Version. Nur Abdrücke der Rechnung bis
+    Format 53 (ohne :data:`CONTENT_STAMP`), und nur einmal: Ein Abdruck mit
+    Angabe behält sie über jede weitere Erhöhung (FD-212). Die Dokumente der
+    Rezepte bleiben, wie sie sind — ihr Inhalt ist der Abdruck.
+    """
+    version = data.get("format_version")
+    libs = data.get("libs")
+    if not isinstance(version, int) or not isinstance(libs, dict):
+        return data
+    from app.core.scene.migrations import FORMAT_VERSION
+
+    if version >= FORMAT_VERSION:
+        return data
+    for key, value in list(libs.items()):
+        if (
+            isinstance(key, str)
+            and key.startswith(FINGERPRINT_KEY)
+            and isinstance(value, str)
+            and value
+            and not value.startswith(CONTENT_STAMP)
+            and STAMP_FORMAT not in value
+        ):
+            libs[key] = f"{value}{STAMP_FORMAT}{version}"
+    return data
 
 
 def stamp(document: Document, registry: PartRegistry | None = None) -> None:
@@ -509,4 +590,5 @@ def stamp(document: Document, registry: PartRegistry | None = None) -> None:
     for name in sorted(used):
         mark = fingerprint(name, registry)
         if mark:
-            document.libs[f"{FINGERPRINT_KEY}{name}"] = mark
+            # Ohne Formatversion gerechnet (FD-212) und so gekennzeichnet.
+            document.libs[f"{FINGERPRINT_KEY}{name}"] = f"{CONTENT_STAMP}{mark}"
