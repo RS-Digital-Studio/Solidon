@@ -41,6 +41,7 @@ from app.ui.settings import UiSettings
 from tests import ui_helpers
 from tests.helpers import exact_kernel
 from tests.ui_helpers import session as session
+from tests.window_leftovers import close_after
 
 
 def test_the_value_of_an_expression_is_written_like_any_other_number() -> None:
@@ -1614,6 +1615,7 @@ def test_a_choice_in_an_operation_dialog_says_what_it_does(qt_app: QApplication)
 
 def test_typing_the_equals_sign_into_the_number_opens_the_expression(
     qt_app: QApplication,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Drei Texte des Programms versprechen genau das — und es ging nicht.
 
@@ -1635,6 +1637,7 @@ def test_typing_the_equals_sign_into_the_number_opens_the_expression(
 
     spec = REGISTRY.get("create_box")
     dialog = OperationDialog(spec, [], None, parameter_values={"breite": 60.0})
+    close_after(request, dialog)
     field = dialog._editors["width"]
     assert isinstance(field, ValueField)
     assert not field.toggle.isChecked(), "das Feld beginnt als Zahl"
@@ -5124,7 +5127,9 @@ def test_a_field_that_is_no_circle_has_no_toggle(qt_app: QApplication) -> None:
         field.deleteLater()
 
 
-def test_a_typed_measurement_stretches_the_drawing(qt_app: QApplication) -> None:
+def test_a_typed_measurement_stretches_the_drawing(
+    qt_app: QApplication, request: pytest.FixtureRequest
+) -> None:
     """Robert, 03.09.2026: „mach die felder bedienbar, zeichnung folgt".
 
     Bis dahin sperrte der Dialog Länge und Breite, sobald eine Zeichnung
@@ -5170,6 +5175,7 @@ def test_a_typed_measurement_stretches_the_drawing(qt_app: QApplication) -> None
     )
     spec = REGISTRY.get("sketch_extrude")
     dialog = OperationDialog(spec, {}, values={"sketch": sketch_to_text(quadrat)})
+    close_after(request, dialog)
     dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
     dialog.show()
     qt_app.processEvents()
@@ -5279,6 +5285,7 @@ def test_a_chosen_but_empty_drawing_holds_the_accept_button(qt_app: QApplication
 
 def test_the_shape_stays_locked_while_a_drawing_decides_the_outline(
     qt_app: QApplication,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Die Grundform bleibt gesperrt, und das ist keine halbe Sache.
 
@@ -5305,6 +5312,7 @@ def test_the_shape_stays_locked_while_a_drawing_decides_the_outline(
     )
     spec = REGISTRY.get("sketch_extrude")
     dialog = OperationDialog(spec, {}, values={"sketch": sketch_to_text(dreieck)})
+    close_after(request, dialog)
     dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
     dialog.show()
     qt_app.processEvents()

@@ -8,6 +8,7 @@ Gestaltung lässt sich nicht festnageln, ihre Entscheidungen schon.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -30,12 +31,16 @@ from app.ui.start_screen import (
     accepted_path,
     current_theme,
 )
+from tests.window_leftovers import close_all
 from tools.qt_clicks import double_click
 
 
 @pytest.fixture
-def screen(qt_app: QApplication) -> StartScreen:
-    return StartScreen()
+def screen(qt_app: QApplication) -> Iterator[StartScreen]:
+    """Ein Startbildschirm; gezeigt schließt ihn der Abbau (FD-191)."""
+    shown = StartScreen()
+    yield shown
+    close_all([shown])
 
 
 def test_inventory_card_shows_read_failure_and_recovers(qt_app, tmp_path, monkeypatch):

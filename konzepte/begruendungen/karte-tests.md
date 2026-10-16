@@ -462,6 +462,13 @@ wartet, bis die Karte nach ihrer Öffnungsbewegung steht
 (`test_feature_footer_window.py`, `test_feature_footer_low_window.py`,
 `test_card_tab_chain.py`).
 
+`window_leftovers.py` gehört dem Wächter `_no_window_outlives_its_test` in
+`conftest.py` (FD-191): Ein Fall mit `qt_app`, der ein sichtbares Fenster
+offen lässt, wird an sich selbst rot, nicht am nächsten im selben Arbeiter;
+`close_after(request, …)` schließt ein gezeigtes Panel auch im Fehlerfall.
+Sichtbarkeit wird über die Klasse gefragt, weil Fälle `isVisible` ersetzen.
+Geprüft in `test_window_leftovers.py`.
+
 `plane_refusals.py` gibt `sketch_plane_refusal`: die echte Ebenenabsage einer
 Skizzenoperation für `test_plane_refusal_field.py` und
 `test_refusal_field_ways_window.py` (FD-182), statt eines privaten Helfers aus

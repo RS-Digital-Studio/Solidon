@@ -39,6 +39,7 @@ from app.core.units import LengthUnit
 from app.i18n import tr
 from app.ui.labels import BoundedLengthSpin, BoundedSpin, LengthSpin, NumberSpin
 from app.ui.panels import FeaturePanel
+from tests.window_leftovers import close_after
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -1225,7 +1226,9 @@ def test_a_part_bore_diameter_below_its_limit_names_removing_the_part(
         panel.deleteLater()
 
 
-def test_a_refusal_hides_with_its_field_and_returns_with_it(qt_app: QApplication) -> None:
+def test_a_refusal_hides_with_its_field_and_returns_with_it(
+    qt_app: QApplication, request: pytest.FixtureRequest
+) -> None:
     """RM-342 D-N1: Verschwindet ein Feld mit abgelehnter Zahl, geht sein Satz mit.
 
     Der gemeldete Weg: *Zum Langloch ziehen* X = 1500 mm, dann trägt die
@@ -1239,6 +1242,7 @@ def test_a_refusal_hides_with_its_field_and_returns_with_it(qt_app: QApplication
 
     identifier, feature = a_hole()
     panel = FeaturePanel()
+    close_after(request, panel)
     mesh = plate()
     panel.show_feature(identifier, feature, features=features.detect(mesh), mesh=mesh)
     panel.show()
@@ -1640,6 +1644,7 @@ def test_every_number_starts_on_what_was_measured(qt_app: QApplication) -> None:
 )
 def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     qt_app: QApplication,
+    request: pytest.FixtureRequest,
     mesh_name: str,
     scale: float,
     kind: str,
@@ -1666,6 +1671,7 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     assert diameter.value == pytest.approx(measured)
 
     panel = FeaturePanel()
+    close_after(request, panel)
     panel.show_feature(identifier, feature)
     panel.show()
     QApplication.processEvents()
@@ -1705,7 +1711,7 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
 @pytest.mark.parametrize("recess", [False, True], ids=["fillet", "groove"])
 @pytest.mark.parametrize("unit", ["mm", "in"])
 def test_a_rounding_shows_its_radius_and_sends_the_diameter(
-    qt_app: QApplication, recess: bool, unit: LengthUnit
+    qt_app: QApplication, request: pytest.FixtureRequest, recess: bool, unit: LengthUnit
 ) -> None:
     """Das angezeigte Rundungsmaß gilt für Vorschau und Übernehmen, auch in Zoll."""
     from app.ui.labels import set_display_unit
@@ -1724,6 +1730,7 @@ def test_a_rounding_shows_its_radius_and_sends_the_diameter(
         },
     )
     panel = FeaturePanel()
+    close_after(request, panel)
     try:
         set_display_unit(unit)
         panel.show_feature(feature.id, feature)
@@ -2599,7 +2606,9 @@ def spread(panel: FeaturePanel, scroller: QScrollArea, height: int) -> int:
     return max(lagen) - min(lagen)
 
 
-def test_a_tall_window_does_not_pull_the_handlings_apart(qt_app: QApplication) -> None:
+def test_a_tall_window_does_not_pull_the_handlings_apart(
+    qt_app: QApplication, request: pytest.FixtureRequest
+) -> None:
     """Der Restplatz gehört nach unten, nicht zwischen die Handlungen.
 
     Das Panel steckt in einem Rollbereich mit ``setWidgetResizable`` und wird
@@ -2616,6 +2625,7 @@ def test_a_tall_window_does_not_pull_the_handlings_apart(qt_app: QApplication) -
     key, feature = a_hole()
     panel = FeaturePanel()
     scroller = QScrollArea()
+    close_after(request, scroller)
     scroller.setWidget(panel)
     scroller.setWidgetResizable(True)
     scroller.show()

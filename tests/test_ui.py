@@ -70,6 +70,7 @@ from tests.ui_helpers import MESHES, wait_for_export, wait_for_print_findings, w
 from tests.ui_helpers import expire_trial as _expired
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
+from tests.window_leftovers import close_after
 
 
 @pytest.mark.parametrize("command", ["start_sketch", "start_sculpt", "start_armature"])
@@ -7803,6 +7804,7 @@ def test_the_history_counts_through_a_group_and_keeps_the_kernel_switch_last(
 
 def test_history_context_delete_uses_the_visible_multiple_selection(
     qt_app: QApplication,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Rechtsklick löscht dieselbe Mehrfachauswahl wie die Entf-Taste."""
     from app.core.types import Document, Operation, Transaction
@@ -7818,6 +7820,7 @@ def test_history_context_delete_uses_the_visible_multiple_selection(
         ],
     )
     panel = HistoryPanel()
+    close_after(request, panel)
     panel.show_document(document)
     panel.show()
     QApplication.processEvents()
@@ -15709,7 +15712,9 @@ def test_another_project_does_not_inherit_a_refused_number(qt_app: QApplication)
     panel.close()
 
 
-def test_parameter_rows_recalculate_the_card_height(qt_app: QApplication) -> None:
+def test_parameter_rows_recalculate_the_card_height(
+    qt_app: QApplication, request: pytest.FixtureRequest
+) -> None:
     """Neue Zeilen dürfen nicht in der Höhe des leeren Zustands landen.
 
     Die schwebende linke Karte besitzt kein übergeordnetes Layout, das eine
@@ -15721,6 +15726,7 @@ def test_parameter_rows_recalculate_the_card_height(qt_app: QApplication) -> Non
     from app.ui.panels import ParameterPanel
 
     panel = ParameterPanel()
+    close_after(request, panel)
     panel.resize(260, panel.minimumHeight())
     panel.show_document(Document(format_version=1, app_version="0.0.1"))
     panel.show()
@@ -22250,6 +22256,7 @@ def test_editing_a_box_offers_to_name_its_dimensions_in_one_step(window: MainWin
 
 def test_a_bounded_parameter_has_a_slider_and_a_drag_is_one_change(
     qt_app: QApplication,
+    request: pytest.FixtureRequest,
 ) -> None:
     """RM-359 F8: Ein Maß mit eigener Unter- und Obergrenze hat einen Regler (§13).
 
@@ -22264,6 +22271,7 @@ def test_a_bounded_parameter_has_a_slider_and_a_drag_is_one_change(
     from app.ui.panels import SLIDER_STEPS, ParameterPanel
 
     panel = ParameterPanel()
+    close_after(request, panel)
     document = Document(format_version=1, app_version="0.0.1")
     document.parameters["breite"] = Parameter(
         name="breite", value=40.0, minimum=10.0, maximum=110.0, title="Breite"

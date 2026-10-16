@@ -7,6 +7,7 @@ ihre Werte, und genau das ist die Zusage.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ from app.ui.main_window import MainWindow
 from app.ui.transform_bar import TransformBar
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
+from tests.window_leftovers import close_all
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -50,9 +52,14 @@ def test_the_values_bar_rotates_the_selected_feature_with_its_axis_and_angle(
 
 
 @pytest.fixture
-def bar(qt_app: QApplication) -> TransformBar:
-    """Eine Leiste ohne Fenster — für alles, was nur ihre Werte betrifft."""
-    return TransformBar()
+def bar(qt_app: QApplication) -> Iterator[TransformBar]:
+    """Eine Leiste ohne Fenster — für alles, was nur ihre Werte betrifft.
+
+    Ein Fall, der sie zeigt, bekommt sie beim Abbau geschlossen (FD-191).
+    """
+    shown = TransformBar()
+    yield shown
+    close_all([shown])
 
 
 # --- Was eine Rolle auslöst -----------------------------------------------------

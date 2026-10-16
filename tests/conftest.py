@@ -1486,6 +1486,30 @@ def _no_mouse_button_outlives_its_test(request: pytest.FixtureRequest) -> Iterat
     pytest.fail(f"Nach dem Fall ist noch {held!r} gedrückt; ein Druck ohne Loslassen? (FD-142)")
 
 
+@pytest.fixture(autouse=True)
+def _no_window_outlives_its_test(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Nach einem Fall mit ``qt_app`` steht kein neues sichtbares Fenster mehr (FD-191).
+
+    Ein offen gelassener Dialog machte einen späteren Fall im selben Arbeiter
+    rot (``function_surface.open_dialog``: „Mehrere offene Bedienflächen“).
+    Gemeldet wird hier am verursachenden; danach sind die Fenster zu, damit
+    der nächste Fall frei beginnt. Die Liste von vorher hält die Fenster fest,
+    damit keine Kennung an ein neues Objekt weitergegeben wird.
+    """
+    from tests import window_leftovers
+
+    before = window_leftovers.visible_windows()
+    yield
+    if "qt_app" not in request.fixturenames:
+        return
+    left = window_leftovers.leftovers({id(widget) for widget in before})
+    if not left:
+        return
+    named = window_leftovers.describe(left)
+    window_leftovers.close_all(left)
+    pytest.fail(f"Nach dem Fall stehen noch offen: {named}; wer öffnet, schließt (FD-191)")
+
+
 @pytest.fixture
 def record_trace(request: pytest.FixtureRequest) -> Callable[[str, object], None]:
     """Befunddaten eines Falls an seinen Bericht — ``record_property`` ohne JUnit.
