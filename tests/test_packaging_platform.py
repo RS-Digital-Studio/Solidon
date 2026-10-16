@@ -355,9 +355,13 @@ def test_the_shell_guard_finds_every_way_of_looking(
 SHELL_HELPERS: Final = "tests/shell_helpers.py"
 
 
-def _shell_lookups_by_file(index: code_index.Index, root: Path) -> dict[str, list[str]]:
+def _shell_lookups_by_file(index: code_index.Index) -> dict[str, list[str]]:
     """Je Testdatei unter ``tests/`` (ohne Unterordner, ohne :data:`SHELL_HELPERS`) die Shells,
     nach denen sie sucht.
+
+    Gelesen wird ``ROOT / "tests"`` flach, wie der Index die Dateien führt; eine Attrappe setzt
+    ``ROOT`` dieses Moduls auf ihren Baum. So bleibt die Lesestelle für W4 ein Ordner des
+    Baums (``tests/``) statt eines Parameters, der sich nicht auflösen lässt.
 
     Der Index antwortet für den Stand, zu dem er geladen wurde — ``shared()`` lädt einmal je
     Prozess, und andere Sitzungen ändern den Baum während eines Laufs. Steht eine Testdatei
@@ -369,7 +373,7 @@ def _shell_lookups_by_file(index: code_index.Index, root: Path) -> dict[str, lis
         for path, digest in index.digests.items()
         if path.startswith("tests/") and path.count("/") == 1 and path.endswith(".py")
     }
-    sources = {f"tests/{file.name}": file.read_bytes() for file in (root / "tests").glob("*.py")}
+    sources = {f"tests/{file.name}": file.read_bytes() for file in (ROOT / "tests").glob("*.py")}
     changed = sorted(
         path
         for path in indexed.keys() | sources.keys()
@@ -395,14 +399,14 @@ def test_only_the_shell_helpers_look_for_bash_or_sh() -> None:
     und mit WSL vorn liefe das Tor-Skript in einem Linux. ``test_packaging.py``
     suchte die ``sh`` mit einem halben Rückfall, nur unter ``ProgramFiles``.
     """
-    lookups = _shell_lookups_by_file(code_index.shared(), ROOT)
+    lookups = _shell_lookups_by_file(code_index.shared())
     assert len(lookups) > 100, f"nur {len(lookups)} Dateien unter tests — falscher Pfad?"
     assert {path: found for path, found in lookups.items() if found} == {}
 
 
 @pytest.mark.parametrize("change", ["neu", "umgeschrieben", "entfernt"])
 def test_the_shell_guard_answers_only_for_the_state_the_index_was_loaded_at(
-    tmp_path: Path, change: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
 ) -> None:
     """RCS-3: Eine Testdatei, die nach dem Laden des Index entsteht, sich ändert oder
     verschwindet, gibt die Meldung „Lauf neu starten“ — keinen rohen ``KeyError`` und keine
@@ -416,7 +420,8 @@ def test_the_shell_guard_answers_only_for_the_state_the_index_was_loaded_at(
             "tests/shell_helpers.py": 'import shutil\n\nshutil.which("bash")\n',
         },
     )
-    assert _shell_lookups_by_file(index, root) == {"tests/test_old.py": ["sh"]}
+    monkeypatch.setattr(sys.modules[__name__], "ROOT", root)
+    assert _shell_lookups_by_file(index) == {"tests/test_old.py": ["sh"]}
     old = root / "tests" / "test_old.py"
     if change == "neu":
         (root / "tests" / "test_new.py").write_text(old.read_text("utf-8"), encoding="utf-8")
@@ -425,7 +430,7 @@ def test_the_shell_guard_answers_only_for_the_state_the_index_was_loaded_at(
     else:
         old.unlink()
     with pytest.raises(AssertionError, match=r"test_(new|old)\.py — den Lauf neu starten"):
-        _shell_lookups_by_file(index, root)
+        _shell_lookups_by_file(index)
 
 
 def test_the_start_check_says_in_one_line_how_far_the_start_came() -> None:
