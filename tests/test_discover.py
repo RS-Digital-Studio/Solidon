@@ -895,6 +895,9 @@ def test_what_a_person_types_into_an_address_field_is_checked_there() -> None:
         "http://127.0.0.1:8188",
         "127.0.0.1:11434",
         "https://werkstatt.lan:11434/api/chat",
+        # Ein Doppelpunkt an zweiter Stelle ist noch kein Laufwerk (Review RCI-7).
+        "[::1]:11434",
+        "a:8080",
         "",
     )
     for eingabe in brauchbar:
