@@ -1280,6 +1280,30 @@ def test_tree_walls_change_the_print_only_where_the_program_reads_them(
         ignored = "support.tree_walls" in handover.ignored_under_trees(
             style, organic, program, hollow=handover.hollow_trees(setup)
         )
+        # **Organische Bäume legt OrcaSlicer nicht immer gleich** (CS-39): Mit
+        # derselben Platte und denselben Einstellungen kam unter Last einmal
+        # ein Lauf mit 84 Bewegungen weniger (13 087 statt 13 171, 3MF und
+        # Konfigurationsblock gleich). „Überlesen“ heißt deshalb: Der Lauf mit
+        # zwei Wänden gleicht einem der Läufe mit einer Wand; nur bei
+        # Abweichung wird mit einer Wand bis zu zweimal nachgeschnitten.
+        single = [moves[1]]
+        for again in range(2 if ignored else 0):
+            if moves[2] in single:
+                break
+            single.append(
+                _sliced_tower(
+                    printer,
+                    installed_slicer,
+                    tmp_path / f"{style}-1-{again + 2}",
+                    {
+                        "support.style": style,
+                        "support.placement": "build_plate",
+                        "support.tree_walls": 1,
+                    },
+                )[0]
+            )
+        if moves[2] in single:
+            moves[1] = moves[2]
         assert (moves[1] == moves[2]) is ignored, (
             f"{program}, {style}: Wände {'überlesen' if moves[1] == moves[2] else 'gedruckt'}, "
             f"die Tabelle sagt {'überlesen' if ignored else 'gedruckt'}"
