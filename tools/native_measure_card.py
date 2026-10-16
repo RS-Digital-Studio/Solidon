@@ -1486,14 +1486,21 @@ class CardRoute:
                 if self.trace is not None:
                     self.application.removeEventFilter(self.trace)
                     self.trace.timer.stop()
+                stragglers: tuple[str, ...] | None = None
                 if self.window is not None:
                     from tools.window_bench import shutdown_window
 
                     self.window.session.forget_changes()
-                    shutdown_window(self.window, self.application)
-                self.state["shutdown_complete"] = True
+                    stragglers = shutdown_window(self.window, self.application)
                 leave()
                 self.state["source_pins_unchanged"] = True
+                if stragglers is not None:
+                    from tools.window_bench import record_shutdown
+
+                    # Wie jedes Prozessende des Prüfstands: Nachzügler stehen benannt
+                    # im Zustand, und der Prozess wartet nicht ein zweites Mal (RF-18).
+                    self.state["exit"] = exit_code
+                    record_shutdown(self.state, self.persist, stragglers)
             except Exception:
                 exit_code = 1
                 self.state["shutdown_or_binding_exception"] = traceback.format_exc()
