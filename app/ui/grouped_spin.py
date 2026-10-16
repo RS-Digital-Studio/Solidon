@@ -17,7 +17,9 @@ Drei Bauarten für drei Bedürfnisse: :class:`GroupedSpin` lehnt eine Zahl
 jenseits der Grenzen ab (Operationsdialog, Druckeinstellungen, Merkmalfenster),
 :class:`GroupedNumberSpin` klemmt wie ein gewöhnliches Zahlenfeld, und
 :class:`GroupedIntSpin` ist ein ``QSpinBox`` — wer ``value()`` als ``int``
-liest, liest weiter ein ``int``.
+liest, liest weiter ein ``int``. Eine Kennung (Dreiecksnummer, Startwert,
+Port) ist keine Menge und steht ohne Gruppen: :class:`IdentifierSpin` und
+:class:`IdentifierIntSpin`.
 """
 
 from __future__ import annotations
@@ -112,3 +114,28 @@ class GroupedIntSpin(QSpinBox):
             return int(self._digits(text))
         except ValueError:
             return int(super().valueFromText(text))
+
+
+class IdentifierSpin(GroupedSpin):
+    """Eine Kennung im Operationsdialog, etwa eine Dreiecksnummer — keine Menge.
+
+    Geschrieben ohne Gruppen, damit sie sich abschreiben lässt wie ein
+    Startwert; gelesen wie jedes Ganzzahlfeld, auch mit Gruppen. Welches Feld
+    eine Kennung ist, sagt das Schema (``param(identifier=True)``), nicht sein
+    Name (Review F2a, R5).
+    """
+
+    @override
+    def textFromValue(self, value: float) -> str:
+        if not self._whole():
+            return super().textFromValue(value)
+        return str(round(value))
+
+
+class IdentifierIntSpin(GroupedIntSpin):
+    """Eine Kennung als ``QSpinBox``: Startwert, Port. Ohne Gruppen geschrieben —
+    Leerzeichen wären beim Abschreiben in die Kommandozeile ein Fehler."""
+
+    @override
+    def textFromValue(self, value: int) -> str:
+        return str(int(value))

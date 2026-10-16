@@ -66,6 +66,7 @@ from app.ui.first_run import (
     slicer_printer_ids,
     valid_printer_choice,
 )
+from app.ui.grouped_spin import IdentifierIntSpin
 from app.ui.guide_targets import section_heading
 from app.ui.icons import icon
 from app.ui.labels import TrackSlider, by_title, slicer_title, wheel_needs_focus
@@ -335,7 +336,8 @@ class SettingsDialog(QDialog):
         # Französisch von 566 auf 768 Bildpunkte — gemessen, dann verworfen.
         self.remote = QCheckBox(titles["remote"], self)
         self.remote.setChecked(settings.remote_enabled)
-        self.remote_port = QSpinBox(self)
+        # Eine Portnummer ist eine Kennung, keine Anzahl: ohne Gruppen.
+        self.remote_port = IdentifierIntSpin(self)
         self.remote_port.setRange(1024, 65535)
         self.remote_port.setValue(settings.remote_port)
         self.remote.setToolTip(

@@ -158,9 +158,12 @@ Rückseite; eine ausdrückliche Feldübergabe öffnet sie vor dem Fokuswechsel.
   (`count_text`, FD-124); Felder mit Nachkomma nie. Jedes Feld ohne Nachkomma
   der Oberfläche, Anzahl wie Maß, entsteht über `grouped_spin` (`GroupedSpin`,
   `GroupedNumberSpin`, `GroupedIntSpin`), nie als nacktes `QSpinBox` oder über
-  `setDecimals(0)`; Kennungen (Startwert, Port) sind die Ausnahme. Der Wächter
-  `tests/test_grouped_count_fields.py` prüft den wirksamen Wert: Eine berechnete
-  Stellenzahl trägt ihren Ort in `COMPUTED_PLACES` (FD-184, R2).
+  `setDecimals(0)`. Eine Kennung (Dreiecksnummer, Startwert, Port) ist keine
+  Menge und steht ohne Gruppen, damit man sie abschreiben kann: am Parameter
+  `param(identifier=True)`, sonst `IdentifierIntSpin` — entschieden am Schema,
+  nie am Feldnamen (R5). Der Wächter `tests/test_grouped_count_fields.py`
+  prüft den wirksamen Wert: Eine berechnete Stellenzahl trägt ihren Ort in
+  `COMPUTED_PLACES` (FD-184, R2).
 - **Eine umgebrochene Beschriftung zeigt jede Zeile** (FD-183):
   `align_to_the_front` hält ihre Breite fest, `wrapped_caption.keep_whole_lines`
   die Höhe des Textes in dieser Breite, auch nach einem Schriftwechsel.

@@ -12,6 +12,11 @@ der **wirksame** Wert an diesem Ort ermittelt wird. Geprüft wird dann der
 Wert, den das Feld wirklich bekommt, nicht die Schreibweise: Die
 Druckeinstellungen hatten ``setDecimals(field.decimals)``, und dreizehn
 Zeilen mit null Stellen standen ohne Gruppen da (Review F2a, R2).
+
+**Eine Kennung ist keine Menge** (R5): Dreiecksnummer, Startwert und Port
+stehen ohne Gruppen, damit man sie abschreiben kann. Was eine Kennung ist,
+sagt das Schema (``param(identifier=True)``) oder die Bauart
+(``IdentifierSpin``, ``IdentifierIntSpin``), nie der Name eines Feldes.
 """
 
 from __future__ import annotations
@@ -28,21 +33,18 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.units import LengthUnit, decimals_for
 from app.i18n.catalog import available_languages
-from app.ui.grouped_spin import GroupedIntSpin, GroupedNumberSpin, GroupedSpin
+from app.ui.grouped_spin import (
+    GroupedIntSpin,
+    GroupedNumberSpin,
+    GroupedSpin,
+    IdentifierIntSpin,
+    IdentifierSpin,
+)
 
 UI = Path(__file__).resolve().parent.parent / "app" / "ui"
 
 #: Das geschützte Leerzeichen zwischen den Gruppen.
 GAP = " "
-
-#: (Datei, Attribut) → warum dieses Ganzzahlfeld keine Gruppen trägt.
-UNGROUPED: dict[tuple[str, str], str] = {
-    ("generate_dialog.py", "seed"): (
-        "Ein Startwert ist eine Kennung zum Abschreiben, auch in die Kommandozeile; "
-        "Leerzeichen darin wären dort ein Fehler."
-    ),
-    ("settings_dialog.py", "remote_port"): "Eine Portnummer ist eine Kennung, keine Anzahl.",
-}
 
 UNITS: tuple[LengthUnit, ...] = get_args(LengthUnit)
 
@@ -176,18 +178,77 @@ def _scan() -> tuple[list[tuple[str, str, int]], list[tuple[str, str]]]:
 
 def test_no_integer_field_is_built_without_groups() -> None:
     bare, _computed = _scan()
-    wrong = [
-        f"{name}:{line} {target or 'ohne Namen'}"
-        for name, target, line in bare
-        if (name, target) not in UNGROUPED
-    ]
+    wrong = [f"{name}:{line} {target or 'ohne Namen'}" for name, target, line in bare]
     assert not wrong, (
-        "Ganzzahlfeld ohne Dreiergruppen — GroupedSpin, GroupedNumberSpin oder "
-        "GroupedIntSpin aus app.ui.grouped_spin nehmen:\n" + "\n".join(wrong)
+        "Ganzzahlfeld an grouped_spin vorbei — GroupedSpin, GroupedNumberSpin oder "
+        "GroupedIntSpin nehmen, für eine Kennung IdentifierSpin oder IdentifierIntSpin:\n"
+        + "\n".join(wrong)
     )
-    seen = {(name, target) for name, target, _line in bare}
-    stale = sorted(f"{name} {target}" for name, target in UNGROUPED if (name, target) not in seen)
-    assert not stale, f"Ausnahme trifft kein Feld mehr — austragen: {stale}"
+
+
+def test_every_whole_operation_field_is_grouped_unless_it_is_an_identifier(
+    qt_app: QApplication,
+) -> None:
+    """Jede ganze Zahl jeder Operation: Menge in Gruppen, Kennung ohne (R5).
+
+    ``detect_region.seed_face`` stand als „1 234 567“ da, eine Dreiecksnummer,
+    die man abschreibt wie einen Startwert.
+    """
+    from app.core import bootstrap
+    from app.core.registry import REGISTRY
+    from app.ui.op_dialog import ValueField
+
+    bootstrap.load_operations()
+    entries = [
+        (spec.name, entry)
+        for spec in REGISTRY.all()
+        for entry in spec.params.spec()
+        if entry.kind == "int" and not entry.internal
+    ]
+    identifiers = {f"{name}.{entry.name}" for name, entry in entries if entry.identifier}
+    assert "detect_region.seed_face" in identifiers, identifiers
+    assert len(identifiers) < len(entries) // 4, "fast alles Kennungen — dann prüft das nichts"
+    wrong: list[str] = []
+    for name, entry in entries:
+        field = ValueField(entry)
+        try:
+            kind = IdentifierSpin if entry.identifier else GroupedSpin
+            if type(field.spin) is not kind:
+                wrong.append(f"{name}.{entry.name}: {type(field.spin).__name__}")
+        finally:
+            field.deleteLater()
+    assert not wrong, "\n".join(wrong)
+
+
+def test_no_schema_marks_anything_but_a_whole_number_as_identifier() -> None:
+    from app.core import bootstrap
+    from app.core.registry import REGISTRY
+
+    bootstrap.load_operations()
+    marked = [
+        f"{spec.name}.{entry.name} ({entry.kind})"
+        for spec in REGISTRY.all()
+        for entry in spec.params.spec()
+        if entry.identifier and entry.kind != "int"
+    ]
+    assert not marked, marked
+
+
+@pytest.mark.parametrize("kind", [IdentifierSpin, IdentifierIntSpin])
+def test_an_identifier_is_written_without_groups_and_read_with_them(
+    qt_app: QApplication, kind: type
+) -> None:
+    field = kind()
+    try:
+        field.setRange(0, 5_000_000)
+        field.setValue(1_234_567)
+        assert field.lineEdit().text() == "1234567"
+        field.lineEdit().setText(f"2{GAP}103{GAP}472")
+        field.interpretText()
+        assert field.value() == 2_103_472
+        assert field.lineEdit().text() == "2103472"
+    finally:
+        field.deleteLater()
 
 
 def test_every_computed_number_of_places_is_known() -> None:

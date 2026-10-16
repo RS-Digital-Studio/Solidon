@@ -2265,6 +2265,13 @@ class ParamSpec:
     ``least`` ab, und der Bereichsnachweis fährt ``least`` als eigene Ecke
     (``range_check._corner_values``) — an der Null allein sähe er das grobe
     Ende nie."""
+    identifier: bool = False
+    """Die ganze Zahl ist eine Kennung, keine Menge — etwa die Nummer eines Dreiecks.
+
+    Mengen stehen ab vier Stellen in Dreiergruppen (FD-124); eine Kennung
+    nicht, denn man schreibt sie ab wie einen Startwert, und „1 234 567“
+    wäre dort eine andere Schreibweise derselben Nummer (Review F2a, R5).
+    ``tests/test_grouped_count_fields.py`` hält die Angabe an ganzen Zahlen."""
 
 
 @runtime_checkable
