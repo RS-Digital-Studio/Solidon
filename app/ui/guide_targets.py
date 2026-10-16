@@ -93,6 +93,12 @@ _HELD: list[QWidget] = []
 _PROBED: list[QWidget] = []
 
 
+def release_held() -> None:
+    """Gibt die gehaltenen Fenster frei — am Ende einer Fläche und eines Falls (RC-11)."""
+    _HELD.clear()
+    _PROBED.clear()
+
+
 def _open_dialog(window: MainWindow) -> QWidget:
     """Der offene Operationsdialog, sonst der Dialog, der gerade modal läuft."""
     dialog = window._op_dialog

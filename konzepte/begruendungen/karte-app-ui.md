@@ -2310,7 +2310,10 @@ Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.
 
 `guide_targets` teilt `widget_under`, `zone_of`, `search_hits`,
 `menubar_entries`, `point_for` und `next_click` zwischen Tour, Bildanleitungen
-und Prüfstand. `area_for` deckt die Zielfläche einschließlich verschachtelter
+und Prüfstand. Den Wrapper des zuletzt geholten modalen Dialogs und des
+zuletzt getroffenen Fensters hält es (`_HELD`, `_PROBED`), damit die Wrapper
+ihrer Kinder nicht verfallen; `release_held` gibt beide frei, am Ende jeder
+Fläche und jedes Falls des Prüfstands. `area_for` deckt die Zielfläche einschließlich verschachtelter
 Rollbereiche auf; `next_click` geht den tatsächlichen Kundenweg ohne solches
 Aufdecken. Es rollt mit Radereignissen am tatsächlichen Rollbereich, bis ein
 Feld, das hineinpasst, mit beiden Kanten frei steht; ein kurzer Restschritt

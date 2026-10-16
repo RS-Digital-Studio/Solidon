@@ -230,11 +230,14 @@ class LanguageFlow:
         from PySide6.QtTest import QTest
         from shiboken6 import isValid
 
+        from app.ui import guide_targets
         from tools.function_surface import windows_to_picture
 
         for _attempt in range(MOST_UNSTICKS):
             opened = windows_to_picture(self.window)
             if not opened:
+                # Die Fläche ist zu: Ihr Fenster hält keine Liste mehr am Leben (RC-11).
+                guide_targets.release_held()
                 return True
             widget = opened[-1]
 
@@ -258,6 +261,7 @@ class LanguageFlow:
                 break
         remaining = windows_to_picture(self.window)
         if not remaining:
+            guide_targets.release_held()
             return True
         names = ", ".join(type(widget).__name__ for widget in remaining)
         flow.data["errors"].append(f"Rückweg der Fläche: Fenster bleibt offen ({names})")

@@ -103,3 +103,72 @@ def test_the_probe_in_an_open_list_stays_alive(qt_app: Any) -> None:
     dialog.deleteLater()
     qt_app.processEvents()
     assert seen == ["QPoint"] * 3, seen
+
+
+def test_a_held_window_goes_free_when_the_surface_and_the_case_end(
+    qt_app: Any, monkeypatch: Any
+) -> None:
+    """RC-11: ``_HELD`` und ``_PROBED`` hielten das letzte Fenster über die Fläche hinaus.
+
+    Ein Python-eigener Dialog ohne Elternteil lebte verborgen als Fenster der
+    obersten Ebene weiter, bis jemand die Listen leerte; das tat niemand. Jetzt
+    geben sie das Ende einer Fläche (``LanguageFlow.close_surfaces``) und das
+    Ende eines Falls (``FunctionFlow.finish``) frei.
+    """
+    import weakref
+
+    from PySide6.QtCore import SIGNAL, SLOT, QObject, QTimer
+    from PySide6.QtWidgets import QDialog, QPushButton, QVBoxLayout
+
+    from app.ui import guide_targets
+    from tools import function_bench, function_language, function_surface
+
+    window = SimpleNamespace(_op_dialog=None)
+
+    def held_dialog() -> weakref.ref[QDialog]:
+        dialog = QDialog()
+        QVBoxLayout(dialog).addWidget(QPushButton("OK", dialog))
+        dialog.resize(200, 100)
+
+        def look() -> None:
+            try:
+                held = guide_targets._open_dialog(window)  # type: ignore[arg-type]
+                guide_targets.widget_under(held.mapToGlobal(held.rect().center()))
+            finally:
+                dialog.reject()
+
+        QTimer.singleShot(50, look)
+        # Wachhund am Dialog selbst, ohne Python-Verweis auf ihn: nie ein hängender Fall.
+        guard = QTimer(dialog)
+        guard.setSingleShot(True)
+        QObject.connect(guard, SIGNAL("timeout()"), dialog, SLOT("reject()"))
+        guard.start(5000)
+        del guard
+        dialog.exec()
+        return weakref.ref(dialog)
+
+    def gone(reference: weakref.ref[QDialog]) -> bool:
+        gc.collect()
+        qt_app.processEvents()
+        return reference() is None
+
+    flow = object.__new__(function_bench.FunctionFlow)
+    flow.watch = SimpleNamespace(
+        poll=lambda: None, modal_entries=list, raw_entries=list, windows=[]
+    )
+    flow._timers = []
+    flow.data = {}
+    flow.persist = lambda: None
+    first = held_dialog()
+    assert not gone(first), "der Dialog wird gehalten, solange der Fall läuft"
+    flow.finish()
+    assert gone(first), "nach dem Fall lebt der gehaltene Dialog weiter"
+    assert guide_targets._HELD == [] and guide_targets._PROBED == []
+
+    monkeypatch.setattr(function_surface, "windows_to_picture", lambda window: [])
+    surface = object.__new__(function_language.LanguageFlow)
+    surface.window = window
+    second = held_dialog()
+    assert not gone(second)
+    assert surface.close_surfaces(flow) is True
+    assert gone(second), "nach der Fläche lebt der gehaltene Dialog weiter"

@@ -457,7 +457,10 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
         self.persist()
 
     def finish(self) -> None:
-        """Was die Wachen gesehen haben, ins Protokoll."""
+        """Was die Wachen gesehen haben, ins Protokoll; die gehaltenen Fenster frei (RC-11)."""
+        from app.ui import guide_targets
+
+        guide_targets.release_held()
         self.watch.poll()
         self.data["modals"] = self.watch.modal_entries()
         self.data["raw_windows"] = self.watch.raw_entries()
