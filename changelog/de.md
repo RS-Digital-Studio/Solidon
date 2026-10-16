@@ -134,7 +134,8 @@ Nutzen da und sonst nichts.
 - Die Legende *Hinzugefügt* und *Entfernt* steht im Vorschauband nur, wenn die Vorschau Material hinzufügt oder entfernt. Bei *Objekt umbenennen* fehlt sie deshalb.
 - Der Chat nennt bei Parametern, Passungen, Drucker, Material und Rückgängig den Ort im Fenster, an dem man dasselbe selbst tut.
 - Der Prüfbericht und die Prüfung vor dem Export nennen die Körper einer Passung beim Namen statt mit einer internen Kennung, auch einen inzwischen entfernten Körper.
-- Meldungen nennen ein Merkmal mit Art und Nummer, etwa „Bohrung 2“, statt mit einer internen Kennung. Beim Gegenstück zu einem Gewinde stehen Durchmesser und Steigung in der eingestellten Einheit.
+- Meldungen nennen ein Merkmal mit Art und Nummer, etwa „Bohrung 2“, statt mit einer internen Kennung.
+- Maße unter einer Meldung stehen mit ihrer Einheit, Längen in der eingestellten Einheit. Version 0.6.0 zeigte dort oft nur die Zahl, bei *Kanten verfeinern* etwa die kleinste noch mögliche Kantenlänge.
 - Englisch und Portugiesisch unterscheiden den Überstand eines Hakens oder eines Körpers unter dem Bett vom Überhang beim Drucken.
 - Auf Spanisch und Portugiesisch zeigen Menü, Suche und Dialog bei *Stift für Bohrung* und *Druckoptimal ausrichten* wieder nur den ersten Satz.
 - Einige Übersetzungen lesen sich klarer, darunter die Einleitung von *Parameter anlegen …*. Der Zapfen beginnt in allen Sprachen groß.

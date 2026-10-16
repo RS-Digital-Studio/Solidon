@@ -563,7 +563,10 @@ def split_to_fit(
                         code="split.cut_failed",
                         severity="warning",
                         message=_("Der Schnitt hat kein zweites Teil ergeben."),
-                        values={"axis": candidate.axis, "position": round(candidate.position, 2)},
+                        values={
+                            "axis": candidate.axis,
+                            "position_mm": round(candidate.position, 2),
+                        },
                     )
                 )
             return finish()

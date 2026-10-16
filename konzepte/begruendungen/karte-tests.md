@@ -38,6 +38,7 @@ Hier statt in der Karte, weil sie an ihrem Budget steht.
 | Richtet sich eine Auswahlhandlung nach dem Schritt, der die Absage auslöst, mit einem Feld aus seinem Schema, im ganzen Register, bei einzeln gewählten Kanten die gewählten; gehen Halt und Ausgabebefund (*Aushöhlen* ohne Hohlraum) beide durch die Anpassung? | `test_choice_ways.py` |
 | Öffnet *Anderes Merkmal/Andere Kanten/Andere Flächen wählen* den Schritt mit dem Feld sichtbar und im Fokus, auch *Einzelne Kanten*, *Eingabe korrigieren* daneben den Wert? (Fenster) | `test_choice_ways_ui.py` |
 | Nennt eine Absage ohne Schrittkennung (*Gegenstück zum Gewinde*, nichts zum Slicen) ihren Weg als Satz statt eines Knopfs ohne Wirkung, und nicht noch einmal neben seinem Knopf (`left_out`)? Stehen Merkmal und Längen lesbar darunter? | `test_stepless_advice.py` |
+| Steht jedes Maß unter einer Absage oder einem Befund mit Einheit und Längen in der Anzeigeeinheit, auch ein Schlüssel ohne Endung, den Agent oder Handler lesen; schlägt der Wächter über alle `values` in `app/core` an? | `test_value_measures.py` |
 | Nennt *In Einzelteile aufteilen* Splitter und bietet *Splitter behalten* an? | `test_split_splinters.py` |
 | Nennen die Zusatzwerkzeuge des Agenten ihren Fensterort, und steht er in der gebauten Menüleiste? | `test_agent_tool_places.py` |
 

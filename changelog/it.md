@@ -109,7 +109,8 @@ scrive in `website/version.json`.
 - La legenda *Aggiunto* e *Rimosso* compare nella barra dell'anteprima solo quando l'anteprima aggiunge o toglie materiale. Per questo *Rinomina oggetto* non la mostra.
 - Per parametri, accoppiamenti, stampante, materiale e annulla, la chat indica il punto della finestra in cui fare lo stesso da sé.
 - Il rapporto di verifica e il controllo prima dell'esportazione nominano i corpi di un accoppiamento invece di mostrare un identificativo interno, anche un corpo nel frattempo rimosso.
-- I messaggi indicano una caratteristica con tipo e numero, come «Foro 2», invece di un identificativo interno. Per la controparte di una filettatura, diametro e passo sono nell'unità scelta.
+- I messaggi indicano una caratteristica con tipo e numero, come «Foro 2», invece di un identificativo interno.
+- Le misure sotto un messaggio riportano la loro unità, le lunghezze nell'unità scelta. La versione 0.6.0 mostrava spesso solo il numero, come la lunghezza minima dello spigolo in *Affina gli spigoli*.
 - L'inglese e il portoghese distinguono ora la sporgenza di un gancio, o di un corpo sotto il piatto, dallo sbalzo in stampa.
 - In spagnolo e portoghese menu, ricerca e finestra di dialogo mostrano di nuovo solo la prima frase di *Perno per foro* e *Orienta per la stampa*.
 - Diverse traduzioni si leggono con più chiarezza, tra cui l'introduzione di *Crea parametro …*. Il perno inizia con la maiuscola in tutte le lingue.

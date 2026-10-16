@@ -1689,7 +1689,7 @@ def test_a_fillet_names_the_largest_radius_that_fits() -> None:
     sketch = box()
     with pytest.raises(ValidationError) as caught:
         edit.fillet(sketch, edit.flat_points(sketch), 3, 30.0)
-    assert caught.value.values["most"] == "20"
+    assert caught.value.values["most_mm"] == pytest.approx(20.0)
     assert "20" in str(caught.value.detail)
     with pytest.raises(ValidationError):
         edit.fillet(sketch, edit.flat_points(sketch), 3, 20.0)
@@ -1730,7 +1730,7 @@ def test_a_chamfer_cuts_the_corner_with_a_straight_edge() -> None:
 
     with pytest.raises(ValidationError) as caught:
         edit.chamfer(sketch, edit.flat_points(sketch), 3, 25.0)
-    assert caught.value.values["most"] == "20"
+    assert caught.value.values["most_mm"] == pytest.approx(20.0)
     assert caught.value.constraint == "maximum"
     assert caught.value.title is ValidationError.default_title
     with pytest.raises(ValidationError):
