@@ -2308,7 +2308,7 @@ Auskunft.
 - Ursache: Die Absagen legen Längen unter Schlüsseln ohne `_mm` ab, `spoken_values` erkennt sie nicht als Länge; Leser im Code brauchen die Schlüssel (`main_window.py` liest `previous`/`diameter`, `bore_pin.py` `diameter`/`pitch`), deshalb blieben sie in FD-186 unverändert.
 - Vorschlag: je Stelle `_mm`-Schlüssel und die Leser nachziehen; ein Wächter über `spoken_values` aller Absagen mit Zahl.
 - Wirkung beim Kunden: In Zoll liest er eine Millimeterzahl ohne Einheit und hält sie für Zoll.
-- Stand: offen RM-737; in Arbeit
+- Stand: behoben `deab9a418`; `tests/test_value_measures.py` (29) am Stand davor 28 rot, danach grün; Maße unter Absagen und Befunden stehen mit Einheit, Längen in der Anzeigeeinheit (`labels._BARE_MEASURES`, `"unit": "mm"` an Grenzwerten, Endung an Schlüsseln ohne Leser), Werte bleiben Zahlen in mm; Wächter über jeden `values`-Eintrag in `app/core`; offscreen hell und dunkel in sechs Sprachen in mm und Zoll im Operationsdialog und im Prüfbericht gesehen („Erreichbar: 0,58 mm“ / „0,0228 in“), nativer Nachweis im Schlusslauf; der Anzeigetest der Befundwerte (`test_finding_display_units.py`, 18 rot mit der Erwartung vor FD-188) erwartet seit `68e3de0f0` Längen und Druckeinstellungen mit Einheit.
 
 ### FD-189 *Einzelne Kanten* zeigt einen gespeicherten Kantenschlüssel roh
 
@@ -2458,13 +2458,13 @@ Auskunft.
 
 - Art: Stabilität
 - Schwere: mittel
-- Funktion: keine Zeile: Fensterlauf `tests/test_operation_ui.py`
+- Funktion: keine Zeile: Lesen von Layoutelementen in Dialogen und Karten (`QLayout.itemAt`), gesehen im Fensterlauf `tests/test_operation_ui.py`
 - Prüfpunkt: 19
 - Beleg: `output/konsolidierung-2026-10-12/fix-rest-a-claude.md`: dreimal dieselbe Zugriffsverletzung in `ExpressionField.__init__` beim Bau des `QCompleter` (`op_dialog.py:494` bzw. `:503` ← `_editor_for` ← `OperationDialog.__init__`) im Fall `test_every_operation_dialog_names_its_fields_and_keeps_the_grid`; die ganze Datei zehnmal gepinnt: 9 grün, 1 Abriss, mit abgeschaltetem Speicherbereiniger derselbe Ort; `fix-fd201-202-claude.md`: nativer Stapel unter `cdb.exe` — `PySide::SignalManager::retrieveMetaObject` mit Typdaten `nullptr` aus `QCompleterWrapper::metaObject()`. Zwilling von RM-790 (Abbruch am `QCompleter` in `ValueField.__init__`).
-- Ursache: offen; am Stapel liefert der `BindingManager` während des Konstruktors die Hülle eines längst freigegebenen C++-Objekts an derselben Adresse, vermutlich eines Typs ohne `QObject`, den C++ löscht, während Python die Hülle noch hält.
-- Vorschlag: den Typnamen der fremden Hülle im Abriss lesen und je Fall zählen, welche Hüllen ohne `QObject` über die Datei wachsen (`shiboken6.Shiboken.getAllValidWrappers()`); den Verursacher abbauen.
-- Wirkung beim Kunden: keine belegte; im Kundenweg nicht beobachtet, in der Suite etwa jeder zehnte ganze Lauf der Datei.
-- Stand: offen RM-737; in Arbeit
+- Ursache: belegt (`fix-fd201-202-claude.md`): `QLayout.itemAt(index)` hängt die Python-Hülle eines `QWidgetItem` an das Layout; löscht Qt das Element selbst (hier der umbrechende `DialogFooter` nach der Messung des Prüfstands, im Produkt `removeRow` und jeder Neuaufbau einer Knopfleiste), bleibt die Hülle gültig, und ein späterer `QCompleter` an derselben Adresse bekommt sie über `metaObject()` (cdb: `PySide::SignalManager::retrieveMetaObject+0x24`, Typ `PySide6.QtWidgets.QWidgetItem`).
+- Vorschlag: Index-Lesungen über `layout_lifetime.borrowed_items`/`layout_parts`, die ihre Hüllen nach dem Block freigeben.
+- Wirkung beim Kunden: Dieselbe Bauart lag an 14 Produktstellen (`style`, `card_width`, `overlay`, `panels`, `tab_stops`, `transform_bar`, `KeyDialog`): beim Kunden ein seltener Absturz ohne Rückweg; in der Suite etwa jeder zehnte ganze Lauf von `test_operation_ui.py`.
+- Stand: behoben `b72547842`; die Zugriffsverletzung beim Bau des `QCompleter` war eine verwaiste `QWidgetItem`-Hülle an derselben Adresse (cdb: `PySide::SignalManager::retrieveMetaObject+0x24`, Typ `PySide6.QtWidgets.QWidgetItem`, deterministisch nachgestellt mit `itemAt(index)` und `removeRow`): `QLayout.itemAt(index)` hängt die Hülle an das Layout, und löscht Qt das Element selbst (hier der umbrechende `DialogFooter` nach der Messung des Prüfstands), bleibt sie stehen; alle Index-Lesungen in `app/` und `tools/` gehen jetzt über `layout_lifetime.borrowed_items`/`layout_parts`, die ihre Hüllen freigeben, `test_layout_item_wrappers.py` am Stand davor 4 rot, danach 7 grün, und die ganze `test_operation_ui.py` lief 50-mal gepinnt ohne Abriss.
 
 ### FD-202 Der Maßkartenfall las gleitende Seitenkarten als Dauerschleife
 
@@ -2476,7 +2476,7 @@ Auskunft.
 - Ursache: Die Seitenkarten gleiten nach der Wahl einer Bohrung 160 ms nach der Wanduhr, `settle_measure_layout` zählte nur 20 Ereignisrunden, und jeder Schritt der Karten setzt die Maßkarte neu. Kein Produktfehler.
 - Vorschlag: Das Einschwingen wartet wie in FD-157 auf ruhende Karten (`wait_for_resting_cards`, eine Quelle für `ui_helpers` und `guide_window`).
 - Wirkung beim Kunden: Kein Produktfehler; die Maßkarte folgt den gleitenden Karten Bild für Bild und steht danach.
-- Stand: offen RM-737; in Arbeit
+- Stand: behoben `0f7e3cdfa`; kein Produktfehler: Die Seitenkarten gleiten nach der Wahl einer Bohrung 160 ms nach der Wanduhr, und `settle_measure_layout` zählte nur 20 Ereignisrunden, sodass der Klappfall die Bilder der folgenden Maßkarte als Dauerschleife las (die Annahme war seit `f6b0f53f2` falsch, mit 1 s Gleiten auf main, welle5 und rest-a rot); das Einschwingen wartet jetzt wie in FD-157 auf ruhende Karten (`wait_for_resting_cards`, eine Quelle für `ui_helpers` und `guide_window`), `test_settling_waits_until_the_side_cards_rest` am Stand davor rot, danach grün, die acht Maßkartendateien und `test_guide_targets.py` 100 grün.
 
 ### FD-203 Herstellerwerte außerhalb der Feldgrenzen stehen im Druckdialog gekürzt
 
@@ -2593,6 +2593,150 @@ eingefroren“). Ihr Registerpunkt ist RM-812.
 - Wirkung beim Kunden: Nach kleinerer Schrift bleibt das Schlüsselfeld zu hoch.
 - Stand: offen RM-812
 
+### FD-218 Volumen und Mengen stehen in Befunden ohne Einheit
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `smooth_mesh`, `pose_armature`, `orient_for_print`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 1: `geom/mesh_ops.py:1968-1969` (`before`/`after`, mm³), `geom/pose.py:1035`, `agent/checks.py:180`, `slice/orientation.py:779-780` (`support`, `saved`, cm³), `slice/gcode.py:1799, 1812-1813` (`estimated`/`measured`, je nach Größe Volumen, Gramm oder Zeit).
+- Ursache: Die Schlüssel tragen keine Endung; derselbe Anzeigeweg wie FD-188 kennt Volumen, Gramm und Zeit nicht.
+- Vorschlag: `_mm3`-Endung bzw. die Einheit je Größe; den Wächter `test_value_measures` um Volumenwörter erweitern.
+- Wirkung beim Kunden: Er liest Volumen, Gewichte und Zeiten als nackte Zahlen und muss die Einheit raten.
+- Stand: offen RM-812
+
+### FD-219 Die Skizzenabsage nennt das Maß ohne Einheit
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `dialog:sketch_editor_dialog`
+- Prüfpunkt: 9, V5
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 2: `sketch/edit.py:2916, 2999`: „… kleiner sein als 20“ über `written_measure` (Punkt als Dezimalzeichen, keine Einheit).
+- Ursache: `written_measure` schreibt die Zahl ohne Einheit und ohne Anzeigeeinheit.
+- Vorschlag: `format_length(…, display_unit())` wie RM-516.
+- Wirkung beim Kunden: In Zoll liest er eine Millimeterzahl ohne Einheit.
+- Stand: offen RM-812
+
+### FD-220 Sätze im Kern mit fester Millimeterlänge folgen der Zollanzeige nicht
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `part:*`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 3: `prepare_ops.py` „ab {largest}“ und `knowledge/parts/fasteners.py:1870, 1881` („Feiner als {finest}“) nutzen `format_length` ohne `display_unit()`; `parameter_usage.py:254-255` schreibt eine feste Feldeinheit in `limit`/`result`.
+- Ursache: Der Kern legt fertigen Text mit fester Einheit ab, der dem Einheitenwechsel nicht folgt.
+- Vorschlag: `format_length(…, display_unit())` wie bei FD-219, oder die Zahl mit `_mm` ablegen und in der Anzeige setzen.
+- Wirkung beim Kunden: In Zoll stehen diese Sätze in Millimetern.
+- Stand: offen RM-812
+
+### FD-221 „Ausrichtung“ zeigt einen Kosinus statt eines Winkels
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `report`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 4: `scene/fits.py:1504` legt im Befund `fit.violated` `abs(signed)` ab, der Kunde liest „0,98“.
+- Ursache: Der Wert ist der Betrag eines Skalarprodukts, kein Winkel.
+- Vorschlag: den Winkel in Grad unter `angle_deg` ablegen.
+- Wirkung beim Kunden: Er liest an einer verletzten Passung eine Zahl, die er nicht deuten kann.
+- Stand: offen RM-812
+
+### FD-222 Ein verlorener Anteil steht als Bruch
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `smooth_mesh`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 5: `geom/mesh_ops.py:1967` `lost` im Befund `mesh.smooth_shrank` („0,25“ statt 25 %).
+- Ursache: Der Anteil liegt unter einem Schlüssel ohne Prozentangabe.
+- Vorschlag: `lost_percent`.
+- Wirkung beim Kunden: „0,25“ liest sich als Maß, nicht als ein Viertel.
+- Stand: offen RM-812
+
+### FD-223 Der Kalibrierwert im Befund steht ohne Einheit
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 6: `knowledge/calibration.py:127` legt `value` je Feld ab (mm, Grad oder Anzahl).
+- Ursache: Der Befund trägt nicht die Einheit seines Felds.
+- Vorschlag: die Einheit des Felds als `values["unit"]`.
+- Wirkung beim Kunden: Er sieht nicht, ob Millimeter, Grad oder eine Anzahl gemeint ist.
+- Stand: offen RM-812
+
+### FD-224 Große Anzahlen stehen in Absage und Bericht ohne Dreiergruppen
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `report`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 7: „Dreiecke: 263419“, „Grenze: 263418“ in Absage und Bericht (Bilder dort); `labels.count_text` gibt es. Zwilling von FD-124.
+- Ursache: Anzahlschlüssel (`triangles`, `limit` …) laufen nicht über `count_text`.
+- Vorschlag: Anzahlschlüssel gruppiert zeigen, aus derselben Quelle wie FD-124.
+- Wirkung beim Kunden: Große Zahlen sind schwer zu lesen.
+- Stand: offen RM-812
+
+### FD-225 Die Seitenkarten gleiten auch bei ausgeschalteter Bewegung
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: keine Zeile: Seitenkarten des Hauptfensters (`app/ui/overlay.py`)
+- Prüfpunkt: 19, G8
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd201-202-claude.md`, neuer Punkt: `overlay.OverlayHost._move` (`MOVE_MS` 160, `app/ui/overlay.py:1525`) fragt `motion.animations_enabled()` nicht und gleitet auch unter `SOLIDON3D_MOTION=aus` und offscreen; sieben Tests umgehen es mit `monkeypatch.setattr(overlay, "MOVE_MS", 0)`; FD-157 und FD-202 sind dieselbe Bauart.
+- Ursache: `_move` ist die einzige Bewegung der Oberfläche ohne die Frage an `animations_enabled()`.
+- Vorschlag: `_move` setzt sofort, wenn `animations_enabled()` falsch ist; die Gleittests schalten Bewegung ausdrücklich ein, die Umgehungen mit `MOVE_MS = 0` entfallen; Changelog.
+- Wirkung beim Kunden: Wer keine Bewegung verträgt und sie ausschaltet, sieht die Seitenkarten trotzdem gleiten (Barrierefreiheit).
+- Stand: offen RM-812
+
+### FD-226 Die Maßkarte kehrt nach Auf- und Zuklappen je nach Stand an eine andere Lage zurück
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: 19
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd201-202-claude.md`, neuer Punkt: Nach Auf- und Zuklappen kehrt die zugeklappte Maßkarte auf welle5 an ihren Anfangsplatz zurück (`(642, 173)`), auf Restpaket A bleibt sie oben stehen (`(642, 24)`); de, Karten in Ruhe.
+- Ursache: offen; welche Lage gewollt ist, ist nicht entschieden.
+- Vorschlag: am Kundenweg entscheiden und mit einem Lagetest festhalten.
+- Wirkung beim Kunden: Die Karte steht nach dem Zuklappen mal hier, mal dort.
+- Stand: offen RM-812
+
+### FD-228 Das Merkmalfenster sperrt „Gewinde ändern“ mit einer falschen Begründung
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `feature.apply`
+- Prüfpunkt: 7, V5
+- Beleg: `output/konsolidierung-2026-10-12/fix-w5-gewinde-claude.md`, neuer Punkt: Sonde `test_zz_panel.py` an `a25ac8cb2` (Szene `gewinde_zu_kurz`, Gewinde gewählt): Beide Handlungen „Gewinde ändern“ ändern den bestehenden Schritt 3 (`row.step`, `stepChangeRequested`), das Fenster ist aber ganz gesperrt mit „Die Kette hält an Schritt 4 (Stift für Bohrung) an — ein neuer Schritt dahinter würde nicht gerechnet. Der Weg weiter steht im Prüfbericht.“
+- Ursache: `MainWindow` sperrt das Merkmalfenster mit `halt_line` über `feature_panel.set_locked`, auch für Handlungen, die einen Schritt vor dem Haltepunkt ändern.
+- Vorschlag: Handlungen mit `step` vor dem Haltepunkt von der Halt-Sperre ausnehmen, wie `action_refusal` die Wege des Halts ausnimmt (RA-3); dann greift dort der Wartesatz wie im Dialog.
+- Wirkung beim Kunden: Gesperrt ist genau der Weg, den die Absage nennt („Das Gewinde in seinem Schritt verlängern“); der Ausweg führt über Prüfbericht oder Verlauf.
+- Stand: offen RM-812
+
+### FD-229 Der Bausteinbau in einer Operation rechnet immer fein und ohne Abbruch
+
+- Art: Leistung
+- Schwere: leicht
+- Funktion: `split_pinned`, `part:*`
+- Prüfpunkt: 6, 14
+- Beleg: `output/konsolidierung-2026-10-12/paket-cs0-k.md`, neuer Punkt 1: `knowledge/parts/build.py` `union`/`subtract`/`intersect` rufen die Kette fest mit `quality="fine"` und ohne `cancelled`; beim Verstiften (`split_pinned`, Entwurf, mit Token) laufen drei boolesche Aufrufe des Stiftbaus fein und ohne Abbruch (`probe_pins.py`: `build.py:70` zweimal, `build.py:61` einmal).
+- Ursache: Der Bausteinbau erbt `ctx.quality` und `ctx.cancelled` der Operation nicht.
+- Vorschlag: entscheiden, ob Bausteine in einer Op `ctx.quality`/`ctx.cancelled` erben (dann `_from_the_op` in `test_geometry_review.py` streichen) oder bewusst fein bleiben (dann als Regel in `kanten.md`/`kern.md`).
+- Wirkung beim Kunden: klein (ein Stift), aber *Abbrechen* erreicht diese Rechnung nicht, und der Entwurf rechnet sie fein.
+- Stand: offen RM-812
+
+### FD-230 Ein Speicherfehler der örtlichen Nachmessung endet als interner Fehler
+
+- Art: Stabilität
+- Schwere: leicht
+- Funktion: `scale_object`
+- Prüfpunkt: 7
+- Beleg: `output/konsolidierung-2026-10-12/paket-cs0-k.md`, neuer Punkt 5: Läuft `perceive.features.detect` in `local._recognise_region` in den Speicher, fängt niemand den `MemoryError`; der Folgeschritt endet als `op.scale_object.InternalError`, die Auswertung bleibt unvollständig; in `evaluate._with_features` wird derselbe Fehler zur Absage mit Merker (Sonde zu `test_a_memory_error_after_a_confirmation_is_not_repeated` mit Ersatz am Original).
+- Ursache: `_recognise_region` fängt den `MemoryError` nicht wie `_with_features`.
+- Vorschlag: denselben Weg wie in `_with_features` (Absage, `remember_out_of_memory`) oder bewusst laut lassen und als Regel festhalten.
+- Wirkung beim Kunden: Ob ein Ausschnitt realistisch am Speicher scheitert, ist offen; tut er es, sieht der Kunde einen internen Fehler statt einer Absage mit Handlung (Regel 17).
+- Stand: offen RM-812
+
 ## Regressionen aus Fixen nach dem Einfrieren (ab FD-212)
 
 Was ein Fix des eingefrorenen Umfangs kaputt macht, ist kein neuer Fund für
@@ -2611,6 +2755,30 @@ eingefroren“).
 - Vorschlag: den Abdruck unabhängig von der Formatversion des Dokuments rechnen oder das mitgereiste Rezept in der Version vergleichen, in der es gespeichert wurde; Test mit einem Projekt der Vorversion und geändertem eigenem Baustein.
 - Wirkung beim Kunden: Für jedes Projekt aus 0.6.0 mit geändertem eigenem Baustein sagt der Prüfbericht „ihr alter Stand liegt nicht mehr vor“, obwohl er mitgereist ist, und *Gespeicherten Stand verwenden* fehlt.
 - Stand: behoben `f470cd0e5`: Der Abdruck eines eigenen Bausteins rechnet ohne Formatversion (`recipe.fingerprint`, gespeichert mit `c:`); ein Abdruck aus einer älteren Datei bekommt beim Öffnen deren Formatversion und wird mit ihr nachgerechnet (`check.mark_stamp_formats`, `check.stamp_means`); `tests/test_part_stamps.py` mit dem Prüfstandsfall am Stand davor 7 von 7 rot, nachher 8 von 8 grün, Gegenprobe einer späteren Formatversion dabei; Zwilling Buchungsabdruck mitbehoben, sein einmaliger Bruch steht im Archiv; Changelog 0.6.1 in sechs Sprachen.
+
+### FD-227 Im Änderungsweg verdrängt die Absage eines späteren Schritts den Satz zur ersten Änderung
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `resize_hole`, `resize_feature`, `finding.action:change_creating_step`
+- Prüfpunkt: 7, E7, V5
+- Beleg: `output/konsolidierung-2026-10-12/fix-w5-gewinde-claude.md`: Fensterlauf des Pakets K, `tests/test_change_step_window.py::test_changing_the_thread_step_waits_for_a_change` auf welle5 `a25ac8cb2` rot — am Gewindeschritt der Szene `gewinde_zu_kurz` stand vor jeder Änderung die Absage des Stifts („Gewinde zu kurz 2,00/1,90“) statt „Erst „Länge“ ändern, dann übernehmen.“; gepinnt eingegrenzt: `66e6d75df` und `40c9a5840` grün, `1ae26ea86` und `3f84a4c3c` rot. Regression aus D2 (`1ae26ea86`), auf welle5 mit dem Merge `3f84a4c3c`.
+- Ursache: D2 änderte in `OperationDialog._follow_source_pending` die Bedingung für den Wartesatz auf `not reason`; `reason` enthält auch die Absage der Vorschau von außen (`block_apply`) und die offene Flächenwahl, nicht nur die Sperrgründe der Felder, die D2 meinte.
+- Vorschlag: Sperrgrund der Felder und offene Flächenwahl gehen dem Satz zur ersten Änderung vor, die Absage der Vorschau erst danach (sie steht im Band und nach der ersten Änderung am Knopf).
+- Wirkung beim Kunden: Wer einen Schritt nur öffnet, liest am grauen *Übernehmen* die Absage eines späteren Schritts statt des Wegs — der Befund von FD-99 kam zurück; 0.6.0 hatte den Wartesatz noch nicht.
+- Stand: behoben `3225c2722`; `test_change_step_window.py` an `a25ac8cb2` rot und jetzt grün, dazu neu `test_operation_dialog_change.py::test_a_refused_preview_does_not_hide_the_way` und `test_change_step_window.py::test_the_step_that_stops_the_chain_says_why_at_once` (ohne Fix rot, die Mutation an `stopped_at != op_id` in `edit_operation` rot); betroffene 14 571 passed; Regel in `.claude/rules/vorderseite.md`.
+
+### FD-231 Die aufgeklappten Einzelheiten einer Sammelzeile nennen nur noch fünfzehn Körper
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `report`
+- Prüfpunkt: 4, 10
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd197-claude.md`, „Regression Stapelimport (16.10.)“: `tests/test_print_contract_ui.py::test_batch_import_bundles_notes_and_keeps_every_body_and_original_detail` an welle5 `b4b2551ce` gepinnt rot (2 von 2, „obj_16“ fehlt, „… (+2)“); Bisektion über die erste Elternlinie von welle5: `4d4a46307`, `364367294`, `b8f8296a1` und `780ea7dd7` grün, `3f84a4c3c` und `1f8346073` rot. Regression aus FD-196 (`a04ba84fe`), auf welle5 mit dem Merge `3f84a4c3c`.
+- Ursache: FD-196 begrenzt Kurzhilfe und Vorlesetext einer Sammelzeile auf fünfzehn Mitglieder (`NAMED_MEMBERS`) mit „… (+N)“; die Einzelheiten, die man im Prüfbericht aufklappt, übernahmen genau diesen Text (`app/ui/panels.py`, `finding_details.setPlainText(item.toolTip()…)`).
+- Vorschlag: Die Zeile trägt die vollständigen Einzelheiten aus der Liste aller Mitglieder getrennt von der Kurzhilfe, und das aufgeklappte Feld liest dort; Kurzhilfe und Vorlesetext bleiben bei fünfzehn.
+- Wirkung beim Kunden: Nach einem Stapelimport von 17 Körpern standen in den aufgeklappten Einzelheiten nur fünfzehn und „… (+2)“; Körper 16 und 17 waren im Prüfbericht nicht mehr zu finden. 0.6.0 nannte dort jeden Körper.
+- Stand: offen RM-737; Fix `4617bd1ec` auf `fix/w5-stapel`, gemergt nach Bereichsnachweis. Mit dem Fix nennen die aufgeklappten Einzelheiten einer Sammelzeile wieder jedes Mitglied (`_DETAILS_ROLE`), Kurzhilfe und Vorlesetext bleiben bei fünfzehn; der Testfall aus dem Beleg ist danach grün, Nachbarn 1191 grün.
 
 ## Nachgetragene Funde aus CI-Fix und Prüfstand (ab FD-213)
 
