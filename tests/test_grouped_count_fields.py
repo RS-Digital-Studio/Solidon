@@ -33,6 +33,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.units import LengthUnit, decimals_for
 from app.i18n.catalog import available_languages
+from app.ui.fine_length_spin import finer
 from app.ui.grouped_spin import (
     GroupedIntSpin,
     GroupedNumberSpin,
@@ -108,8 +109,8 @@ def _parameter_places(least: int) -> Callable[[], list[int]]:
 #: entsteht über ``grouped_spin``.
 COMPUTED_PLACES: dict[tuple[str, str], Callable[[], Iterable[int]]] = {
     ("labels.py", "decimals_for(self._unit)"): lambda: [decimals_for(unit) for unit in UNITS],
-    ("fine_length_spin.py", "decimals_for(self._unit) + FINE_PLACES"): lambda: [
-        decimals_for(unit) + 1 for unit in UNITS
+    ("fine_length_spin.py", "finer(decimals_for(self._unit))"): lambda: [
+        finer(decimals_for(unit)) for unit in UNITS
     ],
     ("op_dialog.py", "_decimals_for(entry, self._shown)"): _operation_places,
     ("parameter_dialog.py", "number_places(code, 3)"): _parameter_places(3),

@@ -5,8 +5,14 @@ und ihre dritte Stelle unterscheidet zwei Messungen (0,075 und 0,08 mm). Ein
 gewöhnliches :class:`~app.ui.labels.LengthSpin` zeigt in Millimetern zwei
 Stellen und in Zoll vier (``units.decimals_for``); mit ihm hätte *Material
 kalibrieren* die Zollanzeige zwar befolgt, die gemessene dritte Stelle aber
-beim Öffnen gerundet. Dieselbe Feinheitsregel wie im Operationsdialog
-(``op_dialog._decimals_for``): eine Stelle mehr — 0,075 mm, 0,00295 in.
+beim Öffnen gerundet.
+
+**Wie viel feiner, steht hier für beide Orte** (:func:`finer`): eine Stelle
+mehr — 0,075 mm, 0,00295 in —, auch für ein feines Feld im Operationsdialog
+(``op_dialog._decimals_for``). **Wann** ein Feld fein ist, entscheidet jeder Ort
+selbst: Im Operationsdialog ist es die Obergrenze bis 1 mm, hier ist es die
+Bedeutung — Spiel, Übermaß, Lochkorrektur und Elefantenfuß sind Feinmaße des
+Materials, auch wenn das Feld bis 5 mm reicht (Review F2a, R6).
 """
 
 from __future__ import annotations
@@ -20,6 +26,11 @@ from app.ui.labels import LengthSpin
 FINE_PLACES: Final = 1
 
 
+def finer(places: int) -> int:
+    """Die Stellen eines Feinmaßes, wenn die Einheit sonst ``places`` zeigt."""
+    return places + FINE_PLACES
+
+
 class FineLengthSpin(LengthSpin):
     """:class:`~app.ui.labels.LengthSpin` mit einer Nachkommastelle mehr; innen Millimeter."""
 
@@ -28,6 +39,6 @@ class FineLengthSpin(LengthSpin):
         super()._apply_unit()
         # Erst die Feinheit, dann die Grenzen noch einmal: Qt schneidet eine
         # Grenze auf die Stellenzahl zu, die beim Setzen galt.
-        self.setDecimals(decimals_for(self._unit) + FINE_PLACES)
+        self.setDecimals(finer(decimals_for(self._unit)))
         low, high = (from_mm(value, self._unit) for value in self._bounds_mm)
         self.setRange(low, high)

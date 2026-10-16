@@ -66,6 +66,7 @@ from app.ui.dialog_footer import DialogFooter
 from app.ui.dialogs import ErrorNotice, align_to_the_front
 from app.ui.feature_list import FeatureList
 from app.ui.feature_set_field import FeatureSetField
+from app.ui.fine_length_spin import finer
 from app.ui.first_change import first_change_sentence
 from app.ui.first_focus import select_on_first_focus
 from app.ui.form_fields import explain, name_rows
@@ -191,7 +192,8 @@ def _decimals_for(entry: ParamSpec, unit: LengthUnit | None = None) -> int:
     """
     base = decimals_for(unit) if unit else 2
     if entry.maximum is not None and abs(entry.maximum) <= _FINE_BELOW:
-        return base + 1
+        # Wie viel feiner, sagt dieselbe Quelle wie *Material kalibrieren* (R6).
+        return finer(base)
     return base
 
 
