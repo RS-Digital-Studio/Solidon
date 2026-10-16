@@ -217,8 +217,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft](#rm-755) | Tests und Entwicklungswerkzeuge | Gefunden in SK: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` einzeln 1 von 2 rot; Ursache klären wie bei der Formsitzung (Zeitgeber beim Zustellen) |
 | [RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot](#rm-779) | Tests und Entwicklungswerkzeuge | Den Vorgänger finden, der Zustand hinterlässt, und ihn aufräumen |
 | [RM-719 — Ein Fenstertest wackelt mit vier Arbeitern](#rm-719) | Tests und Entwicklungswerkzeuge | Ursache des Wettlaufs finden |
-| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | Wächter, Auflöser und Werkzeug in `welle5`; offen der erzeugte Schnitt K (W2 c) scharf), Review der Merge-Auflösungen und Tor — vor 0.6.1 |
-| [RM-728 — Kopfkopien entziehen sich Patches](#rm-728) | Tests und Entwicklungswerkzeuge | 226 Kopfkopien über `move_names copies` aufs Original umstellen (Paket K), dann W2 c) scharf |
+| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | Alle Pakete samt K in `welle5`, W1 bis W6 scharf; offen Bereichsnachweis und Tor, dann main — vor 0.6.1 |
 | [RM-813 — Codestruktur Schritt 1 und die offenen Punkte aus Schritt 0](#rm-813) | Tests und Entwicklungswerkzeuge | Phase 3 nach 0.6.1: Schritt 1 (`geom/prepare_ops.py`); CS-28, CS-29 und die Handfixe aus Paket M an ihrem Schritt |
 | [RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat](#rm-786) | Tests und Entwicklungswerkzeuge | Am Tag die Suite auslassen, wenn der main-Lauf zum Tag-Commit grün ist; Vertrag und Wächter nachziehen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
@@ -6583,26 +6582,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   [RM-727](ROADMAP-ARCHIV.md#rm-727), [RM-729](ROADMAP-ARCHIV.md#rm-729)), dazu CS-17 bis
   CS-40 bis auf CS-26, CS-28 und CS-29 ([Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md),
   „Schritt 0“). Karten, Regel 6 in `AGENTS.md` und `/liefern` sind nachgezogen.
-  **Nächster Schritt:** Paket K — der erzeugte Schnitt `move_names copies` für CS-11
-  ([RM-728](#rm-728)) samt den Handstellen aus CS-26, danach W2 c) scharf; dann
-  Bereichsnachweis, Review der Merge-Auflösungen und Tor auf `welle5`, mit D0 nach main.
+  **Stand (welle5 `ec28714cf`):** Paket K hat CS-11 und CS-26 als erzeugten Schnitt behoben
+  ([RM-728](ROADMAP-ARCHIV.md#rm-728)), W2 c) ist scharf, damit alle sechs Wächter; Review I
+  über die Merge-Auflösungen urteilt „integrierbar“, seine Funde zu K sind nachgezogen.
+  **Nächster Schritt:** Bereichsnachweis und Tor auf `welle5`, mit D0 nach main.
   **Abnahme:** alle sechs Wächter grün über dem Bestand, je Wächter eine Gegenprobe rot; das
   Werkzeug verschiebt an der Attrappe mit Beweis; Review. Erst danach Schritt 1
   ([RM-813](#rm-813)).
-
-<a id="rm-728"></a>
-
-- [ ] **RM-728 — Kopfkopien entziehen sich Patches.**
-  Module halten per `from M import N` eine eigene Kopie eines Namens, den Tests am Original
-  patchen, etwa `features.detect` in `scene/evaluate.py`; der Patch erreicht die Kopie nicht.
-  Der Plan zu Schritt 0 zählte 226 Kopien (182 in 99 Modulen unter `app/`, 44 in 25
-  Werkzeugen; die erste Fassung nannte 54), die heutige Zahl nennt das Inventar des Auflösers
-  (`tools/code_index.py --inventory`, W2 c).
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-11.
-  **Nächster Schritt:** Paket K: erzeugter Schnitt `move_names copies` (Entscheidung E1: alle
-  gepatchten Namen über Modulzugriff, Patches auf Kopien aufs Original), die Handstellen aus
-  CS-26 vorher in eigenen Commits; danach W2 c) ohne `xfail`.
-  **Abnahme:** keine Kopfkopie eines gepatchten Namens mehr; W2 c) (RM-722) macht neue Fälle rot.
 
 <a id="rm-813"></a>
 

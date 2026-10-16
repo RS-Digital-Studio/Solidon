@@ -444,6 +444,7 @@ entfernt hat.
 | 2026-10-12 | [RM-789: Die Einrichtung von ComfyUI startet hinter der gemeinsamen Prozessgrenze (12.10.2026)](#rm-789-die-einrichtung-von-comfyui-startet-hinter-der-gemeinsamen-prozessgrenze-12102026) |
 | 2026-10-16 | [FD-212: Der Abdruck eines eigenen Bausteins übersteht eine Formaterhöhung (16.10.2026)](#fd-212-der-abdruck-eines-eigenen-bausteins-übersteht-eine-formaterhöhung-16102026) |
 | 2026-10-16 | [RM-723 bis RM-727, RM-729, RM-730: Codestruktur Schritt 0 behebt die Funde vor dem ersten Schnitt (16.10.2026)](#rm-723-bis-rm-727-rm-729-rm-730-codestruktur-schritt-0-behebt-die-funde-vor-dem-ersten-schnitt-16102026) |
+| 2026-10-17 | [RM-728: Kein Modul hält mehr eine Kopfkopie eines am Original ersetzten Namens (17.10.2026)](#rm-728-kein-modul-hält-mehr-eine-kopfkopie-eines-am-original-ersetzten-namens-17102026) |
 | ohne Datum | [Gegen echte Modelle geprüft](#gegen-echte-modelle-geprüft) |
 | ohne Datum | [Referenzkorpus und Passungen vervollständigt](#referenzkorpus-und-passungen-vervollständigt) |
 | ohne Datum | [Durchsicht nach P12 — was noch offen ist](#durchsicht-nach-p12--was-noch-offen-ist) |
@@ -48580,8 +48581,8 @@ Die vom Programm unabhängigen Funde des [Konzepts
 Codestruktur](konzepte/konzept-codestruktur-2026-10.md), die Schritt 0 vor dem ersten Schnitt
 behebt ([RM-722](ROADMAP.md#rm-722)). Gebaut in den Paketen Q, P1, P2, R und R2, integriert
 über `welle5` (Stand `a25ac8cb2`); Ursache, Beleg und alle Commits je Fund in der
-[Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md). Offen bleiben CS-11
-([RM-728](ROADMAP.md#rm-728), Paket K) und Schritt 1 ([RM-813](ROADMAP.md#rm-813)).
+[Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md). Offen blieben CS-11
+([RM-728](#rm-728), Paket K, seither behoben) und Schritt 1 ([RM-813](ROADMAP.md#rm-813)).
 
 **RM-723 (CS-2) — Quelltextprüfungen lasen `app/ui/` flach und übersahen `render/`.**
 **Behoben (Q):** Alle 26 flachen Leser — die 17 des Funds, `test_translations`, `activation`,
@@ -48638,3 +48639,35 @@ diese Tests nicht rufen (`handover.detect`, `handover.standard_choice`,
 `a25ac8cb2`, gepinnt):** `handover.detect` in Zeile 370 umbenannt →
 `test_import_resolution.py::test_every_attribute_of_an_own_module_resolves` rot mit
 `tools/matrix_unit.py:370`, 1 failed, 4 passed, EXIT=1; unverändert 5 passed, EXIT=0.
+
+## RM-728: Kein Modul hält mehr eine Kopfkopie eines am Original ersetzten Namens (17.10.2026)
+
+<a id="rm-728-kein-modul-hält-mehr-eine-kopfkopie-eines-am-original-ersetzten-namens-17102026"></a>
+<a id="rm-728"></a>
+
+CS-11 und CS-26 aus der [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md) des
+[Konzepts Codestruktur](konzepte/konzept-codestruktur-2026-10.md), Schritt 0
+([RM-722](ROADMAP.md#rm-722)). Module hielten per `from M import N` eine eigene Kopie eines
+Namens, den Tests am Original ersetzten; der Ersatz erreichte die Kopie nicht. Gebaut in
+Paket K als erzeugter Schnitt, integriert über `welle5` (`ec28714cf`), Nachzug aus Review I
+auf `cs0/k2`.
+
+**Behoben (K):** `tools/move_names.py` im Modus `copies` mit dem Zuschnitt aus
+`--list-copies` (89 Familien) und zwei geprüften Erklärungen in `[[open_names]]` stellt 312
+Kopfkopien auf Modulzugriff zur Aufrufzeit um und 318 Patch-Stellen auf das Original, in einem
+Commit ohne Handarbeit (`cb3cc8525`). Vorher in eigenen Commits die Stellen, die das Werkzeug
+mit Ausweg abwies (CS-26): gefaltete Patch-Stellen mit festem Text, vier Kopien unter neuem
+Namen, die jetzt das Original zur Aufrufzeit lesen (`MAX_ANSWER_BYTES`, `HEAVY_TRIANGLES`,
+`_windows_file_api`, `MAX_ARCHIVE_ENTRY_BYTES`), zwei f-Strings; dazu streicht das Werkzeug
+mit einer wegfallenden Modulzuweisung auch ihren Ladeimport (`90bc64591`). Was danach rot
+wurde, weil ein Ersatz am Original mehr Leser erreicht, je Fund in eigenen Commits
+(`f0ec8d7f0` bis `856948114`). Review I fand zwei Laufzeitkopien über
+`builtin.__getattr__` (`catalog`, `recipe_dialog`), die W2 c) nicht sieht; beide lesen das
+Register jetzt zur Aufrufzeit (`8d3f4b8a0`), die Lücke des Wächters ist CS-45.
+
+**Nachweis:** W2 `tests/test_patch_targets.py` Regel c) ohne `xfail` (`d3e543ceb`): am Stand
+vor dem Schnitt 312 Funde, danach keiner; das Beweisprotokoll des Schnitts (Lesermengen je
+Familie gleich, Registerabzug byte-gleich) liegt beim Paketbericht. Gegenprobe ohne Fenster:
+Ein Ersatz an `geom.boolean.boolean` erreicht `chamber_ops` vorher nie, danach bei jeder
+Booleschen. `tests/test_parts_register_readers.py` war vor dem Nachzug rot. Review I
+„integrierbar“, Mutant mit zurückgesetzter Kopfkopie in `chamber_ops.py` rot.
