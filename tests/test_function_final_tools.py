@@ -11,6 +11,10 @@ Fenster; die Fälle mit ``qt_app`` laufen offscreen.
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+
 from tools import function_setup
 from tools.function_checks import SCALES, SMALLEST_AVAILABLE
 
@@ -47,3 +51,86 @@ def test_125_percent_is_a_case_on_the_measuring_screen_and_150_200_are_not() -> 
             {"screen": "MSI", "geometry": _logical(scale)}, variant
         )
         assert "kein Fall" in reason and "kleinsten Arbeitsfläche" in reason, reason
+
+
+# --- Werkzeug 1: Inhaltsschrift 14 und 18 pt, Wechsel 9 → 14 → 9 pt (FD-54, 57, 58, 185) --
+
+
+def test_the_font_sets_exist_and_only_carry_fonts_there() -> None:
+    sets = function_setup.variant_sets()
+    assert [entry["font"] for entry in sets["schrift"]] == [14.0, 18.0]
+    assert [tuple(entry["font_change"]) for entry in sets["schriftwechsel"]] == [(9.0, 14.0, 9.0)]
+    assert function_setup.PHASES["schrift"] == ("surface",)
+    assert function_setup.PHASES["schriftwechsel"] == ("fontchange",)
+    changing = function_setup.Variant.of(sets["schriftwechsel"][0])
+    assert function_setup.Variant.of(changing.as_dict()) == changing
+    for broken in (
+        {"set": "basis", "font": 14.0},
+        {"set": "schrift", "font": -1.0},
+        {"set": "schriftwechsel", "font_change": [9.0, 0.0]},
+    ):
+        with pytest.raises(ValueError):
+            function_setup.Variant.of(broken)
+
+
+def test_the_content_font_goes_through_the_style_of_the_application(qt_app: Any) -> None:
+    """Wie ein Wechsel der Systemschrift: Schrift der Anwendung und ihr Stylesheet folgen."""
+    from tools.function_fonts import set_content_font
+
+    before = qt_app.styleSheet()
+    assert set_content_font(qt_app, 18.0, "light") == 18.0
+    assert qt_app.font().pointSizeF() == 18.0
+    assert qt_app.styleSheet() != before, "das Stylesheet rechnet mit der neuen Größe"
+
+
+def test_the_font_change_records_every_stage_narrow_and_wide(qt_app: Any) -> None:
+    """FD-57/58: je Stufe Schrift, Größe, Ruhe, Bild, abgeschnittene Texte — schmal, groß."""
+    from types import SimpleNamespace
+
+    from PySide6.QtWidgets import QLabel, QWidget
+
+    from tools import function_bench
+    from tools.function_checks import SMALLEST_WINDOW
+    from tools.function_machine import Step
+
+    window = QWidget()
+    surface = QLabel("Auswahl", window)
+    flow = object.__new__(function_bench.FunctionFlow)
+    flow.application = qt_app
+    flow.window = window
+    flow.variant = function_setup.Variant.of(function_setup.variant_sets()["schriftwechsel"][0])
+    flow.data = {"images": [], "unmeasured": {}}
+    flow.surface = lambda: surface
+    flow.path_steps = list
+    flow.picture = lambda label: flow.data["images"].append(f"cases/001/{label}.png")
+    flow.window_size = lambda: [window.width(), window.height()]
+
+    def still(name: str, root: Any) -> Step:
+        if name == "schrift-2-14pt-gross":
+            # Eine Fläche, die nach dem Wechsel nicht zur Ruhe kommt (FD-57).
+            flow.data["unmeasured"][f"still:{name}"] = "ohne Stillstand"
+        return Step(name, lambda machine: None)
+
+    flow.still_step = still
+
+    def run_steps(label: str, steps: list[Any], timeout_s: float | None = None) -> bool:
+        for step in steps:
+            step.act(SimpleNamespace(insert=lambda more: None))
+        return True
+
+    flow.run_steps = run_steps
+    try:
+        flow.phase_fontchange()
+    finally:
+        window.close()
+    stages = flow.data["font_change"]
+    assert [stage["wanted"] for stage in stages] == [9.0, 14.0, 9.0]
+    assert [stage["points"] for stage in stages] == [9.0, 14.0, 9.0]
+    assert stages[0]["window"] == list(SMALLEST_WINDOW) == stages[2]["window"]
+    assert [stage["still"] for stage in stages] == [True, False, True]
+    assert [stage["image"] for stage in stages] == [
+        "cases/001/schrift-1-9pt-schmal.png",
+        "cases/001/schrift-2-14pt-gross.png",
+        "cases/001/schrift-3-9pt-schmal.png",
+    ]
+    assert all(isinstance(stage["cut"], list) for stage in stages)

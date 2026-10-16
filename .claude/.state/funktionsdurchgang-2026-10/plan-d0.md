@@ -277,6 +277,7 @@ In `app/core/guides.py`: `TARGET_PROPERTY = "guideTarget"`, `menubar_name(msgid,
 | `search{}` | je Probe Rang und Treffer |
 | `place` | Ort (karte, menue, werkzeugleiste, kuerzel, kontext), Pfad |
 | `spot` | E4: an Merkmal oder Kante `point` und `covered_by` vor dem Übernehmen; an einer Handlung am ganzen Körper `frame` der geänderten `bodies` im Ergebnisbild, `view`, `inside`, `covered_by` (`tools/function_spot.py`) |
+| `font_change` | Schriftwechsel zur Laufzeit je Stufe: `points` (wirksam), `wanted`, `window`, `still`, `image`, `cut` (abgeschnittene Texte; `tools/function_fonts.py`) |
 | `prediction` | V4 mit Vorhersagetor: `ready`, `target`, `bound` (Pfad und SHA256), `step_index`, `image_index`, `reason` ohne Bindung, `rejected`, `after` (§2.9) |
 | `layout[]`, `fonts[]`, `state_images[]`, `contrast[]`, `icons[]`, `animations[]`, `scrollbars[]` | G1–G8, Z6 |
 | `hover_labels[]`, `empty_states[]` | I1, Z4 |
@@ -405,7 +406,7 @@ Jedes Skill erhält eine Tabelle mit den Spalten `Kennung | Zählgröße | Schwe
 
 | Befehl | Wirkung |
 |---|---|
-| `inventory --functions --out <ordner> [--package D4] [--rows …] [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel,bewegung,vorhersage]` | Fälle aus Funktionsliste und Spezifikationen, Szenen nach `<out>/scenes/`, Menüleiste nach `<out>/menubar.json`; `vorhersage` hält vor dem Handlungsklick am Vorhersagetor an, auch die Sprachfälle daneben (§2.9) |
+| `inventory --functions --out <ordner> [--package D4] [--rows …] [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel,bewegung,vorhersage,schrift,schriftwechsel]` | Fälle aus Funktionsliste und Spezifikationen, Szenen nach `<out>/scenes/`, Menüleiste nach `<out>/menubar.json`; `vorhersage` hält vor dem Handlungsklick am Vorhersagetor an, auch die Sprachfälle daneben (§2.9); `skalierung` fährt 1920 × 1009 und 125, 150, 200 % (unter 1920 × 1080 logisch kein Fall); `schrift` setzt die Inhaltsschrift 14 und 18 pt vor dem Fenster, `schriftwechsel` wechselt an der offenen Fläche 9 → 14 → 9 pt, schmal und groß im Wechsel (`tools/function_fonts.py`) |
 | `run --out … [--first --last --again --timeout] [--screen <name oder index>]` | je Fall ein Prozess mit eigenem Profil; wieder aufnehmbar |
 | `report --out … [--package] [--verdicts <pfad>] [--checklist <pfad>] [--runs <ablage>]` | Zusammenfassung, Ergebnisse je Prüfpunkt, Abhakliste; `--runs` ist die Ablage der Läufe (Siegeldateien der Vorhersagen, §2.9); Ausgang 1 nur bei ungültigen Eingaben |
 

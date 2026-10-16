@@ -41,6 +41,7 @@ from tools.function_checks import (
     NO_RESPONSE,
     WITHOUT_DIALOG,
 )
+from tools.function_fonts import FontPhase
 from tools.function_gestures import GesturePhases
 from tools.function_machine import (
     MOST_UNSTICKS,
@@ -152,7 +153,7 @@ def surface_signature(root: Any) -> tuple[Any, ...]:
     return (root, place(root), shown)
 
 
-class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
+class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontPhase):
     """Ein Funktionsfall am echten Fenster: Phasen nach der Variante, jede mit Abdruck.
 
     Jede Phase beginnt an der Startszene (:meth:`reset`) und endet ohne offenes

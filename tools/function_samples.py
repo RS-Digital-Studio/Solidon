@@ -327,6 +327,17 @@ def sample_protocol() -> dict[str, Any]:
         "fonts": [
             {"surface": "OperationDialog", "widget": "QLabel", "level": "body", "stylesheet": ""}
         ],
+        # Der Schriftwechsel zur Laufzeit (``function_fonts``, FD-57/58).
+        "font_change": [
+            {
+                "points": 14.0,
+                "wanted": 14.0,
+                "window": [2560, 1369],
+                "still": True,
+                "image": "cases/1/schrift-2-14pt-gross.png",
+                "cut": [],
+            }
+        ],
         "state_images": [
             {
                 "surface": "OperationDialog",

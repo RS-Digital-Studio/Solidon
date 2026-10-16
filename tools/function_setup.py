@@ -107,6 +107,9 @@ PHASES: Final[dict[str, tuple[str, ...]]] = {
     "skalierung": ("surface",),
     "dunkel": ("surface",),
     "bewegung": ("surface",),
+    # Inhaltsschrift 14 und 18 pt, und ihr Wechsel zur Laufzeit (``function_fonts``).
+    "schrift": ("surface",),
+    "schriftwechsel": ("fontchange",),
     "sprachen": (),
     "start": (),
 }
@@ -125,7 +128,9 @@ class Variant:
     ``motion`` falsch heißt: Lauf mit ``SOLIDON3D_MOTION=aus`` (G8).
     ``predict`` hält vor jedem Handlungsklick an, bis eine Vorhersage gebunden
     ist (``function_prediction``, V4): der Satz ``vorhersage`` und die
-    Sprachfälle daneben.
+    Sprachfälle daneben. ``font`` ist die Inhaltsschrift in Punkt (0: die des
+    Systems), ``font_change`` die Folge des Wechsels zur Laufzeit
+    (``function_fonts``, FD-54, 57, 58, 185).
     """
 
     set: str = "basis"
@@ -140,6 +145,8 @@ class Variant:
     motion: bool = True
     phases: tuple[str, ...] = ()
     predict: bool = False
+    font: float = 0.0
+    font_change: tuple[float, ...] = ()
 
     @classmethod
     def of(cls, data: Mapping[str, Any] | None) -> Variant:
@@ -149,8 +156,9 @@ class Variant:
         unknown = sorted(set(data) - known)
         if unknown:
             raise ValueError(f"unbekannte Angaben in der Variante: {', '.join(unknown)}")
-        if "phases" in data:
-            data["phases"] = tuple(data["phases"])
+        for key in ("phases", "font_change"):
+            if key in data:
+                data[key] = tuple(data[key])
         variant = cls(**data)
         variant.check()
         return variant
@@ -159,6 +167,7 @@ class Variant:
         data = asdict(self)
         data["preconditions"] = dict(self.preconditions)
         data["phases"] = list(self.phases)
+        data["font_change"] = list(self.font_change)
         return data
 
     def protocol(
@@ -200,6 +209,10 @@ class Variant:
             raise ValueError(f"Fenstergröße {self.window_size!r} ist nicht BREITExHÖHE")
         if not self.scale > 0:
             raise ValueError(f"Skalierung {self.scale} ist nicht positiv")
+        if self.font < 0 or any(not points > 0 for points in self.font_change):
+            raise ValueError(f"Schrift {self.font} oder Folge {self.font_change} nicht positiv")
+        if (self.font or self.font_change) and self.set not in ("schrift", "schriftwechsel"):
+            raise ValueError("Schrift und Schriftwechsel gibt es nur in ihren Sätzen")
 
     @property
     def printing(self) -> str:
@@ -220,6 +233,8 @@ FIXED_VARIANT_SETS: Final[dict[str, tuple[dict[str, Any], ...]]] = {
     "dunkel": ({"set": "dunkel", "theme": "dark"},),
     "bewegung": ({"set": "bewegung", "motion": False},),
     "vorhersage": ({"set": "vorhersage", "predict": True},),
+    "schrift": ({"set": "schrift", "font": 14.0}, {"set": "schrift", "font": 18.0}),
+    "schriftwechsel": ({"set": "schriftwechsel", "font_change": [9.0, 14.0, 9.0]},),
     "sprachen": (),
 }
 
@@ -619,6 +634,11 @@ def place_window(application: Any, window: Any, variant: Variant) -> dict[str, A
     Titelleiste genau diese. Eine Skalierung, die die Fläche darunter drückt,
     ist kein Fall (:func:`below_smallest`).
     """
+    if variant.font:
+        # Die Inhaltsschrift des Falls steht, bevor das Fenster erscheint (FD-54, 185).
+        from tools.function_fonts import set_content_font
+
+        set_content_font(application, variant.font, variant.theme)
     screens = list(application.screens())
     primary = application.primaryScreen()
     chosen = None

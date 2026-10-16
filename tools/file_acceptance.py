@@ -4,7 +4,7 @@
     .venv\\Scripts\\python.exe tools/file_acceptance.py inventory --source <bestand> --out <ordner>
     .venv\\Scripts\\python.exe tools/file_acceptance.py inventory --functions --out <ordner>
         [--package D4] [--rows <kennung>,…] [--phases main,escape]
-        [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel,bewegung,vorhersage]
+        [--variants basis,sprachen,…,vorhersage,schrift,schriftwechsel] (function_setup.PHASES)
     .venv\\Scripts\\python.exe tools/file_acceptance.py run --out <ordner> [--first 1] [--last 9]
         [--again] [--timeout <s>] [--screen <name oder nummer>]
     .venv\\Scripts\\python.exe tools/file_acceptance.py report --out <ordner>

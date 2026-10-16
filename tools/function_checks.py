@@ -347,6 +347,7 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         _keys(
             "language", "theme", "unit", "licence", "preconditions", "platform", "screen",
             "scale", "window_size", "motion", "set", "phases", "placed", "predict",
+            "font", "font_change",
         ),
         {"theme": ("light", "dark"), "unit": DISPLAY_UNITS, "licence": VARIANT_LICENCES},
         required=True,
@@ -446,6 +447,12 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
             "primary", "family", "base_family",
         ),
         types={"primary": bool, "family": str, "base_family": str},
+    ),
+    # Der Schriftwechsel zur Laufzeit (FD-57, FD-58, ``function_fonts``): je Stufe
+    # die wirksame und die verlangte Schrift, die Innenfläche, ob die Fläche zur
+    # Ruhe kam, ihr Bild und die abgeschnittenen Texte.
+    "font_change": ProtocolField(
+        "liste", _keys("points", "wanted", "window", "still", "image", "cut")
     ),
     "state_images": ProtocolField("liste", _keys("surface", "widget", "states")),
     "contrast": ProtocolField(

@@ -52,6 +52,7 @@ BENCH_MODULES: Final[tuple[str, ...]] = (
     "function_capture",
     "function_spot",
     "function_prediction",
+    "function_fonts",
 )
 
 #: Die Namen, über die eine Bedienung umgangen wird (Konzept §12 „Die Abkürzungen
@@ -108,9 +109,12 @@ CALL_ONLY: Final[frozenset[str]] = frozenset({"done"})
 
 #: Aufrufe, die einen verbotenen Namen tragen und doch keiner sind:
 #: ``machine.insert`` reiht Schritte in den Automaten ein,
-#: ``guide_targets.action_for`` liest die Handlung zu einem Ziel nur nach.
+#: ``guide_targets.action_for`` liest die Handlung zu einem Ziel nur nach,
+#: ``style.apply_style`` gibt die Schrift des Falls durch den Stilweg der
+#: Anwendung wie ein Wechsel der Systemschrift (``function_fonts``) — eine
+#: Bedingung des Falls wie Thema und Skalierung, keine Bedienung.
 ALLOWED_CALLS: Final[frozenset[str]] = frozenset(
-    {"machine.insert", "guide_targets.action_for", "QTest.wheelEvent"}
+    {"machine.insert", "guide_targets.action_for", "QTest.wheelEvent", "style.apply_style"}
 )
 
 #: Private Namen fremder Objekte, die der Prüfstand berühren darf: die
