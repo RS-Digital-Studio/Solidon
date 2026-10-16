@@ -70,7 +70,6 @@ def test_the_feature_window_names_every_field_it_counts(qt_app: Any) -> None:
     body = QVBoxLayout(host)
     panel = FeaturePanel()
     body.addWidget(panel)
-    body.addWidget(panel.footer())
     hole = Feature(
         id="hole",
         kind="hole",
@@ -92,7 +91,8 @@ def test_the_feature_window_names_every_field_it_counts(qt_app: Any) -> None:
             row.toggle.click()
             qt_app.processEvents()
             surface = row.toggle.parentWidget()
-            entries = [*capture.field_entries(surface), *capture.field_entries(panel.footer())]
+            # Die Knopfzeile wohnt seit FD-136 im Merkmalfenster unter der offenen Handlung.
+            entries = [*capture.field_entries(surface), *capture.field_entries(panel._footer)]
             assert entries, op
             unnamed = [e for e in entries if not e["label"] and not e["accessible_name"]]
             assert unnamed == [], (op, unnamed)

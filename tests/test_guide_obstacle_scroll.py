@@ -1,12 +1,16 @@
 """Ein Hindernis unter dem Rand rollt erst heran (FD-131, RM-737).
 
-Die Klappe *Filament und Druck* steht an einem gewählten Körper unter dem
-sichtbaren Teil der Auswahlkarte. ``guide_targets.next_click`` nannte sie als
-Klick, ohne zu rollen: Der Klick fiel unter das Fenster, die Probe fand dort
-nichts („verdeckt“), und der Kundenweg zu *Filament zuweisen* lief in keiner
-Sprache. Die Karte selbst reicht nicht über den Fensterrand; ihr Rollbereich
-kann die Klappe heranholen. Gerollt wird über der Karte: Die Liste der
-Handlungen darin rollt nicht selbst und reicht das Rad weiter, wie Qt es tut.
+Eine zugeklappte Klappe stand an einem gewählten Körper unter dem sichtbaren
+Teil der Auswahlkarte. ``guide_targets.next_click`` nannte sie als Klick, ohne
+zu rollen: Der Klick fiel unter das Fenster, die Probe fand dort nichts
+(„verdeckt“), und der Kundenweg lief in keiner Sprache. Die Karte selbst reicht
+nicht über den Fensterrand; ihr Rollbereich kann die Klappe heranholen.
+Gerollt wird über der Karte: Die Liste der Handlungen darin rollt nicht selbst
+und reicht das Rad weiter, wie Qt es tut.
+
+Gefunden an *Filament und Druck*; die steht seit FD-19 oben in der Karte. Die
+Lage stellt der Fall deshalb selbst her: *Vorbereiten*, der letzte Abschnitt,
+liegt am kleinsten Fenster unter dem Rand, zugeklappt mit seinen Handlungen.
 """
 
 from __future__ import annotations
@@ -51,6 +55,27 @@ def _window_rect(window: Any) -> QRect:
     return QRect(window.mapToGlobal(QPoint(0, 0)), window.size())
 
 
+#: Der letzte Abschnitt der Auswahlkarte und eine Handlung darin.
+LAST_SECTION = "section:prepare"
+INSIDE = "operation:set_material"
+
+
+def _close_last_section(qt_app: Any, window: Any) -> Any:
+    """Klappt *Vorbereiten* zu, wie der Kunde, und gibt die Klappe zurück."""
+    from PySide6.QtTest import QTest
+
+    from app.ui import guide_targets
+    from tests.ui_helpers import wait_for_resting_cards
+
+    heading = guide_targets.widget_for(window, LAST_SECTION)
+    assert heading.isChecked(), "Voraussetzung: der Abschnitt steht offen"
+    QTest.mouseClick(heading, Qt.MouseButton.LeftButton, pos=heading.rect().center())
+    _settle(qt_app)
+    wait_for_resting_cards(qt_app)
+    assert not heading.isChecked()
+    return heading
+
+
 def test_a_flap_below_the_edge_is_rolled_into_view_before_it_is_clicked(
     qt_app: Any, chosen_box: Any
 ) -> None:
@@ -61,7 +86,7 @@ def test_a_flap_below_the_edge_is_rolled_into_view_before_it_is_clicked(
     from tools.function_walk import QtPorts
 
     window = chosen_box
-    heading = guide_targets.widget_for(window, "filament.section")
+    heading = _close_last_section(qt_app, window)
     # Voraussetzung, nicht Annahme: Die Klappe ist zu und steht unter dem Rand.
     assert heading.isVisible() and not heading.isChecked()
     centre = heading.mapToGlobal(heading.rect().center())
@@ -69,7 +94,7 @@ def test_a_flap_below_the_edge_is_rolled_into_view_before_it_is_clicked(
     ports = QtPorts(window, 0.0)
     reasons: list[str] = []
     for _step in range(60):
-        click = guide_targets.next_click(window, "filament.picker")
+        click = guide_targets.next_click(window, INSIDE)
         reasons.append(str(click.why))
         point = click.rect.center()
         assert _window_rect(window).contains(point), (click.why, click.rect, reasons)
@@ -86,8 +111,7 @@ def test_a_flap_below_the_edge_is_rolled_into_view_before_it_is_clicked(
         _settle(qt_app)
     assert reasons[-1] == "ziel", reasons
     assert reasons[0] == "rollen" and "klappe" in reasons, reasons
-    picker = guide_targets.widget_for(window, "filament.picker")
-    assert picker.isVisible()
+    assert heading.isChecked(), "die Klappe ging auf"
 
 
 def test_the_heading_itself_is_reached_through_the_card_not_refused(
@@ -102,7 +126,10 @@ def test_the_heading_itself_is_reached_through_the_card_not_refused(
     """
     from app.ui import guide_targets
 
-    click = guide_targets.next_click(chosen_box, "filament.section")
+    heading = guide_targets.widget_for(chosen_box, LAST_SECTION)
+    centre = heading.mapToGlobal(heading.rect().center())
+    assert not guide_targets.unclipped(chosen_box.selection_operations).contains(centre)
+    click = guide_targets.next_click(chosen_box, LAST_SECTION)
     assert click.why == "rollen" and click.direction == 1, click
 
 
