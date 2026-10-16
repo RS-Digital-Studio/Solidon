@@ -163,7 +163,8 @@ def main(argv: list[str] | None = None) -> int:
         "values": extremes.values,
         "paths": dict(sorted(extremes.found.items())),
     }
-    TARGET.write_text(json.dumps(document, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    text = json.dumps(document, indent=1, ensure_ascii=False) + "\n"
+    TARGET.write_text(text, encoding="utf-8", newline="\n")
     found = len(extremes.found)
     print(f"{extremes.files} Profile, {extremes.values} Werte, {found} Felder → {TARGET}")
     return 0
