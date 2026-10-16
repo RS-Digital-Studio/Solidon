@@ -151,6 +151,9 @@ Rückseite; eine ausdrückliche Feldübergabe öffnet sie vor dem Fokuswechsel.
   vorn keines, nennt er das erste hinter der Klappe samt Klappe, damit das
   Warten nicht am Klappzustand hängt (R4). Ein Fokus oder dieselbe Zahl ist
   keine Änderung, und die Eingabetaste wartet dann auf keine Vorschau.
+  Ein Sperrgrund der Felder geht dem Satz vor (D2), die Absage der Vorschau
+  (`block_apply`) nicht: Sie gilt den Werten, die schon stehen, und steht im
+  Band; sonst läse der Kunde am Gewindeschritt die Absage des späteren Stifts.
 - **Ein leerer Pflichttext ist ein Hinweis, keine Absage** (FD-134): Im Feld
   steht der erste Satz seiner `doc`, es rechnet keine Vorschau, der Knopf sagt
   „Erst „Text“ ausfüllen, dann übernehmen.“ (`required_inputs.missing_input`).

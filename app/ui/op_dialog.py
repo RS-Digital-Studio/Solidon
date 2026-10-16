@@ -2673,12 +2673,17 @@ class OperationDialog(QDialog):
             or (self._target_reason() if no_target else "")
             or (tr("Wählen Sie eine ebene Fläche für das Muster.") if no_texture_face else "")
             or (placement_hint() if no_place else "")
-            or (blocked or "")
+            or (self._attachment_problem or "")
         )
         # Ein Sperrgrund der Felder geht vor (D2): Wer den Haken *Ganzer Körper*
         # abwählt, hat geändert, was der Satz verlangt; die leere Liste ist der Grund.
+        # Die Absage der Vorschau dagegen nicht: Sie gilt den Werten, die
+        # schon stehen, und an einem späteren Schritt hält sie die Kette auch
+        # ohne diesen Dialog an — der Weg ist die erste Änderung, die Absage
+        # steht im Band (FD-99, Szene ``gewinde_zu_kurz``).
         if first and not (refusal or pending) and not reason:
             reason = first
+        reason = reason or (self._blocked_reason or "")
         incomplete = (
             self._waits_for_change
             or incomplete

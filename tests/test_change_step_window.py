@@ -69,3 +69,35 @@ def test_changing_the_thread_step_waits_for_a_change(
         wait_until(qt_app, lambda: button.toolTip() != waiting)
     finally:
         dialog.reject()
+
+
+def test_the_step_that_stops_the_chain_says_why_at_once(
+    qt_app: QApplication, thread_too_short: MainWindow
+) -> None:
+    """Der Schritt, an dem die Kette steht, wartet nicht: Seine Absage ist der Grund.
+
+    Gegenstück zum Gewindeschritt (``wait_for_change`` in ``edit_operation``):
+    Der Stift hält die Kette selbst an, sein Knopf trägt die Absage der
+    Vorschau statt des Satzes zur ersten Änderung.
+    """
+    from app.ui.op_dialog import OperationDialog
+
+    window = thread_too_short
+    result = window.session.last_result
+    op_id = next(
+        entry.id for entry in window.session.project.document.ops if entry.op == "pin_for_bore"
+    )
+    assert result is not None and result.stopped_at == op_id, "Voraussetzung: der Stift hält an"
+    window.edit_operation(op_id)
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    try:
+        assert window.session.wait_for_idle(60_000)
+        button = dialog._accept_button
+        wait_until(qt_app, lambda: bool(window._preview_reason))
+        assert button.text() == tr("Übernehmen")
+        assert not dialog._waits_for_change
+        assert not button.isEnabled()
+        assert button.toolTip() == window._preview_reason
+        assert button.accessibleDescription() == window._preview_reason
+    finally:
+        dialog.reject()
