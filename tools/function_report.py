@@ -82,9 +82,11 @@ from tools.function_verdict_rules import (
     RunSeals,
     bound_problems,
     fix_problems,
+    git_ancestry,
     prediction_problems,
     release_problems,
     releases_of,
+    stale_findings,
 )
 
 ROOT: Final = Path(__file__).resolve().parent.parent
@@ -1619,7 +1621,9 @@ def write(
     Ausgang 1 nur bei ungültigen Eingaben (Kommandozeile des Prüfstands,
     ``file_acceptance.py report``): kein Protokoll, ein unlesbares oder
     ungültiges Protokoll, ein Fall, an dem das Urteil scheitert, ein
-    abgewiesenes Urteil, eine fehlerhafte Funddatei. Eine Abhakliste bekommt nur
+    abgewiesenes Urteil, eine fehlerhafte Funddatei oder eine, die nicht
+    nachgezogen ist (FD-153: offen, obwohl der genannte Fix im Laufkopf liegt).
+    Eine Abhakliste bekommt nur
     ein Paket mit mindestens einem Fall — ein leerer oder verirrter Laufordner
     überschreibt keine; sie nennt abgewiesene Urteile in einem eigenen Abschnitt.
     """
@@ -1674,6 +1678,11 @@ def write(
     commits = sorted(
         {str((p.get("version") or {}).get("commit")) for p in protocols if p.get("version")}
     )
+    # Vor der Abhakliste: Kein Fund steht offen, dessen Fix im Laufkopf liegt (FD-153).
+    invalid += [
+        f"funde.md: {problem}"
+        for problem in stale_findings(found.values(), commits, git_ancestry(ROOT))
+    ]
     shown_commit = commit or (", ".join(commits) if commits else "unbekannt")
     shown_date = date or datetime.date.today().isoformat()
     goals = common_goals if common_goals is not None else read_common_goals()

@@ -22,8 +22,13 @@ eines Belegs machen (Konzept §4, „Urteil und Schwere“):
   und jede Datei unter ``cases/`` hat noch den SHA256 aus ihr. Sonst ließen
   sich Siegeldatei der Vorhersage und Bindung im Protokoll nach dem Lauf
   gemeinsam neu schreiben — beide liegen im selben Laufordner.
+* **Die Funddatei ist nachgezogen** (FD-153): Kein Fund steht offen, dessen
+  Stand einen Commit nennt, der im Laufkopf liegt — außer der Stand sagt mit
+  „Rest:“ (:data:`OPEN_REST`), was trotzdem offen bleibt. Sonst liest der Prüfer
+  *gut nach Fix* aus dem Text statt aus der Datei (:func:`stale_findings`).
 
-Aufgerufen aus ``function_report._verdict_problems``.
+Aufgerufen aus ``function_report._verdict_problems``; der Stand der Funde aus
+``function_report.write``, bevor eine Abhakliste entsteht.
 """
 
 from __future__ import annotations
@@ -31,7 +36,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Iterable, Mapping
+import subprocess
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
@@ -54,6 +60,16 @@ COVERS: Final[dict[int, tuple[str, ...]]] = {
 
 #: Ein Fund gilt als behoben, wenn sein Stand so beginnt (Funddatei, Konzept §7).
 FIXED_STANDS: Final = ("behoben", "gut nach Fix")
+
+#: So sagt ein offener Fund, der einen Commit im Laufkopf nennt, was trotzdem
+#: offen bleibt: „offen RM-…; Teil behoben `…`; Rest: …“ (FD-153).
+OPEN_REST: Final = "Rest:"
+#: Ein Commit im Stand eines Funds, wie die Funddatei ihn schreibt.
+_STAND_COMMIT: Final = re.compile(r"`([0-9a-f]{7,40})`")
+_HEAD: Final = re.compile(r"[0-9a-f]{7,40}")
+
+#: Ob ein Commit Vorfahr eines Kopfs ist: ``None``, wenn eines davon unbekannt ist.
+Ancestry = Callable[[str, str], bool | None]
 
 #: Gründe der Abweisung — die Gegenproben verlangen genau diese.
 GOOD_OVER_OPEN: Final = "gut trotz offenem Fund an der Zelle"
@@ -338,3 +354,66 @@ def bound_problems(entry: Mapping[str, Any]) -> list[str]:
     if not str(entry.get("prediction") or "").strip():
         problems.append("prediction_bound ohne die Vorhersage selbst")
     return problems
+
+
+def stale_findings(
+    findings: Iterable[Finding], heads: Iterable[str], is_ancestor: Ancestry
+) -> list[str]:
+    """Offene Funde, deren genannter Fix schon im Laufkopf liegt (FD-153).
+
+    Vor einer Urteilsrunde zieht der Koordinator den Stand der Funde nach, deren
+    Fix im Laufkopf liegt (Konzept §4); beim gemeinsamen Lauf hatte er es nicht,
+    und sechs Funde standen offen, obwohl ihre Fixe Vorfahren des Kopfs waren.
+    Ein offener Stand darf einen Commit im Kopf nur mit „Rest:“ nennen. Ein
+    Commit, den Git nicht kennt, oder ein Lauf ohne Kopf macht den Stand nicht
+    prüfbar — das ist ein Befund, kein stilles Durchwinken.
+    """
+    known = sorted({head for head in heads if _HEAD.fullmatch(head)})
+    problems: list[str] = []
+    for finding in findings:
+        stand = finding.stand
+        if not stand.startswith("offen") or OPEN_REST in stand:
+            continue
+        named = list(dict.fromkeys(_STAND_COMMIT.findall(stand)))
+        if not named:
+            continue
+        if not known:
+            problems.append(
+                f"{finding.key}: nennt {_quoted(named)} in einem offenen Stand, doch der Lauf "
+                "trägt keinen Kopf — der Stand ist nicht prüfbar (FD-153)"
+            )
+            continue
+        answers = {commit: {is_ancestor(commit, head) for head in known} for commit in named}
+        inside = [commit for commit, said in answers.items() if True in said]
+        unknown = [commit for commit, said in answers.items() if None in said - {True}]
+        if inside:
+            problems.append(
+                f"{finding.key}: steht offen, obwohl {_quoted(inside)} im Laufkopf "
+                f"{', '.join(head[:9] for head in known)} liegt — den Stand auf „behoben `…`“ "
+                f"nachziehen oder mit „{OPEN_REST} …“ sagen, was offen bleibt (FD-153)"
+            )
+        elif unknown:
+            problems.append(
+                f"{finding.key}: {_quoted(unknown)} oder der Laufkopf ist im Repository "
+                "nicht bekannt — der Stand ist nicht prüfbar (FD-153)"
+            )
+    return problems
+
+
+def _quoted(commits: Iterable[str]) -> str:
+    return ", ".join(f"`{commit}`" for commit in commits)
+
+
+def git_ancestry(root: Path) -> Ancestry:
+    """:data:`Ancestry` über ``git merge-base --is-ancestor`` im Baum ``root``."""
+
+    def is_ancestor(commit: str, head: str) -> bool | None:
+        finished = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", commit, head],
+            cwd=root,
+            capture_output=True,
+            check=False,
+        )
+        return {0: True, 1: False}.get(finished.returncode)
+
+    return is_ancestor
