@@ -602,8 +602,9 @@ def tin() -> MeshData:
     return hollow(cube(standing=True), 3.0, vents=0, open_top=True).mesh
 
 
-#: Wo die Bausteinbibliothek ihre Formen baut — fein und ohne Abbruch: Ein Stift ist eine
-#: Normform, keine Rechnung der Op.
+#: Wo die Bausteinbibliothek ihre Formen baut — heute fein und ohne Abbruch. Ob der Bau
+#: eines Bausteins in einer Op der Entwurfsstufe und dem Abbruch folgen soll, ist offen
+#: (FD-229); bis dahin zählen die Proben nur die Rechnung der Op selbst.
 PART_BUILD = "app.core.knowledge.parts.build"
 
 

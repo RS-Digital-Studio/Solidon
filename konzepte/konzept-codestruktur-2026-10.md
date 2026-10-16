@@ -567,7 +567,10 @@ brächten Lizenzeintrag und feste Version. Mit eigenem Test an einer
 Paket-Attrappe.
 
 Schritt 0 ist selbst ein Registerpunkt mit Review; erst wenn er gelandet ist,
-beginnt Schritt 1.
+beginnt Schritt 1. **Schritt 0 ist gelandet:** alle Pakete über den
+Integrationszweig welle5, zuletzt K mit dem erzeugten Schnitt (`ec28714cf`,
+CS-11), mit Review I und dem Tor dieses Zweigs vor main; W1 bis W6 sind
+scharf.
 
 ### 4.2 Muster jedes Verschiebeschritts
 

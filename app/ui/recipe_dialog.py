@@ -52,7 +52,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.errors import AppError, FileWriteError, InternalError
-from app.core.knowledge.parts import GROUPS, PARTS
+from app.core.knowledge import parts
+from app.core.knowledge.parts import GROUPS
 from app.core.knowledge.parts import recipe as recipes
 from app.core.log import get_logger
 from app.core.types import Document, Feature, ObjectId, Profile, measure_status, step_numbers
@@ -1475,7 +1476,7 @@ def taken_name(name: str) -> bool:
     auf der Platte kann eine Datei liegen, die dabei fehlgeschlagen ist. Wer
     nur das Register fragt, überschreibt sie.
     """
-    if PARTS.has(name):
+    if parts.PARTS.has(name):
         return True
     return (recipes.recipes_dir() / f"{name}.json").exists()
 

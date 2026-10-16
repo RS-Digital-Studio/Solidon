@@ -43,7 +43,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import guides
-from app.core.knowledge.parts import GROUPS, PARTS
+from app.core.knowledge import parts
+from app.core.knowledge.parts import GROUPS
 from app.core.knowledge.parts.ops import (
     catalog_operation,
     cuts_by_parameter,
@@ -188,7 +189,7 @@ def _in_own_library(spec: PartSpec) -> bool:
 
 def _own_library_is_empty() -> bool:
     """Ob es noch keinen Baustein im eigenen Bausteinordner gibt (RM-680)."""
-    return not any(_in_own_library(spec) for spec in PARTS.all())
+    return not any(_in_own_library(spec) for spec in parts.PARTS.all())
 
 
 def describe(spec: PartSpec) -> str:
@@ -225,7 +226,7 @@ def parts_for_feature(kind: str) -> frozenset[str]:
     from app.core.registry import REGISTRY
 
     fitting = {operation.name for operation in REGISTRY.for_feature(kind)}
-    return frozenset(spec.name for spec in PARTS.all() if op_name(spec.name) in fitting)
+    return frozenset(spec.name for spec in parts.PARTS.all() if op_name(spec.name) in fitting)
 
 
 def feature_title(kind: str) -> str:
@@ -918,7 +919,7 @@ class PartCatalog(QDialog):
     def show_parts(self, text: str = "") -> None:
         """Füllt die Liste, gruppiert wie der Katalog gruppiert."""
         self.list.clear()
-        wanted = PARTS.search(text) if text.strip() else PARTS.all()
+        wanted = parts.PARTS.search(text) if text.strip() else parts.PARTS.all()
         fitting = self._fitting
         if fitting is not None:
             wanted = tuple(spec for spec in wanted if spec.name in fitting)
@@ -1122,7 +1123,9 @@ class PartCatalog(QDialog):
             # hält den Katalog am Leben — zehn losgelassene überlebten alle
             # zehn, und ``gc.get_referrers`` nannte genau sie.
             return
-        missing = next((spec for spec in PARTS.all() if spec.name not in self._previews), None)
+        missing = next(
+            (spec for spec in parts.PARTS.all() if spec.name not in self._previews), None
+        )
         if missing is None:
             return
 
@@ -1154,7 +1157,7 @@ class PartCatalog(QDialog):
         """Hängt ein fertiges Bild an seine Zeile, ohne die Liste neu zu bauen —
         ein Neuaufbau würde die Auswahl und die Bildlaufposition mitnehmen.
         """
-        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
+        spec = next((entry for entry in parts.PARTS.all() if entry.name == name), None)
         if spec is None or name not in self._previews:
             return
         for row in range(self.list.count()):
@@ -1200,7 +1203,7 @@ class PartCatalog(QDialog):
         wechselt mit jedem Klick in der Liste.
         """
         name = self.chosen()
-        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
+        spec = next((entry for entry in parts.PARTS.all() if entry.name == name), None)
         shown = detail(spec)
         self.detail.setText(shown)
         allowed, reason = self._insert_state(spec)
@@ -1257,14 +1260,14 @@ class PartCatalog(QDialog):
 
     def _chosen(self, item: QListWidgetItem) -> None:
         name = item.data(Qt.ItemDataRole.UserRole)
-        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
+        spec = next((entry for entry in parts.PARTS.all() if entry.name == name), None)
         if name and self._insert_state(spec)[0]:
             self.partChosen.emit(name)
             self.accept()
 
     def _accept(self) -> None:
         name = self.chosen()
-        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
+        spec = next((entry for entry in parts.PARTS.all() if entry.name == name), None)
         if name and self._insert_state(spec)[0]:
             self.partChosen.emit(name)
             self.accept()

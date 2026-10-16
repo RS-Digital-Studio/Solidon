@@ -71,7 +71,7 @@ Ausgänge in den Docstrings, die Geschwister in `karte-tools.md`.
 |---|---|
 | `code_index.py` · `code_facts.py` · `code_values.py` · `code_cache.py` · `code_store.py` · `code_scripts.py` · `code_report.py` | Statischer Auflöser für Namen, Importe und Patch-Ziele (W2, W5, W6, `move_names`), auch in Skripten für `python -c` (`script:<art>`; nicht Faltbares zählt das Inventar, es ist kein Fund); `--inventory` nennt jede Stelle. Auszüge je Datei nach Inhaltshash, Antworten je Baumstand unter `tools/__pycache__/`, gestempelt mit dem geladenen Auflöser, nie mit der Platte |
 | `tree_reads.py` · `data_reads.py` | Wer welchen Ordner mit welchem Muster liest, selbst oder über eine bezogene Definition (W4, Auswahl) · welche Einheit unter `tests/` eine Datei außerhalb des Codes erreicht |
-| `move_names.py` | Verschiebewerkzeug: Zuschnittliste (TOML; `module`, `copies`, `component`) → Plan → Kandidatenbaum → Beweis → erst dann schreiben; `--proof` legt das Protokoll vor dem Baum ab, `--list-copies` nennt Originale mit Kopfkopien. Bedeutung fragt es nur `code_index` |
+| `move_names.py` | Verschiebewerkzeug: Zuschnittliste (TOML; `module`, `copies`, `component`) → Plan → Kandidatenbaum → Beweis → erst dann schreiben; `--proof` legt das Protokoll vor dem Baum ab, `--list-copies` nennt Originale mit Kopfkopien; fällt eine Modulzuweisung weg, fällt ihr ungelesener Ladeimport mit. Bedeutung fragt es nur `code_index` |
 | `size_ratchet.py` · `registry_dump.py` | W1: Dateien über 2 000 Zeilen halten ihre Zahl an Definitionen genau (`tests/data/size_ratchet.toml`; `--lower`, `--move`, `--raise`, `--init` nur einmal) · W3: Registerabzug, vor und nach einem Kernschritt bytegleich (`--compare`) |
 
 ## Erzeugen

@@ -271,8 +271,13 @@ Namens, den Tests an `M` patchen, etwa `features.detect` in
 Vorschlag: je Paar prüfen, ob ein Test die Wirkung in der Kopie erwartet;
 wenn ja, dort über das Modul zugreifen (`features.detect`) oder den Patch
 umsetzen. W2 macht neue Fälle rot. Gemessen im Plan zu Schritt 0: 226
-Kopfkopien statt 54 (Abschnitt „Schritt 0“). Stand: in Paket K (erzeugter
-Schnitt `move_names copies`), Stand folgt. [RM-728](../ROADMAP.md#rm-728).
+Kopfkopien statt 54 (Abschnitt „Schritt 0“). Stand: behoben in Paket K (über
+welle5 `ec28714cf`): erzeugter Schnitt `move_names copies` (`cb3cc8525`), 89
+Familien, 312 Kopfkopien lesen das Original über sein Modul zur Aufrufzeit, 318
+Patch-Stellen zielen aufs Original; W2 c) ist scharf (312 → 0, `d3e543ceb`).
+Zwei Laufzeitkopien über `builtin.__getattr__` (`catalog`, `recipe_dialog`)
+nachgezogen (Review I, A-4); dass W2 c) dieser Kette nicht folgt, ist CS-45.
+[RM-728](../ROADMAP-ARCHIV.md#rm-728).
 
 ### CS-12 Die Gegenprobe der Oberflächensuche zählt nur Dateien
 
@@ -425,7 +430,8 @@ CS-36, CS-37, CS-38; offen nach 0.6.1 CS-42. Aus dem Plan (`plan-cs0.md` §1,
 - Umfang von CS-11 (§1.4): 226 Kopfkopien (182 in `app/`, 44 in `tools/`) zu
   78 Namen statt 54; R zählte am Code 302 (254 und 48) zu 89 Originalen in 149
   Haltern, das Inventar von R2 309 (W2 c), `617cac547`); K schlägt 89 Familien
-  vor. Behoben wird es in K (CS-11).
+  vor. Behoben in K (CS-11, über welle5 `ec28714cf`): am Stand des Schnitts 312
+  Kopfkopien in 89 Familien, W2 c) 312 → 0.
 
 Ohne Nummer behoben: Das Verbot auf `sign_release.run` erreichte keinen
 Aufruf (R, `6948c76e3`, W2 d) seitdem scharf); der Wächter gegen die echte
@@ -648,7 +654,13 @@ würden (`tools/check_frozen_start.py:220`, `tools/make_download.py:1167`).
 Ursache: Formen, die das Werkzeug nicht sicher umschreibt; es weist sie mit
 Ausweg ab. Vorschlag: vor dem Schnitt von Hand; bei den umbenannten Kopien
 entscheiden, ob der Leser das Original liest oder eine eigene Zahl führt.
-Keine Wirkung beim Kunden. Stand: in Paket K, Stand folgt.
+Keine Wirkung beim Kunden. Stand: behoben in Paket K (über welle5 `ec28714cf`),
+je Fund ein Commit vor dem Schnitt: die Stellen mit festem Text umgeschrieben
+(dazu zwei `hasattr`-Zeilen, die die Trockenprobe am heutigen Baum fand); alle
+vier umbenannten Kopien lesen das Original zur Aufrufzeit, weil ihre Kommentare
+dieselbe Zahl verlangten; die zwei f-Strings über einen Namen gekürzt. Dazu
+streicht `move_names` mit einer wegfallenden Modulzuweisung auch ihren
+Ladeimport (`90bc64591`).
 
 ### CS-27 Der Auflöser zählt `hasattr(M, "N")` nicht als Bezug
 
