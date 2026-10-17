@@ -2,63 +2,63 @@
   "guides": {
     "change-a-dimension": {
       "fingerprint": "cf72e44223ccca7c",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "draw-and-pull": {
       "fingerprint": "ef4233d2fe187ae4",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "drill-a-hole": {
       "fingerprint": "1d852dc501ef70bd",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "first-part": {
-      "fingerprint": "f85c80879abb5e3a",
-      "version": "0.6.0"
+      "fingerprint": "cb38289467415a5c",
+      "version": "0.6.1"
     },
     "housing-with-lid": {
       "fingerprint": "b43af80146498dba",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "label-a-part": {
       "fingerprint": "6349edca1b12be25",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "move-and-turn": {
       "fingerprint": "e63130cbfbd66d11",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "print-a-model": {
       "fingerprint": "cd610a4ab81b3acf",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "repair-a-model": {
       "fingerprint": "35bfa0a0419b4f12",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "round-edges": {
       "fingerprint": "44b8a2c679e3b626",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "split-a-large-part": {
       "fingerprint": "4817bd5e1be10e30",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "thread-a-hole": {
       "fingerprint": "8e82262d5c5801af",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "two-colours": {
       "fingerprint": "cff6e331c26fd626",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "undo-a-step": {
       "fingerprint": "3812de3f2c0b23c6",
-      "version": "0.6.0"
+      "version": "0.6.1"
     },
     "window-overview": {
       "fingerprint": "5676c73a3592a8a2",
-      "version": "0.6.0"
+      "version": "0.6.1"
     }
   }
 }
