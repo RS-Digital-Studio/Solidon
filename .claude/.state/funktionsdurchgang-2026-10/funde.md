@@ -2764,7 +2764,7 @@ eingefroren“) und in 0.6.2 behoben (Robert, 17.10.2026). Ihr Registerpunkt ist
 ### FD-236 Nach *Auf das Bett setzen* ragt der Körper oben aus dem Bild
 
 - Art: Fehler
-- Schwere: leicht
+- Schwere: mittel
 - Funktion: `place_on_bed`
 - Prüfpunkt: E4
 - Beleg: Schlusslauf L4 an `d0173380f`, Fall 002 (`F:\tmp-suche\schlusslauf-d0173380\L4-d0\cases\002`, Szene `unter_dem_bett.netz`): `function.json` `spot.frame` [4075, −31, 997, 973] gegen `spot.view` [3413, 92, 2560, 1259], `inside` falsch; `03-uebernommen.png` zeigt den Würfel ohne Oberseite. Am Endkopf `d9f7a81f9` (L4, Fall 002) gleich; schon im finalen Lauf des Funktionsdurchgangs so.
@@ -3484,6 +3484,66 @@ Die folgenden Funde (FD-241 bis FD-295) kommen aus den Nachurteilen am Schlussla
 - Ursache: offen; der Befundklick fährt seit FD-111 selbst hin.
 - Vorschlag: Den Knopf weglassen, wenn der Befundklick schon hinfährt, oder ihm eine eigene Wirkung geben (näher heranfahren).
 - Wirkung beim Kunden: Ein Knopf, der nichts sichtbar tut, lässt den Kunden zweifeln, ob er gewirkt hat.
+- Stand: offen RM-812
+
+### FD-296 Nach *Senken* öffnet sich ungefragt der Einstellmodus des ursprünglichen Bohrungsschritts
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `countersink_hole`
+- Prüfpunkt: 2, 7
+- Beleg: L5 an `d9f7a81f9`, Fall 001 `v4s:cases/001/v4-nachher.png` (`1ebca94ae648`): Nach dem Klick steht die schwebende Karte „Bohrung im ursprünglichen Schritt ändern“ mit Verschiebepfeilen und Kantenmaßen in der Ansicht, die Oberseite wirkt geschlossen, Bohrung und Senkung sind nicht zu sehen; Objektbaum („Bohrung 1 mit Senkung“, Oberseite 1121 mm²) und Verlauf („3 Senken“) führen das Ergebnis. Vorher war die Klappe dieses Abschnitts in der rechten Karte aufgeklappt (`v4s:cases/001/v4-vorher.png`). Prüfer 1b Punkt 22, Prüfer 2 C1-3; vom Koordinator am Bild bestätigt.
+- Ursache: offen; vermutlich bleibt die aufgeklappte Klappe des Änderungswegs nach der Operation am gewählten Merkmal offen und wechselt in die schwebende Maßkarte, deren Vorschau den Stand vor späteren Schritten zeigt.
+- Vorschlag: Nach einer Operation am Merkmal das Ergebnis zeigen und den Einstellmodus eines älteren Schritts nicht von selbst öffnen; Test mit aufgeklappter Klappe vor *Senken*. Zusammenhang mit FD-279 prüfen.
+- Wirkung beim Kunden: Wer eine Bohrung senkt, sieht danach weder Bohrung noch Senkung und eine offene Karte, die er nicht aufgerufen hat.
+- Stand: offen RM-812
+
+### FD-297 *Aushöhlen* zeigt bei gewählter Öffnung eine Entlüftung, die das Ergebnis nicht hat
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `hollow_object`
+- Prüfpunkt: 7
+- Beleg: L5 an `d9f7a81f9`, Fall 003 `v4s:cases/003/v4-nachher.png` (`05c7c9d7…`): Ist die Oberseite als Öffnung gewählt, zeigt der Dialog „Entlüftungen 1“ weiter aktiv und die Vorschau eine Scheibe; das Ergebnis hat zu Recht keine Entlüftung (7 152,0 mm³, genau die Schale). Prüfer 1a C1-2, Prüfer 2 C1-5; der Vorhersage-Schreiber erwartete deshalb eine Entlüftung.
+- Ursache: offen; das Feld und die Vorschau der Entlüftung folgen der gewählten Öffnung nicht.
+- Vorschlag: Bei gewählter Öffnung das Feld *Entlüftungen* grau mit Grund („Die Öffnung entlüftet den Hohlraum.“) und keine Scheibe in der Vorschau; Test mit Öffnung und Entlüftung.
+- Wirkung beim Kunden: Der Dialog verspricht eine Entlüftung, die nicht entsteht.
+- Stand: offen RM-812
+
+### FD-298 Die Gründe für *entfällt* kennen keinen Prüfpunkt, der nur an anderen Zeilen gilt
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Urteilsform des Funktionsdurchgangs (`tools/function_report.py`, Gründe für `not_applicable`)
+- Prüfpunkt: 19
+- Beleg: Nachurteil Runde C1, Prüfer 2 C1-6 (`output/konsolidierung-2026-10-12/nachurteil-pruefer2-claude.md`): I4 gilt nur an Befundhandlungen, I5 nur an Vorher/Nachher; an 16 Zellen stand deshalb `ohne_auswahlbezug` als nächstliegender Grund.
+- Ursache: Die geschlossene Liste der Gründe (`ohne_rechnung`, `ohne_auswahlbezug`, `ohne_dialog`, `ohne_agentenwerkzeug`, `nur_stufe_c`) hat keinen für „Prüfpunkt gilt an dieser Art Zeile nicht“.
+- Vorschlag: Einen Grund wie `andere_zeilenart` mit der Zeilenart, an der der Punkt gilt, und die 16 Urteile darauf umstellen; oder die Liste je Zeile ohne diese Punkte erzeugen.
+- Wirkung beim Kunden: Kein Produktfehler; die Begründung von 16 Urteilen ist ungenau.
+- Stand: offen RM-812
+
+### FD-299 Ein Test prüft die Kamerafahrt nicht, die sein Name verspricht
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Test `test_clicking_a_warning_switches_the_map_and_moves_the_camera`
+- Prüfpunkt: 11
+- Beleg: Nachurteil Runde C1, Prüfer 2 C1-7: Der Test belegt den Kartenwechsel, nicht die Fahrt der Kamera.
+- Ursache: Zusicherung fehlt.
+- Vorschlag: Kamerastand vor und nach dem Klick vergleichen; Gegenprobe ohne Fahrt muss rot werden.
+- Wirkung beim Kunden: Kein Produktfehler; eine zugesagte Wirkung ist ohne Wächter.
+- Stand: offen RM-812
+
+### FD-300 Das Handbuch zu *Schichten* verspricht Inselzahl und Überhangfläche ohne Einschränkung
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `tool:layers`
+- Prüfpunkt: 11
+- Beleg: Nachurteil Runde C1, Prüfer 2 C1-8: Das Handbuch nennt neben dem Regler Inselzahl und Überhangfläche; die Anwendung zeigt sie nur, wenn es Inseln oder Überhänge gibt, und kein Test prüft ihre Anzeige.
+- Ursache: Handbuchsatz ohne Bedingung.
+- Vorschlag: Satz um „wenn vorhanden“ ergänzen (alle Kataloge) und einen Test für die Anzeige mit Insel und Überhang.
+- Wirkung beim Kunden: Wer die Angaben nicht sieht, sucht nach einem Fehler, wo keiner ist.
 - Stand: offen RM-812
 
 ## Regressionen aus Fixen nach dem Einfrieren (ab FD-212)
