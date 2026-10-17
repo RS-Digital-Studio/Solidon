@@ -45,6 +45,7 @@ from app.ui.filament_picker import (
 )
 from app.ui.labels import NumberSpin, local_timestamp, localised
 from app.ui.leash import RELEASE_RETRY_MS, Worker, WorkerLeash, weak_slot
+from app.ui.status_line import settle_in_bar
 from app.ui.style import (
     NORMAL,
     ROOMY,
@@ -1239,6 +1240,9 @@ class UsageNotice(QWidget):
                 else tr("Filament abziehen …")
             )
         )
+        # Knopf und Zustandszeile stehen in der Statusleiste gleich in ihrer
+        # neuen Breite (FD-90).
+        settle_in_bar(self)
 
     def _rejected(self, problem: object) -> None:
         self._problems[self._active] = (

@@ -249,6 +249,10 @@ def test_history_conflict_opens_existing_review_with_fresh_old_warning(monkeypat
         state=inert,
         changed=SimpleNamespace(emit=lambda: None),
         _release_dialog=lambda dialog: None,
+        # Was ``status_line.settle_in_bar`` am Feld fragt (FD-90).
+        layout=lambda: None,
+        updateGeometry=lambda: None,
+        parentWidget=lambda: None,
     )
     host._sync_review = lambda: ui.UsageNotice._sync_review(host)
     monkeypatch.setattr(ui, "weak_slot", lambda owner, action: lambda: action(owner))
