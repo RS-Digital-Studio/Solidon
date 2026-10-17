@@ -3831,6 +3831,18 @@ Quellen: `output/konsolidierung-2026-10-12/review-spaet-claude.md` (Befunde 1 bi
 - Wirkung beim Kunden: Stimmen die Sätze heute, kann ein späterer Umbau sie unbemerkt brechen.
 - Stand: offen RM-812
 
+### FD-324 Im Handbuchbild des Hauptfensters trägt der Kartengriff den Fokusrahmen
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: keine Zeile: Handbuch-Bildschirmfoto `main-window.png` (`tools/make_figures.py`) und der Startweg, den es nachbildet
+- Prüfpunkt: 19
+- Beleg: Nativer Endblock 0.6.1 an `2ba3ee78c` (`F:\tmp-suche\nativ-ende-2ba3ee78\bilder\kontakt\fig-griff-01.png`, alt links, neu rechts): In `app/images/manual/{de,en,es,fr,it,pt}/main-window.png` trägt der Griff der rechten Karte oben rechts den orangen 2-px-Rahmen aus `QToolButton:focus` (185 Akzentpixel je Sprache); schon im Bild von 0.6.0. `sketch-mode.png`, `sketch-result.png` und alle Bildanleitungen sind seit `d04117aa6` (Fokus nach dem Ladeschleier) ohne Rahmen.
+- Ursache: offen; `make_figures` baut das Hauptfenster auf einem Weg ohne Ladeschleier (vermutlich Laden ohne Schleier oder `WA_DontShowOnScreen`), auf dem Qt den Fokus an das erste Glied der Tabfolge gibt, den Kartengriff.
+- Vorschlag: Klären, ob ein Kunde denselben Weg nimmt (Öffnen ohne Schleier, Start mit Datei); dann wie bei `d04117aa6` den Fokus in die Ansicht geben, sonst im Werkzeug; Test am Weg, danach `main-window.png` in sechs Sprachen neu.
+- Wirkung beim Kunden: Im Handbuch sieht der Griff aus wie eine zweite Markierung; ob der Kunde ihn nach einem Start mit Datei ebenso sieht, ist offen.
+- Stand: offen RM-812
+
 ## Regressionen aus Fixen nach dem Einfrieren (ab FD-212)
 
 Was ein Fix des eingefrorenen Umfangs kaputt macht, ist kein neuer Fund für

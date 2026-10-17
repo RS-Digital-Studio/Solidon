@@ -197,7 +197,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4 |
 | [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; Phase 4 |
 | [RM-790 — Ein nativer Abbruch nach Rückgängig bei gezeigter Maßgruppe, einmal gesehen](#rm-790) | Bedienung und Darstellung | 150 Zyklen unter Last ohne Wiederholung; beim nächsten Auftreten Stapel sichern und zuordnen |
-| [RM-812 — Funde des Funktionsdurchgangs für 0.6.2](#rm-812) | Bedienung und Darstellung | für 0.6.2: FD-204 bis FD-211, FD-218 bis FD-226, FD-228 bis FD-230, FD-233, FD-234 und FD-236 bis FD-323 der Funddatei beheben (Umfang eingefroren, Robert 16.10.; Ziel 0.6.2, Robert 17.10.) |
+| [RM-812 — Funde des Funktionsdurchgangs für 0.6.2](#rm-812) | Bedienung und Darstellung | für 0.6.2: FD-204 bis FD-211, FD-218 bis FD-226, FD-228 bis FD-230, FD-233, FD-234 und FD-236 bis FD-324 der Funddatei beheben (Umfang eingefroren, Robert 16.10.; Ziel 0.6.2, Robert 17.10.) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -6077,7 +6077,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   fehlt),
   FD-321 (der Prüfstand nimmt den Bausteinkatalog vor den Vorschaubildern auf),
   FD-322 (zwei Knöpfe *Abbrechen* beim Lesen der Slicerprofile),
-  FD-323 (vier Wirkungsversprechen zu Filament und Parametern haben keinen Test).
+  FD-323 (vier Wirkungsversprechen zu Filament und Parametern haben keinen Test),
+  FD-324 (im Handbuchbild des Hauptfensters trägt der Kartengriff den Fokusrahmen).
   **Abnahme:** je Fund ein Test, der am Stand davor rot war, und der Stand „behoben `<commit>`“
   in der Funddatei; Kundenwirkung im Changelog der nächsten Version in sechs Sprachen.
 
