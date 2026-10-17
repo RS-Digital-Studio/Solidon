@@ -275,11 +275,11 @@ class _Row(QWidget):
         self._name_state(str(tr("Vorhanden") if here else tr("Fehlt")))
         self.action.setVisible(not here)
         self.action.setEnabled(not here and status.installable)
-        # Jeder neue Status ersetzt den Grund in allen drei Hilfekanälen.
-        # Eine alte Absage darf nach dem Freischalten nicht stehen bleiben.
+        # Jeder neue Status ersetzt den Grund in Tooltip und Beschreibung; ein
+        # Knopf trägt keinen Statustipp (RM-509). Eine alte Absage darf nach
+        # dem Freischalten nicht stehen bleiben.
         reason = "" if here or status.installable else str(status.reason)
         self.action.setToolTip(reason)
-        self.action.setStatusTip(reason)
         self.action.setAccessibleDescription(reason)
         # Der zweite Schritt erscheint, sobald der erste getan ist — vorher
         # wäre er ein Angebot, etwas einzurichten, das es nicht gibt.

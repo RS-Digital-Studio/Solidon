@@ -274,8 +274,7 @@ def _second_text(target: QWidget | QAction) -> str:
 
 def _set_second_text(target: QWidget | QAction, text: str) -> None:
     if isinstance(target, QAction):
-        action = target
-        action.setStatusTip(text)
+        target.setStatusTip(text)
     else:
         target.setAccessibleDescription(text)
 
