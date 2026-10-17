@@ -9,6 +9,7 @@ paths:
   - "app/ui/scale_widget.py"
   - "app/ui/placement_flow.py"
   - "app/ui/measure_field_places.py"
+  - "app/ui/measure_card.py"
 ---
 
 # Regeln für die Griffe in der Szene
@@ -152,6 +153,9 @@ Mündung. Wo er sitzt, sagt das Register (`slot_feature_kinds()` aus dem
   Bounds/Geometrie/Picks bleiben erhalten. Bei gleicher Punktzahl aktualisiert
   `_show_preview(update=True)` Punkte, Deckkraft und Sichtbarkeit im selben
   Aktor. Wächter: `test_feature_grip_readability.py`.
+* **Die gewählte Öffnung bleibt frei:** Knöpfe außen am Scheitel
+  (`knob_centres`; der Zug rechnet vom Scheitel, `knob_seats`), Pfeile erst
+  hinter ihnen (`Gizmo(clear=…)`), Wandtönung leise. `test_hole_grip_clearance.py`.
 
 * **Der Winkel zählt gegen die x-Achse von `sketch.planes.frame_of`** — wie
   `prepare.slot_profile` schneidet und `prepare_ops.slot_angle_of` nachmisst;
@@ -305,6 +309,16 @@ wieder her (`_drag_kind` bleibt `"slot"`).
   die anderen, ohne eines ganz zu decken; Setzpunkt, Bewegungsgriff und Vorschauband erst mit,
   dann ohne Abstand: Überdecken ist das kleinere Übel, ein Feld außerhalb des Bildes
   keines.
+
+* **Eine gewachsene Karte bleibt stehen** (`grown_place`): Ecke oben links,
+  gerückt nur um das, was Raum, Setzpunkt, Griff und Band verlangen, gleitend
+  über `motion.glide` — sonst springt das Feld weg, das man gerade korrigiert.
+
+* **Die Maßkarte hält die Tastatur** (`measure_card.MeasureCard`): Tab geht
+  nach dem Layout — Felder, „Weitere Werte“, Sammelhaken über den Knöpfen,
+  *Übernehmen*, *Abbrechen* — und schließt sich zum ersten Feld; verschwindet
+  die Karte mit Fokus darin, geht er an die Ansicht. Eine Feldablehnung steht
+  nur am Feld, der Hinweis wiederholt sie nicht (`stands_in`).
 
 * **Nach Übernehmen Maße/Griffe wiederherstellen:**
   `MainWindow._measures_to_resume` → `_show_feature_fields` (Konzept

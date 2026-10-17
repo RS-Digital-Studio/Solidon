@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from app.branding import APP_VERSION
+from app import branding
 from tools import make_installer, sign_release
 from tools.make_installer import _sha256 as file_sha256
 
@@ -45,7 +45,7 @@ def validate_request(
     _require(_RUN_ID.fullmatch(release_id) is not None, "Ungültige Release-Entwurfsnummer")
     _require(_COMMIT.fullmatch(commit) is not None, "Ungültiger Quellcommit")
     _require(_DIGEST.fullmatch(digest) is not None, "Ungültige Anwendungsprüfsumme")
-    _require(version == APP_VERSION, "Version weicht vom ausgeführten Quellstand ab")
+    _require(version == branding.APP_VERSION, "Version weicht vom ausgeführten Quellstand ab")
     return installer_context()
 
 

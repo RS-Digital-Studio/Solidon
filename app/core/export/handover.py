@@ -70,8 +70,9 @@ from app.core.export.slicer_keys import (
     takes_a_machine_profile,
     wants_bed_coordinates,
 )
-from app.core.geom.attributes import used_slots
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import attributes
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
 from app.core.ingest.threemf import SETTINGS_PATH
 from app.core.knowledge import print_fields, print_settings, profiles
 from app.core.knowledge.print_settings import read_path, with_path
@@ -2831,10 +2832,10 @@ def slot_processes(
     kannte, bekam ein Teil mit einer zweiten Spule einen übernommenen
     Vorschlag nicht, den der Dialog für genau dieses Teil gezeigt hatte.
     """
-    mesh = as_mesh_data(body.mesh)
+    mesh = geom_mesh.as_mesh_data(body.mesh)
     own_profile = profiles.for_object(profile, body)
     foundation: manufacturer.Foundation | None = None
-    present = set(used_slots(mesh))
+    present = set(attributes.used_slots(mesh))
     processes: list[SlotProcess] = []
     for original in threemf.assembly_slots(
         threemf.AssemblyPart(mesh=mesh, slots=threemf.slots_for_object(body))
@@ -3129,7 +3130,7 @@ def bind_object_profiles(settings: PrintSettings, objects: Sequence[SceneObject]
         threemf.merge_slots(
             [
                 threemf.AssemblyPart(
-                    as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                    geom_mesh.as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
                 )
                 for entry in objects
             ],
@@ -3169,7 +3170,9 @@ def chosen_slot_profiles(
     settings = bind_object_profiles(settings, objects)
     merged = threemf.merge_slots(
         [
-            threemf.AssemblyPart(as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry))
+            threemf.AssemblyPart(
+                geom_mesh.as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+            )
             for entry in objects
         ]
     )
@@ -6741,7 +6744,7 @@ def _printable_above(meshes: Sequence[Mesh], height: float, settings: PrintSetti
     inset = settings.layers.line_width / 2.0
     step = settings.layers.layer_height
     for mesh in meshes:
-        data = as_mesh_data(mesh)
+        data = geom_mesh.as_mesh_data(mesh)
         bottom = float(data.bounds.minimum[2])
         top = float(data.bounds.maximum[2])
         start = bottom + height
@@ -7245,7 +7248,7 @@ def _check_plate(
                 suggestions=(SPLIT_MODEL, resize, CHOOSE_PRINTER, CANCEL),
             )
     if len(meshes) > 1:
-        data = [as_mesh_data(mesh) for mesh in meshes]
+        data = [geom_mesh.as_mesh_data(mesh) for mesh in meshes]
         if not arrangement_holds(data, profile):
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
@@ -8679,7 +8682,7 @@ def _first_layer_narrower_than_a_line(meshes: Sequence[Mesh], settings: PrintSet
 
     inset = 0.75 * settings.layers.first_layer_line_width
     for mesh in meshes:
-        data = as_mesh_data(mesh)
+        data = geom_mesh.as_mesh_data(mesh)
         if not data.triangle_count:
             continue
         height = float(data.bounds.minimum[2]) + settings.layers.first_layer_height / 2.0

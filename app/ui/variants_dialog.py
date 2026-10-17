@@ -27,13 +27,12 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QLabel,
     QProgressBar,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 from app.core.errors import AppError, InternalError
-from app.core.export.writer import plan_export, write_plan
+from app.core.export import writer
 from app.core.log import get_logger
 from app.core.scene import build_variants
 from app.core.scene.cancel import CancelSignal
@@ -41,10 +40,11 @@ from app.core.scene.project import ProjectSources
 from app.core.scene.variants import MAX_VARIANTS
 from app.core.types import Finding
 from app.i18n import tr
-from app.ui.dialogs import show_error
+from app.ui import dialogs
+from app.ui import session as ui_session
+from app.ui.grouped_spin import GroupedIntSpin
 from app.ui.labels import NumberSpin, localised_value
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
-from app.ui.session import Session
 from app.ui.style import NORMAL, SPACE, WIDE, make_primary
 
 _log = get_logger(__name__)
@@ -104,8 +104,10 @@ class _VariantWorker(Worker):
                 profile = self._arguments["profile"]
                 objects = list(made.scene(profile).objects.values())
                 if objects:
-                    plan = plan_export(objects, project_name=self._project_name, profile=profile)
-                    written = write_plan(plan, self._target)
+                    plan = writer.plan_export(
+                        objects, project_name=self._project_name, profile=profile
+                    )
+                    written = writer.write_plan(plan, self._target)
         except AppError as error:
             self.failed.emit(error)
             return
@@ -117,7 +119,7 @@ class VariantsDialog(QDialog):
     Varianten bekommen.
     """
 
-    def __init__(self, session: Session, parent: QWidget | None = None) -> None:
+    def __init__(self, session: ui_session.Session, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.session = session
         self._leash = WorkerLeash(self)
@@ -136,7 +138,7 @@ class VariantsDialog(QDialog):
         self.step.setRange(-100.0, 100.0)
         self.step.setDecimals(3)
         self.step.setValue(0.05)
-        self.count = QSpinBox(self)
+        self.count = GroupedIntSpin(self)
         self.count.setRange(2, MAX_VARIANTS)
         self.count.setValue(4)
 
@@ -352,7 +354,7 @@ class VariantsDialog(QDialog):
             # Der Satz steht auch im Dialog: Nach dem Fehlerfenster stand dort
             # weiter „Die Varianten werden gerechnet …".
             self.state.setText(str(error.title))
-            show_error(error, self)
+            dialogs.show_error(error, self)
 
     def _finished(self, made: Any, written: Any) -> None:
         """Was gerechnet und geschrieben wurde — und was dabei auffiel."""

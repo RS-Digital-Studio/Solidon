@@ -442,6 +442,9 @@ entfernt hat.
 | 2026-10-11 | [RM-782: Die Lochfeld-Öffnung bleibt Wabe, auch im Quadratraster (11.10.2026)](#rm-782-die-lochfeld-öffnung-bleibt-wabe-auch-im-quadratraster-11102026) |
 | 2026-10-12 | [RM-788: Ein Slicertest wartete auf ein Windows-Fenster, das niemand sah (12.10.2026)](#rm-788-ein-slicertest-wartete-auf-ein-windows-fenster-das-niemand-sah-12102026) |
 | 2026-10-12 | [RM-789: Die Einrichtung von ComfyUI startet hinter der gemeinsamen Prozessgrenze (12.10.2026)](#rm-789-die-einrichtung-von-comfyui-startet-hinter-der-gemeinsamen-prozessgrenze-12102026) |
+| 2026-10-16 | [FD-212: Der Abdruck eines eigenen Bausteins übersteht eine Formaterhöhung (16.10.2026)](#fd-212-der-abdruck-eines-eigenen-bausteins-übersteht-eine-formaterhöhung-16102026) |
+| 2026-10-16 | [RM-723 bis RM-727, RM-729, RM-730: Codestruktur Schritt 0 behebt die Funde vor dem ersten Schnitt (16.10.2026)](#rm-723-bis-rm-727-rm-729-rm-730-codestruktur-schritt-0-behebt-die-funde-vor-dem-ersten-schnitt-16102026) |
+| 2026-10-17 | [RM-728: Kein Modul hält mehr eine Kopfkopie eines am Original ersetzten Namens (17.10.2026)](#rm-728-kein-modul-hält-mehr-eine-kopfkopie-eines-am-original-ersetzten-namens-17102026) |
 | ohne Datum | [Gegen echte Modelle geprüft](#gegen-echte-modelle-geprüft) |
 | ohne Datum | [Referenzkorpus und Passungen vervollständigt](#referenzkorpus-und-passungen-vervollständigt) |
 | ohne Datum | [Durchsicht nach P12 — was noch offen ist](#durchsicht-nach-p12--was-noch-offen-ist) |
@@ -48350,6 +48353,19 @@ Würfel 10 × 10 × 10: „oberste Fläche“ bügelt in allen acht Programmen n
 Oberseiten“ z 10 und 20 (Orca-Familie 594–614 gegen 5 732–5 789 mm Bahn, Anycubic, Prusa
 und SuperSlicer 912–922 gegen 8 644–8 706 mm, Cura 863 gegen 8 297 mm).
 
+**Format 53 (FD-197, 16.10.2026):** *Fluss bei Brücken* trug in 0.6.0 seine Grenzen als
+Anteil in einem Prozentfeld; wer es anfasste, speicherte 0,01 oder 0,02. Migration 52 → 53
+nimmt eine eigene Wahl oder Wahl der Platte unter 0,5 zurück, es gilt der Wert ohne eigene
+Einstellung, und der Prüfbericht nach dem Öffnen sagt es (`project.bridge_flow_reset`,
+`Project.notices`, nicht gespeichert). Beispieldatei `bridge_flow_v52.p3d` (im Dialog von
+0.6.0 geschrieben), `example_v53.p3d`. **Der Abdruck einer Buchung kippt für genau diese
+Projekte:** Was dem Projekt gehört (`filament_usage._owned_settings`), trug
+`["shell.bridge_flow", 0.01]` und trägt ihn danach nicht mehr (Review 1, Sonde
+`sonde_abdruck.py`, Prüfsummen `836301b9…` gegen `d0024469…`). Gewollt: Mit 1 % druckte
+die Brücke ohne Material, nach dem Update ist es ein anderer Druck, und eine Buchung aus 0.6.0
+für ein solches Projekt wird nicht wiedererkannt. Jedes andere Projekt behält seinen Abdruck,
+der Schritt ändert nichts sonst.
+
 ## RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)
 
 <a id="rm-771-den-fehlerbericht-als-rückfall-bekommt-nur-ein-programmfehler-11102026"></a>
@@ -48523,3 +48539,138 @@ Proxy-Adressen reisen ohne Zugangsdaten, wie bei pip und winget (§32, im Review
 (kein fremder Schlüssel, kein `PYTHONPATH`, `HF_ENDPOINT` da, Arbeitsordner `trusted_cwd`) und
 `test_a_cancelled_comfyui_step_ends_its_whole_tree` (ein Enkel endet mit dem Abbruch), am Stand
 davor beide rot — der Enkel schlief seine vier Minuten zu Ende.
+
+## FD-212: Der Abdruck eines eigenen Bausteins übersteht eine Formaterhöhung (16.10.2026)
+
+<a id="fd-212"></a>
+
+**FD-212 — Seit dem Formatschritt 52 → 53 bot `parts.own_changed` *Gespeicherten Stand
+verwenden* nicht mehr an.** Der Abdruck eines Rezepts (`recipe.fingerprint`, zugleich
+`PartSpec.version`) war der Hash über seine Daten samt Formatversion seines Dokuments; beim
+Lesen wird das Rezept migriert, und nach jeder Formaterhöhung passte kein gespeicherter
+Abdruck mehr. Ein unveränderter eigener Baustein galt als geändert, der mitgereiste
+gespeicherte Stand wurde nicht gefunden. 0.6.0 hatte dasselbe für Projekte aus 0.5 (Format 46
+und älter).
+**Behoben:** Der Abdruck rechnet ohne Formatversion (Rezept und Dokument, auch in den
+Abhängigkeiten); das Speichern kennzeichnet ihn mit `c:`. Ein älterer Abdruck bekommt beim
+Öffnen die Formatversion der Datei angehängt (`check.mark_stamp_formats`, vor der Migration)
+und wird mit ihr nachgerechnet (`recipe.fingerprint(..., as_format=)`, `check.stamp_means`).
+Grenze: Hat eine Migration den Inhalt eines Rezeptdokuments geändert (Marker an Schritten),
+passt der alte Abdruck weiterhin nicht.
+**Der Abdruck einer Verbrauchsbuchung bleibt über einen Vorabdruck (FD-232, 17.10.2026):**
+`filament_usage._part_versions` nimmt `PartSpec.version`, und der heutige Abdruck eines Körpers
+aus eigenem Rezept ist ein anderer als in 0.6.0. Der Abdruck von 0.6.0 steht deshalb in
+`former_fingerprints` (`StoredInputs.bodies_of_060`, Fassung mit Format 52 im Hash, nur wenn ein
+Schritt ein Rezept setzt); eine Buchung aus 0.6.0 ist derselbe Druck, kein zweiter Abzug.
+Belegt mit einem Projekt und einem Abdruck aus dem Code von `v0.6.0`
+(`tests/test_filament_usage_own_recipe_060.py`). Buchungen ohne eigenes Rezept bleiben unberührt.
+**Nachweis:** `tests/test_part_stamps.py` (alte Datei aus 0.6.0, unverändert und mit lokal
+geändertem Baustein, Abdruck von heute gegen ein späteres Format, Abdruck aus Format 46), am
+Stand davor rot; `test_function_list.py::test_a_light_mesh_scene_keeps_its_promises[baustein_geaendert.netz]`
+wieder grün.
+
+## RM-723 bis RM-727, RM-729, RM-730: Codestruktur Schritt 0 behebt die Funde vor dem ersten Schnitt (16.10.2026)
+
+<a id="rm-723-bis-rm-727-rm-729-rm-730-codestruktur-schritt-0-behebt-die-funde-vor-dem-ersten-schnitt-16102026"></a>
+<a id="rm-723"></a>
+<a id="rm-724"></a>
+<a id="rm-725"></a>
+<a id="rm-726"></a>
+<a id="rm-727"></a>
+<a id="rm-729"></a>
+<a id="rm-730"></a>
+
+Die vom Programm unabhängigen Funde des [Konzepts
+Codestruktur](konzepte/konzept-codestruktur-2026-10.md), die Schritt 0 vor dem ersten Schnitt
+behebt ([RM-722](ROADMAP.md#rm-722)). Gebaut in den Paketen Q, P1, P2, R und R2, integriert
+über `welle5` (Stand `a25ac8cb2`); Ursache, Beleg und alle Commits je Fund in der
+[Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md). Offen blieben CS-11
+([RM-728](#rm-728), Paket K, seither behoben) und Schritt 1 ([RM-813](ROADMAP.md#rm-813)).
+
+**RM-723 (CS-2) — Quelltextprüfungen lasen `app/ui/` flach und übersahen `render/`.**
+**Behoben (Q):** Alle 26 flachen Leser — die 17 des Funds, `test_translations`, `activation`,
+der Bauordner des Lizenzmoduls und `test_style.py`
+`test_every_layout_of_a_dialog_keeps_the_grid` — lesen über `tests/source_tree.python_files`
+rekursiv (`d6b9ee31c`); das Prüfmodul bleibt flach, ein Modul im Unterordner hält den Bau an
+(`1d5c77c74`). **Nachweis:** W4 `tests/test_source_readers.py` (`63d399303`, Auflöser
+`tools/tree_reads.py` seit `1c1bd1313`) verbietet flaches `glob` über ein Paket in `tests/` und
+`tools/` und legt jeder umgestellten Prüfung einen Verstoß in ein Unterpaket einer Kopie des
+Baums; am Stand davor 26 rot, danach 0. Zwei reine Quelltextprüfungen forderten `qt_app` an und
+liefen nie im Tor; sie laufen jetzt dort (`9af771975`).
+
+**RM-724 (CS-3) — Späte Importe in `tools/` prüfte niemand.** **Behoben (R):** W5
+`tests/test_import_resolution.py` löst jeden Import und jeden Modulalias in `app/`, `tools/` und
+`tests/` statisch auf, auch in Funktionen und unter `TYPE_CHECKING` (`51672538f`, scharf seit
+`f65d9b925`). `_feature_item` bleibt privat; es wird im Verschiebeschritt von `panels.py`
+öffentlich (Konzept 3.1, Regel 5). **Nachweis:** wie RM-730 unten.
+
+**RM-725 (CS-6) — `affected_tests` erkannte `glob(` nicht als Baumleser.** **Behoben (Q):**
+`glob` zählt, auch über den lesenden Helfer (`3b327c94c`); seit `02532e1f1` wählt die Auswahl
+nach dem aufgelösten Lesebereich, und eine reine Teständerung wählt nur die Leser von `tests/`.
+**Nachweis:** `test_affected_tests.py::test_a_flat_glob_reads_the_tree_too` und
+`test_a_test_reading_through_a_source_helper_is_a_tree_reader`, je mit Gegenprobe.
+
+**RM-726 (CS-9) — Zwei Patches waren wirkungslos.** **Behoben:** a) (P1) Das Spulenverbot der
+Ersteinrichtung steht auf der Bindung, die das Lager liest
+(`filament_inventory.configured_spools`, `3cb4f8d8e`); b) (P2) `_cost_matrix` ist wieder der
+Eintritt in den dichten Solverweg, `_assignment` liest sie über das Modul (`4c915e009`),
+96 von 96 Zuordnungsfällen bytegleich. **Nachweis:** `tests/test_first_run_spools.py`
+(ohne Patch genau ein Aufruf), `test_spatial_matching.py::test_the_forbidden_quadratic_stages_are_reached_where_the_solver_is_needed`
+(Spion); statisch W2 d) — die verbotene Bindung hat zur Aufrufzeit einen Leser
+(`6948c76e3`, Entscheidung E8).
+
+**RM-727 (CS-10) — Namenslisten übersprangen fehlende Module stumm.** **Behoben:** (P2)
+`_step_ways` bricht bei einem fehlenden Modul mit `ModuleNotFoundError`, bei einem ohne eigene
+Funktion mit `InternalError` ab, auch aus `evaluate()` (`ff37fc086`); (P1) der Lebensdauer-Pin
+ordnet über `UI_PINS` Modul und Klasse zu und bricht bei fehlender Klasse den Import ab
+(`01a6db635`). **Nachweis:** W6 `tests/test_name_lists.py` (je Liste ein fehlender und ein
+leerer Eintrag rot, `test_c_the_evaluation_itself_stops_on_a_missing_step_way_module`) und
+`tests/test_suite_pin.py` (`test_a_module_without_its_class_stops_the_import`).
+
+**RM-729 (CS-12) — Gegenproben der Oberflächensuche zählten nur Dateien.** **Behoben (Q):**
+Die Gegenproben verlangen die Definitionsdateien von `MainWindow`, `Viewport`, `Renderer`,
+`detect` und `make_primary` statt einer Mindestzahl (`d6b9ee31c`), die dritte Stelle in
+`test_print_disclosure.py` die Datei mit `is_utc_timestamp` (`890a12512`). **Nachweis:**
+`test_source_readers.py::test_the_sweeps_follow_a_definition_into_a_package` schneidet
+`main_window.py` und `features.py` zum Paket, `test_a_flat_sweep_is_red`.
+
+**RM-730 (CS-13) — `tools/matrix_unit.py` lief angeblich in keiner Suite.** Am Belegstand
+schon falsch: `tests/test_delivery_matrix_review.py` und `tests/test_delivery_tools.py` laden
+das Modul über seinen Pfad, ohne Marker, also im Tor. Seine Aliaszugriffe in Funktionen, die
+diese Tests nicht rufen (`handover.detect`, `handover.standard_choice`,
+`handover.slice_model`), löst W5 statisch auf. **Nachweis (Paket U, Wegwerfbaum an
+`a25ac8cb2`, gepinnt):** `handover.detect` in Zeile 370 umbenannt →
+`test_import_resolution.py::test_every_attribute_of_an_own_module_resolves` rot mit
+`tools/matrix_unit.py:370`, 1 failed, 4 passed, EXIT=1; unverändert 5 passed, EXIT=0.
+
+## RM-728: Kein Modul hält mehr eine Kopfkopie eines am Original ersetzten Namens (17.10.2026)
+
+<a id="rm-728-kein-modul-hält-mehr-eine-kopfkopie-eines-am-original-ersetzten-namens-17102026"></a>
+<a id="rm-728"></a>
+
+CS-11 und CS-26 aus der [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md) des
+[Konzepts Codestruktur](konzepte/konzept-codestruktur-2026-10.md), Schritt 0
+([RM-722](ROADMAP.md#rm-722)). Module hielten per `from M import N` eine eigene Kopie eines
+Namens, den Tests am Original ersetzten; der Ersatz erreichte die Kopie nicht. Gebaut in
+Paket K als erzeugter Schnitt, integriert über `welle5` (`ec28714cf`), Nachzug aus Review I
+auf `cs0/k2`.
+
+**Behoben (K):** `tools/move_names.py` im Modus `copies` mit dem Zuschnitt aus
+`--list-copies` (89 Familien) und zwei geprüften Erklärungen in `[[open_names]]` stellt 312
+Kopfkopien auf Modulzugriff zur Aufrufzeit um und 318 Patch-Stellen auf das Original, in einem
+Commit ohne Handarbeit (`cb3cc8525`). Vorher in eigenen Commits die Stellen, die das Werkzeug
+mit Ausweg abwies (CS-26): gefaltete Patch-Stellen mit festem Text, vier Kopien unter neuem
+Namen, die jetzt das Original zur Aufrufzeit lesen (`MAX_ANSWER_BYTES`, `HEAVY_TRIANGLES`,
+`_windows_file_api`, `MAX_ARCHIVE_ENTRY_BYTES`), zwei f-Strings; dazu streicht das Werkzeug
+mit einer wegfallenden Modulzuweisung auch ihren Ladeimport (`90bc64591`). Was danach rot
+wurde, weil ein Ersatz am Original mehr Leser erreicht, je Fund in eigenen Commits
+(`f0ec8d7f0` bis `856948114`). Review I fand zwei Laufzeitkopien über
+`builtin.__getattr__` (`catalog`, `recipe_dialog`), die W2 c) nicht sieht; beide lesen das
+Register jetzt zur Aufrufzeit (`8d3f4b8a0`), die Lücke des Wächters ist CS-45.
+
+**Nachweis:** W2 `tests/test_patch_targets.py` Regel c) ohne `xfail` (`d3e543ceb`): am Stand
+vor dem Schnitt 312 Funde, danach keiner; das Beweisprotokoll des Schnitts (Lesermengen je
+Familie gleich, Registerabzug byte-gleich) liegt beim Paketbericht. Gegenprobe ohne Fenster:
+Ein Ersatz an `geom.boolean.boolean` erreicht `chamber_ops` vorher nie, danach bei jeder
+Booleschen. `tests/test_parts_register_readers.py` war vor dem Nachzug rot. Review I
+„integrierbar“, Mutant mit zurückgesetzter Kopfkopie in `chamber_ops.py` rot.

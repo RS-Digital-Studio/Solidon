@@ -34,13 +34,13 @@ from app.core import units
 from app.core.deferred import cKDTree, trimesh
 from app.core.geom.mesh import MeshData, unique_edges
 from app.core.log import get_logger
+from app.core.perceive import features as perceive_features
 from app.core.perceive.actions import ACTION_ORDER, feature_value_source
 from app.core.perceive.features import (
     CURVATURE_LIMIT,
     EPS_ANGLE,
     SINK_AXIS_LIMIT,
     SINK_FIT_LIMIT,
-    _large_facet_faces,
     _neighbour_index,
     _one_body,
     axis_of,
@@ -1425,7 +1425,7 @@ def _blended_cavity_faces(
     neighbours, seams = _neighbour_index(body)
     if not neighbours.shape[1]:
         return indices
-    large = _large_facet_faces(body)
+    large = perceive_features._large_facet_faces(body)
     angles = np.asarray(body.face_adjacency_angles)
     reached = set(indices)
     frontier = np.fromiter(sorted(indices), dtype=np.int64, count=len(indices))

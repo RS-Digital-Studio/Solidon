@@ -33,13 +33,15 @@ from app.core import discover
 from app.core.activation import Activation
 from app.core.export.slicer_profiles import model_name
 from app.core.geom.mesh import MeshData, face_components
+from app.core.geom.texture import carries_colour
+from app.core.knowledge.print_fields import shown_value as shown_setting
 from app.core.knowledge.profiles import shown_printer_title
 from app.core.perceive.actions import measure_explanation, measure_qualifier
 from app.core.perceive.groups import FunctionalGroup, GroupMeasure
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import REGISTRY
 from app.core.registry import group_title as group_title
-from app.core.registry.registry import FEATURE_TITLES
+from app.core.registry.registry import FEATURE_TITLES, feature_title_of
 from app.core.registry.surfaces import _CHOICE_NAMES as _CHOICE_NAMES
 from app.core.registry.surfaces import SIDE_NAMES
 from app.core.registry.surfaces import choice_label as _choice_label
@@ -109,25 +111,30 @@ def localised(text: str) -> str:
 #: in der Kerneinheit; Winkel und einheitenlose Anzahlen sind die beiden anderen
 #: Bedeutungen. Dieselbe Liste bedient Parameterdialog, linke Leiste und
 #: Rezeptdialog, damit ein Projektparameter überall dieselbe Sprache spricht.
+#: Die Länge nennt die Einheit, in der ihr Feld schreibt (``{unit}``, FD-125):
+#: gespeichert bleibt ``mm``, gezeigt wird die Anzeigeeinheit.
 PARAMETER_UNITS: Final[tuple[tuple[str, TranslatableText], ...]] = (
-    ("mm", _("mm — Länge")),
+    ("mm", _("{unit} — Länge")),
     (DEGREE_UNIT, _("Grad — Winkel")),
     ("", _("ohne Einheit")),
 )
 
 
-def fill_parameter_units(box: QComboBox, selected: str = "mm") -> None:
+def fill_parameter_units(box: QComboBox, selected: str = "mm", shown: str = "mm") -> None:
     """Füllt *box* mit den festen Parametereinheiten und wählt *selected*.
 
     Eine alte Projektdatei kann einen freien Wert tragen. Er wird sichtbar als
     zusätzlicher Eintrag erhalten, nie still als Millimeter umgedeutet. Tippen
     lässt die Auswahl trotzdem nicht zu: Neue Werte kommen nur aus der
     freigegebenen Liste.
+
+    *shown* ist die Einheit, in der das Feld daneben eine Länge schreibt —
+    die Daten bleiben die Codes des Dokuments.
     """
     box.clear()
     box.setEditable(False)
     for code, label in PARAMETER_UNITS:
-        box.addItem(str(label), code)
+        box.addItem(str(label).format(unit=shown), code)
     index = box.findData(selected)
     if index < 0:
         unknown_label = str(tr("{unit} — wird nicht umgerechnet").format(unit=selected or "?"))
@@ -408,9 +415,11 @@ class NumberSpin(QDoubleSpinBox):
     ein neuer Fehler derselben Sorte: „1.000,50" wurde damit im deutschen
     Fenster zu 1,00. Sichtbar war es, aber um den Faktor tausend falsch. Was
     zweideutig **bleibt**, ist „1.000" ohne Nachkomma — nach dieser Regel eins.
-    Angezeigt wird nie mit Tausendertrennung
-    (``setGroupSeparatorShown`` steht auf falsch), also gibt es keine
-    Schreibweise, die das Feld vormacht und dann nicht liest.
+    Ein Feld mit Nachkomma zeigt nie eine Tausendertrennung
+    (``setGroupSeparatorShown`` steht auf falsch); ein Ganzzahlfeld schreibt
+    ab vier Stellen in Dreiergruppen wie ``count_text`` und liest „1.000“ dort
+    als tausend (:class:`app.ui.grouped_spin.GroupedSpin`, FD-124). Keins macht
+    eine Schreibweise vor, die es dann nicht liest.
     ``DragValueBar.typed_value`` im Viewport entscheidet ähnlich, nur ohne die
     Gruppen.
 
@@ -1624,6 +1633,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "changes": _("Änderungen"),
     "character": _("Zeichen"),
     "choice": _("Wahl"),
+    # ``scene.choice_ways``: das Feld, das eine Auswahlhandlung öffnet.
+    "choice_field": _("Feld"),
     "choices": _("Auswahl"),
     "checked": _("Geprüft"),
     "clearance": _("Spiel"),
@@ -2040,6 +2051,86 @@ _METHOD_NAMES: Final[dict[str, TranslatableText]] = {
 }
 
 
+#: Wert-Schlüssel ohne Einheiten-Endung, die überall ein Maß tragen, mit der
+#: Endung, die sie meinen (FD-188).
+#:
+#: Ein Maß bekommt seine Endung im Kern (``oversize_mm``); diese Schlüssel
+#: tragen keine, weil Agent und Handler sie unter diesem Namen lesen
+#: (``reachable`` für *Die kleinste Kantenlänge nehmen*, ``diameter`` und
+#: ``pitch`` für das Gegenstück, ``previous`` für das Bohrungsmaß). Unter der
+#: Absage stand deshalb „Erreichbar: 0,58“ — ohne Einheit und in Zoll falsch.
+#: Hier steht einmal, dass sie ein Maß sind; der Wert bleibt die Zahl in
+#: Millimetern (Regel 6). Ein Schlüssel kommt nur hierher, wenn er **als Zahl
+#: nirgends** etwas anderes trägt — ``size`` ist auch eine Dateigröße,
+#: ``minimum`` jede Grenze; ein Grenzwert bringt seine Einheit in
+#: ``values["unit"]`` mit (:data:`UNIT_VALUES`). Text ohne Zahlform bleibt Text:
+#: Unter ``needed`` steht auch die Mindestversion von ComfyUI („0.35.0“), unter
+#: ``tolerance`` „auto:pla“. ``tests/test_value_measures.py`` liest jede Stelle
+#: in ``app/`` und ``tools/``, die ``values`` erzeugt, und wird rot, wenn ein Maß
+#: ohne Kennzeichnung dasteht oder ein Text unter einem dieser Schlüssel
+#: ungeprüft bleibt.
+_BARE_MEASURES: Final[dict[str, str]] = {
+    "amount": "_mm",
+    "at": "_mm",
+    "cell_width": "_mm",
+    "clearance": "_mm",
+    "core": "_mm",
+    "corner": "_mm",
+    "cut": "_mm",
+    "depth": "_mm",
+    "diameter": "_mm",
+    "distance": "_mm",
+    "drawn_width": "_mm",
+    "drop": "_mm",
+    "edge": "_mm",
+    "excess": "_mm",
+    "grip": "_mm",
+    "head_room": "_mm",
+    "height": "_mm",
+    "largest": "_mm",
+    "least": "_mm",
+    "length": "_mm",
+    "major": "_mm",
+    "margin": "_mm",
+    "needed": "_mm",
+    "nominal": "_mm",
+    "pitch": "_mm",
+    "play": "_mm",
+    "previous": "_mm",
+    "radius": "_mm",
+    "reachable": "_mm",
+    "room": "_mm",
+    "root": "_mm",
+    "shortest": "_mm",
+    "thickness": "_mm",
+    "tolerance": "_mm",
+    "tube_diameter": "_mm",
+    "width": "_mm",
+    "area": "_mm2",
+    "footprint": "_mm2",
+    "overhang": "_mm2",
+    "angle": "_deg",
+    "last_angle": "_deg",
+}
+
+#: Schlüssel, die nur als fertiger Text „12.00 mm“ ein Maß tragen — als Zahl
+#: sind ``actual`` und ``expected`` eine Anzahl, ``gap`` eine Druckeinstellung.
+_MEASURE_TEXTS: Final = frozenset({"actual", "expected", "gap"})
+
+#: Zahlen aus der Druckprüfung, die eine Druckeinstellung sind: Sie stehen wie
+#: im Druckdialog, mit dessen Stellen und Einheit (``print_fields``).
+_SETTING_PATHS: Final[dict[str, str]] = {
+    "gap": "support.z_gap",
+    "layer_height": "layers.layer_height",
+}
+
+#: Ein Maß als fertiger Text aus ``units.format_length``: Zahl, Leerzeichen, Einheit.
+_MEASURE_TEXT: Final = re.compile(r"([+-]?\d+(?:\.\d+)?) (mm|in)")
+
+#: Eine Zahl ohne alles — nur sie bekommt die Endung ihres Maßes.
+_PLAIN_NUMBER: Final = re.compile(r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?")
+
+
 def value_text(key: str, value: object) -> str:
     """Der Wert mit seiner Einheit, in der Einheit der Anzeige (§19.3)."""
     if key == "reason" and isinstance(value, str) and value == "points_are_on_one_line":
@@ -2054,6 +2145,17 @@ def value_text(key: str, value: object) -> str:
         # Die Art eines Merkmals heißt, wie Karte, Handbuch und Agent sie nennen
         # (Review I, M3): Im Bericht stand „Art: hole“.
         return str(FEATURE_TITLES[value])
+    if key == "feature" and isinstance(value, str | list | tuple):
+        # Die Kennung bleibt in den Werten für Agent und Handler; zu lesen ist
+        # sie wie in der Merkmalsliste (FD-186): „Merkmal: thread_1“.
+        found = value.split(", ") if isinstance(value, str) else [str(entry) for entry in value]
+        # Eine lange Liste endet mit „ … (+103)“ (``ReportPanel``); der Rest
+        # bleibt beziffert und hängt nicht an der letzten Kennung.
+        rest = ""
+        if found and " … (+" in found[-1]:
+            found[-1], marker, count = found[-1].partition(" … (+")
+            rest = marker + count
+        return ", ".join(feature_title_of(entry) for entry in found) + rest
     if key in ("solver", "attempted") and isinstance(value, str) and value in _METHOD_NAMES:
         return str(_METHOD_NAMES[value])
     if key in ("solver", "attempted") and isinstance(value, (list, tuple)):
@@ -2062,21 +2164,27 @@ def value_text(key: str, value: object) -> str:
         return ", ".join(
             str(_METHOD_NAMES[entry]) if entry in _METHOD_NAMES else str(entry) for entry in value
         )
-    # Lage- und Abstandsbefunde tragen diese Längen auch im alten Cache als
-    # mm-Text. Erst hier umrechnen, damit derselbe Befund einem Einheitenwechsel
-    # folgt und seine gespeicherten Werte für die Entdoppelung gleich bleiben.
-    # Ein nackter numerischer ``gap`` ist dagegen eine Slicer-Einstellung;
-    # Freitext ohne die eindeutige gespeicherte Form wird nicht geraten.
-    if key in ("excess", "gap", "needed") and isinstance(value, str):
-        measured = re.fullmatch(r"([+-]?\d+(?:\.\d+)?) mm", value)
-        if measured is not None:
-            return length(float(measured[1]))
-    # Diese bestehenden Befundschlüssel tragen keine Einheiten-Endung.
-    # Längen folgen trotzdem der Anzeigeeinheit; Materialkennwerte behalten
-    # die Einheit des Filamentprofils und der Festigkeitsrechnung.
-    if key in ("at", "margin"):
-        key += "_mm"
-    elif key == "flow_limit":
+    # Maße unter Schlüsseln ohne Endung (FD-188, :data:`_BARE_MEASURES`): Ein
+    # fertiger Text „12.00 mm“ aus ``format_length`` wird erst hier umgerechnet,
+    # damit derselbe Befund einem Einheitenwechsel folgt und seine gespeicherten
+    # Werte für die Entdoppelung gleich bleiben. Eine Zahl bekommt die Endung
+    # ihres Maßes; was keine Zahl ist („0.35.0“, „auto:pla“), bleibt Text.
+    measure = _BARE_MEASURES.get(key)
+    if isinstance(value, str) and (measure == "_mm" or key in _MEASURE_TEXTS):
+        written = _MEASURE_TEXT.fullmatch(value)
+        if written is not None:
+            return length(to_mm(float(written[1]), cast(LengthUnit, written[2])))
+    if key in _SETTING_PATHS and isinstance(value, int | float):
+        # Eine Druckeinstellung steht wie im Druckdialog, in der Einheit ihres Felds.
+        return shown_setting(_SETTING_PATHS[key], value, localise=localised, choice=choice_label)
+    if measure is not None and isinstance(value, list | tuple) and value:
+        # Eine Lage aus drei Koordinaten: jede eine Länge.
+        return ", ".join(value_text(key, entry) for entry in value)
+    if measure is not None and _PLAIN_NUMBER.fullmatch(str(value)) and not isinstance(value, bool):
+        key += measure
+    # Materialkennwerte behalten die Einheit des Filamentprofils und der
+    # Festigkeitsrechnung.
+    if key == "flow_limit":
         return f"{localised_value(value)} mm³/s"
     elif key == "stress":
         return f"{localised_value(value)} MPa"
@@ -2336,7 +2444,7 @@ BODY_FACTS_LIMIT: Final = 100_000
 
 @dataclass(frozen=True, slots=True)
 class BodyFacts:
-    """Was ein Körper mitbringt — die drei Fragen aus ``requires_body``.
+    """Was ein Körper mitbringt — die Fragen aus ``requires_body``.
 
     ``None`` heißt „nicht gerechnet": ein Netz über :data:`BODY_FACTS_LIMIT`
     oder ein exakter Körper, dessen Tessellation hier niemand anstoßen will.
@@ -2346,6 +2454,10 @@ class BodyFacts:
     closed: bool | None
     pieces: int | None
     cavity: bool | None
+    #: Ob der Körper Farbinformation trägt (``texture.carries_colour``, FD-135):
+    #: Die Frage kostet nichts und gilt auch über der Grenze; ein exakter
+    #: Körper trägt nie eine.
+    colour: bool | None = None
 
 
 def body_facts(entry: SceneObject) -> BodyFacts:
@@ -2375,10 +2487,11 @@ def body_facts(entry: SceneObject) -> BodyFacts:
     )
     mesh = entry.mesh
     if not isinstance(mesh, MeshData):
-        return BodyFacts(closed=None, pieces=None, cavity=True if hollow else None)
+        return BodyFacts(closed=None, pieces=None, cavity=True if hollow else None, colour=False)
     hollow = hollow or mesh.cavity is not None
+    colour = carries_colour(mesh.raw)
     if mesh.triangle_count > BODY_FACTS_LIMIT:
-        return BodyFacts(closed=None, pieces=None, cavity=True if hollow else None)
+        return BodyFacts(closed=None, pieces=None, cavity=True if hollow else None, colour=colour)
     pieces = len(face_components(mesh.raw))
     # **Ohne Hohlraum ist nur, was aus einem Stück besteht.** Eine Innenschale
     # ist eine zweite Komponente; wo es zwei gibt und die Wahrnehmung keinen
@@ -2401,7 +2514,9 @@ def body_facts(entry: SceneObject) -> BodyFacts:
         known = False if bores_lead_outside(mesh, entry.features) else None
     else:
         known = False
-    return BodyFacts(closed=bool(mesh.raw.is_watertight), pieces=pieces, cavity=known)
+    return BodyFacts(
+        closed=bool(mesh.raw.is_watertight), pieces=pieces, cavity=known, colour=colour
+    )
 
 
 def body_requirement(spec: Any, facts: BodyFacts | None) -> str | None:
@@ -2435,6 +2550,10 @@ def body_requirement(spec: Any, facts: BodyFacts | None) -> str | None:
         from app.core.geom.lattice import NO_CAVITY
 
         return str(NO_CAVITY)
+    if wanted == "colour" and facts.colour is False:
+        from app.core.geom.colour_ops import NO_COLOUR
+
+        return str(NO_COLOUR)
     return None
 
 
@@ -2983,20 +3102,14 @@ def edge_label(entry: Any) -> str:
     """
     # Die Lage fragt der Kern (``edges.edge_lie_of``): An einem Ring ist die
     # Richtung null, und ``flat`` galt an jedem — die Mündung einer quer
-    # liegenden Bohrung hieß „Waagerecht“ (RM-269). Erst hier geladen: Die
-    # Kantenrechnung zieht die Boolesche Kette nach, und ``labels`` lädt früh.
-    from app.core.geom.edges import edge_lie_of
+    # liegenden Bohrung hieß „Waagerecht“ (RM-269). Wörter und Ort stehen in
+    # ``unlisted_choice``, damit eine Kante aus ihrem Schlüssel (FD-189)
+    # genauso heißt. Erst hier geladen: Die Kantenrechnung zieht die Boolesche
+    # Kette nach, und ``labels`` lädt früh.
+    from app.ui.unlisted_choice import edge_lie_word, edge_place
 
-    shown = edge_lie_of(entry)
-    if shown == "upright":
-        lie = tr("Senkrecht")
-    elif shown == "flat":
-        lie = tr("Waagerecht")
-    else:
-        lie = tr("Schräg")
-    x, y, _z = entry.middle
-    place = f"x {length(x, with_unit=False)}, y {length(y, with_unit=False)}"
-    return f"{lie} · {length(float(entry.length))} · {place}"
+    lie = edge_lie_word(entry)
+    return f"{lie} · {length(float(entry.length))} · {edge_place(entry.middle)}"
 
 
 def local_timestamp(value: str) -> str:
@@ -3030,6 +3143,12 @@ def local_moment(value: datetime) -> str:
     return locale.toString(QDateTime.fromSecsSinceEpoch(int(value.timestamp())), pattern)
 
 
+#: Wie der Erste eines Monats heißt, wo ``QLocale`` nur die Zahl kennt: auf
+#: Französisch „1er décembre“ (FD-181). Die übrigen Sprachen schreiben ihn wie
+#: jeden anderen Tag.
+_FIRST_OF_MONTH: Final[dict[str, str]] = {"fr": "er"}
+
+
 def calendar_date(value: date | None) -> str:
     """Ein Kalendertag mit ausgeschriebenem Jahr in der Anzeigesprache."""
     if value is None:
@@ -3037,12 +3156,18 @@ def calendar_date(value: date | None) -> str:
     # ``QLocale()`` folgt der Prozesssprache. Solidon kann seine Sprache aber
     # im laufenden Prozess wechseln; dann bliebe ein ausgeschriebener Monat
     # sonst deutsch in einem spanischen Dialog stehen.
-    locale = QLocale(get_language())
+    language = get_language()
+    locale = QLocale(language)
     pattern = locale.dateFormat(QLocale.FormatType.LongFormat)
     # Der Wochentag macht aus „bis mindestens 31. Oktober“ einen schwer
     # lesbaren Satz. Reihenfolge, Monatsname und Bindewörter bleiben Sache der
     # Sprache; nur ``dddd`` samt anschließender Trennung fällt weg.
     without_weekday = pattern.replace("dddd", "").lstrip(" ,")
+    suffix = _FIRST_OF_MONTH.get(language, "") if value.day == 1 else ""
+    if suffix:
+        # Der Tag steht im Muster als einzelnes ``d``; dahinter kommt das
+        # Suffix als Literal — „d'er' MMMM yyyy“.
+        without_weekday = re.sub(r"(?<![d'])d(?![d'])", f"d'{suffix}'", without_weekday, count=1)
     return locale.toString(QDate(value.year, value.month, value.day), without_weekday)
 
 

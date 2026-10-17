@@ -506,8 +506,7 @@ def test_embedded_picker_fits_the_narrow_selection_tab(qt_app: QApplication) -> 
 
     window.resize(int((width + 2 * CARD_PADDING + 4) / NARROW_CARD_SHARE) + 1, 800)
     QTest.qWait(100)
-    # Der Rollbereich liegt seit dem 13.09.2026 in einer Spalte, unter der die
-    # Knopfzeile des Merkmalfensters fest steht (`_build_feature_dock`); der
+    # Der Rollbereich liegt in einer Spalte (`_build_feature_dock`); der
     # Reiter *Auswahl* ist diese Spalte, der Rollbereich ihr erstes Kind.
     column = window.feature_dock
     scroller = column.findChild(QScrollArea)
@@ -539,16 +538,16 @@ def test_refresh_only_visits_each_whole_body_slot_array_once(
     picker: QuickFilamentPicker, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Text und Entfernen-Knopf teilen denselben vollständigen Flächendurchlauf."""
-    from app.ui import filament_assignment
+    from app.core.geom import attributes
 
     calls = []
-    original = filament_assignment.used_slots
+    original = attributes.used_slots
 
     def counted(mesh):
         calls.append(mesh)
         return original(mesh)
 
-    monkeypatch.setattr(filament_assignment, "used_slots", counted)
+    monkeypatch.setattr(attributes, "used_slots", counted)
     first = _body("one", "Teil", [MaterialSlot(1, "Rot")])
     second = _body("two", "Anderes Teil")
     picker.set_context([first, second])

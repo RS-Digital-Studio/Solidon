@@ -20,7 +20,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Utilização e sistema
 
 - Os painéis de medidas movem-se e crescem com campos abertos. Títulos e cotas da mesa mais claros, barras e manípulos mais discretos e grelha mais visível no tema claro facilitam a vista do modelo.
-- Corrigido um possível encerramento inesperado ao mudar de característica ou de projeto.
+- Corrigido um possível encerramento inesperado ao mudar de característica ou de projeto, ou ao abrir uma caixa de diálogo.
 - A explicação de «Pousar na mesa» também se aplica a corpos que se encontram abaixo da mesa.
 - As listas de ações sobre características usam inteiramente o idioma escolhido.
 - No Mac, o Solidon pode agora carregar o controlador da 3Dconnexion (3DxWare) para o rato 3D. Da versão 0.4.1 à 0.6.0, o macOS não o permitia.
@@ -52,6 +52,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um leitor de ecrã lê o nome e a explicação de cada campo numérico de uma caixa de diálogo.
 - Depois de uma ação no *Relatório de verificação*, o relatório fica à frente e Ctrl+Z desfá-la logo. Até agora, o separador *Seleção* passava para a frente.
 - Os avisos de plataforma e adesão usam a unidade escolhida. Mudar mm/polegadas mantém a observação escolhida, detalhes abertos, separador e estado expandido dos corpos.
+- Os números ao longo da plataforma seguem a unidade escolhida e indicam-na. A versão 0.6.0 mostrava milímetros mesmo com polegadas definidas.
+- A grelha da plataforma conta a partir do centro da plataforma, a cada 10 mm em milímetros e a cada meia polegada em polegadas. Cada número fica numa linha mais forte.
+- Na vista *Ortográfica*, um clique numa observação mostra o local num tamanho adequado. Até agora ficava o zoom anterior.
+- Um clique numa observação sem local próprio mostra o corpo inteiro, e um projeto aberto fica todo à vista.
+- Um furo selecionado fica visível, com a borda. As pegas ficam por fora da borda e as setas começam depois delas.
 - Ctrl+Z e Ctrl+Y funcionam também com o cursor num campo vazio, por exemplo no campo de pesquisa. Se escreveu algo ali, primeiro é desfeito o que escreveu.
 - Sem ativação, as ações que alteram algo em *Relatório de verificação*, *Seleção*, menus de contexto e filamento ficam a cinzento com o motivo. Antes, a recusa surgia depois do clique.
 - Sem ativação, também *Criar parâmetro …*, *Mover*, *Dividir*, as teclas do histórico e as medidas na vista ficam a cinzento. Cada motivo indica o caminho, como *Ajuda → Desbloquear o Solidon …*.
@@ -67,10 +72,62 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O painel de seleção segue conteúdo e letra, mantendo texto e colunas. Os separadores destacados conservam o tamanho. Se houver uma alteração proposta, «Aplicar» é a ação principal.
 - Os elementos correspondentes pedem par e tamanho e explicam ambas as metades. Forma e ajuste ficam em «Mais definições». A altura inicial do diálogo adapta-se ao conteúdo.
 - Após a recusa de uma pré-visualização, os textos da seguinte continuam totalmente legíveis.
+- A linha com material e duração da impressão só indica «desde o último passo» o que um passo alterou. Enquanto os valores do perfil de slicer ainda estão a ser lidos, mostra «provisório».
+- O material e a duração da impressão aparecem sempre por inteiro na barra de estado. Se a barra estiver cheia, a mensagem ao lado encurta-se, e a frase completa fica na dica.
+- O cabeçalho só encurta o nome da impressora quando a linha está cheia. O nome do projeto e as medidas ficam juntos à esquerda, a impressora à direita ao lado de *Definições de impressão …*.
+- Se *Dividir automaticamente* não encontrar um corte, a linha de estado diz porquê. Até agora dizia então que a peça já cabia na mesa.
+- A breve confirmação após uma ação aparece ao lado dos cartões, não por cima, por exemplo ao lado do relatório. O passo seguinte retira-a com a linha de estado, também um «Anulado» antigo.
+- Numa observação de um modelo gerado, *Gerar de novo* abre o gerador com a sua descrição e a semente seguinte.
+- Quando o mapa de análise recusa um modelo demasiado grande, o número de triângulos aparece em grupos de três, como 2 103 472.
+- Quando a cadeia para, uma função que acrescentaria um passo depois já não abre um diálogo com o botão cinzento. A paragem e o caminho a seguir aparecem logo.
+- No relatório de verificação, a tecla Tab chega à ação oferecida, e nenhuma área de deslocamento é já uma paragem própria sem nome.
+- Um duplo clique numa alteração de medida no histórico abre essa medida para a alterar, e numa mudança de impressora ou material abre *Definições de impressão …*.
+- A coluna de medidas da árvore de objetos mostra cada medida completa; o cartão da esquerda alarga quando é preciso. Senão, o nome fica abreviado e a sua dica mostra-o por inteiro.
+- As linhas de constatações do relatório aparecem completas, incluindo a medida, e nomeiam cada corpo uma só vez.
+- A barra de parâmetros mostra os comprimentos em polegadas quando estão definidas as polegadas. Um clique direito no campo do valor abre *Alterar …*.
+- O diálogo *Criar parâmetro …* explica cada campo, incluindo os limites inferior e superior, e um leitor de ecrã nomeia cada campo.
+- Se um nome de parâmetro não serve, o motivo aparece logo abaixo do campo do nome, com um botão para um nome que serve.
+- Quem trabalha em polegadas introduz os parâmetros de comprimento em polegadas em *Criar parâmetro …* e ao guardar um bloco. A versão 0.6.0 mostrava aí só milímetros.
+- O diálogo *Calibrar material* chama a um material por medir «ainda não calibrado», também na linha de comandos. Antes dizia «valores iniciais».
+- Uma recusa num diálogo já não repete o título por baixo. *Corrigir a entrada* põe o cursor no campo em causa.
+- A janela *Pormenores* nomeia o corpo e o passo e dá o ponto na unidade escolhida. *Mostrar os valores* mostra os nomes dos campos e só é tão alto quanto necessário.
+- Os campos das barras *Análise* e *Dividir*, a descrição em *Gerar modelo*, a escolha *Tipo* e a caixa «Incluir valores» explicam-se na dica e ao leitor de ecrã.
+- A partir de um separador do cartão da direita, a tecla Tab entra na página da frente e percorre-a de cima para baixo.
+- Uma medida do projeto sem unidade continua a ser um número no histórico e na barra de parâmetros, também em polegadas. A versão 0.6.0 acrescentava «mm» no histórico.
+- Um leitor de ecrã nomeia cada campo de cada diálogo de operação, incluindo listas pendentes, caixas de seleção e listas de características.
+- Os números inteiros grandes aparecem também nos campos em grupos de três algarismos, como 1 051 736 triângulos ou 10 000 mm/s² de *Aceleração*. Escrevem-se com ou sem separadores.
+- Os nomes longos de campos em *Mais definições* mostram todas as linhas, também com letra grande. Na versão 0.6.0, *Abrir furo* perdia a última palavra de um deles.
+- Os diálogos de operação têm a altura do conteúdo, também depois de expandir *Mais definições*. Na versão 0.6.0, *Repetir característica* deixava uma faixa vazia por cima dos botões.
+- Os diálogos com secções recolhíveis, como *Criar parâmetro*, têm a altura do conteúdo depois de expandir e recolher. Só deslizam na horizontal quando o ecrã é demasiado estreito.
+- Se um campo obrigatório como o texto de *Inscrição como corpo* estiver vazio, o campo diz o que lá vai e o botão espera. A versão 0.6.0 mostrava ali um erro ao abrir.
+- Quem altera um passo confirma com *Aplicar*. O botão fica cinzento até algo mudar e indica o campo a alterar.
+- O diálogo *Calibrar material* mostra folga, interferência, compensação de furos, pé de elefante e parede na unidade escolhida, também em polegadas, e mantém a 3.ª casa decimal.
+- Um botão longo por baixo de uma recusa quebra a linha com letra grande, em vez de alargar o diálogo.
+- Os botões já não ficam esmagados com letra grande. Na versão 0.6.0, as ações de uma constatação no relatório de verificação ficavam cortadas em cima e em baixo.
+- Quando o tamanho de letra do sistema muda, o Solidon acompanha de imediato, também nos diálogos abertos. A versão 0.6.0 só o aplicava depois de reiniciar.
+- Uma linha agrupada do relatório de verificação nomeia na dica no máximo quinze afetados, com tipo e corpo. Na versão 0.6.0, um leitor de ecrã lia ali cada frase.
+- A legenda *Acrescentado* e *Removido* só aparece na barra de pré-visualização quando a pré-visualização acrescenta ou retira material. Por isso, *Mudar o nome do objeto* não a mostra.
+- Num corpo sem cor, *Converter a textura em filamentos* fica a cinzento e indica o motivo, em vez de recusar só na pré-visualização.
+- Para parâmetros, ajustes, impressora, material e desfazer, o chat indica o lugar da janela onde se faz o mesmo à mão.
+- O relatório de verificação e a verificação antes da exportação nomeiam os corpos de um ajuste em vez de mostrar um identificador interno, também um corpo entretanto removido.
+- As mensagens indicam uma característica por tipo e número, como «Furo 2», em vez de um identificador interno.
+- As medidas sob uma mensagem trazem a sua unidade, os comprimentos na unidade escolhida. A versão 0.6.0 mostrava muitas vezes só o número, como o comprimento mínimo de aresta em *Refinar as arestas*.
+- O inglês e o português distinguem agora o ressalto de um gancho, ou de um corpo abaixo da placa, da saliência na impressão.
+- Em espanhol e português, o menu, a pesquisa e o diálogo voltam a mostrar só a primeira frase de *Pino para furo* e *Orientar para impressão*.
+- Várias traduções leem-se com mais clareza, entre elas a introdução de *Criar parâmetro …*. O pino começa com maiúscula em todas as línguas.
+- As explicações nos painéis ocupam só as linhas de que o texto precisa, também num painel largo. Na versão 0.6.0 ficavam linhas vazias em algumas línguas, por exemplo sob duas faces selecionadas.
+- Um campo de seleção nomeia um valor que a sua lista não oferece, como «Face 1 · não serve aqui», e uma aresta pela orientação e posição. A versão 0.6.0 mostrava um código interno.
+- Na janela *Desbloquear o Solidon …*, *Comprar o Solidon* continua disponível num computador ativado. Os botões a cinzento indicam o motivo, e *Verificar chave* também o caminho para uma chave nova.
+- Em francês, o primeiro dia do mês escreve-se agora «1er», por exemplo «1er décembre 2026».
+- Sem controlador gráfico, por exemplo numa máquina virtual, o Solidon termina agora de forma fiável ao fechar. Na versão 0.6.0 o programa podia continuar a correr aí sem ser visto.
 
 ### Imprimir e entregar ao slicer
 
 - Se o slicer escolhido não for um programa, o Solidon diz-o agora de imediato e propõe escolher outro. Na versão 0.6.0, o fatiamento esperava que alguém fechasse uma mensagem do Windows.
+- O campo *Fluxo em pontes* mostra o valor em percentagem e aceita de 50 a 200 %. Na versão 0.6.0, mostrava 2 %, e alterá-lo enviava ao slicer 1 ou 2 %.
+- Um projeto da versão 0.6.0 com um fluxo em pontes de 1 ou 2 % abre com o valor sem definição própria, e o relatório indica-o.
+- As definições de impressão mostram por inteiro os valores do perfil do slicer, como 40 000 mm/s² de aceleração. Na versão 0.6.0, o campo mostrava o seu limite.
+- Uma largura de linha acima do dobro do bico, como 4 em vez de 0,4 mm, dá um aviso e propõe a linha limpa mais larga.
 
 ### Editar e esboçar
 
@@ -81,6 +138,31 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
 - Nos furos, vista e *Seleção* mostram a mesma alteração. Dimensão, profundidade e entrada associada ficam à frente; compensação de impressão e ajustes finos, em «Mais valores».
 - Os campos do furo e a caixa para alterar elementos iguais em conjunto explicam o seu efeito. «Compensar desvios de impressão» esclarece a correção do perfil do material.
+- No separador *Seleção*, *Aplicar* fica logo abaixo da ação aberta, «Filamento e impressão» fica em cima com a cor da atribuição, e abaixo da lista não fica espaço vazio.
+- Um furo alterado mantém o seu lugar na árvore de objetos.
+- As ações que não funcionam num elemento aparecem como «Aqui não é possível: …» com o seu motivo.
+- Ao recortar um cubo para experimentar um ajuste, a posição escolhe-se agora em *Posição do cubo*. A linha *Ponto* acima mostra-a.
+- O diálogo por trás de *Dar espessura* diz na primeira linha que dá espessura à superfície.
+- No cartão de medidas, a tecla Tab vai dos campos à caixa dos elementos iguais, depois a *Aplicar* e *Cancelar*, e volta ao início. A caixa fica agora acima dos botões.
+- Depois de *Cancelar* ou Esc no cartão de medidas, o teclado volta à vista 3D, como depois de *Aplicar*. Antes ia parar ao cartão *Objetos*.
+- No cartão de medidas, *Aplicar* fica cinzento até mudar um valor ou a caixa dos elementos iguais, e indica o primeiro campo. Antes bastava um clique num campo, sem efeito.
+- Se o cartão de medidas recusar um valor, o motivo aparece uma só vez, logo abaixo do campo. Antes a mesma frase repetia-se acima dos botões e na barra de estado.
+- Se um aviso fizer crescer o cartão de medidas, fica no lugar e só se desloca o que o limite ou a pega exigirem, com um movimento curto. Antes saltava para outro sítio.
+- Um texto que o diálogo já preenche fica selecionado ao abrir, e escrever substitui-o. Assim, *Mudar o nome do objeto* começa com o nome atual e, sem um nome novo, não se cria nenhum passo.
+- No separador *Seleção*, *Aplicar* fica cinzento até mudar um valor e indica o primeiro campo. Rodar ou duplicar com os valores predefinidos continua imediato.
+- Furar, tapar, furos oblongos e campos de furos chamam ao ajuste «Compensar desvios de impressão», como o grupo de cotas, e acrescentam a compensação de furos.
+- Após um plano de desenho ilegível, *Escolher outro plano* abre o passo com o cursor no seu esboço.
+- Quando um botão do relatório de verificação leva ao modo de esboço, o teclado fica onde o trabalho continua: no campo *Plano de desenho* se o plano faltar e, caso contrário, na vista.
+- Se junto a uma peça imprimível só restarem lascas, *Dividir em peças soltas* nomeia-as e oferece *Manter as lascas*. Antes dizia que o corpo era de uma só peça.
+- Se o raio de um arredondamento ou a largura de um chanfro for grande demais para as arestas, a mensagem oferece *Escolher outras arestas*.
+- Se uma face selecionada não servir para *Aplicar o ângulo de saída* ou *Deslocar a face*, a mensagem oferece *Escolher outras faces*.
+- O mesmo vale para *Esvaziar*, *Ranhura com vedação* e *Aplicar textura*. Se um arredondamento não puder ser reduzido a uma aresta, a mensagem oferece *Escolher outra característica*.
+- Se uma característica selecionada não servir, por exemplo um furo, uma rosca, uma câmara ou um fecho, a mensagem oferece *Escolher outra característica*.
+- Os botões *Escolher outras arestas*, *Escolher outras faces* e *Escolher outra característica* abrem o passo com o cursor no campo correspondente, também atrás de *Mais definições*.
+- Se uma mensagem não pertence a nenhum passo, como em *Contraparte da rosca*, indica o caminho numa frase, por exemplo *Escolher outra característica*, e só mostra botões que ali têm efeito.
+- Um clique em *Aplicar* numa característica durante um cálculo mantém a alteração, mesmo que a pré-visualização demore mais. Na versão 0.6.0 perdia-se sem aviso em modelos maiores.
+- Uma textura apresentada já não calcula uma pré-visualização sem alterações nem oferece *Cancelar*.
+- Um projeto com uma peça própria de uma versão anterior já não indica uma falsa alteração e oferece *Usar o estado guardado*. Na versão 0.6.0 faltava em projetos da 0.5.
 
 ## 0.6.0
 

@@ -1010,12 +1010,14 @@ def test_an_unchanged_build_volume_is_not_built_again(
 def test_every_reason_to_build_the_bed_again_still_builds_it(
     profile: Profile, qt_app: QApplication
 ) -> None:
-    """Vier Gründe, und jeder muss durchkommen (RM-124).
+    """Fünf Gründe, und jeder muss durchkommen (RM-124).
 
-    Ein anderer Bauraum, eine Platte mehr, andere Farben aus dem Thema, ein
-    anderer Renderer. Ein Wächter, der einen davon verschluckt, lässt eine
-    Kulisse stehen, die etwas anderes zeigt als die Szene.
+    Ein anderer Bauraum, eine Platte mehr, andere Farben aus dem Thema, eine
+    andere Anzeigeeinheit für die Maßzahlen (FD-92), ein anderer Renderer. Ein
+    Wächter, der einen davon verschluckt, lässt eine Kulisse stehen, die etwas
+    anderes zeigt als die Szene.
     """
+    from app.ui.labels import display_unit, set_display_unit
     from tests.render_fakes import RecordingRenderer
 
     viewport, renderer = _with_recorder(profile)
@@ -1045,6 +1047,15 @@ def test_every_reason_to_build_the_bed_again_still_builds_it(
     assert _rebuilds(viewport, renderer, lambda: viewport.set_theme("light")) == three, (
         "andere Farben"
     )
+
+    unit = display_unit()
+    try:
+        set_display_unit("in" if unit != "in" else "mm")
+        assert _rebuilds(viewport, renderer, viewport.refresh_labels) == three, (
+            "eine andere Einheit schreibt die Maßzahlen neu"
+        )
+    finally:
+        set_display_unit(unit)
 
     zweiter = RecordingRenderer(size=(900, 600))
     viewport.renderer = zweiter

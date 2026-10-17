@@ -31,19 +31,13 @@ from app.core.errors import (
     CORRECT_INPUT,
     ValidationError,
 )
-from app.core.geom import glyphs, transform
+from app.core.geom import boolean, glyphs, transform
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.attributes import with_slot
-from app.core.geom.boolean import (
-    BOOLEAN_OVERLAP,
-    BooleanKind,
-    boolean,
-    deepest,
-    fell_apart,
-    without_effect,
-)
+from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, deepest, fell_apart, without_effect
 from app.core.geom.glyphs import FONT_FOLDER
 from app.core.geom.label_layout import WRAPS, Wrap, bent_outlines, measured_radius, wrapped
-from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
+from app.core.geom.mesh import MeshData, concatenated
 from app.core.geom.transform import apply, rotation, translation
 from app.core.log import get_logger
 from app.core.registry import NAME_DOC, op_params, param, register_op
@@ -1000,7 +994,7 @@ def _sides(
     sides = [(position, normal)]
     if not both_sides:
         return sides, None
-    back = opposite_side(as_mesh_data(body), position, normal)
+    back = opposite_side(geom_mesh.as_mesh_data(body), position, normal)
     if back is None:
         return sides, _no_back_side()
     sides.append((back, (-normal[0], -normal[1], -normal[2])))
@@ -1262,7 +1256,7 @@ def label_text(ctx: OpContext) -> OpResult:
 
     mode = cast(Placement, params.mode)
     tools, answered, missing_back = _mesh_tools(params, source, mode, both_sides=params.both_sides)
-    body_mesh = as_mesh_data(source.mesh)
+    body_mesh = geom_mesh.as_mesh_data(source.mesh)
     slots = list(source.material_slots)
     if params.slot:
         # §20: Erhaben tragen die Buchstaben einen eigenen Slot in die
@@ -1279,7 +1273,7 @@ def label_text(ctx: OpContext) -> OpResult:
     letters = tools[0] if len(tools) == 1 else MeshData.of(concatenated([t.raw for t in tools]))
 
     kind: BooleanKind = "union" if mode == "raised" else "difference"
-    outcome = boolean(
+    outcome = boolean.boolean(
         kind,
         [body_mesh, *tools],
         quality=ctx.quality,
@@ -1516,10 +1510,12 @@ def inlay_text(ctx: OpContext) -> OpResult:
         inlay_features = features_of(inlay, cancelled=ctx.cancelled, known_threads=threads)
     else:
         mesh_tools, answered, _missing = _mesh_tools(params, source, "engraved", both_sides=False)
-        body_mesh = as_mesh_data(source.mesh)
+        body_mesh = geom_mesh.as_mesh_data(source.mesh)
         tool = mesh_tools[0]
-        cut = boolean("difference", [body_mesh, tool], quality=ctx.quality, cancelled=ctx.cancelled)
-        common = boolean(
+        cut = boolean.boolean(
+            "difference", [body_mesh, tool], quality=ctx.quality, cancelled=ctx.cancelled
+        )
+        common = boolean.boolean(
             "intersection",
             [body_mesh, tool],
             quality=ctx.quality,
@@ -1533,7 +1529,7 @@ def inlay_text(ctx: OpContext) -> OpResult:
         findings.extend([*cut.findings, *common.findings])
         solver = deepest([cut.solver, common.solver])
     nothing = without_effect(
-        cast(Any, source.mesh) if exact else as_mesh_data(source.mesh),
+        cast(Any, source.mesh) if exact else geom_mesh.as_mesh_data(source.mesh),
         carrier,
         "difference",
         ctx.profile,
@@ -1638,10 +1634,7 @@ class LabelBodyParams(BaseParams):
     params=LabelBodyParams,
     consumes=0,
     produces=1,
-    doc=_(
-        "Legt einen Schriftzug als eigenes Objekt an — für den Zweifarbendruck "
-        "mit zwei Dateien und für Buchstaben, die aufgeklebt werden."
-    ),
+    doc=_("Legt einen Schriftzug als eigenes Objekt an — zum Aufkleben oder für zwei Farben."),
 )
 def create_label(ctx: OpContext) -> OpResult:
     """§25: dieselben Umrisse, für sich stehend statt auf einem Teil.

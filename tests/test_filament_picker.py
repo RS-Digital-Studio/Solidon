@@ -1357,7 +1357,7 @@ def test_profile_choice_reports_an_empty_search_beside_an_existing_profile(
 
     executable = Path("prusa-slicer.exe")
     monkeypatch.setattr(module.tools, "slicer_program", lambda: executable)
-    monkeypatch.setattr(module, "detect", lambda _path: handover.SlicerSetup(executable, "prusa"))
+    monkeypatch.setattr(handover, "detect", lambda _path: handover.SlicerSetup(executable, "prusa"))
 
     def find(*_args, **_kwargs):
         if lookup == "broken":

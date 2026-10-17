@@ -63,6 +63,7 @@ from app.ui.filament_inventory import paint_spool
 from app.ui.icons import icon
 from app.ui.leash import stop_watching_the_dying
 from app.ui.panels import collapsible
+from app.ui.scroll_areas import PassingScrollArea
 from app.ui.shortcut_schemes import return_opens
 from app.ui.style import NORMAL, TIGHT, WIDE, make_large_target, make_primary, set_level
 from app.ui.theme import THEMES
@@ -976,7 +977,7 @@ class StartScreen(QWidget):
 
         # In einem Rollbereich, weil die Spalte bei einem kleinen Fenster sonst
         # unten abgeschnitten wird — und was man nicht sieht, gibt es nicht.
-        scroll = QScrollArea(self)
+        scroll = PassingScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         # Die schmale Fassung wird eine Kachelspalte und wächst nach unten.

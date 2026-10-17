@@ -439,6 +439,43 @@ def test_renderer_group_keeps_pure_cases_from_mixed_files(tmp_path: Path) -> Non
     }
 
 
+def test_a_collection_in_the_process_leaves_import_hooks_and_environment_as_they_were(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Sammlung führt jede ``conftest.py`` aus — im Prozess der Suite auch deren
+    ``tests/conftest.py`` ein zweites Mal, die einen Import-Haken vorn in ``sys.meta_path``
+    einsetzt und die Profilvariablen auf einen neuen Temp-Ordner biegt. Danach stehen
+    Haken und Umgebung wieder, wie sie standen: geändert, gelöscht und neu."""
+    monkeypatch.setenv("SOLIDON_COLLECT_PROBE_CHANGED", "before")
+    monkeypatch.setenv("SOLIDON_COLLECT_PROBE_DELETED", "before")
+    monkeypatch.delenv("SOLIDON_COLLECT_PROBE_ADDED", raising=False)
+    (tmp_path / "conftest.py").write_text(
+        "import os\nimport sys\nfrom pathlib import Path\n"
+        "class Hook:\n"
+        "    def find_spec(self, name, path=None, target=None):\n"
+        "        return None\n"
+        "sys.meta_path.insert(0, Hook())\n"
+        "os.environ['SOLIDON_COLLECT_PROBE_CHANGED'] = 'after'\n"
+        "del os.environ['SOLIDON_COLLECT_PROBE_DELETED']\n"
+        "os.environ['SOLIDON_COLLECT_PROBE_ADDED'] = 'after'\n"
+        "Path(__file__).with_name('ran').write_text('', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    windowed = tmp_path / "test_collect_probe.py"
+    windowed.write_text(
+        "import pytest\n@pytest.mark.windowed\ndef test_window(): pass\n", encoding="utf-8"
+    )
+    hooks = list(sys.meta_path)
+    environment = dict(os.environ)
+
+    found = list_windowed_tests.collect_windowed((tmp_path,), confcutdir=tmp_path)
+
+    assert (tmp_path / "ran").is_file(), "die conftest lief in der Sammlung nicht"
+    assert found == (windowed.resolve(),)
+    assert sys.meta_path == hooks
+    assert dict(os.environ) == environment
+
+
 def test_an_empty_user_filter_keeps_pytests_nonzero_exit(tmp_path: Path) -> None:
     """Die Gruppenlogik darf eine ausdrücklich leere ``-k``-Wahl nicht grün färben."""
     config = tmp_path / "pytest.ini"
@@ -1266,3 +1303,57 @@ def test_a_failing_output_target_does_not_stop_draining_the_pipe() -> None:
     console = io.BytesIO()
     runner.copy_output(Source(), Broken(), console)  # type: ignore[arg-type]
     assert console.getvalue() == b"eins\nzwei\n" and not chunks
+
+
+def test_a_collection_in_the_process_leaves_no_test_module_behind(tmp_path: Path) -> None:
+    """Die Sammlung lädt Testdateien eines Ordners ohne Paket unter ihrem bloßen Namen. Blieb
+    ``test_same_probe`` danach in ``sys.modules`` stehen, scheiterte die nächste Sammlung einer
+    gleichnamigen Datei aus einem anderen Ordner im selben Prozess an „import file mismatch“ —
+    so wurde ``test_windowed_suite_selection_follows_the_fixture_graph`` nach der Gegenprobe
+    zu RQ-1 rot. Was die Suite vorher geladen hatte, bleibt."""
+    loaded = set(sys.modules)
+    found = []
+    for folder in ("first", "second"):
+        (tmp_path / folder).mkdir()
+        probe = tmp_path / folder / "test_same_probe.py"
+        probe.write_text(
+            f"import pytest\n@pytest.mark.windowed\ndef test_{folder}(): pass\n", encoding="utf-8"
+        )
+        found.append(
+            list_windowed_tests.collect_windowed((tmp_path / folder,), confcutdir=tmp_path / folder)
+        )
+
+    assert found == [
+        ((tmp_path / "first" / "test_same_probe.py").resolve(),),
+        ((tmp_path / "second" / "test_same_probe.py").resolve(),),
+    ]
+    assert "test_same_probe" not in sys.modules
+    assert loaded <= set(sys.modules)
+
+
+@pytest.mark.parametrize("target", ["folder", "file"])
+def test_a_collection_in_the_process_leaves_no_helper_behind(tmp_path: Path, target: str) -> None:
+    """F-5: Auch ein Helfer neben den Testdateien steht nach der Sammlung unter seinem bloßen
+    Namen in ``sys.modules``. Sammelte der Prozess danach einen Ordner mit einem gleichnamigen
+    Helfer, kam der still aus dem ersten — und dort war der Fall kein Fenstertest. Was die
+    Sammlung aus den gesammelten Ordnern geladen hat, geht wieder, gleich ob ein Ordner oder eine
+    Datei genannt ist."""
+    case = (
+        "import pytest\n"
+        "from same_probe_helper import WINDOW\n"
+        "MARKS = [pytest.mark.windowed] if WINDOW else []\n"
+        "@pytest.mark.parametrize('x', [pytest.param(1, marks=MARKS)])\n"
+        "def test_case(x):\n"
+        "    assert x\n"
+    )
+    found = []
+    for folder, window in (("first", False), ("second", True)):
+        where = tmp_path / folder
+        where.mkdir()
+        (where / "same_probe_helper.py").write_text(f"WINDOW = {window}\n", encoding="utf-8")
+        (where / "test_same_helper_probe.py").write_text(case, encoding="utf-8")
+        named = where if target == "folder" else where / "test_same_helper_probe.py"
+        found.append(list_windowed_tests.collect_windowed((named,), confcutdir=where))
+
+    assert found == [(), ((tmp_path / "second" / "test_same_helper_probe.py").resolve(),)]
+    assert "same_probe_helper" not in sys.modules

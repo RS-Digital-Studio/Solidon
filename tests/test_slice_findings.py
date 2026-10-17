@@ -770,6 +770,7 @@ def test_print_check_without_geometry_is_explicitly_not_applicable() -> None:
 def test_print_check_accounts_for_mesh_preparation_failure(monkeypatch, missing, cancel) -> None:
     """Auch die Netzbereitstellung gehört zur Prüfung; ohne Grundlage beginnt sie nicht."""
     from app.core.errors import OperationCancelled
+    from app.core.geom import mesh as geom_mesh
     from app.core.slice import findings
     from app.core.types import Scene, SceneObject
 
@@ -781,7 +782,7 @@ def test_print_check_accounts_for_mesh_preparation_failure(monkeypatch, missing,
         calls.append(True)
         raise problem
 
-    monkeypatch.setattr(findings, "as_mesh_data", unavailable)
+    monkeypatch.setattr(geom_mesh, "as_mesh_data", unavailable)
     events = []
     arguments = {"check_status": events.append, "missing_basis": missing}
     scene = Scene(objects={entry.id: entry})

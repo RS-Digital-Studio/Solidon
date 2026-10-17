@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from app import branding
 from tests.helpers import pack_release, product_tree
 from tools import make_installer, sign_release
 
@@ -378,7 +379,7 @@ def _application_phase(signing: dict[str, object], **overrides: object) -> dict[
     application = sign_release.sign_application(**arguments)  # type: ignore[arg-type]
     metadata = json.loads((application.parent / sign_release.APPLICATION_METADATA).read_text())
     content = b"CI Setup:" + application.read_bytes()
-    setup_name = f"{APP}-Setup-{make_installer.APP_VERSION}.exe"
+    setup_name = f"{APP}-Setup-{branding.APP_VERSION}.exe"
     digest = hashlib.sha256(content).hexdigest()
     tools = signing["tools"]
     assert isinstance(tools, FakeTools)
@@ -502,7 +503,7 @@ def test_the_chain_signs_the_application_before_the_installer_and_binds_everythi
     assert "/n" not in sign_call and "/a" not in sign_call
     assert sign_call[-1].endswith(f"{APP}.exe")
 
-    assert result.name == f"{APP}-Setup-{make_installer.APP_VERSION}.exe"
+    assert result.name == f"{APP}-Setup-{branding.APP_VERSION}.exe"
     assert result.read_bytes().endswith(FakeTools.SIGNATURE)
     checksum = result.with_name(result.name + ".sha256").read_text(encoding="ascii")
     assert checksum == f"{_sha256(result)}  {result.name}\n"
@@ -785,7 +786,9 @@ def test_check_reads_prerequisites_without_an_archive_or_file_changes(
     def forbidden(*args: object, **kwargs: object) -> None:
         pytest.fail("--check hat die Archiv- oder Signierkette erreicht")
 
-    for name in ("verify_archive", "extract_archive", "download_handoff", "sign_file", "run"):
+    # ``run`` steht nicht in der Liste: Es hält nur Aufrufer des alten Komplettbaus an,
+    # und ``main`` ruft es auf keinem Weg — ein Verbot dort prüfte nichts (W2 d).
+    for name in ("verify_archive", "extract_archive", "download_handoff", "sign_file"):
         monkeypatch.setattr(sign_release, name, forbidden)
     before = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
     capsys.readouterr()
@@ -1202,7 +1205,7 @@ def _tag_run_api(
     monkeypatch: pytest.MonkeyPatch, annotated: bool = False
 ) -> tuple[dict[str, object], dict[str, object], dict[str, object], list[str]]:
     """Stellt die drei getrennten API-Auskünfte eines echten Release-Tags bereit."""
-    tag = f"v{make_installer.APP_VERSION}"
+    tag = f"v{branding.APP_VERSION}"
     run = {**_ci_record("123", sign_release.BUILD_WORKFLOW), "event": "push", "head_branch": tag}
     ref: dict[str, object] = {
         "ref": f"refs/tags/{tag}",
@@ -1291,7 +1294,7 @@ def test_only_the_current_real_release_tag_can_authorise_signing(
         key, value = changes[problem]
         run[key] = value
     elif problem == "branch_instead_of_tag":
-        ref["ref"] = f"refs/heads/v{make_installer.APP_VERSION}"
+        ref["ref"] = f"refs/heads/v{branding.APP_VERSION}"
     elif problem == "missing_ref":
         ref.clear()
     elif problem in {"moved_ref", "tree_ref", "invalid_sha"}:
@@ -1465,7 +1468,7 @@ def test_installer_ci_return_must_match_the_application_provenance(
     arguments = _application_phase(signing)
     tools = signing["tools"]
     assert isinstance(tools, FakeTools)
-    name = f"{APP}-Setup-{make_installer.APP_VERSION}.exe"
+    name = f"{APP}-Setup-{branding.APP_VERSION}.exe"
     if problem == "extra":
         tools.installer_files["foreign.dll"] = b"foreign"
     elif problem == "missing":
@@ -1608,7 +1611,7 @@ def test_final_signing_copy_keeps_the_previous_complete_package(
     output = signing["output"]
     assert isinstance(output, Path)
     output.mkdir()
-    result = output / f"{APP}-Setup-{make_installer.APP_VERSION}.exe"
+    result = output / f"{APP}-Setup-{branding.APP_VERSION}.exe"
     result.write_bytes(b"previous installer")
     checksum = result.with_name(result.name + ".sha256")
     checksum.write_bytes(b"previous checksum")
@@ -1640,7 +1643,7 @@ def test_final_checksum_replace_failure_removes_an_obsolete_checksum(
     output = signing["output"]
     assert isinstance(output, Path)
     output.mkdir()
-    result = output / f"{APP}-Setup-{make_installer.APP_VERSION}.exe"
+    result = output / f"{APP}-Setup-{branding.APP_VERSION}.exe"
     checksum = result.with_name(result.name + ".sha256")
     result.write_bytes(b"previous installer")
     checksum.write_bytes(b"previous checksum")

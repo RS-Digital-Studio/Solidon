@@ -43,8 +43,11 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import activation
+from app.core.registry import REGISTRY
+from app.core.types import Document, OpId
 from app.i18n import tr
 from app.ui.dialogs import licence_lock_line
+from app.ui.labels import step_number
 
 if TYPE_CHECKING:
     from app.ui.panels import HistoryPanel
@@ -153,9 +156,48 @@ def change_refusal() -> str:
     return "" if state.unlocked else licence_lock_line(state)
 
 
-def action_refusal(action_id: str) -> str:
-    """Warum diese Handlung eines Befunds oder Fehlers gerade nicht geht — oder leer."""
-    return "" if action_id in READING_ACTIONS else change_refusal()
+def action_refusal(action_id: str, *, halt: str = "", at_halt: bool = False) -> str:
+    """Warum diese Handlung eines Befunds oder Fehlers gerade nicht geht — oder leer.
+
+    ``halt`` ist der Satz des Halts (:func:`halt_line`), wenn die Kette anhält:
+    Eine ändernde Handlung geht dann nicht, und der Satz nennt den Schritt und
+    den Weg weiter (FD-104). Vor dem Klick, nicht erst als Absage danach.
+
+    **Ausgenommen sind die Wege des Halts selbst** (RA-3): ``at_halt`` sagt,
+    dass die Handlung am haltenden Befund steht (``revision.halt_finding``) —
+    demselben Befund, dessen Wege ``Session.halt_in_the_way`` als die des Halts
+    anbietet. Eine Liste von Kennungen entschied das vorher, graute am Halt
+    „braucht einen ausgeschalteten Schritt“ beide Wege und gab hinter einem
+    fremden Halt Wege frei, die die Sitzung danach ablehnte.
+    """
+    if action_id in READING_ACTIONS:
+        return ""
+    return change_refusal() or ("" if at_halt else halt)
+
+
+def halt_line(document: Document | None, stopped_at: OpId | None) -> str:
+    """Warum gerade kein neuer Schritt geht — die Kette hält an (§15.3) — oder leer.
+
+    Eine Quelle für Fensterbefehle (``MainWindow._halt_reason``) und
+    Befundhandlungen (:func:`action_refusal`): Schrittnummer und Titel wie im
+    Verlauf, und der Weg weiter steht im Prüfbericht.
+    """
+    if document is None or stopped_at is None:
+        return ""
+    step = next((entry for entry in document.ops if entry.id == stopped_at), None)
+    title = (
+        REGISTRY.get(step.op).title
+        if step is not None and REGISTRY.has(step.op)
+        else str(stopped_at)
+    )
+    return str(
+        tr(
+            "Die Kette hält an Schritt {number} ({step}) an — ein neuer Schritt dahinter "
+            "würde nicht gerechnet. Der Weg weiter steht im Prüfbericht.",
+            number=step_number(document, stopped_at),
+            step=title,
+        )
+    )
 
 
 def refused(say: Callable[[str], object]) -> bool:
@@ -232,8 +274,7 @@ def _second_text(target: QWidget | QAction) -> str:
 
 def _set_second_text(target: QWidget | QAction, text: str) -> None:
     if isinstance(target, QAction):
-        action = target
-        action.setStatusTip(text)
+        target.setStatusTip(text)
     else:
         target.setAccessibleDescription(text)
 

@@ -34,7 +34,8 @@ from app.core.errors import (
     Action,
     ValidationError,
 )
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult
@@ -423,7 +424,7 @@ def displace_image(ctx: OpContext) -> OpResult:
     """Ein Bild als Geometrie — und die Frage, ob der Drucker es hergibt."""
     params = cast(DisplaceParams, ctx.params)
     source = ctx.inputs[0]
-    before = as_mesh_data(source.mesh)
+    before = geom_mesh.as_mesh_data(source.mesh)
     field = sample_image(ctx.sources.read(params.source) if ctx.sources else b"")
 
     after = displaced(

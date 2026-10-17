@@ -62,6 +62,8 @@ def test_over_a_thousand_real_faces_keep_their_identity_through_project_lifecycl
     bereits belegte Topologie unmittelbar mitnehmen.
     """
     evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import matching
+
     monkeypatch.setattr(evaluation, "FEATURE_LIMIT_COUNT", 1056)
     load_operations()
     payload, suffix, operation = _grid_source(exact)
@@ -83,14 +85,14 @@ def test_over_a_thousand_real_faces_keep_their_identity_through_project_lifecycl
 
     active = cache()
     matched_counts: list[tuple[int, int]] = []
-    original_match = evaluation.match
+    original_match = matching.match
 
     def recorded_match(old: Any, new: Any, *args: Any, **kwargs: Any) -> Any:
         """Der Zähler belegt den echten Anschluss, das Ergebnis bleibt unverändert."""
         matched_counts.append((len(old), len(new)))
         return original_match(old, new, *args, **kwargs)
 
-    monkeypatch.setattr(evaluation, "match", recorded_match)
+    monkeypatch.setattr(matching, "match", recorded_match)
 
     def run(current: Any, remembered: ResultCache, offset: np.ndarray) -> Any:
         """Jede einzelne Fläche bleibt am gleichen Würfel und auf derselben Seite."""

@@ -61,10 +61,10 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 
 | Datei | Rolle |
 |---|---|
-| `paths.py` | Wo Nutzerdaten liegen (§38); `opened_path` (kanonischer Pfad hinter einem offenen Handle, für `scene/project` und `updates`); `lock_file()` als Lebensdauersperre für Wiederherstellung und Absturzprotokoll; `read_text_shared` liest ohne Löschsperre; `replace_file` tauscht atomar, auch gegen offene Leser unter Windows (Filamentlager, gemerkte Programme) |
+| `paths.py` | Wo Nutzerdaten liegen (§38); `opened_path` (kanonischer Pfad hinter einem offenen Handle, für `scene/project` und `updates`); `lock_file()` als Lebensdauersperre für Wiederherstellung und Absturzprotokoll; `read_text_shared` liest ohne Löschsperre; `replace_file` tauscht atomar, auch gegen offene Leser unter Windows (Filamentlager, gemerkte Programme); `PROFILE_VARIABLES` und `isolate_secrets` (Schlüsselbund als Attrappe, kein Chat-Schlüssel aus der Umgebung) für frische Profile der Werkzeuge |
 | `log.py` | Lokales Protokoll (§33.2); `install_crash_logging()` beim Prozessstart, nie beim Import; `redact_user_paths` setzt `~` für den Nutzerordner |
 | `discover.py` · `tools.py` · `install.py` | Installierte Programme außerhalb des PATH finden · externe Programme · Fehlendes aus der Anwendung nachinstallieren (§36); `workspace_for(ascii_only=True)` liefert unter Windows bei Bedarf einen geprüften 8.3-Alias oder einen privaten Ordner im Windows-Temp; `slicer_start_refused` ist die Absage beider Startwege des Slicers, wenn die gewählte Datei kein Programm ist |
-| `process.py` · `http.py` · `json_boundary.py` | Sichere Grenze für externe Prozesse (§32; `run_limited` beendet einen Prozess, der nach seinem gemeldeten Ergebnis nicht endet: `finished`, `linger`; `bind_helper` bindet die Hilfsprozesse des Netzkerns an diesen Prozess; `no_error_dialogs` startet ohne Systemfenster) · für kleine HTTP-Transporte (`apply_header_deadline`) · für JSON aus fremden Vertrauensräumen |
+| `process.py` · `http.py` · `json_boundary.py` | Sichere Grenze für externe Prozesse (§32; `run_limited` beendet einen Prozess, der nach seinem gemeldeten Ergebnis nicht endet: `finished`, `linger`; `bind_helper` bindet die Hilfsprozesse des Netzkerns an diesen Prozess; `no_error_dialogs` startet ohne Systemfenster; `start_bounded` startet in einer Grenze um den ganzen Prozessbaum, die `terminate_process_tree` mit allen Nachkommen beendet) · für kleine HTTP-Transporte (`apply_header_deadline`) · für JSON aus fremden Vertrauensräumen |
 | `network.py` | CA-Satz für macOS und Pakete ohne nutzbaren Vertrauensspeicher (Flatpak) |
 | `keyring_backend.py` | Backend-Suche des System-Schlüsselbunds, einmal je Prozess im eigenen Faden; geteilt von `backends.keys` und `activation.device`, damit keins das andere importiert |
 | `memory.py` | Was der Prozess an Arbeitsspeicher bekommt (`physical_memory`: Rechner, cgroup, Windows-Job, Adressraum) und was ein Wert davon hält (`held_bytes`: NumPy-Puffer einmal, jede Folge ganz; `held_parts`: Rest und teilbare große Behälter, damit Einträge und Schrittmerker Geteiltes einmal zählen) — für die Grenze des Ergebniscaches (RM-567); `note_released` meldet dem Sammler im Fenster, was in Ringen wartet (RM-594) |
@@ -179,13 +179,14 @@ Rechenschritt aus dem Kundenstart heraus.
 
 ## Zwei Muster, die überall wiederkehren
 
-**1. Lazy-Import in den Paket-`__init__.py`.** `scene`, `registry`, `agent`,
+**1. Lazy-Import in den Paket-`__init__.py`.** `scene`, `registry`,
 `brep`, `sketch`, `activation` und `knowledge/parts` exportieren über
 `_EXPORTS` und `app.core.lazy.install()` — gegen einen
 Deadlock: Zwei Threads, die gleichzeitig importieren, verklemmen sich sonst
 über die Modul-Locks. Ein neuer Name steht an **drei** Stellen
 (`TYPE_CHECKING`-Block, `_EXPORTS`, `__all__`); `tests/test_lazy_exports.py`
-hält sie zusammen. Der Grund des Deadlocks: **Acht Unterpakete hängen über
+hält sie zusammen. Ein Export, den niemand über das Paket bezieht, wird
+gestrichen (W6 e, `tests/test_name_lists.py`); `agent` exportiert nichts. Der Grund des Deadlocks: **Acht Unterpakete hängen über
 eifrige Importe im Kreis** — `brep`, `geom`, `ingest`, `knowledge`,
 `perceive`, `scene`, `sketch`, `slice`, mit `geom` als Nabe; weitere Kanten
 sind bewusst träge. `tests/test_core_package_direction.py` friert jede Kante

@@ -2761,12 +2761,19 @@ def test_refused_measure_commit_keeps_the_flow_and_its_fields(
     quiet_measure_flow: Any, monkeypatch: Any
 ) -> None:
     """Eine fachliche Absage verliert weder die Fläche noch die aktive Feldgruppe."""
-    controller, session, _viewport, host, group, _fields, _during = quiet_measure_flow
+    controller, session, _viewport, host, group, fields, _during = quiet_measure_flow
     before = len(session.project.document.ops)
-    surface = controller._surface
     finished: list[int] = []
     host.finished.connect(finished.append)
     host.begin_edit()
+    # Erst eine Änderung gibt Übernehmen frei (FD-31); die Vorschau gilt als fertig.
+    fields["diameter"].set_value_mm(6.0)
+    assert session.wait_for_idle(30_000)
+    for _ in range(20):
+        QApplication.processEvents()
+    host.block_apply(None)
+    surface = controller._surface
+    assert controller._measure_accept.isEnabled(), controller._measure_accept.toolTip()
     monkeypatch.setattr(host, "_accepted", lambda _values: False)
     controller._measure_accept.click()
     assert controller.active and host.begun
@@ -2861,10 +2868,15 @@ def test_measure_field_replacement_removes_the_old_editor_filters(quiet_measure_
 
 
 @pytest.mark.parametrize("size,point_size", [((900, 650), 14), ((1200, 850), 22)])
-def test_measure_group_keeps_scope_below_its_controls_and_inside_the_view(
+def test_measure_group_keeps_scope_above_its_buttons_and_inside_the_view(
     quiet_measure_flow: Any, size: tuple[int, int], point_size: int
 ) -> None:
-    """Große Schrift und lange Gruppenbeschriftung verdrängen keine erreichbaren Knöpfe."""
+    """Große Schrift und lange Gruppenbeschriftung verdrängen keine erreichbaren Knöpfe.
+
+    Der Sammelhaken steht über *Übernehmen* und *Abbrechen*: Er sagt, was der
+    Knopf trifft, und Auge und Tabulatortaste lesen ihn davor — wie im
+    Merkmalfenster (FD-86).
+    """
     from PySide6.QtCore import QPoint, QRect
     from PySide6.QtWidgets import QCheckBox
 
@@ -2894,7 +2906,7 @@ def test_measure_group_keeps_scope_below_its_controls_and_inside_the_view(
             assert not first.geometry().intersects(second.geometry())
     button = controller._measure_cancel
     assert (
-        scope.mapTo(viewport, QPoint()).y() > button.mapTo(viewport, QPoint(0, button.height())).y()
+        scope.mapTo(viewport, QPoint(0, scope.height())).y() < button.mapTo(viewport, QPoint()).y()
     )
     for child in (scope, controller._measure_accept, button):
         rectangle = QRect(child.mapTo(controller._measure_box, QPoint()), child.size())
@@ -4167,8 +4179,8 @@ def test_cancel_below_apply_discards_what_waits(qt_app: QApplication) -> None:
     try:
         panel = window.feature_panel
         _, _hole = _a_selected_hole(window)
-        # ``isHidden``: die Knopfzeile hängt unter dem Rollbereich des Docks
-        # und nicht mehr am Panel (13.09.2026, ``FeaturePanel.footer``).
+        # ``isHidden``: Gefragt ist, ob der Knopf weggenommen ist, nicht ob die
+        # Elternkette gerade sichtbar ist (``FeaturePanel._apply_stands``).
         assert panel._cancel.isHidden(), "der Abschluss steht ausschließlich an den Maßen"
         _hole, flow = _a_pulled_slot(window)
         assert panel._cancel.isHidden() and panel._apply.isHidden()

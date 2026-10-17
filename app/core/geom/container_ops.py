@@ -8,8 +8,8 @@ from collections.abc import Sequence
 from typing import Any, cast
 
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, ValidationError
-from app.core.geom import transform
-from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest
+from app.core.geom import boolean, mesh, transform
+from app.core.geom.boolean import BOOLEAN_OVERLAP, deepest
 from app.core.geom.lid import (
     CAP_THREAD_FEATURE,
     CAVITY_FEATURE,
@@ -24,7 +24,7 @@ from app.core.geom.lid import (
     screw_lid,
 )
 from app.core.geom.lid_hinge import HINGE_HOLE_FEATURE, HINGE_PIN_FEATURE, barrel_halves
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, pin
 from app.core.knowledge.parts.containers import rounded_prism
@@ -365,9 +365,9 @@ class _Build:
         if len(forms) == 1:
             return forms[0]
         if isinstance(forms[0], MeshData):
-            result = boolean(
+            result = boolean.boolean(
                 cast(Any, kind),
-                [as_mesh_data(form) for form in forms],
+                [mesh.as_mesh_data(form) for form in forms],
                 # Die Güte kürzt die Kette, nicht der Aufruf: Dieselben Stufen
                 # wie ``DRAFT_CHAIN``, aber als ``cut_short`` — dann rechnet die
                 # Auswertung im Fenster einen gescheiterten Schritt voll nach (FD-6).

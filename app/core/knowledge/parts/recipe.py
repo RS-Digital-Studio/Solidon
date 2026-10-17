@@ -63,6 +63,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
+from app.core import paths
 from app.core.errors import (
     CANCEL,
     CORRECT_INPUT,
@@ -72,7 +73,7 @@ from app.core.errors import (
 )
 from app.core.knowledge.parts.registry import PartRegistry, PartSpec
 from app.core.log import get_logger
-from app.core.paths import ensure_dir, user_parts_dir
+from app.core.paths import ensure_dir
 from app.core.registry import Registry, op_params, param
 from app.core.scene.migrations import migrate
 from app.core.scene.serialise import document_from_data, document_to_data, has_lone_surrogate
@@ -632,15 +633,34 @@ def _report_from(data: Any) -> Any:
     )
 
 
-def fingerprint(recipe: Recipe) -> str:
+def fingerprint(recipe: Recipe, *, as_format: int | None = None) -> str:
     """Der Hash über die kanonischen Daten — er **ist** die Version (§24.4).
 
     Kanonisch heißt: sortierte Schlüssel, keine Zeitstempel, nichts
     Maschinenabhängiges. Zwei gleiche Rezepte geben denselben Wert, jede
     Änderung einen anderen — und der Vergleich beim Öffnen eines Projekts ist
     damit derselbe wie für jeden anderen Baustein.
+
+    **Und keine Formatversion** (FD-212). Ein Rezept wird beim Lesen migriert;
+    stand die Formatversion seines Dokuments im Hash, war nach jeder
+    Formaterhöhung jedes Rezept ein anderes: Ein Projekt aus 0.6.0 meldete
+    seinen unveränderten eigenen Baustein als geändert und fand den
+    mitgereisten gespeicherten Stand nicht mehr. ``as_format`` rechnet die
+    Formel bis Format 53 nach — mit der Formatversion, die das Dokument beim
+    Speichern hatte —, damit ein so gespeicherter Abdruck gültig bleibt
+    (``check.stamp_means``).
     """
-    canon = json.dumps(to_data(recipe), sort_keys=True, ensure_ascii=False)
+    data = to_data(recipe)
+    pending = [data]
+    while pending:
+        current = pending.pop()
+        if as_format is None:
+            current.pop("format_version", None)
+            current["document"].pop("format_version", None)
+        else:
+            current["document"]["format_version"] = as_format
+        pending.extend(current["dependencies"].values())
+    canon = json.dumps(data, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()
 
 
@@ -986,7 +1006,7 @@ def _default_profile() -> Profile:
 
 def recipes_dir(base: Path | None = None) -> Path:
     """Wo die Rezepte liegen: ein Unterordner des Bausteinordners."""
-    return (base or user_parts_dir()) / RECIPES_DIRNAME
+    return (base or paths.user_parts_dir()) / RECIPES_DIRNAME
 
 
 def _encoded_file(recipe: Recipe) -> bytes:
@@ -1378,11 +1398,11 @@ def _prepare_binding(
     owned = set(part_ops.operation_names(recipe.name, parts))
     prepared_parts = PartRegistry()
     prepared_operations = Registry()
-    for part_spec in parts.all():
+    for part_spec in parts.in_registration_order():
         if replace_existing and part_spec.name == recipe.name:
             continue
         prepared_parts.register(part_spec)
-    for operation_spec in operations.all():
+    for operation_spec in operations.in_registration_order():
         if replace_existing and operation_spec.name in owned:
             continue
         prepared_operations.register(operation_spec)
@@ -1410,10 +1430,10 @@ def _prepare_removal(
     owned = set(part_ops.operation_names(name, parts))
     prepared_parts = PartRegistry()
     prepared_operations = Registry()
-    for part_spec in parts.all():
+    for part_spec in parts.in_registration_order():
         if part_spec.name != name:
             prepared_parts.register(part_spec)
-    for operation_spec in operations.all():
+    for operation_spec in operations.in_registration_order():
         if operation_spec.name not in owned:
             prepared_operations.register(operation_spec)
     return _PreparedBinding(prepared_parts, prepared_operations)

@@ -9,6 +9,7 @@ Bild. Ob die Farben auf dem richtigen Dreieck landen, entscheidet der Kern, und
 from __future__ import annotations
 
 import dataclasses
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
@@ -22,7 +23,7 @@ from app.core.perceive import maps
 from app.core.types import Action, Finding
 from app.i18n import TranslatableText, format_decimal, tr
 from app.ui.analysis_bar import MAP_ORDER, AnalysisBar, LayerBar, MapLegend
-from app.ui.labels import feature_label, length
+from app.ui.labels import count_text, feature_label, length
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -108,7 +109,10 @@ def test_report_navigation_preserves_a_started_draft_before_any_side_effect(
         _quiet_command_allowed=lambda: MainWindow._quiet_command_allowed(state),
         _say_the_change_comes_first=lambda: events.append("refused"),
         _object_of=lambda error: MainWindow._object_of(state, error),
-        viewport=SimpleNamespace(clear_finding_mark=lambda: events.append("clear_mark")),
+        viewport=SimpleNamespace(
+            clear_finding_mark=lambda: events.append("clear_mark"),
+            reset_camera=lambda: events.append("frame"),
+        ),
         history_panel=SimpleNamespace(
             point_at=lambda op_id: events.append(("history", op_id)) or False
         ),
@@ -841,7 +845,8 @@ def test_a_map_request_discards_old_colours_and_late_replies(
     assert host.viewport.analysis_map is None, "the previous map belongs to another kind"
     previous.tooLarge.emit(120000)
     assert host.viewport.analysis_map is None
-    assert "120000" in host.analysis_bar.legend.note.text()
+    # In Dreiergruppen, wie jede Anzahl der Oberfläche (FD-124).
+    assert count_text(120000) in host.analysis_bar.legend.note.text()
 
     newest = maps.AnalysisMap(
         kind="overhang", title="Überhang", values=(0.0,) * 12, unit="°", low=0.0, high=90.0
@@ -2236,7 +2241,16 @@ def test_the_menu_entry_opens_that_step(window: MainWindow) -> None:
     assert window.session.wait_for_idle(60_000), "die Vorschau rechnet nach einer Minute noch"
     for _ in range(40):
         QApplication.processEvents()
-    assert dialog.can_accept(), dialog.toolTip()
+    # Ein Schritt im Änderungsweg wartet auf eine Änderung (FD-99): erst die
+    # Länge ändern, dann rechnen lassen und übernehmen.
+    length = dialog._editors["length"]
+    length.set_value(float(length.value()) + 1.0)
+    deadline = time.monotonic() + 60
+    while not dialog.can_accept() and time.monotonic() < deadline:
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(60_000)
+        time.sleep(0.01)
+    assert dialog.can_accept(), dialog._accept_button.toolTip()
     dialog.accept()
     assert window.session.wait_for_idle(60_000)
     document = window.session.project.document
@@ -2686,15 +2700,16 @@ def test_a_finding_without_values_stays_as_it_is() -> None:
     assert _line_for(finding) == "Doppelte Punkte verschweißt."
 
 
-def test_an_orphaned_feature_keeps_its_internal_name_in_details_only(
+def test_an_orphaned_feature_is_named_without_its_identifier(
     qt_app: QApplication,
 ) -> None:
-    """Einsteiger lesen Wirkung und Ausweg, die Diagnose behält die Kennung.
+    """Einsteiger lesen Wirkung und Ausweg; die Kennung steht nur in den Werten.
 
     „Merkmal face_3 hat keinen Nachfolger" beschreibt die interne Zuordnung
-    statt der Folge für den Nutzer. Die Kennung bleibt im Tooltip und in der
-    zugänglichen Beschreibung erreichbar; die sichtbare Zeile nennt Körper,
-    Wirkung, nächsten Klick und dass die Bearbeitung erhalten ist.
+    statt der Folge für den Nutzer. Tooltip und zugängliche Beschreibung nennen
+    das Merkmal mit Art und Nummer (FD-186), die Kennung bleibt in den Werten;
+    die sichtbare Zeile nennt Körper, Wirkung, nächsten Klick und dass die
+    Bearbeitung erhalten ist.
     """
     from app.core.scene import EvaluationResult
     from app.core.types import Report, Scene
@@ -2726,16 +2741,20 @@ def test_an_orphaned_feature_keeps_its_internal_name_in_details_only(
         assert "Bearbeitung bleibt erhalten" in item.text()
         assert "Merkmal" not in item.text() and "Nachfolger" not in item.text()
         assert "face_3" not in item.text(), "interne Kennungen sind keine Kundensprache"
-        assert "face_3" in item.toolTip()
-        assert "face_3" in str(item.data(Qt.ItemDataRole.AccessibleDescriptionRole))
+        # Die Kurzhilfe nennt das Merkmal mit Art und Nummer (FD-186); die
+        # Kennung bleibt in den Werten für Agent und Handler.
+        assert "Fläche 3" in item.toolTip() and "face_3" not in item.toolTip()
+        shown: Finding = item.data(Qt.ItemDataRole.UserRole)
+        assert shown.values["feature"] == "face_3", "die Kennung bleibt im Befund"
+        assert "Fläche 3" in str(item.data(Qt.ItemDataRole.AccessibleDescriptionRole))
     finally:
         panel.deleteLater()
 
 
-def test_a_mended_defect_keeps_its_internal_name_in_details_only(
+def test_a_mended_defect_is_named_without_its_identifier(
     qt_app: QApplication,
 ) -> None:
-    """Eine geschlossene Fehlstelle ist Wirkung, nicht `edge_loop_7`."""
+    """Eine geschlossene Fehlstelle ist Wirkung, nicht `edge_loop_7` (FD-186)."""
     from app.core.scene import EvaluationResult
     from app.core.types import Report, Scene
     from app.ui.panels import ReportPanel
@@ -2758,8 +2777,11 @@ def test_a_mended_defect_keeps_its_internal_name_in_details_only(
         item = panel.list.item(0)
         assert "Halter" in item.text()
         assert "Merkmal" not in item.text() and "edge_loop_7" not in item.text()
-        assert "edge_loop_7" in item.toolTip()
-        assert "edge_loop_7" in str(item.data(Qt.ItemDataRole.AccessibleDescriptionRole))
+        # Mit Art und Nummer wie in der Merkmalsliste (FD-186).
+        assert "Offene Kante 7" in item.toolTip() and "edge_loop_7" not in item.toolTip()
+        assert "Offene Kante 7" in str(item.data(Qt.ItemDataRole.AccessibleDescriptionRole))
+        shown: Finding = item.data(Qt.ItemDataRole.UserRole)
+        assert shown.values["feature"] == "edge_loop_7", "die Kennung bleibt im Befund"
     finally:
         panel.deleteLater()
 
@@ -3949,7 +3971,7 @@ def test_the_layer_worker_reuses_the_report_cache_and_invalidates_changed_inputs
 
     from app.core.geom.mesh import MeshData
     from app.core.knowledge import print_settings, profiles
-    from app.core.slice import findings
+    from app.core.slice import analysis as slice_analysis
     from app.core.types import SliceResult
     from app.ui.main_window import _SliceWorker
 
@@ -3963,7 +3985,7 @@ def test_the_layer_worker_reuses_the_report_cache_and_invalidates_changed_inputs
         calls.append((height, kwargs["first_layer_height"], body))
         return SliceResult(layers=(), support_volume=float(len(calls)), first_layer_area=0.0)
 
-    monkeypatch.setattr(findings, "slice_body", measure)
+    monkeypatch.setattr(slice_analysis, "slice_body", measure)
     angle, wall = 45.0, 0.84
 
     def run() -> SliceResult:
@@ -4011,6 +4033,7 @@ def test_a_cancelled_layer_worker_never_publishes_a_result(
 
     from app.core.geom.mesh import MeshData
     from app.core.knowledge import print_settings, profiles
+    from app.core.slice import findings as slice_findings
     from app.core.types import SliceResult
     from app.ui import main_window as module
 
@@ -4024,7 +4047,7 @@ def test_a_cancelled_layer_worker_never_publishes_a_result(
         cancelled.cancel()
         return SliceResult(layers=(), support_volume=0.0, first_layer_area=0.0)
 
-    monkeypatch.setattr(module, "analysed", measure)
+    monkeypatch.setattr(slice_findings, "analysed", measure)
     values = []
     worker.done.connect(values.append)
     if when == "before":
@@ -4115,8 +4138,8 @@ def test_the_layer_analysis_takes_both_limits_from_the_material(
     größte Mindestwand und den kleinsten Winkel der verwendeten Materialien.
     """
     from app.core.knowledge import profiles as profile_module
+    from app.core.slice import findings as slice_findings
     from app.core.types import SliceResult
-    from app.ui import main_window as module
 
     seen: list[tuple[float | None, float | None]] = []
 
@@ -4125,7 +4148,7 @@ def test_the_layer_analysis_takes_both_limits_from_the_material(
         seen.append((overhang_angle, bridge_from))
         return SliceResult(layers=(), support_volume=0.0, first_layer_area=0.0)
 
-    monkeypatch.setattr(module, "analysed", measure)
+    monkeypatch.setattr(slice_findings, "analysed", measure)
     entry = window.session.last_result.scene.objects["obj_1"]
     wall, angle = profile_module.analysis_limits(window.session.profile, entry)
 
@@ -4281,18 +4304,18 @@ def test_the_bed_carries_numbers_not_just_lines() -> None:
     Als reine Rechnung geprüft: offscreen gibt es keinen Renderer, und ein
     Test, der sich dort überspringt, prüft nie etwas.
     """
-    from app.ui.viewport import BED_SCALE_STEP, bed_scale
+    from app.ui.bed_scale import BED_SCALE_STEP, bed_scale
 
-    marks = bed_scale(256.0, 256.0)
+    marks = bed_scale(256.0, 256.0, "mm")
     labels = [text for _point, text in marks]
 
     assert "50" in labels
     assert "100" in labels
     # 128 mm je Seite, alle 50 mm: Null, 50 und 100 in beide Richtungen — je
-    # Kante fünf Zahlen.
+    # Kante fünf Zahlen. Die größte der Vorderkante trägt die Einheit (FD-92).
     assert len(marks) == 2 * 5
 
-    steps = sorted({float(text) for text in labels})
+    steps = sorted({float(text.split()[0]) for text in labels})
     assert steps == [-2 * BED_SCALE_STEP, -BED_SCALE_STEP, 0.0, BED_SCALE_STEP, 2 * BED_SCALE_STEP]
 
 
@@ -4309,9 +4332,9 @@ def test_the_bed_scale_signs_its_numbers_and_puts_zero_in_the_middle() -> None:
     Geprüft wird beides — dass die Null dort liegt, wo sie hingehört, und dass
     die negative Seite ihr Vorzeichen behält.
     """
-    from app.ui.viewport import bed_scale
+    from app.ui.bed_scale import bed_scale
 
-    marks = bed_scale(220.0, 220.0)
+    marks = bed_scale(220.0, 220.0, "mm")
     # Die Marken der Vorderkante liegen weiter vorn als seitlich, die der linken
     # Kante umgekehrt — das trennt die beiden Kanten, ohne den Abstand zu kennen,
     # mit dem sie vor der Platte stehen.
@@ -4325,20 +4348,22 @@ def test_the_bed_scale_signs_its_numbers_and_puts_zero_in_the_middle() -> None:
         )
 
     assert "-100" in [text for _point, text in marks], "die negative Seite behält ihr Vorzeichen"
-    assert [text for _point, text in front].count("100") == 1, "keine Zahl steht zweimal je Kante"
+    front_values = [text.split()[0] for _point, text in front]
+    assert front_values.count("100") == 1, "keine Zahl steht zweimal je Kante"
 
 
 def test_a_small_bed_still_gets_a_scale() -> None:
     """Und eine Platte, die kleiner ist als ein Schritt, bekommt wenigstens
     ihren Nullpunkt — den Bezug, an dem eine Skala anfängt (und unter VTK, bis
     06.09.2026, stolperte der Renderer über eine leere Beschriftungsliste)."""
-    from app.ui.viewport import bed_scale
+    from app.ui.bed_scale import bed_scale
 
-    marks = bed_scale(60.0, 60.0)
+    marks = bed_scale(60.0, 60.0, "mm")
     assert marks
     # Je Kante ihre Null, seit die Skala vorzeichenbehaftet ist — vorher war es
-    # eine einzige in der Ecke, und die lag am falschen Ort.
-    assert [text for _point, text in marks] == ["0", "0"]
+    # eine einzige in der Ecke, und die lag am falschen Ort. Die der
+    # Vorderkante trägt die Einheit (FD-92).
+    assert [text for _point, text in marks] == ["0 mm", "0"]
 
 
 def test_a_shadow_falls_beside_the_body_not_under_it() -> None:
@@ -4880,8 +4905,18 @@ def test_a_flood_of_identical_findings_becomes_one_line_that_counts_them(
 
         row = texts.index(bundle[0])
         tooltip = panel.list.item(row).toolTip()
-        assert "hole_0" in tooltip, "die Betroffenen bleiben erreichbar"
+        # Die Betroffenen mit Art und Nummer, ohne Kennung (FD-186, L2).
+        assert "Bohrung 0" in tooltip, "die Betroffenen bleiben erreichbar"
+        assert "hole_" not in tooltip, "keine Kennung in der Kurzhilfe"
         assert "+103" in tooltip, "und der Rest hinter den ersten fünfzehn wird beziffert"
+        # **Höchstens fünfzehn Mitglieder, ohne den Satz je Mitglied** (FD-196):
+        # 118 Waisen ergaben 20 179 Zeichen, und ein Bildschirmleser las den
+        # ganzen Satz 118-mal.
+        sentence = "Formdetails sind nach diesem Schritt nicht mehr automatisch"
+        assert tooltip.count(sentence) <= 1, tooltip.count(sentence)
+        assert len(tooltip) < 2000, len(tooltip)
+        described = str(panel.list.item(row).data(Qt.ItemDataRole.AccessibleDescriptionRole))
+        assert described == tooltip
 
         stored: Finding = panel.list.item(row).data(Qt.ItemDataRole.UserRole)
         assert stored.values.get("count") == 118
@@ -5681,41 +5716,44 @@ def test_the_object_tree_gives_the_names_the_larger_half(qt_app: QApplication) -
 
     Den Deckel nur abzuschalten kippt es um: dann nimmt die Maßspalte ihre
     Inhaltsbreite, und bei „60 x 40 x 12 mm" waren das 186 von 258 — 70 für den
-    Namen. Geprüft wird deshalb das Verhältnis und nicht der Schalter: Der Name
-    behält die Mehrheit, das Maß bekommt höchstens seinen Anteil, und über die
-    Breite hinweg bleibt beides so.
+    Namen. Das war die synthetische Schrift von offscreen; geprüft wird in der
+    Prüfschrift, und dort steht das Maß ganz (FD-20), der Name behält die
+    Mehrheit, über die Breite hinweg.
     """
     from PySide6.QtWidgets import QTreeWidgetItem
 
-    from app.ui.panels import MEASURE_SHARE, ObjectTree
+    from app.ui.panels import ObjectTree
+    from tests.bundled_fonts import bundled_font
 
-    panel = ObjectTree()
-    try:
-        panel.resize(258, 400)
-        panel.show()
-        for name, size in (
-            ("Gehäuseboden", "60 x 40 x 12 mm"),
-            ("Gehäuseboden (Kopie) Prüfstück", "20 x 20 x 5 mm"),
-        ):
-            panel.tree.addTopLevelItem(QTreeWidgetItem([name, size]))
-        QApplication.processEvents()
+    with bundled_font(qt_app, 9):
+        panel = ObjectTree()
+        try:
+            panel.resize(258, 400)
+            panel.show()
+            for name, size in (
+                ("Gehäuseboden", "60 x 40 x 12 mm"),
+                ("Gehäuseboden (Kopie) Prüfstück", "20 x 20 x 5 mm"),
+            ):
+                panel.tree.addTopLevelItem(QTreeWidgetItem([name, size]))
+            QApplication.processEvents()
 
-        header = panel.tree.header()
-        assert not header.stretchLastSection(), (
-            "der Deckel überstimmt jede Einstellung der letzten Spalte"
-        )
-        for width in (258, 420, 700):
-            panel.resize(width, 400)
-            QApplication.processEvents()
-            panel._size_columns()
-            QApplication.processEvents()
-            names, measures = header.sectionSize(0), header.sectionSize(1)
-            assert names > measures, f"bei {width} px: Name {names}, Maß {measures}"
-            assert measures <= int(panel.tree.viewport().width() * MEASURE_SHARE) + 1, (
-                f"bei {width} px nimmt die Maßspalte {measures} und damit mehr als ihren Anteil"
+            header = panel.tree.header()
+            assert not header.stretchLastSection(), (
+                "der Deckel überstimmt jede Einstellung der letzten Spalte"
             )
-    finally:
-        panel.deleteLater()
+            for width in (258, 420, 700):
+                panel.resize(width, 400)
+                QApplication.processEvents()
+                panel._size_columns()
+                QApplication.processEvents()
+                names, measures = header.sectionSize(0), header.sectionSize(1)
+                assert names > measures, f"bei {width} px: Name {names}, Maß {measures}"
+                assert measures >= panel.tree.sizeHintForColumn(1), (
+                    f"bei {width} px steht das Maß in {measures} von "
+                    f"{panel.tree.sizeHintForColumn(1)} Punkten"
+                )
+        finally:
+            panel.deleteLater()
 
 
 def test_the_layer_readout_follows_the_unit(qt_app: object) -> None:

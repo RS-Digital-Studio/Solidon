@@ -2359,15 +2359,18 @@ def test_an_authentication_error_marks_the_backend_and_names_it(
     assert backend.available is False, "derselbe Schlüssel wird nicht noch einmal geschickt"
 
 
-def test_the_chat_falls_back_to_the_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_chat_falls_back_to_the_local_model(
+    monkeypatch: pytest.MonkeyPatch,
+    unpatched_backends: Callable[[], tuple[llm.LLMBackend, ...]],
+) -> None:
     """Der Sinn des Ganzen: Nach der Ablehnung wählt der Chat das nächste
     Modell, statt bis zum Neustart denselben Fehler zu melden."""
     monkeypatch.setattr(keys, "read", lambda account: "sk-abgelaufen")
     monkeypatch.setattr(llm.OllamaBackend, "available", property(lambda self: True))
     # ``conftest`` leert die Backend-Liste, damit die Suite nicht nach einem
     # echten Modell auf dieser Maschine sucht. Genau die Liste ist hier die
-    # Sache — das Original steht unter eigenem Namen bereit.
-    monkeypatch.setattr(llm, "backends", llm.unpatched_backends)
+    # Sache — das Original reicht die Fixture ``unpatched_backends``.
+    monkeypatch.setattr(llm, "backends", unpatched_backends)
     assert llm.first_available() is not None
     assert llm.first_available().id == "anthropic"
 
@@ -3431,8 +3434,9 @@ def test_the_mesh_transport_stops_reading_an_endless_answer(
     """
     from app.core.backends import mesh
     from app.core.backends.mesh import GenerationFailed
+    from app.core.ingest import loader
 
-    monkeypatch.setattr(mesh, "MAX_ANSWER_BYTES", 4096)
+    monkeypatch.setattr(loader, "MAX_FILE_BYTES", 4096)
     monkeypatch.setattr(mesh, "opener_for", _mesh_opener(Endless(64 * 1024)))
 
     with pytest.raises(GenerationFailed) as gefangen:

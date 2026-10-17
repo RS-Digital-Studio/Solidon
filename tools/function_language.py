@@ -5,19 +5,89 @@
 Protokoll unter ``surfaces/``. Vor jeder Fläche steht ein Anfangsvermerk in
 ``bench.json``; ein Vermerk ohne Ergebnis heißt, der vorige Lauf starb dort, und
 die Fläche wird mit diesem Fehler übersprungen (Review M14).
+
+**Jede Fläche beginnt im Ausgangszustand eines frischen Starts** (FD-132): Eine
+Fläche kann der nächsten einen aufgeklappten Abschnitt, den sich die Anwendung
+merkt, oder eine gerollte Karte hinterlassen; der Weg dorthin erschien dann
+kürzer, als er ist. Vor jeder Fläche steht der Prüfbericht vorn, wie nach dem
+Öffnen eines Projekts, und was sich darüber hinaus vom Ausgangszustand
+unterscheidet (:func:`ground_state`), beendet den Prozess vor dieser Fläche:
+``file_acceptance.run`` startet den Fall neu (``function_cases.RESTART_EXIT``), mit
+frischem Profil, und er nimmt seine Flächen ab dieser wieder auf.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from tools.function_bench import FunctionFlow
 from tools.function_machine import MOST_UNSTICKS, SETTLE_MS, Step
 from tools.function_protocol import empty_protocol, safe_name, unmeasured
 from tools.function_setup import Variant, place_window
 from tools.function_surface import without_way
+
+#: Wie viele Ereignisrunden ein Fenster höchstens braucht, um nach vorn zu kommen.
+FORWARD_ROUNDS: Final = 50
+
+#: *Zurück in Solidon* in einem Reiter mit eigenem Fenster: Escape schließt es nicht,
+#: der Kunde holt den Reiter über diesen Knopf zurück (FD-175).
+RETURN_TARGET: Final = "tabs.return"
+
+
+def has_return(widget: Any) -> bool:
+    """Ob das Fenster einen sichtbaren Rückweg-Knopf :data:`RETURN_TARGET` trägt."""
+    from PySide6.QtWidgets import QWidget
+
+    from app.core import guides
+
+    return isinstance(widget, QWidget) and any(
+        child.isVisible() and child.property(guides.TARGET_PROPERTY) == RETURN_TARGET
+        for child in widget.findChildren(QWidget)
+    )
+
+
+def ground_state(window: Any) -> tuple[Any, ...]:
+    """Was eine Fläche der nächsten hinterlassen kann (FD-132).
+
+    Der Reiter vorn in der rechten Karte, die Abschnitte, deren Zustand sich die
+    Anwendung merkt (``UiSettings.open_sections``), und die Rolllage jedes
+    Rollbereichs in den Karten. Nach dem Öffnen einer Szene ist nichts gewählt;
+    was hier abweicht, stammt von einer vorigen Fläche.
+    """
+    from PySide6.QtWidgets import QAbstractScrollArea, QWidget
+
+    from app.ui.overlay import CARD
+
+    cards = [widget for widget in window.findChildren(QWidget) if widget.objectName() == CARD]
+    rolled = tuple(
+        area.verticalScrollBar().value()
+        for card in cards
+        for area in card.findChildren(QAbstractScrollArea)
+    )
+    page = window.right.currentWidget()
+    return (
+        type(page).__name__ if page is not None else "",
+        tuple(sorted(window.settings.open_sections.items())),
+        rolled,
+    )
+
+
+def bring_forward(widget: Any) -> None:
+    """Holt ein Fenster nach vorn, wie der Kunde, der es anklickt, bevor er eine Taste drückt."""
+    import time
+
+    from PySide6.QtWidgets import QApplication
+
+    if QApplication.activeWindow() is widget:
+        return
+    widget.activateWindow()
+    for _round in range(FORWARD_ROUNDS):
+        QApplication.processEvents()
+        if QApplication.activeWindow() is widget:
+            return
+        time.sleep(0.01)
 
 
 class LanguageFlow:
@@ -50,8 +120,28 @@ class LanguageFlow:
         self.variant = variant
         self.scenes = scenes
         self.version = version
+        #: Der Ausgangszustand nach dem ersten Öffnen in diesem Prozess (FD-132).
+        self.pristine: tuple[Any, ...] | None = None
 
-    def run(self) -> None:
+    def grounded(self, flow: FunctionFlow) -> bool:
+        """Steht die Fläche im Ausgangszustand eines frischen Starts? (FD-132)
+
+        Nach dem Öffnen eines Projekts steht der Prüfbericht vorn; ließ die vorige
+        Fläche die Auswahl vorn, holt ihn ein Klick auf seinen Reiter zurück, wie
+        der Kunde es täte (Phase ``ausgangszustand``, kein Teil des Wegs).
+        Weicht danach etwas vom ersten Öffnen dieses Prozesses ab, ist die Fläche
+        nicht im Ausgangszustand.
+        """
+        right, report = self.window.right, self.window.report
+        if right.isVisible() and right.currentWidget() is not report:
+            flow.run_steps("ausgangszustand", [flow.walker.step("report", stop_before_target=True)])
+        state = ground_state(self.window)
+        if self.pristine is None:
+            self.pristine = state
+        return state == self.pristine
+
+    def run(self) -> bool:
+        """Die Flächen der Zeilen; ``False``, wenn vor einer ein neuer Prozess nötig ist."""
         from tools.file_acceptance import write_json
 
         surfaces = self.folder / "surfaces"
@@ -100,6 +190,14 @@ class LanguageFlow:
                 out=self.folder.parent.parent,
             )
             if flow.reset():
+                if not self.grounded(flow):
+                    # Die vorige Fläche hat den Ausgangszustand verändert: Diese
+                    # beginnt in einem neuen Prozess (FD-132), nichts ist gemessen.
+                    self.bench["restart_before"] = str(row.get("id"))
+                    self.bench["surfaces_done"] = done
+                    self.bench["surface_started"] = None
+                    self.persist()
+                    return False
                 flow.phase_surface()
             cleaned = self.close_surfaces(flow)
             write_json(path, protocol)
@@ -112,7 +210,9 @@ class LanguageFlow:
                 self.persist()
                 raise RuntimeError("Fenster der vorigen Fläche blieb offen; den Rückweg prüfen")
         self.bench["surfaces_done"] = done
+        self.bench.pop("restart_before", None)
         self.persist()
+        return True
 
     def close_surfaces(self, flow: FunctionFlow) -> bool:
         """Rückweg vor dem nächsten Projekt, auch aus nichtmodalen Fenstern.
@@ -120,31 +220,48 @@ class LanguageFlow:
         Der Schrittautomat löst nur noch laufende modale Aufrufe mit Escape.
         Ein nichtmodaler Generator kehrt sofort zurück und blieb deshalb über
         Projektwechsel sichtbar. Er wird über dieselbe Kundentaste geschlossen;
-        bleibt ein Fenster stehen, beginnt keine weitere Messung darin.
+        bleibt ein Fenster stehen, beginnt keine weitere Messung darin. Escape
+        drückt der Kunde in dem Fenster, das vorn steht: Steht das Hauptfenster
+        vorn, nimmt seine Taste *Auswahl leeren* den Druck, und der Dialog
+        bleibt offen — es wird erst nach vorn geholt. Ein Reiter in eigenem
+        Fenster geht nicht mit Escape zu; ihn holt *Zurück in Solidon* zurück.
         """
         from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
+        from shiboken6 import isValid
 
+        from app.ui import guide_targets
         from tools.function_surface import windows_to_picture
 
         for _attempt in range(MOST_UNSTICKS):
             opened = windows_to_picture(self.window)
             if not opened:
+                # Die Fläche ist zu: Ihr Fenster hält keine Liste mehr am Leben (RC-11).
+                guide_targets.release_held()
                 return True
             widget = opened[-1]
 
             def escape(machine: Any, widget: Any = widget) -> None:
+                # Ein Unterdialog geht mit seinem Dialog zu: Bis dieser Schritt dran
+                # ist, kann sein Wrapper schon tot sein (FD-175, Konturen wählen).
+                if not isValid(widget):
+                    return
                 flow.walker.record(
                     {"target": type(widget).__name__, "key": "Escape", "button": None}
                 )
+                bring_forward(widget)
                 QTest.keyClick(widget, Qt.Key.Key_Escape)
 
-            if not flow.run_steps(
-                "rückweg fläche", [Step("fenster verlassen", escape, settle_ms=SETTLE_MS)]
-            ):
+            leave = (
+                flow.walker.step(RETURN_TARGET)
+                if has_return(widget)
+                else Step("fenster verlassen", escape, settle_ms=SETTLE_MS)
+            )
+            if not flow.run_steps("rückweg fläche", [leave]):
                 break
         remaining = windows_to_picture(self.window)
         if not remaining:
+            guide_targets.release_held()
             return True
         names = ", ".join(type(widget).__name__ for widget in remaining)
         flow.data["errors"].append(f"Rückweg der Fläche: Fenster bleibt offen ({names})")

@@ -27,7 +27,7 @@ import pytest
 import trimesh
 
 from app.core.bootstrap import load_operations
-from app.core.errors import GeometryError, OperationCancelled
+from app.core.errors import CANCEL, CHANGE_FEATURE, GeometryError, OperationCancelled
 from app.core.geom.boolean import boolean
 from app.core.geom.edges import (
     EDGE_CHOICES,
@@ -1242,7 +1242,7 @@ def test_draft_shaping_keeps_every_boolean_in_draft(
     operation: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Die Nutzeroperation reicht den Entwurf bis zum letzten Geometrieschritt durch."""
-    from app.core.geom import edges, faces
+    from app.core.geom import boolean as geom_boolean
 
     body = block()
     params: dict[str, Any] = {}
@@ -1273,8 +1273,7 @@ def test_draft_shaping_keeps_every_boolean_in_draft(
         seen.append(kwargs.get("quality", "fine"))
         return boolean(*args, **kwargs)
 
-    monkeypatch.setattr(edges, "boolean", measured)
-    monkeypatch.setattr(faces, "boolean", measured)
+    monkeypatch.setattr(geom_boolean, "boolean", measured)
 
     result = run(operation, source, quality="draft", **params)
 
@@ -1655,7 +1654,8 @@ def test_a_fillet_beside_a_curved_wall_does_not_invent_a_plane(
         run(operation, source, profile, **params)
 
     assert "zwei ebene Flächen" in str(problem.value.detail)
-    assert {entry.id for entry in problem.value.suggestions} == {"change_selection", "cancel"}
+    # Die Absage kommt aus einem Merkmalsschritt; sein Feld ist das Merkmal (RB-1).
+    assert tuple(problem.value.suggestions) == (CHANGE_FEATURE, CANCEL)
     assert body.volume == pytest.approx(before)
 
 

@@ -3,7 +3,7 @@
 import pytest
 from PySide6.QtCore import QPoint, QRect
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton
 
 from app.core.bootstrap import load_operations
 from app.core.errors import ValidationError
@@ -13,6 +13,7 @@ from app.i18n import set_language, tr
 from app.i18n.catalog import available_languages, install_language
 from app.ui.labels import value_text
 from app.ui.op_dialog import OperationDialog
+from app.ui.refusal_details import silent_ways
 from app.ui.style import apply_style
 from app.ui.theme import apply_theme
 
@@ -70,7 +71,16 @@ def test_a_late_refusal_fits_or_scrolls_without_overriding_a_manual_size(
         error = _plane_error()
         dialog.show_refusal(error)
         _settle(qt_app)
-        assert all(str(action.label) in dialog._refusal.text() for action in error.suggestions)
+        # Jeder Weg steht da: als Satz oder, wo der Dialog ihn selbst einlöst,
+        # als Knopf; was er ohne Feld nicht einlösen kann, sagt er nicht (FD-95,
+        # ``refusal_details.field_ways``, ``silent_ways``).
+        silent = silent_ways(error, dialog)
+        buttons = {button.text() for button in dialog._refusal.findChildren(QPushButton)}
+        assert all(
+            str(action.label) in dialog._refusal.text() or str(action.label) in buttons
+            for action in error.suggestions
+            if action.id not in silent
+        )
         label = dialog._refusal.label
         assert label.font().pointSizeF() == pytest.approx(points)
         scroll = dialog._scroll

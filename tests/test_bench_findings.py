@@ -263,14 +263,21 @@ def test_the_history_claims_the_timeline_as_it_stands_in_the_column(
     panel.compare.show()
     panel.compare.setChecked(True)
     panel.timeline.show()
-    panel.timeline_label.setText("Stand 2 von 2: Quader")
     panel.resize(298, 100)
     panel.show()
-    for _ in range(5):
-        qt_app.processEvents()
     label = panel.timeline_label
+    # Ob Qts Wunsch umbricht, hängt an der Schrift: Es bricht um, sobald der
+    # Satz breiter ist als zwanzig mittlere Zeichen. „Quader“ reicht unter
+    # Windows und mit DejaVu (Linux), unter macOS braucht es einen längeren
+    # Namen, der in der Spalte trotzdem auf eine Zeile passt.
+    for name in ("Quader", "Versteifung", "Versteifung am Rand"):
+        label.setText(f"Stand 2 von 2: {name}")
+        for _ in range(5):
+            qt_app.processEvents()
+        if label.sizeHint().height() > label.heightForWidth(label.width()):
+            break
     assert label.sizeHint().height() > label.heightForWidth(label.width()), (
-        "der Satz bricht im Wunsch um, in der Spalte nicht — sonst prüft der Test nichts"
+        "premise: der Satz bricht im Wunsch um, in der Spalte nicht — sonst prüft der Test nichts"
     )
     # Was Qt an dieser Breite über der Liste legt: das Ganze ohne die Liste.
     laid_out = panel.heightForWidth(panel.width()) - panel.list.height()

@@ -166,3 +166,31 @@ def test_queued_fold_layout_survives_replacement_and_end(selected_hole, qt_app, 
         flow.deleteLater()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         settle_measure_layout(qt_app)
+
+
+def test_settling_waits_until_the_side_cards_rest(window, qt_app, monkeypatch):
+    """Erst wenn keine Seitenkarte mehr gleitet, steht die Maßkarte (FD-202).
+
+    Nach der Wahl einer Bohrung gleiten die Seitenkarten an ihre neue Größe,
+    auch offscreen nach der Wanduhr, und jeder Schritt setzt die Maßkarte neu.
+    Zählte das Einschwingen nur Ereignisrunden, las der Klappfall diese Bilder
+    als eigene Dauerschleife, sobald die Runden schneller waren als die
+    Bewegung. Hier dauert sie eine Sekunde, damit keine Runde sie zufällig
+    überholt.
+    """
+    from app.ui import overlay
+
+    monkeypatch.setattr(overlay, "MOVE_MS", 1000)
+    window.resize(1920, 1080)
+    window.show()
+    window._show_start_screen(False)
+    settle_measure_layout(qt_app)
+    zone = window.overlay.left
+    assert zone.isVisible()
+    start = zone.geometry()
+    window.overlay._move(zone, start.adjusted(0, 0, 0, 120), moving=True)
+    assert window.overlay._moves, "die Karte gleitet"
+
+    settle_measure_layout(qt_app)
+
+    assert not window.overlay._moves, "die Karte gleitet nach dem Einschwingen noch"

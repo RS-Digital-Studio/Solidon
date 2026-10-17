@@ -274,6 +274,8 @@ def _beyond(
             limit=allowed,
         )
     )
+    # Die Grenze in der Einheit ihres Felds (``values["unit"]``, FD-188).
+    unit_value = {"unit": entry.unit} if entry.unit else {}
     detail_values = {
         "field": field,
         "number": operation.id,
@@ -287,12 +289,12 @@ def _beyond(
             detail=detail,
             value=value,
             constraint="minimum",
-            values={"minimum": limit, **detail_values},
+            values={"minimum": limit, **unit_value, **detail_values},
         )
     return ValidationError(
         field=f"ops.{operation.id}.{entry.name}",
         detail=detail,
         value=value,
         constraint="maximum",
-        values={"maximum": limit, **detail_values},
+        values={"maximum": limit, **unit_value, **detail_values},
     )

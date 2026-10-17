@@ -51,21 +51,21 @@ from PySide6.QtWidgets import (  # noqa: E402
     QWidget,
 )
 
-from app.core.bootstrap import load_operations  # noqa: E402
+from app.core import bootstrap  # noqa: E402
 
-load_operations()
+bootstrap.load_operations()
 
+from app import i18n  # noqa: E402
 from app.core.registry import REGISTRY  # noqa: E402
 from app.core.scene import OperationDraft  # noqa: E402
 from app.core.types import Parameter  # noqa: E402
-from app.i18n import get_language, install_catalog, set_language, tr  # noqa: E402
+from app.i18n import get_language, install_catalog, tr  # noqa: E402
 from app.i18n.catalog import read_catalog  # noqa: E402
+from app.ui import main_window, settings  # noqa: E402
+from app.ui import session as ui_session  # noqa: E402
 from app.ui.app import install_qt_translations  # noqa: E402
 from app.ui.dialogs import ParameterDialog  # noqa: E402
-from app.ui.main_window import MainWindow  # noqa: E402
 from app.ui.render.api import CameraPose  # noqa: E402
-from app.ui.session import Session  # noqa: E402
-from app.ui.settings import UiSettings  # noqa: E402
 from app.ui.theme import apply_theme  # noqa: E402
 from tools import make_video as video_base  # noqa: E402
 from tools.make_figures import grab_uncovered, release_viewport  # noqa: E402
@@ -128,7 +128,7 @@ class Recorder:
     def __init__(
         self,
         app: QApplication,
-        window: MainWindow,
+        window: main_window.MainWindow,
         folder: Path,
         chapter: str,
     ) -> None:
@@ -458,7 +458,7 @@ class Recorder:
         painter.end()
 
 
-def _place_dialog(window: MainWindow, dialog: QDialog) -> None:
+def _place_dialog(window: main_window.MainWindow, dialog: QDialog) -> None:
     """Den einzigen Dialog unterhalb der Einblendung im Fenster halten."""
     # Ein bereits über exec() laufender Kundendialog behält Modalität und Größe.
     # Ein erneutes show()/setModal() kann sein natives Fenster neu anlegen.
@@ -493,7 +493,7 @@ def _button(dialog: QDialog) -> QWidget:
     return button
 
 
-def _menu_path(window: MainWindow, action: Any) -> list[tuple[QMenu, Any]]:
+def _menu_path(window: main_window.MainWindow, action: Any) -> list[tuple[QMenu, Any]]:
     """Den sichtbaren Weg von der Menüleiste bis zu einer Aktion finden."""
     menus = [menu for menu in window._menus if action in menu.actions()]
     if not menus:
@@ -585,12 +585,12 @@ def _show_action_path(
     return True
 
 
-def _operation_action(window: MainWindow, op_name: str) -> Any | None:
+def _operation_action(window: main_window.MainWindow, op_name: str) -> Any | None:
     """Die Menüaktion einer Operation einschließlich Varianteneintrag liefern."""
     return window._op_actions.get(op_name) or window._variant_actions.get(op_name)
 
 
-def _bed_point(window: MainWindow, point: tuple[float, float]) -> QPoint | None:
+def _bed_point(window: main_window.MainWindow, point: tuple[float, float]) -> QPoint | None:
     """Ein Punkt auf dem Bett als Bildschirmpunkt — für den Mauszeiger im Film."""
     renderer = getattr(window.viewport, "renderer", None)
     if renderer is None:
@@ -602,7 +602,7 @@ def _bed_point(window: MainWindow, point: tuple[float, float]) -> QPoint | None:
 
 def pull_up_plate(
     recorder: Any,
-    session: Session,
+    session: ui_session.Session,
     size: tuple[float, float, float],
     given: Mapping[str, Any],
     *,
@@ -690,13 +690,13 @@ def pull_up_plate(
         raise SystemExit("Die Höhe der Platte hängt nicht am Projektmaß.")
 
 
-def _select(window: MainWindow, object_id: str) -> None:
+def _select(window: main_window.MainWindow, object_id: str) -> None:
     """Einen Wirtskörper sichtbar wählen."""
     window.object_tree.select_object(object_id)
     video_base.settle(QApplication.instance(), 8)  # type: ignore[arg-type]
 
 
-def _fit(window: MainWindow, app: QApplication) -> None:
+def _fit(window: main_window.MainWindow, app: QApplication) -> None:
     """Die Szene für einen lesbaren Ergebniszustand einpassen."""
     # Orange Auswahl ist im Bedienmoment hilfreich, verdeckt in einem
     # Ergebnisbild aber gerade kleine Senkungen und Innenkanten. Der nächste
@@ -707,7 +707,9 @@ def _fit(window: MainWindow, app: QApplication) -> None:
     video_base.settle(app, 18)
 
 
-def _view(window: MainWindow, app: QApplication, direction: str, zoom: float = 1.0) -> None:
+def _view(
+    window: main_window.MainWindow, app: QApplication, direction: str, zoom: float = 1.0
+) -> None:
     """Eine gezielte Ansicht einstellen und kleine Details lesbar heranholen."""
     window.object_tree.tree.clearSelection()
     window.viewport.view_from(direction)
@@ -717,7 +719,9 @@ def _view(window: MainWindow, app: QApplication, direction: str, zoom: float = 1
     video_base.settle(app, 18)
 
 
-def _highlight_kind(window: MainWindow, session: Session, object_id: str, kind: str) -> int:
+def _highlight_kind(
+    window: main_window.MainWindow, session: ui_session.Session, object_id: str, kind: str
+) -> int:
     """Alle Merkmale einer Art in der blauen Merkmalsauswahl zeigen."""
     result = session.last_result
     if result is None or object_id not in result.scene.objects:
@@ -735,7 +739,7 @@ def _highlight_kind(window: MainWindow, session: Session, object_id: str, kind: 
     return len(feature_ids)
 
 
-def _verify(session: Session, context: str) -> None:
+def _verify(session: ui_session.Session, context: str) -> None:
     """Auf die echte Auswertung warten und unvollständige Schritte stoppen."""
     session.wait_for_idle(120_000)
     result = session.last_result
@@ -749,7 +753,7 @@ def _verify(session: Session, context: str) -> None:
 
 
 def _apply(
-    session: Session,
+    session: ui_session.Session,
     title: str,
     drafts: Sequence[OperationDraft],
     *,
@@ -763,7 +767,7 @@ def _apply(
 
 def _add_parameter(
     recorder: Recorder,
-    session: Session,
+    session: ui_session.Session,
     name: str,
     title: str,
     value: float,
@@ -825,7 +829,7 @@ def _add_parameter(
 
 def _edit_parameter(
     recorder: Recorder,
-    session: Session,
+    session: ui_session.Session,
     name: str,
     value: float,
     title: str,
@@ -894,7 +898,7 @@ def _show_catalog(
 
 def _show_operation(
     recorder: Recorder,
-    session: Session,
+    session: ui_session.Session,
     op_name: str,
     values: Mapping[str, Any],
     title: str,
@@ -957,7 +961,7 @@ def _show_operation(
 
 def _show_bundled_operation(
     recorder: Recorder,
-    session: Session,
+    session: ui_session.Session,
     title: str,
     drafts: Sequence[OperationDraft],
     dialog_title: str,
@@ -1002,10 +1006,10 @@ def _begin_video(
     *,
     screen: Any = None,
     native_resolution: bool = False,
-) -> tuple[Session, MainWindow, Recorder]:
+) -> tuple[ui_session.Session, main_window.MainWindow, Recorder]:
     """Ein leeres sichtbares Projekt für genau einen Film öffnen."""
-    session = Session()
-    window = MainWindow(session, UiSettings(language=get_language()))
+    session = ui_session.Session()
+    window = main_window.MainWindow(session, settings.UiSettings(language=get_language()))
     if screen is not None:
         window.setScreen(screen)
     window.resize(*FRAME_SIZE)
@@ -1041,7 +1045,7 @@ def _begin_video(
     return session, window, recorder
 
 
-def _finish_video(session: Session, window: MainWindow) -> None:
+def _finish_video(session: ui_session.Session, window: main_window.MainWindow) -> None:
     """Arbeiter und OpenGL-Kontext ohne Speichernachfrage freigeben."""
     session.forget_changes()
     window.close()
@@ -2292,7 +2296,7 @@ def main() -> int:
     assert isinstance(app, QApplication)
     video_base.require_screen(app)
     install_catalog(language, read_catalog(language))
-    set_language(language)
+    i18n.set_language(language)
     install_qt_translations(app, language)
     apply_theme(app, "dark")
 

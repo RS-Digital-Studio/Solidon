@@ -8,7 +8,8 @@ import numpy as np
 from shapely.geometry import MultiPoint, Polygon, box
 from shapely.ops import unary_union
 
-from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean
+from app.core.geom import boolean
+from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import face
@@ -148,7 +149,7 @@ def build_organizer(
             cutters.append(
                 _tool(wall.rect, wall.radius, wall.height, layout.height + BOOLEAN_OVERLAP)
             )
-    outcome = boolean("difference", [base, *cutters], quality=quality, cancelled=cancelled)
+    outcome = boolean.boolean("difference", [base, *cutters], quality=quality, cancelled=cancelled)
     for cell in layout.cells:
         key = f"{cell.id}/floor"
         patch = _patch(outcome.mesh, key, (0, 0, 1), layout.floor, cell.rect, cancelled=cancelled)

@@ -37,12 +37,12 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSpacerItem,
-    QSpinBox,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from app.core import guides
 from app.core.backends import comfy_setup, mesh
 from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import (
@@ -55,14 +55,18 @@ from app.core.errors import (
 from app.core.generate import fell_apart, skin_thickness, working_volume
 from app.core.geom.mesh import only_a_skin
 from app.core.log import get_logger
-from app.core.types import Mesh
+from app.core.types import Document, Mesh, SourceOrigin
 from app.i18n import format_decimal, tr
+from app.ui import dialogs
+from app.ui import settings as ui_settings
 from app.ui.ai_disclosure import DisclosureResult, ensure_ai_disclosure
-from app.ui.dialogs import align_to_the_front, show_error, spoken_values
+from app.ui.dialogs import align_to_the_front, spoken_values
+from app.ui.form_fields import explain_row
+from app.ui.grouped_spin import IdentifierIntSpin
 from app.ui.labels import UNEXPECTED_CRASH, volume, wheel_needs_focus
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
-from app.ui.settings import UiSettings, load_settings
+from app.ui.settings import load_settings
 from app.ui.style import (
     NORMAL,
     SPACE,
@@ -147,6 +151,23 @@ def _origin_line(origin: _Origin) -> str:
     if origin.prompt:
         return tr("„{text}“ · Startwert {seed}", text=_shortened(origin.prompt), seed=origin.seed)
     return tr("Startwert {seed}", seed=origin.seed)
+
+
+def generated_origin(document: Document, object_id: str | None) -> SourceOrigin | None:
+    """Woraus ein erzeugter Körper entstand — Beschreibung und Startwert, oder nichts.
+
+    Gefragt am Ladeschritt, der den Körper anlegt, und an seiner Quelle: Nur
+    eine erzeugte Quelle trägt ``prompt`` und ``seed`` (``generate.into_project``).
+    """
+    if not object_id:
+        return None
+    for operation in document.ops:
+        if operation.op != "load" or object_id not in operation.outputs:
+            continue
+        source = document.sources.get(str(operation.params.get("source", "")))
+        if source is not None and source.kind == "generated":
+            return source.origin
+    return None
 
 
 class _AttemptList(QListWidget):
@@ -368,7 +389,7 @@ class GenerateDialog(QDialog):
         backend: MeshBackend | None = None,
         parent: QWidget | None = None,
         *,
-        settings: UiSettings | None = None,
+        settings: ui_settings.UiSettings | None = None,
     ) -> None:
         super().__init__(parent)
         self.backend: MeshBackend = backend or ComfyBackend()
@@ -432,9 +453,19 @@ class GenerateDialog(QDialog):
         self.setMinimumWidth(480)
 
         self.prompt = QLineEdit(self)
+        self.prompt.setProperty(guides.TARGET_PROPERTY, "generate.prompt")
         self.prompt.setPlaceholderText(tr("Was soll entstehen?"))
+        # Kurzhilfe und Beschreibung des Felds (FD-78); mit Bild sagt es,
+        # warum es ruht (:meth:`_show_image`).
+        self._prompt_help = str(
+            tr(
+                "Beschreiben Sie in Worten, was entstehen soll, etwa „Wandhaken für ein "
+                "Rohr“. Daraus erzeugt der Generator ein Modell."
+            )
+        )
 
-        self.seed = QSpinBox(self)
+        # Eine Kennung zum Abschreiben, auch in die Kommandozeile: ohne Gruppen.
+        self.seed = IdentifierIntSpin(self)
         self.seed.setRange(0, MAX_SEED)
         self.seed.setToolTip(
             tr(
@@ -464,7 +495,14 @@ class GenerateDialog(QDialog):
         form.setHorizontalSpacing(NORMAL)
         form.setVerticalSpacing(NORMAL)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        # Ein Satz über dem Feld, wenn der Dialog für einen neuen Versuch an
+        # einem erzeugten Modell aufgeht (:meth:`start_over`, FD-117).
+        self.lead = QLabel(self)
+        self.lead.setWordWrap(True)
+        self.lead.setVisible(False)
+        form.addRow(self.lead)
         form.addRow(tr("Beschreibung"), self.prompt)
+        explain_row(form, self.prompt, self._prompt_help)
         form.addRow(tr("Bild"), self.picture)
         form.addRow("", picture_row)
 
@@ -529,6 +567,9 @@ class GenerateDialog(QDialog):
         assert button_layout is not None
         button_layout.setSpacing(SPACE)
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Erzeugen"))
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setProperty(
+            guides.TARGET_PROPERTY, "generate.start"
+        )
         # „Erzeugen" trug den Akzent schon, nur hatte ihn niemand gesetzt: Qt
         # vergibt beim ersten ``show()`` den Default an den ersten
         # autoDefault-Knopf. Die Farbe war damit da, die halbfette Schrift
@@ -997,8 +1038,8 @@ class GenerateDialog(QDialog):
             else ""
         )
         self.prompt.setEnabled(picture is None)
-        self.prompt.setToolTip(resting)
-        self.prompt.setAccessibleDescription(resting)
+        self.prompt.setToolTip(resting or self._prompt_help)
+        self.prompt.setAccessibleDescription(resting or self._prompt_help)
         # **Der Weg hat gewechselt, also gilt die alte Antwort nicht mehr.** Mit
         # Bild braucht es kein Bildmodell; ohne schon. Wer eines wählt, soll
         # nicht weiter lesen, dass etwas fehlt, was er gerade umgangen hat.
@@ -1372,6 +1413,26 @@ class GenerateDialog(QDialog):
         self._scroll.ensureWidgetVisible(self.attempts)
         self._scroll.ensureWidgetVisible(self.again)
 
+    def start_over(self, origin: SourceOrigin | None) -> None:
+        """*Neu erzeugen* am Befund eines erzeugten Modells (FD-117).
+
+        Die Beschreibung von damals steht wieder im Feld, der Startwert zählt
+        eins weiter wie bei *Noch ein Versuch* — derselbe Wert gäbe denselben
+        Körper. Was der Kunde schon getippt hat, bleibt. Der Satz darüber sagt,
+        was geschieht; das bisherige Modell bleibt im Projekt.
+        """
+        prompt = (origin.prompt or "") if origin is not None else ""
+        if prompt and self._image is None and not self.prompt.text().strip():
+            self.prompt.setText(prompt)
+        if origin is not None and origin.seed is not None:
+            self.seed.setValue(min(origin.seed + 1, MAX_SEED))
+        self.lead.setText(
+            tr("Ein neuer Versuch mit derselben Beschreibung. Das bisherige Modell bleibt.")
+            if prompt
+            else tr("Ein neuer Versuch. Das bisherige Modell bleibt.")
+        )
+        self.lead.setVisible(True)
+
     def _try_again(self) -> None:
         """Noch einen Wurf, mit dem nächsten Startwert.
 
@@ -1394,7 +1455,7 @@ class GenerateDialog(QDialog):
         _log.warning("generation crashed: %s", detail)
         error = InternalError(detail=detail)
         self._on_failed(error)
-        show_error(error, self)
+        dialogs.show_error(error, self)
 
     def _on_failed(self, problem: object) -> None:
         """Was nicht ging, warum, und was jetzt hilft — alle drei (§2.7).

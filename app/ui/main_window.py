@@ -81,7 +81,8 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
+from app import branding
+from app.branding import APP_NAME, PART_FILE_SUFFIX, PROJECT_SUFFIX
 from app.core import (
     activation,
     bootstrap,
@@ -90,6 +91,7 @@ from app.core import (
     feedback,
     guides,
     manual,
+    registry,
     tools,
     updates,
 )
@@ -138,6 +140,7 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.export import handover, manufacturer, readback, slicer_profiles
+from app.core.export import writer as export_writer
 from app.core.export.handover import GCODE_SUFFIXES as _CORE_GCODE_SUFFIXES
 from app.core.export.handover import SliceOutcome, override_for, with_slot_override
 from app.core.export.slicer_keys import SlicerFlavour
@@ -146,15 +149,14 @@ from app.core.export.writer import (
     ExportPlan,
     check_before_export,
     clearance_margin,
-    plan_export,
     safe_name,
     write_assembly,
-    write_plan,
 )
 from app.core.filament_usage import StoredInputs, UsageRequest, with_spool
 from app.core.filament_usage import prepare as prepare_usage
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.measure import bounding_box_of, volume_of
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData
 from app.core.geom.pose import armature_to_text
 from app.core.geom.sculpt import (
     BRUSH_TO_EDGE,
@@ -176,6 +178,7 @@ from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.ingest.plan import MODEL_SUFFIXES as _CORE_MODEL_SUFFIXES
 from app.core.ingest.plan import imported_group_for_bed
 from app.core.knowledge import calibration, filaments, print_settings, profiles
+from app.core.knowledge.parts import ops as parts_ops
 from app.core.knowledge.parts.ops import (
     catalog_operation,
     creation_name,
@@ -183,14 +186,12 @@ from app.core.knowledge.parts.ops import (
     footprint_at_once,
     free_spot_for,
     operation_names,
-    part_of,
 )
 from app.core.knowledge.parts.recipe import steps_of
 from app.core.log import get_logger
 from app.core.perceive import maps
 from app.core.perceive.actions import GROUP_OPS
 from app.core.perceive.digest import digest
-from app.core.perceive.maps import wall_thickness_map
 from app.core.registry import (
     REGISTRY,
     VARIABLE,
@@ -199,7 +200,6 @@ from app.core.registry import (
     SearchEntry,
     catalogue_operations,
     caveat_line,
-    exact_kernel_present,
     exact_names,
     folded_categories,
     group_for_variant,
@@ -225,6 +225,7 @@ from app.core.scene import (
 )
 from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
+from app.core.scene.choice_ways import for_the_choice
 from app.core.scene.evaluate import size_set_by
 from app.core.scene.history import change_for, repair_is_available, step_titles
 from app.core.scene.parameter_usage import bounds_refusal
@@ -232,6 +233,7 @@ from app.core.scene.placement import NORMAL as NORMAL_FIELDS
 from app.core.scene.placement import POSITION as POSITION_FIELDS
 from app.core.scene.placement import bound_surface_values, seats_on, surface_at_feature
 from app.core.scene.project import clear_autosave, discard_recovery, find_recovery
+from app.core.scene.revision import halt_finding
 from app.core.sketch.planes import (
     feature_plane,
     feature_plane_parts,
@@ -242,10 +244,10 @@ from app.core.sketch.planes import (
 )
 from app.core.sketch.profile import SketchCurve, curves_of
 from app.core.sketch.serialize import sketch_from_text
+from app.core.slice import findings as slice_findings
 from app.core.slice import gcode
 from app.core.slice.estimate import plates_findings, support_material, time_comparison_blocked
 from app.core.slice.estimate import total as estimate_total
-from app.core.slice.findings import analysed
 from app.core.support import KIND_CRASH, KIND_IDEA, KIND_SURVEY
 from app.core.tour import TourTarget, tour_for
 from app.core.types import (
@@ -277,8 +279,10 @@ from app.core.types import (
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
 from app.i18n import TranslatableText, _, format_decimal, tr
-from app.ui import app_events, change_lock, first_run
+from app.ui import app_events, change_lock, dialogs, first_run, guide_targets
+from app.ui import session as ui_session
 from app.ui import settings as settings_module
+from app.ui.action_notice import ActionNotice
 from app.ui.ai_disclosure import (
     DisclosureResult,
     ensure_ai_disclosure,
@@ -287,7 +291,7 @@ from app.ui.ai_disclosure import (
 from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
 from app.ui.calibration_dialog import CalibrationDialog
 from app.ui.catalog import PartCatalog
-from app.ui.change_lock import change_refusal
+from app.ui.change_lock import change_refusal, halt_line
 from app.ui.chat import ChatPanel
 from app.ui.dialogs import (
     AboutDialog,
@@ -307,7 +311,6 @@ from app.ui.dialogs import (
     open_or_copy,
     open_website,
     show_details,
-    show_error,
 )
 from app.ui.draw_bar import DrawBar
 from app.ui.draw_flow import DrawFlow
@@ -324,13 +327,13 @@ from app.ui.filament_picker import (
     swatch,
 )
 from app.ui.filament_usage import UsageNotice
-from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
-from app.ui.guide_targets import (
-    MissingTargetError,
-    menu_entries,
-    menubar_entries,
-    widget_for,
+from app.ui.generate_dialog import (
+    IMAGE_SUFFIXES,
+    GenerateDialog,
+    generated_origin,
+    image_filter,
 )
+from app.ui.guide_targets import MissingTargetError, menu_entries, menubar_entries
 from app.ui.header import ALL_PLATES, HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.input_dialog import ask_choice, ask_text
@@ -366,7 +369,7 @@ from app.ui.labels import (
 )
 from app.ui.labels import area as area_label
 from app.ui.labels import set_display_unit as set_length_unit
-from app.ui.leash import Worker, WorkerLeash, stop_watching_the_dying, wait_for_all, weak_slot
+from app.ui.leash import Worker, WorkerLeash, wait_for_all, weak_slot
 from app.ui.loading import (
     BAR_AFTER_MS,
     DELAY_MS,
@@ -377,6 +380,7 @@ from app.ui.loading import (
 )
 from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
+from app.ui.measure_card import stands_in
 from app.ui.message_dialog import name_button
 from app.ui.motion import switch
 from app.ui.op_dialog import DeferredSourcePicker, OperationDialog, simple_shape_of
@@ -434,11 +438,10 @@ from app.ui.session import (
     AGENT_STOPPED,
     SHORT_CHAIN_PREVIEW,
     AskRequest,
-    Session,
     TriangleCounts,
     agent_stop_sentence,
 )
-from app.ui.settings import UiSettings, save_settings
+from app.ui.settings import save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog, searchable_options
 from app.ui.shortcut_schemes import (
     delete_keys,
@@ -455,12 +458,13 @@ from app.ui.sketch_editor import (
     grid_step_for,
     plane_where,
 )
+from app.ui.sketch_focus import focus_the_sketch
 from app.ui.spacemouse import SpaceMouseController
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_paths, accepted_url, dropped_file
+from app.ui.status_line import StatusLine, settle_in_bar
 from app.ui.style import (
     NORMAL,
-    ROOMY,
     TIGHT,
     divider,
     make_danger,
@@ -474,12 +478,14 @@ from app.ui.survey import SupportNotice, SurveyNotice, UsageClock
 from app.ui.tab_signal import SignalTabBar
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
+from app.ui.toolbar_follow import follow_the_font
 from app.ui.tour import TourPanel
 from app.ui.transform_bar import ROLES as TRANSFORM_ROLES
 from app.ui.transform_bar import TransformBar
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
-from app.ui.viewport import DisplayMode, Projection, SketchSelectionBadge, Viewport
+from app.ui.viewport import DisplayMode, Projection, Viewport
+from app.ui.waiting_click import kept_through_rebuild, waiting_approval
 
 _log = get_logger(__name__)
 
@@ -938,66 +944,6 @@ class _DialogsStayAbove(QObject):
         for dialog in dialogs_above(window, windows):
             dialog.raise_()
         return False
-
-
-class _ActionNotice(SketchSelectionBadge):
-    """Dieselbe passive Quittung wie in der Skizze, am Ort der letzten Handlung."""
-
-    def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent)
-        self.setTextFormat(Qt.TextFormat.PlainText)
-        self.setWordWrap(True)
-        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._anchor = QPoint()
-        self._expiry = QTimer(self)
-        self._expiry.setSingleShot(True)
-        self._expiry.timeout.connect(self.clear)
-        parent.installEventFilter(self)
-
-    def show_message(self, text: str, anchor: QPoint) -> None:
-        """Ersetzt die alte Meldung; Fortschritt besitzt weder Text noch Zeitgeber."""
-        self.clear()
-        if not text:
-            return
-        self._anchor = anchor
-        self.setText(text)
-        self.place()
-        self.show()
-        # Der volle Text bleibt zusätzlich in der Statuszeile. Hier reichen
-        # kurze Sätze mindestens acht Sekunden, lange bekommen mehr Lesezeit.
-        self._expiry.start(max(8000, len(text) * 60))
-
-    def clear(self) -> None:
-        """Projektwechsel und Fensterabbau nehmen auch den Zeitgeber mit."""
-        self._expiry.stop()
-        super().clear()
-        self.hide()
-
-    def place(self) -> None:
-        """Am gemerkten Ort, umbrochen und innerhalb der aktuellen Zeichenfläche."""
-        parent = self.parentWidget()
-        if parent is None:
-            return
-        available = max(1, parent.width() - 2 * ROOMY)
-        self.setMaximumWidth(min(available, max(1, self.fontMetrics().averageCharWidth() * 60)))
-        self.adjustSize()
-        x = min(max(ROOMY, self._anchor.x()), max(ROOMY, parent.width() - self.width() - ROOMY))
-        y = self._anchor.y() + ROOMY
-        if y + self.height() > parent.height() - ROOMY:
-            y = self._anchor.y() - self.height() - ROOMY
-        y = min(max(ROOMY, y), max(ROOMY, parent.height() - self.height() - ROOMY))
-        self.move(x, y)
-        self.raise_()
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
-        """Größe und Schrift dürfen den gemerkten Satz nicht außerhalb stehen lassen."""
-        if stop_watching_the_dying(self, watched, event):
-            return False
-        if event.type() in (QEvent.Type.Resize, QEvent.Type.FontChange, QEvent.Type.StyleChange):
-            self.place()
-        elif event.type() == QEvent.Type.Hide:
-            self.clear()
-        return super().eventFilter(watched, event)
 
 
 class _SelectionPage(QWidget):
@@ -1507,7 +1453,7 @@ class _SculptWallWorker(Worker):
                     else maps.overhang_map(sculpted)
                 )
                 if self._kind == "overhang"
-                else wall_thickness_map(
+                else maps.wall_thickness_map(
                     sculpted,
                     minimum=self._minimum,
                     pitch=self._minimum * WALL_GRID_SHARE,
@@ -1706,7 +1652,7 @@ class _FoundationWorker(Worker):
     def __init__(
         self,
         key: tuple[object, ...],
-        ui_settings: UiSettings,
+        ui_settings: settings_module.UiSettings,
         profile: Profile,
         quality: QualityPreset,
         chosen: _ChosenSetup | None = None,
@@ -1889,7 +1835,7 @@ _WORKED_ALONGSIDE: Final = frozenset({"generate", "agent"})
 SLICER_WARMUP_DELAY_MS: Final = 2000
 
 #: Wie lange eine Ansage neben einem solchen Lauf in der Zeile steht —
-#: so lange wie ihre Blase mindestens (``_ActionNotice.show_message``).
+#: so lange wie ihre Blase mindestens (``ActionNotice.show_message``).
 SPOKEN_HOLD_MS: Final = 8000
 
 
@@ -1950,6 +1896,7 @@ class _ExportWorker(Worker):
         evaluated: Sequence[Finding] = (),
         chosen: _ChosenSetup | None = None,
         inputs: StoredInputs | None = None,
+        names: Mapping[str, str] | None = None,
     ) -> None:
         super().__init__()
         self._objects = objects
@@ -1972,6 +1919,8 @@ class _ExportWorker(Worker):
         self._document = document
         self._evaluated = tuple(evaluated)
         """Die Befunde der Auswertung, aus der die Körper stammen (RM-419)."""
+        self._names = dict(names or {})
+        """Die Namen derselben Auswertung — für einen entfernten Passungspartner (RB2-5)."""
         #: Ein schon erhobener Bericht — dann wurde die Frage bereits gestellt
         #: und beantwortet. ``None`` heißt „noch nicht geprüft"; eine **leere**
         #: Liste ist eine Antwort und keine fehlende.
@@ -2022,6 +1971,7 @@ class _ExportWorker(Worker):
             evaluated=self._evaluated,
             chosen=self._chosen,
             inputs=self._inputs,
+            names=self._names,
         )
 
     def work(self) -> None:
@@ -2037,6 +1987,7 @@ class _ExportWorker(Worker):
                     document=self._document,
                     cancelled=self.cancelled,
                     evaluated=self._evaluated,
+                    names=self._names,
                 )
                 self.cancelled.raise_if_cancelled()
                 if any(entry.severity in ("warning", "error") for entry in found):
@@ -2242,7 +2193,7 @@ class _ExportWorker(Worker):
         # ``{project}`` das Projekt und nicht sein eigenes Muster.
         looks_like_scheme = "{" in stem and "}" in stem
         fixed = stem.replace("{", "{{").replace("}", "}}")
-        plan = plan_export(
+        plan = export_writer.plan_export(
             self._objects,
             project_name=self._project_name if looks_like_scheme else stem,
             profile=self._profile,
@@ -2253,7 +2204,11 @@ class _ExportWorker(Worker):
             document=self._document,
             checked=self._checked,
         )
-        return write_plan(plan, self._target.parent, self._format), list(plan.findings), plan
+        return (
+            export_writer.write_plan(plan, self._target.parent, self._format),
+            list(plan.findings),
+            plan,
+        )
 
 
 class _PartImportWorker(Worker):
@@ -2432,8 +2387,8 @@ class _SliceWorker(Worker):
     def work(self) -> None:
         try:
             self.cancel.raise_if_cancelled()
-            result = analysed(
-                as_mesh_data(self._entry.mesh),
+            result = slice_findings.analysed(
+                geom_mesh.as_mesh_data(self._entry.mesh),
                 self._settings,
                 self._overhang_angle,
                 self._bridge_from,
@@ -2557,7 +2512,7 @@ def offers_naming(spec: OperationSpec) -> bool:
     Feld, wie bisher. Und ein Grundkörper ohne Millimetermaß vorn bekäme einen
     Haken, der nichts täte.
     """
-    part = part_of(spec.name) if spec.consumes == 0 else None
+    part = parts_ops.part_of(spec.name) if spec.consumes == 0 else None
     template = part is not None and part.template
     return (spec.category == "primitive" or template) and any(
         _names_a_dimension(entry) for entry in spec.params.spec()
@@ -3199,7 +3154,7 @@ class MainWindow(QMainWindow):
     ``app.rebuild_for_language`` baut es neu, und das gehört in den nächsten
     Ereignisdurchlauf, nicht in den Signalpfad eines eigenen Dialogs."""
 
-    def __init__(self, session: Session, settings: UiSettings) -> None:
+    def __init__(self, session: ui_session.Session, settings: settings_module.UiSettings) -> None:
         super().__init__()
         self.session = session
         self.settings = settings
@@ -3625,6 +3580,9 @@ class MainWindow(QMainWindow):
         """Ob die Markierung im Verlauf jünger ist als die Körperwahl im Baum (Review G7)."""
         self.history_panel.list.itemSelectionChanged.connect(self._history_selection_changed)
         self.history_panel.operationActivated.connect(self.edit_operation)
+        # Eine Maßänderung öffnet ihr Maß wie *Ändern …* an der Leiste (FD-166).
+        self.history_panel.parameterActivated.connect(self.action_edit_parameter)
+        self.history_panel.printSettingsActivated.connect(self.action_print_settings)
         self.history_panel.noteRequested.connect(self.announce)
         self.history_panel.removalRequested.connect(self.remove_history_operations)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
@@ -3663,6 +3621,9 @@ class MainWindow(QMainWindow):
         """Ob die Statuszeile gerade die zwei Flächen einer Fase nennt
         (:meth:`_follow_chamfer_sides`) — nur dann gibt es sie wegzunehmen."""
         self._preview_approval: _PreviewApproval | None = None
+        self._kept_through_rebuild: _PreviewApproval | None = None
+        """Die Freigabe mit wartendem Klick, die ein laufender Neuaufbau stehen lässt
+        (``app.ui.waiting_click``)."""
         self._click_after_evaluation: _WaitingClick | None = None
         """Ein Übernehmen-Klick, der auf das Ende einer Auswertung wartet
         (:meth:`_click_after`, :meth:`_run_click_after_evaluation`)."""
@@ -4518,7 +4479,7 @@ class MainWindow(QMainWindow):
         for notice in (self._survey_notice, self._support_notice):
             for zone in (left, self.right_column, bottom, self.viewport.view_bar):
                 notice.keep_clear_of(zone)
-        self._action_notice = _ActionNotice(self.overlay)
+        self._action_notice = ActionNotice(self.overlay)
         self._announcement_document = self.session.project.document
         self._tour_project = self.session.project
         # Parameterzeilen entstehen nach dem Öffnen eines Projekts neu. Ihre
@@ -4648,7 +4609,7 @@ class MainWindow(QMainWindow):
 
     def _build_status_bar(self) -> None:
         self.measurements = MeasurementLabel(self)
-        self.status_message = QLabel("", self)
+        self.status_message = StatusLine(self)
         # **Keine Zahl im Balken.** Sie steht mittig, und der Rand der
         # Füllung wandert darunter hindurch: bei 45 % lag sie halb auf
         # Bernstein und halb auf der Spur, ab 60 % ganz auf Bernstein — mit
@@ -5857,6 +5818,8 @@ class MainWindow(QMainWindow):
         # bleibt eine Zeile hoch; auf schmalen Fenstern sammelt Qt den
         # Überstand wie bei jeder Werkzeugleiste im Pfeilmenü ein.
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        # Nach einem Schriftwechsel von der Wortform aus neu wählen wie beim Start (L1).
+        follow_the_font(toolbar, partial(self._set_toolbar_form, TOOLBAR_WORDS), self._fit_toolbar)
         # **Und wenn der Platz nicht reicht, kürzen sie, statt zu
         # verschwinden** (Befund D6). Qt sammelt den Überstand einer
         # Werkzeugleiste hinter einem unbeschrifteten Pfeil ein — was dort
@@ -7008,13 +6971,8 @@ class MainWindow(QMainWindow):
         halted = self.session.halted_step()
         if halted is None:
             return None
-        number, title = halted
-        return tr(
-            "Die Kette hält an Schritt {number} ({step}) an — ein neuer Schritt dahinter "
-            "würde nicht gerechnet. Der Weg weiter steht im Prüfbericht.",
-            number=step_number(self.session.project.document, number),
-            step=title,
-        )
+        # Derselbe Satz wie an den Befundhandlungen (FD-104): eine Quelle.
+        return halt_line(self.session.project.document, halted[0])
 
     def _feature_kinds_of_selection(self) -> frozenset[str]:
         """Die Arten der erkannten Merkmale am gewählten Körper.
@@ -7284,10 +7242,10 @@ class MainWindow(QMainWindow):
         if twin is None:
             return
         target = REGISTRY.get(twin)
-        if twin in exact_names() and not exact_kernel_present():
+        if twin in exact_names() and not registry.exact_kernel_present():
             from app.core.brep.kernel import BRepUnavailable
 
-            show_error(BRepUnavailable(), self)
+            dialogs.show_error(BRepUnavailable(), self)
             return
         # Die zweite Sperre — kein späterer Schritt braucht den exakten Körper —
         # ist die Hürde des Kerns (``History.change_kernel``, ``needs_exact``);
@@ -7543,6 +7501,7 @@ class MainWindow(QMainWindow):
             message = licence_lock_line(state)
         self.trial_line.setText(message)
         self.trial_line.setVisible(bool(message))
+        settle_in_bar(self.trial_line)
         # Der Satz nennt den Menüweg weiterhin — er steht auch im Handbuch und
         # in fünf Katalogen so. Was dazukommt, ist die Zusage, dass der Klick
         # dorthin führt: an drei Stellen, weil drei verschiedene Leute sie
@@ -8003,7 +7962,7 @@ class MainWindow(QMainWindow):
         except AppError as error:
             self.status_message.setText(self._announcement)
             self._show_recent()
-            show_error(error, self)
+            dialogs.show_error(error, self)
             return
         self._show_start_screen(False)
 
@@ -8112,7 +8071,7 @@ class MainWindow(QMainWindow):
                 selection_only=selection_only,
             )
         except AppError as error:
-            show_error(error, self)
+            dialogs.show_error(error, self)
             answered(None)
             return
 
@@ -8177,7 +8136,7 @@ class MainWindow(QMainWindow):
                 again=partial(self._save_to, path),
                 elsewhere=self.action_save_as,
             )
-            show_error(error, self)
+            dialogs.show_error(error, self)
             return
         self._write_failure = None
         self.settings.remember(saved)
@@ -8241,7 +8200,7 @@ class MainWindow(QMainWindow):
             if len(paths) == 1:
                 self.open_path(paths[0])
             else:
-                show_error(
+                dialogs.show_error(
                     UserError(
                         title=tr("Projektdateien bitte einzeln öffnen."),
                         detail=tr("Für eine Baugruppe gemeinsam die Modelldateien auswählen."),
@@ -8308,7 +8267,7 @@ class MainWindow(QMainWindow):
         try:
             address = check_url(url)
         except AppError as error:
-            show_error(error, self)
+            dialogs.show_error(error, self)
             return
 
         worker = _DownloadWorker(address)
@@ -8396,7 +8355,7 @@ class MainWindow(QMainWindow):
 
     def _download_failed(self, error: AppError) -> None:
         self._end_download()
-        show_error(error, self)
+        dialogs.show_error(error, self)
 
     def _downloaded(self, fetched: FetchedModel) -> None:
         """Was ankam, geht denselben Weg wie eine Datei von der Platte — mit
@@ -8498,7 +8457,8 @@ class MainWindow(QMainWindow):
         """
         self._generate(Path(path))
 
-    def _generate(self, image: Path | None) -> None:
+    def _generate(self, image: Path | None, again: Any = None) -> None:
+        """Den Erzeugen-Dialog öffnen; ``again`` ist der Befund hinter *Neu erzeugen*."""
         if self._drawing_refuses():
             return
         # **Gefragt wird vor dem Start, wie beim Import** (RM-361). Der Lauf
@@ -8512,7 +8472,7 @@ class MainWindow(QMainWindow):
                 refusal,
                 self,
                 tr("Einfügen beenden und Modell erzeugen"),
-                partial(self._generate, image),
+                partial(self._generate, image, again),
             )
             return
         # **Nichtmodal, und einer zur Zeit** (RM-371, §2.8). Der Dialog lief
@@ -8522,9 +8482,18 @@ class MainWindow(QMainWindow):
         # bedienbar. Ein zweiter Aufruf holt denselben Dialog nach vorn: Zwei
         # Läufe auf derselben Grafikkarte wären doppelte Wartezeit.
         dialog = self._generator
+        # **Neu erzeugen bringt die Beschreibung mit** (FD-117): Der Befund
+        # nennt den erzeugten Körper, seine Quelle Beschreibung und Startwert.
+        origin = (
+            generated_origin(self.session.project.document, getattr(again, "object_id", None))
+            if again is not None
+            else None
+        )
         if dialog is not None:
             if image is not None:
                 dialog.set_image(image)
+            if again is not None:
+                dialog.start_over(origin)
             self._show_generator(dialog, activate=True)
             return
         # Der Aufbau fragt einmal, ob ein Generator läuft, und das ist ein
@@ -8556,6 +8525,8 @@ class MainWindow(QMainWindow):
         self._generator_project = self.session._project_generation
         if image is not None:
             dialog.set_image(image)
+        if again is not None:
+            dialog.start_over(origin)
         self._show_generator(dialog, activate=True)
 
     def _show_generator(self, dialog: GenerateDialog, *, activate: bool) -> None:
@@ -8815,7 +8786,9 @@ class MainWindow(QMainWindow):
             replace(action, label=way) if action.id == STOP_INSERTING.id else action
             for action in error.suggestions
         )
-        show_error(error, parent, {**self.error_handlers(), STOP_INSERTING.id: stop_inserting_then})
+        dialogs.show_error(
+            error, parent, {**self.error_handlers(), STOP_INSERTING.id: stop_inserting_then}
+        )
 
     def _rebuild_chosen_body(self) -> None:
         """*Modell nachbauen* aus der Karte der Handlungen: genau der gewählte Körper."""
@@ -8936,7 +8909,7 @@ class MainWindow(QMainWindow):
                 try:
                     self.session.commit_rebuild(application, accept_losses=take_losses)
                 except AppError as error:
-                    show_error(error, self)
+                    dialogs.show_error(error, self)
 
         self._open_for_project(dialog, finished)
         self._rebuild_dialog = dialog
@@ -9087,6 +9060,22 @@ class MainWindow(QMainWindow):
             if self._split_turn is not None:
                 self._split_turn_done += 1
         if applied.transaction is None:
+            # **Ohne Schnitt passt es nur, wenn die Suche nichts zu sagen hat**
+            # (FD-106): Fand sie keine Trennebene oder sperrte eine geschützte
+            # Fläche, stand hier „passt bereits“ neben der Warnung, dass es über
+            # den Bauraum ragt. Dann sagt die Zeile den Grund; seine Handlung
+            # steht am Befund im Bericht.
+            reason = next(
+                (finding for finding in applied.findings if finding.severity != "info"), None
+            )
+            if reason is not None:
+                self.announce(
+                    tr(
+                        "Nicht geteilt. {reason}",
+                        reason=first_sentence(str(reason.message)),
+                    )
+                )
+                return
             self.announce(tr("Dieses Objekt passt bereits auf das Bett."))
             return
         self._queue_split_reveal(applied.object_ids)
@@ -9841,7 +9830,7 @@ class MainWindow(QMainWindow):
                 return
             slot_index = 0
             if targets:
-                used = set(as_mesh_data(body.mesh).slots) or {0}
+                used = set(geom_mesh.as_mesh_data(body.mesh).slots) or {0}
                 matching = next(
                     (
                         slot.index
@@ -9856,7 +9845,7 @@ class MainWindow(QMainWindow):
                 elif free is not None:
                     slot_index = free
                 else:
-                    mesh = as_mesh_data(body.mesh)
+                    mesh = geom_mesh.as_mesh_data(body.mesh)
                     choices = [
                         tr(
                             "{name}: {value}",
@@ -10183,7 +10172,7 @@ class MainWindow(QMainWindow):
             return
         path = self._gcode_path
         self._end_gcode_check()
-        show_error(
+        dialogs.show_error(
             UserError(
                 title=tr("Diese G-Code-Datei ließ sich nicht lesen."),
                 detail=tr(
@@ -10205,7 +10194,7 @@ class MainWindow(QMainWindow):
             self._gcode_stopped(worker)
             return
         self._end_gcode_check()
-        show_error(InternalError(detail=detail), self)
+        dialogs.show_error(InternalError(detail=detail), self)
 
     def _gcode_stopped(self, worker: _GcodeWorker) -> None:
         """Den bestätigten Abbruch sichtbar machen."""
@@ -10560,6 +10549,7 @@ class MainWindow(QMainWindow):
             # Und was die Auswertung schon fand: Ein durchstochener Formzug
             # stand im Prüfbericht und nicht vor dem Schreiben (RM-419).
             evaluated=result.scene.report.findings,
+            names=result.object_names,
             # Dieselbe Slicerwahl wie die Zahlenzeile, ohne den Bestand ein
             # zweites Mal zu lesen (RM-623).
             chosen=self._chosen_setup_now(),
@@ -10864,7 +10854,7 @@ class MainWindow(QMainWindow):
                 again=partial(self._start_export, attempt[0], attempt[1]),
                 elsewhere=self.action_export,
             )
-        show_error(error, self)
+        dialogs.show_error(error, self)
 
     def _export_crashed(self, worker: _ExportWorker, detail: str) -> None:
         """Unerwartete Fehler folgen demselben Besitzer- und Abbruchvertrag."""
@@ -11276,7 +11266,7 @@ class MainWindow(QMainWindow):
         handlers = self.error_handlers()
         if not isValid(catalog):
             # Ohne Katalog gibt es die zwei Auswege nicht mehr, die ihn brauchen.
-            show_error(problem, self, handlers)
+            dialogs.show_error(problem, self, handlers)
             return
         suggested = problem.values.get("suggested_name")
         from app.core.knowledge.parts.registry import PARTS
@@ -11305,7 +11295,7 @@ class MainWindow(QMainWindow):
             handlers["use_suggested_name"] = lambda error: self._use_suggested_part_name(
                 catalog, payload, error
             )
-        show_error(problem, catalog, handlers)
+        dialogs.show_error(problem, catalog, handlers)
 
     def _use_suggested_part_name(
         self,
@@ -11346,7 +11336,7 @@ class MainWindow(QMainWindow):
             text = export_part_scad(spec, self._current_part_values(spec))
             Path(target).write_text(text, encoding="utf-8")
         except (AppError, OSError) as error:
-            show_error(
+            dialogs.show_error(
                 error
                 if isinstance(error, AppError)
                 else ValidationError(
@@ -11392,7 +11382,7 @@ class MainWindow(QMainWindow):
             # Der Knopf steht nur an eigenen Bausteinen; hierher kommt, wer
             # den Weg an ihm vorbei nimmt — ein Kürzel, ein Signal aus einem
             # Test. Ein Satz ist billiger als ein Stapelabzug (Regel 17).
-            show_error(
+            dialogs.show_error(
                 ValidationError(
                     field="part",
                     detail=tr(
@@ -11409,7 +11399,7 @@ class MainWindow(QMainWindow):
             recipe = recipes.from_data(dict(data))
             project = recipes.draft(recipe)
         except AppError as error:
-            show_error(error, self._catalog_or_self(catalog))
+            dialogs.show_error(error, self._catalog_or_self(catalog))
             return
         if not self._may_discard():
             return
@@ -11467,7 +11457,7 @@ class MainWindow(QMainWindow):
             return
         data = PARTS.get(name).recipe_data
         if data is None:
-            show_error(
+            dialogs.show_error(
                 ValidationError(
                     field="title",
                     detail=tr(
@@ -11601,7 +11591,7 @@ class MainWindow(QMainWindow):
         handlers["retry"] = lambda _error: self._start_part_remove(
             catalog, name, expected_sha256, affected
         )
-        show_error(problem, self._catalog_or_self(catalog), handlers)
+        dialogs.show_error(problem, self._catalog_or_self(catalog), handlers)
 
     def _start_part_restore(
         self,
@@ -11659,7 +11649,7 @@ class MainWindow(QMainWindow):
         self._end_part_file_attempt()
         handlers = self.error_handlers()
         handlers["retry"] = lambda _error: self._start_part_restore(catalog, token, affected)
-        show_error(problem, catalog, handlers)
+        dialogs.show_error(problem, catalog, handlers)
 
     def _undo_part_file(self, catalog: PartCatalog) -> None:
         """Nur die sichtbare Bibliothekshandlung zurücknehmen, nie die Szene."""
@@ -11745,7 +11735,7 @@ class MainWindow(QMainWindow):
             again=partial(self._start_part_export, catalog, name, data, target),
             elsewhere=partial(self._share_part, catalog),
         )
-        show_error(problem, catalog)
+        dialogs.show_error(problem, catalog)
 
     def _start_part_file_worker(
         self,
@@ -11787,7 +11777,7 @@ class MainWindow(QMainWindow):
     def _part_file_crashed(self, catalog: PartCatalog, detail: str) -> None:
         """Auch ein unerwarteter Workerfehler lässt keinen Wartezustand zurück."""
         self._end_part_file_attempt()
-        show_error(InternalError(detail=detail), self._catalog_or_self(catalog))
+        dialogs.show_error(InternalError(detail=detail), self._catalog_or_self(catalog))
 
     def _part_file_worker_done(self, worker: Any) -> None:
         if self._part_file_worker is worker:
@@ -11942,7 +11932,7 @@ class MainWindow(QMainWindow):
 
         chosen = self._counterpart_targets()
         if chosen is None:
-            show_error(
+            dialogs.show_error(
                 ValidationError(
                     field="selection",
                     detail=counterpart_needs_two(),
@@ -11978,7 +11968,7 @@ class MainWindow(QMainWindow):
                     choices = [str(entry) for entry in error.values.get("choices", ())]
                     asked = getattr(error, "constraint", None) == AMBIGUOUS_THREAD
                     if not asked or size is not None or not choices:
-                        show_error(error, self)
+                        dialogs.show_error(error, self)
                         return
                     picked = ask_choice(
                         self,
@@ -12054,7 +12044,7 @@ class MainWindow(QMainWindow):
                 {"at_feature": second_feature},
             )
         except AppError as error:
-            show_error(error, self)
+            dialogs.show_error(error, self)
             return
 
         for finding in applied.findings:
@@ -12118,7 +12108,7 @@ class MainWindow(QMainWindow):
         try:
             calibrated = calibration.apply(measured, process=process)
         except AppError as error:
-            show_error(error, self)
+            dialogs.show_error(error, self)
             return
         self.announce(
             tr(
@@ -12345,7 +12335,7 @@ class MainWindow(QMainWindow):
                         slicer_choice = dialog.slicer_path
                         slicer_printers = dialog.discovered_printers
                         printer_query = dialog.printer_query
-                        show_error(error, self)
+                        dialogs.show_error(error, self)
                         continue
                     dialog.apply_to(self.settings)
                     self.settings.circle_measure = draft.circle_measure
@@ -12439,6 +12429,12 @@ class MainWindow(QMainWindow):
             self._on_selection(self.object_tree.selected(), refresh_analysis=False)
         self._refresh_map_units()
         self._update_header()
+        # **Die Parameterleiste baut ihre Zeilen neu** (RA-2): Grenzen, Ablehnung,
+        # abgeleitete Maße und Einheitenliste stehen sonst in der alten Einheit —
+        # „über der Obergrenze 254,0000 in“ für 254 mm. Ein fremdes Dokument
+        # erzwingt den Neubau (``ParameterPanel.show_document``).
+        self.parameters._document = None
+        self._refresh_parameters()
         # Auch alte und nachträglich ergänzte Befunde lesen ihre Werte neu.
         # Der öffentliche Nachschubweg erhält Filter und Befundauswahl; die
         # bereits geöffneten Einzelheiten bleiben ebenfalls offen.
@@ -13326,6 +13322,8 @@ class MainWindow(QMainWindow):
         self.toolbar.setVisible(False)
         self.sketch_bar.setVisible(True)
         self._update_actions()
+        # Die Tastatur ins Ziel: Ebenenwahl ohne lesbare Ebene, sonst die Ansicht (FD-190).
+        focus_the_sketch(panel, self.viewport, frame)
         # Beide Texte sagten „die Operation", auch wenn es noch keine gab: der
         # Zeichnen-Knopf startet ohne festgelegte Op, und was aus der Skizze
         # wird, entscheidet der Dialog bei „Fertig". Ein Hinweis, der auf eine
@@ -14387,7 +14385,9 @@ class MainWindow(QMainWindow):
             if entry.op == "pose_armature":
                 self.start_armature(entry.inputs[0], step=op_id)
             else:
-                self.start_sculpt(entry.inputs[0], step=op_id, source=as_mesh_data(body.mesh))
+                self.start_sculpt(
+                    entry.inputs[0], step=op_id, source=geom_mesh.as_mesh_data(body.mesh)
+                )
 
         self.session.scene_before_step_async(op_id, ready, explained=self.announce)
 
@@ -14412,7 +14412,7 @@ class MainWindow(QMainWindow):
         if entry is None:
             return None
         try:
-            return as_mesh_data(entry.mesh)
+            return geom_mesh.as_mesh_data(entry.mesh)
         except AppError:
             return None
 
@@ -16467,21 +16467,16 @@ class MainWindow(QMainWindow):
         scroller = SelectionScroller(self)
         scroller.setWidget(inside)
 
-        # **Die Knopfzeile rollt nicht mit.** Gemessen am gebauten Fenster bei
-        # 1600 auf 1000 Punkten mit gewählter Bohrung (13.09.2026): Sichtfeld
-        # 877 Punkte, Inhalt 1579 — *Im Bild einstellen* lag bei y = 1015,
-        # *Übernehmen* bei y = 1062, also unter dem Rand. Wer eine Zahl tippte,
-        # musste erst rollen, um seinen Schritt abzuschließen. Sie steht
-        # deshalb **unter** dem Rollbereich, nicht darin; dieselbe Regel, die
-        # `fenster.md` für die Karten schon kennt („Was unter der Liste
-        # steht, gehört in beide Rechnungen … sonst schiebt man den einzigen
-        # Weg hinaus, den die Karte anbietet").
+        # **Die Knopfzeile steht unter der offenen Handlung** (FD-136), im
+        # Rollinhalt des Merkmalfensters (``feature_footer``): Unter dem
+        # Rollbereich stand *Übernehmen* am Kartenende, das Feld oben. Dass sie
+        # nicht aus dem Bild rollt (13.09.2026, *Übernehmen* bei y = 1062 unter
+        # dem Rand), hält ``feature_footer.keep_in_sight`` bei jedem Wechsel.
         column = _SelectionPage(self.right, self.report, self, tour=self.tour)
         stack = QVBoxLayout(column)
         stack.setContentsMargins(0, 0, 0, 0)
         stack.setSpacing(0)
         stack.addWidget(scroller, 1)
-        stack.addWidget(self.feature_panel.footer())
 
         # „Auswahl", nicht „Merkmal": Der Reiter steht auch an einem gewählten
         # Körper, seit er dessen Handlungen trägt. Er ist der erste der Karte,
@@ -17409,7 +17404,7 @@ class MainWindow(QMainWindow):
         if result is None:
             return {}
         meshes = [
-            as_mesh_data(entry.mesh)
+            geom_mesh.as_mesh_data(entry.mesh)
             for entry in (result.scene.objects.get(one) for one in chosen)
             if entry is not None
         ]
@@ -17632,7 +17627,7 @@ class MainWindow(QMainWindow):
             return None, "direction"
         at_feature = str(current.get("at_feature") or "")
         direction = tuple(float(current.get(name) or 0.0) for name in ("nx", "ny", "nz"))
-        part = part_of(spec.name)
+        part = parts_ops.part_of(spec.name)
         keeps_up = bool(part is not None and part.keeps_up)
         axis_field = str(current.get("axis") or "z")
         free = any(abs(value) > EPS_GEOM for value in direction)
@@ -18123,7 +18118,7 @@ class MainWindow(QMainWindow):
                 tr(
                     "Für eine Analysekarte ist dieses Modell zu groß: "
                     "{count} Dreiecke, möglich sind {limit}."
-                ).format(count=triangles, limit=limit)
+                ).format(count=count_text(triangles), limit=count_text(limit))
                 + " "
                 + tr("Wählen Sie einen anderen Körper oder schließen Sie die Karte."),
                 tr("Keine Karte"),
@@ -18134,7 +18129,7 @@ class MainWindow(QMainWindow):
             tr(
                 "Für eine Analysekarte ist dieses Modell zu groß: "
                 "{count} Dreiecke, möglich sind {limit}."
-            ).format(count=triangles, limit=limit),
+            ).format(count=count_text(triangles), limit=count_text(limit)),
             tr("Dreiecke verringern"),
             weak_slot(self, MainWindow._decimate_for_a_map, limit),
         )
@@ -18587,6 +18582,12 @@ class MainWindow(QMainWindow):
         target = None if kind == "deviation" else maps.location_of(entry, finding)
         if target is not None:
             self._show_finding_at(str(finding.message), entry, target, finding.outline)
+        else:
+            # **Ohne eigenen Ort ist der Körper die Stelle** (FD-111): Zu groß
+            # für den Bauraum, Erkennung übersprungen, Netzfehler einer
+            # Operation. Die Kamera blieb sonst, wo sie war — im Prüfstand in
+            # der Nahsicht der vorigen Szene, und der Körper füllte das Bild.
+            self.viewport.reset_camera()
         if kind is not None:
             self._analysis_map(kind, entry.id, finding=finding if target is None else None)
 
@@ -18971,7 +18972,7 @@ class MainWindow(QMainWindow):
                 # (``history_moved``). Dann wird aus der automatischen
                 # Übernahme ein normaler Vorschlag — mit dem Fehler dazu,
                 # statt eines stummen Verlusts.
-                show_error(error, self)
+                dialogs.show_error(error, self)
             else:
                 self._proposal = None
                 self._applied_transaction = transaction.id if transaction else None
@@ -19087,7 +19088,7 @@ class MainWindow(QMainWindow):
             # (der Verweis in den Verlauf, §2.7); der Vorschlag bleibt
             # stehen — ihn wegzuräumen wäre die zweite stumme Folge desselben
             # Klicks, und Verwerfen geht weiterhin.
-            show_error(error, self)
+            dialogs.show_error(error, self)
             return
         self._clear_proposal()
 
@@ -19236,7 +19237,7 @@ class MainWindow(QMainWindow):
             # Hinter einem Halt schreibt die Sitzung keinen Schritt und sagt
             # es mit den Handlungen des Halts (Regel 17) — hier ankommen muss
             # das als Dialog, nicht als Zeile auf stderr.
-            show_error(error, self)
+            dialogs.show_error(error, self)
             return
         self.report.add_findings(applied.findings)
         self._queue_split_reveal(applied.object_ids)
@@ -19856,8 +19857,10 @@ class MainWindow(QMainWindow):
             self.viewport.select_feature(feature_id)
         # Eine Vorschau, die zum vorigen Merkmal gehört, hat hier nichts mehr
         # zu suchen — sie zeigte eine Änderung an etwas, das nicht mehr gewählt
-        # ist.
-        self._drop_feature_preview()
+        # ist. Bleibt es dasselbe Merkmal, bleibt ein wartender Klick stehen
+        # (``app.ui.waiting_click``).
+        with kept_through_rebuild(self):
+            self._drop_feature_preview()
         # Merkmalsabhängige Operationen und der getrennte Merkmalsknopf müssen
         # denselben Auswahlstand sehen wie das Dock. Vorher wurde die
         # Menüfreigabe erst beim nächsten Körperklick nachgeführt.
@@ -19881,7 +19884,8 @@ class MainWindow(QMainWindow):
             # Funktion (:meth:`selection_label`): „Halter · Oberseite" stand
             # sonst an zwei Stellen mit je eigener Rechnung, und die driften.
             self.measurements.setText(self.selection_label())
-            self._show_feature_fields(feature_id, entry, result)
+            with kept_through_rebuild(self):
+                self._show_feature_fields(feature_id, entry, result)
             self._fields_this_round = (feature_id, self.feature_panel.serial)
         else:
             self.feature_panel.clear()
@@ -19944,7 +19948,7 @@ class MainWindow(QMainWindow):
             self._start_feature_preview()
             self._lay_out_now()
             return
-        mesh = as_mesh_data(entry.mesh)
+        mesh = geom_mesh.as_mesh_data(entry.mesh)
         if (
             allow_worker
             and mesh.triangle_count >= ANSWERS_IN_WORKER_FROM
@@ -20078,7 +20082,7 @@ class MainWindow(QMainWindow):
         if feature is None:
             return
         self.feature_panel.remember_answers(
-            feature_id, feature, entry.features, as_mesh_data(entry.mesh), answers
+            feature_id, feature, entry.features, geom_mesh.as_mesh_data(entry.mesh), answers
         )
         if worker is not self._answers_worker:
             return
@@ -20087,7 +20091,8 @@ class MainWindow(QMainWindow):
             or self.object_tree.selected_feature() != feature_id
         ):
             return
-        self._show_feature_fields(feature_id, entry, result, allow_worker=False)
+        with kept_through_rebuild(self):
+            self._show_feature_fields(feature_id, entry, result, allow_worker=False)
 
     def _answers_failed(self, worker: _FeatureAnswersWorker, detail: str) -> None:
         """Ein Programmfehler im Arbeiter ist einer — mit Fehlerbericht, ohne Wartezustand."""
@@ -20254,7 +20259,7 @@ class MainWindow(QMainWindow):
         """
         from app.core.perceive.relations import cavity_chain_at
 
-        mesh = as_mesh_data(entry.mesh)
+        mesh = geom_mesh.as_mesh_data(entry.mesh)
         for one, other in ((first, second), (second, first)):
             chain = cavity_chain_at(one, entry.features, mesh)
             if chain is not None and any(link.id == other.id for link in chain):
@@ -20441,7 +20446,8 @@ class MainWindow(QMainWindow):
             # Steht es schon — aus ``featureSelected`` derselben Runde, und
             # seither unverändert —, bleibt es stehen, samt Maßgruppe.
             if shown_this_round != (chosen_id, self.feature_panel.serial):
-                self._show_feature_fields(chosen_id, entry, result)
+                with kept_through_rebuild(self):
+                    self._show_feature_fields(chosen_id, entry, result)
             return
         self.feature_panel.show_pair(first_id, first, second_id, second)
         self.feature_dock.reveal()
@@ -20578,7 +20584,7 @@ class MainWindow(QMainWindow):
         body = result.scene.objects.get(selected) if result else None
         picked = str(params.get("at_feature", ""))
         group = (
-            alike_for_action(op, picked, body.features, as_mesh_data(body.mesh))
+            alike_for_action(op, picked, body.features, geom_mesh.as_mesh_data(body.mesh))
             if body is not None
             else None
         )
@@ -20936,6 +20942,7 @@ class MainWindow(QMainWindow):
             self.end_quiet_placement()
         self._end_changed_quiet_placement()
         previous = self._preview_approval
+        waiting = waiting_approval(self)
         order = self._prepare_feature_order(op, params)
         if self.tools.active() == "split":
             self.tools.close_tool()
@@ -20943,6 +20950,9 @@ class MainWindow(QMainWindow):
             approval = self._set_preview_order(self._quiet_host or self.feature_panel, order)
         else:
             approval = None
+        if waiting is not None and self._preview_approval is not waiting:
+            # Ein anderer Wert verdrängt den wartenden Klick — mit Satz (R2-2).
+            self._say_click_refusal(self._not_applied("values"))
         # **Der Umriss im Bild folgt der Zahl im Feld** (§21.1). Beim
         # Langlochzug stand er in einer eigenen Leiste und folgte deren
         # Feldern; die ist gefallen, und die Felder stehen jetzt rechts.
@@ -21626,7 +21636,11 @@ class MainWindow(QMainWindow):
             if not reading["fields"]:
                 window.feature_panel.take_values(op, host.values(), arm=False)
             previous = window._preview_approval
-            approval = window._set_preview_order(host, order)
+            waiting = waiting_approval(window)
+            approval = window._set_preview_order(host, order, rebuilt=not host.begun)
+            if waiting is not None and window._preview_approval is not waiting:
+                # Ein anderer Wert in der Maßgruppe verdrängt den Klick (R2-2).
+                window._say_click_refusal(window._not_applied("values"))
             if not host.begun:
                 # **Gebunden, nicht gerechnet.** Beim Aufbau der Maßgruppe
                 # stehen die gemessenen Werte im Träger, und eine Vorschau
@@ -21652,7 +21666,10 @@ class MainWindow(QMainWindow):
                 host.refuse_fields(refusal)
                 if interpret:
                     focus_target.setFocus()
-                    window.announce(refusal)
+                    # Steht der Satz schon unter dem Feld, sagt ihn die
+                    # Statuszeile nicht ein zweites Mal (FD-88).
+                    if not stands_in(window._quiet_placement.measure_group, refusal):
+                        window.announce(refusal)
                 return False
             host.refuse_fields(None)
             if interpret:
@@ -22108,6 +22125,16 @@ class MainWindow(QMainWindow):
         """
         if not self._quiet_command_allowed() or not self._begin_from_the_start_screen():
             return
+        # **Hinter einen Halt kommt kein Schritt — gesagt vor dem Dialog**
+        # (FD-104): Eine Befundhandlung wie *In Flächen und Kanten umwandeln*
+        # öffnete ihren Dialog, dessen Hauptknopf grau blieb, ohne Grund. Die
+        # Absage der Sitzung kommt jetzt sofort, mit den Wegen des Halts. Mit
+        # Einfügemarke landet der Schritt vor ihr und geht.
+        if self.session.inserting is None:
+            refusal = self.session.halt_in_the_way()
+            if refusal is not None:
+                self._on_error(refusal)
+                return
         if spec.name == "create_container":
             from app.core.geom.container_ops import ContainerWizardParams
 
@@ -22226,6 +22253,13 @@ class MainWindow(QMainWindow):
                 values.update(dict(zip(("angle_x", "angle_y", "angle_z"), angles, strict=True)))
             except AppError:
                 pass  # Der relative Weg bleibt offen; „nach“ erklärt seinen fehlenden Bezug.
+        # **Umbenennen beginnt beim jetzigen Namen** (FD-114): Mit leerem Feld
+        # tippte man für eine kleine Änderung den ganzen Namen neu.
+        current_name: str | None = None
+        if spec.unchanged_effect == "name" and len(chosen) == 1 and result is not None:
+            named = result.scene.objects.get(chosen[0])
+            if named is not None:
+                current_name = values["name"] = str(named.name)
         # Leere Materialrollen übernehmen die Projektvorgabe. Ausdrücklich
         # mitgebrachte Werte folgen danach und behalten damit Vorrang.
         for parameter in spec.params.spec():
@@ -22264,7 +22298,7 @@ class MainWindow(QMainWindow):
                     measured=length(float(diameter)),
                     feature=feature,
                     features=entry.features if entry else None,
-                    mesh=as_mesh_data(entry.mesh) if entry else None,
+                    mesh=geom_mesh.as_mesh_data(entry.mesh) if entry else None,
                     spec=spec,
                 )
                 # **Eine Frage ohne Antwortweg ist keine Frage, sondern eine
@@ -22414,6 +22448,8 @@ class MainWindow(QMainWindow):
                         # Regel 18: der Grund steht nicht nur am Zeigerbild.
                         item.setData(locked, Qt.ItemDataRole.AccessibleDescriptionRole)
                 variant.setToolTip(str(group.doc))
+                # Auch für den Bildschirmleser (FD-78).
+                variant.setAccessibleDescription(str(group.doc))
                 variant.setCurrentIndex(variant.findData(spec.name))
 
             def chosen_spec() -> OperationSpec:
@@ -22483,6 +22519,10 @@ class MainWindow(QMainWindow):
                 offer_naming=offers_naming(spec) and spec.name != "create_container",
                 # Die letzte Wahl des Kunden, beim ersten Start an (RM-369).
                 naming_default=self.settings.name_dimensions,
+                # Steht der jetzige Name im Feld, wartet *Übernehmen* auf einen
+                # neuen (RA-13, FD-114): kein leerer Schritt „Objekt umbenennen“.
+                # Ein mitgebrachter anderer Name ist schon die Änderung.
+                offered=current_name is not None and values.get("name") == current_name,
             )
             dialog.spoolChosen.connect(remember_spool)
             if spec.name == "apply_texture":
@@ -23024,6 +23064,13 @@ class MainWindow(QMainWindow):
             offer_naming=offers_naming(spec) and spec.name != "create_container",
             naming_default=self.settings.name_dimensions,
             note=self._size_set_later(op_id),
+            # Ein bestehender Schritt: *Übernehmen*, grau bis zur ersten Änderung
+            # (FD-99). Nicht, wenn eine Geste die Werte schon geändert hat
+            # (``given``) oder dieser Schritt die Kette anhält — dort sagt erst
+            # die Vorschau, was gilt, samt Weg (*Gewindeschritt öffnen*).
+            changing=True,
+            wait_for_change=given is None
+            and (self.session.last_result is None or self.session.last_result.stopped_at != op_id),
         )
         number = step_number(self.session.project.document, op_id)
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {number}")
@@ -23393,7 +23440,7 @@ class MainWindow(QMainWindow):
             try:
                 values = expressions.resolve_params(dialog.values(), self._parameter_values())
             except AppError as error:
-                show_error(error, dialog)
+                dialogs.show_error(error, dialog)
                 return
 
             def answered(result: dict[str, Any] | None) -> None:
@@ -23436,7 +23483,7 @@ class MainWindow(QMainWindow):
                 values = expressions.resolve_params(dialog.values(), parameters)
                 editor = OrganizerDialog(values, parameters, dialog, layout_only=True)
             except AppError as error:
-                show_error(error, dialog)
+                dialogs.show_error(error, dialog)
                 return
 
             def finished(accepted: bool) -> None:
@@ -23531,9 +23578,26 @@ class MainWindow(QMainWindow):
         changed_kind = order.change_name is not None and order.change_name != operation.op
         return order.change_op + int(changed_kind)
 
-    def _set_preview_order(self, owner: Any, order: _PreviewOrder) -> _PreviewApproval:
-        """Schon beim Wertwechsel sperren; identische Werte behalten ihre Freigabe."""
+    def _set_preview_order(
+        self, owner: Any, order: _PreviewOrder, *, rebuilt: bool = False
+    ) -> _PreviewApproval:
+        """Schon beim Wertwechsel sperren; identische Werte behalten ihre Freigabe.
+
+        ``rebuilt``: Gebunden wird ohne Eingabe des Kunden — die Maßgruppe vor
+        ihrem ersten Zug trägt nachgereichte Werte ein. **Das ersetzt keine
+        Freigabe, an der ein Klick wartet**: Er verlor ihn still, ohne Schritt
+        und ohne Satz (Review 1, RCI-2). Während eines Neuaufbaus
+        (``app.ui.waiting_click``) gilt dasselbe für jede Bindung; danach zeigen
+        Maßgruppe und Merkmalfenster die Werte des Klicks. Eine Eingabe des
+        Kunden mit anderem Wert ersetzt die Freigabe; ihr Aufrufer sagt, dass
+        der Klick verfällt (``_not_applied("values")``).
+        """
         previous = self._preview_approval
+        if previous is not None and (
+            previous is self._kept_through_rebuild
+            or (rebuilt and previous is waiting_approval(self))
+        ):
+            return previous
         if (
             previous is not None
             and previous.owner is owner
@@ -23792,6 +23856,13 @@ class MainWindow(QMainWindow):
             """Auch Nebenmeldungen tragen denselben Eigentümer und dieselbe Revision."""
 
             def receive(value: Any) -> None:
+                # **Ein abgebautes Fenster hört nichts mehr** (FD-158): Die
+                # Vorschau rechnet im Arbeiter weiter, und ihre Antwort kam
+                # nach dem Abbau an — ``_preview_is_current`` las dann den
+                # Objektbaum, den es nicht mehr gab. Gefragt wird hier, an der
+                # einen Stelle, über die jeder Vorschaurückruf eintrifft.
+                if not isValid(self) or self._close_requested:
+                    return
                 if self._preview_is_current(approval):
                     callback(value)
 
@@ -24682,8 +24753,12 @@ class MainWindow(QMainWindow):
 
         Geschrieben für den geschlossenen Dialog, gilt aber für jeden Weg, an
         dessen Ende keine Vorschau mehr stehen darf; :meth:`_drop_feature_preview`
-        ruft sie ebenfalls.
+        ruft sie ebenfalls. Nicht während eines Neuaufbaus, der eine Freigabe mit
+        wartendem Klick hält (``app.ui.waiting_click``): Ihre Rechnung läuft weiter.
         """
+        kept = self._kept_through_rebuild
+        if kept is not None and self._preview_approval is kept:
+            return
         self._forget_preview_approval()
         self._preview_prefix = None
         self._preview_prefix_result = None
@@ -24772,7 +24847,7 @@ class MainWindow(QMainWindow):
         try:
             activation.require(activation.CHANGE)
         except AppError as error:
-            show_error(error, self)
+            dialogs.show_error(error, self)
             complete(None)
             return
 
@@ -24846,7 +24921,7 @@ class MainWindow(QMainWindow):
             self._source_stopped(worker)
             return
         self._finish_source_read(None)
-        show_error(error, self)
+        dialogs.show_error(error, self)
 
     def _source_crashed(self, worker: _SourceReadWorker, detail: str) -> None:
         """Unerwartete Lesefehler ebenfalls aus dem Wartezustand holen."""
@@ -25537,7 +25612,7 @@ class MainWindow(QMainWindow):
             # Der Frageweg legt erst die gültige Szene zurück und gibt seinen
             # Arbeiter frei. Danach zeigt er genau denselben Fehlerdialog.
             return
-        show_error(InternalError(detail=detail), self)
+        dialogs.show_error(InternalError(detail=detail), self)
 
     def _on_scene(self, result: EvaluationResult) -> None:
         """Eine fertige Auswertung ins Fenster bringen — **nicht verschachtelt**.
@@ -25695,14 +25770,7 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         if chosen == "correct_step":
             if result is not None and result.stopped_at is not None:
-                refusal = next(
-                    (
-                        finding
-                        for finding in result.scene.report.findings
-                        if finding.severity == "error" and finding.op_id == result.stopped_at
-                    ),
-                    None,
-                )
+                refusal = halt_finding(result.scene.report.findings, result.stopped_at)
                 if refusal is not None:
                     self._correct_after_error(as_error(refusal, self.session.project.document))
                 else:
@@ -25941,7 +26009,7 @@ class MainWindow(QMainWindow):
         # „Zuletzt geöffnet“ prüft die Einträge nur beim Aufbau; eine Datei,
         # die seither verschwand, stünde sonst weiter da (Durchsicht 0.5.1).
         self._show_recent()
-        show_error(error, self)
+        dialogs.show_error(error, self)
 
     def _on_import_finished(self, accepted: bool) -> None:
         """Der Stapel steht; die Auswertung läuft danach von selbst.
@@ -26036,7 +26104,7 @@ class MainWindow(QMainWindow):
         if not self.session.project.document.ops and self.session.path is None:
             self._show_start_screen(True)
         self.status_message.setText(self._announcement)
-        show_error(error, self)
+        dialogs.show_error(error, self)
 
     def _on_project(self) -> None:
         # Zuerst, bevor das Abräumen unten die Vorschau nimmt: Ein Strg+Z
@@ -26066,6 +26134,10 @@ class MainWindow(QMainWindow):
             self._bodies_shown = ()
             self._feature_shown = None
             self.feature_dock.forget_dismissal()
+            # **Und ein neuer Rahmen** (FD-111): Dieselbe Kennung galt der
+            # Ansicht als verschobener Körper, und das neue Projekt stand in
+            # der Kamera des alten — bis zum Fünffachen der Größe.
+            self.viewport.frame_next_scene()
         self._selection_document = document
         request = self._map_request
         if request is not None and not self._map_is_current(request):
@@ -26073,7 +26145,15 @@ class MainWindow(QMainWindow):
             self.viewport.set_analysis_map(None, None)
             self.viewport.clear_finding_mark()
             self.analysis_bar.show_legend(None)
-        if self._announcement_document is not self.session.project.document:
+        # **Die Statuszeile folgt dem letzten Schritt** (FD-162): Ein Projekt-
+        # wechsel räumt die Quittung ab, und ebenso ein Schritt nach ihr, der
+        # keine eigene sagt — sonst stand „zurückgenommen“ noch nach der
+        # nächsten Übernahme da.
+        steps = tuple(entry.id for entry in self.session.project.document.transactions)
+        if self._announcement_document is not self.session.project.document or (
+            (self._announcement or self._action_notice.isVisible())
+            and self._action_notice.outlived_by(steps)
+        ):
             self._announcement_document = self.session.project.document
             self.announce("")
         # Eine Änderung während der Erkennung meldet kein ``busyChanged``; das
@@ -26431,8 +26511,30 @@ class MainWindow(QMainWindow):
         return profiles.for_process(self.session.profile, settings, effective=True)
 
     def _foundation_crashed(self, detail: str) -> None:
+        """Der Arbeiter kam nicht zurück: Solidons Tabelle ist die Grundlage (RA-14).
+
+        Ohne Merker galt die Zahlenzeile danach für immer als vorläufig, und
+        ihre Kurzhilfe sagte, das Slicerprofil werde noch gelesen. Gemerkt wird
+        die Tabelle für genau den Schlüssel, für den gerechnet wurde — Schlüssel
+        und Stufe trägt der Arbeiter, der sich meldet. Der Absturz eines
+        abgelösten Arbeiters ändert nichts.
+        """
         _log.warning("print foundation worker crashed: %s", detail)
+        worker = self.sender()
+        key = getattr(worker, "_key", None)
+        quality = getattr(worker, "_quality", None)
+        if key is None or quality is None:
+            self._foundation_pending = None
+            return
+        if self._foundation_pending != key:
+            return
         self._foundation_pending = None
+        self._foundation_cache = (
+            key,
+            manufacturer.base_settings(self.session.profile, quality, None),
+        )
+        if not self._close_requested:
+            self._update_facts()
 
     def _foundation_worker_done(self, worker: Any) -> None:
         if self._foundation_worker is worker:
@@ -26458,9 +26560,26 @@ class MainWindow(QMainWindow):
         if result is None or not result.scene.objects:
             self.facts.show_estimate(None, self._facts_key())
             return
+        session = self.session
+        if not (session.result_current or session.picture_current):
+            # Das Ergebnis gehört zum Stand vor der letzten Änderung; die Zeile
+            # behält ihre Zahl, bis das neue da ist (FD-89).
+            return
+        settings = self.effective_print_settings()
+        cached = self._foundation_cache
         bodies = [(entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()]
+        # **Verglichen wird nur zwischen Schritten auf derselben Grundlage**
+        # (FD-89): Die Grundlage des Slicerprofils kommt nach der ersten
+        # Auswertung aus dem Arbeiter, und die Zeile meldete die Differenz als
+        # „seit dem letzten Schritt“. Der Stand ist die Folge der
+        # Transaktionen; die Einfügemarke zählt zur Grundlage, denn sie ändert
+        # die Zahl ohne Schritt.
         self.facts.show_estimate(
-            estimate_total(bodies, self.effective_print_settings()), self._facts_key()
+            estimate_total(bodies, settings),
+            self._facts_key(),
+            state=tuple(entry.id for entry in session.project.document.transactions),
+            basis=(settings, session.inserting),
+            provisional=cached is None or cached[0] != self._foundation_key(settings.quality),
         )
 
     def _facts_key(self) -> str:
@@ -26523,6 +26642,11 @@ class MainWindow(QMainWindow):
                 self._render_progress_state()
             return
         self._announcement = text
+        # Nach welchem Schritt gesagt wurde: Der nächste nimmt die Quittung mit
+        # (FD-162, :meth:`ActionNotice.outlived_by`).
+        self._action_notice.remember(
+            tuple(entry.id for entry in self.session.project.document.transactions)
+        )
         # Nur was neben einem solchen Lauf gesagt wird, nimmt ihm die Zeile:
         # Eine Ansage unter einer Teilung oder einem Export gehört zu diesem
         # und soll danach nicht über dem Agenten stehen bleiben.
@@ -26903,7 +27027,16 @@ class MainWindow(QMainWindow):
         Maßgruppe, und die übernimmt nur ein gezeigtes Bild
         (``QuietHost.requires_displayed_preview``) — das gilt auch hier, wo
         die Maßgruppe nicht mehr steht.
+
+        **Die Uhr des Neuaufbaus fällt.** Er meldete die Werte des Schritts
+        als Änderung (``show_texture``) und stellte die Entprellung; lief sie
+        ab, bevor die Vorschau dieses Klicks stand, band sie die alten Werte,
+        und der Klick verfiel still (CI macOS Intel, Lauf 38815410592). Eine
+        Eingabe des Kunden hätte den wartenden Klick schon vorher mit Satz
+        verworfen (:meth:`_check_waiting_order`).
         """
+        self._feature_pending = None
+        self._feature_preview.stop()
         if displayed:
             approval = self._set_preview_order(self.feature_panel, order)
             if approval.required is False:
@@ -27270,8 +27403,18 @@ class MainWindow(QMainWindow):
         zeigt es alte Pixel. Verborgen ist es kein Fenster, und der Schleier
         gewinnt. Der Wechsel zurück läuft über ``ended`` — denselben Weg, den
         auch der Seitenwechsel des ``middle_stack`` täglich geht.
+
+        **Der Fokus kommt mit der Ansicht zurück.** Verbirgt Qt das Widget mit
+        dem Fokus, reicht es ihn an das nächste Glied der Tabulatorkette weiter
+        — den Griff der rechten Karte, der dann nach jedem Laden den
+        Fokusrahmen in der Akzentfarbe trug wie eine zweite Markierung. Wohin
+        Qt ihn reichte, merkt sich ``_veil_focus`` neben dem früheren Halter.
         """
+        before = self.focusWidget()
+        inside = before is not None and self.middle_stack.isAncestorOf(before)
         self.middle_stack.setVisible(False)
+        if inside and not self.middle_stack.isVisible():
+            self._veil_focus = (weakref.ref(before), self.focusWidget())
 
     def _on_veil_ended(self) -> None:
         """Der Schleier ist weg — die Ansicht kommt zurück.
@@ -27279,8 +27422,22 @@ class MainWindow(QMainWindow):
         Erst jetzt wird das native Fenster erzeugt und gerendert; die Szene
         steht zu diesem Zeitpunkt bereits, das erste Bild ist also das
         fertige Modell und nicht Schwarz.
+
+        Den Fokus bekommt zurück, wer ihn vor dem Schleier hatte — aber nur,
+        solange er noch dort steht, wohin Qt ihn beim Verbergen reichte: Wer
+        während des Ladens selbst woanders hinklickte, behält seine Wahl.
         """
         self.middle_stack.setVisible(True)
+        held, handed = self.__dict__.pop("_veil_focus", (None, None))
+        owner = held() if held is not None else None
+        if (
+            owner is not None
+            and isValid(owner)
+            and self.focusWidget() is handed
+            and owner.isVisibleTo(self)
+            and owner.isEnabled()
+        ):
+            owner.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _on_ask(self, request: AskRequest) -> None:
         """Der Arbeiter wartet, solange dieser Dialog offen ist (§21.3).
@@ -27512,14 +27669,14 @@ class MainWindow(QMainWindow):
             error.suggestions = tuple(
                 action for action in error.suggestions if action.id != REPAIR_AND_RETRY.id
             )
-        show_error(error, self)
+        dialogs.show_error(error, self)
 
     def _adopt_carried_printers(self) -> None:
         """Übernimmt den mitgebrachten Drucker und sagt, was geschehen ist."""
         try:
             adopted = self.session.adopt_carried_printers()
         except AppError as error:
-            show_error(error, self)
+            dialogs.show_error(error, self)
             return
         if adopted:
             self.announce(tr("Der Drucker steht jetzt in Ihren Druckern."))
@@ -27547,7 +27704,7 @@ class MainWindow(QMainWindow):
             # Die Rücknahme-Warnung des Agenten zeigt in den Verlauf — dort
             # stehen die Transaktionen, die eine Annahme mitnähme (H-1).
             "show_history": lambda _error: self._flash_area("history"),
-            "generate_again": lambda _error: self._generate(None),
+            "generate_again": lambda error: self._generate(None, error),
             # **Ein Rat, den nur der Kunde ausführen kann, ist ein halber.**
             # „Die Teilung läuft schon" schlägt vor, sie abzubrechen, und die
             # Handlung gibt es (``Session.cancel_split`` hält an *und*
@@ -27592,7 +27749,8 @@ class MainWindow(QMainWindow):
             # Derselbe Weg an einem Befund, der sagt, was ein Schritt getan hat
             # (RM-374): *Größe ändern* öffnet ``fit_to_size`` mit dem Cursor im
             # Maß — der Wert ist danach ein gewöhnlicher Parameter.
-            "change_step": self._correct_after_error,
+            # Und an einer Auswahlabsage das Feld, das sie nennt (RB-2, ``choice_ways``).
+            "change_step": lambda error: self._correct_after_error(for_the_choice(error)),
             # **Eine unlesbare Zeichenebene** (``sketch.planes._unreadable``):
             # Der Schritt geht mit dem Cursor im Ebenenfeld auf, das der Kern
             # nennt — dort wird die andere Ebene gewählt. Bis zum 22.09.2026
@@ -28547,7 +28705,7 @@ class MainWindow(QMainWindow):
             )
             return
         volume = self.session.profile.printer.build_volume
-        size = as_mesh_data(entry.mesh).bounds.size
+        size = geom_mesh.as_mesh_data(entry.mesh).bounds.size
         needed_any = [needed for needed in size if needed > 0.0]
         if not needed_any:
             return
@@ -28641,7 +28799,7 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         chosen = self.object_tree.selected_objects()
         entries = [result.scene.objects.get(entry) for entry in chosen] if result else []
-        meshes = [as_mesh_data(entry.mesh) for entry in entries if entry is not None]
+        meshes = [geom_mesh.as_mesh_data(entry.mesh) for entry in entries if entry is not None]
         described = describe_selection(result, object_id)
         if described is None or not meshes:
             self.measurements.clear_selection()
@@ -28897,7 +29055,7 @@ class MainWindow(QMainWindow):
         try:
             self.session.recover(candidate)
         except AppError as error:
-            show_error(error, self)
+            dialogs.show_error(error, self)
             return
         self._show_start_screen(False)
 
@@ -29064,7 +29222,9 @@ class MainWindow(QMainWindow):
                 self.announce(tr("Die Seite war nicht erreichbar — später noch einmal versuchen."))
             else:
                 self.announce(
-                    tr("Sie haben die aktuelle Version ({version}).").format(version=APP_VERSION)
+                    tr("Sie haben die aktuelle Version ({version}).").format(
+                        version=branding.APP_VERSION
+                    )
                 )
 
     def _offer_survey(self) -> None:
@@ -29141,7 +29301,7 @@ class MainWindow(QMainWindow):
         """
         package = Path(str(file))
         if not package.is_file():
-            show_error(
+            dialogs.show_error(
                 ExternalToolError(
                     tool="update",
                     detail=tr("Das Paket liegt nicht mehr da, wo es geladen wurde."),
@@ -29367,6 +29527,7 @@ class MainWindow(QMainWindow):
         # Das Zeichen steht neben der Zahl, nicht statt ihrer: dieselbe zweite
         # Kodierung wie am Reiter (Regel 18).
         self.alert_button.setText(f"{SEVERITY_MARKER['warning']} {count}")
+        settle_in_bar(self.alert_button)
         hint = (
             tr("Ein offener Befund — anklicken öffnet den Prüfbericht.")
             if count == 1
@@ -29439,7 +29600,7 @@ class MainWindow(QMainWindow):
         names: dict[str, str] = {}
         for target in get_args(TourTarget):
             try:
-                area = widget_for(self, target)
+                area = guide_targets.widget_for(self, target)
             except MissingTargetError:
                 continue
             index = self.right.indexOf(area)
@@ -29481,7 +29642,7 @@ class MainWindow(QMainWindow):
             self.right_tabs.stop_pointing()
             return
         try:
-            area = widget_for(self, target)
+            area = guide_targets.widget_for(self, target)
         except MissingTargetError as missing:
             _log.warning("tour flash without target: %s", missing)
             return

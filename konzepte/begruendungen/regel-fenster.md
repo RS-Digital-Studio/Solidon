@@ -861,6 +861,43 @@ hält schon das Klappen den Anker, damit die Überschrift unter dem Zeiger
 bleibt, und ohne den Anker zog die passive Nachmessung einen Umlauf später den
 Dialog nach oben (`ContentHeight._keeps_anchor`).
 
+## Klappen messen ausdrücklich, ohne Balken und mit Breite
+
+Den senkrechten Balken, der nach dem Aufklappen einen Umlauf lang steht,
+schaltete zuerst nur der Operationsdialog für seine Messung ab (R1 zu FD-45).
+*Parameter anlegen* behielt danach bei 11 pt 17 Punkte leer über den Knöpfen
+(FD-198): In der Balkenenge brach der Erklärsatz eine Zeile mehr um, und Qt
+behielt den Balken auch in der gewachsenen Höhe, weil `QScrollArea` die
+Breitenhöhe in der alten Ausschnittbreite nachrechnet. Deshalb misst und legt
+`ContentHeight.fit` für jeden Anlass ohne Balken und stellt ihn danach zurück;
+braucht der Inhalt ihn am Bildschirmrand wirklich, kommt er wieder. Für die
+Wunschhöhe zählt ohnehin `maximumViewportSize`, nicht die vorläufige Enge;
+nötige und dauernde Querleisten bleiben in `_hidden_height` berücksichtigt.
+
+Ein Satz, der seine Höhe selbst pinnt (`WrappedNote`), bekommt die neue Breite
+erst mit den Layout-Anfragen, die das Legen stellt, und Qt arbeitet in einem
+`sendPostedEvents` nur ab, was vor dem Aufruf anstand — je Schachtelungsebene
+eine Runde. Gemessen am Chatdialog bei 9 pt: Der Schlüsselsatz pinnte in der
+Balkenenge drei Zeilen, in der Endbreite zwei, und die 14 Punkte blieben leer,
+weil erst das passive Nachmessen sie sah, und das gibt nie zurück. Darum ein
+zweiter Durchgang nach `_LAYOUT_LEVELS` Runden, nur wenn sich der Wunsch
+verschoben hat.
+
+Fünf Dialoge — *Parameter anlegen*, *Baustein speichern*, *Erste Schritte*,
+*Chat einrichten*, *Solidon freischalten* — maßen ihre Klappen nur passiv und
+gaben beim Zuklappen bis zu 326 Punkte nicht zurück. Jede Klappe eines
+`ContentHeight`-Dialogs ruft deshalb `explicit`.
+
+Quer rollte *Material kalibrieren* bei 14 und 16 pt 9 bis 12 Punkte
+(FD-199), *Bohrung setzen* bei 16 und 18 pt 8 (FD-200), *Baustein speichern*
+schon beim Öffnen bis 214, jeweils mit über 200 Punkten frei daneben: Am
+Bildschirmrand bleibt der senkrechte Balken und nimmt dem Inhalt seine Breite,
+und ein Dialog ohne Breitenwachstum beim Öffnen misst seine Mindestbreite nie.
+`fit` verbreitert deshalb nach dem Legen um das, was der Inhalt samt
+gebliebenem Balken mehr braucht, bis zum Bildschirmrand. Der R1-Test nahm jede
+Querleiste aus, weil der Prüfschirm schmal sei; er zählt sie jetzt, außer der
+Schirm deckelt die Breite wirklich.
+
 ## Wie die Karten ihre Höhe teilen
 
 `OverlayHost._chrome_height` bestimmt Reiterleiste und Rand aus der gesamten
@@ -1058,3 +1095,25 @@ dass *Merkmal verschieben* an Zapfen, Senkung, Kugel und Ring wie *Bohrung
 ändern* ins Bild führt; die Entscheidung vom 10.09.2026, dass Verschieben auf
 Klick rechnet, ist damit zurückgenommen. Der Kunde schrieb: „das Verschieben
 mit Maßen bei Bohrungen ist gut, bei anderen Merkmalen fehlen sie“.
+
+**Welche Wege hinter einem Halt gehen, sagt der haltende Befund** (RA-3,
+Review 1 Restpaket A). Eine Liste von Kennungen (`change_lock.CHAIN_WAYS`:
+`correct_input`, `repair_and_retry`, `split_and_retry`, `recount_and_retry`,
+`decimate_and_retry`, `remesh_and_retry` und weitere) graute am Halt „braucht
+einen ausgeschalteten Schritt“ dessen beide Wege und gab hinter einem fremden
+Halt Wege frei, die die Sitzung danach ablehnte. Seither antwortet
+`revision.halt_finding` für Sitzung, Revision und Bericht: Die Handlungen am
+haltenden Befund gehen, jede andere ändernde steht grau mit dem Halt als
+Grund.
+
+## Befundklick: Ortsmarken
+
+*Aus `fenster.md` beim Merge von welle5 (16.10.2026), wegen der Ladelast von
+`main_window.py`.*
+
+Ortsmarken verwenden `FINDING_COLOUR` vor Material, Abstand als Radius,
+Titelgrund in Kamera-Oben-Richtung und `Finding.outline` als Rand
+(`ansicht.md`, „Was gefärbt wird“). Die Marke wird nicht nach vorn gezogen;
+nur die Beschriftung ist `always_visible`. Szenenorte gehen durch
+`view_point_of`, Kartenorte kommen in `_map_ready`. Mehrschritt-Transaktionen
+tragen am Gruppenknoten nur `OPS_ROLE`.

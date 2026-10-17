@@ -170,7 +170,6 @@ def test_the_face_keeps_its_lines_columns_and_footer_when_it_shrinks(
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(0)
     layout.addWidget(scroller, 1)
-    layout.addWidget(feature_panel.footer())
     tabs.addTab(page, "Auswahl")
     shell = QWidget()
     box = QVBoxLayout(shell)
@@ -222,10 +221,21 @@ def test_the_face_keeps_its_lines_columns_and_footer_when_it_shrinks(
     assert after[1] <= before[1], "Die Karte darf dabei nicht höher werden"
     assert after[2] <= before[2], "Zusätzlicher Rollweg wäre versteckte Mehrhöhe"
     assert all(operations.columns_of(title) >= count for title, count in columns.items())
-    assert operations._quick_columns == quick_before
+    # Die Hauptknöpfe bleiben, wie sie standen — außer die Karte ist innerhalb
+    # der Reserve breiter geworden, und ihr Paar passt jetzt nebeneinander.
+    # Wo diese Schwelle liegt, hängt an der Schriftrasterung: DejaVu unter
+    # macOS (CoreText) maß 508 statt 498, und das Paar passte (CI-Lauf
+    # 38781742486). Weniger Spalten oder ein Wechsel ohne Zuwachs bleiben rot.
+    if operations._quick_columns != quick_before:
+        assert operations._quick_columns > quick_before and after[0] > before[0], (
+            quick_before,
+            operations._quick_columns,
+            before,
+            after,
+        )
     for label, height in heights.items():
         assert label.heightForWidth(label.width()) <= height, label.text()
-    assert feature_panel.footer().geometry().bottom() <= page.height()
+    assert feature_panel._footer.geometry().bottom() <= feature_panel.height()
     assert scroller.horizontalScrollBar().maximum() == 0
 
 
@@ -475,7 +485,6 @@ def test_open_hole_coordinates_follow_actual_font_changes(
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(0)
     layout.addWidget(scroller, 1)
-    layout.addWidget(panel.footer())
     tabs.addTab(page, "Auswahl")
     shell = QWidget()
     box = QVBoxLayout(shell)
@@ -538,7 +547,7 @@ def test_open_hole_coordinates_follow_actual_font_changes(
             "Geöffnete XYZ-Felder bleiben bei vorhandenem Platz nebeneinander"
         )
         assert coordinates.width() >= coordinates._needed()
-        assert panel.footer().geometry().bottom() <= page.height()
+        assert panel._footer.geometry().bottom() <= panel.height()
         assert scroller.horizontalScrollBar().maximum() == 0
         from app.ui.card_width import button_width
 

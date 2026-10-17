@@ -56,10 +56,11 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QTextDocument
 from PySide6.QtWidgets import QApplication
 
-from app.branding import APP_NAME, APP_VERSION, website_page_url
+from app import branding, i18n
+from app.branding import APP_NAME, website_page_url
 from app.core import figures, guides, manual, markup
-from app.i18n import TranslatableText, _, set_language, tr
-from app.i18n.catalog import available_languages, install_language
+from app.i18n import TranslatableText, _, catalog, tr
+from app.i18n.catalog import available_languages
 
 #: Wohin die Filme gehen, je Sprache ein Unterordner. ``marketing/`` liegt nur
 #: lokal (Entscheidung Robert, 26.09.2026).
@@ -191,7 +192,7 @@ def check_pictures(folder: Path, chosen: tuple[guides.Guide, ...]) -> None:
             stale.append(f"{guide.key}: nie aufgenommen")
         elif entry["fingerprint"] != guides.fingerprint(guide):
             stale.append(f"{guide.key}: seit der Aufnahme geändert")
-        elif entry["version"] != APP_VERSION:
+        elif entry["version"] != branding.APP_VERSION:
             stale.append(f"{guide.key}: aufgenommen mit {entry['version']}")
     if stale:
         raise SystemExit(
@@ -425,7 +426,7 @@ def _opening(draw: _Painter, film: Film) -> QImage:
         else:
             summary = html.escape(markup.plain(str(film.chapters[0].summary)))
             draw.rich(painter, QRectF(120, 400, 1500, 200), summary, 44, colour=draw.muted)
-        version = f"{tr('Version')} {APP_VERSION}"
+        version = f"{tr('Version')} {branding.APP_VERSION}"
         draw.plain(painter, QRectF(120, 990, 800, 40), version, 26, draw.muted)
     finally:
         painter.end()
@@ -635,7 +636,7 @@ def _probe(path: Path, seconds: float) -> dict[str, Any]:
         "fps": FPS,
         "video": "h264",
         "audio": "aac",
-        "version": APP_VERSION,
+        "version": branding.APP_VERSION,
     }
 
 
@@ -751,8 +752,8 @@ def main(argv: list[str] | None = None) -> int:
     os.environ.pop("QT_QPA_PLATFORM", None)
     app = QApplication.instance() or QApplication([])
     for language in arguments.languages or available:
-        install_language(language)
-        set_language(language)
+        catalog.install_language(language)
+        i18n.set_language(language)
         print(f"{language}:", flush=True)
         for film in films(arguments.only):
             make_film(

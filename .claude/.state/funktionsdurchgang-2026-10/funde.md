@@ -17,7 +17,7 @@ Felder je Fund, in dieser Reihenfolge:
 | Ursache | Satz |
 | Vorschlag | Satz |
 | Wirkung beim Kunden | Satz |
-| Stand | offen RM-…, behoben `<commit>`, gut nach Fix `<lauf>` |
+| Stand | offen RM-…, behoben `<commit>`, gut nach Fix `<lauf>`; nennt ein offener Stand einen Commit im Laufkopf, sagt er mit „Rest: …“, was offen bleibt, sonst hält `report` den Lauf an (FD-153) |
 
 Schwer heißt falsches Ergebnis, Datenverlust, Sackgasse oder nicht auffindbar;
 mittel heißt Regelverstoß, Umweg oder Fehlerweg ohne Handlung; leicht heißt
@@ -113,7 +113,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `app/core/geom/prepare_ops.py` (doc und Feldtitel), `field_ops.py`; das Wort steht im eingefrorenen Bestand von `tests/data/customer_vocabulary.json`.
 - Vorschlag: Slicer-Wort, etwa „Spiel des Materials einrechnen“, in allen Sprachen neu übersetzt; Bestand schrumpft.
 - Wirkung beim Kunden: Wer aus dem Slicer kommt, versteht nicht, warum die Bohrung größer wird als getippt.
-- Stand: offen RM-741; der Fix (`f333e5ba7`, welle4 `b86381559`) ersetzt das Wort nur an der Maßgruppe — der finale Lauf zeigt „Materialtoleranz“ weiter im doc von *Bohrung setzen* (037, V1 Fund), in der Zusammenfassung von *Bohrung verschließen* (037) und in der Detailmeldung (043); Stufe B V1 offen (D4, D8).
+- Stand: behoben `9ef1b33a0`, `970e8a458`; `tests/test_hole_compensation_words.py` am Stand davor rot (fünf Operationen mit „Materialtoleranz berücksichtigen“ in sechs Sprachen, dazu der alte Titel in `scene/fits.py`), danach heißt der Haken überall „Druckabweichung ausgleichen“ mit dem Satz zur Lochkorrektur aus dem Materialprofil, auch im Befund und im Handbuch; die erzeugten Handbuchseiten zieht das Release nach.
 
 ### FD-8 Der Kalibrierstand heißt „Startwert“
 
@@ -125,7 +125,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `app/ui/calibration_dialog.py:73` (`tr("Startwert", context="Kalibrierstand")`).
 - Vorschlag: „noch nicht kalibriert“ oder „Werkswerte“.
 - Wirkung beim Kunden: Das Wort sagt nicht, dass noch nicht gemessen wurde.
-- Stand: offen RM-747
+- Stand: behoben `eda0f8407`; Dialog und Kommandozeile sagen „noch nicht kalibriert“, beide Tests am Stand davor rot („PETG — Startwert“); der Agentenauszug folgt dem Wort aus Bauplan §23.
 
 ### FD-9 Die Beschreibung von Schriftzug anlegen ist zu lang
 
@@ -137,7 +137,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `app/core/geom/label_ops.py` (doc).
 - Vorschlag: ein Satz, etwa „Legt einen Schriftzug als eigenes Objekt an — zum Aufkleben oder für zwei Farben.“; Eintrag in `tests/data/text_lengths/` streichen.
 - Wirkung beim Kunden: Ein zu langer Satz über dem ersten Feld wird übersprungen.
-- Stand: offen RM-747
+- Stand: behoben `5c8ba4e60`; `test_text_length.py` nach Streichen des Bestandseintrags am Stand davor rot („op_doc zu lang“), mit dem neuen Satz in sechs Sprachen grün.
 
 ### FD-10 Die Messfelder der Kalibrierung erklären sich nicht
 
@@ -161,7 +161,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `app/ui/dialogs.py` (`ParameterDialog`, Felder ohne Satz).
 - Vorschlag: je Feld ein Satz, etwa „So heißt das Maß in Ausdrücken, etwa @breite.“
 - Wirkung beim Kunden: Wofür Ober- und Untergrenze gut sind, muss er raten.
-- Stand: offen RM-747
+- Stand: behoben `3a1e6fdf1`; `test_parameter_dialog.py::test_every_field_says_what_it_does_on_both_halves` am Stand davor rot („Name: ohne Satz“), danach trägt jedes Feld einen Satz an Feld, Beschriftung und Beschreibung.
 
 ### FD-12 Am Drehfeld eines Zahlenfelds fehlt die Beschreibung für Hilfsmittel
 
@@ -257,7 +257,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `app/ui/selection_operations.py` (`collapsible(..., open_now=False)`).
 - Vorschlag: Zuweisung oben als Zeile mit Farbe, oder offen, solange kein Filament zugewiesen ist.
 - Wirkung beim Kunden: Mehrfarbdruck ist ein häufiges Ziel, seine Zuweisung liegt am Ende der längsten Liste.
-- Stand: offen RM-747
+- Stand: behoben `55c856d12`; `test_print_section_place.py` am Stand davor rot, danach steht die Klappe *Filament und Druck* direkt unter den Hauptaktionen mit dem Farbfeld der Zuweisung; Bild hell und dunkel.
 
 ### FD-20 Die Maßspalte im Objektbaum schneidet krumme Maße ab
 
@@ -269,7 +269,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `app/ui/panels.py` (`_size_columns`, Spalte auf `MEASURE_SHARE` gedeckelt).
 - Vorschlag: Spalte nach dem Inhalt der sichtbaren Zeilen statt nach festem Anteil.
 - Wirkung beim Kunden: Ein eingelesenes Modell mit krummen Maßen zeigt das Maß abgeschnitten.
-- Stand: offen RM-748
+- Stand: behoben `6209cb930`, `9b6232ff7`, `51a9d0c75`; `test_object_tree_columns.py` am Stand davor rot, danach nimmt die Maßspalte, was die Namen übrig lassen, und die linke Karte wird bis `LEFT_MAX` breiter; Wächter `test_left_card_width_window.py` (`26f33fc8e`) gegen die Mutation rot; Maßspalte nativ in sechs Sprachen ganz (Schlusslauf `d9f7a81f9` L4 052–057); die Nachurteile am Schlusslauf (`d9f7a81f9` L4 054–057) zeigten in es, it, pt und fr noch gekürzte Maße; Rest behoben `b9993ff5d` (Nachzüge `59a374c15`, `d07f5d3ec`): das Maß bekommt seine Breite zuerst, Merkmalsnamen zählen für die Kartenbreite ganz, ein gekürzter Name steht ganz in der Kurzhilfe, Test am Stand davor 4 rot; nativ belegt (Nativer Endblock `2ba3ee78c` L4-fx 054–056: Maße ganz, gekürzt nur Namen, auch `tool:analysis`).
 
 ### FD-21 Jede Fehlermeldung ist ein rohes Systemfenster
 
@@ -401,7 +401,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: Der Knopf wartet auf eine Änderung und sagt es nicht.
 - Vorschlag: ein Satz, der das erste Feld als Weg nennt; der Prüfstand zählt einen offenen Feldtitel derselben Fläche als Ausweg (Entscheidung Koordinator).
 - Wirkung beim Kunden: Ein grauer Knopf ohne Satz sieht aus wie gesperrt.
-- Stand: offen RM-737
+- Stand: behoben `827d559cc`, `3ecee68ce` (Maßgruppe), `ce8390478` (Merkmalfenster und Flächenkarte), `38ab43c4f` (Operationsdialog); `test_measure_card_first_change.py`, `test_feature_first_change.py` und `test_operation_dialog_change.py` je am Stand davor rot, danach grün: *Übernehmen* ist bis zur ersten Änderung grau mit „Erst „{Feld}“ ändern, dann übernehmen.“ aus einer Quelle (`app/ui/first_change.py`).
 
 ### FD-32 Der Sperrgrund steht im Reiter Auswahl zweimal
 
@@ -413,7 +413,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: FD-5 setzte den Satz an beiden Flächen.
 - Vorschlag: die Zeile unter dem Suchfeld gilt für den Reiter; das Merkmalfenster trägt den Grund nur an seinen grauen Elementen.
 - Wirkung beim Kunden: Derselbe Satz zweimal lenkt vom Weg ab.
-- Stand: offen RM-737
+- Stand: behoben `4170f587b`, `e5a172a4a`; Nachweis `6c413f383` (`test_lock_reason_once.py`, am Stand vor `4170f587b` rot mit zwei Zeilen, danach genau eine).
 
 ### FD-33 Jede Aktualisierung der Fensterbefehle fragt nach dem exakten Kern
 
@@ -425,7 +425,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: Die Anwesenheit des Kerns wird bei jedem Aufruf neu gesucht, obwohl sie sich im Prozess nicht ändert.
 - Vorschlag: je Prozess einmal ermitteln, an der Quelle; Messung vorher und nachher.
 - Wirkung beim Kunden: Jede Auswahl und jede Handlung kostet unnötig Zeit im Hauptfaden.
-- Stand: offen RM-737
+- Stand: behoben `ca9f933a7`; nachgemessen mit CPU-Zeit im Wechsel: die Frage rund 1 000 µs → unter der Auflösung, `_update_actions` 2,97–3,44 → 2,08–2,60 ms; Wächter `test_kernel_switch.py::test_the_kernel_is_looked_up_once_per_process`.
 
 ### FD-34 Eine erkannte Bohrung holt Bohrung ändern ins Bild, rechts bleibt Merkmal verschieben scharf
 
@@ -437,7 +437,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `request_in_view` holt die Maßgruppe ins Bild, ohne ihre Handlung scharf zu machen, wie es der Knopf *Im Bild einstellen* tut.
 - Vorschlag: ein Weg für Auswahl und Knopf; die Handlung im Bild ist auch rechts die scharfe.
 - Wirkung beim Kunden: Rechts steht offen eine andere Handlung als die, deren Maße er im Bild sieht.
-- Stand: offen RM-737; Fix `aa1bae3ba` (in welle4 `6238bf7fd`): Rechts ist die Handlung im Bild scharf, *Merkmal verschieben* steht im finalen Lauf nur noch als zugeklappter Kopf (007). Offen bleibt nach Stufe B (`resize_hole`, Prüfpunkt 1), dass mit der Maßgruppe die Verschiebepfeile des Merkmals an derselben Bohrung scharf im Bild stehen (02, 016, 019).
+- Stand: offen RM-737; Hauptteil behoben `aa1bae3ba` (rechts ist die Handlung im Bild scharf, *Merkmal verschieben* nur noch zugeklappt); F5 `90600562c` lässt die Pfeile des Griffs erst ab der Knopfreichweite beginnen. Rest: Die Verschiebepfeile des Merkmals stehen neben der Maßgruppe scharf an derselben Bohrung (Stufe B, 02, 016, 019), nativ bestätigt im Schlusslauf (`d0173380f` L1 de/001, `d9f7a81f9` L4 001, 019, 022).
 
 ## D0: Entwurf neuer Belege und Funde aus den Fixen (FD-35 bis FD-85)
 
@@ -465,7 +465,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: FeaturePanel._removal_way nennt die Entfernen-Zeile auch während eines begonnenen Maßentwurfs, obwohl _settle_lock sie dann sperrt. Ohne begonnenen Entwurf ist der direkte Weg richtig.
 - Vorschlag: Begonnenen Entwurf unterscheiden; zuerst Abbrechen und danach den tatsächlichen Entfernen-Titel nennen. Fixbericht fix-probe-feedback-codex.md: vier Produktzeilen, sechs Kataloge, 6 vorher rot/18 Gegenfälle grün, danach 24 grün; echte DE-Aufnahme bestätigt den Text.
 - Wirkung beim Kunden: Wer dem bisherigen Hinweis folgt, erreicht einen gesperrten Knopf; der erforderliche erste Schritt fehlt.
-- Stand: offen RM-737; der Hinweis nennt im finalen Lauf zuerst „Abbrechen“ (001 Fehlfall; Fix `c75ece14b`, welle4 `f807415569`, Rottest 6 rot), doch der angebotene Weg Abbrechen → *Merkmal entfernen* ist im Lauf nicht durchgeklickt; P7 und V5 beider Prüfer offen (D4).
+- Stand: behoben `c75ece14b`; der Hinweis nennt zuerst *Abbrechen*, Rottest am Stand davor rot (6); den zweiten Schritt des Wegs (*Merkmal entfernen* nach *Abbrechen*) geht der Prüfstand seit `3a70b3806` mit (`tools/function_way.py`); nativ belegt (Schlusslauf `d9f7a81f9` L4 001 `04-fehlfall`): Der Hinweis nennt zuerst *Abbrechen*; der zweite Schritt ist ein Hinweis ohne Knopf, Beleg bleibt der Test.
 
 ### FD-37 Flächenaufnahme einer Sofortaktion entsteht erst nach ihrer Wirkung
 
@@ -573,7 +573,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Gemeinsames FeatureSetField-QListWidget orientiert seine Höhe nicht an der tatsächlichen Zeilenzahl; Mindest-/Maximalhöhe und Qt-Größenhinweis reservieren zu viel Listenraum.
 - Vorschlag: Listenhöhe aus vorhandenen Zeilen, Zeilenhöhen, Rahmen und Innenabständen; bei vielen Einträgen begrenzen und rollen. Nach Einfügen/Schrift-/DPI-Wechsel nachziehen, keine feste deutsche Pixelhöhe. Ziel im DE-Einzelfall etwa40–48px statt224px.
 - Wirkung beim Kunden: Unnötige Leere macht den Dialog länger und verschiebt weitere Felder/Knöpfe nach unten; keine exakt verdeckte Modellfläche aus getrenntem Dialogbild behauptet.
-- Stand: offen RM-741; die Listenreserve ist im finalen Lauf weg (037–042 Liste eine Zeile, `group_pattern` und `hollow_object` ohne Reserve; Fix `2e4752521`, welle4 `27a18b48c`, Rottest rot), doch an `pattern_feature` bleibt in DE, EN, FR und IT ein Leerstreifen von etwa 40 px über den Knöpfen, den Stufe B unter FD-45 führt (D4).
+- Stand: behoben `2e4752521` (Listenreserve), `43113904f` (Anfangsmessung in der endgültigen Breite), `6462013cd` (Klappe ohne vorläufigen Rollbalken); `test_operation_dialog_height.py` und `test_operation_dialog_flap_height.py` je am Stand davor rot (bis 28 Punkte leer über den Knöpfen), danach hat kein Operationsdialog in sechs Sprachen einen Streifen; nativ belegt (Schlusslauf `d9f7a81f9` L4 046, 047, 049, 050).
 
 ### FD-46 Rechte Kartenbreite wächst allein mit dem Fensteranteil
 
@@ -681,7 +681,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Bei tatsächlicher großer Inhaltsschrift decken vorhandene automatische Dialogbreite, Umbruchhöhe der Einleitung und einzeilige Knopfleiste den Platzbedarf nicht. Der erste Satz endet vollständig mit „oder ändern lässt.“; der zweite Satz gehört gemäß lead_sentence bewusst in die Kurzhilfe. Der Befund ist eine Abschneidung vorhandener Texte, kein Auftrag zur Kürzung. Die Größenursache ist im Autorenbericht dokumentiert; Basis und eigener Zwischenstand betroffen.
 - Vorschlag: Einleitung über den vorhandenen Umbruchträger korrekt bemessen und automatische Breite anhand des tatsächlichen Inhalts bis zur Bildschirmgrenze nachführen. Bei gewählter Nutzergröße vollständige Knöpfe und Rollweg erhalten, bei Bedarf Knöpfe untereinander beziehungsweise mit Textumbruch; Originaltexte, Rollen, Tastatur und zugängliche Namen bewahren. Sechs Sprachen sowie automatische/manuelle Größe und echte Inhaltsschrift am endgültigen Stand belegen.
 - Wirkung beim Kunden: Der Kunde kann bei großer Schrift den vollständigen Hinweis und den Namen der Hauptaktion nicht lesen, obwohl beide Texte vorhanden sind. Der kürzere englische Cancel-Knopf in der alten Sonde ist eine getrennte fehlende Qt-Übersetzerinitialisierung der Sonde und kein Produktsprachfund.
-- Stand: offen RM-741; Fix `2e4752521` (welle4 `27a18b48c`), aber der finale Lauf fährt keine große Inhaltsschrift — die Lage ist ungemessen (Stufe B `group_pattern` P9).
+- Stand: behoben `2e4752521`; die große Inhaltsschrift fährt der Schlusslauf mit dem Satz `schrift` (14 und 18 pt je Sprache, `996503fed`, `f7a4f0675`); nativ belegt (Schlusslauf `c5666931d` L2 116–127, 14 und 18 pt, sechs Sprachen).
 
 ### FD-55 Wechselnde Python-Wrapperidentität verwirft einen ruhigen C++-Dateidialog
 
@@ -705,7 +705,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Prüfstandfehler in tools/function_walk.py, QtPorts.press, ursprünglicher Radzweig: QApplication.sendEvent stellt QWheelEvent unmittelbar dem getroffenen Kindwidget zu und verlässt den Zweig. Dessen ausdrückliche Ablehnung löst dabei nicht die normale Fenster-Weiterleitung zum äußeren Rollbereich aus. sendEvent-Rückgabe true ist keine Annahme. Ein vorhandener Hinweis verlagert das Ziel um 45 Pixel und macht den funktionierenden Kunden-Rollweg erforderlich. Das Produkt bewältigt diesen Zustand über die Betriebssystem-Eingabe korrekt.
 - Vorschlag: Vorhandenen Qt-Fensterdispatcher QTest.wheelEvent mit korrekt aus dem globalen Punkt abgeleiteten QWindow-Koordinaten und unveränderten Zusatztasten benutzen. Keine eigene Elternschleife, kein direktes Setzen von Scrollwerten. Die Werkzeugvoraussetzung Qt ab 6.8 ausdrücklich prüfen; bei fehlender API Handlungshinweis auf die gepinnte Prüfumgebung 6.12, keine Änderung am allgemeinen App-Minimum. Annahme/Ablehnung, verschachtelte rollbare Bereiche, Bewegung beider Richtungen, Modifier und echten ursprünglichen Zielweg sichern.
 - Wirkung beim Kunden: Die Abnahme meldet Auto Split fälschlich als nicht auffindbar, obwohl der normale Kundenweg mit einem Radschritt funktioniert. Kein Produktfehler und keine Aussage über die Teilungsrechnung; der verwendete passende Quader prüft Zugang und Schon-passend-Rückmeldung.
-- Stand: offen RM-737; Fix `6d5734da5` (welle4 `433da64bc`, Rottest 4 rot), aber im finalen Lauf erreichen 043–048 das Ziel ohne Radschritt — der korrigierte Radweg ist ungemessen.
+- Stand: behoben `6d5734da5`; Rottest am Stand davor rot (4), danach grün; Lage im Test erzwungen, nativ nicht erzwingbar; Weg nativ unverändert (Schlusslauf `c5666931d` L2 071/072, `d9f7a81f9` L4 D8).
 
 ### FD-57 Auswahlkarte und XYZ-Zeile geraten nach spanischem Schriftwechsel in eine Größenschleife
 
@@ -717,7 +717,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Echte Produkt-Geometrieänderung im Auswahlkartenlayout, während die Sitzung nicht rechnet; keine bloß wechselnde Python-Wrapperidentität wie FD55. Der Autorenbericht lokalisiert die Rückkopplung an der von augenblicklicher Sichtbarkeit abhängigen Rollbalkenreserve in der natürlichen Breitenmessung. Ein kleiner roter Höhenwechsel-Fall nimmt XYZ allein durch einen erscheinenden Balken zwölf Punkte zugesagte Breite. Die neue enge Korrektur verwendet das vorhandene Stilmaß möglicher Rollbalken unabhängig von ihrer aktuellen Sichtbarkeit; ein abschließender nativer Nachherbeleg fehlt noch.
 - Vorschlag: Im bestehenden Kartenmessweg die Rollbalkenreserve und den natürlichen Querbedarf so bestimmen, dass der sichtbare aktuelle Zustand keine endlose gegenseitige Größenänderung erzeugt. Roten konkreten Schriftwechsel-Gegenfall sichern, anschließend tatsächlichen ES14-Nachlauf mit stabiler Geometrie sowie Sprach-/Rückkehrgegenfälle belegen. Nicht nur die Wartefrist verlängern, eine breite Fixbreite erzwingen oder den roten Nachlauf durch frühere grüne Fälle ersetzen.
 - Wirkung beim Kunden: Die Auswahlkarte verändert nach dem Schriftwechsel fortlaufend ihre Breite, und XYZ springt zwischen Querzeile und gestapelten Feldern. Die Bedienelemente bleiben dadurch nicht ruhig; eine verlässliche Größeneinstellung und Zielwahl ist in diesem Zustand nicht belegt.
-- Stand: offen RM-747; Fix `11f44ba88` (welle4 `e68ca22cb`), aber der finale Lauf fährt keinen Schriftwechsel 9 → 14 pt; 039 zeigt nur die ruhige Ausgangsschrift.
+- Stand: behoben `11f44ba88`; den Schriftwechsel 9 → 14 pt zur Laufzeit fährt der Schlusslauf mit dem Satz `schriftwechsel` (`996503fed`); seit FD-194 (`a9a3233a7`) folgt die Anwendung dem Wechsel ohne Neustart; nativ mit `schriftwechsel` belegt (Schlusslauf `c5666931d` L2 266–271, sechs Sprachen).
 
 ### FD-58 Vollzeilenknopf erhält halbe Umbruchbreite und behält einen ungültigen Rasterzustand
 
@@ -729,7 +729,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Produktfehler in app/ui/selection_operations.py, vorhandener _wrap_labels-Weg: Der dritte Hauptknopf überspannt die ganze Rasterzeile, die Textmessung teilte die Breite trotzdem wie bei den beiden Nachbarknöpfen. Während Qt die Knöpfe umhängt, wird derselbe Weg vor dem erneuten Eintragen aufgerufen; indexOf(button) ist dann -1, getItemPosition liefert keinen gültigen Spaltenumfang. Die Gegenprobe sah den ungültigen Wert 32761. Der Messcache behielt diesen Zwischenstand, weil sein Schlüssel den gültigen tatsächlichen Span nicht hinreichend unterschied.
 - Vorschlag: Im vorhandenen Umbruchweg den tatsächlichen gültigen Raster-/Spaltenumfang verwenden, einen noch nicht eingetragenen Knopf abwarten und den gültigen Span im bestehenden Messschlüssel berücksichtigen. Keine zusätzliche feste Kartenbreite, zweite Layoutdefinition oder neue Timerkette. Den echten Start- und Rückweg mit tatsächlicher Schrift 9/14 und sechs Sprachen prüfen, einschließlich XYZ-Querzeile, Höhe 1200→700→1200 und unterster sichtbarer Handlung.
 - Wirkung beim Kunden: Eine eigentlich ausreichend breite Hauptaktion wird unnötig zweizeilig und hoch. Beim echten Wechsel von schmaler Ansicht mit kleiner Schrift zur großen Ansicht mit großer Schrift kann dieser überhöhte Zustand trotz genügend Platz erhalten bleiben; die Karte und ihr Rollbedarf zeigen dadurch vermeidbare zusätzliche Höhe.
-- Stand: offen RM-747; Fix `11f44ba88` (welle4 `e68ca22cb`), aber die Folge schmal/9 pt → groß/14 pt → schmal/9 pt ist im finalen Lauf nicht gefahren.
+- Stand: behoben `11f44ba88`; die Folge schmal/9 pt → groß/14 pt → schmal/9 pt fährt der Schlusslauf mit dem Satz `schriftwechsel` (`996503fed`); nativ mit `schriftwechsel` belegt (Schlusslauf `c5666931d` L2 272–277, sechs Sprachen).
 
 ### FD-59 Innere Fallfrist des Dateiprüfstands lässt untergeordnete Prozesse zurück
 
@@ -741,7 +741,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Prüfstandfehler in tools/file_acceptance.py, run(): Die innere Fallfrist beendete nur den direkt gestarteten Launcher. Auf Windows blieb dessen untergeordnete Interpreter-/Helferkette bei Timeout und Ausnahme im Warten bestehen. Die öffentliche Prozessgruppe war an dieser inneren Grenze noch nicht angeschlossen. Der neue Import von app.core.process benötigt zudem den eigenen ROOT unbedingt zuerst in sys.path, auch wenn dort vorher ein fremder Eintrag stand.
 - Vorschlag: Vorhandene process_group_options(no_window=True), no_error_dialogs und terminate_process_tree im bestehenden run-Rumpf verwenden. Den zugehörigen Baum bei Timeout oder Ausnahme beenden, solange seine Kante besteht; keine zweite Prozessverwaltung. ROOT vor dem neuen Kernimport unbedingt vorn eintragen. Tatsächliche Exitwerte, Ausnahme, Timeoutstatus, Falldateien, Wiederaufnahme und sechs weitergegebene Profile unverändert erhalten. Normale Rückkehr und Exit 7 als Gegenfälle belassen.
 - Wirkung beim Kunden: Ein abgebrochener Prüffall endet nur scheinbar vollständig. Zurückgebliebene Interpreter oder Helfer können nachfolgende Fälle und Prozessnachweise verunreinigen. Das ist ein Prüfstandfehler; hieraus wird kein Fehler des Produkt-Exportwegs oder der eigentlichen Anwendung abgeleitet.
-- Stand: offen RM-737; Fix `bc376abc0` (welle4 `c9505aac2`, Rottest 4 rot), aber der finale Lauf hatte weder Zeitüberschreitung noch Ausnahme und nutzt den Einzelfallweg statt `file_acceptance.run` — die innere Frist ist ungemessen.
+- Stand: behoben `bc376abc0`; Rottest am Stand davor rot (4), danach grün; seit CS-35 (`27c56448c`) endet jeder Prozessbaum über ein Jobobjekt; der Schlusslauf fährt dafür keinen eigenen Fall; Beleg bleibt `tests/test_file_acceptance_process_tree.py` im Tor.
 
 ### FD-60 Native Zugriffsverletzungen brechen den frischen Fensterlauf ab
 
@@ -837,7 +837,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Der vorhandene PlacementFlow-Gruppenfilter verarbeitet den geänderten Größenbedarf nach LayoutRequest nicht. Die feste Höhe und ScrollBarAlwaysOff bleiben vom geschlossenen Zustand erhalten, auch nach weiteren Qt-Ereignisrunden.
 - Vorschlag: Größenbedarfsänderungen über den bestehenden Gruppenfilter nach dem Qt-Layoutschritt an die vorhandene Größenrechnung anschließen; selbst ausgelöste Layoutschleifen, Gruppentausch und Abbau berücksichtigen. Aufklappen und Zuklappen gegenprüfen, bei echtem Platzmangel erreichbar rollen und Fußaktionen sichtbar halten.
 - Wirkung beim Kunden: Die Rückseite lässt sich öffnen, ihre Werte sind aber verdeckt und mit dem Zeiger nicht erreichbar. Eine Vergrößerung auf pauschale Maße würde unnötig Modellfläche verdecken.
-- Stand: offen RM-741; Fix `f6b0f53f2` (welle4 `4521cf8ff`), aber der finale Lauf klappt „Weitere Werte“ der Maßgruppe nie auf (001, Schritte 0–104) — ungemessen.
+- Stand: behoben `f6b0f53f2`; nativ belegt (Schlusslauf `d0173380f` L1, sechs Sprachen).
 
 ### FD-68 Druckbett-Raster verschwindet im hellen Thema
 
@@ -873,7 +873,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Zwei gefüllte pickbare SlotHandle-Zylinder mit Deckkraft 1,0, zusätzliche nicht pickbare face-handle-Scheibe mit 0,6 und Merkmalsfüllung mit 0,45 liegen in der gewählten Öffnung übereinander. outlined bezeichnet die Schnittkontur und entfernt die Griffkörper nicht. Die vorhandene Größenbegrenzung der Zylinder verhindert diese perspektivische Überdeckung nicht.
 - Vorschlag: Ruhende Füllungen gezielt zurücknehmen, überfahrene/gehaltene Griffe und wirkliche laufende oder wartende Entwürfe klar erhalten. Bestehende Netze, Bezugspunkte und positive Deckkraft im Pickpfad bewahren. Direkten take_press ohne Hover, wiederverwendeten Vorschauaktor, Abbruch und Wiederaufbau prüfen; keine kleineren Trefferflächen als Gestaltungstrick.
 - Wirkung beim Kunden: Gerade die zu bearbeitende Öffnung lässt sich schlechter erkennen als die ungewählten. Die Gestaltung soll Lochrand und Änderung zugleich sichtbar halten, bei unverändert gut treffbaren Griffen.
-- Stand: offen RM-741; trotz Fix (`48adcd982`, `1e37ebc10`, welle4 `d4e7305f3`) decken im finalen Lauf Griffkörper und Achspfeile die gewählte Bohrung (001, 016, 019), Stufe B G9 offen beider Prüfer (D4).
+- Stand: behoben `90600562c` (nach `48adcd982`, `1e37ebc10`); `test_hole_grip_clearance.py` am Stand davor 7 von 8 rot, danach grün: Knöpfe außen am Scheitel, Pfeile ab der Knopfreichweite, Wandtönung 0,28, hell und dunkel offscreen gelesen; nativ belegt (Schlusslauf `d0173380f` L1 de/001, `d9f7a81f9` L4 001, 019 dunkel, 022 Bewegung).
 
 ### FD-71 Maßkartenzüge halten den impliziten Qt-Mausempfänger fest
 
@@ -909,7 +909,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Viewport._label_gizmo hängt _slot_length_text an den gemeinsamen gizmo_labels-Aktor für X/Y/Z/L und wählt _object_colour als Textfarbe, im dunklen Thema #b9c4d0, im hellen #78828e. 13 Pixel, fett, immer sichtbar, ohne Hintergrund oder Umriss. Der vorhandene Textmaterialweg nutzt volle Deckkraft, keinen Tiefentest und seine Vordergrundqueue; keine belegte erneute OIT- oder Griffdeckkraftursache.
 - Vorschlag: Vorhandenes kontrastierendes Text-/Fensterfarbpaar mit deckendem LabelStyle-Hintergrund verwenden. Die gemeinsame Wirkung auf Achsen-/L-Buchstaben ausdrücklich mitprüfen, bei Themenwechsel erneuern und am echten gehaltenen Zustand in beiden Themen nachlesen. Keine neue Farbrolle, API, Geometrie oder Definition im großen Viewport.
 - Wirkung beim Kunden: Die aktuelle Länge steht zwar im Eingabefeld, lässt sich direkt am Griff aber nur schwer ablesen. Die Lesbarkeit darf nicht von der zufälligen Farbe der Fläche darunter abhängen.
-- Stand: offen RM-741; Fix `a408a0620` (welle4 `26b66508e`), aber der finale Lauf zieht keinen Langlochgriff, die freistehende Maßzahl erscheint nicht — ungemessen.
+- Stand: behoben `a408a0620`; das Bild im gehaltenen Langlochzug nimmt der Prüfstand seit `2835d5847` auf (`05-zug-gehalten`, `slot_hole` mit `drag = "handle:slot.end"`); nativ belegt (Schlusslauf `d0173380f` L2 009 hell, 087 dunkel).
 
 ### FD-74 Prüfstand prüft den Knopftreffer vor der nötigen Mausbewegung
 
@@ -921,7 +921,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Die bisherige Bereitschaft prüft den zukünftigen Treffpunkt, ohne zuvor den tatsächlichen Mausort dorthin zu bewegen und Qt den natürlichen Zustellungs-/Tooltipabbau zu erlauben. Ein verschachteltes processEvents in click_button würde den bereits vorgemerkten StepMachine-Folgeschritt vor dem aktuellen Klick ausführen können.
 - Vorschlag: Im bestehenden Walk.stable zuerst öffentlich zum aktuellen Ziel bewegen und im nächsten regulären Takt Ziel, Sichtbarkeit, Aktivierung, Geometrie und Treffer frisch prüfen. Bei geändertem Ziel erneut bewegen. Benannte und per Getter aufgelöste Knöpfe benutzen denselben Weg; click_button bleibt abschließender synchroner Zustands-/Trefferwächter. Vorhandene Fristen unverändert, keine gezielte Tooltipunterdrückung.
 - Wirkung beim Kunden: Die Abnahme kann einen normal bedienbaren Kundenweg vor dessen Klick abbrechen. Ein kaputter Abbrechen-Knopf der Anwendung ist damit nicht belegt.
-- Stand: offen RM-737; Fix `f749bdc61` (welle4 `bc2d5e20c`, Rottest 1 rot), aber die Lage — eine Kurzhilfe über dem Klickziel nach Feldhilfen — kommt im finalen Lauf nicht vor.
+- Stand: behoben `f749bdc61`; Rottest am Stand davor rot (1), danach grün; Lage im Test erzwungen, nativ nicht erzwingbar; Weg nativ unverändert (Schlusslauf `d0173380f` L1, *Abbrechen* empfängt Druck und Loslassen).
 
 ### FD-75 Erneute Fensterplatzierung trennt gemessene Clientfläche und Aufnahme
 
@@ -933,7 +933,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: place_window ruft bei jeder Vorbereitung erneut setGeometry(availableGeometry) und showMaximized auf, auch wenn das Fenster bereits auf demselben Schirm maximiert ist. Der zweite Aufbau überschreibt damit den gespeicherten QWidget-Clientumfang. Die native Gegenprobe bestätigt einen unveränderten Win32-Rahmen und tatsächlichen Client von 2560 × 1369; ausschließlich QWidget und contentsRect springen beim zweiten Originalaufbau auf 2560 × 1392. Kein physischer Monitorbeschnitt.
 - Vorschlag: Wiederholte Maximierung am bereits gewählten Schirm idempotent behandeln; beim ersten Aufbau, Monitorwechsel oder Wechsel zur ausdrücklichen Größe den nötigen Normalzustand herstellen und den bisherigen Platzierungsvertrag erhalten. Aufnahme und tatsächliche Clientfläche gegenprüfen, einschließlich vollständiger Statuszeile. Kein Zuschneiden, keine erfundenen Sollpixel und keine Änderung der Bildschirm-/DPI-Untergrenzen.
 - Wirkung beim Kunden: Prüfstandsmessung und sichtbarer Bildbeleg beschreiben unterschiedliche Flächen. Die bereits innerhalb des Bilds belegten Kartenaktionen bleiben gültig, eine vollständige Fensterabnahme kann daraus nicht entstehen. Kein Fehler am eigentlichen Kunden-Statusinhalt belegt.
-- Stand: offen RM-737; Fix `a0d5ae491` (welle4 `9dc38e79f`, Rottest 5 rot), aber im finalen Lauf platziert jeder Prozess das Fenster nur einmal — der wiederholte Aufbau ist ungemessen.
+- Stand: behoben `a0d5ae491`; Rottest am Stand davor rot (5); nativ belegt (Schlusslauf `d0173380f` L1, 6 × 27 Aufnahmen, Bildpixel gleich Clientgröße).
 
 ### FD-76 Textmessung beschädigt HTML-Entities und literale Ampersands
 
@@ -957,7 +957,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: guide_targets._scroll_needed prüft ausschließlich die Mitte gegen alle Scrollsichtflächen. Walk bestätigt den stabilen Mittelpunkt und Treffer; der nachfolgende Stillstand prüft keine Vollsicht. So wird die teilweise abgeschnittene Fläche regulär aufgenommen.
 - Vorschlag: Passend große Felder im vorhandenen gemeinsamen Navigationsweg bis zu ihren vertikalen Kanten freilegen, innere und äußere Scrollbereiche berücksichtigen. Vollsichtkontrolle mit halb abgeschnittenem Original, oberem Rand, verschachtelten Bereichen, vollständig sichtbarem Feld, übergroßem Container und Scrollanschlag. Keine privaten Scrollbaränderungen im Kundenweg oder verlängerten Fristen.
 - Wirkung beim Kunden: Eine technisch erreichbare Feldmitte wird als brauchbare Endansicht behandelt. Eine unbedienbare Produktliste ist damit nicht belegt; kein erneuter FD75-Statusbeschnitt.
-- Stand: behoben `46c628ef9`; gegen die alten Module 20 rot (16 fachlich, 4 Vertrag), gezielt 92/92 grün; betroffene Auswahl 14 783 grün, Exit 0; in welle4 `64e389936`. Native EN-Nachheraufnahme von Fall 032 auf `7d978c4ee`: Lauf regulär, der Wähler aber „nicht auffindbar“ — die Anleitungsnavigation verwirft den Rollschritt unter einer verschachtelten Liste (FD-159); der Nachweis folgt mit dessen Fix.
+- Stand: behoben `46c628ef9`; gegen die alten Module 20 rot (16 fachlich, 4 Vertrag), gezielt 92/92 grün; betroffene Auswahl 14 783 grün, Exit 0; in welle4 `64e389936`. Native EN-Nachheraufnahme von Fall 032 auf `7d978c4ee`: Lauf regulär, der Wähler aber „nicht auffindbar“ — die Anleitungsnavigation verwirft den Rollschritt unter einer verschachtelten Liste (FD-159); der Nachweis folgt mit dessen Fix; nativ belegt (Schlusslauf `d9f7a81f9` L4 034–039).
 
 ### FD-78 Fachfelder in Druckvorbereitungswegen haben unvollständige Hilfen
 
@@ -969,7 +969,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Die Rohaufnahme zeigt an sieben unterschiedlichen Feldern eine leere zugängliche Beschreibung; Analyseauswahl, Generatorbeschreibung und Werte-Haken haben zusätzlich keine Kurzhilfe. An den vier übrigen Feldern ist ein erklärender Tooltip vorhanden. Im Slicerhinweis ist der erklärende Satz sichtbar; seine technische Zuordnung an die Hilfekanäle fehlt. Der konkrete Quellenanschluss ist noch nicht diagnostiziert; keine globale Ursache behauptet.
 - Vorschlag: Vorhandene übersetzte Wirkungssätze an die zugängliche Beschreibung der tatsächlichen Eingabefelder binden. Für die drei Felder ohne Tooltip den passenden vorhandenen Wirkungssatz ermitteln und beide Hilfekanäle anbinden. Gleiche Träger, sechs Sprachen, Titelwortüberschneidung und tatsächliche Feldhilfe prüfen. Sichtbare Erklärung erhalten; nachgelagerte Drucker-/Einstellungsdialoge sind durch diese Aufnahmen nicht nachgewiesen.
 - Wirkung beim Kunden: Die Erklärung der Feldwirkung fehlt in einem erforderlichen Hilfekanal, bei drei Feldern auch beim Überfahren. Eine Bildschirmleser-Ausführung wurde hier nicht durchgeführt; kein fehlender Erklärungstext im gesamten Slicerhinweis behauptet.
-- Stand: offen RM-745; kein Fix, der finale Lauf zeigt den Fund weiter (043–048 V3 Fund an allen sechs Zeilen, Stufe B offen, D8).
+- Stand: behoben `ed4a7d77f` (Analyse- und Teilenleiste), `b30b74d97` (Generator, Druckhinweis, Variantenwahl); `test_bar_field_sentences.py` und `test_field_help_rest.py` je am Stand davor rot, danach grün.
 
 ### FD-79 Maßkartenzug umgeht den gemeinsamen Ereignisverteiler
 
@@ -1041,7 +1041,7 @@ Nummern vom Koordinator vergeben; Originalurteile und Originalfunde bleiben erha
 - Ursache: Die Maßkarte hielt fest eine Feldzeile frei, gleich wie viele Felder hineinmussten; die Notreihen brachen ohne Prüfung der Unterkante um und wichen nur dem Setzpunkt aus, nicht dem Bewegungsgriff. Offscreen ausgelöst durch breitere Schrift mit Stylesheet, dazu zwei Testbauannahmen über Schriftbreiten und ein stehen gebliebenes dunkles Thema aus `customer_theme`.
 - Vorschlag: Freihaltung nach den Zeilen, die die Felder brauchen (`measure_field_places.rows_height`), Notanordnung je Feld am ersten freien Platz im Bild mit Stufen vom Abstand bis zum Überdecken (`emergency_places`); Testziele aus dem freien Raum statt fester Punkte; Aussehen nach jedem Fall zurückgeben.
 - Wirkung beim Kunden: Bei schmalem Bildraum, kleinem Bildschirm oder langer Sprache stand ein Maßfeld außerhalb der Ansicht oder über dem Bewegungsgriff, dessen Pfeile und Ringe dann nicht mehr auf den Zeiger reagierten.
-- Stand: behoben `377f1b552`, Testbau `cbc883304`, Nachzug `c5b25728f`, Themenleck zentral über `bf3c6d5e8`; in welle4 `b4e515c7b`, gezielt 580 grün am gemergten Stand. Schlussreview D0: Grifffall mit echter Schrift `c87e0b166` — ohne `marked.append(grip)` rot unter Windows offscreen und mit DejaVu Sans wie in der Linux-CI; der Fall aus `dabd95e26` war das nur in Windows' schriftloser Offscreen-Lage (Review 2, RF-15). Changelog 0.6.1 `37801525b`; der letzte Rückfall der Notanordnung legt ein Feld neben der Karte versetzt über die anderen und deckt keines ganz (`ccb9bd87f`, `ed2ba4504`).
+- Stand: behoben `377f1b552`, Testbau `cbc883304`, Nachzug `c5b25728f`, Themenleck zentral über `bf3c6d5e8`; in welle4 `b4e515c7b`, gezielt 580 grün am gemergten Stand. Schlussreview D0: Grifffall mit echter Schrift `c87e0b166` — ohne `marked.append(grip)` rot unter Windows offscreen und mit DejaVu Sans wie in der Linux-CI; der Fall aus `dabd95e26` war das nur in Windows' schriftloser Offscreen-Lage (Review 2, RF-15). Changelog 0.6.1 `37801525b`; der letzte Rückfall der Notanordnung legt ein Feld neben der Karte versetzt über die anderen und deckt keines ganz (`ccb9bd87f`, `ed2ba4504`); nativ belegt (Schlusslauf `d0173380f` L1 maximiert in sechs Sprachen, `d9f7a81f9` L4 007 bei 1920 × 1009 und 008 bei 125 %).
 
 ### FD-85 Abhakliste lässt einen offenen Fund hinter einem älteren behobenen verschwinden
 
@@ -1073,7 +1073,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: am Code naheliegend, am Lauf nicht belegt: `PlacementFlow` legt Übernehmen, Abbrechen und den Sammelbereich beim Aufbau an (`placement_flow.py:2746–2763`), die Felder entstehen später im Rollbereich; Qt reiht sie in der Fokuskette hinter die Knöpfe, und nach dem letzten Feld folgt ein später entstandenes Widget außerhalb der Karte.
 - Vorschlag: Nach jedem Aufbau der Maßgruppe die Tab-Folge Felder → Weitere Werte → Sammelhaken → Übernehmen → Abbrechen setzen (`QWidget.setTabOrder`) und an der Karte schließen; Test über Tab-Druck und `focusWidget()`.
 - Wirkung beim Kunden: Mit der Tastatur erreicht er Übernehmen und Abbrechen der Maßgruppe nicht und landet in einer anderen Karte.
-- Stand: offen RM-737
+- Stand: behoben `b7bdc571c`; `tests/test_measure_card_keys.py` am Stand davor rot (nach „Weitere Werte“ der Kartengriff „Objekte“, Haken unter den Knöpfen), danach Felder → Weitere Werte → Sammelhaken → Übernehmen → Abbrechen → erstes Feld; nativ belegt (Schlusslauf `d0173380f` L1, sechs Sprachen; `d9f7a81f9` L4 001 Fehlfall).
 
 ### FD-87 Die Maßgruppe springt im Fehlfall an den Plattenrand
 
@@ -1085,7 +1085,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; fest steht, dass die Karte mit der Ablehnung höher wird und danach ohne Übergang an anderer Stelle steht.
 - Vorschlag: Bei wachsender Karte die gewählte Lage halten und nur so weit verschieben, wie der Platz verlangt; der Wechsel mit Übergang aus `motion`.
 - Wirkung beim Kunden: Das Feld, das er gerade korrigiert, springt an eine andere Stelle des Bilds.
-- Stand: offen RM-741
+- Stand: behoben `b58241193`, `fc82ee4be`; `tests/test_measure_card_growth.py` am Stand davor rot (die gewachsene Karte sprang 125 bzw. 281 Punkte), danach bleibt die Ecke, und die Karte gleitet (`grown_place`, `motion.glide`); nativ belegt (Schlusslauf `d0173380f` L1, sechs Sprachen; `d9f7a81f9` L4 001 Fehlfall).
 
 ### FD-88 Die Ablehnung der Maßgruppe steht dreimal da
 
@@ -1097,7 +1097,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; Feldablehnung, Hinweis der Maßgruppe und Statuszeile setzen je denselben Satz. Verwandt mit FD-32 (Sperrgrund zweimal), andere Stelle.
 - Vorschlag: Der Satz steht am Feld; Maßgruppe und Statusleiste wiederholen ihn nicht.
 - Wirkung beim Kunden: Derselbe Satz dreimal lenkt vom Feld ab, das er ändern muss.
-- Stand: offen RM-741
+- Stand: behoben `47b58a2da` (Karte), `08dea68c3` (Statusleiste); `test_measure_card_note.py` und `test_measure_refusal_status.py` je am Stand davor rot (Satz im Hinweis und in der Statusleiste, obwohl er unter dem Feld steht), danach grün; nativ belegt (Schlusslauf `d0173380f` L1, sechs Sprachen; die Nachurteile am Schlusslauf (`d9f7a81f9` L4 001) zeigten die Ablehnung noch in der Statusleiste; Rest behoben `77b083740`: der graue *Übernehmen* der Maßkarte trug sie als `statusTip` (RM-509), entfernt samt Zwillingen, der Wächter prüft das Attribut, Test auf dem Weg des Prüfstands offscreen rot → grün; nativ belegt (Nativer Endblock `2ba3ee78c` L4-fx 001 `04-fehlfall`: Statusleiste ohne Ablehnung, keine `meldung`; 046–051 Kurzhilfe ganz).
 
 ### FD-89 „seit dem letzten Schritt“ meldet auch eine geänderte Rechengrundlage
 
@@ -1109,7 +1109,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: am Code belegt, dass die Zahl nicht nur nach einem Schritt neu entsteht: `_update_facts` läuft nach jeder Auswertung und noch einmal, wenn die Druckgrundlage des gewählten Prozesses eintrifft (`main_window.py:26382`), dann mit anderen wirksamen Einstellungen; `PrintFacts.show_estimate` vergleicht jede neue Schätzung mit der vorigen und nennt die Differenz „seit dem letzten Schritt“ (`facts.py:125–149`). Dass im Lauf genau die Grundlage die Zahl verschob, ist naheliegend, nicht gemessen.
 - Vorschlag: Die Differenz nur zwischen zwei Dokumentständen mit derselben Rechengrundlage bilden; ändern sich die Einstellungen, wird der Vergleichswert still neu gesetzt. Die Zahl erst zeigen, wenn die wirksamen Einstellungen feststehen, oder als vorläufig kennzeichnen.
 - Wirkung beim Kunden: Die Zeile meldet eine Ersparnis durch einen Schritt, den es nicht gab, und dieselbe Szene zeigt je nach Zeitpunkt andere Gramm und Minuten.
-- Stand: offen RM-737
+- Stand: behoben `877a11ce2`, `e9831a8e0`; `test_facts_basis.py` am Stand davor rot (5 von 5, „+836 g seit dem letzten Schritt“ ohne Schritt) und `test_foundation_crash_window.py` am Stand davor rot (nach einem Absturz des Grundlagenarbeiters gilt Solidons Tabelle), danach grün.
 
 ### FD-90 Die Zahlenzeile der Statusleiste wird abgeschnitten
 
@@ -1121,7 +1121,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; Statusmeldung und Zahlenzeile teilen sich die Statusleiste, und die Breite der Zahlenzeile folgt ihrem Text nicht verlässlich.
 - Vorschlag: Mindestbreite aus beiden Texten der Zeile; gekürzt wird zuerst die Statusmeldung.
 - Wirkung beim Kunden: Material und Dauer sind nur zum Teil lesbar.
-- Stand: offen RM-749
+- Stand: behoben `916990010`; `test_status_line_room.py` am Stand davor rot (Differenz 239 von 372 px), danach grün; nativ belegt (Schlusslauf `d9f7a81f9` L4 007, 008; die Nachurteile am Schlusslauf (`d9f7a81f9` L4 001, 002) zeigten die Druckfakten nach dem Öffnen gekürzt („3,5 ç“); Rest behoben `d753d1053`: `status_line.settle_in_bar` legt ein Feld mit gewachsenem Text sofort aus, Zwillinge Befundzähler, Testzeitraum und Filamentbuchung, Tests offscreen rot → grün; nativ belegt (Nativer Endblock `2ba3ee78c` L4-fx 001 „14 g · 23 min“, 002 „3,5 g · 6 min“).
 
 ### FD-91 Die Kopfzeile kürzt den Druckernamen trotz freier Fläche
 
@@ -1133,7 +1133,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen.
 - Vorschlag: Das Profilfeld der Kopfzeile nach seinem Inhalt bemessen und erst kürzen, wenn die Zeile voll ist; der volle Name im Tooltip.
 - Wirkung beim Kunden: Auf der kleinsten Arbeitsfläche ist der gewählte Drucker nicht lesbar.
-- Stand: offen RM-749
+- Stand: behoben `7aa4f4b85`; `test_header_room.py` am Stand davor rot („…· FDM“ bei 1128 px), danach grün; nach einem Schriftwechsel misst die Kopfzeile neu (`40c9a5840`, `885998851`); nativ belegt (Schlusslauf `d9f7a81f9` L4 007, 008; `d0173380f` L1).
 
 ### FD-92 Die Bettmaßzahlen folgen der Anzeigeeinheit nicht
 
@@ -1145,7 +1145,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `bed_scale` schreibt `f"{value:.0f}"` in Millimetern, ohne Anzeigeeinheit und ohne Einheitenzeichen (`viewport.py:2808–2812`). Zwilling zu FD-69 (Farbe derselben Zahlen), andere Ursache.
 - Vorschlag: Die Zahlen über den Längenformatter der Anzeige setzen, Schrittweite passend zur Einheit, das Einheitenzeichen einmal an der Skala; beim Einheitenwechsel neu zeichnen.
 - Wirkung beim Kunden: In Zoll liest er Millimeterzahlen ohne Hinweis und schätzt Größe und Lage falsch ein.
-- Stand: offen RM-737; Schwere von leicht auf mittel wie die Zwillinge FD-61 und FD-125, weil die Anzeigeeinheit zugesagt ist (Prüfpunkt 9; Review RD-6).
+- Stand: behoben `3d29abed1`; `test_bed_scale_unit.py` am Stand davor rot (der Einheitenwechsel baute die Bettzahlen nicht neu), danach Zahlen in Zoll mit Einheit einmal an der Vorderkante, hell und dunkel offscreen gelesen; Schwere mittel wie FD-61 und FD-125 (Review RD-6); nativ belegt (Schlusslauf `d9f7a81f9` L4 004 Zoll).
 
 ### FD-93 Die Auswahlkarte hält am Katalogknopf Leerraum
 
@@ -1157,7 +1157,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; Verdacht: Der Platz des Katalogknopfs „Passende Bausteine …“ (`selection_operations.py`) bleibt reserviert, wenn der Knopf fehlt, und ist bei umbrochenem Text höher als nötig.
 - Vorschlag: Ursache am Layout belegen; die Höhe aus dem sichtbaren Inhalt.
 - Wirkung beim Kunden: Leere Fläche schiebt „Filament und Druck“ nach unten, auf kleinen Schirmen unter den Rand.
-- Stand: offen RM-741
+- Stand: behoben `b1df5efb3`; `test_selection_card_room.py` am Stand davor rot (77 Punkte), danach grün; Bild hell und dunkel.
 
 ### FD-94 Eingabefelder tragen keinen zugänglichen Namen
 
@@ -1169,7 +1169,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `_explain` gibt Namen nur an innere Felder eines Behälters (`op_dialog.py:1389–1397`); ein Auswahlfeld oder Haken, der selbst der Editor ist, bleibt ohne Namen, und der Flächenwähler reicht den Namen seines Hakens weiter. Im `ParameterDialog` tragen Name, Wert, Ausdruck und Grenzen keinen Namen, nur die Einheit (`dialogs.py`). Der Prüfstand fällt dann auf den Text zurück.
 - Vorschlag: Ein Weg für alle Formulare: Jedes Eingabefeld bekommt den Text seiner Beschriftung als `accessibleName`, auch der Editor selbst und die Liste im Flächenwähler; Wächter über alle Operationsdialoge und den Parameterdialog.
 - Wirkung beim Kunden: Ein Bildschirmleser nennt das Feld nicht oder liest nur seinen Inhalt vor.
-- Stand: offen RM-737
+- Stand: behoben `1524e1ddb` (Formulare), `73e1ba16c` (Operationsdialog), `22f55de98` (Partner nach Variantenwechsel); `test_form_fields.py` und `test_operation_dialog_names.py` je am Stand davor rot (183 von 190 Dialogen mit einem Feld ohne oder mit doppeltem Namen), danach grün.
 
 ### FD-95 Die Absage im Operationsdialog wiederholt ihren Titel als „Art:“ und nennt Wege nur als Satz
 
@@ -1181,7 +1181,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `problem_text` setzt die Werte des Fehlers über `spoken_values` darunter, und `kind` ist bei einem Schrittfehler dessen Titel (`_finding_from`); nur der Haltweg nimmt ihn heraus (`session.py:2772–2779`, KUNDE-12), der Dialog nicht (`dialogs.py:3274–3337`). Vorschläge ohne Handler setzt `unhandled_advice` als Satz, auch „Eingabe korrigieren“ in dem Dialog, der selbst die Eingabe ist. FD-44 deckte nur den Ursachencode.
 - Vorschlag: `kind` bei `op.*`-Fehlern zentral in `spoken_values` auslassen, eine Quelle für Halt und Dialog; `show_refusal` löst „Eingabe korrigieren“ als Sprung ins Feld aus `values["field"]` ein und lässt es sonst weg; „Eine andere Ebene wählen“ als Handler des Ebenendialogs.
 - Wirkung beim Kunden: Eine Fachzeile doppelt den Titel, und der Weg aus der Absage steht als Text da, den man nicht klicken kann.
-- Stand: offen RM-737
+- Stand: behoben `1c9b1d9cc`, `72cbf7705`; `test_refusal_details.py` und KUNDE-12 (`test_evaluation.py::test_the_halt_refusal_does_not_repeat_its_sentence`) je am Stand davor rot, danach ohne Titelwiederholung, *Eingabe korrigieren* springt ins Feld; beide Wege hält `test_field_ways_both_paths_window.py`.
 
 ### FD-96 Der i-Knopf der Merkmalzeilen ist ein Buchstabe statt eines Symbols
 
@@ -1193,7 +1193,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `FeaturePanel` setzt `dot.setText(tr("i"))` an einem flachen `QToolButton` (`panels.py:11303–11309`).
 - Vorschlag: Symbol aus dem eigenen Satz (`icons`); Tooltip, zugänglicher Name und Sprung ins Handbuch bleiben.
 - Wirkung beim Kunden: Der Knopf wirkt wie ein Schriftzeichen und fällt neben den Symbolen aus dem Stil.
-- Stand: offen RM-741
+- Stand: behoben `a94e9307d`; `test_info_dot.py` am Stand davor rot, danach Symbol statt Buchstabe; Bild hell und dunkel.
 
 ### FD-97 Abkürzungen verhindern Satzenden an Wortenden
 
@@ -1205,7 +1205,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `sentences` maskiert die Abkürzungen per Teilzeichenkette (`surfaces.py:935–971`); „ca.“ trifft das Wortende von „rosca.“ (ES/PT, Stift) und „placa.“ (ES, Druckoptimal), der Satz endet dort nicht, und `lead_sentence` nimmt zwei. Dieselbe Funktion schneidet Menü, Statuszeile, Suche und den Längenwächter.
 - Vorschlag: Abkürzungen nur als ganzes Wort maskieren (Wortgrenze davor); Test mit „rosca. Es“ und „placa. Cada“.
 - Wirkung beim Kunden: Über dem ersten Feld steht in zwei Sprachen ein Satz mehr, und Menü- und Suchtexte schneiden dort anders als in den übrigen Sprachen.
-- Stand: offen RM-737
+- Stand: behoben `5aafd2b56`; `test_text_length.py::test_sentences_are_counted_as_a_reader_counts_them` mit „rosca. Es“ und „placa. Cada“ am Stand davor rot, danach grün.
 
 ### FD-98 Der Zapfen heißt in fünf Sprachen klein
 
@@ -1217,7 +1217,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: Der Katalogeintrag „Zapfen“ ist in en, es, fr, it und pt klein übersetzt; die übrigen Merkmalsarten aus `registry.py:540–575` sind groß.
 - Vorschlag: Die fünf Katalogwerte groß; braucht ein Satz das Wort klein, ein zweiter Schlüssel mit Kontext.
 - Wirkung beim Kunden: Der Kopf der Karte beginnt klein und sieht wie ein Fehler aus.
-- Stand: offen RM-741
+- Stand: behoben `8718ddd59`; `test_catalog_terms.py::test_every_feature_kind_starts_with_a_capital_letter` am Stand davor in fünf Sprachen rot, danach grün.
 
 ### FD-99 Übernehmen vor der ersten Änderung ist je Fläche anders, im Änderungsweg grau ohne Grund
 
@@ -1229,7 +1229,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: Zwilling zu FD-31: Maßgruppe und Änderungsdialog warten auf eine Änderung und sagen es nicht, Merkmalfenster und Flächenkarte bieten Übernehmen ohne Änderung an. Der Änderungsweg öffnet über `edit_operation` (`main_window.py:27826–27838`) den Dialog des Bausteins, dessen Hauptknopf `accept_text` „Einsetzen“ nennt (`op_dialog.py:249–251`), auch wenn ein bestehender Schritt geändert wird.
 - Vorschlag: Mit FD-31 eine Regel für alle Flächen: vor der ersten Änderung grau mit dem Satz, der das erste Feld nennt; im Änderungsweg heißt der Knopf „Übernehmen“.
 - Wirkung beim Kunden: Einmal geht Übernehmen ohne Änderung, einmal ist es grau ohne Satz, und im Änderungsweg sagt der Knopf „Einsetzen“.
-- Stand: offen RM-737
+- Stand: behoben `38ab43c4f`, `04c528bef`, `6dfa1d7f5` (Operationsdialog), `ce8390478` (Merkmalfenster, Flächenkarte), `66e6d75df` (Anschluss `edit_operation`); `test_operation_dialog_change.py`, `test_feature_first_change.py`, `test_offered_unchanged.py` und `test_change_step_window.py` je am Stand davor rot („Einsetzen“ statt „Übernehmen“), danach im Änderungsweg *Übernehmen*, grau bis zur ersten Änderung; das Bild der Kurzhilfe nimmt der Prüfstand seit `3a70b3806` auf; nativ belegt (Schlusslauf `d0173380f` L2 007, 011, 027, 028, 051, 052, *Fläche versetzen* nach `0313cdbfd`; `d9f7a81f9` L4 Sprachfälle, etwa 034).
 
 ### FD-100 Die Auswahlmatrix fragt das Ziel ohne den Weg der Zeile ab
 
@@ -1241,7 +1241,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `phase_matrix` klickt nur die Auswahl und fragt dann `offer_state(target)` (`function_bench.py:1516–1594`), ohne die Vorbereitungsklicks aus `Row.route` (Reiter, Klappe, Befund) und ohne die Zuordnung der Maßgruppe im Bild, die der Prüfstandsfix zu FD-29 (`0b1e61346`) nur für den Ort einführte.
 - Vorschlag: Die Matrix geht denselben Weg wie die Hauptphase: Route bis vor das Ziel, die Maßgruppe im Bild als Ort der Handlung; der Gegenfall „fehlt“ bleibt.
 - Wirkung beim Kunden: Prüfpunkt 13 ist an zwei von drei Hauptzeilen unmessbar; ein Kundenfehler ist daraus nicht belegt.
-- Stand: offen RM-737
+- Stand: behoben `dd20ed8f2`; `test_function_matrix_way.py` am Stand davor rot, danach geht die Auswahlmatrix nach jeder Stufe den Weg der Zeile.
 
 ### FD-101 Zeilen ohne Weg oder passende Startszene
 
@@ -1253,7 +1253,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: Funktionsliste und Szenenkatalog (`tests/data/function_rows/`, `tools/function_scenes.py`): leere Route, eine Route, die einen Körper wählt, an dem die Handlung nicht gilt, oder eine Startszene ohne den Befund oder die Merkmale. Die Fußknöpfe des Merkmalfensters gibt es nur bei offener Zeile; *Zum Langloch ziehen* fehlt rechts, solange der Bohrschritt im Bild steht (gewollt, `panels.py` `set_measuring`).
 - Vorschlag: Je Zeile Route und Szene so ergänzen, dass die Fläche entsteht (offene Merkmalzeile vor den Fußknöpfen, Rechtsklick für `menu:`, Szene mit Befund oder gleichen Merkmalen); Wächter: keine Zeile der Liste ohne erreichte Fläche.
 - Wirkung beim Kunden: Diese Zeilen bleiben ungemessen; ein Kundenfehler ist daraus nicht belegt.
-- Stand: offen RM-737
+- Stand: behoben `7ddca9f81`, `aa1e8399b`, `22e33f61a`, `308721dcd`, `5979d993e`, `afd9b7756`, `88dcda6e3`, `f61bfc4a8`; jede Zeile von D4, D8 und D10 hat Startszene und Weg zu ihrer Fläche, Wächter `test_function_rows_reach.py` am Stand davor rot, offscreen erreicht der Sprachfall jede dieser Flächen; die übrigen Pakete trägt FD-175; nativ (Schlusslauf `d9f7a81f9` L4): D4 und D10 erreichen jede Fläche; der Rest am echten Fenster (D8 `orient_for_print` in sechs Sprachen, `finding.action:split_bodies` einmal EN) steht in FD-234.
 
 ### FD-102 Ein verborgenes Feld ohne Namen macht V3 rot
 
@@ -1265,7 +1265,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; fest steht, dass das gezählte Feld im Bild nicht sichtbar ist.
 - Vorschlag: Ursache am Flächenprotokoll belegen: Zählt der Prüfstand verborgene Felder, zählen nur sichtbare; ist es ein sichtbares Feld ohne Fläche, wird es entfernt.
 - Wirkung beim Kunden: Falscher V3-Fund an drei Zeilen; kein Kundenfehler belegt.
-- Stand: offen RM-737
+- Stand: behoben `40c38dfb0`; kein Produktfehler; `test_function_capture_reach.py` (ein verborgener Haken zählt nicht, einer hinter der Klappe schon) am Stand davor rot, danach grün.
 
 ### FD-103 Ein Behälter der Maßgruppe hält Qts Abstand 6
 
@@ -1277,7 +1277,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: am Code naheliegend: `_measure_scope_layout` setzt Ränder, aber keinen Abstand (`placement_flow.py:2760–2762`); Zwilling zu FD-23, das die Karten in `panels.py` auf das Raster brachte.
 - Vorschlag: Abstand aus dem Raster setzen; der G2-Wächter schließt die Maßgruppe ein.
 - Wirkung beim Kunden: Keine sichtbare; das Raster ist nicht überall gesetzt.
-- Stand: offen RM-737
+- Stand: behoben `c678ff6df`; `test_style.py::test_every_layout_of_a_dialog_keeps_the_grid` liest jetzt `placement_flow.py` und war am Stand davor rot (drei Layouts mit Qts 6), danach grün.
 
 ### FD-104 Befundhandlungen hinter einer angehaltenen Kette werden angeboten und scheitern
 
@@ -1289,7 +1289,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; fest steht: Die Handlungen hängen einen Schritt hinten an, und erst der Haltweg der Sitzung sagt ab („Die Kette hält an — ein neuer Schritt dahinter würde nicht gerechnet.“, `session.py:2781`). Der Bericht fragt den Halt vor dem Anbieten nicht — das Muster von FD-5.
 - Vorschlag: Vor dem Anbieten fragen, ob die Handlung hinter dem Halt landen würde; dann vor dem Halt einfügen wie *Reparieren und erneut versuchen*, oder grau mit dem Halt als Grund und dem Weg dorthin.
 - Wirkung beim Kunden: Er klickt die angebotene Lösung und bekommt eine Absage oder einen grauen Knopf ohne Satz.
-- Stand: offen RM-737
+- Stand: behoben `dced53d01` (Fenster), `5e233623f` (Bericht und Kontextmenü), `c6eaf7d58` (die Wege des haltenden Befunds); `test_halt_refusal_window.py`, `test_halted_report_offers.py` und `test_halt_ways_window.py` je am Stand davor rot, danach grau mit Grund vor dem Dialog.
 
 ### FD-105 Rohdaten im Kundentext
 
@@ -1301,7 +1301,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; die drei Ausgaben setzen Werte und Kennungen ohne `value_line` und Anzeigenamen.
 - Vorschlag: Werte über `value_line` mit Einheit und Rundung der Anzeige, Körper mit Namen, Operationen mit Titel.
 - Wirkung beim Kunden: Interne Kennungen und Fließkommazahlen statt verständlicher Angaben.
-- Stand: offen RM-745
+- Stand: behoben `4df8bd536` (Passungsbefunde), `321a33b6f` (Einzelheiten, Schrittwerte), `662283167` (Berichtszeile), `fec33ba89` (Kopieren); die Tests je am Stand davor rot, danach nennen Bericht und Dialoge Körper, Schritt und Stelle in Fensterwörtern.
 
 ### FD-106 „Passt bereits auf das Bett“ steht auch neben einem Teil, das nicht passt
 
@@ -1313,7 +1313,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `_split_done` setzt den Satz, sobald die Teilung keine Transaktion liefert (`main_window.py:9089–9091`), gleich aus welchem Grund, auch wenn kein Schnitt möglich war.
 - Vorschlag: Den Satz nur, wenn das Teil wirklich passt; sonst der Grund aus den Befunden der Teilung mit ihrer Handlung.
 - Wirkung beim Kunden: Die Statuszeile sagt, alles passe, während der Bericht das Gegenteil meldet.
-- Stand: offen RM-737
+- Stand: behoben `138ac0b67`; `test_split_done_status.py` am Stand davor rot, danach sagt die Statuszeile mit einem Befund „Nicht geteilt.“ und seinen ersten Satz.
 
 ### FD-107 Zwei Akzentknöpfe in Bericht und Analyseleiste
 
@@ -1325,7 +1325,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; Hauptknopf des Berichts und Knopf der Analyseleiste tragen beide den Akzent.
 - Vorschlag: Solange der Bericht eine Hauptaktion zeigt, ist der Knopf der Leiste gewöhnlich.
 - Wirkung beim Kunden: Er muss lesen, welcher Knopf gemeint ist.
-- Stand: offen RM-745
+- Stand: behoben `794191fef`; `test_analysis_offer_accent.py` am Stand davor rot, danach grün; Bild hell und dunkel.
 
 ### FD-108 Die Halt-Quittung erscheint am Zeiger über dem Bericht
 
@@ -1337,7 +1337,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `announce` setzt jede Quittung als `_ActionNotice` an den Mauszeiger und hebt sie über die Karten, für mindestens acht Sekunden (`main_window.py:943–966`, `26548–26554`); nach dem Klick steht der Zeiger im Bericht.
 - Vorschlag: Die Quittung neben die auslösende Karte in die freie Ansicht setzen, nie über eine Karte.
 - Wirkung beim Kunden: Acht Sekunden lang verdeckt der Satz die Knöpfe, die der Bericht als nächsten Schritt anbietet.
-- Stand: offen RM-737
+- Stand: behoben `c5b2387a9`; `test_action_notice_window.py` am Stand davor rot (Quittung über dem Bericht), danach steht sie an der freien Stelle nächst dem Ort der Handlung; nativ belegt (Schlusslauf `c5666931d` L1 de/017–019, an `d0173380f` L1 dieselben Bedingungen gehalten).
 
 ### FD-109 Befundzeilen kürzen ihre Maßangabe
 
@@ -1349,7 +1349,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; die Zeilen des Berichts werden am rechten Rand elidiert.
 - Vorschlag: Maß und Einheit gehören sichtbar zur Zeile; umbrechen oder den Titel vor dem Maß kürzen.
 - Wirkung beim Kunden: Die Zahl, um die es geht, fehlt.
-- Stand: offen RM-745
+- Stand: behoben `e0b6de3b8`; `test_report_rows.py` am Stand davor rot, danach grün; die Nachurteile am Schlusslauf (`d9f7a81f9` L4 056, 057) zeigten Befundzeilen in it und pt noch gekürzt; Rest behoben `318e7f5d3` (Nachzug `b6ed65bfe`): Zeilenhöhe und Messung legen den Text in die Fläche, in die Qt zeichnet (`drawn_text_room`), Zwillinge Chat und Skizzenbedingungen, Test am Stand davor rot; nativ belegt (Nativer Endblock `2ba3ee78c` L4-fx 057 pt, 056 it `tool:analysis`, kein Berichtsbild von 056/057 mit gekürzter Zeile).
 
 ### FD-110 Die Textmessung erkennt elidierte Berichtszeilen nicht
 
@@ -1361,7 +1361,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; die Messung prüft Zeilen in Listen und Bäumen nicht gegen ihre gezeichnete Breite.
 - Vorschlag: Elision in Listen und Bäumen messen (Text gegen Spaltenbreite der Ansicht), mit kurzer Zeile als Gegenfall.
 - Wirkung beim Kunden: P9 meldet vollständige Texte, wo der Kunde „…“ liest.
-- Stand: offen RM-737
+- Stand: behoben `f81515384`; `test_function_capture_reach.py::test_a_wrapped_row_too_low_for_its_lines_is_cut` am Stand davor rot, danach `axis = hoehe`, `cut = true`; die Nachurteile am Schlusslauf (`d9f7a81f9` L4 057) zeigten eine gekürzte Zeile mit `cut: false`; Rest behoben `318e7f5d3`: die Messung legt den Text in die gezeichnete Fläche wie der Delegat; nativ belegt (Nativer Endblock `2ba3ee78c` L4-fx: 500 Berichtszeilen ohne `cut`, deckungsgleich mit den Bildern; die Lage „Qt kürzt“ trat nativ nicht ein, Beleg bleibt der Test); ein knapp zu breites Einzelwort misst noch `cut=False` (FD-304).
 
 ### FD-111 Nach der Befundauswahl ist die Stelle nicht zu sehen
 
@@ -1373,7 +1373,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen (Kamerafahrt der Befundauswahl oder Größe der Szene).
 - Vorschlag: Ursache an einem der fünf Fälle belegen; die Befundauswahl rahmt Körper und Stelle.
 - Wirkung beim Kunden: Er wählt einen Befund und sieht nicht, wo er liegt.
-- Stand: offen RM-737
+- Stand: behoben `2178041c4` (Ansicht), `7e1fb79c5` (Fenster); `test_finding_frame.py` und `test_finding_frame_window.py` je am Stand davor rot, danach rahmt ein Befund ohne Ort den Körper, und ein geöffnetes Projekt steht ganz im Bild.
 
 ### FD-112 Dieselbe Handlung heißt im Bericht „Dicke geben“ und im Dialog „Offene Fläche schließen“
 
@@ -1385,7 +1385,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: *Dicke geben* öffnet gewollt *Offene Fläche schließen* (`main_window.py:28068`, `errors.py:114–116`); der Dialog nennt nur den Operationstitel.
 - Vorschlag: Der Dialog sagt in seiner ersten Zeile, dass er der Fläche eine Dicke gibt, oder der Knopf heißt wie die Operation.
 - Wirkung beim Kunden: Er klickt „Dicke geben“ und landet in einem Dialog mit anderem Namen.
-- Stand: offen RM-745
+- Stand: behoben `3e7cf5408`; der erste Satz hinter *Dicke geben* sagt „Dicke“ in jeder Sprache, der Test je Sprache am Stand davor rot.
 
 ### FD-113 „In Einzelteile aufteilen“ nennt ein mehrteiliges Netz ein Stück
 
@@ -1397,7 +1397,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `split_bodies` zählt ohne Splitter, solange `keep_tiny` aus ist (`prepare_ops.py:21759–21801`); bleibt ein Teil, sagt `ONE_PIECE` „aus einem Stück“, und die Vorschläge sind nur *Eingabe korrigieren* und *Abbrechen*. Die Zeile „Art: …“ ist FD-95.
 - Vorschlag: Weggelassene Splitter nennen („… und N Splitter unter der Druckgrenze“) und *Splitter behalten* als Handlung anbieten.
 - Wirkung beim Kunden: Die Absage widerspricht dem Bericht und verschweigt den einen Schalter, der weiterhilft.
-- Stand: offen RM-737
+- Stand: behoben `abf1b103d`; `test_split_splinters.py` an `two_components.stl` am Stand davor rot, danach nennt die Absage den Splitter, bietet *Splitter behalten*, und mit dem Schalter entstehen zwei Objekte.
 
 ### FD-114 Umbenennen zeigt den aktuellen Namen nicht
 
@@ -1409,7 +1409,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen.
 - Vorschlag: Der aktuelle Name als Vorgabe, markiert.
 - Wirkung beim Kunden: Für eine kleine Änderung tippt er den ganzen Namen neu.
-- Stand: offen RM-745
+- Stand: behoben `5ae49d564` (Vorgabe in `run_operation`), `ace879f65` (Markierung beim ersten Fokus), `a1cc7a720`, `7426b1693` (*Übernehmen* wartet auf einen neuen Namen, ein mitgebrachter gibt frei); `test_rename_dialog.py` und `test_operation_dialog_first_focus.py` je am Stand davor rot, danach grün; nativ belegt (Schlusslauf `d9f7a81f9` L4 052).
 
 ### FD-115 Flächen von Berichtshandlung und Löschen entstehen nach ihrer Wirkung
 
@@ -1421,7 +1421,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: Der Fix von FD-37 hält den Weg nur bei Zielen `finding.action:` und `feature:` vor dem letzten Klick an (`function_bench.py:1906–1912`); andere Soforthandlungen klicken vor der Aufnahme. Rest zu FD-37.
 - Vorschlag: „Vor der Wirkung messen“ an der Art der Handlung entscheiden (wirkt sofort), nicht am Präfix des Ziels; Gegenprobe an beiden Zeilen.
 - Wirkung beim Kunden: Gemessen wird der Stand danach; kein Kundenfehler belegt.
-- Stand: offen RM-737
+- Stand: behoben `8188f8725`; `test_function_surface_at_once.py` am Stand davor rot, danach wird eine Handlung, die mit dem Klick wirkt, davor gemessen.
 
 ### FD-116 Das Vorschauband zeigt die Legende ohne Volumenänderung
 
@@ -1433,7 +1433,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; verwandt mit FD-52 (Sichtbarkeit der Legende), hier umgekehrt.
 - Vorschlag: Die Legende nur, wenn die Vorschau hinzugefügtes oder entferntes Material zeigt.
 - Wirkung beim Kunden: „Hinzugefügt/Entfernt“ bei einer Handlung, die nichts hinzufügt oder entfernt.
-- Stand: offen RM-737
+- Stand: behoben `3ea182a86`; `test_preview_legend.py` am Stand davor rot (2), danach steht die Legende nur über einer Differenz mit Volumen- oder Körperänderung; nativ belegt (Schlusslauf `d9f7a81f9` L4 001 mit Legende, 052 `set_material` ohne).
 
 ### FD-117 „Neu erzeugen“ öffnet den Generator leer
 
@@ -1445,7 +1445,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: für die Vorbelegung belegt: Der Handler ruft `_generate(None)` (`main_window.py:27550`) und gibt keine frühere Beschreibung mit; Einleitung und Höhe offen.
 - Vorschlag: Die Beschreibung des erzeugten Modells vorbelegen, wenn sie vorliegt; ein Satz über dem Feld.
 - Wirkung beim Kunden: Für einen neuen Versuch tippt er die Beschreibung noch einmal.
-- Stand: offen RM-745
+- Stand: behoben `dd98a37d2`; `test_generate_again_window.py` am Stand davor rot (Feld leer), danach mit Beschreibung, nächstem Startwert und Satz.
 
 ### FD-118 Das Wertefenster ist für sechs Zeilen viel zu groß
 
@@ -1457,7 +1457,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen.
 - Vorschlag: Höhe aus dem Inhalt, wie bei FD-51.
 - Wirkung beim Kunden: Das Fenster verdeckt mehr Modell als nötig.
-- Stand: offen RM-745
+- Stand: behoben `321a33b6f`; `test_the_step_values_window_is_as_tall_as_its_lines` am Stand davor rot (134 px leer), danach so hoch wie die Zeilen (520 × 360 → 464 × 273).
 
 ### FD-119 Der Prüfstück-Dialog hat zweimal „Stelle“
 
@@ -1469,7 +1469,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen.
 - Vorschlag: Zwei unterscheidbare Beschriftungen.
 - Wirkung beim Kunden: Unklar, welches Feld die Stelle festlegt.
-- Stand: offen RM-745
+- Stand: behoben `b785e5c4f`; `test_dialog_texts.py::test_no_field_is_named_like_the_place_line_in_front` am Stand davor rot, danach heißt die Wahl „Lage des Würfels“.
 
 ### FD-120 „Stifte“ klebt am Haken davor
 
@@ -1481,7 +1481,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen (Abstand in der Teilenleiste).
 - Vorschlag: Abstand oder Trenner zwischen Haken und Feldbeschriftung.
 - Wirkung beim Kunden: Haken und Feld lesen sich wie ein Satz.
-- Stand: offen RM-745
+- Stand: behoben `1f2df32dd`; `test_split_bar_spacing.py` am Stand davor rot, danach grün; Bild hell und dunkel.
 
 ### FD-121 Der einmalige Druckhinweis verdeckt die Zielfläche im Prüfstand
 
@@ -1493,7 +1493,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: Das Prüfprofil quittiert den einmaligen Hinweis (`app/ui/print_disclosure.py`) nicht; Stufe A misst E5 am Hinweis.
 - Vorschlag: Den Hinweis im Profil der Fälle als gesehen eintragen (`tools/function_setup.py`, `profile_settings`) und ihn als eigene Zeile messen.
 - Wirkung beim Kunden: E5-Fund an der falschen Fläche, die Zielfläche bleibt ungemessen; kein Kundenfehler belegt.
-- Stand: offen RM-737
+- Stand: behoben `040898baa`, `07b1edf6c`; `test_function_print_hint.py` am Stand davor rot: das Prüfprofil hat den Hinweis gesehen, die eigene Zeile läuft mit `druckhinweis = "offen"`; nativ belegt (Schlusslauf `c5666931d` L3 043–048, sechs Sprachen).
 
 ### FD-122 Der Prüfstand misst an Dateidialogen den erzwungenen Qt-Dialog
 
@@ -1505,7 +1505,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: Der Fallprozess setzt `AA_DontUseNativeDialogs` (`tools/file_acceptance.py:1197`); der Kunde sieht den Systemdialog.
 - Vorschlag: Dateidialoge als Systemfläche kennzeichnen (Z5-Ausnahme, Stufe C) und nicht nach G2 und Z6 messen.
 - Wirkung beim Kunden: Falsche Gestaltungsfunde; kein Kundenfehler.
-- Stand: offen RM-737
+- Stand: behoben `25cce747a`; `test_function_system_surface.py` am Stand davor rot, danach zählt ein `QFileDialog` als Systemfläche (Stufe C).
 
 ### FD-123 Der Kantenfehler bietet „Andere Objekte wählen“ an
 
@@ -1517,7 +1517,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; der Vorschlag nennt Objekte, wo Kanten gemeint sind.
 - Vorschlag: „Andere Kanten wählen“ an Kantenfehlern, in allen Sprachen.
 - Wirkung beim Kunden: Er wählt einen anderen Körper statt einer anderen Kante.
-- Stand: offen RM-745
+- Stand: behoben `f8d54b2ae`, nach Review `36cdd9fe2` (Handlung nach dem auslösenden Schritt); `test_edge_refusal_ways.py` am Stand davor rot, danach bieten die Kantenabsagen beider Kerne *Andere Kanten wählen*.
 
 ### FD-124 Große Zahlen ohne Tausendertrennung
 
@@ -1529,7 +1529,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen.
 - Vorschlag: Ganzzahlen mit Gruppentrennung der Anzeigesprache, auch im Feld.
 - Wirkung beim Kunden: Siebenstellige Zahlen sind schwer zu lesen.
-- Stand: offen RM-745
+- Stand: behoben `8ebd989d4` (Satz der Analyseleiste), `afa2a9427` (Zahlenfeld des Operationsdialogs), `3e515ef4f`, `8af6a2d09` (alle Ganzzahlfelder, FD-184); `test_map_limit_text.py` und `test_grouped_count_field.py` je am Stand davor rot, danach Dreiergruppen wie `count_text`; nativ nicht belegt: In L3 erreicht der Weg den Druckdialog von D9 nicht (Schlusslauf `c5666931d`, FD-234); Beleg bleiben die Tests.
 
 ### FD-125 Parameter anlegen kennt keine Zolleinheit
 
@@ -1541,7 +1541,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `PARAMETER_UNITS` kennt nur mm, Grad und ohne Einheit (`labels.py:112–116`); auch der Rezeptdialog nutzt die Liste (`recipe_dialog.py:253`).
 - Vorschlag: Längenparameter in der Anzeigeeinheit zeigen und annehmen (Längenfeld wie in den Operationsdialogen), gespeichert in mm (Regel 6).
 - Wirkung beim Kunden: Wer in Zoll arbeitet, rechnet für einen Parameter in Millimeter um.
-- Stand: offen RM-737
+- Stand: behoben `91e966a51` (Parameter- und Bausteindialog), `d3cd8f2e0` (Parameterleiste), `6168cacae`, `f49c624d9`, `209bbe08c` (Review RA-1, RA-2, RA-5); `test_parameter_units.py`, `test_parameter_panel_units.py` und `test_parameter_unit_switch_window.py` je am Stand davor rot, danach Zoll gezeigt und angenommen, Millimeter gespeichert, ein Maß ohne Einheit bleibt eine Zahl.
 
 ### FD-126 Im ersten Bild liegt „Parameter anlegen …“ über dem Erklärungstext
 
@@ -1553,7 +1553,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen (ein Bild); Verdacht: Höhe des umbrochenen Texts vor der endgültigen Breite gemessen.
 - Vorschlag: Am Startweg nachstellen, dann beheben.
 - Wirkung beim Kunden: Kurz nach dem Laden verdeckt der Knopf eine Textzeile.
-- Stand: offen RM-747
+- Stand: behoben `9f8e67c08`, `d3cd8f2e0`, `546b0e891` (misst nach einem Schriftwechsel); `test_parameter_empty_note.py` am Stand davor rot, danach grün; nativ belegt (Schlusslauf `d9f7a81f9` L4 003).
 
 ### FD-127 Prüfpunkt 12 zählt nur Operationen
 
@@ -1565,7 +1565,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `phase_revise` vergleicht die Zahl der `ops` (`function_revision.py:38–40`); eine Parameteränderung ist ein Verlaufseintrag ohne Operation.
 - Vorschlag: Die Verlaufslänge aus den Einträgen des Verlaufs lesen und den Parameterweg (Doppelklick, *Ändern …*) messen.
 - Wirkung beim Kunden: P12 bleibt an Parameterzeilen ungemessen; kein Kundenfehler belegt.
-- Stand: offen RM-737
+- Stand: behoben `f50bf25a8`, `13b09c7a0`, `7af8a78f3`, `2b0fcc820`; `test_function_revision_parameters.py` geht beide Wege des Parameters über den echten Wortschatz, ohne die Ziele „nicht gemessen“.
 
 ### FD-128 Prüfpunkte 5 und 16 verlangen Zustände, die die Zeile nicht hat
 
@@ -1577,7 +1577,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `_point_5` verlangt `states.escape` an jeder Zeile (`function_points.py:337–345`), `_point_16` alle `SWITCH_PHASES` (`function_points.py:829–846`), gleich ob die Zeile Entwurf, Vorschau oder Rechnung hat.
 - Vorschlag: Escape nur an Zeilen mit Entwurf oder Dialog verlangen, Wechselphasen nur die, die die Zeile hat; sonst *entfällt* mit Grund aus der geschlossenen Liste.
 - Wirkung beim Kunden: Der Rückweg nach FD-4 und der Wechsel bleiben ungewertet; kein Kundenfehler.
-- Stand: offen RM-737
+- Stand: behoben `8c48fc7d6`; `test_function_judgement_scope.py` (Rückweg ohne Entwurf, Zeile ohne Wechsellage) am Stand davor rot; am finalen Lauf neu ausgewertet 002 P5 erfüllt, P16 entfällt, 003 P16 erfüllt.
 
 ### FD-129 Fensterbefehle mit Agentenwerkzeug nennen keinen Ort, und Prüfpunkt 17 sieht sie nicht
 
@@ -1589,7 +1589,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `_point_17` sucht den Agentenweg nur für Zeilen der Art `operation` (`function_points.py:851–856`); `add_parameter` beschreibt keinen Ort im Fenster (`app/core/agent/tools.py:644–667`), anders als die Operationswerkzeuge über `menu_path`.
 - Vorschlag: Werkzeuge außerhalb des Registers (`add_parameter`, `set_parameter`, `add_fit` und weitere) nennen ihren Fensterort aus derselben Quelle wie das Menü; P17 ordnet sie ihren Zeilen zu.
 - Wirkung beim Kunden: Der Agent kann nicht sagen, wo der Kunde einen Parameter selbst anlegt, und die Prüfung hält den Punkt für nicht zutreffend.
-- Stand: offen RM-737
+- Stand: behoben `133594b30` (Werkzeugort), `2a8329f54` (Prüfpunkt 17); `test_agent_tool_places.py` und `test_function_judgement_scope.py::test_the_agent_place_of_a_window_command_is_compared` je am Stand davor rot, am finalen Lauf 003 P17 erfüllt.
 
 ### FD-130 Die Flächenmessung nimmt für andere Ziele die Auswahlkarte
 
@@ -1601,7 +1601,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `surface_for` kennt Dialog, Bericht, Werkzeugleiste und Merkmal und fällt sonst auf `selection` zurück (`function_surface.py:116`); der Fix von FD-47 schloss nur `feature:`. Rest zu FD-47.
 - Vorschlag: Die Fläche aus dem Ziel selbst ableiten (nächster Kartenvorfahre des Ziels); die Auswahlkarte nur, wenn das Ziel dort liegt.
 - Wirkung beim Kunden: E5, V1 und V2 grün und V3 rot an der falschen Karte; kein Kundenfehler belegt.
-- Stand: offen RM-737
+- Stand: behoben `98c3d4215`; `test_function_surface_place.py` am Stand davor rot, danach ist die Fläche einer Zeile die Seite oder der Abschnitt, in dem ihr Ziel steht.
 
 ### FD-131 Die Navigation klickt ein Ziel unterhalb aller Sichtflächen an
 
@@ -1613,7 +1613,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: teilweise belegt: Am Stand `2ec37b23b` lässt `_scroll_needed` das Ziel stehen, wenn kein Rollbereich weiter rollen kann (`guide_targets.py:1648–1676`), und der Klick geht ins Leere. Der Fix zu FD-77 (`46c628ef9`, auf welle4 seit `64e389936`) macht daraus `MissingTargetError`. Warum kein Bereich das Ziel heranrollt, ist offen: Prüfstand oder eine Karte, die über den Fensterrand reicht.
 - Vorschlag: Am Stand mit FD-77 nachstellen; reicht die Karte über den Fensterrand, ist es ein Produktfund und wird neu bewertet.
 - Wirkung beim Kunden: Der Kundenweg zu *Filament zuweisen* lief in keiner Sprache.
-- Stand: offen RM-737
+- Stand: behoben `9301605b6`; kein Produktfund; `test_guide_obstacle_scroll.py` und `test_function_walk_rolling.py` am Stand davor rot, danach rollt die Navigation eine Klappe heran; nativ belegt (Schlusslauf `c5666931d` L2 055 *Vorbereiten*, sieben Rollschritte; `d9f7a81f9` L4 D10 Klappe, D8 Rollen).
 
 ### FD-132 Der Zustand einer Sprachfläche wandert in die nächste
 
@@ -1625,7 +1625,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: Zwilling zu FD-40: Der Sprachdurchgang wechselt die Startszene, stellt aber Klappzustand und Rolllage der Karten nicht zurück (`tools/function_language.py`).
 - Vorschlag: Vor jeder Sprachfläche den Ausgangszustand der Karten herstellen, oder messen und rot beenden, wenn er abweicht.
 - Wirkung beim Kunden: Ein rotes Z3 wird grün; der Weg zum Filamentabschnitt erscheint kürzer, als er ist.
-- Stand: offen RM-737
+- Stand: behoben `d2c4351fd`; `test_function_language_ground.py` am Stand davor rot, danach beginnt jede Sprachfläche im Ausgangszustand eines frischen Starts.
 
 ### FD-133 Im portugiesischen Maßblock der Gegenstücke stehen zwei Leerzeilen
 
@@ -1637,7 +1637,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; möglicherweise dieselbe Umbruchhöhe wie FD-93.
 - Vorschlag: Am Layout belegen; die Höhe aus dem sichtbaren Inhalt.
 - Wirkung beim Kunden: Leere Zeilen in der Karte.
-- Stand: offen RM-747
+- Stand: behoben `5068fc6d9`, `6affeeb97`; Ursache war `panels.fit_wrapped`, das umbrochene Sätze an der Grundbreite der linken Spalte maß; `test_wrapped_height.py` am Stand davor 14 von 15 rot, `test_left_card_empty_sentences_window.py` am Stand davor 5 von 6 rot, danach grün; Bild hell und dunkel in sechs Sprachen; nativ belegt (Schlusslauf `d9f7a81f9` L4 039 PT gegen 034 DE).
 
 ### FD-134 Schriftzug anlegen meldet vor der ersten Eingabe einen Fehler
 
@@ -1649,7 +1649,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; fest steht, dass die erste Vorschau mit leerem Text als Absage im Dialog endet, bei den Geschwistern nicht. Die Form des Blocks ist FD-95.
 - Vorschlag: Ein leerer Pflichttext ist ein Hinweis am Feld wie bei den Geschwistern, kein Fehler.
 - Wirkung beim Kunden: Bevor er etwas getan hat, steht da ein Fehler.
-- Stand: offen RM-747
+- Stand: behoben `25ff4aa1a`; `test_required_text_field.py` am Stand davor rot (Absage beim Öffnen), danach keine Vorschau, Hinweis im Feld, Knopf grau mit „Erst „Text“ ausfüllen, dann übernehmen.“
 
 ### FD-135 Textur in Filamente umrechnen wird ohne Textur angeboten
 
@@ -1661,7 +1661,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: Der Registereintrag trägt kein `requires_body` (`colour_ops.py:314–330`); `grenzen.md` verlangt, dass am Menüeintrag steht, was am gewählten Körper nie etwas tun kann.
 - Vorschlag: Die Bedingung „trägt Farbinformation“ als `requires_body` mit demselben Satz; der Eintrag steht grau mit Grund.
 - Wirkung beim Kunden: Er öffnet eine Handlung, die an seinem Teil nie etwas tun kann.
-- Stand: offen RM-737
+- Stand: behoben `a1a9306fd` (Kern vorbereitet `7938175dc`, `cac627d7e`); vier Tests in `test_texture.py` und `test_operation_ui.py` am Stand davor rot (Eintrag frei, kein Satz), danach grün: *Textur in Filamente umrechnen* steht an einem Körper ohne Farbe grau mit dem Satz des Befunds (`colour.no_texture`), frei an einem farbigen, beide Kerne; Startszene `farbig.netz` mit Korpus `painted_cube.ply`; Changelog 0.6.1 in sechs Sprachen.
 
 ### FD-136 Der Übernehmen-Fuß steht weit unter seinem Feld
 
@@ -1673,7 +1673,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: Der Fuß steht außerhalb der rollenden Zeilen am Kartenende (so beschrieben in `function_surface.surface_parts`).
 - Vorschlag: Den Fuß unmittelbar unter der offenen Zeile zeigen; E1–E7 an derselben Zeile vorher und nachher messen.
 - Wirkung beim Kunden: Feld oben, Knopf unten — der Blick springt über die ganze Karte.
-- Stand: offen RM-737
+- Stand: behoben `976b60ade` (Panel), `a2cf5c2f7` (Fenster, `_Follower`), Wächter `26f33fc8e`, `78d2158f6`; `test_feature_footer_window.py`, `test_footer_in_sight.py` und `test_feature_footer_low_window.py` je am Stand davor rot, danach steht die Knopfzeile unter der Handlung im Sichtfeld; nativ belegt (Schlusslauf `d0173380f` L2 027, 028, 051, 052; `d9f7a81f9` L4 034).
 
 ### FD-137 Zwei Dialogeinleitungen sind wörtlich oder doppeldeutig übersetzt
 
@@ -1685,7 +1685,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: die Katalogwerte in en, fr und it beziehungsweise pt.
 - Vorschlag: Die vier Katalogwerte neu übersetzen.
 - Wirkung beim Kunden: Die Einleitung ist in vier Sprachen holprig oder missverständlich.
-- Stand: offen RM-747
+- Stand: behoben `6b2b6c555`; `test_catalog_terms.py::test_two_dialog_intros_say_what_the_german_means` am Stand davor in en, fr, it und pt rot, danach grün.
 
 ### FD-138 Die gefaltete Sperrzeile liest sich als gewöhnlicher Absatz
 
@@ -1697,7 +1697,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: Die Gründe aus `NOT_APPLICABLE` (`app/core/perceive/actions.py`) werden in `panels.py` hinter die Titel gefaltet, ohne zu sagen, dass die genannten Handlungen hier nicht gehen. Der Verbinder aus FD-43 ist behoben und nicht betroffen.
 - Vorschlag: Ein Satzbau, der die Absage trägt („Hier nicht: …, weil …“), mit kleinem Anschluss nach dem Gedankenstrich, in allen Sprachen.
 - Wirkung beim Kunden: Er liest eine Aufzählung von Handlungen und erfährt nicht, dass sie hier fehlen.
-- Stand: offen RM-737
+- Stand: behoben `014590964`; `test_refusal_line.py` am Stand davor in sechs Sprachen rot, danach „Hier nicht möglich: {actions}. {reason}“; Bild hell und dunkel.
 
 ### FD-139 Rollbereiche sind eigene Tab-Halte mit Klassennamen
 
@@ -1709,7 +1709,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt am Code: `DialogScrollArea` (`style.py:233`) und `overlay.FittedScroller` (`overlay.py:1046`) setzen keine Fokuspolitik und behalten Qts Vorgabe für Rollbereiche (`StrongFocus`); einen zugänglichen Namen tragen sie nicht.
 - Vorschlag: Reine Rollbehälter auf `NoFocus` (Rad und Tastatur rollen über das fokussierte Kind), sonst mit Name und Beschreibung.
 - Wirkung beim Kunden: Am Anfang und Ende jedes Dialogs ein Tab-Halt ohne Namen.
-- Stand: offen RM-737
+- Stand: behoben `7464c5ae3`, `5fb7d7537` (Maßgruppe); `test_scroll_areas.py` und `test_report_tab_chain.py` am Stand davor rot, danach ist kein Rollbereich ein namenloser Tab-Halt.
 
 ### FD-140 Tab erreicht „Auf das Bett setzen“ im Prüfbericht nicht
 
@@ -1721,7 +1721,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; fest steht, dass die Kette den Bericht nach dem Rollbereich verlässt. Ob seine Knöpfe fokussierbar sind, sagt das Protokoll nicht.
 - Vorschlag: Die Tab-Folge des Berichts belegen (Befundliste → Handlungen) und setzen; Test über Tab und `focusWidget()`.
 - Wirkung beim Kunden: Mit der Tastatur bleibt die angebotene Lösung unerreichbar.
-- Stand: offen RM-737
+- Stand: behoben `7464c5ae3`; `test_report_tab_chain.py::test_tab_reaches_the_offered_action_from_every_stop_before_it` am Stand davor rot („FittedScroller → SignalTabBar“), danach grün.
 
 ### FD-141 Prüfpunkt 10 fragt weder nach der Zielhandlung noch nach technischen Namen
 
@@ -1733,7 +1733,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: belegt: `_point_10` prüft nur Rücksprünge innerhalb der Fläche, leere und doppelte Namen (`function_points.py:615–655`); `name_of` fällt auf den Klassennamen zurück (`function_capture.py:474–477`), der als Name zählt, und Glieder außerhalb werden nur weggefiltert.
 - Vorschlag: P10 verlangt, dass die Kette die Zielhandlung der Zeile erreicht, bevor sie die Fläche verlässt; ein Klassenname zählt als fehlender Name.
 - Wirkung beim Kunden: Ein unbedienbarer Tastaturweg wird als erfüllt abgehakt.
-- Stand: offen RM-737
+- Stand: behoben `0526611ec`; `test_function_capture_reach.py::test_the_chain_names_what_a_screen_reader_reads_and_finds_the_target` am Stand davor rot, am finalen Lauf 002 P10 Fund statt erfüllt.
 
 ### FD-142 Weitere Doppelklicks in Tests und Werkzeugen lassen die Maustaste gedrückt
 
@@ -1745,7 +1745,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: `mouseDClick` schickt nur das Doppelklickereignis; Qt hält die linke Taste danach bis zum nächsten Klick im selben Prozess für gedrückt.
 - Vorschlag: Dieselbe Folge wie der Kunde (Klick, Doppelklick, Loslassen) an allen Stellen; als Wächter eine Fixture, die nach jedem `qt_app`-Fall `QGuiApplication.mouseButtons() == NoButton` zusichert.
 - Wirkung beim Kunden: Kein Produktfehler; im selben Prozess sehen Bewegungen bis zum nächsten Klick wie ein Zug aus, in Tests wie in den Werkstattvideos.
-- Stand: offen RM-737
+- Stand: behoben `701f20cca`; ein Helfer `tools/qt_clicks.double_click` an allen Stellen in `tests/` und `tools/`, der Wächter in `tests/conftest.py` am Stand davor rot an zwei Fällen von `test_start_screen.py` und an einer gepflanzten Stelle, danach grün.
 
 ## Einordnung der Prüferabweichungen (FD-143 bis FD-153)
 
@@ -1778,7 +1778,7 @@ Auskunft.
 - Ursache: `function_report.agreement` zählt nur Paare und meldet ungepaarte Zellen nicht.
 - Vorschlag: `agreement` gibt die ungepaarten Zellen aus, die Abhakliste führt sie als „ohne Gegenurteil“; jeder Prüfpunkt braucht Paare, sonst ist er nicht gemessen.
 - Wirkung beim Kunden: Kein Produktfehler; die Abnahme „≥ 90 % je Prüfpunkt“ war für zwölf Kriterien nicht prüfbar.
-- Stand: offen RM-737
+- Stand: behoben `3d3cd6efd`; `test_function_verdict_round.py::test_cells_without_a_counter_verdict_are_counted_not_dropped` hält die Zellen ohne Gegenurteil in der Abhakliste (am finalen Lauf 77 nur primär, 5 nur zweit).
 
 ### FD-145 Ob die Übereinstimmung gepoolt oder je Paket gilt, war nicht festgelegt
 
@@ -1790,7 +1790,7 @@ Auskunft.
 - Ursache: Konzept und Prüfstand nennen die Grundmenge der Quote nicht.
 - Vorschlag: Entschieden (Koordinator, 15.10.): gepoolt je Prüfpunkt über alle Pakete einer Urteilsrunde ist bindend, je Paket Auskunft; Konzept §4 und `report` erhalten den Rundenwert.
 - Wirkung beim Kunden: Kein Produktfehler; die Abnahme maß bei kleinen Paketen nichts.
-- Stand: offen RM-737
+- Stand: behoben `3d3cd6efd`; die 90 % gelten je Prüfpunkt gepoolt über die Runde (`test_the_round_pools_the_packages_and_binds` am Stand davor rot), die Paketwerte sind Auskunft; Konzept §4 sagt es so.
 
 ### FD-146 E1 bis E3 gelten als erfüllt an Wegen, die vor dem Beispielziel enden
 
@@ -1802,7 +1802,7 @@ Auskunft.
 - Ursache: `_e1`, `_e2`, `_e3` (`tools/function_judges.py`) prüfen weder Spezifikation noch Übernahmeschritt; der E2-Paketanteil zählt diese Zeilen mit.
 - Vorschlag: E1–E3 nur an einem Weg, der das Beispielziel erreicht hat; sonst nicht gemessen, *offen* mit Paket-RM; Gegenprobe Sprachflächenprotokoll ohne Spezifikation.
 - Wirkung beim Kunden: Kein Produktfehler; Schrittzahlen galten als gemessen, die es nicht waren.
-- Stand: offen RM-737
+- Stand: behoben `bd7a043be`; `test_function_judgement_scope.py::test_steps_count_only_on_a_way_that_reached_the_example_goal` am Stand davor 12-mal rot, danach E1–E3 ohne Beispielziel „nicht gemessen“.
 
 ### FD-147 Englisch übersetzt „Überstand“ und „Überhang“ beide mit „Overhang“
 
@@ -1814,7 +1814,7 @@ Auskunft.
 - Ursache: Zwei deutsche Begriffe teilen im englischen Katalog ein Slicer-Wort mit anderer Bedeutung.
 - Vorschlag: Den Überstand unter dem Bett neu übersetzen (etwa „Below plate“), die Bausteintexte auf „protrusion“; alle Kataloge auf dieselbe Verwechslung prüfen.
 - Wirkung beim Kunden: Ein englischsprachiger Kunde liest einen Überhang, wo ein Teil unter dem Bett steckt.
-- Stand: offen RM-745
+- Stand: behoben `40a44bcf8`; `test_catalog_terms.py::test_a_protrusion_is_never_called_an_overhang` am Stand davor in en und pt rot, danach in allen Sprachen grün.
 
 ### FD-148 V4 nimmt jede geschriebene Vorhersage an, auch eine nachträgliche
 
@@ -1826,7 +1826,7 @@ Auskunft.
 - Ursache: Die Vorhersage ist nicht an den Zeitpunkt vor dem Klick gebunden.
 - Vorschlag: Feld `prediction_bound` (Pfad und SHA256 der vor dem Klick freigegebenen Vorhersage); ohne Bindung ist V4 *offen*; Vorhersagetor im Fallprozess auch im Sprachdurchgang.
 - Wirkung beim Kunden: Kein Produktfehler; V4 konnte ohne echte Vorhersage gelten.
-- Stand: offen RM-737
+- Stand: behoben `2cfa39669`; `test_function_verdict_round.py::test_a_good_v4_without_a_bound_prediction_is_rejected` am Stand davor rot; das Vorhersagetor im Fallprozess bindet die Vorhersage seit FD-168 (`d73df33ce`), und `report` prüft die Siegeldatei selbst (`d41312515`, `71856a491`).
 
 ### FD-149 Der Sperrgrund des grauen Knopfs im Fehlfall steht nicht im Bild
 
@@ -1838,7 +1838,7 @@ Auskunft.
 - Ursache: Der Prüfstand nimmt Tooltip und Sperrgrund eines grauen Elements nicht als Bild auf.
 - Vorschlag: Sperrgrund bzw. Tooltip des grauen Elements als eigenes Bild aufnehmen; eine JSON-Eigenschaft ersetzt kein angezeigtes Bild.
 - Wirkung beim Kunden: Kein Produktfehler; Punkt 7 wurde an einer nicht gezeigten Zeile geurteilt.
-- Stand: offen RM-737
+- Stand: behoben `b8a329034` (Aufnahme), `2b0fcc820` (Aufruf im Fehlfall), `2ee321fd6` (nur eine echte Kurzhilfe); `test_function_surface_timing.py::test_the_reason_of_a_grey_target_is_pictured_in_the_fault_phase` am Stand davor rot, danach grün.
 
 ### FD-150 Prüfpunkt 11 findet außerhalb des Registers und an Bildtexten keine Fundstelle
 
@@ -1850,7 +1850,7 @@ Auskunft.
 - Ursache: Website- und Handbuchstellen hängen am Registernamen; Zeilen ohne Op und Bildtexte fallen heraus.
 - Vorschlag: Zeilenspezifikation um `manual` und `website` je Zeile; `_point_11` misst damit auch Nicht-Operationen; `alt` und `title` zählen zum Websitetext.
 - Wirkung beim Kunden: Kein Produktfehler; Versprechen ohne Fundstelle blieben ungeprüft.
-- Stand: offen RM-737
+- Stand: behoben `50a5e4eaa`, `2f3220fc1`, `2b0fcc820`; Bildtexte zählen, Zeilen außerhalb des Registers finden ihre Stellen über die Spezifikation; `test_every_place_a_row_spec_names_exists` hält die Werte der drei Zeilen.
 
 ### FD-151 auto_split hat kein Beispielziel, und die Szene erlaubt kein Teilen
 
@@ -1862,7 +1862,7 @@ Auskunft.
 - Ursache: Szenenkatalog und Zeilenspezifikation decken nur den Fall „passt bereits“.
 - Vorschlag: Spezifikation mit Beispielziel („passt bereits“ als Rückmeldung) und ein zweiter Fall mit zu großem Körper für Vorschlag und G9.
 - Wirkung beim Kunden: Kein Produktfehler; G9 und E1–E3 an auto_split waren nicht messbar.
-- Stand: offen RM-737
+- Stand: behoben `7ddca9f81`; `auto_split` hat an `zu_gross.netz` ein Beispielziel und den Fehlfall „passt bereits“; Wächter `test_function_rows_reach.py` am Stand davor rot.
 
 ### FD-152 I1 „jede Art“ ist aus dem Protokoll nicht prüfbar
 
@@ -1874,7 +1874,7 @@ Auskunft.
 - Ursache: Das Protokoll hält nicht fest, welche Merkmalsarten die Erkennung an der Szene liefert.
 - Vorschlag: Protokollfeld `recognized_kinds` neben `hover_labels`; `_i1` vergleicht beide.
 - Wirkung beim Kunden: Kein Produktfehler; die Bauplanzusage zu I1 war nicht prüfbar.
-- Stand: offen RM-737
+- Stand: behoben `3d549d12e`, `634d6117b`; `test_function_judgement_scope.py::test_every_recognized_kind_must_be_hovered` verlangt jede Art aus `recognized_kinds`, ohne Liste „nicht gemessen“.
 
 ### FD-153 Funde mit integriertem Fix stehen in der Funddatei weiter offen
 
@@ -1886,7 +1886,7 @@ Auskunft.
 - Ursache: Der Stand wurde nach dem gemeinsamen Lauf nicht nachgezogen.
 - Vorschlag: Vor jeder Urteilsrunde den Stand der Funde nachziehen, deren Fix im Laufkopf liegt, mit Nachweis an ihrer Zeile.
 - Wirkung beim Kunden: Kein Produktfehler; *gut nach Fix* war eine Lesart statt einer Folge der Funddatei.
-- Stand: offen RM-737; die sechs Einzelfälle sind nachgezogen (`a00233340`), offen ist der Prozessschritt vor jeder Urteilsrunde.
+- Stand: behoben `3b8b7ba28`; `report` hält einen Lauf an (Ausgang 1), solange ein offener Fund einen Commit nennt, der im Laufkopf liegt, ohne mit „Rest:“ zu sagen, was offen bleibt (`function_verdict_rules.stale_findings`); `test_function_findings.py::test_the_report_refuses_an_open_finding_whose_fix_lies_in_the_run_head` (gepflanzter offener Fund mit dem Kopf als Fix) am Stand davor rot, danach grün; die sechs Einzelfälle sind nachgezogen (`a00233340`), alle Stände vor dem Schlusslauf in `fix/w5-funde`.
 
 ## Folgefunde aus Fixen, Durchsichten und nativen Nachweisen (ab FD-154)
 
@@ -1912,7 +1912,7 @@ Auskunft.
 - Ursache: offen; die Ablehnung des Namens wird als allgemeiner Hinweis des Dialogs gesetzt, nicht am Feld.
 - Vorschlag: Die Ablehnung steht am Namensfeld, das Feld wird markiert und bekommt den Fokus; der Satz nennt den Weg (etwa einen gültigen Vorschlag aus dem eingegebenen Text).
 - Wirkung beim Kunden: Der Kunde sucht, welches Feld falsch ist, und findet den Satz an anderer Stelle.
-- Stand: offen RM-737
+- Stand: behoben `77ea99596`, `f84328243`; `test_a_refused_name_stands_at_the_name_field_with_its_way` am Stand davor rot, danach steht die Ablehnung markiert am Namensfeld mit einem freien Namen als Knopf; Bild hell und dunkel.
 
 ### FD-156 Sechs Fenstertests hielten an der Bohrung und in der Suche das Verhalten vor drei Fixes fest
 
@@ -1948,7 +1948,7 @@ Auskunft.
 - Ursache: offen; der Rückruf hält das Fenster stark und prüft nicht, ob seine Widgets noch leben.
 - Vorschlag: Rückrufe halten das Fenster nur schwach oder prüfen es mit `shiboken6.isValid`, an der einen Stelle, die Vorschaurückrufe anmeldet; Test, der das Fenster vor dem Rückruf abbaut.
 - Wirkung beim Kunden: keine belegte; beim Schließen während einer laufenden Vorschau könnte ein Rückruf ins Leere greifen.
-- Stand: offen RM-737
+- Stand: behoben `1e83dcc92`; `test_preview_teardown_window.py` baut das Fenster zwischen Anfrage und Antwort ab: am Stand davor rot (RuntimeError), danach grün.
 
 ### FD-159 Die Anleitungsnavigation verwirft erreichbare Ziele unter einer verschachtelten Liste
 
@@ -1960,7 +1960,7 @@ Auskunft.
 - Ursache: Die Trefferprobe in `guide_targets._scroll_needed` trifft in der Mitte der Sichtfläche eine verschachtelte Liste (`_ListScroller`) statt des äußeren Rollbereichs und verwirft jeden Rollschritt; Regression aus FD-77.
 - Vorschlag: Den Rollschritt an den Rollbereich geben, der das Ziel enthält und weiter rollen kann, nicht an das Widget unter der Mitte; Gegenprobe mit verschachtelter Liste.
 - Wirkung beim Kunden: Kein Produktfehler; `next_click` rufen nur die Prüfstandsmodule, Tour und Bildanleitungen gehen über `area_for`. Der Prüfstand erreicht den Filamentwähler nicht (032 EN), seine Zeilen bleiben dort ungemessen.
-- Stand: offen RM-737
+- Stand: behoben `827f9d1ae`; die Gegenprobe mit verschachtelter Liste in `test_guide_obstacle_scroll.py` am Stand davor rot, offscreen erreicht der Sprachfall die Filamentzeilen; nativ belegt (Schlusslauf `c5666931d` L2 055 *Vorbereiten*, sieben Rollschritte; `d9f7a81f9` L4 D10 Klappe, D8 Rollen).
 
 ### FD-160 Nach „Abbrechen“ der Maßgruppe steht der Fokus auf dem Kartengriff „Objekte“
 
@@ -1972,7 +1972,7 @@ Auskunft.
 - Ursache: offen; Abbrechen gibt den Fokus nicht an die Ansicht zurück, aus der die Maßgruppe kam.
 - Vorschlag: Alle drei Ausgänge der Maßgruppe geben den Fokus an dieselbe Stelle zurück (die Ansicht).
 - Wirkung beim Kunden: Wer nach Abbrechen eine Taste drückt, bedient die Objektkarte statt der Ansicht.
-- Stand: offen RM-737
+- Stand: behoben `9e7076c0e`; `tests/test_measure_card_exits.py` am Stand davor rot (Fokus auf `CardGrip`), danach enden alle vier Ausgänge in der Ansicht; nativ belegt (Schlusslauf `d0173380f` L1, sechs Sprachen).
 
 ### FD-161 Eine geänderte Bohrung springt im Objektbaum ans Listenende
 
@@ -1984,7 +1984,7 @@ Auskunft.
 - Ursache: offen; der Baum ordnet ein geändertes Merkmal neu ein statt an seiner Stelle.
 - Vorschlag: Ein geändertes Merkmal behält seinen Platz im Baum.
 - Wirkung beim Kunden: Nach jeder Änderung sucht der Kunde die Bohrung neu.
-- Stand: offen RM-737
+- Stand: behoben `78f130336`; `test_feature_order.py::test_a_resized_hole_keeps_its_place_among_the_features` am Stand davor rot, danach grün; nativ belegt (Schlusslauf `d0173380f` L1, sechs Sprachen).
 
 ### FD-162 Die Undo-Blase verdeckt die Sammelzeile, und die Statuszeile meldet danach weiter „zurückgenommen“
 
@@ -1996,7 +1996,7 @@ Auskunft.
 - Ursache: offen; die Quittung kennt weder die Lage der Karten noch den nächsten Schritt.
 - Vorschlag: Mit FD-108 eine Regel für Quittungen: nie über einer Karte, weg mit dem nächsten Schritt; die Statuszeile folgt dem letzten Schritt.
 - Wirkung beim Kunden: Die Blase deckt die nächste Bedienung zu, und die Statuszeile widerspricht dem Stand.
-- Stand: offen RM-737
+- Stand: behoben `c5b2387a9` (Wurzel mit FD-108); `test_action_notice_window.py` (der nächste Schritt nimmt die Quittung mit, eine Karte schiebt sie beiseite) am Stand davor rot, danach grün; nativ belegt (Schlusslauf `d0173380f` L1, sechs Sprachen).
 
 ### FD-163 Prozesse des Prüfstands schreiben kein Dateiprotokoll
 
@@ -2008,7 +2008,7 @@ Auskunft.
 - Ursache: Der Fallprozess richtet das Protokoll der Anwendung nicht ein.
 - Vorschlag: Der Fallprozess richtet dasselbe Dateiprotokoll ein wie `main()`, im isolierten Profil des Falls.
 - Wirkung beim Kunden: Kein Produktfehler; Ursachen in Fallprozessen bleiben ohne Protokoll.
-- Stand: offen RM-737
+- Stand: behoben `e01effdab`; ein Fallprozess schreibt `app.log` in sein Profil, `test_file_acceptance_log.py` am Stand davor rot.
 
 ### FD-164 Die nativen Läufer liegen außerhalb des Repositorys und starten ohne Siegelprüfung
 
@@ -2020,7 +2020,31 @@ Auskunft.
 - Ursache: Die nativen Anschlüsse entstanden als Sitzungswerkzeuge und wurden nie ins Repository übernommen.
 - Vorschlag: Die nativen Läufer (Fallbrücke, Maßkartenfolge, Bindung und Siegel) nach `tools/` übernehmen, mit Siegelprüfung vor dem Start, als Schritt in `/erzeugen` (Konzept §8, §10); die Cursorlesung am Fenster des Druckempfängers.
 - Wirkung beim Kunden: Kein Produktfehler; der Wiederholungslauf beim Release wäre auf keinem frischen Stand reproduzierbar.
-- Stand: offen RM-737
+- Stand: behoben `fb4c91507`, `3dfe19ba1`, `f188d9ca7`; Fallbrücke und Maßkartenläufer stehen als `tools/native_runs.py`, `tools/native_binding.py` und `tools/native_measure_card.py` im Repository, mit Siegel vor dem Start, im Kind vor Qt und danach; `tests/test_native_runs.py` belegt die Verweigerung bei geänderter Läuferdatei; nativ belegt (Schlusslauf `d0173380f` L1, 6 × 70/70, Siegel, Abbau).
+
+### FD-165 Formschräge und Fläche versetzen bieten „Andere Objekte wählen“ an
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: `draft_faces`, `push_face`
+- Prüfpunkt: 7, V5
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-f6-claude.md`: `brep/profiles.py` `draft_faces` (6 Stellen), `geom/faces.py` (11 Stellen, Formschräge und *Fläche versetzen*) und `face_ops._no_face` boten `CHANGE_SELECTION`; `tests/test_face_refusal_ways.py` am Stand davor 8 rot, jede Meldung „['…', 'Andere Objekte wählen', 'Abbrechen']“ (`fix-rest-b-claude.md`). Zwilling von FD-123.
+- Ursache: Die Flächenabsagen beider Kerne trugen `CHANGE_SELECTION`; dessen Handler gibt dem Schritt die im Baum markierten Körper.
+- Vorschlag: `errors.CHANGE_FACES` („Andere Flächen wählen“, `change_step`) an allen Flächenabsagen beider Kerne, nach dem Schritt, der die Absage auslöst.
+- Wirkung beim Kunden: Wer der Absage folgt, tauscht die Körper des Schritts statt der Flächen und kommt nicht weiter.
+- Stand: behoben `b353f58d9`, nach Review `36cdd9fe2` (Handlung nach dem auslösenden Schritt); `test_face_refusal_ways.py` am Stand davor 8 rot, danach grün, beide Kerne und *Fläche versetzen*.
+
+### FD-166 Doppelklick auf einen Parametereintrag im Verlauf bleibt stumm
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `history`, `Bearbeiten/Parameter anlegen …`
+- Prüfpunkt: 12
+- Beleg: `output/konsolidierung-2026-10-12/fix-f8-claude.md` (FD-127): *Parameter anlegen* legt eine Transaktion ohne Operation an, ihre Verlaufszeile trug weder `UserRole` noch `OPS_ROLE`; `test_history_parameter_rows.py` am Stand davor rot (`[] == ['hoehe']`), `test_history_parameter_window.py` ohne Verdrahtung rot (`[] == ['breite']`) (`fix-f4-claude.md`, `fix-rest-a-claude.md`); Review RA-6: auch die Zeilen für Drucker, Material und Passung blieben stumm.
+- Ursache: `HistoryPanel._on_activated` kannte nur Zeilen mit Schritt; eine Maßänderung, eine Drucker- oder Materialwahl und eine Passung hatten keinen Weg.
+- Vorschlag: Die Zeile trägt das Maß (`PARAMETER_ROLE`), Doppelklick öffnet *Ändern …* des Maßes; Drucker und Material öffnen die Druckeinstellungen, eine Passung sagt ihren Weg.
+- Wirkung beim Kunden: Ein Doppelklick auf eine Verlaufszeile tat nichts, obwohl er an jeder anderen Zeile den Schritt öffnet (§2.1).
+- Stand: behoben `3f7011cd1`, `91ff3d3b4`, `94f620bec`, `18ebb9a2d`; `test_history_parameter_window.py` ohne Verdrahtung rot, `test_history_change_rows.py` am Stand davor rot (alle drei Zeilen stumm), danach öffnet der Doppelklick das Maß oder die Druckeinstellungen, an einer Passung steht ein Satz mit dem Weg.
 
 ### FD-167 Ein Körperabschied mitten in einer Schleife über die Erkennungsmerker bricht sie ab
 
@@ -2033,3 +2057,1932 @@ Auskunft.
 - Vorschlag: Die Schleifen über Schnappschüsse (`tuple(...)`), Wächter über jede Schleife an den sechs Merkern, Regel in `kern.md`.
 - Wirkung beim Kunden: Bei Modellen ab 50 000 Dreiecken konnte ein Erkennungsarbeiter seinen Teil verlieren oder enden; der Hauptprozess rechnete ihn selbst, mit demselben Ergebnis, nur langsamer.
 - Stand: behoben `ff0a27705`; neue Fälle am Original rot, am Fix grün; druckgleich an 12 Beispielprojekten und 6 Modellen; in welle4 `5abf5f5b0`.
+
+### FD-168 Der Fallprozess hält vor dem Klick nicht für die Vorhersage an
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: keine Zeile: Fallprozess des Prüfstands (V4)
+- Prüfpunkt: V4
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-f8-claude.md`: FD-148 verlangt `prediction_bound`, aber kein Fallprozess hielt vor dem Klick an; die Vorlage `v4_observer.py` hängte sich als Sitzungswerkzeug per Monkeypatch nur in drei Basisfälle; `test_fd168_rot.py` am Stand davor rot („unbekannte Angaben in der Variante: predict“) (`fix-rest-c-claude.md`).
+- Ursache: Der Prüfstand hatte kein Tor zwischen „vor dem Übernehmen“ und dem Klick.
+- Vorschlag: `tools/function_prediction.PredictionGate`: vor dem Klick Bild und `ready.json`, die Vorhersage des Prüfers binden und versiegeln, `prediction.bound` ins Protokoll; `report` prüft die Bindung.
+- Wirkung beim Kunden: Kein Produktfehler; ohne Tor blieb jedes V4 bis zur Nachurteilsrunde abgewiesen.
+- Stand: behoben `d73df33ce`, `b3c72a8db`, `d41312515`, `71856a491`; ein Fall mit dem Variantensatz `vorhersage` hält vor dem Handlungsklick an, bindet und versiegelt die Vorhersage, `report` rechnet Siegel und Vorhersage selbst nach; `test_function_prediction_seal.py` am Stand davor rot (5 von 6 Verfälschungen angenommen), offscreen 51 Tore gebunden; nativ belegt (Schlusslauf `d9f7a81f9` L5: 15 Fälle, 63 Tore mit Schreiber, alle gebunden, keine Vorhersage abgewiesen, keins abgelaufen; Siegel `seal.json 0f0ae7ff04535f0ef49d01b78cede7741c6c86e4c5f22a31b145ce6b6aed43bc`).
+
+### FD-169 E4 ist an Handlungen am ganzen Körper nicht gemessen
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Prüfanschlüsse des Prüfstands (E4)
+- Prüfpunkt: E4
+- Beleg: Neuer Punkt M-E4 in `output/konsolidierung-2026-10-12/fix-f8-claude.md`: sechs E4-Abweisungen an `finding.action:*`; `FunctionFlow.spot` misst nur an gewähltem Merkmal oder gewählter Kante und liefert sonst `None`; zwei Gegenproben in `function_samples.BROKEN_SAMPLES` blieben am Stand davor grün (`fix-rest-c-claude.md`).
+- Ursache: `_e4` verlangte `spot` nur an Zeilen mit Auswahlbezug; an *Auf das Bett setzen* blieb E4 ohne Stellenmessung.
+- Vorschlag: den Rahmen der geänderten Körper im Ergebnisbild messen (`tools/function_spot.py`); E4 meldet „Stelle nach dem Ergebnis außerhalb des Bildes“.
+- Wirkung beim Kunden: Kein Produktfehler; E4 galt an Ganzkörperhandlungen ohne Messung.
+- Stand: behoben `554c70de7`, `9f59786e0`; die Gegenproben am Stand davor grün geblieben, danach rot; die Messung ist nativ belegt (Schlusslauf `d9f7a81f9` L4 002 `spot`); der gemessene Rahmen liegt außerhalb des Bildes, das ist FD-236.
+
+### FD-170 Die Hauptlinien des Bettrasters liegen nicht an den Maßzahlen
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: keine Zeile: Druckbett in der 3D-Ansicht
+- Prüfpunkt: 9, 19
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-f5-claude.md`: `shapes.grid_lines` teilte 256 mm ab der Ecke in 26 Felder zu 9,85 mm, Hauptlinien bei −128, −78,8, −29,5, 19,7 …, die Zahlen stehen bei 0, ±50, ±100; Bild `bilder-fix-f5/fd92-nachher-hell-mm.png` („0“ zwischen zwei Hauptlinien); `test_bed_grid_visibility.py` am Stand davor 4 rot (`fix-rest-b-claude.md`).
+- Ursache: Raster und Skala rechneten von verschiedenen Nullpunkten — das Raster ab der Ecke der Platte, die Skala ab der Mitte.
+- Vorschlag: Hauptlinien auf den Lagen der Skala, Nebenlinien 10 mm, 1 cm bzw. ½ in, der Rand als Nebenlinie (Entscheidung Koordinator: Linien an die Zahlen, FD-68-Test entsprechend).
+- Wirkung beim Kunden: Das „10-mm“-Raster ist keines, und die Null steht zwischen zwei Hauptlinien — Lagen lassen sich am Raster nicht abzählen.
+- Stand: behoben `46215f53a`; `test_bed_grid_visibility.py` (umgestellter FD-68-Test) am Stand davor 4 rot, dazu `test_bed_grid_at_scale.py`, danach Hauptlinien an den Zahlen in mm und Zoll, hell und dunkel offscreen gesehen; nativ belegt (Schlusslauf `d9f7a81f9` L4 001, 004, 019).
+
+### FD-171 Prüfpunkt 15 meldete „nicht auffindbar“ gegen die Anwendung
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: keine Zeile: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 15
+- Beleg: Neuer Punkt 1 in `output/konsolidierung-2026-10-12/fix-f7-claude.md`: Die Einfügemarke stand vor dem letzten Schritt der Startszene; entstand dort, worüber der Weg führt, gab es ihn am Stand davor nicht (Läufe 001 und 002 im Probelauf und im finalen Lauf: `tree.row:obj_1.hole_1`, `finding:arrange.below_bed`); jede Absage hieß „ergebnis“; `test_function_insertion.py` am Stand davor rot (2).
+- Ursache: Die Phase setzte die Marke ohne Blick auf die Wegziele und las die Antwort gegen den Endstand.
+- Vorschlag: Fehlt ein Wegziel aus der Szene, wendet der Fall die Zeile einmal an und setzt die Marke vor diesen Schritt; die Antwort gilt gegen den Stand davor.
+- Wirkung beim Kunden: Kein Produktfehler; Prüfpunkt 15 meldete an jeder Zeile einen Fund, den die Anwendung nicht hatte.
+- Stand: behoben `f137c9c81`; `test_function_insertion.py` am Stand davor rot, danach zweimal grün.
+
+### FD-172 Ein Fenster aus dem Ereignisdurchlauf hielt den Prüfstand bis zur Frist an
+
+- Art: Stabilität
+- Schwere: mittel
+- Funktion: keine Zeile: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: Neuer Punkt 2 in `output/konsolidierung-2026-10-12/fix-f7-claude.md`: Fragt ein Arbeiter (*Alle Merkmale erkennen*) oder kommt eine Absage als Meldung, geht das modale Fenster in `pump` auf; Stapel per faulthandler über fünf Minuten in `show_error`, `_on_ask`; `test_function_machine_outside.py` mit Gegenprobe.
+- Ursache: Der Automat war fertig, `drive` stand in der Schleife des modalen Fensters, und niemand räumte die tiefere Ereignisschleife ab.
+- Vorschlag: `StepMachine(nested=…)` räumt eine tiefere Ereignisschleife ab wie eine eigene.
+- Wirkung beim Kunden: Kein Produktfehler; ein Fall hing bis zur Frist und lieferte kein Ergebnis.
+- Stand: behoben `8a18eaa3c`; `test_function_machine_outside.py` am Stand davor rot, danach grün.
+
+### FD-173 Ein Dateifall hängt an einem Fenster aus dem Ereignisdurchlauf
+
+- Art: Zwillinge
+- Schwere: mittel
+- Funktion: keine Zeile: Dateifälle von `tools/file_acceptance.py`
+- Prüfpunkt: 19
+- Beleg: Zwilling von FD-172 (`output/konsolidierung-2026-10-12/fix-f7-claude.md`, neuer Punkt 2): `file_acceptance.WindowFlow.drive` baute `StepMachine` ohne `nested`; `tests/test_file_acceptance_modal.py` am Stand davor rot („der Wachhund musste das Fenster schließen — der Fall hing“) (`fix-rest-c-claude.md`).
+- Ursache: dieselbe Bauart wie vor `8a18eaa3c`: Ein Fenster, das in `pump` per `exec()` aufgeht, ließ den fertigen Automaten ohne Takt.
+- Vorschlag: `function_machine.nested_since_now()` als eine Quelle für Funktions- und Dateifall.
+- Wirkung beim Kunden: Kein Produktfehler; ein Dateifall hätte bis zur Frist gehangen.
+- Stand: behoben `e45cf2c30`; `test_file_acceptance_modal.py` am Stand davor rot, danach grün.
+
+### FD-174 Rechtsklick auf das Wertfeld einer Parameterzeile öffnet Qts englisches Textfeldmenü
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `parameters.first`, `menu:parameters.edit`
+- Prüfpunkt: 1, 9
+- Beleg: Neuer Punkt 4 in `output/konsolidierung-2026-10-12/fix-f7-claude.md`: `probe_rechtsklick.py` (offscreen, Szene `parameter.netz`): Wertfeld → Menü des `QLineEdit` mit „&Undo, &Redo, Cu&t, &Copy, &Paste, Delete, &Select All, &Step up, Step &down“; Beschriftung → Menü der Leiste mit *Ändern …*; `test_parameter_row_menu.py` am Stand davor rot (`fix-f4-claude.md`).
+- Ursache: Das Wertfeld brachte sein eigenes Kontextmenü mit, obwohl beide Hälften der Zeile dieselbe Zeile meinen (`panels._remember_row`).
+- Vorschlag: Das Wertfeld hat kein eigenes Menü; der Rechtsklick geht an die Leiste (*Ändern …*).
+- Wirkung beim Kunden: Rechts auf den Wert geklickt, sieht er ein englisches Textfeldmenü statt *Ändern …* (Regel 20).
+- Stand: behoben `52a6a5c65`; `test_parameter_row_menu.py` am Stand davor rot, danach zeigt der Rechtsklick genau `parameters.edit`.
+
+### FD-175 Zeilen der übrigen Pakete haben keinen Weg zu ihrer Fläche
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: keine Zeile: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 1, 2
+- Beleg: Neuer Punkt 5 in `output/konsolidierung-2026-10-12/fix-f7-claude.md`: 37 Zeilen in D9 und D12 ohne Weg zu ihrem Fenster (u. a. `dialog:print_settings_dialog`, `dialog:new_filament_dialog`, `dialog:settings_dialog`, `meldung:_assign_inventory_spool`); `fix-rest-c-claude.md`: zusammen 59 Zeilen (37 in D9/D12, 22 in D1, D2, D7, D11), der Wächter über alle Pakete am Stand des Merges rot.
+- Ursache: Im Sprachfall erreicht der Prüfstand ein Fenster nur über eine `route` der Spezifikation; einige Zeilen brauchten Zustände, die kein Fallprozess herstellte, und die Startzeile lief nur auf Deutsch.
+- Vorschlag: Wege und Szenen in allen Paketen, Nähte des Prüfstands für Zustände, die er nicht herstellen kann (`tools/function_seams.py`), Wächter `test_no_row_of_any_package_is_without_a_way` über alle Pakete.
+- Wirkung beim Kunden: Kein Produktfehler; 59 Zeilen blieben ungemessen.
+- Stand: behoben `9caab1f38`, `3010e5ac0`, `22f869c52`, `ccbcb5810`, `de8ef25ca`, `49a3fdba2`, `c12710342`, `4f01e4fbd`, `1c9bc2975`; jede der 59 Zeilen hat Route, Szene und wo nötig eine Naht und ist offscreen im Sprachfall erreicht, die Startzeile je Sprache im Startfall; der Wächter war am Stand des Merges rot; Rest am echten Fenster: 44 Flächen von D1, D2, D7, D9, D11 und D12 nicht erreicht (Schlusslauf `c5666931d` L3), das ist FD-234.
+
+### FD-176 *Material kalibrieren* folgt der Zollanzeige nicht
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`, `dialog:calibration_dialog`
+- Prüfpunkt: 9
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-f2b-claude.md`: Die Längenfelder (`clearance`, `press`, `hole_compensation`, `elephant_foot`, `minimum_wall`) sind `NumberSpin` mit festem „ mm“ (`calibration_dialog.py:137–146`); `tests/test_calibration_units.py` am Stand davor 3 von 3 rot, Bild `fd176-kalibrieren-zoll-*` „0,250 mm“ trotz Zoll (`fix-f2a-claude.md`).
+- Ursache: Die Felder kannten die Anzeigeeinheit nicht; `LengthSpin` hätte die dritte Stelle dieser Feinmaße verloren.
+- Vorschlag: ein feines Längenfeld mit einer Stelle mehr als die Einheit, gelesen in mm; die Druckbedingungen darunter über `labels.length`.
+- Wirkung beim Kunden: In Zoll liest er Millimeterwerte und tippt sie falsch ein.
+- Stand: behoben `3fdb20462`, `0be16540e` (eine Quelle der Feinheit, `fine_length_spin.finer`); `test_calibration_units.py` am Stand davor rot, danach Längen in der Anzeigeeinheit mit dritter Stelle, gespeichert in mm; nativ belegt (Schlusslauf `c5666931d` L2 026).
+
+### FD-177 Tab von der Reiterleiste springt an der Seite vorbei
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `report`, `selection`
+- Prüfpunkt: 10
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-f4-claude.md`: In der rechten Karte steht der Reiterbalken (`SignalTabBar`) in der Fokuskette hinter dem Inhalt seiner Seite; Tab vom Reiter *Prüfbericht* springt zu Kopfzeile und linker Karte (SignalTabBar → PrintFacts → … → Bericht); `test_card_tab_chain.py` am Stand davor 3 von 3 rot (`fix-rest-a-claude.md`).
+- Ursache: Qt reiht Seiten nach der Entstehung ein, und `setTabOrder(tabBar, page)` greift an einem Behälter ohne Fokus nicht.
+- Vorschlag: `SignalTabBar.focusNextPrevChild` legt die Halte der vorderen Seite in Layoutfolge hinter die Leiste (`tab_stops.chain_after`).
+- Wirkung beim Kunden: Wer per Tastatur vom Reiter in den Bericht will, landet in Kopfzeile und linker Karte.
+- Stand: behoben `1d9db4c0e`, `a7bc3312d`; `test_card_tab_chain.py` am Stand davor rot, danach geht Tab von der Reiterleiste in die vordere Seite; den Tastaturweg ab der Leiste geht der Prüfstand seit `3a70b3806`; nativ belegt (Schlusslauf `c5666931d` L2 010 Prüfbericht, 007 Auswahl).
+
+### FD-178 Rundungsabsagen ohne zwei Ebenen bieten „Andere Objekte wählen“ an
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: `fillet_edges`, `remove_feature`, `resize_feature`
+- Prüfpunkt: 7, V5
+- Beleg: `output/konsolidierung-2026-10-12/fix-rest-b-claude.md`: `edges.NOT_BETWEEN_TWO_PLANES` an vier Stellen (`geom/edges.py:3825, 3926`, `geom/prepare_ops.py:24081`, `brep/edit.py:4081`) und vier weitere Flächenabsagen (Aushöhlen, Befund ohne Hohlraum, Dichtnut, Muster bis zum Rand) boten `CHANGE_SELECTION`; `test_edge_refusal_ways.py` und `test_face_refusal_ways.py` am Stand `3ea182a86` 4 rot. Dritter Zwilling von FD-123 und FD-165.
+- Ursache: Die Absagen trugen die Objektwahl, wo eine Kante oder Fläche gemeint ist; Review RB-1: die Rundungsabsagen kommen auch über *Merkmal entfernen* und *Merkmal ändern* ohne Kantenfeld.
+- Vorschlag: Kantenabsagen `CHANGE_EDGES`, Flächenabsagen `CHANGE_FACES`, jeweils nach dem Schritt, der die Absage auslöst.
+- Wirkung beim Kunden: Der angebotene Weg tauscht die Körper des Schritts und führt nicht zur Rundung oder Fläche.
+- Stand: behoben `69e52b1ab`, nach Review `36cdd9fe2`; die beiden Tests am Stand davor 4 rot, danach grün; der Kantenwächter erfasst jede Kantenabsage beider Kerne (`2789be78c`).
+
+### FD-179 Merkmalsabsagen bieten „Andere Objekte wählen“, wo ein anderes Merkmal gemeint ist
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: `resize_chamber`, `resize_closure`, `pin_for_bore`, `pattern_feature`, `move_feature`, `resize_hole`
+- Prüfpunkt: 7, V5
+- Beleg: `output/konsolidierung-2026-10-12/fix-rest-b-claude.md`: 32 Absagen an Schritten mit `at_feature`/`at_features` (Bohrungskette, Gewinde, Kammer, Verschluss, Ring, Merkmalsoperationen, Muster) boten `CHANGE_SELECTION`; `test_feature_refusal_ways.py` am Stand `69e52b1ab` 12 rot. Vierter Zwilling von FD-123.
+- Ursache: Die Objektwahl stand an Absagen, deren Schritt ein Merkmal wählt.
+- Vorschlag: `errors.CHANGE_FEATURE` („Anderes Merkmal wählen“) an jeder Absage eines Schritts mit Merkmalsfeld; die Objektwahl bleibt, wo ein Körper gemeint ist.
+- Wirkung beim Kunden: Der angebotene Weg wählte andere Körper statt eines anderen Merkmals.
+- Stand: behoben `0b7f08da6`, nach Review `36cdd9fe2`; `test_feature_refusal_ways.py` am Stand davor 12 rot, danach grün; der Text in fünf Katalogen neu übersetzt.
+
+### FD-180 *Solidon kaufen* ist im Freischaltdialog grau ohne Grund
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `dialog:activation_dialog`
+- Prüfpunkt: 7, E7
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-rest-c-claude.md`: `dialogs.ActivationDialog._follow_field` sperrte `buy_button` mit `not damaged and not locked_locally and not busy`, die Kurzhilfe trug nur den Grund der beschädigten Installation; dazu standen *Schlüssel prüfen*, *Online aktivieren* und *Offline aktivieren …* stumm grau; `test_ui_licensing.py::test_an_activated_computer_can_still_buy_and_says_why_the_rest_is_closed` am Stand davor rot.
+- Ursache: Der Knopf öffnet nur die Produktseite, wurde aber auf einem freigeschalteten Rechner gesperrt, ohne Grund in Kurzhilfe oder Beschreibung (Regel 18, E7).
+- Vorschlag: *Solidon kaufen* bleibt bedienbar und ist nur bei beschädigter Installation gesperrt, mit Grund; die übrigen Knöpfe nennen ihren Grund, *Schlüssel prüfen* auch den Ausweg *Diesen Rechner deaktivieren*.
+- Wirkung beim Kunden: Wer für ein zweites Gerät kaufen will, steht vor einem grauen Knopf ohne Erklärung.
+- Stand: behoben `5807a99e0`, `650b01c24`; der Test am Stand davor rot, danach grün; Dialoggröße unverändert, Bilder hell und dunkel; nativ erreicht der Lauf die Freischaltdialoge (Schlusslauf `c5666931d` L3 019, 061); *Solidon kaufen* mit Grund nicht gesondert im Bild.
+
+### FD-181 Der Erste eines Monats heißt auf Französisch „1 décembre“
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `startup.expired_demo`
+- Prüfpunkt: 9
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-rest-c-claude.md`: Startfall fr (Text der abgelaufenen Demo) „1 décembre 2026“; `tests/test_calendar_date_ordinal.py` am Stand davor 2 von 7 rot.
+- Ursache: `labels.calendar_date` setzt das Langformat von `QLocale` „d MMMM yyyy“, und Qt kennt keine Ordinalform.
+- Vorschlag: eine Regel je Sprache (`_FIRST_OF_MONTH = {"fr": "er"}`) an dieser einen Stelle; die anderen Sprachen prüfen.
+- Wirkung beim Kunden: Französische Kunden lesen ein Datum, wie es auf Französisch nicht geschrieben wird.
+- Stand: behoben `3277b97eb`; `test_calendar_date_ordinal.py` am Stand davor rot, danach „1er décembre 2026“; die anderen fünf Sprachen geprüft und unverändert; nativ belegt (Schlusslauf `c5666931d` L3 130 FR „le 1er décembre“).
+
+### FD-182 Der Feldweg „Eine andere Ebene wählen“ steht als toter Knopf in *Objekt umbenennen*
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `rename_object`, `finding.action:sketch.pick_plane`
+- Prüfpunkt: 7, 9
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-f2a-claude.md` (Nachzug F2b): `test_short_dialog_ui` (6 Fälle, 18 pt): `refusal_details.field_ways` bot in *Objekt umbenennen* den Knopf „Eine andere Ebene wählen“ ohne Ebenenfeld an, bei 18 pt 602 px breit, mit Querleiste; `fix-rest-a-claude.md`: Die Ebenenabsage der Skizzenoperationen nannte das Feld `plane`, das keine Skizzenoperation hat; `test_refusal_field_ways_window.py`, `test_plane_refusal_field.py` und `test_short_dialog_ui.py` am Stand davor rot.
+- Ursache: `field_ways` machte jede Absage mit `values["field"]` zum Sprungknopf, ohne zu fragen, ob der Dialog das Feld führt; `sketch.ops._frame_of` nannte das falsche Feld; Knöpfe unter einer Absage brachen nicht um.
+- Vorschlag: Ein Feldweg ist ein Knopf nur, wo der Dialog das Feld führt (`focus_field(…, check_only=True)`), sonst ein Rat; die Skizzenoperationen nennen `sketch`; Knöpfe unter einer Absage brechen um.
+- Wirkung beim Kunden: Ein Knopf in der Absage tat nichts, und bei großer Schrift rollte der Dialog quer.
+- Stand: behoben `c070cb122`; die drei Tests am Stand davor rot, danach grün; Bild hell und dunkel; nativ belegt (Schlusslauf `d9f7a81f9` L4 052).
+
+### FD-183 Eine umgebrochene Beschriftung der Rückseite verliert Zeilen
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `drill_hole`, `dialog:operation_dialog`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-f2a-claude.md`, Sonde `probe_labels.py`: *Bohrung setzen*, „Durchmesser der Aufweitung“ Breite 69, Höhe 32, Bedarf 48; offscreen 11 Beschriftungen in 11 Dialogen bei Grundschrift, 197 bei 16 pt; Bilder `bilder-fix-f2a/fd183-aufweitung-*`; Review R3: nach 16 → 9 pt hielt dieselbe Beschriftung 84 statt 48 Punkte.
+- Ursache: `dialogs.align_to_the_front` hält die Breite einer Rückseitenbeschriftung fest, die Zeilenhöhe nahm das Formular aber aus `QLabel.sizeHint` für eine breitere Zeile.
+- Vorschlag: Die Untergrenze der Höhe ist die Höhe des Textes in der festen Breite, neu gezählt nach Schrift-, Stil- und Breitenwechsel (`wrapped_caption.keep_whole_lines`).
+- Wirkung beim Kunden: Die dritte Zeile einer Feldbeschriftung fehlt, das Feld ist nicht mehr eindeutig benannt.
+- Stand: behoben `15f5a1b4f`, `22f55de98`; `tests/test_wrapped_captions.py` am Stand davor rot (4 von 9, zur Rücknahme nach R3 2 von 10), danach zeigt jede umgebrochene Rückseitenbeschriftung jede Zeile, in beide Schriftrichtungen; Bild hell und dunkel.
+
+### FD-184 Ganzzahlfelder außerhalb des Operationsdialogs schreiben keine Dreiergruppen
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: `dialog:print_settings_dialog`, `dialog:settings_dialog`, `dialog:operation_dialog`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-f2a-claude.md`: 14 Ganzzahlfelder ohne Gruppen (Einrichtung, Pinsel, Teilen, Varianten, Skizzeneditor, Druckeinstellungen, Merkmalfenster, Filamentlager); Felder mit `setDecimals(0)` lasen „2.103.472“ als 2103,472; Review R2: 13 Druckfelder mit null Nachkommastellen, *Leerfahrt* las „1.000“ als 1 mm/s; R5: Kennungen (Startwert, Port) nur über eine Namensausnahme; `tests/test_grouped_count_fields.py` je am Stand davor rot.
+- Ursache: Die Gruppenschreibweise aus FD-124 galt nur im Ganzzahlfeld des Operationsdialogs; Druckfelder mit null Stellen und Kennungen hatten keine Regel.
+- Vorschlag: jedes Ganzzahlfeld über `grouped_spin`, Druckfelder ohne Nachkomma als `GroupedSpin`, Kennungen über `param(identifier=True)` ohne Gruppen; ein Wächter über `app/ui`.
+- Wirkung beim Kunden: Große Zahlen standen ohne Gruppen da, und „1.000“ in *Leerfahrt* wurde als 1 mm/s gelesen.
+- Stand: behoben `3e515ef4f`, `8af6a2d09`, `112fbf80a`; `tests/test_grouped_count_fields.py` am Stand davor rot, danach entsteht jedes Ganzzahlfeld über `grouped_spin` und liest „1.000“ in jeder Sprache als tausend; nativ nicht belegt: In L3 erreicht der Weg den Druckdialog von D9 nicht (Schlusslauf `c5666931d`, FD-234); Beleg bleiben die Tests.
+
+### FD-185 Die Handlungsknöpfe im Prüfbericht sind bei großer Schrift gestaucht
+
+- Art: Gestaltung
+- Schwere: mittel
+- Funktion: `report.action`
+- Prüfpunkt: 9, 10
+- Beleg: Review 2 Restpaket B, N1 (`output/konsolidierung-2026-10-12/review2-rest-b-claude.md`): Fenster bei 18 pt, Befund *Kammer ändern*: Knopf *Anderes Merkmal wählen* 26 px hoch bei `minimumSizeHint` 38 px; *Eingabe korrigieren* und *Andere Kanten wählen* oben und unten beschnitten; `tests/test_report_offer_height_window.py` am Stand davor rot (1920 × 700, 26 statt 38 px) (`fix-rest-a-claude.md`).
+- Ursache: Das Stylesheet gibt `QPushButton` `min-height`, Qt setzt daraus eine ausdrückliche Mindesthöhe von 26 px, und die schlägt im engen Layout die Höhe der Schrift.
+- Vorschlag: Die Mindesthöhe jedes Knopfs folgt seiner Beschriftung nach Stil- und Schriftwechsel (`button_floor`, ein Zuhörer mit FD-194).
+- Wirkung beim Kunden: Bei großer Schrift ist jede Handlung einer Befundzeile angeschnitten (Barrierefreiheit).
+- Stand: behoben `2b0eea69f`, `a9a3233a7`; `test_report_offer_height_window.py` am Stand davor rot, danach grün; Bild 11 und 18 pt hell und dunkel; nativ: Kopfknöpfe des Berichts bei 14 und 18 pt in voller Höhe (Schlusslauf `c5666931d` L2 200–211); die Lage der Befundknöpfe trat nicht ein, Beleg bleibt der Test; die Prüfung mit der Windows-Textgröße entfällt (Robert, 16.10.).
+
+### FD-186 Die Absage zum Gegenstück zeigt eine Kennung und Längen ohne Einheit
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `meldung:action_counterpart`
+- Prüfpunkt: 9, V1
+- Beleg: Review 2 Restpaket B, N2 (`output/konsolidierung-2026-10-12/review2-rest-b-claude.md`): Absagedialog in sechs Sprachen „Merkmal: thread_1“, „Durchmesser: 37,0“, „Steigung: 0,9“ (`blatt-gewinde-dialog-*.png`); `test_stepless_advice.py` am Stand davor 3 rot (`fix-rest-b-claude.md`).
+- Ursache: `counterpart.py:620/644` legten `feature` als Kennung und Längen ohne `_mm` ab; `spoken_values` zeigt beides roh.
+- Vorschlag: `diameter_mm` und `pitch_mm` ablegen, `feature` weglassen; jede Merkmalskennung in Meldungen als „Art Nummer“ (`registry.feature_title_of` in `labels.value_text`).
+- Wirkung beim Kunden: Eine interne Kennung statt eines Namens, und in Zoll eine Millimeterzahl ohne Einheit.
+- Stand: behoben `a2a3cafe3`; `test_stepless_advice.py` am Stand davor rot, danach steht die Absage ohne Kennung, Längen in der Anzeigeeinheit; offscreen hell und dunkel bei 11 und 18 pt in sechs Sprachen gesehen.
+
+### FD-187 Ein Auswahlfeld zeigt einen Wert, den seine Liste nicht führt, als Kennung
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `resize_chamber`, `pattern_feature`, `dialog:operation_dialog`
+- Prüfpunkt: V1
+- Beleg: Review 2 Restpaket B, N3 (`output/konsolidierung-2026-10-12/review2-rest-b-claude.md`): nach *Anderes Merkmal wählen* steht im Feld *Kammer* „face_1“, nach *Andere Flächen wählen* im Feld *Fläche* „fillet_1“; `op_dialog.py:4167` (`combo.addItem(str(start), str(start))`), gleich gebaut an `:1245` und `:4217`; `tests/test_unlisted_choices.py` am Stand davor rot (`fix-f2a-claude.md`).
+- Ursache: Sechs Stellen zeigten einen Wert außerhalb ihrer Liste roh: Merkmalsfeld, Merkmalsliste, Kantenliste, Bild- und Quellenwähler, Objekt- und Quellenauswahl.
+- Vorschlag: eine Quelle `app/ui/unlisted_choice.py`: Art und Nummer mit „passt hier nicht“, der Wert bleibt.
+- Wirkung beim Kunden: Der neue Weg führt genau auf dieses Feld, und dort steht der abgelehnte Wert als interne Kennung.
+- Stand: behoben `82b2b110c`; `tests/test_unlisted_choices.py` am Stand davor rot („face_1“, „fillet_1“, Dateikennungen), danach „Fläche 1 · passt hier nicht“; Bild hell und dunkel; nativ keine rohe Kennung in allen Läufen des Schlusslaufs; die Lage trat nicht ein.
+
+### FD-188 Längen in Absagewerten stehen ohne Einheit
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `draft_faces`, `fillet_edges`, `pin_for_bore`, `create_profile_clamp_set`, `part:*`
+- Prüfpunkt: 9, V5
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-rest-b-claude.md`: gut zwanzig Absagen legen Längen unter Schlüsseln ohne `_mm` ab, die Anzeige zeigt sie ohne Einheit und in Zoll falsch (`brep/profiles.py:1407, 1474`, `geom/edges.py:1734`, `geom/lid_hinge.py:186, 204, 824, 974`, `geom/prepare_ops.py:12197, 17054, 17761, 19027`, `geom/profile_clamp_ops.py:419`, `knowledge/parts/fasteners.py:1872, 1883, 1906`, `parts/holders.py:804`, `parts/mounting.py:1086`, `parts/structure.py:716`); dazu „Erreichbar: 0,58“ im Rat des Operationsdialogs (`mesh_ops._too_fine`); andere legen fertigen Text mit fester Einheit ab (`format_length` in `geom/prepare.py`).
+- Ursache: Die Absagen legen Längen unter Schlüsseln ohne `_mm` ab, `spoken_values` erkennt sie nicht als Länge; Leser im Code brauchen die Schlüssel (`main_window.py` liest `previous`/`diameter`, `bore_pin.py` `diameter`/`pitch`), deshalb blieben sie in FD-186 unverändert.
+- Vorschlag: je Stelle `_mm`-Schlüssel und die Leser nachziehen; ein Wächter über `spoken_values` aller Absagen mit Zahl.
+- Wirkung beim Kunden: In Zoll liest er eine Millimeterzahl ohne Einheit und hält sie für Zoll.
+- Stand: behoben `deab9a418`; `tests/test_value_measures.py` (29) am Stand davor 28 rot, danach grün; Maße unter Absagen und Befunden stehen mit Einheit, Längen in der Anzeigeeinheit (`labels._BARE_MEASURES`, `"unit": "mm"` an Grenzwerten, Endung an Schlüsseln ohne Leser), Werte bleiben Zahlen in mm; Wächter über jeden `values`-Eintrag in `app/core`; offscreen hell und dunkel in sechs Sprachen in mm und Zoll im Operationsdialog und im Prüfbericht gesehen („Erreichbar: 0,58 mm“ / „0,0228 in“); der Anzeigetest der Befundwerte (`test_finding_display_units.py`, 18 rot mit der Erwartung vor FD-188) erwartet seit `68e3de0f0` Längen und Druckeinstellungen mit Einheit; nativ in Zollfällen keine Länge in mm (Schlusslauf `c5666931d` L2 026, 019; `d9f7a81f9` L4 004–006); eine Absage mit Länge trat nicht ein.
+
+### FD-189 *Einzelne Kanten* zeigt einen gespeicherten Kantenschlüssel roh
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: `fillet_edges`, `chamfer_edges`
+- Prüfpunkt: V1
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-rest-b-claude.md`: Über *Andere Kanten wählen* an *Verrunden* mit `edges="named"` steht in der Liste die gewählte Kante als „e:-20.00,-15.00,10.00:0.000,0.000,1.000“ (`weg-benannt-CHANGE_EDGES.png`); `test_unlisted_choices.py` am Stand davor rot (`fix-f2a-claude.md`). Zwilling von FD-187.
+- Ursache: `EdgeSetField` zeigt einen Schlüssel ohne Eintrag in `choices` wörtlich; `MainWindow._edge_names` liefert an einem Netz nur die markierten Kanten, die gespeicherte Wahl eines Schritts bekam keine Beschriftung.
+- Vorschlag: gespeicherte Kanten aus Lage und Ort ihres Schlüssels beschriften, aus derselben Quelle wie die markierten.
+- Wirkung beim Kunden: Statt einer Kante liest er eine Zahlenkette.
+- Stand: behoben `82b2b110c`; `test_unlisted_choices.py` am Stand davor rot, danach heißt eine gespeicherte Kante nach Lage und Ort („Senkrecht · x -20,00, y -15,00“) wie eine markierte; Bild hell und dunkel; nativ keine rohe Kennung in allen Läufen des Schlusslaufs; die Lage trat nicht ein.
+
+### FD-190 Nach *Eine andere Ebene wählen* aus dem Bericht steht die Tastatur nicht in der Ebenenwahl
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `finding.action:sketch.pick_plane`
+- Prüfpunkt: 10
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-rest-a-claude.md` (Merge B und D): Nach *Eine andere Ebene wählen* aus dem Prüfbericht öffnet der Skizzenmodus mit der unlesbaren Ebene, die Tastatur steht aber auf dem Kartengriff (`CardGrip`) statt in der Ebenenwahl; `tests/test_sketch_way_focus_window.py` am Stand davor 2 von 2 rot (Fokus in der Befundliste).
+- Ursache: `MainWindow.start_sketch` setzte keinen Fokus; der gedrückte Berichtsknopf verschwand, und der Bericht parkte den Fokus in seiner Liste (FD-4).
+- Vorschlag: ohne auflösbare Ebene Fokus in *Zeichenebene*, sonst in die Ansicht (`app/ui/sketch_focus.py`, eine Zeile in `start_sketch`).
+- Wirkung beim Kunden: Wer nach dem Weg tippt, bedient nicht die Ebenenwahl, die die Handlung nennt.
+- Stand: behoben `3185c1a3a`; `tests/test_sketch_way_focus_window.py` am Stand davor rot, danach setzt *Eine andere Ebene wählen* die Tastatur in *Zeichenebene* und *Eingabe korrigieren* an einer kaputten Zeichnung in die Ansicht.
+
+### FD-191 Offen gelassene Fenster machten einen späteren Testfall rot
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Fenstertests der Suite
+- Prüfpunkt: 19
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-f2a-claude.md` (Testisolation): `test_function_feature_measurement` fiel im Umfeldlauf mit „Mehrere offene Bedienflächen ohne eindeutiges aktives Fenster“; `fix-rest-a-claude.md`: drei Fälle in `test_operation_ui.py` zeigten einen Operationsdialog und schlossen ihn nie, das Paar mit `test_function_feature_measurement.py` vorher 3 failed, danach 342 passed; der neue Wächter fand 24 Verursacher.
+- Ursache: Fälle ließen sichtbare Fenster zurück, und `surface_for` liest die offenen Fenster der Anwendung.
+- Vorschlag: ein Wächter `_no_window_outlives_its_test` in `tests/conftest.py`; die Verursacher schließen.
+- Wirkung beim Kunden: Kein Produktfehler; ein späterer Fall wurde je nach Reihenfolge rot.
+- Stand: behoben `6b11dcabb`; der Wächter macht jeden Fall rot, der ein sichtbares Fenster zurücklässt (der gepflanzte Fall am Stand davor grün, danach rot), alle 24 Verursacher sind geschlossen.
+
+### FD-192 Eine angezeigte Textur rechnet eine Vorschau ohne Änderung
+
+- Art: Leistung
+- Schwere: leicht
+- Funktion: `feature:texture.change`
+- Prüfpunkt: 6
+- Beleg: Neuer Punkt 1 in `output/konsolidierung-2026-10-12/fix-ci-main-claude.md`: `show_texture` (`app/ui/panels.py:10127`) meldet die unveränderten Werte des Schritts als Änderung, `_on_feature_values_changed` stellt die 300-ms-Uhr, danach rechnet eine Vorschau ohne Änderung und *Abbrechen* steht da (Spur `texslow.txt`); `test_waiting_click_rebuild.py` am Stand davor 3 rot.
+- Ursache: Der Neuaufbau des Merkmalfensters meldete Werte wie eine Eingabe des Kunden; gleiche Wurzel wie der verfallende wartende Klick (Review CI, RCI-2).
+- Vorschlag: `show_texture` meldet nichts; ein Neuaufbau ohne Eingabe hält die Freigabe mit wartendem Klick (`app/ui/waiting_click.py`).
+- Wirkung beim Kunden: Nach dem Anwählen einer Textur rechnet Solidon ohne Grund und zeigt *Abbrechen*.
+- Stand: behoben `6369e3b81`; `test_waiting_click_rebuild.py` am Stand davor rot, danach grün.
+
+### FD-193 Die Ansicht hält einen abgelösten Renderer bis zum Fensterende
+
+- Art: Leistung
+- Schwere: leicht
+- Funktion: `viewport`
+- Prüfpunkt: 6
+- Beleg: Neuer Punkt 2 in `output/konsolidierung-2026-10-12/fix-ci-main-claude.md`: `_Same(self.renderer)` in den Vergleichsschlüsseln der Ansicht (`viewport.py:12281`, `:12592`) hält den alten Renderer nach `release_renderer`, etwa nach einem Sprachwechsel (wgpu.log der Probe 38855455034); `test_viewport_release.py` am Stand davor rot (Halter tuple, Gizmo, SlotHandle, `_Same`).
+- Ursache: Griffe und Vergleichsschlüssel hielten den Renderer stark.
+- Vorschlag: `release_renderer` lässt Griffe und die Schlüssel mit `_Same(self.renderer)` und `_bed_built` fallen.
+- Wirkung beim Kunden: Nach einem Sprachwechsel bleibt der Speicher des alten Renderers bis zum Schließen belegt.
+- Stand: behoben `abcf79ee8`; `test_viewport_release.py` am Stand davor rot, danach grün; belegt mit einem Aufzeichnungsrenderer, am echten `GfxRenderer` nicht nachgestellt.
+
+### FD-194 Solidon übernahm eine geänderte Systemschrift erst nach einem Neustart
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `dialog:main_window`, `dialog:operation_dialog`
+- Prüfpunkt: 9, Z6
+- Beleg: Frage aus Review 2 Restpaket C (RC2-4), am Code und offscreen belegt (`output/konsolidierung-2026-10-12/KOORDINATION.md`, 16.10.): kein Zuhörer auf `ApplicationFontChange`, `apply_style` nur beim Themenwechsel, Sonde 9 → 14 pt: das Stylesheet bleibt; `tests/test_font_follow_window.py` am Stand davor rot (Titel und Abschnitt 16/10 statt 24/16, Knöpfe und offener Dialog bei 9 pt) (`fix-rest-a-claude.md`).
+- Ursache: Das Stylesheet trägt die Größen der Stufen fest und wurde nur beim Themenwechsel gesetzt.
+- Vorschlag: ein Zuhörer auf `ApplicationFontChange` setzt den Stil neu, nur über Solidons eigenem Stylesheet (`app/ui/style_follow.py`).
+- Wirkung beim Kunden: Wer die Windows-Textgröße ändert, sieht Solidon erst nach einem Neustart in der neuen Größe; offene Dialoge blieben klein.
+- Stand: behoben `a9a3233a7`; `test_font_follow_window.py` am Stand davor rot, danach folgen Stufen, Knöpfe und offene Dialoge in beide Richtungen; Bild 9 → 14 → 9 pt hell und dunkel; nativ mit `schriftwechsel` belegt (Schlusslauf `c5666931d` L2 266–277, sechs Sprachen); die Prüfung mit der Windows-Textgröße entfällt (Robert, 16.10.).
+
+### FD-195 Ein offener Dialog gab nach kleinerer Schrift seine Höhe nicht zurück
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `dialog:operation_dialog`
+- Prüfpunkt: 9, Z6
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-rest-a-claude.md` (FD-194): Zurück auf 9 pt behielt der offene Dialog *Quader anlegen* seine 347 px, unten blieb ein leerer Streifen (`fd194-nachher-dialog-c9-*`); `test_font_height_window.py` am Stand davor rot (296 statt 258).
+- Ursache: `style.ContentHeight` lässt passive Änderungen nie verkleinern (RM-487), und ein Schriftwechsel zählte als passiv.
+- Vorschlag: Ein Schriftwechsel misst offene Dialoge wie ein Aufklappen (Absicht `font`); eine Größe des Kunden bleibt.
+- Wirkung beim Kunden: Nach kleinerer Schrift blieb in offenen Dialogen Leerraum über den Knöpfen.
+- Stand: behoben `3b0c1a8f7`; `test_font_height_window.py` am Stand davor rot, danach grün; nativ mit `schriftwechsel` belegt (Schlusslauf `c5666931d` L2 266–277, sechs Sprachen).
+
+### FD-196 Die Sammelzeile verlorener Formdetails liest ein Bildschirmleser 118-mal
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `report`
+- Prüfpunkt: 10
+- Beleg: Nachprüfung Restpaket A (`output/konsolidierung-2026-10-12/review2-rest-a-claude.md`): `app/ui/panels.py:7773–7792`, Sammelzeile mit 118 Waisen: Kurzhilfe und zugängliche Beschreibung je 20 179 Zeichen, jedes Mitglied wiederholt den ganzen Satz, dazu rohe Kennungen (L2, Sonde `test_zz_sonde_kennung_kurzhilfe.py`); seit v0.6.0.
+- Ursache: Die Sammelzeile setzte für jedes Mitglied den ganzen Satz und die Kennung statt des Namens.
+- Vorschlag: Mitglieder nur mit Merkmal und Körper, höchstens fünfzehn wie in der Zeile, danach „… (+N)“.
+- Wirkung beim Kunden: Ein Bildschirmleser liest denselben Satz 118-mal.
+- Stand: behoben `a04ba84fe`, `98a971a7a`; die Mutationen N05 (Kennung statt Name) und N06 (alle statt fünfzehn) sind rot, danach nennen Sammelzeilen Art, Nummer und Körper, höchstens fünfzehn Mitglieder.
+
+### FD-197 *Fluss bei Brücken* zeigt 2 % und schreibt 1–2 % an den Slicer
+
+- Art: Fehler
+- Schwere: schwer
+- Funktion: `dialog:print_settings_dialog`
+- Prüfpunkt: 4, 9
+- Beleg: Review 2 F2a und D, N1 (`output/konsolidierung-2026-10-12/review2-f2a-d-claude.md`): `print_fields.py:327–341` `shell.bridge_flow` mit `minimum=0.5, maximum=1.5, factor=100.0, decimals=0`; am echten Druckdialog „2 %“, „90“ → „90 % liegt über der Obergrenze 2 %.“, „1“ und Pfeil hoch → Modell 0,01 als eigene Wahl; am Tag `v0.6.0` ebenso (eingeführt mit `badc464f9`); `test_print_field_units.py` und `test_bridge_flow_dialog.py` am Stand davor 12 von 73 rot (`fix-fd197-claude.md`).
+- Ursache: Das Feld zeigt Prozent (`factor=100`), seine Grenzen und sein Schritt standen als Anteil; Qt rundete sie bei null Stellen auf 1–2 %.
+- Vorschlag: Grenzen und Schritt in Anzeigeeinheit, ein Wächter über alle Druckfelder; ein Formatschritt, der eine gespeicherte 0,01/0,02 aus 0.6.0 zurücknimmt und es sagt.
+- Wirkung beim Kunden: Jeder Kunde sah einen falschen Wert; wer ihn änderte, schickte 1–2 % Brückenfluss an den Slicer — Brücken drucken ohne Material.
+- Stand: behoben `5212ca45f`, `b736da48f`, `8b7a1b3aa`; Grenzen 50–200 %, Schritt 5, 90 % kommt als 0,9 in der Datei für Orca und Prusa und im G-Code von OrcaSlicer an; der Formatschritt 52 → 53 nimmt 1–2 % aus 0.6.0 zurück und sagt es im Prüfbericht (`project.bridge_flow_reset`); neue Tests am Stand davor 54 von 306 rot, danach grün; Beispielprojekte auf Format 53 (`1f8346073`).
+
+### FD-198 *Parameter anlegen* behält nach dem Aufklappen Leerraum
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `Bearbeiten/Parameter anlegen …`, `dialog:parameter_dialog`, `dialog:settings_dialog`, `dialog:first_run_dialog`, `dialog:activation_dialog`
+- Prüfpunkt: 9, Z6
+- Beleg: Review 2 F2a und D, N2 (`output/konsolidierung-2026-10-12/review2-f2a-d-claude.md`): *Parameter anlegen* bei 9 pt nach dem Aufklappen 330 hoch, 16 leer, ohne senkrechten Balken 314, 0 leer (`sonde_andere.py`); die Zwillinge *Baustein speichern*, *Erste Schritte*, *Chat einrichten* und *Solidon freischalten* zugeklappt bis 326 Punkte leer, die *Einstellungen* bis 382 (Review 2 Restpaket A, P1); `test_content_height_dialogs.py` am Stand davor 22 rot (`fix-rest-a-claude.md`).
+- Ursache: Die Klappe war nicht an die ausdrückliche Messung angeschlossen; die passive Messung lief mit vorläufigem Balken und gab zugeklappt nichts zurück.
+- Vorschlag: `ContentHeight.fit` misst für Öffnen, Klappen und Schriftwechsel ohne vorläufigen Balken und ein zweites Mal nach den Layout-Anfragen; jede Klappe misst `explicit`.
+- Wirkung beim Kunden: Über den Knöpfen blieben bis zu mehrere hundert Punkte leer.
+- Stand: behoben `23c94be83`, `546b0e891`; `test_content_height_dialogs.py` am Stand davor 22 rot, danach 28 grün, mit den Einstellungen und dem Schriftwechsel 40 grün.
+
+### FD-199 *Material kalibrieren* rollt bei großer Schrift quer
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`, `dialog:calibration_dialog`
+- Prüfpunkt: 9, Z6
+- Beleg: Review 2 F2a und D, N2 (`output/konsolidierung-2026-10-12/review2-f2a-d-claude.md`): *Material kalibrieren* rollt bei 16 pt 18 Punkte, obwohl unten Platz ist, auch ohne Balken; *Baustein speichern* rollte beim Öffnen 57 bis 214 Punkte quer (`fix-rest-a-claude.md`); die Fälle `kalibrieren-14/16` und `baustein-9/11/14` in `test_content_height_dialogs.py` am Stand davor rot.
+- Ursache: Bei 14 und 16 pt deckelt der Bildschirm die Höhe nach dem Aufklappen, der bleibende Balken nimmt 12 Punkte Breite, und der Dialog maß seine Breite nie.
+- Vorschlag: `fit` verbreitert nach dem Legen um die fehlende Mindestbreite samt bleibendem Balken, bis zum Bildschirmrand.
+- Wirkung beim Kunden: Der Dialog rollt quer, obwohl daneben über 300 Punkte frei sind.
+- Stand: behoben `23c94be83`; die Fälle am Stand davor rot, danach grün.
+
+### FD-200 *Bohrung setzen* rollt bei großer Schrift quer, und der Test sah weg
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `drill_hole`
+- Prüfpunkt: 9, Z6
+- Beleg: Review 2 F2a und D, N3 (`output/konsolidierung-2026-10-12/review2-f2a-d-claude.md`): bei de 16 pt, 18 pt und auf 1366 × 728 nach dem Aufklappen *Bohrung setzen* (`drill_hole`, `drill_brep_hole`) mit Querleiste, Dialog 490 breit, Ausschnitt 446, Inhalt mindestens 454 (`sonde_querleiste.py`, `n3-bohrung-16pt-aufgeklappt-*.png`); der R1-Test übersprang jeden Dialog mit Querleiste mit falscher Begründung; `test_operation_dialog_flap_height.py` mit gebündelter Schrift, `de-16` am Stand davor rot (`fix-rest-a-claude.md`).
+- Ursache: Die Anfangsbreite kam nicht aus der Mindestbreite der aufgeklappten Rückseite samt Balken.
+- Vorschlag: derselbe Breitenschritt wie FD-199; der Test zählt Querleisten, außer der Schirm deckelt die Breite, und misst mit der gebündelten Schrift.
+- Wirkung beim Kunden: Bei großer Schrift ist die Auswahl *Achse* rechts abgeschnitten.
+- Stand: behoben `23c94be83`; `de-16` am Stand davor rot, danach alle acht Fälle grün (sechs Sprachen bei 9 pt, de bei 16 und 18 pt).
+
+### FD-201 Zugriffsverletzung beim Bau des `QCompleter` im Operationsdialog
+
+- Art: Stabilität
+- Schwere: mittel
+- Funktion: keine Zeile: Lesen von Layoutelementen in Dialogen und Karten (`QLayout.itemAt`), gesehen im Fensterlauf `tests/test_operation_ui.py`
+- Prüfpunkt: 19
+- Beleg: `output/konsolidierung-2026-10-12/fix-rest-a-claude.md`: dreimal dieselbe Zugriffsverletzung in `ExpressionField.__init__` beim Bau des `QCompleter` (`op_dialog.py:494` bzw. `:503` ← `_editor_for` ← `OperationDialog.__init__`) im Fall `test_every_operation_dialog_names_its_fields_and_keeps_the_grid`; die ganze Datei zehnmal gepinnt: 9 grün, 1 Abriss, mit abgeschaltetem Speicherbereiniger derselbe Ort; `fix-fd201-202-claude.md`: nativer Stapel unter `cdb.exe` — `PySide::SignalManager::retrieveMetaObject` mit Typdaten `nullptr` aus `QCompleterWrapper::metaObject()`. Zwilling von RM-790 (Abbruch am `QCompleter` in `ValueField.__init__`).
+- Ursache: belegt (`fix-fd201-202-claude.md`): `QLayout.itemAt(index)` hängt die Python-Hülle eines `QWidgetItem` an das Layout; löscht Qt das Element selbst (hier der umbrechende `DialogFooter` nach der Messung des Prüfstands, im Produkt `removeRow` und jeder Neuaufbau einer Knopfleiste), bleibt die Hülle gültig, und ein späterer `QCompleter` an derselben Adresse bekommt sie über `metaObject()` (cdb: `PySide::SignalManager::retrieveMetaObject+0x24`, Typ `PySide6.QtWidgets.QWidgetItem`).
+- Vorschlag: Index-Lesungen über `layout_lifetime.borrowed_items`/`layout_parts`, die ihre Hüllen nach dem Block freigeben.
+- Wirkung beim Kunden: Dieselbe Bauart lag an 14 Produktstellen (`style`, `card_width`, `overlay`, `panels`, `tab_stops`, `transform_bar`, `KeyDialog`): beim Kunden ein seltener Absturz ohne Rückweg; in der Suite etwa jeder zehnte ganze Lauf von `test_operation_ui.py`.
+- Stand: behoben `b72547842`; die Zugriffsverletzung beim Bau des `QCompleter` war eine verwaiste `QWidgetItem`-Hülle an derselben Adresse (cdb: `PySide::SignalManager::retrieveMetaObject+0x24`, Typ `PySide6.QtWidgets.QWidgetItem`, deterministisch nachgestellt mit `itemAt(index)` und `removeRow`): `QLayout.itemAt(index)` hängt die Hülle an das Layout, und löscht Qt das Element selbst (hier der umbrechende `DialogFooter` nach der Messung des Prüfstands), bleibt sie stehen; alle Index-Lesungen in `app/` und `tools/` gehen jetzt über `layout_lifetime.borrowed_items`/`layout_parts`, die ihre Hüllen freigeben, `test_layout_item_wrappers.py` am Stand davor 4 rot, danach 7 grün, und die ganze `test_operation_ui.py` lief 50-mal gepinnt ohne Abriss; nativ kein Abbruch in den Fallprozessen von L2, L3 und L4 des Schlusslaufs.
+
+### FD-202 Der Maßkartenfall las gleitende Seitenkarten als Dauerschleife
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Fenstertest `tests/test_measure_group_layout.py`
+- Prüfpunkt: 19
+- Beleg: `output/konsolidierung-2026-10-12/fix-rest-a-claude.md`: `test_measure_group_layout.py::test_fold_changes_card_height_and_settles` wechselnd rot (34 statt 30 Zeichnungen, je eine andere Sprache); `fix-fd201-202-claude.md`: mit 1 s Gleiten (`-p slowcards`) auf main, welle5 und Restpaket A rot, auch am Entstehungscommit `f6b0f53f2`.
+- Ursache: Die Seitenkarten gleiten nach der Wahl einer Bohrung 160 ms nach der Wanduhr, `settle_measure_layout` zählte nur 20 Ereignisrunden, und jeder Schritt der Karten setzt die Maßkarte neu. Kein Produktfehler.
+- Vorschlag: Das Einschwingen wartet wie in FD-157 auf ruhende Karten (`wait_for_resting_cards`, eine Quelle für `ui_helpers` und `guide_window`).
+- Wirkung beim Kunden: Kein Produktfehler; die Maßkarte folgt den gleitenden Karten Bild für Bild und steht danach.
+- Stand: behoben `0f7e3cdfa`; kein Produktfehler: Die Seitenkarten gleiten nach der Wahl einer Bohrung 160 ms nach der Wanduhr, und `settle_measure_layout` zählte nur 20 Ereignisrunden, sodass der Klappfall die Bilder der folgenden Maßkarte als Dauerschleife las (die Annahme war seit `f6b0f53f2` falsch, mit 1 s Gleiten auf main, welle5 und rest-a rot); das Einschwingen wartet jetzt wie in FD-157 auf ruhende Karten (`wait_for_resting_cards`, eine Quelle für `ui_helpers` und `guide_window`), `test_settling_waits_until_the_side_cards_rest` am Stand davor rot, danach grün, die acht Maßkartendateien und `test_guide_targets.py` 100 grün; nativ ohne Auffälligkeit (Schlusslauf `d0173380f` L1, gleitende Karten).
+
+### FD-203 Herstellerwerte außerhalb der Feldgrenzen stehen im Druckdialog gekürzt
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `dialog:print_settings_dialog`, `dialog:first_run_dialog`
+- Prüfpunkt: 4, 9
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/review-fd197-claude.md`: `scan_vendor.py` über 9 169 Prozessdateien von fünf Slicern: `speed.acceleration` in 15 Dateien 32 000–100 000 (Feld bis 30 000), `speed.travel` in 13 (1 200–1 500, Feld bis 1 000), Schichthöhen und Bahnbreiten bis 4 und 9,5 mm, `shell.bottom_layers` 999; über `base_settings` bestätigt: Sovol Zero 40 000 → „30000 mm/s²“; `test_vendor_field_values.py` am Stand davor 45 rot (`fix-fd197-claude.md`).
+- Ursache: Das Feld setzte seine Grenzen und klemmte jeden geladenen Wert darauf; Prüfbericht und Kommandozeile nannten den echten Wert, und der Slicer druckte ihn.
+- Vorschlag: Kein Feld kürzt einen geladenen Wert still (`print_fields.shown_range`), die Grenzen decken jeden Herstellerwert, der ein Maß ist, ein Wächter gegen eine eingecheckte Liste der Herstellerwerte.
+- Wirkung beim Kunden: Der Dialog zeigte einen anderen Wert als den, der gedruckt wird.
+- Stand: behoben `b736da48f`, `8b7a1b3aa`; `test_vendor_field_values.py` am Stand davor rot, danach steht jedes Herstellerextrem aus 46 225 Profilen ungekürzt im Feld, sechs Merkzeichen sind benannt; die Düse geht bis 10 mm in Druckdialog und Ersteinrichtung.
+
+## Funde nach dem Einfrieren (ab FD-204, für 0.6.2, RM-812)
+
+Robert, 16.10.2026, 15:50: Fertig gemacht wird, was bis FD-203 beauftragt ist;
+neue Funde werden eingetragen
+(`output/konsolidierung-2026-10-12/AUFTRAG-1016-claude.md`, „Umfang
+eingefroren“) und in 0.6.2 behoben (Robert, 17.10.2026). Ihr Registerpunkt ist RM-812.
+
+### FD-204 Cura-Profile fehlen im Herstellerscan der Druckfeldgrenzen
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Werkzeug `tools/scan_vendor_values.py`
+- Prüfpunkt: 19
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-fd197-claude.md`: Der Erzeuger liest die Orca-Familie und die PrusaSlicer-Bündel, nicht Curas Druckerdefinitionen und Qualitätsprofile (`share\cura\resources`); bestätigt in `review2-fd197-claude.md`.
+- Ursache: `scan_vendor_values.py` hat keinen Leser für Cura.
+- Vorschlag: einen Cura-Leser (`manufacturer`, Cura-Grundlage) in `scan_vendor_values.py` aufnehmen und `tests/data/vendor_print_values.json` neu schreiben.
+- Wirkung beim Kunden: keine belegte; gekürzt wird ein Cura-Wert seit FD-203 nicht mehr (`shown_range`), nur benannt ist er nicht.
+- Stand: offen RM-812
+
+### FD-205 Ein geladenes Merkzeichen weitet die Eingabespanne des Felds
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `dialog:print_settings_dialog`
+- Prüfpunkt: 7
+- Beleg: Neuer Punkt in `output/konsolidierung-2026-10-12/fix-fd197-claude.md`: Nach dem Laden von 999 Bodenschichten (HueForge @LH Stinger) nimmt das Feld jede Eingabe bis 999 an, nicht nur bis 50.
+- Ursache: `print_fields.shown_range` weitet die Spanne bis zum geladenen Wert, und dieselbe Spanne gilt für getippte Werte.
+- Vorschlag: eine getrennte Annahmegrenze in `_BoundedBehavior`, die nur den geladenen Wert selbst zusätzlich zulässt.
+- Wirkung beim Kunden: Ein Tippfehler bis zum Merkzeichen geht ohne Ablehnung durch.
+- Stand: offen RM-812
+
+### FD-206 Ein Hinweis beim Öffnen geht verloren, wenn die erste Auswertung abbricht
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `report`
+- Prüfpunkt: 7
+- Beleg: `output/konsolidierung-2026-10-12/review2-fd197-claude.md`, NP-1: `session.py:440–445` löscht `pending_foreign_check` vor `_evaluate`; `except OperationCancelled` und `except AppError` (`:496–499`) stellen ihn nicht wieder her, und `evaluate_async` bricht einen laufenden Arbeiter bei jeder neuen Anfrage ab; `probe_cancel.py`: erster Lauf abgebrochen, zweiter fertig ohne `project.bridge_flow_reset`. Derselbe Weg trägt die Hinweise zu §32 (`foreign.findings_for`) und §24.4 (`part_check`).
+- Ursache: Der Merker wird gelöscht, bevor die erste Auswertung fertig ist.
+- Vorschlag: den Merker erst nach `finishedWith` löschen oder bei Abbruch und Fehler zurücksetzen; Test mit abgebrochenem erstem Lauf.
+- Wirkung beim Kunden: Wer gleich nach dem Öffnen etwas ändert, erfährt nicht, dass Solidon den Brückenfluss aus 0.6.0 zurückgenommen hat, dass Inhalt fremder Herkunft ist oder ein Baustein sich geändert hat.
+- Stand: offen RM-812
+
+### FD-207 Die Kommandozeile zeigt die Hinweise eines geöffneten Projekts nicht
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: keine Zeile: Kommandozeile (`app/cli/main.py`)
+- Prüfpunkt: 7
+- Beleg: `output/konsolidierung-2026-10-12/review2-fd197-claude.md`, NP-2: `cli/main.py:171` (`open_project`) lädt und liest `project.notices` nicht, ebenso keine Hinweise zu §32; ein `export` eines 0.6.0-Projekts mit 1 % Brückenfluss übergibt still den Wert der Grundlage.
+- Ursache: Der Weg der Hinweise endet in der Sitzung des Fensters; die Kommandozeile hat keinen.
+- Vorschlag: `open_project` gibt `project.notices` über `print_findings` aus.
+- Wirkung beim Kunden: Ein Export über die Kommandozeile nimmt still einen anderen Wert, als das Projekt trug.
+- Stand: offen RM-812
+
+### FD-208 Der Rückzug wird nicht gegen den Extruder geprüft
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `dialog:print_settings_dialog`
+- Prüfpunkt: 7
+- Beleg: `output/konsolidierung-2026-10-12/review2-fd197-claude.md`, NP-3: Ein Rückzug von 15 mm (für 1,5) lehnte die alte Grenze 10 ab, seit den gehobenen Grenzen aus FD-203 wird er angenommen; `advise.py` kennt keinen Rat zum Rückzug. Den Teil zur Bahnbreite behob `8b7a1b3aa` (`advise.WIDE_LINE_SHARE`).
+- Ursache: Es gibt keine Prüfung des Rückzugs gegen die Art des Extruders.
+- Vorschlag: einen Rat zum Rückzug gegen die Extruderart (Direktantrieb, Bowden) in `advise.py`, wie `WIDE_LINE_SHARE` an der Bahnbreite.
+- Wirkung beim Kunden: Ein Tippfehler 15 statt 1,5 mm geht ohne Rat an den Slicer.
+- Stand: offen RM-812
+
+### FD-209 Die Kurzhilfe der Waisen-Sammelzeile nennt die Mitglieder zweimal
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `report`
+- Prüfpunkt: 10
+- Beleg: `output/konsolidierung-2026-10-12/review2-rest-a-claude.md`, P2: Die Kurzhilfe trägt den Wert „Merkmal: …“ (die fünfzehn Namen aus `names`) und danach dieselben fünfzehn noch einmal (`panels.py:7773–7793`), mit demselben Trenner „ · “ wie zwischen Merkmal und Körper: „Fläche 3 · Griff · Bohrung 2 · Deckel“ (Sonde `test_zz_sonde_kennung_kurzhilfe.py`).
+- Ursache: Wertezeile und Mitgliederliste werden beide gesetzt, mit gleichem Trenner.
+- Vorschlag: bei einem Schritt nur die Wertezeile, sonst die Mitglieder mit „; “ trennen.
+- Wirkung beim Kunden: Ein Bildschirmleser liest die Liste doppelt, und Merkmal und Körper sind nicht zu trennen.
+- Stand: offen RM-812
+
+### FD-210 *Filament anlegen* öffnet mit Leerraum über den Knöpfen
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `dialog:new_filament_dialog`
+- Prüfpunkt: 9, Z6
+- Beleg: `output/konsolidierung-2026-10-12/review2-rest-a-claude.md`, P5: 1920 × 1080, 16 pt, 25 Punkte leer über den Knöpfen, vor und nach dem Diff von Restpaket A gleich. Schlusslauf L4 an `d9f7a81f9`, Fall 034 (`F:\tmp-suche\schlusslauf-d9f7a81f\L4-d0\cases\034\flaeche-de-filament.colour-bae0b106-dialog.png`): auch bei 9 pt mit zugeklappten *Weiteren Angaben* etwa 60 px frei über *Spule anlegen*.
+- Ursache: offen; der Dialog steht nicht in `test_content_height_dialogs.py`.
+- Vorschlag: die Ursache wie bei FD-198 an `ContentHeight` prüfen und den Dialog in `test_content_height_dialogs.py` aufnehmen.
+- Wirkung beim Kunden: Bei großer Schrift steht der Dialog mit einer Leerzeile über den Knöpfen da.
+- Stand: offen RM-812
+
+### FD-211 Das Schlüsselfeld in *Solidon freischalten* folgt keiner kleineren Schrift
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `dialog:activation_dialog`
+- Prüfpunkt: 9, Z6
+- Beleg: `output/konsolidierung-2026-10-12/review2-rest-a-claude.md`, P4, und `fix-rest-a-claude.md` (P4-Rest): Das Schlüsselfeld setzt seine Höhe nur bei Text und Anzeigen (`_fit_key_field`), nicht nach einem Schriftwechsel, und bleibt nach 14 → 9 pt 27 Punkte höher als nötig.
+- Ursache: `_fit_key_field` läuft nicht nach einem Schriftwechsel.
+- Vorschlag: Das Feld misst nach einem Schriftwechsel neu, wie `WrappedNote` seit `546b0e891`.
+- Wirkung beim Kunden: Nach kleinerer Schrift bleibt das Schlüsselfeld zu hoch.
+- Stand: offen RM-812
+
+### FD-218 Volumen und Mengen stehen in Befunden ohne Einheit
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `smooth_mesh`, `pose_armature`, `orient_for_print`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 1: `geom/mesh_ops.py:1968-1969` (`before`/`after`, mm³), `geom/pose.py:1035`, `agent/checks.py:180`, `slice/orientation.py:779-780` (`support`, `saved`, cm³), `slice/gcode.py:1799, 1812-1813` (`estimated`/`measured`, je nach Größe Volumen, Gramm oder Zeit).
+- Ursache: Die Schlüssel tragen keine Endung; derselbe Anzeigeweg wie FD-188 kennt Volumen, Gramm und Zeit nicht.
+- Vorschlag: `_mm3`-Endung bzw. die Einheit je Größe; den Wächter `test_value_measures` um Volumenwörter erweitern.
+- Wirkung beim Kunden: Er liest Volumen, Gewichte und Zeiten als nackte Zahlen und muss die Einheit raten.
+- Stand: offen RM-812
+
+### FD-219 Die Skizzenabsage nennt das Maß ohne Einheit
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `dialog:sketch_editor_dialog`
+- Prüfpunkt: 9, V5
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 2: `sketch/edit.py:2916, 2999`: „… kleiner sein als 20“ über `written_measure` (Punkt als Dezimalzeichen, keine Einheit).
+- Ursache: `written_measure` schreibt die Zahl ohne Einheit und ohne Anzeigeeinheit.
+- Vorschlag: `format_length(…, display_unit())` wie RM-516.
+- Wirkung beim Kunden: In Zoll liest er eine Millimeterzahl ohne Einheit.
+- Stand: offen RM-812
+
+### FD-220 Sätze im Kern mit fester Millimeterlänge folgen der Zollanzeige nicht
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `part:*`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 3: `prepare_ops.py` „ab {largest}“ und `knowledge/parts/fasteners.py:1870, 1881` („Feiner als {finest}“) nutzen `format_length` ohne `display_unit()`; `parameter_usage.py:254-255` schreibt eine feste Feldeinheit in `limit`/`result`.
+- Ursache: Der Kern legt fertigen Text mit fester Einheit ab, der dem Einheitenwechsel nicht folgt.
+- Vorschlag: `format_length(…, display_unit())` wie bei FD-219, oder die Zahl mit `_mm` ablegen und in der Anzeige setzen.
+- Wirkung beim Kunden: In Zoll stehen diese Sätze in Millimetern.
+- Stand: offen RM-812
+
+### FD-221 „Ausrichtung“ zeigt einen Kosinus statt eines Winkels
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `report`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 4: `scene/fits.py:1504` legt im Befund `fit.violated` `abs(signed)` ab, der Kunde liest „0,98“.
+- Ursache: Der Wert ist der Betrag eines Skalarprodukts, kein Winkel.
+- Vorschlag: den Winkel in Grad unter `angle_deg` ablegen.
+- Wirkung beim Kunden: Er liest an einer verletzten Passung eine Zahl, die er nicht deuten kann.
+- Stand: offen RM-812
+
+### FD-222 Ein verlorener Anteil steht als Bruch
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `smooth_mesh`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 5: `geom/mesh_ops.py:1967` `lost` im Befund `mesh.smooth_shrank` („0,25“ statt 25 %).
+- Ursache: Der Anteil liegt unter einem Schlüssel ohne Prozentangabe.
+- Vorschlag: `lost_percent`.
+- Wirkung beim Kunden: „0,25“ liest sich als Maß, nicht als ein Viertel.
+- Stand: offen RM-812
+
+### FD-223 Der Kalibrierwert im Befund steht ohne Einheit
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 6: `knowledge/calibration.py:127` legt `value` je Feld ab (mm, Grad oder Anzahl).
+- Ursache: Der Befund trägt nicht die Einheit seines Felds.
+- Vorschlag: die Einheit des Felds als `values["unit"]`.
+- Wirkung beim Kunden: Er sieht nicht, ob Millimeter, Grad oder eine Anzahl gemeint ist.
+- Stand: offen RM-812
+
+### FD-224 Große Anzahlen stehen in Absage und Bericht ohne Dreiergruppen
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `report`
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd188-claude.md`, neuer Punkt 7: „Dreiecke: 263419“, „Grenze: 263418“ in Absage und Bericht (Bilder dort); `labels.count_text` gibt es. Zwilling von FD-124.
+- Ursache: Anzahlschlüssel (`triangles`, `limit` …) laufen nicht über `count_text`.
+- Vorschlag: Anzahlschlüssel gruppiert zeigen, aus derselben Quelle wie FD-124.
+- Wirkung beim Kunden: Große Zahlen sind schwer zu lesen.
+- Stand: offen RM-812
+
+### FD-225 Die Seitenkarten gleiten auch bei ausgeschalteter Bewegung
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: keine Zeile: Seitenkarten des Hauptfensters (`app/ui/overlay.py`)
+- Prüfpunkt: 19, G8
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd201-202-claude.md`, neuer Punkt: `overlay.OverlayHost._move` (`MOVE_MS` 160, `app/ui/overlay.py:1525`) fragt `motion.animations_enabled()` nicht und gleitet auch unter `SOLIDON3D_MOTION=aus` und offscreen; sieben Tests umgehen es mit `monkeypatch.setattr(overlay, "MOVE_MS", 0)`; FD-157 und FD-202 sind dieselbe Bauart.
+- Ursache: `_move` ist die einzige Bewegung der Oberfläche ohne die Frage an `animations_enabled()`.
+- Vorschlag: `_move` setzt sofort, wenn `animations_enabled()` falsch ist; die Gleittests schalten Bewegung ausdrücklich ein, die Umgehungen mit `MOVE_MS = 0` entfallen; Changelog.
+- Wirkung beim Kunden: Wer keine Bewegung verträgt und sie ausschaltet, sieht die Seitenkarten trotzdem gleiten (Barrierefreiheit).
+- Stand: offen RM-812
+
+### FD-226 Die Maßkarte kehrt nach Auf- und Zuklappen je nach Stand an eine andere Lage zurück
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: 19
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd201-202-claude.md`, neuer Punkt: Nach Auf- und Zuklappen kehrt die zugeklappte Maßkarte auf welle5 an ihren Anfangsplatz zurück (`(642, 173)`), auf Restpaket A bleibt sie oben stehen (`(642, 24)`); de, Karten in Ruhe.
+- Ursache: offen; welche Lage gewollt ist, ist nicht entschieden.
+- Vorschlag: am Kundenweg entscheiden und mit einem Lagetest festhalten.
+- Wirkung beim Kunden: Die Karte steht nach dem Zuklappen mal hier, mal dort.
+- Stand: offen RM-812
+
+### FD-228 Das Merkmalfenster sperrt „Gewinde ändern“ mit einer falschen Begründung
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `feature.apply`
+- Prüfpunkt: 7, V5
+- Beleg: `output/konsolidierung-2026-10-12/fix-w5-gewinde-claude.md`, neuer Punkt: Sonde `test_zz_panel.py` an `a25ac8cb2` (Szene `gewinde_zu_kurz`, Gewinde gewählt): Beide Handlungen „Gewinde ändern“ ändern den bestehenden Schritt 3 (`row.step`, `stepChangeRequested`), das Fenster ist aber ganz gesperrt mit „Die Kette hält an Schritt 4 (Stift für Bohrung) an — ein neuer Schritt dahinter würde nicht gerechnet. Der Weg weiter steht im Prüfbericht.“
+- Ursache: `MainWindow` sperrt das Merkmalfenster mit `halt_line` über `feature_panel.set_locked`, auch für Handlungen, die einen Schritt vor dem Haltepunkt ändern.
+- Vorschlag: Handlungen mit `step` vor dem Haltepunkt von der Halt-Sperre ausnehmen, wie `action_refusal` die Wege des Halts ausnimmt (RA-3); dann greift dort der Wartesatz wie im Dialog.
+- Wirkung beim Kunden: Gesperrt ist genau der Weg, den die Absage nennt („Das Gewinde in seinem Schritt verlängern“); der Ausweg führt über Prüfbericht oder Verlauf.
+- Stand: offen RM-812
+
+### FD-229 Der Bausteinbau in einer Operation rechnet immer fein und ohne Abbruch
+
+- Art: Leistung
+- Schwere: leicht
+- Funktion: `split_pinned`, `part:*`
+- Prüfpunkt: 6, 14
+- Beleg: `output/konsolidierung-2026-10-12/paket-cs0-k.md`, neuer Punkt 1: `knowledge/parts/build.py` `union`/`subtract`/`intersect` rufen die Kette fest mit `quality="fine"` und ohne `cancelled`; beim Verstiften (`split_pinned`, Entwurf, mit Token) laufen drei boolesche Aufrufe des Stiftbaus fein und ohne Abbruch (`probe_pins.py`: `build.py:70` zweimal, `build.py:61` einmal).
+- Ursache: Der Bausteinbau erbt `ctx.quality` und `ctx.cancelled` der Operation nicht.
+- Vorschlag: entscheiden, ob Bausteine in einer Op `ctx.quality`/`ctx.cancelled` erben (dann `_from_the_op` in `test_geometry_review.py` streichen) oder bewusst fein bleiben (dann als Regel in `kanten.md`/`kern.md`).
+- Wirkung beim Kunden: klein (ein Stift), aber *Abbrechen* erreicht diese Rechnung nicht, und der Entwurf rechnet sie fein.
+- Stand: offen RM-812
+
+### FD-230 Ein Speicherfehler der örtlichen Nachmessung endet als interner Fehler
+
+- Art: Stabilität
+- Schwere: leicht
+- Funktion: `scale_object`
+- Prüfpunkt: 7
+- Beleg: `output/konsolidierung-2026-10-12/paket-cs0-k.md`, neuer Punkt 5: Läuft `perceive.features.detect` in `local._recognise_region` in den Speicher, fängt niemand den `MemoryError`; der Folgeschritt endet als `op.scale_object.InternalError`, die Auswertung bleibt unvollständig; in `evaluate._with_features` wird derselbe Fehler zur Absage mit Merker (Sonde zu `test_a_memory_error_after_a_confirmation_is_not_repeated` mit Ersatz am Original).
+- Ursache: `_recognise_region` fängt den `MemoryError` nicht wie `_with_features`.
+- Vorschlag: denselben Weg wie in `_with_features` (Absage, `remember_out_of_memory`) oder bewusst laut lassen und als Regel festhalten.
+- Wirkung beim Kunden: Ob ein Ausschnitt realistisch am Speicher scheitert, ist offen; tut er es, sieht der Kunde einen internen Fehler statt einer Absage mit Handlung (Regel 17).
+- Stand: offen RM-812
+
+### FD-233 Ein Druck ohne vorheriges Überfahren fasst den Körper statt des Griffs
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `slot_hole` (Langlochgriff) und jeder Zuggriff der Ansicht
+- Prüfpunkt: 6
+- Beleg: `output/konsolidierung-2026-10-12/schlusslauf-claude.md`, „Sonde FD-73“ (Kopf `df6d34031`, `F:\tmp-suche\schlusslauf-df6d3403\SONDE-2` und `SONDE-3`): Druck an derselben Stelle (4300, 630) auf dem rechten Langlochknopf; ohne vorherige Bewegung (SONDE-2) wird der ganze Körper gewählt und verschoben, mit `mouseMove` an denselben Ort und 0,3 s Verweilen (SONDE-3) wird das Langloch gezogen, Griffmaß „18,12 mm“.
+- Ursache: Die Ansicht schärft einen Griff erst beim Überfahren; ein Druck, dem keine Bewegung vorausging, trifft die Körperwahl.
+- Vorschlag: Beim Druck selbst prüfen, ob unter dem Zeiger ein Griff liegt, und ihn dann fassen; Test mit Druck ohne vorherige Bewegung am Langloch und an einem zweiten Griff.
+- Wirkung beim Kunden: Mit Stift oder Touch, und mit der Maus nach einem Sprung ohne Zwischenbewegung, verschiebt der erste Zug den ganzen Körper statt das Langloch; Strg+Z nimmt es zurück.
+- Stand: offen RM-812
+
+### FD-234 Die Sprachfälle erreichen am echten Fenster nicht jede Fläche
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: keine Zeile: Wege des Prüfstands (FD-101, FD-175)
+- Prüfpunkt: 1, 2
+- Beleg: `output/konsolidierung-2026-10-12/schlusslauf-claude.md`, L3 an `c5666931d` (`F:\tmp-suche\schlusslauf-c5666931\L3-wege`): 44 Wegfunde, darunter 001 D1 `Hilfe/Beispiele` verdeckt (an [3734,34] liegt nichts), 013 D11 `history` vom `HistoryPanel` verdeckt und 14 Kontextmenüzeilen „kein offenes Menü“, 019 D12 `setting.section:*` und `dialog.*` „kein Dialog offen“, 037 `request.send` nach 60 s grau, 073 D2 sechs Grundkörper „weder Knopf noch Menüzeile“, 097 D7 `dialog:sketch_editor_dialog` am Rollanschlag, 103 D9 `print.*` „der Druckdialog ist nicht offen“ (damit nativ ohne Beleg: FD-124, FD-184). L4 an `d9f7a81f9` (`F:\tmp-suche\schlusslauf-d9f7a81f\L4-d0`): D8 `orient_for_print` in allen sechs Sprachen „kein Knopf zu sehen und keine Menüzeile“ (Weg Prüfbericht → *Auswahl* → kein Ziel), `finding.action:split_bodies` einmal (053 EN, in DE erreicht). Offscreen gehen dieselben Fälle durch; D4 und D10 erreichen nativ jede Fläche.
+- Ursache: Die Wege aus FD-101/175 sind an der Offscreen-Lage gebaut; am echten Fenster (2560 × 1369, andere Leistenbreiten, echte Menüs und Dialoge) fehlen Hinfahren, Öffnen des Menüs oder Dialogs und Rollen.
+- Vorschlag: Je Bauart des Wegfunds einen nativen Fall als Test, die Wege an der echten Lage ausrichten; vor den Phase-3-Paketen beheben, weil diese Sprachfälle dort als Beleg dienen.
+- Wirkung beim Kunden: Kein Produktfehler; an diesen Flächen fehlt der native Beleg der Sprachprüfung.
+- Stand: offen RM-812
+
+### FD-236 Nach *Auf das Bett setzen* ragt der Körper oben aus dem Bild
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `place_on_bed`
+- Prüfpunkt: E4
+- Beleg: Schlusslauf L4 an `d0173380f`, Fall 002 (`F:\tmp-suche\schlusslauf-d0173380\L4-d0\cases\002`, Szene `unter_dem_bett.netz`): `function.json` `spot.frame` [4075, −31, 997, 973] gegen `spot.view` [3413, 92, 2560, 1259], `inside` falsch; `03-uebernommen.png` zeigt den Würfel ohne Oberseite. Am Endkopf `d9f7a81f9` (L4, Fall 002) gleich; schon im finalen Lauf des Funktionsdurchgangs so.
+- Ursache: Die Ansicht folgt dem angehobenen Körper nicht; der Bildausschnitt bleibt der von vorher, als der Würfel unter dem Bett lag.
+- Vorschlag: Nach einer Handlung, die den Körper aus dem Bild schiebt, den Ausschnitt nachführen (wie beim Einfügen), ohne eine vom Nutzer gesetzte Ansicht ungefragt zu verlassen; Test mit dem Fall aus dem Beleg.
+- Wirkung beim Kunden: Wer ein Modell unter dem Bett auf das Bett setzt, sieht danach dessen Oberseite nicht und muss die Ansicht selbst einpassen.
+- Stand: offen RM-812
+
+### FD-237 *Spule anlegen* in *Neues Filament* ist grau, ohne zu sagen warum
+
+- Art: Zwillinge
+- Schwere: mittel
+- Funktion: `dialog:new_filament_dialog`, `filament.colour`, `filament.profile`, `meldung:_pick_colour`, `parts.save`
+- Prüfpunkt: E7
+- Beleg: Schlusslauf L4 an `d9f7a81f9`, Fälle 034–039 (`F:\tmp-suche\schlusslauf-d9f7a81f\L4-d0\cases\034\flaeche-de-filament.colour-bae0b106-dialog.png`, `…meldung__pick_colour-978ff8c9-dialog.png`): *Spule anlegen* grau bei leerem *Name*, ohne Satz und ohne Kurzhilfe; Stufe A `unmeasured` „kein sichtbarer Sperrgrund: grau ohne Kurzhilfe“ an `filament.colour`, `filament.profile` und `meldung:_pick_colour` in allen sechs Sprachen. Zwilling in *Auswahl als Baustein speichern* (Nachurteil Runde C3, Prüfer 1b Punkt 25): L4 Fall 034 `cases/034/flaeche-de-parts.save-4b595fac-dialog.png` (SHA256 `8994059f39a6`), Maß *Breite* und alle sechs Stellen sind freigegeben, *Baustein anlegen* ist trotzdem grau, der Grund (Name leer) steht nirgends, Protokoll `unmeasured` „sperrgrund:dialog.accept: Kurzhilfe gesetzt, aber nicht gezeigt“ (die fehlende Aufnahme ist FD-239); das Handbuch (#own-parts) nennt als Sperre nur ein fehlendes Maß oder eine fehlende Stelle.
+- Ursache: Die Regel aus FD-99 (der graue Hauptknopf nennt das erste Feld, das fehlt) gilt in Operationsdialog, Merkmalfenster und Flächenkarte, nicht im Filamentdialog und nicht in *Auswahl als Baustein speichern*.
+- Vorschlag: Den grauen Hauptknopf des Filamentdialogs über dieselbe Quelle wie FD-99 begründen („Erst „Name“ eintragen, dann anlegen.“) und die übrigen Dialoge mit grauem Hauptknopf im selben Zug prüfen, darunter *Auswahl als Baustein speichern* mit dem Grund als Satz unter den Feldern, wie ihn der Katalog für *Baustein als Datei weitergeben …* schon hat; den Handbuchsatz (#own-parts) um den Namen ergänzen; Test mit leerem Namen.
+- Wirkung beim Kunden: Wer eine neue Spule anlegen will, sieht einen grauen Knopf und muss raten, dass der Name fehlt.
+- Stand: offen RM-812
+
+### FD-238 Flächen im Objektbaum stehen ohne Dreiergruppen
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `tree`
+- Prüfpunkt: 9
+- Beleg: Schlusslauf L4 an `d9f7a81f9`, Fall 055 (FR, `finding.action:scale_to_fit`, Ausschnitt `F:\tmp-suche\schlusslauf-claude\bilder\l4-055-baum.png`): *Dessous* und *Face supérieure* je „120000 mm²“ statt „120 000 mm²“. Zwilling von FD-124 und FD-224.
+- Ursache: Die Flächenspalte des Objektbaums formatiert die Zahl ohne die Gruppierung der Sprache.
+- Vorschlag: Flächen über dieselbe Zahlformatierung wie Längen und Anzahlen ausgeben (eine Quelle mit FD-124/FD-224); Test mit einer Fläche über 10 000 mm² in jeder Sprache.
+- Wirkung beim Kunden: Große Flächen sind schwer zu lesen, und die Zahl steht anders da als an jeder anderen Stelle.
+- Stand: offen RM-812
+
+### FD-239 Der Prüfstand zeigt die Kurzhilfe am grauen Hauptknopf in zwei modalen Dialogen nicht
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Kurzhilfebild des Prüfstands (`tools/function_tooltips.py`, `reason_picture`)
+- Prüfpunkt: 19
+- Beleg: Schlusslauf L4 an `d9f7a81f9`, Fall 034 (`dialog:recipe_dialog`, `parts.save`): Stufe A „Kurzhilfe gesetzt, aber nicht gezeigt“; die Kurzhilfe ist am Knopf gesetzt, das Bild nimmt sie im modalen Dialogfenster nicht auf.
+- Ursache: offen; vermutlich erreicht das Hinfahren vor `showText` das modale Fenster nicht wie das Hauptfenster.
+- Vorschlag: Das Kurzhilfebild auch in modalen Dialogen aufnehmen; nativer Fall mit `recipe_dialog`.
+- Wirkung beim Kunden: Kein Produktfehler; an diesen zwei Dialogen fehlt das Bild des Grunds.
+- Stand: offen RM-812
+
+### FD-240 Das Vorher-Bild am Vorhersagetor zeigt manchmal eine noch rechnende Vorschau
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Vorhersagetor des Prüfstands (`tools/function_prediction.py`)
+- Prüfpunkt: V4
+- Beleg: Schlusslauf L5 an `d9f7a81f9` (`F:\tmp-suche\schlusslauf-d9f7a81f\L5-v4`): Bei 6 von 63 Toren beschreibt der Schreiber im Vorher-Bild „Vorschau wird gerechnet“ — 005 `resize_hole`, 028 `finding.action:adopt_printer`, `choose_another_file`, `reactivate_step`, `suppress_step`, 034 `keep_saved_parts`.
+- Ursache: offen; das Tor nimmt das Vorher-Bild vermutlich auf, bevor die feine Vorschau steht.
+- Vorschlag: Vor dem Vorher-Bild auf Ruhe der Vorschau warten wie vor dem Klick; Test mit verzögerter Vorschau.
+- Wirkung beim Kunden: Kein Produktfehler; die Vorhersage stützt sich an diesen Toren auf eine Vorschau, die noch nicht fertig ist.
+- Stand: offen RM-812
+
+## Nachurteile am Schlusslauf (FD-241 bis FD-300, für 0.6.2, RM-812)
+
+Die folgenden Funde (FD-241 bis FD-300) kommen aus den Nachurteilen am Schlusslauf
+(`output/konsolidierung-2026-10-12/nachurteil-pruefer1a-claude.md`, `nachurteil-pruefer1b-claude.md`,
+`nachurteil-pruefer2-claude.md`); Lauf L4 ist `F:\tmp-suche\schlusslauf-d9f7a81f\L4-d0`, Lauf L5
+`F:\tmp-suche\schlusslauf-d9f7a81f\L5-v4`, beide an `d9f7a81f9`. SHA256 der Bilder gekürzt auf zwölf Stellen.
+
+### FD-241 Nach einer Auswahl bleibt die rechte Karte auf dem Reiter *Prüfbericht*
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `command:edit.auto_split`, `rename_object`, `label_text`, `paint_slot`
+- Prüfpunkt: Z3
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-rename_object-03af2449.png` (SHA256 `c9668daa9d8f`) und `cases/052/flaeche-de-command_edit.auto_split-6f848760.png` (`b31838e51c0d`), Fall 034 `cases/034/flaeche-de-label_text-cf59aeca.png` (`41d8108aa3d4`) und `cases/034/flaeche-de-paint_slot-9865a109.png` (`227d3a68b7c2`): Nach der Wahl des Körpers oder der Oberseite zählt Stufe A einen Wegklick `why: reiter` auf *Auswahl*, weil die Karte auf *Prüfbericht* stehen bleibt (`034/surfaces/label_text-cf59aeca.json#steps`, `paint_slot-9865a109.json#steps`); bei `inlay_text` aus demselben Ausgangszustand nicht. Prüfer 1a Punkt 1, Prüfer 1b Punkt 5.
+- Ursache: offen; fest steht, dass der Reiter nach einer Auswahl je nach Handlung wechselt oder nicht.
+- Vorschlag: Bei einer neuen Auswahl im Bild oder im Objektbaum die Seite *Auswahl* nach vorn holen, außer der Kunde hat den Bericht gerade selbst gewählt; Test mit der Wahl einer Fläche bei offenem Bericht.
+- Wirkung beim Kunden: Wer einen Körper oder eine Fläche anklickt, sieht weiter den Bericht und muss die Handlungen erst über den Reiter holen.
+- Stand: offen RM-812
+
+### FD-242 Die Seite *Auswahl* rollt bei gewähltem Körper schon bei 2560 × 1369
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `command:edit.auto_split`, `split_bodies`, `split_line`, `assign_slot`
+- Prüfpunkt: Z3, Z6, 19
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-command_edit.auto_split-6f848760.png` (`b31838e51c0d`): senkrechte Rollleiste rechts an der Karte, *Automatisch teilen …* erst nach Rollen ganz unten unter *Vorbereiten*; `cases/052/flaeche-de-split_bodies-e45b38ac.png` (`0a7644e14661`) und `cases/052/flaeche-de-split_line-53a3b02d.png` (`34e8aee5304b`): die Karte ans Ende gerollt, die Handlung als letzte unter *Vorbereiten*; Fall 034 `cases/034/flaeche-de-filament.picker-0afd58ad.png` (`798d03aec872`): Rollleiste vorn, die Liste läuft unter *Transformation* weiter (`034/surfaces/assign_slot-bd965763.json#scrollbars`, vertical true). Stufe A: Z6 „Rollleiste vorn in `_SelectionPage` bei 2560 × 1369“ in sechs Sprachen, Z3 Wegklicks `rollen`. Schwere: Prüfer 1a mittel (Umweg), Prüfer 1b leicht (Gestaltung); mittel, weil die Handlungen nur nach Rollen erreichbar sind. Prüfer 1a Punkt 1, Prüfer 1b Punkt 6.
+- Ursache: offen; bei gewähltem Körper trägt die Seite mehr Gruppen, als die Karte bei 2560 × 1369 fasst, und *Vorbereiten* steht unten.
+- Vorschlag: Bei gewähltem Körper selten gebrauchte Gruppen zugeklappt beginnen oder die Handlungen der Druckvorbereitung nach oben holen; Test, dass *Vorbereiten* bei gewähltem Körper ohne Rollen erreichbar ist.
+- Wirkung beim Kunden: Teilen, Aufteilen und Filament zuweisen liegen bei gewähltem Körper unter dem Kartenrand; der Kunde muss wissen, dass er rollen muss.
+- Stand: offen RM-812
+
+### FD-243 Über dem ersten Feld der Seite *Auswahl* stehen bei gewähltem Körper 34 bis 36 Wörter
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `command:edit.auto_split`, `delete_object`, `filament.picker`, `filament.section`
+- Prüfpunkt: E5
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-delete_object-df54ecae.png` (`cff8c3864085`), Fall 034 `cases/034/flaeche-de-filament.section-c33fb9a9.png` (`44f530bdd1e4`): Stufe A E5 34 Wörter (de) über dem ersten Feld an `command:edit.auto_split` und `delete_object`, übersetzt 37–42, an `filament.picker` und `filament.section` 36, übersetzt 37–43, erlaubt 25 und 35. Über dem Feld stehen „Kein Merkmal gewählt. Klicken Sie eine Fläche, eine Kante oder eine Bohrung an — im Objektbaum oder im Bild.“, der Name, vier Hauptaktionen und der Satz der Zuweisung. Prüfer 1a Punkt 2, Prüfer 1b Punkt 7.
+- Ursache: Der Hinweis zur Merkmalswahl steht auch bei gewähltem Körper vorn.
+- Vorschlag: Den Hinweis bei gewähltem Körper kürzen oder unter das Suchfeld beziehungsweise unter die Klappe setzen; Wörter je Sprache mit dem Zähler von E5 prüfen.
+- Wirkung beim Kunden: Bevor er Handlung oder Feld erreicht, liest der Kunde einen Satz, der ihm an dieser Stelle nichts sagt.
+- Stand: offen RM-812
+
+### FD-244 Im Druckeinstellungsdialog stehen *Platte*, *Qualität* und ein unbeschriftetes Feld ohne eigenen Satz
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `finding.action:choose_printer`, `finding.action:open_print_settings`
+- Prüfpunkt: 8, V3
+- Beleg: L4, Fall 052 `cases/052/flaeche-geoeffnet-de-finding.action_choose_printer-2c1a8d33-dialog.png` (`c31ce8336687`) und `cases/052/flaeche-geoeffnet-de-finding.action_open_print_settings-970cbb07-dialog.png` (`7e057585d2b3`): Stufe A V3 84 von 87 Feldern mit eigenem Satz; ohne Kurzhilfe und zugängliche Beschreibung sind *Platte*, *Qualität* und ein Feld ohne Beschriftung, in sechs Sprachen. Prüfer 1a Punkt 3. Zwilling von FD-78, der die nachgelagerten Druckdialoge ausdrücklich nicht abdeckte.
+- Ursache: offen; dieselbe Bauart wie FD-78, im Druckeinstellungsdialog.
+- Vorschlag: Je Feld der Wirkungssatz als Kurzhilfe und `accessibleDescription` wie bei *Düse Ø*, das Feld ohne Beschriftung bekommt einen Namen; Wächter über alle Felder des Dialogs.
+- Wirkung beim Kunden: Was *Platte* und *Qualität* bewirken, liest der Kunde weder beim Überfahren noch mit einem Bildschirmleser.
+- Stand: offen RM-812
+
+### FD-245 Im Generierungsdialog hat *Startwert* keinen eigenen Satz
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `finding.action:generate_again`
+- Prüfpunkt: 8, V3
+- Beleg: L4, Fall 052 `cases/052/flaeche-geoeffnet-de-finding.action_generate_again-c04c15ad-dialog.png` (`ac778b2c4a94`): Stufe A V3 1 von 2 Feldern; *Startwert* ohne Beschreibung, die Gruppe „Startwert und Modell“ ohne Satz, in sechs Sprachen. Prüfer 1a Punkt 4. Zwilling von FD-78 (dort *Beschreibung* im Generator).
+- Ursache: offen; FD-78 band den Satz nur an *Beschreibung*.
+- Vorschlag: Ein Satz an *Startwert*, was er bewirkt (gleiche Zahl, gleiches Ergebnis), als Kurzhilfe und Beschreibung; Test über alle Felder des Generators.
+- Wirkung beim Kunden: Wer *Neu erzeugen* öffnet, weiß nicht, wozu der Startwert dasteht und ob er ihn ändern soll.
+- Stand: offen RM-812
+
+### FD-246 Die Sprachflächen fr und it der Analyseleiste zeigen eine fremde Lage
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `tool:analysis`
+- Prüfpunkt: 8, 9, V1, V3
+- Beleg: L4, Fälle 055 und 056 `cases/055/flaeche-fr-tool_analysis-1fea5198.png` (`bc33bf79b0a0`), `cases/056/flaeche-it-tool_analysis-1fea5198.png` (`91da6319b213`): statt der Analyseleiste der in vier Stücke geteilte Quader („2–4 Diviser et goupiller“, „Dividi e metti le spine“), die Explosionsleiste offen, der Bericht mit Warnung; `055/056/surfaces/tool_analysis-1fea5198.json#texts,fields` führen 10 Texte und 21 Felder der fremden Leisten, de, en, es und pt nur die Analyseleiste. V1, V3 sowie Prüfpunkt 8 und 9 sind in fr und it an der falschen Fläche gemessen. Prüfer 1a Punkt 6, Prüfer 2 NP-19. Zwilling von FD-40 und FD-132.
+- Ursache: offen; der Zustand einer früheren Fläche desselben Falls blieb stehen, obwohl jede Sprachfläche seit FD-132 im Ausgangszustand eines frischen Starts beginnen soll.
+- Vorschlag: Vor jeder Sprachfläche Startszene und offenes Werkzeug zurücksetzen und am Protokoll prüfen, dass die aufgenommene Fläche ihr Ziel trägt; eine Fläche ohne Zielelement endet rot.
+- Wirkung beim Kunden: Kein Produktfehler; die Sprachprüfung der Analyseleiste fehlt in zwei Sprachen, und fremde Texte zählen dort als ihre.
+- Stand: offen RM-812
+
+### FD-247 Analyseleiste und Werkzeugleiste halten Qts Abstand 6
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `tool:analysis`, `tool:layers`
+- Prüfpunkt: G2
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-tool_analysis-1fea5198.png` (`1c6f1d581dec`) und `cases/052/flaeche-de-tool_layers-04ae8d9d.png` (`511f8d57b33a`): Stufe A G2 meldet Abstand 6 in `AnalysisBar` und `ToolStrip`. Prüfer 1a Punkt 10. Zwilling von FD-15, FD-23 und FD-103.
+- Ursache: am Befund naheliegend: Die Layouts beider Leisten setzen keinen Abstand und behalten Qts Vorgabe 6.
+- Vorschlag: Den Abstand aus dem Raster setzen; der G2-Wächter in `test_style.py` liest auch die Leisten unter der Ansicht.
+- Wirkung beim Kunden: Die Leisten unter der Ansicht wirken minimal unruhiger als Karten und Dialoge.
+- Stand: offen RM-812
+
+### FD-248 „An den Slicer übergeben …“ steht im leeren Prüfbericht halbfett in 9 pt außerhalb der Stufen
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `report`
+- Prüfpunkt: G4
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-report-845e9183.png` (`625591c99d71`): Stufe A G4 in sechs Sprachen; im Bild steht der Knopf halbfett neben dem gewöhnlichen *Exportieren …*. Prüfer 1a Punkt 11.
+- Ursache: offen; ob der Knopf als Hauptaktion halbfett sein darf (FD-65) und nur die Größe aus den Stufen fällt, ist nicht belegt.
+- Vorschlag: Die Schrift des Knopfs aus den Stufen (`LEVELS`), halbfett nur als erkannte Primärrolle; Messung am leeren Bericht.
+- Wirkung beim Kunden: Im leeren Bericht steht ein Knopf in einer Schrift, die sonst nirgends vorkommt.
+- Stand: offen RM-812
+
+### FD-249 Der Fehlfall von *Auf das Bett setzen* öffnet *Kanten verfeinern*, statt eine Rechnung anzustoßen
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `finding.action:place_on_bed`
+- Prüfpunkt: 7
+- Beleg: L4, Fall 002 `cases/002/02-flaeche.png` (`674ee48c3829`), kein `04-fehlfall.png`: Der Fehlfall soll den Knopf während einer Rechnung über 2 s grau mit Sperrgrund zeigen; der Doppelklick auf den Verlaufsschritt *Kanten verfeinern* öffnete dessen Dialog, der die Klappe des Befunds verdeckt, ein Sperrgrund wurde nicht aufgenommen (Stufe A „nicht gelaufen“). Prüfer 1a Punkt 12 (Nebenbefund) und Urteil zu Prüfpunkt 7, Prüfer 2 Urteile zu Prüfpunkt 2 und 7. Schwere: kein Prüfer bewertet ihn eigens; leicht, weil er eine Zelle ungemessen lässt.
+- Ursache: Der Fehlfall stößt die lange Rechnung über einen Doppelklick im Verlauf an, und der Doppelklick öffnet den Schritt (Bauplan §2.1).
+- Vorschlag: Die lange Rechnung im Fehlfall ohne offenen Dialog herstellen und am Bild prüfen, dass der graue Knopf mit Sperrgrund zu sehen ist.
+- Wirkung beim Kunden: Kein Produktfehler; der Sperrgrund an *Auf das Bett setzen* während einer Rechnung (FD-30, FD-149) ist am Lauf nicht belegt.
+- Stand: offen RM-812
+
+### FD-250 Die erste Rückmeldung von *Auf das Bett setzen* kommt nach 0,35 s
+
+- Art: Leistung
+- Schwere: leicht
+- Funktion: `finding.action:place_on_bed`
+- Prüfpunkt: 6
+- Beleg: L4, Fall 002 `cases/002/03-uebernommen.png` (`9f3a2fa36a97`), `002/function.json#timing`: Zeiger oder Statuszeile nach 0,35 s (fällig ab 0,2 s), größte Lücke im Hauptfaden 94 ms, gesamt 0,40 s; unter der Last des Schlusslaufs gemessen. Prüfer 1a Punkt 13; Prüfer 2 hält dieselbe Zelle als Verdacht offen.
+- Ursache: offen; nicht im Wechsel bestätigt.
+- Vorschlag: Mit `window_bench.py` im Wechsel alt/neu nachmessen; bestätigt es sich, die Statuszeile vor der Auswertung setzen.
+- Wirkung beim Kunden: Nach dem Klick sieht der Kunde eine Drittelsekunde lang nichts.
+- Stand: offen RM-812
+
+### FD-251 Der Schlusslauf liefert Zoll- und Dunkelbilder nicht für jede Zeile, die Prüfpunkt 9 verlangt
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `command:edit.auto_split`, `create_seal`, `finding.action:calibrate_material`, `finding.action:mesh_and_retry`, `finding.action:open_print_settings`, `hollow_object`, `report`, `report.action`, `split_line`, `tool:analysis`, `tool:layers`, `Bearbeiten/Material kalibrieren …`, `filament.picker`, `paint_slot`, `countersink_hole`
+- Prüfpunkt: 9
+- Beleg: L4: Zollbilder gibt es nur für die Funktionsfälle 004 (`resize_hole`), 005 (`place_on_bed`) und 006 (*Parameter anlegen*), dunkle Bilder in D8 nur Fall 020 (Karte), kein dunkles Dialog- und Leistenbild in D8; die Sprachflächenzeilen mit Längen haben kein Zollbild. Prüfpunkt 9 bleibt deshalb an den fünfzehn genannten Zeilen offen (Urteile aller drei Prüfer); FD-176 ist nativ nur in L2 an `c5666931d` belegt (Fall 026), nicht in L4. Schwere: Prüfer 1a und 1b leicht, Prüfer 2 mittel; mittel, weil der Mangel Prüfpunkt 9 an fünfzehn Zeilen in D4, D8 und D10 offen hält. Prüfer 1a Punkt 14, Prüfer 1b Punkt 8, Prüfer 2 NP-3.
+- Ursache: Die Varianten Zoll und dunkel laufen nur an wenigen Funktionsfällen, nicht an den Sprachflächen.
+- Vorschlag: Je Zeile mit Längen eine Zollvariante, je Dialogart (Dialog, Leiste, Karte) und Paket ein dunkles Bild; Wächter in der Fallplanung, dass jede Zeile mit Längen ein Zollbild bekommt.
+- Wirkung beim Kunden: Kein Produktfehler belegt; ob Längen in Zoll und Texte im dunklen Thema an diesen Zeilen stimmen, ist am Lauf nicht gezeigt.
+- Stand: offen RM-812
+
+### FD-252 Das Nachher-Bild am Vorhersagetor entsteht vor dem Ende der Rechnung
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:decimate_and_retry`, `finding.action:release_protection`, `finding.action:split_model`, `finding.action:use_reachable`, `finding.action:recognize_fully`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028: `cases/028/v4-nachher-de-finding.action_decimate_and_retry-b26f29a8.png` (`4fe0da57091b`, „Wird neu berechnet …“, „Kanten verfeinern · 67 %“), `cases/028/v4-nachher-de-finding.action_release_protection-34d13d85.png` (`d91b4b75290c`, „Ausrichtung suchen · 16 %“), `cases/028/v4-nachher-de-finding.action_split_model-d08d0a7a.png` (`f8e246f4724e`, „16 %“), `cases/028/v4-nachher-de-finding.action_use_reachable-2bfea7f0.png` (`0397123d3791`, „Kanten verfeinern · 50 %“), `cases/028/v4-nachher-de-finding.action_recognize_fully-eaf62b33-dialog.png` (`aa6bcf1c06ba`, „Merkmale erkennen · 0 %“); V4 ist dort nicht urteilbar. Prüfer 1a Punkt B1, Prüfer 2 NP-28. Zwilling von FD-240 (Vorher-Bild).
+- Ursache: offen; naheliegend wartet das Tor nach dem Klick eine feste Frist (im Protokoll „keine Wirkung binnen 2 s“), nicht bis die Auswertung ruht.
+- Vorschlag: Nach dem Klick bis zum Leerlauf der Auswertung warten (wie `wait_for_idle`), mit Obergrenze; Test mit verzögerter Auswertung.
+- Wirkung beim Kunden: Kein Produktfehler belegt; an fünf Toren ist die Wirkung der Handlung nicht im Bild.
+- Stand: offen RM-812
+
+### FD-253 Das Vorhersagetor nennt den Knopf nicht, den es klickt
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:change_step`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_change_step-b0dccb5d-dialog.png` (`b53be4ec509f`): geklickt wurde „Andere Kanten wählen“ (`028/surfaces/finding.action_change_step-b0dccb5d.json#steps`), die gebundene Vorhersage beschreibt „Eingabe korrigieren“; beide Knöpfe stehen am selben Befund untereinander, `028/v4/finding.action_change_step-b0dccb5d/ready.json` trägt keinen Knopftext. Schwere: Prüfer 1a leicht, Prüfer 2 mittel; mittel, weil jede Zeile mit zwei Knöpfen am selben Befund so für den Nachbarknopf vorhergesagt werden kann. Prüfer 1a Punkt B2, Prüfer 2 NP-26.
+- Ursache: `ready.json` nennt das Ziel nur als Kennung (`finding.action:change_step`), nicht mit sichtbarem Text und Rechteck des Knopfs.
+- Vorschlag: `ready.json` trägt Text und Rechteck des Zielknopfs, das Vorher-Bild markiert ihn; Test mit zwei Knöpfen an einem Befund.
+- Wirkung beim Kunden: Kein Produktfehler; V4 beurteilt an dieser Zeile eine Vorhersage für den Nachbarknopf.
+- Stand: offen RM-812
+
+### FD-254 *Andere Objekte wählen* öffnet weder den Schritt noch eine Wahl
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:change_selection`
+- Prüfpunkt: V4, V5
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_change_selection-9fd7dccb.png` (`ca951a53fb35`, selbst angesehen): Nach dem Klick am Befund „Dieses Objekt trägt keine Farbinformation.“ steht im Verlauf unter „2 Textur in Filamente umrechnen“ eine Zeile „Textur in Filamente umrechnen“ ohne Nummer, der Dateiname „ohne_farbe.netz“ trägt „*“; Warnung, Auswahl und Quader bleiben, weder Schritt noch Objektwahl öffnen sich, und kein Satz sagt, was zu wählen ist. Prüfer 1a Punkt B3, Prüfer 2 NP-25.
+- Ursache: offen; naheliegend nach FD-165: Der Handler gibt dem Schritt die im Baum markierten Körper, hier denselben Quader, und das ergibt einen Verlaufseintrag ohne Wirkung.
+- Vorschlag: Die Handlung öffnet die Objektwahl des Schritts oder sagt, welche Objekte zu wählen sind, und legt ohne neue Wahl keinen Eintrag an; Test an der Szene des Falls mit der Wirkung im Verlauf.
+- Wirkung beim Kunden: Der Kunde folgt dem angebotenen Weg und sieht nichts geschehen, bekommt aber einen Verlaufseintrag und ein ungespeichertes Projekt.
+- Stand: offen RM-812
+
+### FD-255 *Eingabe korrigieren* setzt den Fokus ins Feld, markiert den Wert aber nicht
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `finding.action:correct_input`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_correct_input-9a5b98d1-dialog.png` (`c2cdc321cf4b`): Fokus im Radiusfeld, die Schreibmarke steht vor „40,00 mm“, der Wert ist nicht markiert. Prüfer 1a Punkt B4.
+- Ursache: offen; der Sprung ins Feld aus FD-95 setzt den Fokus, markiert aber nicht.
+- Vorschlag: Beim Sprung ins Feld den Wert markieren wie beim ersten Fokus von *Objekt umbenennen* (FD-114); Test am markierten Text.
+- Wirkung beim Kunden: Wer den Wert ersetzen will, tippt ihn vor die alte Zahl.
+- Stand: offen RM-812
+
+### FD-256 Befundhandlungen, die erst einen Dialog öffnen, kündigen eine Sofortwirkung an
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `finding.action:give_thickness`, `finding.action:resize_the_widening`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_give_thickness-0921d5a7-dialog.png` (`9b2e4e368f8b`): Satz „Macht aus der Fläche eine Wand …“, der Klick öffnet *Offene Fläche schließen*; `cases/028/v4-nachher-de-finding.action_resize_the_widening-4632a298-dialog.png` (`be21db2519b6`): „Ändert die Senkung im selben Verhältnis …“, der Klick öffnet den Merkmalsdialog mit 11,30 mm; beide gebundenen Vorhersagen erwarteten die Sofortwirkung. Keine dieser Handlungen trägt „…“, ebenso *Dreiecke verringern*, *Material kalibrieren*, *Als 3MF speichern* und *Anderes Druckerprofil wählen*, während das Menü „…“ schreibt. Prüfer 1a Punkt B5, Prüfer 2 NP-29. Der andere Name im Dialog ist FD-112, dort über den ersten Satz behoben.
+- Ursache: offen; Knopftext und Wirkungssatz der Befundhandlungen sagen nicht, dass ein Dialog folgt.
+- Vorschlag: „…“ an jede Befundhandlung, die erst einen Dialog öffnet, wie im Menü, und der Wirkungssatz nennt den Dialog; Wächter über die Befundhandlungen (`panels.FINDING_ACTIONS`).
+- Wirkung beim Kunden: Der Kunde erwartet die Lösung mit dem Klick und steht vor einem Dialog.
+- Stand: offen RM-812
+
+### FD-257 *Zusätzliche Programme …* führt OpenCASCADE nicht, das der Befund verlangt
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:install`
+- Prüfpunkt: V4, V5
+- Beleg: L5, Fall 040 `cases/040/v4-nachher-de-finding.action_install-e8be80b0-dialog.png` (`e66aaf34c460`): Der Befund sagt „Fasen, Verrundungen und STEP brauchen das Zusatzpaket OpenCASCADE …“, das Fenster („Keines davon ist Pflicht …“) listet nur Slicer, Ollama und ComfyUI. Prüfer 1a Punkt B6, Prüfer 2 NP-30.
+- Ursache: offen; das Fenster der zusätzlichen Programme führt den exakten Kern nicht.
+- Vorschlag: OpenCASCADE im Fenster mit Zustand und Weg zur Einrichtung führen oder die Handlung auf den Weg stellen, der den Kern einrichtet; Test, dass die Handlung des Befunds dorthin führt.
+- Wirkung beim Kunden: Der Kunde folgt der Handlung und findet das verlangte Paket nicht; Fase, Verrundung und STEP bleiben gesperrt.
+- Stand: offen RM-812
+
+### FD-258 *Flächenbearbeitung beenden und erneut versuchen* rundet die Innenkante nicht und hinterlässt einen Splitter
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:mesh_and_retry`
+- Prüfpunkt: V4, V5
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_mesh_and_retry-889d8f0d.png` (`aa14da702c36`): eingefügt ist „4 Flächenbearbeitung beenden“ vor „5 Verrunden“, die Innenkante an der Stufe bleibt unverrundet mit Zacke, der Bericht sagt weiter „Einige Kanten dieser Auswahl sind nicht verrundet …“ und neu „Die dünnste Stelle ist schmaler als eine Bahn … Breite: 0,03 mm“. Prüfer 1a Punkt B7, Prüfer 2 NP-31.
+- Ursache: offen; ob die Netzrundung an der Innenkante den Splitter erzeugt, ist nicht eingegrenzt.
+- Vorschlag: Den Fall als Geometrietest fahren und eingrenzen; der Befund bietet die Handlung nur an, wenn sie die Kante rundet.
+- Wirkung beim Kunden: Die angebotene Lösung löst den Befund nicht und legt eine neue dünne Stelle an; der Bericht warnt davor.
+- Stand: offen RM-812
+
+### FD-259 *In Flächen und Kanten umwandeln* endet hinter einem Halt in einer Absage mit derselben Handlung
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:mesh_to_exact`
+- Prüfpunkt: 7, V4, V5
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_mesh_to_exact-ef335aaf-dialog.png` (`ff980fa562f3`): Statt die Umwandlung vor „2 Aushöhlen“ einzufügen, öffnet der Klick „Die Kette hält an — ein neuer Schritt dahinter würde nicht gerechnet. Angehalten ist Schritt 2 (Aushöhlen) …“, und die Meldung bietet wieder „In Flächen und Kanten umwandeln“ an; Verlauf und Fehler bleiben. Prüfer 1a Punkt B8, Prüfer 2 NP-32. Rest zu FD-104, dessen drei Fixe im Laufkopf liegen.
+- Ursache: offen; die Wege des haltenden Befunds aus FD-104 greifen an dieser Handlung nicht, sie wird angeboten, und erst der Haltweg der Sitzung sagt ab.
+- Vorschlag: Die Handlung vor dem Halt einfügen wie *Reparieren und erneut versuchen*, sonst grau mit dem Halt als Grund; eine Absage bietet nie die Handlung an, die sie gerade abgelehnt hat; Test an der Szene des Falls.
+- Wirkung beim Kunden: Der Kunde klickt die Lösung, bekommt eine Absage und darin denselben Knopf.
+- Stand: offen RM-812
+
+### FD-260 *Alle Merkmale erkennen* fragt nach dem Laden eines Modells, das schon geladen ist
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `finding.action:recognize_fully`
+- Prüfpunkt: V4, E6
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_recognize_fully-eaf62b33-dialog.png` (`aa6bcf1c06ba`): Die Erkennung läuft schon („Merkmale erkennen · 0 %“), zugleich steht die Frage „„dichte_platte“ hat 1,5 Millionen Dreiecke …“ mit *Sofort laden*, *Mit Merkmalserkennung laden* und *Abbrechen* und dem Verweis auf denselben Knopf. Schwere: Prüfer 1a leicht, Prüfer 2 mittel; mittel, weil die Frage außerhalb der Ausnahme von Regel 19 steht, die nur beim Import gilt. Prüfer 1a Punkt B9, Prüfer 2 NP-33.
+- Ursache: offen; die Handlung nimmt offenbar den Weg der Importfrage (§21.1).
+- Vorschlag: Am geladenen Modell ohne Frage erkennen, weil der Kunde die Vollerkennung gerade gewählt hat; Test, dass die Handlung keine Ladefrage öffnet.
+- Wirkung beim Kunden: Der Kunde liest eine Frage zum Laden, die nicht zu seinem Klick passt, während die Erkennung schon läuft.
+- Stand: offen RM-812
+
+### FD-261 *Verlauf zeigen* markiert den Schritt nicht, um den es geht
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `finding.action:show_history`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_show_history-2450017e.png` (`eb0fa89e368c`): nur ein Fokusrahmen um den Verlauf, der erzeugende Schritt „2 Bohrung setzen“ ist weder markiert noch geöffnet. Prüfer 1a Punkt B10, Prüfer 2 NP-36.
+- Ursache: offen.
+- Vorschlag: Den Schritt wählen, der die Stelle erzeugt hat, und in den Blick rollen; Test über die gewählte Verlaufszeile.
+- Wirkung beim Kunden: Der Kunde sucht im Verlauf selbst, welcher Schritt gemeint ist.
+- Stand: offen RM-812
+
+### FD-262 *Stellen zeigen* nimmt die Markierung weg, statt die Stellen zu zeigen
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:show_locations`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_show_locations-4834ad7f.png` (`a6e5ca5fed5e`): Kreis und Satz „Das Modell ist nicht geschlossen.“ an der offenen Ecke verschwinden, nichts wird hervorgehoben, die Kamera bleibt. Schwere: Prüfer 1a leicht, Prüfer 2 mittel; mittel, weil die Handlung das Gegenteil ihres Namens tut. Prüfer 1a Punkt B11, Prüfer 2 NP-38.
+- Ursache: offen.
+- Vorschlag: Alle offenen Ränder markieren und die Ansicht auf ihre Hülle fahren; Test, dass die Markierung danach da ist.
+- Wirkung beim Kunden: Wer die Stellen sehen will, verliert die eine, die er schon sah.
+- Stand: offen RM-812
+
+### FD-263 *Stützbedarf zeigen* lässt die überhängende Unterseite außer Sicht
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `finding.action:show_support_need`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_show_support_need-0e6754f5.png` (`ee04797f59d4`): Die Karte *Stützbedarf* geht an (Legende 0,00 bis 8,00 mm), die Kamera bleibt oben, alle sichtbaren Flächen zeigen 0,00 mm, der Kreis zur Stelle verschwindet. Prüfer 1a Punkt B12, Prüfer 2 NP-39.
+- Ursache: offen.
+- Vorschlag: Mit der Karte die Ansicht auf die betroffene Unterseite drehen; Test, dass die Stelle danach im Bild liegt.
+- Wirkung beim Kunden: Der Kunde sieht eine Karte ohne Stützbedarf, obwohl der Befund ihn meldet.
+- Stand: offen RM-812
+
+### FD-264 Der Objektbaum wächst mit neuen Zeilen nicht mit
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `split_line`, `hollow_object`
+- Prüfpunkt: 9
+- Beleg: L5, Fall 006 `cases/006/v4-nachher.png` (`0d3548bc193d`): Nach *An gezeichneter Linie teilen* zeigt der Baum nur „Quader A · Stifte 40 × 30 × 15,4 mm“, „Quader B · Löcher“ fehlt ohne Rollleiste, obwohl die Ansicht beide Hälften zeigt; Fall 003 `cases/003/v4-nachher.png` (`05c7c9d75b91`): nach *Aushöhlen* ist die Zeile „Kammer 26,00 × 26,00 × 18,00 mm“ unten halb abgeschnitten. An `split_line` hält der Fund auch V4 offen (beide Prüfer); an `hollow_object` trifft die Vorhersage, V4 ist dort gut. Schwere: Prüfer 1a und Prüfer 2 (NP-40) mittel, NP-41 leicht; mittel, weil ein Körper im Baum fehlt. Prüfer 1a Punkt B13, Prüfer 2 NP-40 und NP-41.
+- Ursache: offen; ob die Höhe des Baums nach neuen Zeilen nicht nachgeführt wird oder die zweite Hälfte verspätet erscheint, ist nicht eingegrenzt; Zwilling von FD-25 (Mindesthöhe aus den vorhandenen Zeilen).
+- Vorschlag: Die Höhe des Baums nach jeder Änderung der Zeilen bis zur Grenze der Karte nachführen, darüber eine Rollleiste; Test am Baum nach *An gezeichneter Linie teilen* und *Aushöhlen*.
+- Wirkung beim Kunden: Nach dem Teilen fehlt eine Hälfte im Objektbaum; der Kunde kann sie dort weder wählen noch umbenennen und sieht nicht, dass es mehr Zeilen gibt.
+- Stand: offen RM-812
+
+### FD-265 Stufe A übersieht den Knopf unter der Namensabsage von *Parameter anlegen*
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `Bearbeiten/Parameter anlegen …`
+- Prüfpunkt: 2, 7, E7, V5
+- Beleg: L4, Fall 003 `cases/003/04-fehlfall-dialog.png` (`fd8f753cef51`): Unter „Der Name muss sich in einem Ausdruck als @name schreiben lassen …“ steht der Knopf „„breite_aussen“ verwenden“ (Fix von FD-155), `003/function.json#messages[0]` führt `actions: []`; P2, P7, E7 und V5 der Zeile stehen deshalb als Fund. Prüfer 1b Punkt 1, Prüfer 2 NP-4.
+- Ursache: Die Messung liest Knöpfe unter einer Feldabsage nicht als Handlung der Meldung.
+- Vorschlag: Knöpfe unter einer Feldabsage als Handlung der Meldung lesen und im Fehlfall klicken; Gegenfall eine Absage ohne Knopf.
+- Wirkung beim Kunden: Kein Produktfehler; vier Zellen bleiben offen, und die Wirkung des Knopfs ist am Lauf nicht belegt.
+- Stand: offen RM-812
+
+### FD-266 *Anlegen* in *Parameter anlegen* hebt sich beim Überfahren nicht ab
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `Bearbeiten/Parameter anlegen …`
+- Prüfpunkt: G5
+- Beleg: L4, Fall 003 `cases/003/02-flaeche-dialog.png` (`c39599b22eb0`), `003/function.json#state_images`: Ruhe und Überfahren beide `1c998130f6ff3436`. Prüfer 1b Punkt 2.
+- Ursache: offen.
+- Vorschlag: Den Hauptknopf beim Überfahren abheben wie in den Operationsdialogen; Bildvergleich Ruhe gegen Überfahren als Test.
+- Wirkung beim Kunden: Der Knopf antwortet nicht auf die Maus und wirkt wie gesperrt.
+- Stand: offen RM-812
+
+### FD-267 Mindestwand und Überhangwinkel in *Material kalibrieren* erklären sich mit dem Satz ihres Hakens
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`
+- Prüfpunkt: 8, V3
+- Beleg: L4, Fall 034 `cases/034/flaeche-de-Bearbeiten_Material_kalibrieren-139aa900-dialog.png` (`206add009634`), `034…039/surfaces/Bearbeiten_Material_kalibrieren-139aa900.json#fields`: Zahlenfeld und Haken beider Werte tragen „Nur aktivieren, wenn Sie die Probe gedruckt und geprüft haben. Der Überhangwinkel wird von der Senkrechten aus gemessen. …“; was die Mindestwand ist, sagt kein Satz, in sechs Sprachen. Prüfer 1b Punkt 3, Prüfer 2 NP-2.
+- Ursache: offen; die Zahlenfelder der Rückseite übernehmen den Satz des Hakens, der ihren Wert übernimmt.
+- Vorschlag: Je Zahlenfeld ein eigener Satz, der Satz zum Aktivieren nur am Haken; Test, dass kein Feld den Satz seines Hakens trägt.
+- Wirkung beim Kunden: Der Kunde liest am Feld *Mindestwand* einen Satz über den Überhangwinkel.
+- Stand: offen RM-812
+
+### FD-268 *Filament und Druck* beginnt nach einer Auswahl zugeklappt
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `assign_slot`, `clear_filament`, `filament.picker`, `paint_slot`
+- Prüfpunkt: Z3
+- Beleg: L4, Fall 034 `cases/034/flaeche-de-filament.picker-0afd58ad.png` (`798d03aec872`), `034/surfaces/{assign_slot-bd965763,clear_filament-a6b075a9,filament.picker-0afd58ad,paint_slot-9865a109}.json#steps`: je ein Schritt `why: klappe` zwischen Auswahl und Filamentfeld; Stufe A Z3 Fund. Prüfer 1b Punkt 4. Rest zu FD-19: Die Klappe steht seit dessen Fix direkt unter den Hauptaktionen, beginnt aber zu.
+- Ursache: offen; die Klappe beginnt auch nach dem Fix von FD-19 geschlossen.
+- Vorschlag: Bei gewähltem Körper oder gewählter Fläche offen zeigen, solange kein Filament zugewiesen ist, oder das Filamentfeld in den Kopf der Klappe holen; Test mit Z3 an den vier Zeilen.
+- Wirkung beim Kunden: Für eine Farbzuweisung braucht der Kunde nach jeder Auswahl einen Klick mehr.
+- Stand: offen RM-812
+
+### FD-269 Die Liste in *Als Muster zusammenfassen* heißt „Zellen“, übersetzt klein
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `group_pattern`
+- Prüfpunkt: V1
+- Beleg: L4, Fall 046 `cases/046/flaeche-de-group_pattern-5f312f3f-dialog.png` (`49a196faf688`), `047…051/surfaces/group_pattern-5f312f3f.json#texts`: „cells“, „celdas“, „cellules“, „celle“, „células“ klein wie ein roher Schlüssel; das Wort hat am Ort keinen Satz (FD-95 selbst ist behoben). Prüfer 1b Punkt 9. Zwilling von FD-98.
+- Ursache: Der Feldtitel „Zellen“ (`app/core/perceive/ops.py:180`) teilt den Katalogschlüssel mit dem Wertenamen `cells` in `app/ui/labels.py`, und die Kataloge übersetzen ihn klein.
+- Vorschlag: Die Beschriftung „Merkmale“ wie in *Merkmal vervielfachen*, oder ein eigener Schlüssel mit Kontext für den Feldtitel, groß in allen Katalogen.
+- Wirkung beim Kunden: Ein Feldtitel in Kleinschrift mit einem Wort, das der Kunde an dieser Stelle nicht kennt.
+- Stand: offen RM-812
+
+### FD-270 Die Kurzhilfe in *Bohrung verschließen* zeigt Markdown-Sterne
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `plug_hole`
+- Prüfpunkt: 8
+- Beleg: L4, Fall 046 `cases/046/flaeche-de-plug_hole-5b6be594-dialog.png` (`f053b3c7d60e`), `046/surfaces/plug_hole-5b6be594.json#fields` am Haken *Druckabweichung ausgleichen*: „Füllt so weit, wie *Bohrung setzen* mit derselben Einstellung schneidet — …“ mit Sternen. Prüfer 1b Punkt 10.
+- Ursache: Der Satz in `app/core/geom/prepare_ops.py:19996` setzt den Operationstitel in Sterne, und die Kurzhilfe zeigt sie roh.
+- Vorschlag: Anführungszeichen statt Sternen in diesem und gleich gebauten Feldsätzen, die Kataloge nachziehen; Wächter, dass kein Feldsatz `*` trägt.
+- Wirkung beim Kunden: Der Kunde liest Sternchen im Text.
+- Stand: offen RM-812
+
+### FD-271 Graue Knöpfe an der Maßgruppe von *Bohrung ändern* nennen keinen Sperrgrund mit Ausweg
+
+- Art: Verständlichkeit
+- Schwere: mittel
+- Funktion: `resize_hole`
+- Prüfpunkt: 2, 7, E7, V5
+- Beleg: L4, Fall 001 `cases/001/02-flaeche.png` (`79da8c3a08a2`) und `cases/001/04-fehlfall.png` (`77fc234c7bd3`), `001/function.json#messages`: *Merkmal entfernen* ist grau, solange die Maßgruppe offen ist, und nennt als Grund die Beschreibung „Entfernt ein erkanntes Merkmal: …“; im Fehlfall (0,10 mm) ist *Übernehmen* grau mit „Bohrung ändern“ als Grund. Stufe A Fund an P2, P7, E7 und V5, obwohl FD-31, FD-36, FD-99 und FD-227 behoben sind. Prüfer 1b Punkt 12, Prüfer 2 NP-11; die Statuszeile, die die Absage wiederholt, ist FD-88.
+- Ursache: offen; Zwilling von FD-27 (graue Befundhandlung mit Nebenwirkung statt Sperrgrund) an Merkmalfenster und Maßgruppe.
+- Vorschlag: Sperrgründe mit Ausweg aus der Lage ableiten („Erst „Abbrechen“, dann entfernen“, „Erst einen Durchmesser ab 0,20 mm eingeben“); Test an beiden grauen Knöpfen.
+- Wirkung beim Kunden: Der Kunde sieht zwei graue Knöpfe und erfährt nicht, wie er sie freibekommt.
+- Stand: offen RM-812
+
+### FD-272 Die Rückmeldung von *Bohrung ändern* kommt am Schlusslauf zu spät
+
+- Art: Leistung
+- Schwere: mittel
+- Funktion: `resize_hole`
+- Prüfpunkt: 6
+- Beleg: L4, Fall 001 `cases/001/03-uebernommen.png` (`f8b4a09d6d54`), `001/function.json#timing`: größte Lücke im Hauptfaden 154 ms (erlaubt 100), Zeiger oder Statuszeile nach 0,50 s (fällig ab 0,2 s), obwohl FD-33 und FD-216 behoben sind; unter Last gemessen, Verdacht. Prüfer 1b Punkt 13, Prüfer 2 NP-10.
+- Ursache: offen; nicht im Wechsel bestätigt.
+- Vorschlag: Mit `window_bench.py` im Wechsel alt/neu nachmessen; bestätigt sich die Lücke, die teure Stelle im Übernehmen der Maßgruppe suchen.
+- Wirkung beim Kunden: Nach *Übernehmen* steht das Fenster eine halbe Sekunde ohne Antwort.
+- Stand: offen RM-812
+
+### FD-273 G3 misst Haken und Klappe der Maßgruppe gegen die Feldspalte
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: G3
+- Beleg: L4, Fall 001 `cases/001/02-flaeche.png` (`79da8c3a08a2`), `001/function.json#layout` mit `field_edges [0, 0, 104, 104, 0]`: Durchmesser und Tiefe stehen auf einer Kante, die Kante 0 gehört zur Klappe *Weitere Werte* und zum Haken „Auf alle 4 …“; Stufe A meldet „Felder in MeasureCard nicht bündig“. Prüfer 1b Punkt 14 (Gestaltung oder Kriterium), Prüfer 2 NP-12 (Prüfstand).
+- Ursache: offen; zu entscheiden, ob der Haken in die Feldspalte gehört oder G3 nur beschriftete Felder eines Formulars vergleicht.
+- Vorschlag: G3 vergleicht nur Felder mit Beschriftung, ganze Zeilen wie Haken und Klappe zählen nicht; gehört der Haken in die Spalte, ihn dorthin setzen.
+- Wirkung beim Kunden: Kein Produktfehler belegt; ein G3-Fund steht an einer Fläche, die im Bild bündig ist.
+- Stand: offen RM-812
+
+### FD-274 Bohrung und Fläche tragen beim Überfahren keine Beschriftung
+
+- Art: Gestaltung
+- Schwere: mittel
+- Funktion: `resize_hole`
+- Prüfpunkt: I1
+- Beleg: L4, Fall 001 `cases/001/02-flaeche.png` (`79da8c3a08a2`), `001/function.json#hover_labels`: `hole` und `face` mit leerem Text; Stufe A I1 Fund. Prüfer 1b Punkt 15: mittel als Bauplanzusage (§18.5), falls bestätigt.
+- Ursache: offen; ob der Name beim Überfahren fehlt oder der Prüfstand ihn nicht liest, ist nicht nachgestellt.
+- Vorschlag: Am echten Fenster nachstellen; fehlt die Beschriftung, Name und Maß beim Überfahren wie „Oberseite · 400 mm²“ an *Auf das Bett setzen* auch an Bohrung und Fläche, sonst die Lesung des Prüfstands beheben.
+- Wirkung beim Kunden: Der Kunde erfährt beim Überfahren nicht, was er gleich anklickt.
+- Stand: offen RM-812
+
+### FD-275 Z1 findet an *Bohrung ändern* keinen Griff, obwohl Griffe im Bild stehen
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: Z1
+- Beleg: L4, Fall 022 `cases/022/flaeche-bewegung.png` (`15321aedd914`) und Fall 001 `cases/001/02-flaeche.png` (`79da8c3a08a2`): Knöpfe am Ring, Durchmessergriffe, Lagepfeile und die L-Griffe der Kantenmaße; `001/function.json#unmeasured` sagt „kein Griff an dieser Zeile“. Prüfer 1b Punkt 16, Prüfer 2 NP-13. Gegenstück zu FD-283.
+- Ursache: Die Zeile nennt kein `handle:`-Ziel.
+- Vorschlag: Den Durchmessergriff als `handle:`-Ziel der Zeile ziehen und den Bildverzug messen.
+- Wirkung beim Kunden: Kein Produktfehler; Z1 bleibt an der Zeile mit den meisten Griffen ungemessen.
+- Stand: offen RM-812
+
+### FD-276 An *Senken* nimmt die Sprachfläche kein Vorschauband auf
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `countersink_hole`
+- Prüfpunkt: I2
+- Beleg: L4, Fall 046 `cases/046/flaeche-de-countersink_hole-4a325b8d.png` (`49aa609ee908`), `046/surfaces/countersink_hole-4a325b8d.json` ohne `preview`; I2 bleibt offen. Prüfer 1b Punkt 17.
+- Ursache: offen; der Sprachfall nimmt den Bandtext nicht an jeder Operation mit Vorschau auf.
+- Vorschlag: Den Bandtext an Sprachflächen jeder Operation mit Vorschau aufnehmen; Wächter, dass eine Fläche mit Vorschau `preview` trägt.
+- Wirkung beim Kunden: Kein Produktfehler; die Druckfolge im Band ist an *Senken* nicht belegt.
+- Stand: offen RM-812
+
+### FD-277 *Material kalibrieren* lässt kein Material wählen und sagt nicht, wie man ein anderes kalibriert
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 009 `cases/009/v4-nachher-dialog.png` (`206add009634`): Der Dialog kalibriert fest das Material des Projekts („PETG — noch nicht kalibriert“), ohne Wahl und ohne Satz zum Weg; beide gebundenen Vorhersagen erwarteten eine Wahl. Prüfer 1b Punkt 18, Prüfer 2 NP-23.
+- Ursache: offen; der Dialog nimmt das Material des Projekts.
+- Vorschlag: Das Material im Kopf als Wähler oder ein Satz mit dem Weg zu einem anderen Material; Test, dass der Dialog ein zweites Material kalibrieren lässt oder den Weg nennt.
+- Wirkung beim Kunden: Wer ein zweites Filament kalibrieren will, findet den Weg nicht.
+- Stand: offen RM-812
+
+### FD-278 Die Maßgruppe von *Bohrung ändern* bleibt nach *Übernehmen* offen
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 005 `cases/005/v4-nachher.png` (`c6fdfef27112`): Nach dem Klick stehen weiter „Bohrung ändern“ und 8,00 mm, nur *Übernehmen* ist grau; die Geometrie trifft (Ø8, Schritt 2). Beide gebundenen Vorhersagen erwarteten, dass die Gruppe schließt. Prüfer 1b Punkt 19, Prüfer 2 NP-24.
+- Ursache: offen; zu entscheiden, ob die Gruppe nach dem Übernehmen für weitere Änderungen offen bleiben soll.
+- Vorschlag: Nach erfolgreichem Übernehmen schließen oder in der Gruppe sichtbar „übernommen“ sagen; Test am Zustand danach.
+- Wirkung beim Kunden: Der Kunde sieht nach dem Übernehmen dieselbe Gruppe und weiß nicht, ob seine Änderung angekommen ist.
+- Stand: offen RM-812
+
+### FD-279 Nach dem Senken zeigen *Merkmal drehen* und *Merkmal verdoppeln* andere Ausgangswerte
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `rotate_feature`, `duplicate_feature`
+- Prüfpunkt: 4
+- Beleg: L5, Fall 001: `cases/001/v4-vorher.png` (`49aa609ee908`) zeigt „Merkmal drehen x · 90,00 °“, `cases/001/v4-nachher.png` (`1ebca94ae648`) an „Bohrung 1 mit Senkung“ „x · 44,00 °“ und „Merkmal verdoppeln X 15,00 mm“ statt 7,80 mm. Prüfer 1b Punkt 20 (zu prüfen).
+- Ursache: offen; ob die Erkennung die Achse der gesenkten Bohrung anders liest oder die Vorgaben aus der Senkung rechnen, ist nicht geprüft.
+- Vorschlag: Die Vorgabewerte der Merkmalzeilen an einer gesenkten Bohrung nachrechnen und mit einem Test gegen die Achse aus dem Kern festhalten.
+- Wirkung beim Kunden: Der Kunde liest an derselben Bohrung nach dem Senken einen Winkel und einen Abstand, die nicht zu ihr passen.
+- Stand: offen RM-812
+
+### FD-280 Im französischen Leersatz des Objektbaums steht « allein am Zeilenende
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`
+- Prüfpunkt: 9
+- Beleg: L4, Fall 037 `cases/037/flaeche-fr-Bearbeiten_Material_kalibrieren-139aa900.png` (`310317de5ffe`): Im Leersatz des Objektbaums steht das öffnende « am Zeilenende, „Insérer un modèle »“ beginnt die nächste Zeile; so an jeder französischen Fläche mit leerem Baum. Prüfer 2 NP-1.
+- Ursache: Der fr-Katalog setzt innerhalb der Guillemets gewöhnliche Leerzeichen.
+- Vorschlag: Geschützte Leerzeichen (U+00A0 beziehungsweise U+202F) innerhalb der Guillemets im ganzen fr-Katalog; Wächter über den Katalog.
+- Wirkung beim Kunden: Französische Kunden lesen ein verwaistes Anführungszeichen.
+- Stand: offen RM-812
+
+### FD-281 Die Namensabsage nennt „Buchstaben“, lehnt aber Umlaute ab
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `Bearbeiten/Parameter anlegen …`
+- Prüfpunkt: V5
+- Beleg: `app/ui/parameter_dialog.py:500` „… — Buchstaben, Ziffern und Unterstriche.“; die Sonde von Prüfer 2 (`F:\tmp-suche\nachurteil-pruefer2-claude\skripte\name_sonde.py`) am Laufkopf: „breite_außen“ und „höhe“ abgelehnt, der Vorschlag macht daraus „breite_aussen“. Prüfer 2 NP-5.
+- Ursache: Der Ausdrucksprüfer nimmt nur lateinische Buchstaben ohne Umlaute, der Satz sagt „Buchstaben“.
+- Vorschlag: „… lateinische Buchstaben ohne Umlaute, Ziffern und Unterstriche“ in allen Sprachen, oder Umlaute in Namen zulassen.
+- Wirkung beim Kunden: Wer „höhe“ tippt, liest „Buchstaben“ und versteht die Absage nicht.
+- Stand: offen RM-812
+
+### FD-282 Bei 125 % ist der Filamentpunkt im Objektbaum eckig abgeschnitten
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `Bearbeiten/Parameter anlegen …`, `resize_hole`, `finding.action:place_on_bed`
+- Prüfpunkt: Z6
+- Beleg: L4, Fall 016 `cases/016/flaeche-skalierung.png` (`fe15d2f99301`): Der Punkt am Ende der Objektzeile ist eckig, bei 100 % (Fall 015) rund; ebenso Fall 008 (`cases/008/flaeche-skalierung.png`, `550d90ad92c5`, alle Punkte des Baums) und Fall 012 (`cases/012/flaeche-skalierung.png`, `ca14e32ec30a`). Prüfer 2 NP-6.
+- Ursache: offen; vermutlich wird der Punkt bei Teilskalierung vom Zellrechteck beschnitten.
+- Vorschlag: Den Punkt in geräteunabhängigen Pixeln zeichnen und gegen das Zellrechteck bei 125 % und 150 % prüfen.
+- Wirkung beim Kunden: Bei 125 % Skalierung wirken die Farbpunkte im Baum kaputt.
+- Stand: offen RM-812
+
+### FD-283 Z1 hat keinen Grund für *entfällt* an Zeilen ohne Griff
+
+- Art: Aufräumen
+- Schwere: leicht
+- Funktion: keine Zeile: Kriterium Z1 und die geschlossene Liste der Gründe für entfällt
+- Prüfpunkt: Z1
+- Beleg: An Zeilen ohne Griff vermerkt Stufe A „kein Griff an dieser Zeile“ (etwa L4 `cases/002/function.json#unmeasured`); die Liste der Gründe für *entfällt* kennt dafür keinen Eintrag, beide Prüfer halten Z1 dort ohne Messung offen (Prüfer 1a in seiner Lesart, Prüfer 2 NP-7). Gegenstück zu FD-275.
+- Ursache: Die geschlossene Liste kennt keinen Grund „ohne Griff“.
+- Vorschlag: Einen Grund `ohne_griff` in die Liste aufnehmen oder Z1 nur an Zeilen mit Griff in die Spalte nehmen.
+- Wirkung beim Kunden: Kein Produktfehler; Z1-Zellen ohne Zug bleiben offen, obwohl es nichts zu messen gibt.
+- Stand: offen RM-812
+
+### FD-284 *Vor Trennnähten schützen* heißt in fr und es wie die Dichtung
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `paint_slot`
+- Prüfpunkt: 9
+- Beleg: L4, Fälle 037 und 036 `cases/037/flaeche-fr-paint_slot-9865a109.png` (`792014b38950`), `cases/036/flaeche-es-paint_slot-9865a109.png` (`eec47eea1f98`): In der rechten Karte bei gewählter Fläche steht „Protéger des joints“ beziehungsweise „Proteger de las juntas“, dieselbe Karte nennt die Dichtung „Rainure avec joint“ beziehungsweise „Ranura de sellado con junta“. Prüfer 2 NP-8; V1 hielt er nicht offen, weil keine der drei Trefferarten passt.
+- Ursache: `app/i18n/locales/fr.json` und `es.json` übersetzen „Vor Trennnähten schützen“ mit dem Wort der Dichtung.
+- Vorschlag: fr etwa „Protéger des lignes de coupe“, es „Proteger de los cortes“; die übrigen Kataloge auf dieselbe Verwechslung prüfen.
+- Wirkung beim Kunden: Französische und spanische Kunden lesen „vor Dichtungen schützen“.
+- Stand: offen RM-812
+
+### FD-285 Am exakten Körper färbt eine gewählte Bohrung den ganzen Körper
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `countersink_hole`
+- Prüfpunkt: 19
+- Beleg: L4, Fall 046 `cases/046/flaeche-de-countersink_hole-4a325b8d.png` (`49aa609ee908`), gleich in 047–051: Szene `merkmal.hole.exakt`, Bohrung 1 gewählt (Baum und rechte Karte zeigen nur die Bohrung), die Ansicht färbt den ganzen Quader orange, die Bohrungswand ist nicht abgehoben; am Netzkörper (Fall 001) ist nur die Bohrung hervorgehoben. Prüfer 2 NP-9.
+- Ursache: offen.
+- Vorschlag: Am exakten Körper nur die Flächen des gewählten Merkmals hervorheben wie am Netz; Test mit Bild hell und dunkel.
+- Wirkung beim Kunden: Der Kunde sieht nicht, welche Bohrung er gewählt hat.
+- Stand: offen RM-812
+
+### FD-286 Das Handbuch sagt, Strg+Z nehme einen Schnitt der automatischen Teilung zurück
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `command:edit.auto_split`
+- Prüfpunkt: 11
+- Beleg: Handbuch am Laufkopf `d9f7a81f9` (`app/core/manual.py:1396`, ebenso `README.md:363`): „Jeder Schnitt ist eine eigene Operation … Strg+Z nimmt einen Schnitt zurück, nicht die ganze Teilung“; dagegen `tests/test_autosplit.py::test_one_undo_restores_a_complete_multi_cut_auto_split`: Eine mehrschnittige automatische Teilung ist eine Transaktion, ein Strg+Z nimmt sie ganz zurück. Prüfer 2 NP-14.
+- Ursache: Der Satz gilt dem Werkzeug *Teilen*, steht aber ohne Einschränkung neben *Automatisch teilen*.
+- Vorschlag: Den Satz auf das Werkzeug beschränken und für *Automatisch teilen* sagen, dass ein Strg+Z die ganze Teilung zurücknimmt, in sechs Sprachen und in der README.
+- Wirkung beim Kunden: Der Kunde erwartet nach Strg+Z einen Schnitt weniger und verliert die ganze Teilung.
+- Stand: offen RM-812
+
+### FD-287 Das Material der Dichtung steht im Dialog schon auf dem Projektmaterial
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `create_seal`
+- Prüfpunkt: 4
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-create_seal-a2b33d5a-dialog.png` (`4c2636931fbd`, selbst angesehen): *Material des Trägers* und *Material der Dichtung* stehen beide auf „PETG“, in allen Sprachen. Im Kern sind beide Rollen Pflicht ohne Vorgabe (`app/core/geom/seal_ops.py`, `body_material` und `gasket_material` mit `default=""`, `required=True`), und `MaterialField` zeigt für eine Pflichtrolle „Materialprofil wählen …“ (`app/ui/op_dialog.py`: „Eine ausdrücklich verlangte Materialrolle darf kein Projektprofil versprechen“); `MainWindow` füllt aber jede leere Materialrolle mit dem Projektmaterial (`app/ui/main_window.py:22262`, „Leere Materialrollen übernehmen die Projektvorgabe“), sodass `_missing_material` nie greift. Prüfer 2 NP-15 (mittel, zu prüfen), am Code bestätigt.
+- Ursache: belegt: Die Vorbelegung in `main_window.py:22262–22266` gilt auch für Pflichtrollen ohne Vorgabe (Regel 21).
+- Vorschlag: Pflichtrollen nicht vorbelegen, der Hauptknopf nennt sie über `_missing_material`; oder ein elastisches Material aus dem Lager als gekennzeichneter Vorschlag. Die Zwillinge mit Pflichtrollen (`create_profile_clamp_set`, `replace_profile_liners`: Material der Schalen und der Einlagen) im selben Zug; Test, dass eine Pflichtrolle leer öffnet.
+- Wirkung beim Kunden: Wer *Dichtnut mit Dichtung* mit den Vorgaben übernimmt, bekommt eine Dichtung aus starrem PETG, die nicht dichtet; die Wahl, die der Kern ausdrücklich verlangt, hat das Fenster ohne Frage vorweggenommen. Der Wert steht sichtbar vorn im Dialog.
+- Stand: offen RM-812
+
+### FD-288 In *Aushöhlen* steht „Keine“ im falschen Geschlecht, und die Liste heißt zugänglich so
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `hollow_object`
+- Prüfpunkt: 9, 10
+- Beleg: L4, Fälle 054–057, etwa `cases/055/flaeche-fr-hollow_object-c4555753-dialog.png` (`a0bfc63bbe85`): „Ninguno“, „Aucun“, „Nessuno“, „Nenhum“ neben „Aberturas“, „Ouvertures“, „Aperture“, „Aberturas“ (weiblich: „Ninguna“, „Aucune“, „Nessuna“, „Nenhuma“), ebenso im Hinweis darunter; `052/surfaces/hollow_object-c4555753.json#fields`: Die Liste trägt den zugänglichen Namen „Keine“ statt „Öffnungen“. Prüfer 2 NP-18.
+- Ursache: Die Kataloge übersetzen „Keine“ ohne Bezug auf „Öffnungen“; woher der zugängliche Name kommt, ist offen.
+- Vorschlag: „Keine“ mit Kontext übersetzen (es, fr, it und pt weiblich) und den zugänglichen Namen der Liste auf den Feldtitel setzen; Wächter wie in FD-94.
+- Wirkung beim Kunden: In vier Sprachen liest der Kunde einen Grammatikfehler, und ein Bildschirmleser nennt das Feld „Keine“.
+- Stand: offen RM-812
+
+### FD-289 Die Startszenen von Analyse, Schichten und Prüfbericht zeigen nicht, was Handbuch und Website versprechen
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `tool:analysis`, `tool:layers`, `report`
+- Prüfpunkt: 11
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-tool_analysis-1fea5198.png` (`1c6f1d581dec`), `cases/052/flaeche-de-tool_layers-04ae8d9d.png` (`511f8d57b33a`), `cases/052/flaeche-de-report-845e9183.png` (`625591c99d71`): Der Quader der Startszene zeigt keine Analysekarte mit Legende (Wähler „Keine Karte“), weder Insel noch Überhang, und der Bericht hat keinen Befund („Bereit zur Übergabe“). Die Versprechen (acht Karten mit Legende und Herkunft; Zahl der Inseln, Überhangfläche, Legende; „Sortiert nach Fehler, Warnung und Hinweis — und Befunde mit einer Ortsangabe zeigen die betroffene Stelle im Modell“) sind an keinem Bild prüfbar. Prüfer 2 NP-20 und NP-21.
+- Ursache: Die Startszene der drei Zeilen hat weder Überhang noch Insel noch Befund.
+- Vorschlag: Eine Szene mit Überhang, Insel und Befunden aller drei Schweren für die drei Zeilen, eine Karte geöffnet; Wächter, dass eine Zeile mit Versprechen eine Szene hat, die es zeigt.
+- Wirkung beim Kunden: Kein Produktfehler belegt; Prüfpunkt 11 bleibt an drei Ansichten ungeprüft.
+- Stand: offen RM-812
+
+### FD-290 Die Schichtanzeige nennt an Schicht 1 keine Zahl der Inseln
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `tool:layers`
+- Prüfpunkt: 11
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-tool_layers-04ae8d9d.png` (`511f8d57b33a`): „Schicht 1/100 · z 0,10 mm · 1200 mm²“ ohne Zahl der Inseln, auch nicht „0“; das Handbuch sagt, die Zahl stehe daneben. Prüfer 2 NP-20 (Zusatz).
+- Ursache: offen; ob die Zahl erst ab einer Insel erscheint oder fehlt, ist nicht geprüft.
+- Vorschlag: Die Zahl der Inseln immer zeigen („0 Inseln“) oder das Handbuch auf „sobald es Inseln gibt“ stellen, in sechs Sprachen.
+- Wirkung beim Kunden: Der Kunde sucht die Zahl, die das Handbuch verspricht.
+- Stand: offen RM-812
+
+### FD-291 Wie Z3 an Ansichtswerkzeugen urteilt, ist nicht festgelegt
+
+- Art: Aufräumen
+- Schwere: leicht
+- Funktion: keine Zeile: Kriterium Z3 an den Ansichtswerkzeugen Analyse und Schichten
+- Prüfpunkt: Z3
+- Beleg: Die Ansichtswerkzeuge haben eine Route über die Baumzeile (Bedingung `koerper:1`), deshalb gilt Z3; ihre Handlung steht aber in der Werkzeugzeile unter der Ansicht, nicht im Reiter *Auswahl*. Beide Prüfer urteilten *gut* (0 Wegklicks, fester Ort), ohne Regel dafür (Prüfer 1a in seiner Lesart, Prüfer 2 NP-22).
+- Ursache: Konzept und Kriterientext nennen den Fall nicht.
+- Vorschlag: Die Auslegung von Z3 für Ansichtswerkzeuge im Konzept festlegen (der feste Ort der Werkzeugzeile zählt als am Objekt) oder die Route ohne Körperwahl führen.
+- Wirkung beim Kunden: Kein Produktfehler; zwei Prüfer könnten dieselbe Zelle verschieden urteilen.
+- Stand: offen RM-812
+
+### FD-292 Bericht und Druckdialog nennen für dieselbe Platte verschiedene Überstände
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `finding.action:choose_printer`
+- Prüfpunkt: 8
+- Beleg: L5, Fall 028 `cases/028/v4-vorher-de-finding.action_choose_printer-2c1a8d33.png` (`3fd178fbe957`): Bericht „Überstand: 72,00 mm“; `cases/028/v4-nachher-de-finding.action_choose_printer-2c1a8d33-dialog.png` (`c31ce8336687`): Druckdialog „144,00 mm zu groß für diesen Drucker“. Prüfer 2 NP-27.
+- Ursache: offen; naheliegend je Seite gegen gesamt gerechnet.
+- Vorschlag: Eine Größe in beiden Texten und sagen, welche gemeint ist (je Seite oder gesamt).
+- Wirkung beim Kunden: Der Kunde liest für dieselbe Platte zwei Zahlen und weiß nicht, um wie viel sie zu groß ist.
+- Stand: offen RM-812
+
+### FD-293 *Sperren aufheben und erneut teilen* hebt die Sperren auf, eine Teilung ist nicht zu sehen
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:release_protection`
+- Prüfpunkt: 4, V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_release_protection-34d13d85.png` (`d91b4b75290c`): „4 Sperren aufgehoben.“, die Leiste 600 × 30 × 20 mm ist weiter ein Stück, beide Warnungen bleiben, der Verlauf hat einen Schritt, die Statusleiste rechnet „Ausrichtung suchen · 16 %“. Ob die Handlung danach teilt, zeigt das Bild nicht (FD-252). Prüfer 2 NP-34 (mittel, zu prüfen); Prüfer 1a führt dieselbe Zelle unter Punkt B1.
+- Ursache: offen; entweder teilt die Handlung nicht, wie ihr Name sagt, oder das Bild kam vor dem Ende der Rechnung.
+- Vorschlag: Nach FD-252 am Tor bis zum Ende warten; teilt sie nicht, die Handlung das Teilen anstoßen lassen oder umbenennen; Test mit der Wirkung.
+- Wirkung beim Kunden: Teilt sie nicht, bekommt der Kunde aufgehobene Sperren statt der versprochenen Teilung.
+- Stand: offen RM-812
+
+### FD-294 Graue Befundhandlungen hinter einem Halt zeigen ihre Beschreibung statt eines Sperrgrunds
+
+- Art: Verständlichkeit
+- Schwere: mittel
+- Funktion: `finding.action:orient_for_print`, `finding.action:remesh_and_retry`
+- Prüfpunkt: V5
+- Beleg: L5, Fall 028 `cases/028/v4-vorher-de-finding.action_orient_for_print-a1ca663b.png` (`9214394d9d1f`): *Druckoptimal ausrichten* grau mit „Dreht den Körper …“ darunter; `cases/028/v4-vorher-de-finding.action_remesh_and_retry-c1243162.png` (`12214fab0737`): *Kanten verfeinern und erneut versuchen* grau mit „Teilt die Dreiecke feiner …“, beide während die Kette an einem anderen Schritt hält. Prüfer 2 NP-35. Zwilling von FD-27, Rest zu FD-104 („grau mit Grund“).
+- Ursache: offen; unter dem grauen Knopf bleibt der Wirkungssatz stehen.
+- Vorschlag: Unter einem grauen Knopf der Sperrgrund mit Ausweg („Erst Schritt N beheben“ mit Verweis auf den haltenden Schritt); Test im Halt.
+- Wirkung beim Kunden: Der Kunde liest, was der Knopf täte, nicht warum er grau ist und was er tun kann.
+- Stand: offen RM-812
+
+### FD-295 *Stelle zeigen* wiederholt nur, was der Klick auf den Befund schon tat
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `finding.action:show_location`
+- Prüfpunkt: 2
+- Beleg: L5, Fall 028 `cases/028/v4-vorher-de-finding.action_show_location-527c02ef.png` (`dbc6570d5085`) und `cases/028/v4-nachher-de-finding.action_show_location-527c02ef.png` (`06993e251eea`): Schon nach dem Klick auf den Befund stehen Kamera, Umrandung, Kreis und Satz an der Stelle; der Knopf ändert am Bild nichts. Prüfer 2 NP-37.
+- Ursache: offen; der Befundklick fährt seit FD-111 selbst hin.
+- Vorschlag: Den Knopf weglassen, wenn der Befundklick schon hinfährt, oder ihm eine eigene Wirkung geben (näher heranfahren).
+- Wirkung beim Kunden: Ein Knopf, der nichts sichtbar tut, lässt den Kunden zweifeln, ob er gewirkt hat.
+- Stand: offen RM-812
+
+### FD-296 Nach *Senken* öffnet sich ungefragt der Einstellmodus des ursprünglichen Bohrungsschritts
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `countersink_hole`
+- Prüfpunkt: 2, 7
+- Beleg: L5 an `d9f7a81f9`, Fall 001 `v4s:cases/001/v4-nachher.png` (`1ebca94ae648`): Nach dem Klick steht die schwebende Karte „Bohrung im ursprünglichen Schritt ändern“ mit Verschiebepfeilen und Kantenmaßen in der Ansicht, die Oberseite wirkt geschlossen, Bohrung und Senkung sind nicht zu sehen; Objektbaum („Bohrung 1 mit Senkung“, Oberseite 1121 mm²) und Verlauf („3 Senken“) führen das Ergebnis. Vorher war die Klappe dieses Abschnitts in der rechten Karte aufgeklappt (`v4s:cases/001/v4-vorher.png`). Prüfer 1b Punkt 22, Prüfer 2 C1-3; vom Koordinator am Bild bestätigt.
+- Ursache: offen; vermutlich bleibt die aufgeklappte Klappe des Änderungswegs nach der Operation am gewählten Merkmal offen und wechselt in die schwebende Maßkarte, deren Vorschau den Stand vor späteren Schritten zeigt.
+- Vorschlag: Nach einer Operation am Merkmal das Ergebnis zeigen und den Einstellmodus eines älteren Schritts nicht von selbst öffnen; Test mit aufgeklappter Klappe vor *Senken*. Zusammenhang mit FD-279 prüfen.
+- Wirkung beim Kunden: Wer eine Bohrung senkt, sieht danach weder Bohrung noch Senkung und eine offene Karte, die er nicht aufgerufen hat.
+- Stand: offen RM-812
+
+### FD-297 *Aushöhlen* zeigt bei gewählter Öffnung eine Entlüftung, die das Ergebnis nicht hat
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `hollow_object`
+- Prüfpunkt: 7
+- Beleg: L5 an `d9f7a81f9`, Fall 003 `v4s:cases/003/v4-nachher.png` (`05c7c9d7…`): Ist die Oberseite als Öffnung gewählt, zeigt der Dialog „Entlüftungen 1“ weiter aktiv und die Vorschau eine Scheibe; das Ergebnis hat zu Recht keine Entlüftung (7 152,0 mm³, genau die Schale). Prüfer 1a C1-2, Prüfer 2 C1-5; der Vorhersage-Schreiber erwartete deshalb eine Entlüftung.
+- Ursache: offen; das Feld und die Vorschau der Entlüftung folgen der gewählten Öffnung nicht.
+- Vorschlag: Bei gewählter Öffnung das Feld *Entlüftungen* grau mit Grund („Die Öffnung entlüftet den Hohlraum.“) und keine Scheibe in der Vorschau; Test mit Öffnung und Entlüftung.
+- Wirkung beim Kunden: Der Dialog verspricht eine Entlüftung, die nicht entsteht.
+- Stand: offen RM-812
+
+### FD-298 Die Gründe für *entfällt* kennen keinen Prüfpunkt, der nur an anderen Zeilen gilt
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Urteilsform des Funktionsdurchgangs (`tools/function_report.py`, Gründe für `not_applicable`)
+- Prüfpunkt: 19
+- Beleg: Nachurteil Runde C1, Prüfer 2 C1-6 (`output/konsolidierung-2026-10-12/nachurteil-pruefer2-claude.md`): I4 gilt nur an Befundhandlungen, I5 nur an Vorher/Nachher; an 16 Zellen stand deshalb `ohne_auswahlbezug` als nächstliegender Grund.
+- Ursache: Die geschlossene Liste der Gründe (`ohne_rechnung`, `ohne_auswahlbezug`, `ohne_dialog`, `ohne_agentenwerkzeug`, `nur_stufe_c`) hat keinen für „Prüfpunkt gilt an dieser Art Zeile nicht“.
+- Vorschlag: Einen Grund wie `andere_zeilenart` mit der Zeilenart, an der der Punkt gilt, und die 16 Urteile darauf umstellen; oder die Liste je Zeile ohne diese Punkte erzeugen.
+- Wirkung beim Kunden: Kein Produktfehler; die Begründung von 16 Urteilen ist ungenau.
+- Stand: offen RM-812
+
+### FD-299 Ein Test prüft die Kamerafahrt nicht, die sein Name verspricht
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Test `test_clicking_a_warning_switches_the_map_and_moves_the_camera`
+- Prüfpunkt: 11
+- Beleg: Nachurteil Runde C1, Prüfer 2 C1-7: Der Test belegt den Kartenwechsel, nicht die Fahrt der Kamera.
+- Ursache: Zusicherung fehlt.
+- Vorschlag: Kamerastand vor und nach dem Klick vergleichen; Gegenprobe ohne Fahrt muss rot werden.
+- Wirkung beim Kunden: Kein Produktfehler; eine zugesagte Wirkung ist ohne Wächter.
+- Stand: offen RM-812
+
+### FD-300 Das Handbuch zu *Schichten* verspricht Inselzahl und Überhangfläche ohne Einschränkung
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `tool:layers`
+- Prüfpunkt: 11
+- Beleg: Nachurteil Runde C1, Prüfer 2 C1-8: Das Handbuch nennt neben dem Regler Inselzahl und Überhangfläche; die Anwendung zeigt sie nur, wenn es Inseln oder Überhänge gibt, und kein Test prüft ihre Anzeige.
+- Ursache: Handbuchsatz ohne Bedingung.
+- Vorschlag: Satz um „wenn vorhanden“ ergänzen (alle Kataloge) und einen Test für die Anzeige mit Insel und Überhang.
+- Wirkung beim Kunden: Wer die Angaben nicht sieht, sucht nach einem Fehler, wo keiner ist.
+- Stand: offen RM-812
+
+### FD-301 Felder der Bewegen- und der Schnittleiste tragen keinen Satz
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: `tool:transform`, `tool:section`, `tool:measure`
+- Prüfpunkt: V3
+- Beleg: `output/konsolidierung-2026-10-12/fix-nachurteil-claude.md`, neuer Punkt N-1: In den fr/it-Protokollen der Fälle 055 und 056 (L4 an `d9f7a81f9`, fremde Lage, FD-246) fehlen an „Faktor“, „Schnittachse“, „Messart“ und „Scheibe“ Kurzhilfe und Beschreibung; „Rasterfang“ und „Winkelfang“ haben eine Kurzhilfe, aber keine Beschreibung. Zwilling von FD-78, dessen Fix Analyse- und Teilenleiste umfasste.
+- Ursache: Der Wirkungssatz ist an diese Leistenfelder nicht gebunden.
+- Vorschlag: Je Feld der Wirkungssatz als Kurzhilfe und `accessibleDescription` wie bei FD-78; Wächter über alle Leistenfelder (`test_bar_field_sentences.py`).
+- Wirkung beim Kunden: Wer ein Feld der Leiste nicht kennt, findet keine Erklärung, und ein Bildschirmleser nennt nur den Namen.
+- Stand: offen RM-812
+
+### FD-302 Der Kriterientext von Prüfpunkt 8 nennt weniger Teile, als die Zuordnung der Funde rechnet
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Nachurteilsliste und Prüfpunkte des Prüfstands (`tools/function_checks.py`, `tools/function_verdict_rules.py`)
+- Prüfpunkt: 19
+- Beleg: Nachurteil Runde C2a: Die Spalte nannte für Prüfpunkt 8 „umfasst V1, V2, V3, V6“ (`CHECKPOINTS[8].parts`, was Stufe A misst), `COVERS[8]` und Konzept §4 ordnen 8 aber V1 bis V6 zu; Prüfer 2 urteilte deshalb an `Bearbeiten/Parameter anlegen …` 8 und `resize_hole` 8 *gut nach Fix* trotz offener Funde an V5 (FD-281, FD-271), `report` wies beide ab.
+- Ursache: Der Text der Liste kommt aus den gemessenen Teilen, die Zuordnung aus `COVERS`.
+- Vorschlag: Den Kriterientext aus `COVERS` bilden oder beide Angaben nennen („misst V1, V2, V3, V6; Funde an V1 bis V6 gehören zur Zelle“).
+- Wirkung beim Kunden: Kein Produktfehler; zwei Urteile mussten neu.
+- Stand: offen RM-812
+
+### FD-303 Drei Wirkungen von *Linie teilen* aus der Parametertabelle haben keinen Test
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `split_line`
+- Prüfpunkt: 11
+- Beleg: Nachurteil Runde C2a, beide Prüfer (Prüfer 1a, Prüfer 2 C2a-2) am Laufkopf `d9f7a81f9`: Kein Test prüft, dass eine nachträglich geänderte *Lage* den Schnitt verschiebt, ohne ihn zu drehen, dass ein Schwalbenschwanz auch gegen Auseinanderziehen hält, und dass ein einzelner Sechskant gegen Verdrehen hält; die Benennung „1 von 3“ über *Stücke des Laufs* ist ebenfalls ohne Test (Prüfer 1a).
+- Ursache: Die Versprechen der Parametertabelle haben keinen Wächter.
+- Vorschlag: Je Wirkung ein Geometrietest gegen den Korpus (Lageänderung, Formschluss gegen Zug und Drehung, Benennung).
+- Wirkung beim Kunden: Stimmen die Sätze heute, kann ein späterer Umbau sie unbemerkt brechen.
+- Stand: offen RM-812
+
+## Spätreview, Bildanleitungen und Nachurteil C3 (FD-304 bis FD-323, für 0.6.2, RM-812)
+
+Quellen: `output/konsolidierung-2026-10-12/review-spaet-claude.md` (Befunde 1 bis 4, N-3; Stand
+`8e83594e5`, Zeilen hier am Kopf `182e7cb00`), `fix-guides-claude.md` (neue Punkte 2 bis 5, Lauf
+`F:\tmp-suche\guides-claude\voll3-<sprache>` an `4247b38fa`) und `nachurteil-pruefer1b-claude.md`, Runde C3
+(Punkte 23 bis 29, L4 an `d9f7a81f9`, `F:\tmp-suche\schlusslauf-d9f7a81f\L4-d0`). Punkt 25 steht bei FD-237.
+
+### FD-304 Die Textmessung meldet ein knapp zu breites Wort in einer Liste als ungekürzt
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Textmessung des Funktionsprüfstands (tools/function_capture.py, Zeilen in Listen und Bäumen)
+- Prüfpunkt: 9
+- Beleg: Spätreview Befund 1, Sonde P2 (`F:\tmp-suche\rv-spaet\probe_capture_width.txt`): Wort 289 px, Textfläche 282, Zelle 296 → `axis=breite, need_px=295, width_px=296, cut=False`; gewählt 282/279/296 ebenso `False`. Qt zeichnet das Wort mit „…“. Vor dem Fix von FD-110 (`318e7f5d3`) ebenso `False`, als Höhenfall; keine Regression. Rest zu FD-110.
+- Ursache: belegt: Im Umbruchzweig entscheidet die Messung an der gezeichneten Textfläche (`widest > text_width`), rechnet `cut` aber gegen die ganze Zelle (`need_px = widest + margin + symbol`, `width_px = shown`, `tools/function_capture.py:790–800`); ein Wort, das um weniger als Innenrand und Kante (8 bzw. 11 px) zu breit ist, fällt durch.
+- Vorschlag: Im Breitenfall `need_px = widest` gegen `width_px = text_width`; Test mit einem Wort zwischen Textfläche und Zelle.
+- Wirkung beim Kunden: Kein Produktfehler; Prüfpunkt 9 meldet in diesem Fall vollständigen Text, wo der Kunde „…“ liest.
+- Stand: offen RM-812
+
+### FD-305 Der Satz zur ersten Änderung findet ein Feld hinter *Weitere Werte* nicht, solange die Klappe zu ist
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Merkmalfenster, Weg des Wartesatzes über die Klappe *Weitere Werte* (app/ui/panels.py)
+- Prüfpunkt: E7
+- Beleg: Spätreview Befund 2, Sonde P3 (`F:\tmp-suche\rv-spaet\probe_flap.txt`): mit der Hülle `row.more` als `behind` liefert `first_field` `''`, mit dem Inhalt „Erst „Fase“ unter „Weitere Werte“ ändern, dann übernehmen.“ (so reicht es `op_dialog.py:2651`). Heute ohne Kundenwirkung: Nur `resize_hole` hat eine solche Klappe, und vorn steht dort immer ein Feld; deshalb hält der Fund keine Zelle offen. Rest zu FD-99 (`0313cdbfd`).
+- Ursache: belegt: Der Klappenweg reicht die Hülle `row.more` (aus `collapsible`) als `behind` (`app/ui/panels.py:10681–10686`); zugeklappt ist der Inhalt darunter verborgen, und `first_field` findet nie ein Feld.
+- Vorschlag: Den Inhalt der Klappe an der Zeile führen und reichen; Test mit einer Zeile, deren einziges offenes Feld hinter der Klappe liegt.
+- Wirkung beim Kunden: Heute keine; bekommt eine Merkmalzeile ein Feld nur hinter der Klappe, stünde *Übernehmen* grau ohne Satz.
+- Stand: offen RM-812
+
+### FD-306 Dass Berichtszeilen gewählt gerechnet werden, hält kein Test
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Wächter der Berichtszeilen (tests/test_report_rows.py zu app/ui/report_rows.py)
+- Prüfpunkt: 9
+- Beleg: Spätreview Befund 3, Mutation M6b: ohne `drawn.state |= QStyle.StateFlag.State_Selected` (`app/ui/report_rows.py:56` am Kopf) bleiben alle sechs Fälle grün; die Reserve fürs Runden verdeckt die 3-px-Auswahlkante. Bei 125 % rechnet die Reserve das Runden, nicht die Kante. Rest zu FD-109 (`318e7f5d3`).
+- Ursache: Kein Fall, in dem nur die Auswahlkante den Unterschied macht.
+- Vorschlag: Ein Fall mit breiter Auswahlkante im Stylesheet, in dem nur die Kante über „…“ entscheidet; die Mutation muss rot werden.
+- Wirkung beim Kunden: Kein Produktfehler; eine spätere Änderung kann gewählte Berichtszeilen wieder kürzen, ohne dass ein Test es merkt.
+- Stand: offen RM-812
+
+### FD-307 Eine Einzelzeile mit dem Titel ihrer Bausteingruppe behält die Kurzhilfe des Merkmals
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: `tree`
+- Prüfpunkt: 9
+- Beleg: Spätreview Befund 4, Mutation M5e (Gruppenkurzhilfe ohne Titel) grün über Objektbaum, Karte, Analyse, Merkmalfenster, Filament und Auswahl: Kein Test hält, dass die Kurzhilfe der Bausteingruppe mit ihrem Titel beginnt. Die Einzelzeile, die den Titel ihrer aufgelösten Gruppe übernimmt (`only.setText(0, group.text(0))`, `app/ui/panels.py:2810`), behält die Kurzhilfe des Merkmals („Sackbohrung 1 · …“); gekürzt stünde „Magnettasche“ nirgends ganz, entgegen dem Changelog 0.6.1 („seine Kurzhilfe nennt ihn ganz“) und `vorderseite.md`. Gekürzt wird eine solche Zeile erst jenseits `LEFT_MAX`. Rest zu FD-20 (`b9993ff5d`).
+- Ursache: belegt: Beim Übernehmen des Gruppentitels wird die Kurzhilfe nicht mitgesetzt.
+- Vorschlag: Die Einzelzeile trägt den übernommenen Titel auch vorn in der Kurzhilfe; Test für Gruppe und Einzelzeile.
+- Wirkung beim Kunden: Wird der Name einer solchen Zeile bei sehr schmaler linker Karte gekürzt, nennt auch die Kurzhilfe ihn nicht.
+- Stand: offen RM-812
+
+### FD-308 Ein Test der Schichtanalyse zählt eine fremde Analyse mit
+
+- Art: Stabilität
+- Schwere: leicht
+- Funktion: keine Zeile: Test tests/test_analysis_ui.py::test_the_layer_analysis_takes_both_limits_from_the_material
+- Prüfpunkt: 19
+- Beleg: Spätreview N-3: im gemischten Lauf (M5e, 547 Fälle) einmal rot mit `seen == [(45.0, 0.84), (45.0, 0.84)]`, die Analyse lief zweimal; allein und dateiweise grün (`F:\tmp-suche\rv-spaet\layer.out`, 282 passed). Mit der Mutation nicht verbunden.
+- Ursache: offen; naheliegend zählt der Fall auch eine Analyse, die vor seinem eigenen Aufruf noch anstand.
+- Vorschlag: Nur Aufrufe nach dem eigenen `_slice_of` zählen oder eine anstehende Analyse vorher abwarten; Gegenprobe mit einer vorher angestoßenen Analyse.
+- Wirkung beim Kunden: Kein Produktfehler; der Fall kann das Tor je nach Reihenfolge rot machen.
+- Stand: offen RM-812
+
+### FD-309 Am Startbildschirm schneidet der Zuschnitt der Bildanleitung die Beispielkarten an
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: keine Zeile: Bildanleitungen (tools/make_guides.py), Schritte am Startbildschirm
+- Prüfpunkt: 19
+- Beleg: `F:\tmp-suche\guides-claude\voll3-de\de\guide-first-part-1.webp` (SHA256 `cea63a79a843`, selbst angesehen): Der Zuschnitt um *Neues Projekt* endet mitten in den Beispielkarten, deren rechte Hälfte und der Rahmen fehlen; `guide-draw-and-pull-1.webp` (`fd9f18205e59`) ähnlich; so schon in 0.6.0. `fix-guides-claude.md`, neuer Punkt 2.
+- Ursache: offen; der Zuschnitt nimmt nur das Ziel, nicht den Inhalt des Startbildschirms.
+- Vorschlag: Ein Schritt am Startbildschirm nimmt dessen Inhalt in den Fokus wie ein offenes Menü; Prüfung, dass keine Karte angeschnitten ist.
+- Wirkung beim Kunden: Das erste Bild der Anleitung zeigt halbe Karten und wirkt unfertig.
+- Stand: offen RM-812
+
+### FD-310 *print-a-model*, Schritt 5, rahmt nur den Drucker, der Satz nennt Drucker und Filament
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: keine Zeile: Bildanleitung print-a-model (tools/make_guides.py, Schritt 5)
+- Prüfpunkt: 19
+- Beleg: `F:\tmp-suche\guides-claude\voll3-de\de\guide-print-a-model-5.webp` (SHA256 `9f43dd5e8da9`, selbst angesehen): Die Nummer 5 zeigt auf das Feld *Drucker*, der Satz sagt „Prüfen Sie oben Drucker und Filament“; so schon in 0.6.0. `fix-guides-claude.md`, neuer Punkt 3.
+- Ursache: Der Schritt hat nur ein Ziel.
+- Vorschlag: Ein zweites Ziel für die Zeile *Filamente* oder den Satz auf den Drucker beschränken.
+- Wirkung beim Kunden: Der Kunde sucht im Bild das Filament, das der Satz nennt.
+- Stand: offen RM-812
+
+### FD-311 *housing-with-lid*, Schritt 6, hat keine freie Stelle für die Schrittnummer
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: keine Zeile: Bildanleitung housing-with-lid (tools/make_guides.py, Schritt 6)
+- Prüfpunkt: 19
+- Beleg: `F:\tmp-suche\guides-claude\voll3-de\de\guide-housing-with-lid-6.webp` (SHA256 `bde425c9950d`, selbst angesehen): Der Ausschnitt schneidet die Auswahlkarte links an, die Nummer 6 steht im linken Rand, ihr Pfeil läuft über den Rest der halb verdeckten Überschrift. `fix-guides-claude.md`, Abschnitt 2 („Rest“) und neuer Punkt 4.
+- Ursache: Rings um den Dialog liegt Text, rechts reicht die angeschnittene Karte in den Rand; der Pfeil nimmt die nächste freie Randstelle.
+- Vorschlag: Der Zuschnitt um einen Dialog über einer Karte nimmt die Karte ganz oder gar nicht (die Regel „ganz im Bild oder ganz draußen“ von `work_rect` auch für `make_guides.framed`).
+- Wirkung beim Kunden: Im Bild liegt der Pfeil über einer abgeschnittenen Überschrift und wirkt unaufgeräumt.
+- Stand: offen RM-812
+
+### FD-312 Die Filmwerkzeuge und das Oberflächenaudit hängen den Zeiger-Wächter nicht auf
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: keine Zeile: Aufnahmewerkzeuge make_video, make_longform_video, make_workshop_videos und run_ui_audit
+- Prüfpunkt: 19
+- Beleg: Am Kopf `182e7cb00`: `tools/make_video.py:3058`, `tools/make_longform_video.py:2301`, `tools/make_workshop_videos.py:3890` und `tools/run_ui_audit.py:519` setzen `apply_theme(app, "dark")` ohne `cursors.install(app)`. `fix-guides-claude.md`, neuer Punkt 5; Zwilling des Fixes `5ffbd9fbe` (make_guides, make_figures, make_web_images).
+- Ursache: Den Zeiger für später entstehende Fenster verteilt nur der Wächter `app.ui.cursors.install`, den diese Werkzeuge nicht aufhängen.
+- Vorschlag: Dieselbe Zeile nach `apply_theme`; den Wächtertest `test_cursors.py::test_every_picture_tool_hangs_up_the_pointer_watcher_after_the_theme` auf alle Werkzeuge mit `apply_theme` ausdehnen.
+- Wirkung beim Kunden: In Filmen und Audits tragen Panels und Leisten den Systempfeil statt des Solidon-Zeigers.
+- Stand: offen RM-812
+
+### FD-313 Felder in *Neues Filament*, *Zahlen an Maße binden*, in der Parameterzeile und in *Auswahl als Baustein speichern* tragen keinen eigenen Satz
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: `filament.colour`, `filament.profile`, `parameters.bind`, `parameters.first.label`, `parts.save`
+- Prüfpunkt: 8, V3
+- Beleg: L4 Fall 034, Stufe A V3 und Prüfpunkt 8 Fund, am Bild bestätigt (Prüfer 1b, Runde C3, Punkt 23): `cases/034/flaeche-de-filament.colour-bae0b106-dialog.png` (SHA256 `106190dc2923`) 9 von 15 Feldern mit Satz, Name und Lagerort nur mit Platzhalter, Farbfeld, Nennfüllung und Restmenge ohne Satz, das Farbfeld ohne Namen; `cases/034/flaeche-de-filament.profile-52662c50-dialog.png` (`56facac57783`) 8 von 14, *Gekauft am*, *Geöffnet am*, *Spulenpreis*, *Notiz* ohne Satz, *Währung* nur mit Platzhalter; `cases/034/flaeche-de-parameters.bind-7614c137-dialog.png` (`acf151103ff3`) 0 von 2, der Ausdruck „@breite / 2“ ohne Beschriftung, Namen und Satz; `cases/034/flaeche-de-parameters.first.label-55b85e42.png` (`5a34730d653c`) Wertfeld *Breite* ohne Beschreibung; `cases/034/flaeche-de-parts.save-4b595fac-dialog.png` (`8994059f39a6`) 11 von 25, *Vorgabe*, *von*, *bis* und die Stellen ohne Satz. Zwilling von FD-78, FD-244 und FD-301.
+- Ursache: offen; diese Dialoge binden keinen Wirkungssatz an ihre Felder.
+- Vorschlag: Je Feld ein Satz als Kurzhilfe und `accessibleDescription`, der Ausdruck in *Zahlen an Maße binden* bekommt Namen und Satz; Wächter über die Felder dieser Dialoge wie `test_form_fields.py`.
+- Wirkung beim Kunden: Was Nennfüllung, Restmenge, ein Ausdruck oder die Grenzen eines Bausteinmaßes bewirken, muss der Kunde raten.
+- Stand: offen RM-812
+
+### FD-314 *Neues Filament* und *Auswahl als Baustein speichern* zeigen vorn sieben bis zwölf Felder
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `filament.colour`, `filament.profile`, `parts.save`
+- Prüfpunkt: E5
+- Beleg: L4 Fall 034, Stufe A E5 Fund, am Bild bestätigt (Prüfer 1b, Runde C3, Punkt 23): `…filament.colour-bae0b106-dialog.png` (`106190dc2923`) vorn Name, Typ, Farbe, Lagerort, Nennfüllung, Haken *Restmenge bekannt* und Restmenge, sieben Felder (erlaubt 4); `…filament.profile-52662c50-dialog.png` (`56facac57783`) dieselben sieben vorn, Stufe A zählt mit den aufgeklappten *Weiteren Angaben* 14; `…parts.save-4b595fac-dialog.png` (`8994059f39a6`) vorn Name, Gruppe, Haken *Breite*, Vorgabe, von, bis und sechs Haken der Stellen, zwölf Felder. Schwere: Prüfer 1b „leicht bis mittel“ für den ganzen Punkt; mittel wie FD-13, FD-42 und FD-63, weil die Grenze von E5 weit überschritten ist.
+- Ursache: offen; die Dialoge teilen ihre Felder nicht nach Vorder- und Rückseite.
+- Vorschlag: Vorn nur, was für die Aufgabe nötig ist (Name, Typ, Farbe; Name und die freigegebenen Maße), der Rest unter *Weitere Angaben* mit Zusammenfassung; Test mit dem Zähler von E5.
+- Wirkung beim Kunden: Wer schnell eine Spule oder einen Baustein anlegen will, sieht ein langes Formular.
+- Stand: offen RM-812
+
+### FD-315 Lagerseite und Ersatzwahl tragen zwei Akzente
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `filament.colour`, `filament.spool`
+- Prüfpunkt: G1
+- Beleg: L4, Prüfer 1b, Runde C3, Punkt 23: `cases/034/flaeche-de-filament.colour-bae0b106.png` (`e7e3e7e33a9e`): Die leere Lagerseite trägt zwei orange Hauptknöpfe *Spule von Hand anlegen* (oben rechts und im leeren Zustand); Fall 040 `cases/040/flaeche-de-filament.spool-33637b79-dialog.png` (`ab23f98822f6`): Die Ersatzwahl trägt einen orangen Hauptknopf „1 — Filament 1“ und dieselbe Zeile orange in der Liste. Stufe A G1 „2 Hauptknöpfe und 2 Akzente“ an beiden Zeilen.
+- Ursache: offen.
+- Vorschlag: Je Fläche ein Hauptknopf; der Knopf im leeren Zustand gewöhnlich, solange oben derselbe steht, in der Ersatzwahl die gewählte Zeile ohne Akzentfarbe; Bild hell und dunkel.
+- Wirkung beim Kunden: Er muss lesen, welcher von zwei gleich betonten Knöpfen gemeint ist.
+- Stand: offen RM-812
+
+### FD-316 In *Neues Filament* stehen Feldkanten versetzt, und die Ladezeile meldet einen Übergang von −1 ms
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `filament.colour`, `filament.profile`
+- Prüfpunkt: G3, G8
+- Beleg: L4 Fall 034, Prüfer 1b, Runde C3, Punkt 23: Stufe A an `filament.colour` „Feldkanten an sechs Stellen versetzt“, an `filament.profile` Feldkanten versetzt, ein Wert nicht rechtsbündig mit Einheit und ein Übergang mit −1 ms an der Ladezeile, in allen sechs Sprachen (`cases/034/flaeche-de-filament.profile-52662c50-dialog.png`, `56facac57783`); die Kantenversätze löst das Bild nicht eindeutig auf.
+- Ursache: offen; ob die negative Dauer ein Fehler der Messung ist, ist nicht geprüft.
+- Vorschlag: Kanten und Ausrichtung am Formular des Dialogs belegen und angleichen; die Dauer von −1 ms an der Messung prüfen (G8 misst nur echte Übergänge).
+- Wirkung beim Kunden: Der Dialog wirkt minimal unruhig.
+- Stand: offen RM-812
+
+### FD-317 Das Filament einer Schrift liegt zwei Klicks vom gewählten Körper entfernt
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `filament.spool`
+- Prüfpunkt: Z3
+- Beleg: L4 Fall 040 `cases/040/flaeche-de-filament.spool-33637b79.png` (`a6575fa16e8d`), Stufe A Z3 Fund mit 2 Wegklicks nach der Auswahl (Menü *Erzeugen* → *Text aufbringen*, dann Klappe *Weitere Einstellungen* zum Feld *Filament*); nach der Wahl des Quaders steht rechts nur *Filament und Druck* für den Körper. Prüfer 1b, Runde C3, Punkt 23. Schwere: „leicht bis mittel“ für den ganzen Punkt; mittel wie FD-268, weil es ein Umweg ist.
+- Ursache: offen.
+- Vorschlag: Das Filament der Schrift vorn im Textdialog oder an der Schrift im Merkmalfenster wählen lassen; Test mit Z3.
+- Wirkung beim Kunden: Wer eine Schrift in einer anderen Farbe will, findet das Feld erst über Menü und Klappe.
+- Stand: offen RM-812
+
+### FD-318 *Zahlen an Maße binden* hält Abstände von 11, 9 und 6 px
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `parameters.bind`
+- Prüfpunkt: G2
+- Beleg: L4 Fall 034 `cases/034/flaeche-de-parameters.bind-7614c137-dialog.png` (`acf151103ff3`): Stufe A G2 „Abstände 11, 9 und 6 px im BindingDialog keine Vielfachen von 4“; am Bild sitzen Rand, Hakenzeile, „0 von 1 Zahlen gewählt“ und Knopfzeile in ungleichen Abständen. Prüfer 1b, Runde C3, Punkt 23. Zwilling von FD-15 und FD-247.
+- Ursache: offen; Layouts ohne gesetzten Abstand.
+- Vorschlag: Abstände aus dem Raster; der G2-Wächter liest den Dialog mit.
+- Wirkung beim Kunden: Der Dialog wirkt minimal unruhig.
+- Stand: offen RM-812
+
+### FD-319 Stufe A zählt an der Spule einer Schrift die Felder hinter der Klappe als vorn
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `filament.spool`
+- Prüfpunkt: E5
+- Beleg: L4 Fall 040 `cases/040/flaeche-de-filament.spool-33637b79-dialog-2.png` (SHA256 `7e910eddf95e`): vorn stehen Text, Schriftgröße und Art, die übrigen 14 Felder unter *Weitere Einstellungen*, das der Weg selbst aufgeklappt hat (`steps`: Klappe auf `field:slot`); über dem ersten Feld unter 25 Wörter. Stufe A zählt 17 Felder vorn und 46 Wörter; die Wörter passen nur mit dem Satz der Ersatzwahl (`…-dialog.png`) dazu (`040/surfaces/filament.spool-33637b79.json#fields,texts`). Prüfer 1b, Runde C3, Punkt 24.
+- Ursache: Die Messung zählt „vorn“ am Zustand nach den Klappenklicks des Wegs und die Wörter über zwei Dialoge.
+- Vorschlag: „vorn“ am Zustand vor den Klappenklicks des Wegs zählen und die Wörter je Dialog; Gegenprobe mit diesem Fall.
+- Wirkung beim Kunden: Kein Produktfehler; E5 meldet einen Fund, den die Fläche nicht hat, und hält die Zellen offen.
+- Stand: offen RM-812
+
+### FD-320 Website und Handbuch versprechen in *Auswahl als Baustein speichern* eine Zeile zum Bereichstest, die vor dem Anlegen fehlt
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `parts.save`
+- Prüfpunkt: 11
+- Beleg: L4 Fall 034 `cases/034/flaeche-de-parts.save-4b595fac-dialog.png` (`8994059f39a6`): Beschreibung, Lizenz und Autor stehen unter *Weitere Einstellungen*, eine Zeile zu den Kombinationen fehlt. Website `funktionen.html#eigene-bausteine`, Bildtext zu `beleg-eigener-baustein.webp`: oben „Name, Gruppe, Beschreibung, Lizenz und Autor“, unten „Bereichstest: 8 Kombinationen“; Handbuch (#own-parts): „Vorher sagt der Dialog, wie viele Kombinationen das sind und wie lange es etwa dauert“. `app/ui/recipe_dialog.py` zeigt die Zeile laut Kommentar (RM-517) nur, solange der Test läuft oder zu viele Maße freigegeben sind. Prüfer 1b, Runde C3, Punkt 26.
+- Ursache: Bild, Bildtext und Handbuch beschreiben den Dialog vor RM-517.
+- Vorschlag: Bild und Bildtext der Website neu erzeugen und den Handbuchsatz auf „während der Prüfung“ stellen, in sechs Sprachen.
+- Wirkung beim Kunden: Der Kunde sucht vor dem Anlegen eine Angabe, die der Dialog dort nicht mehr zeigt.
+- Stand: offen RM-812
+
+### FD-321 Der Prüfstand nimmt den Bausteinkatalog auf, bevor die Vorschaubilder fertig sind
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `parts.save`
+- Prüfpunkt: 11
+- Beleg: L4 Fall 034 `cases/034/flaeche-de-parts.save-4b595fac-dialog-2.png` (SHA256 `e50d53893e77`): Acht von 27 sichtbaren Kacheln (Druckbares Gewinde, Schraubenloch mit Senkung, Gewindebolzen, Schnappverbinder für eine Naht, Schnappverbindung, Profilklemmen-Einlage, Profilklemmschale, Wandhalter) zeigen den Platzhalter, in allen sechs Sprachen dieselben acht; die Vorschaukette (`app/ui/catalog.py`, `_render_pending`) lief noch. Der Bildtext der Website verspricht „jeder mit Vorschau“, am Bild ist das nicht zu belegen. Prüfer 1b, Runde C3, Punkt 27. Zwilling von FD-240 und FD-252.
+- Ursache: Die Aufnahme wartet nicht auf das Ende der Vorschaukette.
+- Vorschlag: Vor der Aufnahme des Katalogs auf das Ende der Vorschaukette warten; Test mit verzögerter Vorschau.
+- Wirkung beim Kunden: Kein Produktfehler belegt; das Versprechen „jeder mit Vorschau“ bleibt am Lauf ungeprüft.
+- Stand: offen RM-812
+
+### FD-322 *Neues Filament* zeigt beim Lesen der Slicerprofile zwei Knöpfe *Abbrechen*
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `filament.profile`
+- Prüfpunkt: 8
+- Beleg: L4 Fall 034 `cases/034/flaeche-de-filament.profile-52662c50-dialog.png` (SHA256 `56facac57783`): einer neben dem Laufbalken (fokussiert, bricht das Lesen ab), einer im Dialogfuß (schließt den Dialog); beide gleich beschriftet. Prüfer 1b, Runde C3, Punkt 28.
+- Ursache: Beide Knöpfe tragen denselben Text.
+- Vorschlag: Den ersten „Lesen abbrechen“ nennen, in allen Sprachen.
+- Wirkung beim Kunden: Er weiß nicht, ob *Abbrechen* das Lesen oder den ganzen Dialog beendet.
+- Stand: offen RM-812
+
+### FD-323 Vier Wirkungsversprechen zu Filament und Parametern haben keinen Test
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `filament.colour`, `filament.profile`, `filament.spool`, `parameters.first.label`
+- Prüfpunkt: 11
+- Beleg: Prüfer 1b, Runde C3, Punkt 29, am Laufkopf `d9f7a81f9` gesucht: Handbuch #moving „Änderungen im Lager überschreiben keine gespeicherten Projektfarben oder Druckwerte“ und „Die erste [Farbe] zeigt das Bild“ (`filament.colour`, `filament.profile`); #operation-label_text „Der 3MF-Export macht daraus den Farbwechsel, ohne zweite Datei“ für das Filament der Schrift (`filament.spool`); #parameters „Die Vorschlagsliste setzt den richtigen ein“ (Beschriftung gegen Name, `parameters.first.label`). Gefunden nur Nachbarn (Mehrfarbe für die Orca-Familie, Spulenprofile im geschriebenen Profil, Slot der Schrift, Undo eines Parameters). Zwilling von FD-299 und FD-303.
+- Ursache: Die Versprechen haben keinen Wächter.
+- Vorschlag: Je Satz ein Test, der genau diese Wirkung prüft.
+- Wirkung beim Kunden: Stimmen die Sätze heute, kann ein späterer Umbau sie unbemerkt brechen.
+- Stand: offen RM-812
+
+### FD-324 Im Handbuchbild des Hauptfensters trägt der Kartengriff den Fokusrahmen
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: keine Zeile: Handbuch-Bildschirmfoto `main-window.png` (`tools/make_figures.py`) und der Startweg, den es nachbildet
+- Prüfpunkt: 19
+- Beleg: Nativer Endblock 0.6.1 an `2ba3ee78c` (`F:\tmp-suche\nativ-ende-2ba3ee78\bilder\kontakt\fig-griff-01.png`, alt links, neu rechts): In `app/images/manual/{de,en,es,fr,it,pt}/main-window.png` trägt der Griff der rechten Karte oben rechts den orangen 2-px-Rahmen aus `QToolButton:focus` (185 Akzentpixel je Sprache); schon im Bild von 0.6.0. `sketch-mode.png`, `sketch-result.png` und alle Bildanleitungen sind seit `d04117aa6` (Fokus nach dem Ladeschleier) ohne Rahmen.
+- Ursache: offen; `make_figures` baut das Hauptfenster auf einem Weg ohne Ladeschleier (vermutlich Laden ohne Schleier oder `WA_DontShowOnScreen`), auf dem Qt den Fokus an das erste Glied der Tabfolge gibt, den Kartengriff.
+- Vorschlag: Klären, ob ein Kunde denselben Weg nimmt (Öffnen ohne Schleier, Start mit Datei); dann wie bei `d04117aa6` den Fokus in die Ansicht geben, sonst im Werkzeug; Test am Weg, danach `main-window.png` in sechs Sprachen neu.
+- Wirkung beim Kunden: Im Handbuch sieht der Griff aus wie eine zweite Markierung; ob der Kunde ihn nach einem Start mit Datei ebenso sieht, ist offen.
+- Stand: offen RM-812
+
+### FD-325 Der Alt-Text des Website-Bilds zum Druckschritt nennt etwas, das das Bild nicht zeigt
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: keine Zeile: Website, Bild `schritt-druck` (`tools/make_web_images.py`, Seiten `index`, `funktionen`, `<sprache>/index`, `<sprache>/features`)
+- Prüfpunkt: 9
+- Beleg: Nativer Endblock 0.6.1 an `2ba3ee78c`, Schritt 5 (Bericht des Schlusslaufs): Der Alt-Text nennt „Brim und längere Mindestzeit je Schicht“, das Bild zeigt Brim und Naht; schon in 0.6.0.
+- Ursache: Der Text folgt einer früheren Fassung des Motivs.
+- Vorschlag: Alt-Text in sechs Sprachen an das Bild anpassen, und ein Wächter, der den Alt-Text der Verkaufsbilder aus derselben Quelle wie das Motiv nimmt.
+- Wirkung beim Kunden: Wer die Seite mit einem Bildschirmleser liest oder das Bild nicht lädt, liest etwas anderes, als das Bild zeigt.
+- Stand: offen RM-812
+
+## Regressionen aus Fixen nach dem Einfrieren (ab FD-212)
+
+Was ein Fix des eingefrorenen Umfangs kaputt macht, ist kein neuer Fund für
+nach 0.6.1, sondern Teil dieses Fixes und wird vor 0.6.1 behoben
+(`output/konsolidierung-2026-10-12/AUFTRAG-1016-claude.md`, „Umfang
+eingefroren“).
+
+### FD-212 Nach dem Formatschritt 52 → 53 bietet ein geänderter eigener Baustein seinen gespeicherten Stand nicht mehr an
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:keep_saved_parts`
+- Prüfpunkt: 7, V5
+- Beleg: `tests/test_function_list.py::test_a_light_mesh_scene_keeps_its_promises[baustein_geaendert.netz]` und `::test_a_scene_leaves_nothing_behind` mit „Handlung keep_saved_parts fehlt an parts.own_changed, angeboten []“, gepinnt rot (EXIT=1) an welle5 `1f8346073`, `3f84a4c3c`, `780ea7dd7` und auf dem FD-197-Zweig an `b736da48f` und `5212ca45f`, grün (EXIT=0) an `364367294` (Elter von `5212ca45f`), `b8f8296a1` und `068ebf2b7` (`output/konsolidierung-2026-10-12/funde-w5-claude.md`). Regression aus FD-197 (Formatschritt 52 → 53).
+- Ursache: Der Abdruck eines eigenen Rezept-Bausteins (`recipe.fingerprint`, zugleich `PartSpec.version`) hashte die Formatversion des Rezeptdokuments mit; beim Lesen wird das Rezept migriert, also passte nach jeder Formaterhöhung kein gespeicherter Abdruck mehr (Sonde an `own_part_v52.p3d`: gespeichert `1ac66d32c23d`, heute `fdf886e56582`, mit Format 52 nachgerechnet wieder `1ac66d32c23d`). In 0.6.0 traf es ebenso Projekte aus 0.5.3 (Format 46).
+- Vorschlag: den Abdruck unabhängig von der Formatversion des Dokuments rechnen oder das mitgereiste Rezept in der Version vergleichen, in der es gespeichert wurde; Test mit einem Projekt der Vorversion und geändertem eigenem Baustein.
+- Wirkung beim Kunden: Für jedes Projekt aus 0.6.0 mit geändertem eigenem Baustein sagt der Prüfbericht „ihr alter Stand liegt nicht mehr vor“, obwohl er mitgereist ist, und *Gespeicherten Stand verwenden* fehlt.
+- Stand: behoben `f470cd0e5`: Der Abdruck eines eigenen Bausteins rechnet ohne Formatversion (`recipe.fingerprint`, gespeichert mit `c:`); ein Abdruck aus einer älteren Datei bekommt beim Öffnen deren Formatversion und wird mit ihr nachgerechnet (`check.mark_stamp_formats`, `check.stamp_means`); `tests/test_part_stamps.py` mit dem Prüfstandsfall am Stand davor 7 von 7 rot, nachher 8 von 8 grün, Gegenprobe einer späteren Formatversion dabei; Zwilling Buchungsabdruck mitbehoben, sein einmaliger Bruch steht im Archiv; Changelog 0.6.1 in sechs Sprachen.
+
+### FD-227 Im Änderungsweg verdrängt die Absage eines späteren Schritts den Satz zur ersten Änderung
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `resize_hole`, `resize_feature`, `finding.action:change_creating_step`
+- Prüfpunkt: 7, E7, V5
+- Beleg: `output/konsolidierung-2026-10-12/fix-w5-gewinde-claude.md`: Fensterlauf des Pakets K, `tests/test_change_step_window.py::test_changing_the_thread_step_waits_for_a_change` auf welle5 `a25ac8cb2` rot — am Gewindeschritt der Szene `gewinde_zu_kurz` stand vor jeder Änderung die Absage des Stifts („Gewinde zu kurz 2,00/1,90“) statt „Erst „Länge“ ändern, dann übernehmen.“; gepinnt eingegrenzt: `66e6d75df` und `40c9a5840` grün, `1ae26ea86` und `3f84a4c3c` rot. Regression aus D2 (`1ae26ea86`), auf welle5 mit dem Merge `3f84a4c3c`.
+- Ursache: D2 änderte in `OperationDialog._follow_source_pending` die Bedingung für den Wartesatz auf `not reason`; `reason` enthält auch die Absage der Vorschau von außen (`block_apply`) und die offene Flächenwahl, nicht nur die Sperrgründe der Felder, die D2 meinte.
+- Vorschlag: Sperrgrund der Felder und offene Flächenwahl gehen dem Satz zur ersten Änderung vor, die Absage der Vorschau erst danach (sie steht im Band und nach der ersten Änderung am Knopf).
+- Wirkung beim Kunden: Wer einen Schritt nur öffnet, liest am grauen *Übernehmen* die Absage eines späteren Schritts statt des Wegs — der Befund von FD-99 kam zurück; 0.6.0 hatte den Wartesatz noch nicht.
+- Stand: behoben `3225c2722`; `test_change_step_window.py` an `a25ac8cb2` rot und jetzt grün, dazu neu `test_operation_dialog_change.py::test_a_refused_preview_does_not_hide_the_way` und `test_change_step_window.py::test_the_step_that_stops_the_chain_says_why_at_once` (ohne Fix rot, die Mutation an `stopped_at != op_id` in `edit_operation` rot); betroffene 14 571 passed; Regel in `.claude/rules/vorderseite.md`; nativ belegt (Schlusslauf `d0173380f` L2 011).
+
+### FD-231 Die aufgeklappten Einzelheiten einer Sammelzeile nennen nur noch fünfzehn Körper
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `report`
+- Prüfpunkt: 4, 10
+- Beleg: `output/konsolidierung-2026-10-12/fix-fd197-claude.md`, „Regression Stapelimport (16.10.)“: `tests/test_print_contract_ui.py::test_batch_import_bundles_notes_and_keeps_every_body_and_original_detail` an welle5 `b4b2551ce` gepinnt rot (2 von 2, „obj_16“ fehlt, „… (+2)“); Bisektion über die erste Elternlinie von welle5: `4d4a46307`, `364367294`, `b8f8296a1` und `780ea7dd7` grün, `3f84a4c3c` und `1f8346073` rot. Regression aus FD-196 (`a04ba84fe`), auf welle5 mit dem Merge `3f84a4c3c`.
+- Ursache: FD-196 begrenzt Kurzhilfe und Vorlesetext einer Sammelzeile auf fünfzehn Mitglieder (`NAMED_MEMBERS`) mit „… (+N)“; die Einzelheiten, die man im Prüfbericht aufklappt, übernahmen genau diesen Text (`app/ui/panels.py`, `finding_details.setPlainText(item.toolTip()…)`).
+- Vorschlag: Die Zeile trägt die vollständigen Einzelheiten aus der Liste aller Mitglieder getrennt von der Kurzhilfe, und das aufgeklappte Feld liest dort; Kurzhilfe und Vorlesetext bleiben bei fünfzehn.
+- Wirkung beim Kunden: Nach einem Stapelimport von 17 Körpern standen in den aufgeklappten Einzelheiten nur fünfzehn und „… (+2)“; Körper 16 und 17 waren im Prüfbericht nicht mehr zu finden. 0.6.0 nannte dort jeden Körper.
+- Stand: behoben `4617bd1ec`: Mit dem Fix nennen die aufgeklappten Einzelheiten einer Sammelzeile wieder jedes Mitglied (`_DETAILS_ROLE`), Kurzhilfe und Vorlesetext bleiben bei fünfzehn; der Testfall aus dem Beleg ist danach grün, Nachbarn 1191 grün.
+
+### FD-232 Eine Filamentbuchung aus 0.6.0 für einen Körper aus eigenem Rezept wird nach dem Update nicht wiedererkannt
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `usage.review`, `dialog:usage_dialog`
+- Prüfpunkt: 7, V5
+- Beleg: `output/konsolidierung-2026-10-12/review-i-claude.md`, B-2: Der Verbrauchsabdruck desselben Körpers aus eigenem Rezept ist an `v0.6.0`, an welle5 vor FD-212 und an welle5 je ein anderer (`abcd8952…`, `3c2a56dc…`, `0921e442…`); eine Buchung aus 0.6.0 ist damit nie Kandidat. Regression aus dem Formatschritt 52 → 53 (FD-197) und der Abdruckformel aus FD-212.
+- Ursache: Der `si1-`-Abdruck enthält über `StoredInputs.bodies()` die `PartSpec.version` eines eigenen Rezepts, und die hängt seit FD-197/FD-212 von der Formatversion ab.
+- Vorschlag: Für Körper aus eigenem Rezept den Abdruck von 0.6.0 als Vorabdruck führen, wie `verbrauch.md` es für jeden Formelwechsel verlangt.
+- Wirkung beim Kunden: Im Modus *Ohne Rückfrage buchen* hätte 0.6.1 einen in 0.6.0 gebuchten Druck still ein zweites Mal vom Lager abgezogen, im Modus *Nachfragen* ihn als neu angeboten; 0.6.0 selbst war nicht betroffen.
+- Stand: behoben `9138485c1`: Der Buchungsabdruck führt für einen Körper aus eigenem Rezept den Abdruck von 0.6.0 als Vorabdruck (`StoredInputs.bodies_of_060`); belegt mit Projekt und Abdruck aus dem Code von `v0.6.0` (`si1-783938a1…`); `test_filament_usage_own_recipe_060.py` am Stand davor 3 von 3 rot, danach grün (`fix-fd197-claude.md`). Kein Changelog, weil keine Ausgabe den Fehler trug.
+
+## Nachgetragene Funde aus CI-Fix und Prüfstand (ab FD-213)
+
+Behobene Funde aus `output/konsolidierung-2026-10-12/fix-ci-main-claude.md` und
+`fix-rest-c-claude.md`, die ihre Nummer erst bei der Landung der Welle 5 bekamen.
+
+### FD-213 Ein Klick an einer Textur während einer Berechnung ging verloren
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `feature:texture.change`
+- Prüfpunkt: 6
+- Beleg: `output/konsolidierung-2026-10-12/fix-ci-main-claude.md`, Punkt 17: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` auf macOS Intel rot (`0.6 == 0.9`); lokal nachgestellt mit verzögertem `_PreviewWorker.work`: Verzögerung 0 → 0,9, 0,5 s und 3 s → 0,6, auch nach 20 s (`texslow*.txt`).
+- Ursache: Nach der Auswertung baut das Merkmalfenster die Textur neu auf, `show_texture` meldete die Werte des Schritts als Änderung und stellte die 300-ms-Entprellung; rechnete die Vorschau des getragenen Klicks länger, band die Uhr die alten Werte und ersetzte die Freigabe samt wartendem Klick — kein Schritt, kein Satz.
+- Vorschlag: `_apply_carried_feature_order` verwirft Merkposten und Uhr des Neuaufbaus, bevor es bindet; beide Wege des getragenen Klicks (Merkmalfenster und Maßgruppe) gehen hierdurch.
+- Wirkung beim Kunden: An größeren Modellen fiel ein *Übernehmen* an einer Textur während einer Berechnung still weg; seit 0.6.0.
+- Stand: behoben `bfdad2d9a`; der Fall hält die Vorschau an und lässt die Uhr ablaufen, am Stand davor rot (`0.6 == 0.9`), danach grün, `test_operation_ui.py` ganz 328 passed; die Wurzel trägt seit `6369e3b81` `app/ui/waiting_click.py` (FD-192); Endprobe 38862811071 auf Linux, macOS ARM, macOS Intel und Windows grün.
+
+### FD-214 Ohne Grafiktreiber hing das Prozessende in `wgpuSurfaceRelease`
+
+- Art: Stabilität
+- Schwere: mittel
+- Funktion: `viewport`
+- Prüfpunkt: 6
+- Beleg: `output/konsolidierung-2026-10-12/fix-ci-main-claude.md`, Punkt 19: Windows-Runner ohne Grafikkarte (WARP), py-spy des Fallprozesses im Hauptfaden in `wgpuSurfaceRelease → wgpuTextureViewRelease → WaitForSingleObjectEx` aus `GPUCanvasContext.__del__` beim Prozessende; nach `release_renderer` lebten `GfxRenderer`, `WgpuRenderer`, `WgpuContextToScreen` und `GPUCanvasContext` weiter; A/B in Probe 38855455034: ohne Freigabe beim Schließen 6 von 6 hängend, mit 0 von 6.
+- Ursache: Die Bildschirmfläche der Ansicht ging erst beim Abbau des Interpreters, nach Fenster und Anwendung; dort wartete wgpu ohne Gerät ewig.
+- Vorschlag: `GfxRenderer.close()` gibt die Fläche frei, solange Fenster und Gerät leben.
+- Wirkung beim Kunden: Ohne Grafiktreiber, etwa in einer virtuellen Maschine, lief Solidon nach dem Schließen unsichtbar weiter.
+- Stand: behoben `973fc5128`; `test_render_gfx_regressions.py` (ein Zeuge zählt die Freigabe, die Mutation ohne Aufruf ist rot; ein Vertragsfall über die Interna von pygfx, rendercanvas und wgpu); Endprobe 38862811071: Windows-Prüfstandsfall zwölfmal ohne Hänger.
+
+### FD-215 Die Sprachkarte der Website deckte die Fußverweise am Seitenende
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Website, Karte mit dem Sprachhinweis
+- Prüfpunkt: 9
+- Beleg: `output/konsolidierung-2026-10-12/fix-ci-main-claude.md`, Punkt 18: `test_website_browser.py::test_the_fixed_card_keeps_its_space_free[telefon]` auf macOS rot; die Sonde zeigte `--language-hint-space` 162 px, der berechnete `padding-bottom` von `body` aber 0 px, am Seitenende lagen 12 Fußverweise unter der Karte; lokal nachgestellt mit QtWebEngine offscreen, 12-mal der Telefonfall: am Stand von main 4 von 12 mit verdeckten Verweisen.
+- Ursache: Chromium rechnete den Stil von `body` nach dem Setzen des Polsters während des Ladens erst beim nächsten Bild nach (im Prüfstand ohne Bild dauerhaft); weder die Variable an `body` noch ein Inline-Stil hielten.
+- Vorschlag: einen eigenen leeren Block in der Höhe der Karte am Ende von `body`, der den Platz sofort hält; die Variable nur noch für `scroll-padding-bottom`.
+- Wirkung beim Kunden: Auf dem Telefon lagen die Fußverweise am Seitenende zeitweise unter der Sprachkarte und waren nicht zu erreichen.
+- Stand: behoben `0da225deb`, `730e741f6`; lokal 12 von 12 ohne verdeckten Verweis, der Browserfall prüft die Höhe des Blocks gegen den Platzwert und nach dem Schließen 0 (Mutation ohne `spacer.remove()` rot); Endprobe 38862811071 auf vier Plattformen grün.
+
+### FD-216 Ein wartender Klick zeigte alte Werte, und gleiches Tippen ließ ihn still fallen
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `resize_hole`, `feature:texture.change`
+- Prüfpunkt: 6
+- Beleg: Nachprüfung CI, R2-2 (`output/konsolidierung-2026-10-12/review2-ci-claude.md`, Sonde `test_zz_sonde_review2.py`): Während der gehaltene Klick an seiner Freigabe wartete, zeigte die Maßgruppe 5,20, der Klick wollte 5,70; den gewollten Wert erneut getippt, verwarf den Klick ohne Schritt und ohne Satz, ein anderer Wert ebenso; an der Textur dasselbe mit 0,6 gegen 0,9; neue Fälle in `test_waiting_click_rebuild.py` am Stand davor 8 rot (`fix-ci-main-claude.md`).
+- Ursache: `_apply_carried_feature_order` und `show_values` der neuen Maßgruppe banden mit verschiedenen Eigentümern, ein gleicher Auftrag behielt die Freigabe nur beim selben; `_check_waiting_order` meldete nur den Klick nach der Auswertung, nicht den an der Freigabe wartenden.
+- Vorschlag: Nach einem Neuaufbau zeigen Maßgruppe und Merkmalfenster die Werte des wartenden Auftrags; ein anderer Wert sagt, dass nicht übernommen wurde.
+- Wirkung beim Kunden: Feld und Statuszeile widersprachen sich für die ganze Rechenzeit; wer dem Feld glaubte und seinen Wert noch einmal tippte, verlor die Änderung ohne Satz; seit 0.6.0.
+- Stand: behoben `c14595ed8`; die neuen Fälle am Stand davor 8 rot, danach 9 grün; die Mutationen (Werte tragen, Satz im Merkmalfenster, Satz in der Maßgruppe, Wächter `_clear_preview`) sind rot.
+
+### FD-217 Der Maßkartenläufer endete ohne `record_shutdown`
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: keine Zeile: native Läufer des Prüfstands (`tools/native_measure_card.py`)
+- Prüfpunkt: 19
+- Beleg: `output/konsolidierung-2026-10-12/fix-rest-c-claude.md`, Fund unterwegs: `test_window_bench.py::test_every_process_end_names_its_stragglers_once` war am Zweig seit dem Merge von F10 rot (am Stand `94da19159` 1 failed).
+- Ursache: `CardRoute.run` verwarf die Nachzügler von `shutdown_window` und setzte `shutdown_complete` selbst (RF-18), statt über `record_shutdown` zu gehen.
+- Vorschlag: `record_shutdown` nach `leave()`, damit ein sofortiges Ende bei Nachzüglern die Siegelprüfung nicht überspringt.
+- Wirkung beim Kunden: Kein Produktfehler; ein Nachzügler im nativen Lauf endete ohne Namen.
+- Stand: behoben `d5530a736`; der Test am Stand davor rot, danach grün (`test_window_bench`, `test_native_measure_card_cursor`, `test_native_runs`, `test_function_guard` 132 passed); nativ belegt (Schlusslauf `d0173380f` L1, 6 × 70/70, Siegel, Abbau).
+
+### FD-235 Ein Sprachfall hing in der Speicherfrage, wenn die Fläche davor einen Entwurf offen ließ
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: keine Zeile: Rückweg des Prüfstands (`tools/function_bench.py`, `FunctionFlow.reset`)
+- Prüfpunkt: 19
+- Beleg: `output/konsolidierung-2026-10-12/schlusslauf-claude.md`: L3 an `c5666931d`, Fall 097 (D7), und L4 an `d0173380f`, Fall 052 (D8 DE), standen modal in „Ungesicherte Änderungen“; Stapel `function_bench.reset` → `MainWindow.open_path` → `_may_discard` → `dialogs.confirm_unsaved`, in 052 nach `finding.action:split_along_line` mit offenem Zeichenmodus. Zwilling von FD-172/FD-173 im Sprachfall.
+- Ursache: `reset` rief vor `open_path` nur `session.forget_changes()`; das verwirft den Stand, nicht die offenen Entwürfe, und `_may_discard` fragt auch nach einem Entwurf.
+- Vorschlag: Vor beiden Rückwegen zur Startszene den Weg von „Verwerfen“ gehen (`_discard_gestures`, dann `forget_changes`).
+- Wirkung beim Kunden: Kein Produktfehler; die Frage ist richtig. Der native Lauf stand bis zur Frist, und die Flächen nach der hängenden fehlten im Beleg.
+- Stand: behoben `84505b539`: `FunctionFlow.discard_previous` vor `open_path` und vor *Datei → Neu*; `tests/test_function_reset_discards.py` mit Attrappe der Speicherfrage am Stand davor 2 rot, danach grün; `test_function_*` samt Wächtern 1 829 passed; nativ belegt (Schlusslauf `d9f7a81f9` L4, D8 052–069 ohne Hänger).

@@ -377,6 +377,10 @@ def test_visible_warning_action_opens_existing_review_and_decline_keeps_stock(
         review=Value(),
         state=Value(),
         changed=SimpleNamespace(emit=lambda: None),
+        # Was ``status_line.settle_in_bar`` am Feld fragt (FD-90).
+        layout=lambda: None,
+        updateGeometry=lambda: None,
+        parentWidget=lambda: None,
     )
     opened = []
     host._release_dialog = lambda dialog: None

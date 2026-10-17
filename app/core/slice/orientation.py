@@ -16,25 +16,22 @@ from app.core.errors import (
     OPEN_PRINT_SETTINGS,
     SHOW_SUPPORT_NEED,
 )
+from app.core.geom import mesh_ops, orient
 from app.core.geom.mesh import MeshData
-from app.core.geom.mesh_ops import decimate_for_display
 from app.core.geom.orient import (
     AXES,
     MAX_FACE_CANDIDATES,
     NoFittingOrientationError,
     Orientation,
-    evaluate_directions,
     extreme_points,
-    fitting_transform,
     print_transform,
-    ranked_orientations,
     rotation_to_down,
     turned_extents,
 )
-from app.core.geom.orient import candidates as face_candidates
 from app.core.geom.transform import apply, moved_points, place_on_bed, translation
 from app.core.log import get_logger
-from app.core.slice.analysis import _cross_sections, slice_body
+from app.core.slice import analysis
+from app.core.slice.analysis import _cross_sections
 from app.core.types import CancelToken, Finding, Profile, ProgressFn, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -290,7 +287,7 @@ def judge(
     # Körper zu messen, der gleich wieder gedreht wird, ist Arbeit, die
     # niemand ansieht — und die Schichten als Konturen zurückzugeben ebenso
     # (RM-266): gelesen werden Stützvolumen und Aufstandsfläche.
-    result = slice_body(
+    result = analysis.slice_body(
         turned,
         layer_height,
         detail="support",
@@ -405,7 +402,7 @@ def search_proxy(mesh: MeshData) -> MeshData:
     """
     if mesh.triangle_count <= SEARCH_TRIANGLES:
         return mesh
-    return decimate_for_display(mesh, SEARCH_TRIANGLES)
+    return mesh_ops.decimate_for_display(mesh, SEARCH_TRIANGLES)
 
 
 def settled(baseline: Candidate, floor: float, footprint: float, best_footprint: float) -> bool:
@@ -463,7 +460,7 @@ def stays(
         return remembered
     from app.core.slice import advise
 
-    result = slice_body(
+    result = analysis.slice_body(
         mesh,
         profile.printer.layer_height,
         first_layer_height=profile.printer.layer_height,
@@ -505,7 +502,7 @@ def best_face_candidate(
     stehende Lage hatte.
     """
     footing = profile.printer.layer_height / 2.0
-    coarse = ranked_orientations(
+    coarse = orient.ranked_orientations(
         mesh,
         limit=count,
         cancelled=cancelled,
@@ -613,7 +610,7 @@ def search(
     def matrix_for(direction: Vec3) -> np.ndarray | None:
         if profile is None:
             return print_transform(mesh, direction)
-        return fitting_transform(mesh, direction, profile.printer, margin=margin)
+        return orient.fitting_transform(mesh, direction, profile.printer, margin=margin)
 
     matrices: dict[Vec3, np.ndarray] = {}
     baseline_matrix = matrix_for(baseline_direction)
@@ -633,7 +630,9 @@ def search(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
 
-    directions = _unique_directions([baseline_direction, *face_candidates(mesh, hull_limit=count)])
+    directions = _unique_directions(
+        [baseline_direction, *orient.candidates(mesh, hull_limit=count)]
+    )
     # **Die Vorauswahl sieht Achsen und tragende Flächen am Original.** Die
     # Kandidatenliste beginnt mit der Ausgangslage, den sechs Achsen und den
     # größten ebenen Flächen des Körpers — und die Ausdünnung, an der die
@@ -663,8 +662,8 @@ def search(
     # die Vorauswahl nach Schrägen, die der Drucker ohne Stütze druckt.
     limit: dict[str, float] = {} if overhang_angle is None else {"overhang_limit": overhang_angle}
     scored: list[Orientation] = [
-        *evaluate_directions(mesh, on_original, cancelled, **limit),
-        *evaluate_directions(proxy, on_proxy, cancelled, **limit),
+        *orient.evaluate_directions(mesh, on_original, cancelled, **limit),
+        *orient.evaluate_directions(proxy, on_proxy, cancelled, **limit),
     ]
     if not scored:
         raise NoFittingOrientationError()
@@ -862,7 +861,7 @@ def turned_like(
     matrix = (
         print_transform(mesh, direction)
         if profile is None
-        else fitting_transform(mesh, direction, profile.printer, margin=margin)
+        else orient.fitting_transform(mesh, direction, profile.printer, margin=margin)
     )
     if matrix is None:
         return None

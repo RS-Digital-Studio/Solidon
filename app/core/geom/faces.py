@@ -31,26 +31,16 @@ import numpy as np
 from app.core import units
 from app.core.errors import (
     CANCEL,
-    CHANGE_SELECTION,
+    CHANGE_FACES,
     CORRECT_INPUT,
     REPAIR_AND_RETRY,
     GeometryError,
     ValidationError,
 )
-from app.core.geom.boolean import (
-    BOOLEAN_OVERLAP,
-    BooleanKind,
-    BooleanOutcome,
-    boolean,
-    deepest,
-)
+from app.core.geom import boolean, repair
+from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, deepest
 from app.core.geom.mesh import MeshData
-from app.core.geom.repair import (
-    merge_vertices,
-    remove_degenerate_faces,
-    remove_doubled_faces,
-    remove_hollow_shells,
-)
+from app.core.geom.repair import remove_degenerate_faces, remove_doubled_faces, remove_hollow_shells
 from app.core.geom.section import settled_on_plane
 from app.core.types import CancelToken, Feature, FeatureId, Finding, Quality, Vec3
 from app.core.units import EPS_GEOM, MAX_FACET_SAG
@@ -186,7 +176,7 @@ def face_normal(feature: Feature) -> Vec3:
     if length <= EPS_GEOM:
         raise GeometryError(
             detail=_("Zu dieser Fläche ist keine Richtung bekannt. Wählen Sie sie im Bild erneut."),
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FACES, CANCEL),
         )
     return tuple(float(value) for value in raw / length)  # type: ignore[return-value]
 
@@ -321,7 +311,7 @@ def push_face(
         )
     tool = _prism_over(mesh, feature, distance)
     kind: BooleanKind = "union" if distance > 0.0 else "difference"
-    outcome = boolean(kind, [mesh, tool], quality=quality, cancelled=cancelled)
+    outcome = boolean.boolean(kind, [mesh, tool], quality=quality, cancelled=cancelled)
     if outcome.mesh.volume <= EPS_GEOM:
         raise GeometryError(
             detail=_(
@@ -425,7 +415,7 @@ def _prism_between(below: np.ndarray, corners: np.ndarray, above: np.ndarray) ->
     # Quader und ein Ergebnis, das 0,13 % daneben lag. Verschweißt und von den
     # entarteten Dreiecken befreit ist es derselbe Keil, den die erste Stufe
     # in Millisekunden nimmt.
-    welded, _seams = merge_vertices(MeshData(body))
+    welded, _seams = repair.merge_vertices(MeshData(body))
     cleaned, _flat = remove_degenerate_faces(welded)
     return cleaned
 
@@ -459,7 +449,7 @@ def gone_face_error(values: Mapping[str, Any] | None = None) -> GeometryError:
             "hat ihn verändert. Wählen Sie sie neu."
         ),
         values=dict(values or {}),
-        suggestions=(CHANGE_SELECTION, CANCEL),
+        suggestions=(CHANGE_FACES, CANCEL),
     )
 
 
@@ -473,7 +463,7 @@ def _must_be_flat(mesh: MeshData, triangles: list[int], normal: np.ndarray) -> N
                 "Wählen Sie eine ebene Fläche, oder ändern Sie das Merkmal über "
                 "seine Maße."
             ),
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FACES, CANCEL),
         )
 
 
@@ -549,7 +539,7 @@ def draft_walls(
                 "Dieser Körper hat keine Flächen, die in Entformungsrichtung stehen. Wählen "
                 "Sie eine andere Richtung oder einzelne Flächen."
             ),
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_FACES, CANCEL),
         )
     from app.core.perceive.features import _one_body
 
@@ -558,7 +548,7 @@ def draft_walls(
     if _round_beside_the_walls(body, chosen, pull):
         raise GeometryError(
             detail=DRAFT_BESIDE_A_ROUND,
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FACES, CANCEL),
             values={"angle_deg": round(angle_deg, 2)},
         )
     heights = np.asarray(body.vertices, dtype=float) @ pull
@@ -575,7 +565,9 @@ def draft_walls(
         chosen_tools = [tool for side, _wall, tool in tools if side == wanted]
         if not chosen_tools:
             continue
-        outcome = boolean(kind, [result, *chosen_tools], quality=quality, cancelled=cancelled)
+        outcome = boolean.boolean(
+            kind, [result, *chosen_tools], quality=quality, cancelled=cancelled
+        )
         runs.append(outcome)
         result = outcome.mesh
     # **Was kein Volumen hat, ist kein Körper** — wie nach den Kantenwerkzeugen
@@ -844,7 +836,9 @@ def _checked_tools(
         if len(parts) == 1:
             return parts[0]
         try:
-            return solved(boolean("union", parts, quality=quality, cancelled=cancelled)).mesh
+            return solved(
+                boolean.boolean("union", parts, quality=quality, cancelled=cancelled)
+            ).mesh
         except GeometryError:
             # Im Entwurf endet die Kette nach Stufe 2; die Prüfung lässt dann
             # nach, statt die Operation scheitern zu lassen. Ebenso, wo die
@@ -857,7 +851,7 @@ def _checked_tools(
         if second is None:
             return 0.0
         try:
-            outcome = boolean(
+            outcome = boolean.boolean(
                 kind, [first, second], quality=quality, allow_empty=True, cancelled=cancelled
             )
         except GeometryError:
@@ -868,7 +862,7 @@ def _checked_tools(
     def refused() -> GeometryError:
         return GeometryError(
             detail=DRAFT_CUTS_THROUGH,
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_FACES, CANCEL),
             values={"angle_deg": round(angle_deg, 2)},
         )
 
@@ -920,7 +914,7 @@ def _chosen_wall(
                 "Angestellt werden ebene Flächen. Wählen Sie eine ebene Seitenwand, "
                 "oder lassen Sie die Auswahl leer für alle Wände."
             ),
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FACES, CANCEL),
         )
     triangles = _triangles_of(mesh, feature)
     normal = np.asarray(face_normal(feature), dtype=float)
@@ -937,7 +931,7 @@ def _across_the_pull() -> GeometryError:
             "die in diese Richtung verlaufen. Wählen Sie eine Seitenwand oder eine andere "
             "Entformungsrichtung."
         ),
-        suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+        suggestions=(CORRECT_INPUT, CHANGE_FACES, CANCEL),
     )
 
 
@@ -1061,7 +1055,7 @@ def _moved_corners(
                     "verschwände — so weit reicht dieser Weg am Netz nicht. Stellen Sie einen "
                     "kleineren Winkel ein, oder wählen Sie weniger Flächen."
                 ),
-                suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+                suggestions=(CORRECT_INPUT, CHANGE_FACES, CANCEL),
                 values={"corner": [round(float(value), 3) for value in point]},
             )
         if float(np.linalg.norm(step)) > units.GRAZING_SLIDE * free + slack:
@@ -1071,7 +1065,7 @@ def _moved_corners(
                     "etwa eine Rundung — dort gibt es keine eindeutige neue Kante. Lassen Sie "
                     "diese Fläche aus, oder wählen Sie die angrenzende mit, wenn sie eben ist."
                 ),
-                suggestions=(CHANGE_SELECTION, CORRECT_INPUT, CANCEL),
+                suggestions=(CHANGE_FACES, CORRECT_INPUT, CANCEL),
                 values={"corner": [round(float(value), 3) for value in point]},
             )
         shift[vertex] = step
@@ -1201,7 +1195,7 @@ def _must_be_closed(mesh: MeshData) -> None:
     """
     if mesh.is_watertight:
         return
-    welded, _gone = merge_vertices(mesh)
+    welded, _gone = repair.merge_vertices(mesh)
     if welded.is_watertight:
         return
     cleaned, _dropped = remove_degenerate_faces(welded)

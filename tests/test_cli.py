@@ -4,6 +4,7 @@ Oberfläche (§10).
 
 from __future__ import annotations
 
+import importlib
 import struct
 from pathlib import Path
 
@@ -191,7 +192,8 @@ def test_the_first_run_speaks_the_language_from_the_installer(
         assert printed.splitlines()[0] == "Impresora", (
             f"deutsche Ausgabe trotz Installer-Wahl: {printed[:80]!r}"
         )
-        assert "valores de partida" in printed or "calibrado" in printed
+        # Der Kalibrierstand heißt seit FD-8 „aún sin calibrar“ statt „valores de partida“.
+        assert "aún sin calibrar" in printed or "calibrado" in printed
     finally:
         install_language(SOURCE_LANGUAGE)
         set_language(SOURCE_LANGUAGE)
@@ -1239,7 +1241,7 @@ def test_the_command_line_keeps_an_answer_for_its_next_evaluation(
     # Stelle wird so einmal gesucht und steht danach im Schritt (§17.1).
     answered = {1: {"width": 42.0}}
     monkeypatch.setattr(
-        main,
+        importlib.import_module("app.core.scene.evaluate"),
         "evaluate",
         lambda *_args, **_kwargs: SimpleNamespace(matches={1: {key: record}}, answers=answered),
     )
@@ -1262,7 +1264,7 @@ def test_the_command_line_takes_back_a_skipped_recognition(
 
     from app.core.perceive.match_records import recognition_answer_key
 
-    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(import_module("app.core.perceive.local"), "FEATURE_LIMIT_TRIANGLES", 1)
     path = tmp_path / "projekt.p3d"
     main(["new", str(path)])
     monkeypatch.setattr("builtins.input", lambda prompt="": "1")

@@ -29,7 +29,8 @@ from typing import Any, Final
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.geom.mesh import MeshData, as_mesh_data, refined_units, remember_refined_units
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData, refined_units, remember_refined_units
 from app.core.log import get_logger
 from app.core.types import CancelToken, Mesh
 
@@ -388,7 +389,7 @@ def with_slots(mesh: Mesh, slots: tuple[int, ...], *, cancelled: CancelToken | N
         cancelled.raise_if_cancelled()
     if isinstance(mesh, Solid):
         return mesh.with_triangle_slots(slots, cancelled=cancelled)
-    return replace(as_mesh_data(mesh), slots=slots)
+    return replace(geom_mesh.as_mesh_data(mesh), slots=slots)
 
 
 def validate_full_faces(mesh: Mesh, indices: tuple[int, ...]) -> None:

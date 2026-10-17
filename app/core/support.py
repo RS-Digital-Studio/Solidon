@@ -28,7 +28,8 @@ from datetime import UTC, datetime
 from typing import Any, Final
 from urllib.parse import urlsplit
 
-from app.branding import APP_NAME, APP_VERSION, SUPPORT_ADDRESS
+from app import branding
+from app.branding import APP_NAME, SUPPORT_ADDRESS
 from app.core.errors import CANCEL, CORRECT_INPUT, Action, AppError, UserError
 from app.core.http import (
     RejectRedirects,
@@ -200,7 +201,7 @@ class Ticket:
     def subject(self) -> str:
         """Was im Posteingang steht: Art, Version, erste Zeile."""
         first = self.message.strip().splitlines()[0] if self.message.strip() else ""
-        head = f"{APP_NAME} {APP_VERSION} — {self.kind_name}"
+        head = f"{APP_NAME} {branding.APP_VERSION} — {self.kind_name}"
         return tr("{name}: {value}", name=head, value=first[:80]) if first else head
 
     def as_text(self) -> str:
@@ -459,7 +460,7 @@ def _package(ticket: Ticket) -> tuple[str, bytes]:
         "subject": _header_safe(ticket.subject),
         "contact": _header_safe(ticket.contact),
         "message": ticket.as_text(),
-        "app_version": APP_VERSION,
+        "app_version": branding.APP_VERSION,
         "environment": json.dumps(environment(), ensure_ascii=False),
     }
 
@@ -521,7 +522,7 @@ def _post(url: str, content_type: str, body: bytes) -> dict[str, Any]:
         data=body,
         headers={
             "Content-Type": content_type,
-            "User-Agent": f"{APP_NAME}/{APP_VERSION}",
+            "User-Agent": f"{APP_NAME}/{branding.APP_VERSION}",
             "Accept": "application/json",
         },
         method="POST",

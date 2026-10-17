@@ -26,12 +26,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.core.bootstrap import load_operations
+from app.core import bootstrap
 from app.core.errors import AppError
 from app.core.ingest.loader import READABLE_SUFFIXES, normalise, read_model
 from app.core.knowledge import profiles
-from app.core.perceive.features import detect
-from app.core.slice.analysis import slice_body
+from app.core.perceive import features
+from app.core.slice import analysis
 
 #: Über so vielen Dreiecken wird die Schichtanalyse übersprungen, außer sie
 #: wird verlangt — eine Katze mit zwei Millionen Dreiecken ist eine
@@ -77,13 +77,13 @@ def run_one(path: Path, layer_height: float, skip_slice: bool) -> Outcome:
         outcome.watertight = mesh.is_watertight
 
         start = time.perf_counter()
-        found = detect(mesh)
+        found = features.detect(mesh)
         outcome.seconds["detect"] = time.perf_counter() - start
         outcome.findings.append(f"features={len(found)}")
 
         if not skip_slice and mesh.triangle_count <= SLICE_LIMIT:
             start = time.perf_counter()
-            slice_body(mesh, layer_height)
+            analysis.slice_body(mesh, layer_height)
             outcome.seconds["slice"] = time.perf_counter() - start
     except AppError as problem:
         outcome.failure = f"{type(problem).__name__}: {problem.title}"
@@ -113,7 +113,7 @@ def main() -> int:
         print(f"Diesen Ordner gibt es nicht: {args.folder}")
         return 2
 
-    load_operations()
+    bootstrap.load_operations()
     profiles.make_profile("centauri-carbon-2", "petg")
 
     found = models(args.folder, args.limit)

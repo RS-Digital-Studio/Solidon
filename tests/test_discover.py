@@ -21,6 +21,7 @@ import stat
 import subprocess
 import sys
 import urllib.request
+from collections.abc import Callable, Iterable
 from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
@@ -53,6 +54,8 @@ def test_plural_search_keeps_every_installation(
     monkeypatch: pytest.MonkeyPatch,
     isolated_search: None,
     source: str,
+    unpatched_find_program: Callable[..., Path | None],
+    unpatched_find_programs: Callable[[str, Iterable[str]], tuple[Path, ...]],
 ) -> None:
     """Jede Suchstufe liefert beide Slicer; der erste bleibt die einzelne Antwort."""
     names = ("orcaslicer", "prusa-slicer")
@@ -109,15 +112,18 @@ def test_plural_search_keeps_every_installation(
     monkeypatch.setattr(
         discover.shutil, "which", lambda name: str(programs[0]) if name == names[0] else None
     )
-    plural = discover.unpatched_find_programs
-    single = discover.unpatched_find_program
+    plural = unpatched_find_programs
+    single = unpatched_find_program
     assert plural("slicer", names) == programs
     monkeypatch.setattr(discover.shutil, "which", lambda _name: None)
     assert single("slicer", names) == programs[0]
 
 
 def test_plural_search_keeps_separate_appimage_versions(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_search: None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_search: None,
+    unpatched_find_programs: Callable[[str, Iterable[str]], tuple[Path, ...]],
 ) -> None:
     """Jede AppImage-Datei ist eine eigene Installation, auch im selben Ordner."""
     first = _appimage(tmp_path, "OrcaSlicer_Linux_V2.1.1.AppImage")
@@ -126,7 +132,7 @@ def test_plural_search_keeps_separate_appimage_versions(
     monkeypatch.setattr(discover, "_APPIMAGE_FOLDERS", (str(tmp_path), str(tmp_path)))
     monkeypatch.setattr(discover.os, "access", lambda path, _mode: path != blocked)
 
-    plural = discover.unpatched_find_programs
+    plural = unpatched_find_programs
     assert plural("slicer", ("orcaslicer",)) == (first, second)
 
 
@@ -139,6 +145,7 @@ def test_creality_is_found_through_the_public_slicer_catalogue(
     monkeypatch: pytest.MonkeyPatch,
     isolated_search: None,
     filename: str,
+    unpatched_find_programs: Callable[[str, Iterable[str]], tuple[Path, ...]],
 ) -> None:
     """Hersteller- und Versionsordner sind über denselben Katalog erreichbar wie andere Slicer."""
     from app.core.export.slicer_keys import flavour_of
@@ -153,7 +160,7 @@ def test_creality_is_found_through_the_public_slicer_catalogue(
     monkeypatch.setattr(discover, "_install_roots", lambda: (root,))
     monkeypatch.setattr(discover, "_SUFFIXES", (".exe", "") if filename.endswith(".exe") else ("",))
 
-    found = discover.unpatched_find_programs("slicer", SLICERS)
+    found = unpatched_find_programs("slicer", SLICERS)
 
     assert set(found) == {creality, prusa}
     assert len(found) == 2
@@ -167,6 +174,8 @@ def test_plural_search_keeps_a_chosen_bundle_or_host_path(
     monkeypatch: pytest.MonkeyPatch,
     isolated_search: None,
     kind: str,
+    unpatched_find_program: Callable[..., Path | None],
+    unpatched_find_programs: Callable[[str, Iterable[str]], tuple[Path, ...]],
 ) -> None:
     """Ein gültiger gemerkter Pfad gilt in der Mehrzahl ebenso wie in der Einzahl."""
     program = tmp_path / "custom" / ("Slicer.app" if kind == "bundle" else "slicer")
@@ -177,8 +186,8 @@ def test_plural_search_keeps_a_chosen_bundle_or_host_path(
         monkeypatch.setattr(discover, "in_flatpak", lambda: True)
     monkeypatch.setattr(discover, "remembered_path", lambda _tool_id: str(program))
 
-    plural = discover.unpatched_find_programs
-    single = discover.unpatched_find_program
+    plural = unpatched_find_programs
+    single = unpatched_find_program
     assert plural("slicer", ("not-on-the-path",)) == (program,)
     assert single("slicer", ("not-on-the-path",)) == program
 
@@ -284,6 +293,7 @@ def test_a_chosen_path_that_is_gone_does_not_keep_it_found(tmp_path: Path) -> No
 
 def test_a_remembered_address_is_not_reported_as_a_missing_file(
     caplog: pytest.LogCaptureFixture,
+    unpatched_find_program: Callable[..., Path | None],
 ) -> None:
     """Eine Adresse ist keine Datei — und keine verschwundene.
 
@@ -299,7 +309,7 @@ def test_a_remembered_address_is_not_reported_as_a_missing_file(
     discover.remember("comfyui", "http://127.0.0.1:8188")
 
     with caplog.at_level(logging.WARNING, logger="app.core.discover"):
-        found = discover.unpatched_find_program("comfyui", ("nothing-called-this",))
+        found = unpatched_find_program("comfyui", ("nothing-called-this",))
 
     assert found is None, "eine Adresse ist kein Programmpfad"
     assert not [r for r in caplog.records if "is gone" in r.getMessage()], (
@@ -308,7 +318,9 @@ def test_a_remembered_address_is_not_reported_as_a_missing_file(
 
 
 def test_a_chosen_path_that_is_gone_still_warns(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    unpatched_find_program: Callable[..., Path | None],
 ) -> None:
     """Die Gegenrichtung: Ein echter Pfad, den es nicht mehr gibt, warnt weiter.
 
@@ -318,7 +330,7 @@ def test_a_chosen_path_that_is_gone_still_warns(
     discover.remember("comfyui", str(tmp_path / "weg.exe"))
 
     with caplog.at_level(logging.WARNING, logger="app.core.discover"):
-        discover.unpatched_find_program("comfyui", ("nothing-called-this",))
+        unpatched_find_program("comfyui", ("nothing-called-this",))
 
     assert [r for r in caplog.records if "is gone" in r.getMessage()]
 
@@ -410,7 +422,9 @@ def test_a_service_can_live_on_another_machine() -> None:
     assert discover.service_url("comfyui", "http://127.0.0.1:8188") == "http://192.168.1.5:8188"
 
 
-def test_a_local_launcher_and_a_remote_address_are_remembered_together(tmp_path: Path) -> None:
+def test_a_local_launcher_and_a_remote_address_are_remembered_together(
+    tmp_path: Path, unpatched_find_program: Callable[..., Path | None]
+) -> None:
     """ComfyUI ist beides; die App-Auswahl darf die Webadresse nicht überschreiben."""
     program = tmp_path / "Comfy Desktop.exe"
     program.write_text("")
@@ -422,7 +436,7 @@ def test_a_local_launcher_and_a_remote_address_are_remembered_together(tmp_path:
         assert discover.service_url("comfyui", "http://127.0.0.1:8188") == (
             "http://192.168.1.5:8188"
         )
-        assert discover.unpatched_find_program("comfyui", ("Comfy Desktop",)) == program
+        assert unpatched_find_program("comfyui", ("Comfy Desktop",)) == program
 
         discover.use_local_address("comfyui")
         assert discover.service_url("comfyui", "http://127.0.0.1:8188") == ("http://127.0.0.1:8188")
@@ -438,7 +452,9 @@ def test_a_local_launcher_and_a_remote_address_are_remembered_together(tmp_path:
 
 
 def test_a_manually_selected_macos_app_bundle_is_a_program(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    unpatched_find_program: Callable[..., Path | None],
 ) -> None:
     """Eine ``.app`` ist auf dem Dateisystem ein Ordner, für den Nutzer aber die App."""
     bundle = tmp_path / "Comfy Desktop.app"
@@ -446,7 +462,7 @@ def test_a_manually_selected_macos_app_bundle_is_a_program(
     monkeypatch.setattr(discover, "remembered_path", lambda _tool_id: str(bundle))
     monkeypatch.setattr(discover.sys, "platform", "darwin")
 
-    assert discover.unpatched_find_program("comfyui", ("Comfy Desktop",)) == bundle
+    assert unpatched_find_program("comfyui", ("Comfy Desktop",)) == bundle
 
 
 def test_a_closed_port_answers_false_quickly() -> None:
@@ -677,8 +693,8 @@ def test_an_ascii_workspace_survives_unicode_temp_without_short_names(
     fallback.mkdir()
     monkeypatch.setattr(discover.tempfile, "tempdir", str(unicode_temp))
     monkeypatch.setattr(discover.sys, "platform", "win32")
-    monkeypatch.setattr(discover, "_windows_short_path", lambda _path: None, raising=False)
-    monkeypatch.setattr(discover, "_windows_temp_dir", lambda: fallback, raising=False)
+    monkeypatch.setattr(discover, "_windows_short_path", lambda _path: None)
+    monkeypatch.setattr(discover, "_windows_temp_dir", lambda: fallback)
     with discover.workspace_for(
         tmp_path / "CuraEngine.exe", "probe-", ascii_only=True
     ) as workspace:
@@ -884,6 +900,7 @@ def test_what_a_person_types_into_an_address_field_is_checked_there() -> None:
         "/home/jemand/modelle",
         "~/modelle",
         "file:///c:/modelle",
+        "C:",
         "http://host:keinport",
         "http://:11434",
     )
@@ -895,10 +912,35 @@ def test_what_a_person_types_into_an_address_field_is_checked_there() -> None:
         "http://127.0.0.1:8188",
         "127.0.0.1:11434",
         "https://werkstatt.lan:11434/api/chat",
+        # Ein Doppelpunkt an zweiter Stelle ist noch kein Laufwerk (Review RCI-7).
+        "[::1]:11434",
+        "a:8080",
         "",
     )
     for eingabe in brauchbar:
         assert discover.unusable_address(eingabe) is None, eingabe
+
+
+@pytest.mark.parametrize("flavour", ["system", "posix"])
+def test_a_windows_folder_is_named_a_folder_on_every_platform(
+    flavour: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Laufwerkspfad ist überall ein Ordner, nicht ein kaputter Port.
+
+    Erkannt wurde er über ``Path(...).drive``, und das kennt nur unter Windows
+    Laufwerke. Unter Linux und macOS las ``urlparse`` alles hinter ``C:`` als
+    Port, und der Kunde bekam den Satz zur Portnummer statt den zum Ordner
+    (CI-Lauf 38781742486). ``posix`` stellt den Pfadtyp von Linux und macOS nach.
+    """
+    from pathlib import PurePosixPath
+
+    if flavour == "posix":
+        monkeypatch.setattr(discover, "Path", PurePosixPath)
+    folder_reason = discover.unusable_address("/home/jemand/modelle")
+    assert folder_reason is not None and "Ordner" in str(folder_reason)
+
+    for eingabe in (r"C:\Users\Jemand\.ollama\models", "D:/Modelle", r"c:\modelle"):
+        assert discover.unusable_address(eingabe) == folder_reason, eingabe
 
 
 def test_an_empty_address_is_no_complaint_but_a_reset() -> None:
@@ -1135,7 +1177,9 @@ def test_an_appimage_without_the_executable_bit_is_not_a_find(
 
 
 def test_find_program_reaches_the_appimage_stage(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    unpatched_find_program: Callable[..., Path | None],
 ) -> None:
     """Und die Stufe haengt wirklich in der Kette.
 
@@ -1156,7 +1200,7 @@ def test_find_program_reaches_the_appimage_stage(
     # Nicht ``discover.find_program`` — das ist in der Suite die Attrappe aus
     # ``conftest``, die nur zurückgibt, was ausdrücklich gesetzt wurde. Genau
     # sie würde diesen Test grün machen, ohne die Kette je zu betreten.
-    assert discover.unpatched_find_program("orcaslicer", ("OrcaSlicer", "orca-slicer")) == path
+    assert unpatched_find_program("orcaslicer", ("OrcaSlicer", "orca-slicer")) == path
 
 
 def test_a_service_on_this_machine_does_not_go_through_the_company_proxy(
@@ -1664,7 +1708,10 @@ def test_the_refusal_names_every_slicer_solidon_works_with() -> None:
 
 
 def test_the_path_is_asked_once_until_it_or_the_program_changes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_search: None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_search: None,
+    unpatched_find_program: Callable[..., Path | None],
 ) -> None:
     """Jeder 3MF-Export fragte den PATH nach sechzehn Slicernamen — 0,4 s
     Rechenzeit unter Windows, unter Last drei Sekunden (RM-670).
@@ -1684,7 +1731,7 @@ def test_the_path_is_asked_once_until_it_or_the_program_changes(
 
     monkeypatch.setattr(discover.shutil, "which", which)
     names = ("prusa-slicer", "orca-slicer")
-    find = discover.unpatched_find_program
+    find = unpatched_find_program
 
     assert find("slicer", names) == program
     assert asked == ["prusa-slicer", "orca-slicer"]
@@ -1705,12 +1752,14 @@ def test_the_path_is_asked_once_until_it_or_the_program_changes(
 
 
 def test_an_empty_answer_of_the_path_is_kept_too(
-    monkeypatch: pytest.MonkeyPatch, isolated_search: None
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_search: None,
+    unpatched_find_program: Callable[..., Path | None],
 ) -> None:
     """Auch „nicht im PATH“ ist eine Antwort — der häufigste Fall unter Windows."""
     asked: list[str] = []
     monkeypatch.setattr(discover.shutil, "which", lambda name: asked.append(name))
-    find = discover.unpatched_find_program
+    find = unpatched_find_program
 
     assert find("slicer", ("orca-slicer",)) is None
     assert find("slicer", ("orca-slicer",)) is None
@@ -1718,7 +1767,11 @@ def test_an_empty_answer_of_the_path_is_kept_too(
 
 
 def test_a_slicer_the_list_finds_ends_the_remembered_no_of_the_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_search: None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_search: None,
+    unpatched_find_program: Callable[..., Path | None],
+    unpatched_find_programs: Callable[[str, Iterable[str]], tuple[Path, ...]],
 ) -> None:
     """Review RM-670 N7: Unter Linux legt der Paketverwalter den Slicer in einen
     Ordner, der schon im PATH steht. Das gemerkte Nein blieb, und der Export
@@ -1733,34 +1786,38 @@ def test_a_slicer_the_list_finds_ends_the_remembered_no_of_the_path(
         lambda name: str(program) if name == "orca-slicer" and program.exists() else None,
     )
     names = ("orca-slicer",)
-    find = discover.unpatched_find_program
+    find = unpatched_find_program
     assert find("slicer", names) is None
     program.write_text("")
     assert find("slicer", names) is None, "das Nein ist gemerkt"
     generation = discover.cache_generation()
 
-    assert discover.unpatched_find_programs("slicer", names) == (program,)
+    assert unpatched_find_programs("slicer", names) == (program,)
 
     assert discover.cache_generation() != generation, "wer eine Wahl hält, leitet neu her"
     assert find("slicer", names) == program
 
 
 def test_a_slicer_the_list_finds_ends_the_remembered_no_of_the_folders(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_search: None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_search: None,
+    unpatched_find_program: Callable[..., Path | None],
+    unpatched_find_programs: Callable[[str, Iterable[str]], tuple[Path, ...]],
 ) -> None:
     """Dasselbe für die Ordnersuche, auf jeder Plattform."""
     roots = (tmp_path / "Programme",)
     monkeypatch.setattr(discover, "_install_roots", lambda: roots)
     names = ("orca-slicer",)
     program = discover._below(roots[0] / "OrcaSlicer", names)[0]
-    find = discover.unpatched_find_program
+    find = unpatched_find_program
     assert find("slicer", names) is None
     program.parent.mkdir(parents=True)
     program.write_text("")
     assert find("slicer", names) is None, "das Nein ist gemerkt"
     generation = discover.cache_generation()
 
-    assert discover.unpatched_find_programs("slicer", names) == (program,)
+    assert unpatched_find_programs("slicer", names) == (program,)
 
     assert discover.cache_generation() != generation
     assert find("slicer", names) == program

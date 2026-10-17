@@ -70,6 +70,11 @@ MAX_FACET_SAG: Final[float] = 0.05
 #: (`first_run.printer_nozzle`) und Druckdialog (`_NOZZLE_RANGE_MM`) lesen sie.
 SMALLEST_NOZZLE: Final[float] = 0.1
 
+#: Die größte Düse, an beiden Stellen dieselbe. Die Herstellerprofile reichen bis
+#: 8 mm (Ginger G1, Granulat); der Druckdialog endete bei 2 mm und ließ größere
+#: Düsen aus der Auswahl fallen (FD-203, ``tests/data/vendor_print_values.json``).
+LARGEST_NOZZLE: Final[float] = 10.0
+
 #: Wie weit Maße und Positionen nach einer Beschleunigung oder Ersparnis vom
 #: Stand davor abweichen dürfen: ein Vierzigstel der kleinsten Düse. Der
 #: Maßstab der Nachweise; im Kern nur die Schranke, unter der eine Rechnung

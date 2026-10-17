@@ -72,9 +72,11 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.i18n import tr
-from app.ui.cursors import cursor
+from app.ui import cursors
 from app.ui.icons import icon
+from app.ui.layout_lifetime import layout_parts
 from app.ui.leash import stop_watching_the_dying
+from app.ui.scroll_areas import PassingScrollArea
 from app.ui.style import ROOMY, SPACE
 from app.ui.tab_windows import DetachableTabs
 from app.ui.theme import THEMES, Theme
@@ -758,13 +760,11 @@ class CardColumn(QWidget):
         """Die Flächen der sichtbaren Karten, in den Koordinaten der Spalte."""
         layout = self.layout()
         assert isinstance(layout, QVBoxLayout)
-        rects = []
-        for index in range(layout.count()):
-            item = layout.itemAt(index)
-            card = item.widget() if item is not None else None
-            if card is not None and card.isVisibleTo(self):
-                rects.append(card.geometry())
-        return rects
+        return [
+            card.geometry()
+            for card, _inner in layout_parts(layout)
+            if card is not None and card.isVisibleTo(self)
+        ]
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
         if stop_watching_the_dying(self, watched, event):
@@ -1016,7 +1016,7 @@ class CurrentPageTabs(DetachableTabs):
         return self._chrome_height(super().sizeHint(), stack) + inner
 
 
-class ContentScroller(QScrollArea):
+class ContentScroller(PassingScrollArea):
     """Ein Rollbereich, der seinen ganzen Inhalt wünscht; legen darf Qt ihn selbst.
 
     Anders als :class:`FittedScroller` setzt Qt die Größe des Inhalts hier
@@ -1043,7 +1043,7 @@ class ContentScroller(QScrollArea):
         return QSize(hint.width(), height + 2 * self.frameWidth())
 
 
-class FittedScroller(QScrollArea):
+class FittedScroller(PassingScrollArea):
     """Ein Rollbereich, der seinen ganzen Inhalt wünscht und erst rollt, wenn die Zone knapp ist.
 
     Für eine Karte aus vielen festen Zeilen, deren Höhe die Überlagerung
@@ -1270,9 +1270,7 @@ def extra_height(zone: QWidget) -> int:
         return 0
     margins = layout.contentsMargins()
     total = margins.top() + margins.bottom() + max(layout.count() - 1, 0) * layout.spacing()
-    for index in range(layout.count()):
-        item = layout.itemAt(index)
-        widget = item.widget() if item is not None else None
+    for widget, _inner in layout_parts(layout):
         if widget is None or not widget.isVisibleTo(zone):
             continue
         takers = [
@@ -1622,7 +1620,15 @@ class OverlayHost(QWidget):
     def _card_width(self, key: str, width: int) -> int:
         """Wie breit eine Seitenkarte ist — gleich, wo sie steht."""
         if key == "left":
-            return card_width(LEFT_WIDTH, LEFT_MAX, width)
+            card = card_width(LEFT_WIDTH, LEFT_MAX, width)
+            if self.left is None:
+                return card
+            # **Was der Inhalt mindestens braucht, bekommt er, bis LEFT_MAX**
+            # (FD-20): Der Objektbaum nennt die Breite, in der Name und Maß
+            # ganz stehen. Über der schmalen Grenze wächst nichts; dort teilt
+            # der Baum die Breite wie bisher.
+            least = self.left.minimumSizeHint().width()
+            return max(card, min(least, LEFT_MAX, int(width * NARROW_CARD_SHARE)))
         return self._right_width(width)
 
     def _card_sizes(
@@ -2197,7 +2203,7 @@ class CardGrip(QToolButton):
         self.setIcon(icon("grip", self))
         self.setAutoRaise(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setCursor(cursor("move", self))
+        self.setCursor(cursors.cursor("move", self))
         self.setAccessibleName(name)
         self.setToolTip(tr("Karte verschieben. Doppelklick legt sie zurück."))
         self.describe()

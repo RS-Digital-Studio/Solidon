@@ -441,7 +441,7 @@ def test_imported_local_pattern_keeps_one_selection_through_cache_save_and_undo(
 
     load_operations()
     # Die Größenentscheidung wird isoliert; die Erkennung selbst rechnet echt.
-    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(import_module("app.core.perceive.local"), "FEATURE_LIMIT_TRIANGLES", 1)
     mesh, _count = honeycomb_plate(columns=4, rows=3, across_flats=3, pitch=4, thickness=3)
     project = new_project()
     project.sources["src_1"] = mesh.raw.export(file_type="stl")
@@ -533,6 +533,7 @@ def test_large_path_revalidates_known_features_after_translation(monkeypatch) ->
     import importlib
 
     evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import local as perceive_local
     from app.core.perceive.local import detect_local
     from app.core.types import Operation, SceneObject
 
@@ -543,7 +544,7 @@ def test_large_path_revalidates_known_features_after_translation(monkeypatch) ->
     old = replace(hole, id="hole_31")
     shifted = mesh.raw.copy()
     shifted.apply_translation((12, -8, 2))
-    monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     output = evaluation._with_features(
         SceneObject("own", "Eigener Körper", MeshData.of(shifted)),
         {old.id: old},
@@ -570,6 +571,8 @@ def test_affine_large_path_measures_current_shape_and_search_extent(
     from app.core.types import Operation, SceneObject
 
     evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import local as perceive_local
+
     mesh = blind_cylinder()
     face, point, normal = bore_seed(mesh)
     known = detect_local(mesh, point, normal=normal, radius=8, seed_faces=(face,)).features
@@ -586,7 +589,7 @@ def test_affine_large_path_measures_current_shape_and_search_extent(
     matrix = np.diag([*factors, 1.0])
     turned = mesh.raw.copy()
     turned.apply_transform(matrix)
-    monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     output = evaluation._with_features(
         SceneObject("own", "Eigener Körper", MeshData.of(turned), features={old.id: old}),
         {old.id: old},
@@ -808,6 +811,8 @@ def test_long_thin_plane_keeps_its_measured_scope_after_rotation(monkeypatch) ->
     from app.core.types import Operation, SceneObject
 
     evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import local as perceive_local
+
     mesh = MeshData.of(trimesh.creation.box((80, 0.2, 2)))
     known = detect_local(mesh, (0, 0, 1), normal=(0, 0, 1), radius=45).features
     old = next(
@@ -819,7 +824,7 @@ def test_long_thin_plane_keeps_its_measured_scope_after_rotation(monkeypatch) ->
     rotation[:3, 3] = (120, -40, 30)
     raw = mesh.raw.copy()
     raw.apply_transform(rotation)
-    monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     output = evaluation._with_features(
         SceneObject("own", "Eigener Körper", MeshData.of(raw)),
         {old.id: old},
@@ -853,7 +858,7 @@ def test_large_local_transaction_replays_through_project_disk_cache_and_undo(
     from app.i18n import _
 
     # Der Test prüft den örtlichen Weg unabhängig vom automatischen Importbudget.
-    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(import_module("app.core.perceive.local"), "FEATURE_LIMIT_TRIANGLES", 1)
     load_operations()
     assert REGISTRY.get("detect_region").fn is detect_region
     registry = Registry()
@@ -1268,7 +1273,7 @@ def test_a_face_found_at_a_spot_stays_in_the_stack_and_after_a_change(
     from app.core.types import Source
 
     load_operations()
-    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(import_module("app.core.perceive.local"), "FEATURE_LIMIT_TRIANGLES", 1)
     monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", 40)
     raw = trimesh.creation.box(extents=(20.0, 20.0, 20.0)).subdivide().subdivide()
     project = new_project("centauri-carbon-2", "petg")
@@ -2180,19 +2185,20 @@ def test_a_search_region_is_never_welded_again(monkeypatch: pytest.MonkeyPatch) 
     Stelle fand sie bei 5 mm nicht (25.09.2026). Gezählt wird, ob für einen
     Ausschnitt verschweißt wird — der ganze Körper hier ist schon dicht.
     """
+    from app.core.geom import repair
     from app.core.perceive import features as detection
     from app.core.perceive import local
 
     mesh = blind_cylinder()
     assert detection.fully_stitched(mesh.raw)
     welded: list[int] = []
-    real = detection.merge_vertices
+    real = repair.merge_vertices
 
     def counted(target: Any, *args: Any, **kwargs: Any) -> Any:
         welded.append(target.triangle_count)
         return real(target, *args, **kwargs)
 
-    monkeypatch.setattr(detection, "merge_vertices", counted)
+    monkeypatch.setattr(repair, "merge_vertices", counted)
     face, point, normal = bore_seed(mesh)
     result = local.detect_local(mesh, point, normal=normal, radius=8, seed_faces=(face,))
     assert result.complete

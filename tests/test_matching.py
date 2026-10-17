@@ -114,8 +114,9 @@ def test_the_vectorised_matrix_is_the_single_pair_formula() -> None:
 
     Gemischt werden richtungslose Achsen, gerichtete Normalen, verschiedene
     Arten und die beiden Größenschlüssel. Damit steht jede Verzweigung von
-    ``cost`` mindestens einmal in der Matrix und wird elementweise gegen die
-    lesbare Einzelpaar-Referenz geprüft.
+    ``cost`` mindestens einmal in der Paketformel und wird elementweise gegen
+    die lesbare Einzelpaar-Referenz geprüft; die Matrix des Solvers trägt
+    dieselben Zahlen für jedes angenommene Paar.
     """
     old = [
         Feature(
@@ -177,12 +178,32 @@ def test_the_vectorised_matrix_is_the_single_pair_formula() -> None:
     after = (10.0, -4.0, 2.0)
     diagonal = 80.0
 
-    matrix = _cost_matrix(old, new, before, after, diagonal)
+    from app.core.perceive import matching
+
+    one = matching._vectors(old, before, diagonal, None)
+    two = matching._vectors(new, after, diagonal, None)
     reference = np.asarray(
         [[cost(first, second, before, after, diagonal) for second in new] for first in old]
     )
+    # Die Paketformel, wie ``_costed`` sie für Kandidaten rechnet, über jedes
+    # Paar — auch über das gekippte gerichtete Normalenpaar, das der
+    # Raumfilter nie annimmt.
+    rows, columns = np.divmod(np.arange(len(old) * len(new)), len(new))
+    signless = np.asarray(["axis" in feature.params for feature in old])[rows]
+    batch = matching._vector_costs(one[rows], two[columns], signless).reshape(reference.shape)
+    other_kind = np.asarray([[first.kind != second.kind for second in new] for first in old])
+    batch[other_kind] = matching.KIND_PENALTY
+    np.testing.assert_allclose(batch, reference, rtol=1e-12, atol=1e-12)
 
-    np.testing.assert_allclose(matrix, reference, rtol=1e-12, atol=1e-12)
+    # Die Matrix, die der globale Solver bekommt: über Raumfilter und Pakete
+    # gerechnet, abgelehnte Paare mit der Strafe (CS-9b).
+    accepted = reference <= matching.MATCH_THRESHOLD
+    assert accepted.sum() == 2, "Bohrung und Kugel angenommen, die gekippte Fläche nicht"
+    tree = matching.cKDTree(two[:, :3])
+    matrix = _cost_matrix(old, new, one, two, tree, matching._query_radius(), None)
+    np.testing.assert_allclose(
+        matrix, np.where(accepted, reference, matching.KIND_PENALTY), rtol=1e-12, atol=1e-12
+    )
 
 
 def test_the_matching_needs_no_entry_for_a_new_kind_of_feature() -> None:
@@ -672,10 +693,10 @@ def test_a_rigid_motion_keeps_a_feature_when_detection_misses_it(
     assert previous, "the fixture must expose a feature before it moves"
     matrix = translation((480.0, -125.0, 0.0))
     moved = apply(mesh, matrix)
-    import importlib
 
-    evaluation = importlib.import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(evaluation, "detect", lambda _mesh, **_kwargs: {})
+    from app.core.perceive import features as perceive_features
+
+    monkeypatch.setattr(perceive_features, "detect", lambda _mesh, **_kwargs: {})
     findings = []
 
     result = _with_features(
@@ -711,7 +732,6 @@ def test_arranging_keeps_a_feature_when_detection_misses_it(monkeypatch) -> None
     nicht wiedererkanntes Merkmal muss deshalb um den Versatz seines Körpers
     mitgenommen werden.
     """
-    import importlib
 
     from app.core.scene.evaluate import _with_features
     from app.core.types import Operation, SceneObject
@@ -720,8 +740,9 @@ def test_arranging_keeps_a_feature_when_detection_misses_it(monkeypatch) -> None
     previous = holes_of(mesh)
     matrix = translation((-120.0, 45.0, 0.0))
     moved = apply(mesh, matrix)
-    evaluation = importlib.import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(evaluation, "detect", lambda _mesh, **_kwargs: {})
+    from app.core.perceive import features as perceive_features
+
+    monkeypatch.setattr(perceive_features, "detect", lambda _mesh, **_kwargs: {})
     findings = []
 
     result = _with_features(
@@ -916,20 +937,19 @@ def _counted_recognitions(monkeypatch) -> list[int]:
     den der Merker vorher nichts wusste. Rechnet er an einem bewegten Netz, ist
     die Übertragung ausgefallen.
     """
-    import importlib
 
+    from app.core.perceive import features as perceive_features
     from app.core.perceive.features import known_detection
 
-    evaluation = importlib.import_module("app.core.scene.evaluate")
     runs: list[int] = []
-    original = evaluation.detect
+    original = perceive_features.detect
 
     def counted(mesh, **kwargs):
         if known_detection(mesh) is None:
             runs.append(1)
         return original(mesh, **kwargs)
 
-    monkeypatch.setattr(evaluation, "detect", counted)
+    monkeypatch.setattr(perceive_features, "detect", counted)
     return runs
 
 
@@ -1443,7 +1463,8 @@ def test_the_evaluation_carries_features_across_a_refinement(
     from app.core.types import Source
 
     features = importlib.import_module("app.core.perceive.features")
-    evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import local as perceive_local
+
     forget_cache()
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source(
@@ -1465,7 +1486,7 @@ def test_the_evaluation_carries_features_across_a_refinement(
     )
     if above_the_limit:
         # Der Eingang liegt darunter, das feinere Netz darüber.
-        monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", source_mesh.triangle_count)
+        monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", source_mesh.triangle_count)
         monkeypatch.setattr(
             local, "_recognise_region", lambda *_a, **_k: pytest.fail("örtlich nachgemessen")
         )
@@ -1514,7 +1535,8 @@ def test_a_refinement_keeps_its_features_when_the_project_is_opened_again(
     from app.core.types import Source
 
     features = importlib.import_module("app.core.perceive.features")
-    evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import local as perceive_local
+
     forget_cache()
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source(
@@ -1532,7 +1554,7 @@ def test_a_refinement_keeps_its_features_when_the_project_is_opened_again(
     if above_the_limit:
         # Der Eingang liegt darunter, das feinere Netz darüber.
         monkeypatch.setattr(
-            evaluation, "FEATURE_LIMIT_TRIANGLES", body("plate_holes.stl").triangle_count
+            perceive_local, "FEATURE_LIMIT_TRIANGLES", body("plate_holes.stl").triangle_count
         )
         monkeypatch.setattr(
             local, "_recognise_region", lambda *_a, **_k: pytest.fail("örtlich nachgemessen")
@@ -2032,7 +2054,7 @@ def test_scaling_generated_bores_keeps_only_current_circular_measures(
         import importlib
 
         monkeypatch.setattr(
-            importlib.import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1
+            importlib.import_module("app.core.perceive.local"), "FEATURE_LIMIT_TRIANGLES", 1
         )
     mesh = one_hole_plate()
     bore = next(iter(holes_of(mesh).values()))
@@ -2191,52 +2213,6 @@ def test_a_printed_screw_from_the_catalogue_moves_and_scales_without_a_halt(
     else:
         assert "table_size" not in thread.params
     assert "size" not in thread.params
-
-
-def test_every_part_moves_scales_and_stretches_its_features_without_a_halt() -> None:
-    """Kein Baustein legt einen Namen in ein Feld, das das Nachführen streckt.
-
-    Eine Kundenmeldung zu 0.6.0 (die gedruckte M20-Schraube, Fall oben) hielt
-    beim Verschieben mit „could not convert string to float: 'M'“ an: Das
-    Gewinde trug seine Tabellengröße als ``size``. Am Stand 0.6.0 traf das vier
-    Bausteine — gedruckte Mutter, Schraube, Gewinde und Gewindestange. Dieser
-    Fall fährt jeden Baustein mit seinen Vorgaben durch Verschieben,
-    gleichmäßiges und achsweises Skalieren, damit der nächste Baustein mit
-    einem Text in einem Maßfeld hier rot wird und nicht beim Kunden.
-    """
-    from app.core.geom.ops import as_transform
-    from app.core.knowledge.parts import PARTS
-    from app.core.perceive.matching import transformed_features
-
-    matrices = {
-        "verschieben": np.array(
-            [
-                [1.0, 0.0, 0.0, 14.0],
-                [0.0, 1.0, 0.0, -4.9],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0],
-            ]
-        ),
-        "skalieren": np.diag([2.0, 2.0, 2.0, 1.0]),
-        "strecken": np.diag([2.0, 1.0, 1.0, 1.0]),
-    }
-    specs = PARTS.all()
-    assert len(specs) >= 40, len(specs)
-    halts: list[str] = []
-    threaded: set[str] = set()
-    for spec in specs:
-        features = spec.fn(spec.params()).features
-        if any(feature.kind == "thread" for feature in features.values()):
-            threaded.add(spec.name)
-        for label, matrix in matrices.items():
-            try:
-                transformed_features(features, as_transform(matrix))
-            except Exception as error:
-                halts.append(f"{spec.name} {label}: {type(error).__name__}: {error}")
-    # Der Fall, dessen Ausgang bekannt ist: Ohne die vier Gewinde von 0.6.0
-    # prüfte der Wächter nichts, was je angehalten hat.
-    assert {"printed_nut", "printed_screw", "printed_thread", "threaded_rod"} <= threaded, threaded
-    assert not halts, halts
 
 
 def test_anisotropic_face_diameter_is_not_an_exact_circular_fit() -> None:

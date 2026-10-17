@@ -36,20 +36,14 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 
 from app.core.errors import CANCEL, SUPPRESS_ALONG, AmbiguityError, UserError
-from app.core.perceive.matching import (
-    AXIS_TOLERANCE,
-    MATCH_THRESHOLD,
-    POSITION_TOLERANCE,
-    feature_vector,
-    fingerprint,
-    resolve,
-)
+from app.core.perceive import matching
+from app.core.perceive.matching import AXIS_TOLERANCE, MATCH_THRESHOLD, feature_vector, fingerprint
 from app.core.registry import REGISTRY, Registry
 from app.core.registry.params import reads_scene
 from app.core.scene.evaluate import EvaluationResult, sight_of
@@ -220,7 +214,7 @@ def _same_place(saved: Mapping[str, Any], feature: Feature, centre: Any, diagona
             sum((vector[3 + i] + axis[i]) * (vector[3 + i] + axis[i]) for i in range(3))
         )
         turn = min(turn, back)
-    return shift / POSITION_TOLERANCE + turn / AXIS_TOLERANCE <= MATCH_THRESHOLD
+    return shift / matching.POSITION_TOLERANCE + turn / AXIS_TOLERANCE <= MATCH_THRESHOLD
 
 
 def verdict(
@@ -251,11 +245,11 @@ def verdict(
         if len(by_creator) == 1:
             target = by_creator[0]
         elif by_creator:
-            target = resolve(
+            target = matching.resolve(
                 expected.fingerprint, by_creator, same_kind, found.centre, found.diagonal
             ) or (expected.feature if expected.feature in by_creator else None)
     if target is None and expected.fingerprint:
-        target = resolve(
+        target = matching.resolve(
             expected.fingerprint, tuple(sorted(same_kind)), same_kind, found.centre, found.diagonal
         )
         if target is not None and creator is not None:
@@ -456,16 +450,29 @@ def _shown_number(document: Document, plan: RevisionPlan, step: OpId) -> int:
     return step_position(plan.document(document).ops, step)
 
 
-def _halted(document: Document, plan: RevisionPlan, result: EvaluationResult) -> UserError:
-    """Die Absage, wenn der Vorschlag anhält — mit dem Grund aus dem Halt."""
-    halt = next(
+def halt_finding(findings: Iterable[Finding], stopped_at: OpId | None) -> Finding | None:
+    """Der Befund, an dem die Kette hält — oder ``None`` ohne Halt.
+
+    Eine Quelle für die Sitzung (``Session.halt_in_the_way`` trägt seine Wege
+    als die des Halts), für diese Absagen und für die graue Anzeige der
+    Befundhandlungen (``change_lock.action_refusal``, RA-3): Hinter einem Halt
+    gehen genau die Wege dieses Befunds, nicht eine Liste von Kennungen.
+    """
+    if stopped_at is None:
+        return None
+    return next(
         (
             finding
-            for finding in result.scene.report.findings
-            if finding.severity == "error" and finding.op_id == result.stopped_at
+            for finding in findings
+            if finding.severity == "error" and finding.op_id == stopped_at
         ),
         None,
     )
+
+
+def _halted(document: Document, plan: RevisionPlan, result: EvaluationResult) -> UserError:
+    """Die Absage, wenn der Vorschlag anhält — mit dem Grund aus dem Halt."""
+    halt = halt_finding(result.scene.report.findings, result.stopped_at)
     shown = _old_number(plan, result.stopped_at)
     reason: TranslatableText | str = halt.message if halt is not None else ""
     known = {entry.id for entry in document.ops}

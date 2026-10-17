@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QScrollArea,
     QSplitter,
     QTreeWidget,
     QTreeWidgetItem,
@@ -51,6 +50,7 @@ from app.ui.dialogs import ErrorNotice, problem_text
 from app.ui.labels import length
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.panels import align_forms
+from app.ui.scroll_areas import PassingScrollArea
 from app.ui.style import NORMAL, SPACE, TIGHT, WIDE, make_primary, no_primary, set_level
 from app.ui.theme import Theme, current_theme
 
@@ -362,7 +362,7 @@ class OrganizerDialog(QDialog):
         self.selection = QLabel(tr("Wählen Sie ein Fach oder eine Wand."), left)
         self.selection.setWordWrap(True)
         left_layout.addWidget(self.selection)
-        scroll = QScrollArea(left)
+        scroll = PassingScrollArea(left)
         scroll.setWidgetResizable(True)
         self.editor = QWidget(scroll)
         self.editor_form = QFormLayout(self.editor)

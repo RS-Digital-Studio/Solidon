@@ -18,6 +18,7 @@ from app.core.knowledge.parts.registry import GROUPS
 from app.i18n import SOURCE_LANGUAGE, TranslatableText, format_decimal, set_language
 from app.i18n.catalog import available_languages, install_language, read_catalog
 from app.i18n.extract import message_ids
+from tests import source_tree
 
 PACKAGE_DIR = Path(app.__file__).parent
 UI_DIR = PACKAGE_DIR / "ui"
@@ -901,7 +902,7 @@ def test_french_measurement_warnings_and_advice_keep_complete_text_frames(
             Finding(
                 "test.error",
                 "error",
-                TranslatableText("Objekt: {object_id}", values={"object_id": "cube:12.5"}),
+                TranslatableText("{name}: {value}", values={"name": "Objet", "value": "cube:12.5"}),
             ),
         )
     )
@@ -1758,10 +1759,10 @@ def test_no_entry_mixes_two_apostrophes(language: str) -> None:
 
 
 def model_text_files() -> list[Path]:
-    """Was das Sprachmodell liest: die Agentenschicht und der Steckbrief."""
+    """Was das Sprachmodell liest: die Agentenschicht samt Unterpaketen und der Steckbrief."""
     return [
-        *sorted((PACKAGE_DIR / "core" / "agent").glob("*.py")),
-        PACKAGE_DIR / "core" / "perceive" / "digest.py",
+        *source_tree.python_files("app/core/agent"),
+        source_tree.definition_file("digest", "app/core/perceive"),
     ]
 
 
@@ -1775,8 +1776,8 @@ def non_model_surface_files() -> list[Path]:
     war ungeschützt.
     """
     model = set(model_text_files())
-    return sorted((PACKAGE_DIR / "cli").rglob("*.py")) + [
-        path for path in sorted((PACKAGE_DIR / "core").rglob("*.py")) if path not in model
+    return source_tree.python_files("app/cli") + [
+        path for path in source_tree.python_files("app/core") if path not in model
     ]
 
 
@@ -1791,7 +1792,7 @@ def test_model_texts_do_not_append_a_fixed_colon() -> None:
     paths = model_text_files()
     assert len(paths) > 5, "die Agentenschicht muss Quellen haben"
     offenders = [
-        f"{path.relative_to(PACKAGE_DIR)}:{line}"
+        f"{source_tree.relative(path)}:{line}"
         for path in paths
         for line in sorted(_fixed_translated_colons(ast.parse(path.read_text(encoding="utf-8"))))
     ]
@@ -1803,7 +1804,7 @@ def test_non_model_surface_labels_do_not_append_a_fixed_colon() -> None:
     paths = non_model_surface_files()
     assert len(paths) > 100, "die Kundentextprüfung muss den Kern lesen"
     offenders = [
-        f"{path.relative_to(PACKAGE_DIR)}:{line}"
+        f"{source_tree.relative(path)}:{line}"
         for path in paths
         for line in sorted(_fixed_translated_colons(ast.parse(path.read_text(encoding="utf-8"))))
     ]

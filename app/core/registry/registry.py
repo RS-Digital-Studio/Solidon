@@ -25,10 +25,11 @@ FEATURE_KINDS: Final[tuple[str, ...]] = get_args(FeatureKind)
 #: Zustände, die eine Operation vom Körper verlangen kann (``requires_body``).
 #: ``open`` heißt nicht wasserdicht, ``parts`` mehr als ein zusammenhängendes
 #: Stück, ``cavity`` ein Hohlraum — als Merkmal ``void`` erkannt oder von
-#: *Aushöhlen* eingetragen. Was hier nicht steht, prüft die Operation selbst
-#: beim Rechnen; die Oberfläche fragt nur nach diesen dreien, weil sie sich
-#: ohne Rechnung beantworten lassen.
-BODY_REQUIREMENTS: Final[tuple[str, ...]] = ("open", "parts", "cavity")
+#: *Aushöhlen* eingetragen, ``colour`` Farbinformation — Textur, Flächen- oder
+#: Eckfarben (``texture.carries_colour``). Was hier nicht steht, prüft die
+#: Operation selbst beim Rechnen; die Oberfläche fragt nur nach diesen, weil
+#: sie sich ohne Rechnung beantworten lassen.
+BODY_REQUIREMENTS: Final[tuple[str, ...]] = ("open", "parts", "cavity", "colour")
 
 #: Kategorien aus dem Operationskatalog (§25). Sie ordnen das Menü.
 #: Der Katalog aus §25, in der Reihenfolge, in der er im Menü erscheint. Vier
@@ -570,6 +571,30 @@ FEATURE_TITLES: Final[dict[str, TranslatableText]] = {
     "torus": _("Ringfläche"),
 }
 
+
+def feature_title_of(feature_id: str) -> str:
+    """Eine Merkmalskennung, wie der Kunde sie liest: „hole_2“ ist „Bohrung 2“ (FD-186).
+
+    Absagen und Befunde legen die Kennung in ``values["feature"]`` ab, denn
+    Agent und Handler lesen sie dort; im Fenster stand sie roh („Merkmal:
+    thread_1“). Die Art steht vorn in der Kennung (``<art>_<nummer>``), ein
+    Körper davor (``obj_1:``) fällt weg. Eine Kennung ohne bekannte Art bleibt,
+    wie sie ist — dann ist sie ein Name, den jemand vergeben hat.
+    """
+    bare = feature_id.rsplit(":", 1)[-1]
+    # Ein Muster zählt seine Glieder mit Punkt: „pattern_1.2“ ist Glied 2
+    # des ersten Musters (Review 2 F2a/D, D3 — dieselbe Regel wie im Feld).
+    parts = bare.split(".")
+    kind, _sep, first = parts[0].rpartition("_")
+    numbers = [first, *(part.rsplit("_", 1)[-1] for part in parts[1:])]
+    title = FEATURE_TITLES.get(kind)
+    if title is None:
+        return feature_id
+    if all(number.isdigit() for number in numbers):
+        return f"{title} {'.'.join(numbers)}"
+    return str(title)
+
+
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 
 #: ``produces=VARIABLE``: so viele Objekte heraus wie hinein.
@@ -1037,6 +1062,17 @@ class Registry:
 
     def all(self) -> tuple[OperationSpec, ...]:
         return tuple(self._ops[name] for name in sorted(self._ops))
+
+    def in_registration_order(self) -> tuple[OperationSpec, ...]:
+        """In der Reihenfolge der Registrierung, nicht nach Namen wie :meth:`all`.
+
+        Diese Folge ist Vertrag: ``bootstrap._OPERATION_MODULES`` hält sie
+        (Konzept Codestruktur 3.1, Regel 3), und der Registerabzug
+        (``tools/registry_dump.py``) zeigt an ihr, ob ein Schnitt die
+        Importfolge verschoben hat. Ein zurückgenommener und neu registrierter
+        Eintrag steht danach hinten.
+        """
+        return tuple(self._ops.values())
 
     def by_category(self) -> dict[str, tuple[OperationSpec, ...]]:
         """Nach Kategorien gruppiert, **innerhalb nach dem Titel sortiert**.

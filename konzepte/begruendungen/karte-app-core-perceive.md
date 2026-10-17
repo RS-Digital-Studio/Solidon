@@ -1177,6 +1177,15 @@ lassen die gesamte Wiedererkennung offen. Auch ein ungültiger Nichtgewinner
 darf keinen vermeintlich eindeutigen Treffer freigeben. Die historischen
 Vorgaben optionaler Achsen- und Maßfelder bleiben unverändert.
 
+`_cost_matrix` ist der Eintritt in den quadratischen Weg: Sie legt die volle
+Strafmatrix für den globalen Solver an, Solver, Hülle und Komponenten danach
+lesen nur sie. `_assignment` liest sie über das Modul, damit ein Test, der sie
+verbietet, den ganzen Weg verbietet (CS-9b; vorher rief sie niemand, und das
+Verbot in `test_spatial_matching.py` war immer grün). `_MATCH_WAYS` hält nur
+Namen, die `match` zur Aufrufzeit liest; ein Name, der nichts beiträgt, macht
+`tests/test_name_lists.py` rot (W6 d). Die Karte nennt beides nicht, sie hat
+keinen Platz; die Docstrings tragen es.
+
 ### Erben nur mit Beleg
 
 *Früher unter „Die Sache mit der Stabilität“.*

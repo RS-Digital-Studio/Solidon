@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -96,6 +97,9 @@ class WindowedCollector:
         self.rendering_counts: dict[Path, int] = {}
         #: Je Datei die Programme ihrer Slicertests (``pytest.mark.slicer``).
         self.slicer_programs: dict[Path, set[str]] = {}
+        #: Je Datei die Einheiten ihrer Fenster- und ihrer Slicerfälle (:func:`unit_keys`).
+        self.window_units: dict[Path, set[str]] = {}
+        self.slicer_units: dict[Path, set[str]] = {}
         self.include_rendered = include_rendered
         self.collected_count = 0
 
@@ -109,8 +113,10 @@ class WindowedCollector:
         path = Path(str(item.path)).resolve()
         for marker in item.iter_markers("slicer"):
             self.slicer_programs.setdefault(path, set()).update(str(arg) for arg in marker.args)
+            self.slicer_units.setdefault(path, set()).update(unit_keys(item))
         if needs_release_isolation(item):
             self.files.add(path)
+            self.window_units.setdefault(path, set()).update(unit_keys(item))
             self.window_counts[path] = self.window_counts.get(path, 0) + 1
             if not needs_a_window(item):
                 self.rendering_counts[path] = self.rendering_counts.get(path, 0) + 1
@@ -165,6 +171,20 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     mark_rendering_items(items)
 
 
+def unit_keys(item: pytest.Item) -> set[str]:
+    """Woran ein Fall seine Einheiten der Testdatei erreicht: seine Funktion, seine Klasse und
+    seine Fixtures beim Namen — dieselben Namen, unter denen ``tools/tree_reads.py`` eine
+    Lesung der Testdatei führt (``Borrowed.unit``)."""
+    keys = {
+        str(getattr(item, "originalname", None) or item.name),
+        *getattr(item, "fixturenames", ()),
+    }
+    owner = getattr(item, "cls", None)
+    if owner is not None:
+        keys.add(owner.__name__)
+    return keys
+
+
 def collect_windowed(paths: Sequence[Path], *, confcutdir: Path | None = None) -> tuple[Path, ...]:
     """Sammelt ohne Testlauf und gibt die betroffenen Dateien sortiert zurück."""
     windowed, _plain = collect_test_groups(paths, confcutdir=confcutdir, include_rendered=True)
@@ -212,6 +232,20 @@ def collect_ci_selection(
     return tuple(sorted(collector.files)), programs
 
 
+def collect_ci_units(
+    paths: Sequence[Path], *, confcutdir: Path | None = None
+) -> tuple[dict[Path, frozenset[str]], dict[Path, frozenset[str]]]:
+    """Je Datei mit Fenster- oder Rendererfällen und je Datei mit Slicerfällen die Einheiten,
+    die diese Fälle erreichen (:func:`unit_keys`), in einer Sammlung — für
+    ``tools/ci_selection.py``: Eine Datei, die allein eine Lesestelle gewählt hat, fährt dort
+    nur, wenn einer dieser Fälle die lesende Einheit erreicht."""
+    collector = _collect(paths, confcutdir=confcutdir)
+    return (
+        {path: frozenset(keys) for path, keys in sorted(collector.window_units.items())},
+        {path: frozenset(keys) for path, keys in sorted(collector.slicer_units.items())},
+    )
+
+
 def _collect(
     paths: Sequence[Path], *, confcutdir: Path | None, include_rendered: bool = False
 ) -> WindowedCollector:
@@ -239,21 +273,61 @@ def _collect(
     # Danach fand ``from conftest import make_object`` die ``conftest.py``
     # eines Testordners im Temp-Verzeichnis (CI 0.5.1, macOS). Ersetztes kommt
     # zurück, und der Suchpfad steht wieder, wie er stand.
+    #
+    # Ebenso Import-Haken und Umgebung: Die Sammlung führt ``tests/conftest.py``
+    # ein zweites Mal aus, die einen Import-Haken vorn in ``sys.meta_path``
+    # einsetzt und die Profilvariablen auf einen neuen Temp-Ordner biegt. Beides
+    # steht danach wieder, wie es stand.
     modules = dict(sys.modules)
     search_path = list(sys.path)
+    finders = list(sys.meta_path)
+    environment = dict(os.environ)
     try:
         with contextlib.redirect_stdout(captured_out), contextlib.redirect_stderr(captured_err):
             outcome = pytest.main(arguments, plugins=[collector])
     finally:
         sys.path[:] = search_path
+        sys.meta_path[:] = finders
+        for name in os.environ.keys() - environment.keys():
+            del os.environ[name]
+        for name, value in environment.items():
+            if os.environ.get(name) != value:
+                os.environ[name] = value
         for name, module in modules.items():
             if sys.modules.get(name) is not module:
                 sys.modules[name] = module
+        # Neu geladene Module der gesammelten Ordner gehen wieder — Testdateien, ``conftest.py``
+        # und Helfer daneben: Eine Datei ohne Paket steht unter ihrem bloßen Namen dort, und
+        # die nächste Sammlung einer gleichnamigen Testdatei aus einem anderen Ordner
+        # scheiterte an „import file mismatch“, ein gleichnamiger Helfer kam still aus dem
+        # ersten Ordner (F-5). Was die Sammlung sonst geladen hat (die Anwendung), bleibt —
+        # ein zweites Laden registrierte jede Op noch einmal.
+        roots = [_folder_of(Path(path).resolve()) for path in paths]
+        for name in sys.modules.keys() - modules.keys():
+            if _is_collected_module(name, sys.modules[name], roots):
+                del sys.modules[name]
     only_filtered = outcome == pytest.ExitCode.NO_TESTS_COLLECTED and collector.collected_count > 0
     if outcome != pytest.ExitCode.OK and not only_filtered:
         details = (captured_out.getvalue() + captured_err.getvalue()).strip()
         raise RuntimeError(f"Die Tests ließen sich nicht sammeln (Exit {int(outcome)}).\n{details}")
     return collector
+
+
+def _folder_of(path: Path) -> Path:
+    """Der Ordner, aus dem eine Sammlung lädt: der genannte Ordner, für eine Datei ihrer."""
+    return path if path.is_dir() else path.parent
+
+
+def _is_collected_module(name: str, module: object, roots: Sequence[Path]) -> bool:
+    """Ob ``module`` aus einem der gesammelten Ordner stammt — Testdatei, ``conftest.py`` oder
+    Helfer — und nicht zur Anwendung gehört (``app``)."""
+    if name == "app" or name.startswith("app."):
+        return False
+    file = getattr(module, "__file__", None)
+    if not isinstance(file, str):
+        return False
+    path = Path(file).resolve()
+    return any(path.is_relative_to(root) for root in roots)
 
 
 def main() -> int:

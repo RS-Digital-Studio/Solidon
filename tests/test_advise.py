@@ -297,7 +297,11 @@ def test_a_solid_block_gets_no_warning_about_its_thinnest_spot() -> None:
     drei Linienbreiten aber 2,55 mm, und damit stand über einem massiven Klotz
     „die schmalste Stelle geht auf keine ganze Zahl von Bahnen auf".
     """
-    settings = print_settings.resolve(profiles.make_profile())
+    # An der 0,8er Düse, wie der Satz sagt: An der 0,4er wären 0,85 mm mehr als
+    # das Doppelte der Düse, und das meldet der Rat zu Recht (WIDE_LINE_SHARE).
+    base = profiles.make_profile()
+    profile = replace(base, printer=replace(base.printer, nozzle_diameter=0.8))
+    settings = print_settings.resolve(profile)
     settings = print_settings.with_path(settings, "layers.line_width", 0.85)
     settings = print_settings.with_path(settings, "shell.wall_generator", "classic")
     block = result_with([0.0] * 20, min_width=WIDTH_INTERESTING)
@@ -305,7 +309,7 @@ def test_a_solid_block_gets_no_warning_about_its_thinnest_spot() -> None:
         "sonst liegt der Deckel über der Schwelle und der Fall prüft nichts"
     )
 
-    entries = advise.advise(settings, profiles.make_profile(), block)
+    entries = advise.advise(settings, profile, block)
 
     assert "shell.wall_generator" not in paths(entries)
     assert "layers.line_width" not in paths(entries)
@@ -2203,7 +2207,7 @@ def test_scarf_advice_follows_a_changed_shared_ramp_length(monkeypatch: pytest.M
     round_one = _standing(trimesh.creation.cylinder(radius=12.5, height=20.0, sections=128))
     try:
         with monkeypatch.context() as changed:
-            changed.setattr(print_settings, "SCARF_LENGTH", 50.0, raising=False)
+            changed.setattr(print_settings, "SCARF_LENGTH", 50.0)
             importlib.reload(slicer_keys)
             importlib.reload(advise)
             assert "shell.scarf_seam" not in paths(advise.advise(settings, profile, round_one))

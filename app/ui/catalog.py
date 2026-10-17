@@ -42,7 +42,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.knowledge.parts import GROUPS, PARTS
+from app.core import guides
+from app.core.knowledge import parts
+from app.core.knowledge.parts import GROUPS
 from app.core.knowledge.parts.ops import (
     catalog_operation,
     cuts_by_parameter,
@@ -54,18 +56,11 @@ from app.core.knowledge.parts.registry import PartSpec
 from app.core.registry.registry import FEATURE_TITLES
 from app.core.registry.surfaces import choice_label
 from app.i18n import tr
+from app.ui import style
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import ROLES
 from app.ui.panels import collapsible, open_section
-from app.ui.style import (
-    NORMAL,
-    SPACE,
-    TIGHT,
-    WIDE,
-    DialogScrollArea,
-    fit_dialog_to_screen,
-    make_primary,
-)
+from app.ui.style import NORMAL, SPACE, TIGHT, WIDE, DialogScrollArea, make_primary
 
 #: Was den gescheiterten oder fehlenden Bereichstest in Worten anführt (§24.5)
 #: — in Detailspalte und Kurzhilfe. Auf der Kachel steht dafür ein Warndreieck.
@@ -194,7 +189,7 @@ def _in_own_library(spec: PartSpec) -> bool:
 
 def _own_library_is_empty() -> bool:
     """Ob es noch keinen Baustein im eigenen Bausteinordner gibt (RM-680)."""
-    return not any(_in_own_library(spec) for spec in PARTS.all())
+    return not any(_in_own_library(spec) for spec in parts.PARTS.all())
 
 
 def describe(spec: PartSpec) -> str:
@@ -231,7 +226,7 @@ def parts_for_feature(kind: str) -> frozenset[str]:
     from app.core.registry import REGISTRY
 
     fitting = {operation.name for operation in REGISTRY.for_feature(kind)}
-    return frozenset(spec.name for spec in PARTS.all() if op_name(spec.name) in fitting)
+    return frozenset(spec.name for spec in parts.PARTS.all() if op_name(spec.name) in fitting)
 
 
 def feature_title(kind: str) -> str:
@@ -545,6 +540,7 @@ class PartCatalog(QDialog):
         # gerechneten Körpers. Der Katalog kennt das Dokument nicht und soll es
         # nicht kennen.
         self.save_part = QPushButton(tr("Auswahl als Baustein speichern …"), self)
+        self.save_part.setProperty(guides.TARGET_PROPERTY, "parts.save")
         self.save_part.clicked.connect(self.saveRequested.emit)
         self.set_can_save(False, "")
 
@@ -923,7 +919,7 @@ class PartCatalog(QDialog):
     def show_parts(self, text: str = "") -> None:
         """Füllt die Liste, gruppiert wie der Katalog gruppiert."""
         self.list.clear()
-        wanted = PARTS.search(text) if text.strip() else PARTS.all()
+        wanted = parts.PARTS.search(text) if text.strip() else parts.PARTS.all()
         fitting = self._fitting
         if fitting is not None:
             wanted = tuple(spec for spec in wanted if spec.name in fitting)
@@ -1009,7 +1005,7 @@ class PartCatalog(QDialog):
         holt der Filter unten nach.
         """
         super().showEvent(event)
-        fit_dialog_to_screen(self)
+        style.fit_dialog_to_screen(self)
         self._stretch_headings()
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen
@@ -1127,7 +1123,9 @@ class PartCatalog(QDialog):
             # hält den Katalog am Leben — zehn losgelassene überlebten alle
             # zehn, und ``gc.get_referrers`` nannte genau sie.
             return
-        missing = next((spec for spec in PARTS.all() if spec.name not in self._previews), None)
+        missing = next(
+            (spec for spec in parts.PARTS.all() if spec.name not in self._previews), None
+        )
         if missing is None:
             return
 
@@ -1159,7 +1157,7 @@ class PartCatalog(QDialog):
         """Hängt ein fertiges Bild an seine Zeile, ohne die Liste neu zu bauen —
         ein Neuaufbau würde die Auswahl und die Bildlaufposition mitnehmen.
         """
-        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
+        spec = next((entry for entry in parts.PARTS.all() if entry.name == name), None)
         if spec is None or name not in self._previews:
             return
         for row in range(self.list.count()):
@@ -1205,7 +1203,7 @@ class PartCatalog(QDialog):
         wechselt mit jedem Klick in der Liste.
         """
         name = self.chosen()
-        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
+        spec = next((entry for entry in parts.PARTS.all() if entry.name == name), None)
         shown = detail(spec)
         self.detail.setText(shown)
         allowed, reason = self._insert_state(spec)
@@ -1262,14 +1260,14 @@ class PartCatalog(QDialog):
 
     def _chosen(self, item: QListWidgetItem) -> None:
         name = item.data(Qt.ItemDataRole.UserRole)
-        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
+        spec = next((entry for entry in parts.PARTS.all() if entry.name == name), None)
         if name and self._insert_state(spec)[0]:
             self.partChosen.emit(name)
             self.accept()
 
     def _accept(self) -> None:
         name = self.chosen()
-        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
+        spec = next((entry for entry in parts.PARTS.all() if entry.name == name), None)
         if name and self._insert_state(spec)[0]:
             self.partChosen.emit(name)
             self.accept()

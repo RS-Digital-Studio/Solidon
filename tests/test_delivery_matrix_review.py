@@ -501,8 +501,7 @@ def test_every_plate_row_carries_the_support_limit_of_its_nozzle(
 
     from app.core.knowledge import profiles
     from app.core.slice.estimate import support_floor
-
-    unit = _matrix_unit_for_flags(tmp_path, monkeypatch)
+    from app.ui import print_settings_dialog
 
     def prepared(job: Any, plate: int) -> Any:
         return SimpleNamespace(
@@ -522,7 +521,10 @@ def test_every_plate_row_carries_the_support_limit_of_its_nozzle(
         )
         return SimpleNamespace(findings=[], gcode_path=tmp_path / "p.gcode", metrics=metrics)
 
-    monkeypatch.setattr(unit, "_prepare_plate", prepared)
+    # Ersetzt wird das Original im Dialog; das über den Pfad geladene Werkzeug
+    # liest ``_prepare_plate`` dort zur Aufrufzeit (CS-11).
+    monkeypatch.setattr(print_settings_dialog, "_prepare_plate", prepared)
+    unit = _matrix_unit_for_flags(tmp_path, monkeypatch)
     monkeypatch.setattr(unit.handover, "slice_model", sliced)
     base = profiles.make_profile("centauri-carbon-2", "pla")
     profile = dataclasses.replace(

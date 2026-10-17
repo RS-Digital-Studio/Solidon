@@ -61,6 +61,7 @@ STATE = """JSON.stringify((() => {
     above_header: hint ? hint.offsetTop + hint.offsetHeight <= header.offsetTop : null,
     height: hint ? hint.offsetHeight : 0,
     space: root.getPropertyValue("--language-hint-space").trim(),
+    reserved: document.querySelector("body > .language-hint-space")?.offsetHeight ?? 0,
     stored,
     focus: document.activeElement ? document.activeElement.className : "",
   };
@@ -256,6 +257,7 @@ def test_closing_is_remembered_and_frees_the_space(outcomes: dict[str, list], ca
     Fokus am Zeichen der Kopfzeile statt im Nichts."""
     _done, closed, reloaded = outcomes[case]
     assert (closed["hint"], closed["stored"], closed["space"]) == ("", "closed", "0px")
+    assert closed["reserved"] == 0, "der Block am Seitenende geht mit der Karte"
     if case == "escape":
         assert closed["focus"] == "brand"
     assert reloaded["hint"] == ""
@@ -269,6 +271,9 @@ def test_the_fixed_card_keeps_its_space_free(outcomes: dict[str, list], case: st
     state = outcomes[case][0]
     assert state["position"] == "fixed"
     assert int(state["space"].removesuffix("px")) >= state["height"] > 0
+    # Der Block am Seitenende selbst, nicht nur die Variable: Ein Polster an
+    # ``body`` blieb unter Chromium manchmal bei 0px stehen (CI-Probe 38861197337).
+    assert f"{state['reserved']}px" == state["space"], state
     if case == "telefon":
         _state, under_hint, focused_above = outcomes[case]
         assert under_hint == 0, "Fußverweise am Seitenende unter der Karte"

@@ -71,6 +71,13 @@ def _scene_print(
     }
 
 
+def _link(
+    name: str, rect: list[int], cls: str, mark: str = "", *, primary: bool = False
+) -> dict[str, Any]:
+    """Ein Glied der Tab-Kette, wie ``function_capture.focus_entry`` es schreibt."""
+    return {"name": name, "rect": rect, "class": cls, "mark": mark, "primary": primary}
+
+
 def sample_protocol() -> dict[str, Any]:
     """Ein vollständiges Protokoll, an dem kein Prüfpunkt und kein Kriterium etwas findet.
 
@@ -175,6 +182,19 @@ def sample_protocol() -> dict[str, Any]:
             },
         ],
         "spot": {"point": [640, 410], "covered_by": None},
+        # Das Vorhersagetor vor dem Übernehmen (V4, FD-168): gebunden.
+        "prediction": {
+            "ready": "cases/001/v4/ready.json",
+            "target": "feature.apply",
+            "bound": f"cases/001/v4/prediction-before-click.json {'c' * 64}",
+            "path": "cases/001/v4/prediction-before-click.json",
+            "sha256": "c" * 64,
+            "step_index": 6,
+            "image_index": 3,
+            "reason": None,
+            "rejected": [],
+            "after": ["cases/001/v4-nachher.png"],
+        },
         "states": {
             "before": before,
             "preview": before,
@@ -257,9 +277,21 @@ def sample_protocol() -> dict[str, Any]:
             },
         ],
         "tab_chain": [
-            {"name": "Durchmesser", "rect": [12, 40, 120, 24]},
-            {"name": "Tiefe", "rect": [12, 72, 120, 24]},
-            {"name": "Übernehmen", "rect": [12, 120, 96, 28]},
+            _link("Durchmesser", [12, 40, 120, 24], "BoundedLengthSpin"),
+            _link("Tiefe", [12, 72, 120, 24], "BoundedLengthSpin"),
+            # Die Zielhandlung: der Hauptknopf der Fläche (Prüfpunkt 10, FD-141).
+            _link("Übernehmen", [12, 120, 96, 28], "QPushButton", "feature.apply", primary=True),
+        ],
+        # Ab der Reiterleiste über der Fläche (FD-177): leer, wenn keine darüber steht.
+        "tab_from_bar": [],
+        # Grau, bis ein Maß sich ändert; die Kurzhilfe als Bild (FD-99).
+        "grey_apply": [
+            {
+                "where": "02-uebernehmen-grund",
+                "target": "feature.apply",
+                "grey": True,
+                "image": "cases/1/02-uebernehmen-grund-1.png",
+            }
         ],
         "names": ["Durchmesser", "Tiefe", "Übernehmen"],
         "focus_return": True,
@@ -305,6 +337,17 @@ def sample_protocol() -> dict[str, Any]:
         ],
         "fonts": [
             {"surface": "OperationDialog", "widget": "QLabel", "level": "body", "stylesheet": ""}
+        ],
+        # Der Schriftwechsel zur Laufzeit (``function_fonts``, FD-57/58).
+        "font_change": [
+            {
+                "points": 14.0,
+                "wanted": 14.0,
+                "window": [2560, 1369],
+                "still": True,
+                "image": "cases/1/schrift-2-14pt-gross.png",
+                "cut": [],
+            }
         ],
         "state_images": [
             {
@@ -368,6 +411,7 @@ def sample_protocol() -> dict[str, Any]:
             },
         ],
         "hover_labels": [{"kind": "hole", "label": "Bohrung Ø 5 mm"}],
+        "recognized_kinds": ["hole"],
         "empty_states": [
             {
                 "surface": "Verlauf",
@@ -425,7 +469,7 @@ def sample_protocol() -> dict[str, Any]:
         "findings": [],
         "closed_by_escape": [],
         "unmeasured": {},
-        "images": ["cases/1/01-vorher.png"],
+        "images": ["cases/1/01-vorher.png", "cases/1/02-uebernehmen-grund-1.png"],
         "errors": [],
     }
 
@@ -550,7 +594,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
             click_step("operation:drill_hole"),
             click_step("feature.in_view"),
             click_step("feature.every"),
-            click_step("feature.apply"),
+            click_step("feature.apply", "dialog", phase="übernehmen"),
         ),
     ),
     BrokenSample(
@@ -662,6 +706,15 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     ),
     BrokenSample(10, "doppelter Name", change=_set("names.1", "Durchmesser")),
     BrokenSample(10, "Fokus kommt nicht zurück", change=_set("focus_return", False)),
+    # --- FD-141: Ein Klassenname ist kein Name, und die Kette erreicht das Ziel.
+    BrokenSample(
+        10, "Glied heißt nach seiner Klasse", change=_set("tab_chain.1.name", "BoundedLengthSpin")
+    ),
+    BrokenSample(
+        10,
+        "Kette verlässt die Fläche vor der Zielhandlung",
+        change=_all(_set("tab_chain.2.primary", False), _set("tab_chain.2.mark", "")),
+    ),
     BrokenSample(11, "Operation ohne Handbuchstelle", context={"manual_place": lambda row: None}),
     BrokenSample(
         11,
@@ -669,6 +722,12 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         kind="verdict",
         verdict=_verdict(point=11, image=None),
         reason="ohne Bild oder Stelle",
+    ),
+    BrokenSample(
+        11,
+        "Spezifikation nennt eine Fundstelle, die es nicht gibt",
+        context={"promise_problems": lambda spec: ["Handbuchseite 'erfunden' gibt es nicht"]},
+        expect="nicht_pruefbar",
     ),
     BrokenSample(12, "Verlauf gewachsen", change=_set("revise.0.history_after", 3)),
     BrokenSample(
@@ -732,7 +791,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
             click_step("operation:drill_hole"),
             click_step("feature.in_view"),
             click_step("feature.every"),
-            click_step("feature.apply"),
+            click_step("feature.apply", "dialog", phase="übernehmen"),
         ),
     ),
     BrokenSample(
@@ -744,7 +803,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
                 click_step("tree.row:body1.hole1", "karte_links"),
                 click_step("feature:resize_hole"),
                 click_step("feature.in_view"),
-                click_step("feature.apply"),
+                click_step("feature.apply", "dialog", phase="übernehmen"),
             ),
         ),
     ),
@@ -923,6 +982,22 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         verdict=_verdict(criterion="I1", design_judgement=True),
         reason=GOOD_OVER_FINDING,
     ),
+    # --- „Jede Art“ ist die Liste der Erkennung (FD-152): eine erkannte Art, die
+    # nicht überfahren wurde, ist nicht gemessen.
+    BrokenSample(
+        "I1",
+        "erkannte Art nicht überfahren",
+        change=_set("recognized_kinds", ["hole", "slot"]),
+        expect="nicht_gelaufen",
+    ),
+    BrokenSample(
+        "I1",
+        "ohne Liste der erkannten Arten, Urteil gut",
+        kind="verdict",
+        change=_drop("recognized_kinds"),
+        verdict=_verdict(criterion="I1", design_judgement=True),
+        reason=UNMEASURED_VERDICT,
+    ),
     BrokenSample(
         "I2",
         "gerechnete Vorschau ohne Bandaufnahme",
@@ -1012,6 +1087,31 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         expect="nicht_gelaufen",
     ),
     BrokenSample("E4", "Stelle nicht gemessen", change=_drop("spot"), expect="nicht_gelaufen"),
+    # Eine Handlung am ganzen Körper: Die Stelle ist der Körper im Ergebnisbild (FD-169).
+    BrokenSample(
+        "E4",
+        "Körper nach dem Ergebnis außerhalb des Bildes",
+        change=_set(
+            "spot",
+            {
+                "frame": [400, -60, 300, 260],
+                "view": [0, 0, 1280, 820],
+                "inside": False,
+                "bodies": ["obj_1"],
+                "covered_by": None,
+            },
+        ),
+    ),
+    BrokenSample(
+        "E4",
+        "Rahmen des Körpers ohne Bild nicht gemessen",
+        change=_all(
+            _set("row.requirement", ""),
+            _drop("spot"),
+            _set("unmeasured.spot", "ohne Bild der Ansicht"),
+        ),
+        expect="nicht_gelaufen",
+    ),
     BrokenSample(
         "Z6",
         "Fall lief nur bei 1920 x 1080",
@@ -1104,6 +1204,36 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample(6, "Zeiger erst nach 0,5 s", change=_set("timing.first_feedback_s", 0.5)),
     # --- Beide Sätze am Feld (Review L17).
     BrokenSample("V3", "Feld ohne Kurzhilfe", change=_set("fields.0.tooltip", "")),
+    # --- Schritte zählen nur bis zum Beispielziel (FD-146): Ein Weg, der an der
+    # Fläche endet, misst nichts, was danach käme.
+    *(
+        BrokenSample(
+            key,
+            "Weg endet vor dem Übernehmen",
+            change=_steps(
+                click_step("tree.row:body1", "karte_links"), click_step("operation:drill_hole")
+            ),
+            expect="nicht_gelaufen",
+        )
+        for key in ("E1", "E2", "E3")
+    ),
+    # --- Eine umbrochene Listenzeile, niedriger als ihr Text (FD-110).
+    BrokenSample(
+        9,
+        "Befundzeile höher als ihre Zelle",
+        change=_set(
+            "texts.1",
+            {
+                "text": "Ein Objekt steckt unter dem Druckbett. · Überstand: 10,00 mm",
+                "carrier": "_ReportList.Zeile",
+                "need_px": 72,
+                "width_px": 16,
+                "cut": True,
+                "lead": False,
+                "axis": "hoehe",
+            },
+        ),
+    ),
 )
 
 

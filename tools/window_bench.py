@@ -57,17 +57,13 @@ EVENT_DRAIN_ROUNDS = 20
 
 
 def isolate(profile: Path) -> None:
-    """Biegt die Nutzerverzeichnisse in das Messprofil um (§38)."""
+    """Nutzerverzeichnisse ins Messprofil (§38), Schlüsselbund auf die Attrappe (RC-12)."""
     profile.mkdir(parents=True, exist_ok=True)
-    for variable in (
-        "APPDATA",
-        "LOCALAPPDATA",
-        "HOME",
-        "XDG_DATA_HOME",
-        "XDG_CONFIG_HOME",
-        "XDG_CACHE_HOME",
-    ):
-        os.environ[variable] = str(profile)
+    # Die Ordner eines zeichnenden Profils, eine Quelle mit dem Prüfstand (C-1).
+    from app.core.paths import drawing_profile_variables, isolate_secrets
+
+    os.environ.update(dict.fromkeys(drawing_profile_variables(), str(profile)))
+    isolate_secrets(os.environ)
 
 
 def working_set_mb() -> float:
@@ -281,8 +277,8 @@ def main() -> int:
         help="Messprofil für die Nutzerverzeichnisse (bleibt zwischen Läufen)",
     )
     arguments = parser.parse_args()
-    isolate(arguments.profile)
     sys.path.insert(0, str(ROOT))
+    isolate(arguments.profile)
 
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication

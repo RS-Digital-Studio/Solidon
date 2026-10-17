@@ -8,10 +8,11 @@ from typing import Any, cast
 import numpy as np
 
 from app.core.errors import CHOOSE_PRINTER, ValidationError
-from app.core.geom import transform
-from app.core.geom.boolean import BooleanOutcome, boolean, deepest
+from app.core.geom import boolean, transform
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.boolean import BooleanOutcome, deepest
 from app.core.geom.contours import polygons_of
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData
 from app.core.geom.seal import (
     _band,
     _closed_path,
@@ -215,7 +216,7 @@ def _path(
                 "path_sketch", _("Wählen Sie eine vorhandene Zeichenebene für den Dichtweg.")
             )
         if plane.startswith("plane:"):
-            vertices = as_mesh_data(ctx.inputs[0].mesh).raw.vertices
+            vertices = geom_mesh.as_mesh_data(ctx.inputs[0].mesh).raw.vertices
             top = float(np.max(vertices @ frame.normal))
             frame = replace(frame, origin=cast(Vec3, tuple(top * np.asarray(frame.normal))))
         return profile_of(_solved_drawing(ctx, p.path_sketch, findings)), frame, plane, {}
@@ -272,7 +273,7 @@ def _measured_boolean(
 ) -> BooleanOutcome:
     from app.core.geom.boolean import BooleanKind
 
-    outcome = boolean(
+    outcome = boolean.boolean(
         cast(BooleanKind, kind),
         [first, second],
         quality=ctx.quality,
@@ -306,7 +307,7 @@ def _named_floor(
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    mesh = as_mesh_data(output.mesh)
+    mesh = geom_mesh.as_mesh_data(output.mesh)
     inverse = np.linalg.inv(_matrix(frame))
     centres = mesh.raw.triangles_center @ inverse[:3, :3].T + inverse[:3, 3]
     normals = mesh.raw.face_normals @ np.asarray(frame.normal)
@@ -426,7 +427,9 @@ def _counterface(
             ),
         )
     overlap = p.protrusion - gap
-    intersection = _measured_boolean(ctx, "intersection", gasket, as_mesh_data(source.mesh))
+    intersection = _measured_boolean(
+        ctx, "intersection", gasket, geom_mesh.as_mesh_data(source.mesh)
+    )
     return [
         Finding(
             code="seal.counterface",
@@ -528,7 +531,9 @@ def create_seal(ctx: OpContext) -> OpResult:
         ),
         frame,
     )
-    missing = _measured_boolean(ctx, "difference", envelope_mesh, as_mesh_data(ctx.inputs[0].mesh))
+    missing = _measured_boolean(
+        ctx, "difference", envelope_mesh, geom_mesh.as_mesh_data(ctx.inputs[0].mesh)
+    )
     if _thicker_than_shown(missing.mesh.volume, envelope_mesh.raw.area):
         raise _invalid(
             "groove_depth",
@@ -567,11 +572,13 @@ def create_seal(ctx: OpContext) -> OpResult:
         from app.core.brep import edit
 
         gasket_placed: Any = edit.transformed(gasket_body, matrix, cancelled=ctx.cancelled)
-        gasket_mesh = as_mesh_data(gasket_placed)
+        gasket_mesh = geom_mesh.as_mesh_data(gasket_placed)
     else:
         gasket_mesh = _placed(gasket_body, frame)
         gasket_placed = gasket_mesh
-    collision = _measured_boolean(ctx, "intersection", as_mesh_data(body.mesh), gasket_mesh)
+    collision = _measured_boolean(
+        ctx, "intersection", geom_mesh.as_mesh_data(body.mesh), gasket_mesh
+    )
     if _thicker_than_shown(collision.mesh.volume, gasket_mesh.raw.area):
         raise _invalid(
             "gasket_width",
@@ -592,7 +599,7 @@ def create_seal(ctx: OpContext) -> OpResult:
         material=p.gasket_material,
     )
     gasket_footprint = cross_section(
-        as_mesh_data(gasket_body), -p.groove_depth + (p.groove_depth + p.protrusion) / 2
+        geom_mesh.as_mesh_data(gasket_body), -p.groove_depth + (p.groove_depth + p.protrusion) / 2
     )
     if gasket_footprint is None:
         raise _closed_path()

@@ -2580,6 +2580,21 @@ class GfxRenderer(Renderer):
             self._canvas.close()
         except Exception as problem:  # pragma: no cover - hängt am Treiber
             _log.warning("the render canvas could not close: %s", problem)
+        # **Die Fläche geht jetzt, nicht beim Prozessende.** Das Schließen der
+        # Leinwand hebt nur ihre Einrichtung auf; freigegeben wurde die Fläche
+        # erst, wenn der Speicherbereiniger diesen Renderer abräumte — und die
+        # Ansicht hält ihn in ihren Vergleichsschlüsseln bis zum Abbau des
+        # Interpreters. Dann waren Fenster und Anwendung schon fort, und unter
+        # Windows ohne Grafikkarte (WARP, CI-Runner) wartete
+        # ``wgpuSurfaceRelease`` ewig: Der Prozess endete nie (CI-Probe
+        # 38855455034, ohne Freigabe 6 von 6 hängend, mit 0 von 6).
+        context = getattr(self._renderer, "_canvas_context", None)
+        release = getattr(getattr(context, "_wgpu_context", None), "_release", None)
+        if callable(release):
+            try:
+                release()
+            except Exception as problem:  # pragma: no cover - hängt am Treiber
+                _log.warning("the render surface could not be released: %s", problem)
         if self.widget is not None:
             self.widget.close()
 

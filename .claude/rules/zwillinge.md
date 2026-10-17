@@ -85,6 +85,5 @@ zusammen, statt sie zu umgehen:
 
 | Stelle | Anmerkung |
 |---|---|
-| `knowledge/calibration._literal` ↔ `knowledge/parts/scad._literal` | Wortgleich, klein |
 | `viewport.ambient_occlusion` ↔ `contact_shadows` | **Nur die Bedingung** ist der Zwilling; die zwei Eigenschaften bleiben zwei — sie beantworten verschiedene Fragen, die heute dieselbe Antwort haben |
 | `tools/make_licence_keys._new_keypair` ↔ `tools/sign_version.new_keypair` | Sicherheitsnah, außerhalb dieses Geltungsbereichs |

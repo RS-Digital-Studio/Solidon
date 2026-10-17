@@ -32,8 +32,9 @@ from app.core.registry import REGISTRY
 from app.core.scene.parameter_binding import BindingSpot
 from app.core.types import Document, OpId
 from app.i18n import tr
+from app.ui import style
 from app.ui.labels import length, step_number, wheel_needs_focus
-from app.ui.style import NORMAL, SPACE, DialogScrollArea, fit_dialog_to_screen, make_primary
+from app.ui.style import NORMAL, SPACE, DialogScrollArea, make_primary
 
 
 def spot_title(document: Document, spot: BindingSpot) -> str:
@@ -143,4 +144,4 @@ class BindingDialog(QDialog):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt gibt den Namen
         super().showEvent(event)
-        fit_dialog_to_screen(self)
+        style.fit_dialog_to_screen(self)

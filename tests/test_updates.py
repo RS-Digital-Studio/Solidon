@@ -24,7 +24,7 @@ from unittest import mock
 import pytest
 
 from app.branding import APP_VERSION
-from app.core import updates
+from app.core import install, updates
 from app.core.changes import Group
 from app.core.errors import ExternalToolError, FileWriteError, OperationCancelled
 from tests.release_signing import (
@@ -89,7 +89,7 @@ def test_update_requests_separate_internal_tests_from_customer_installations(
     die signierte Update-Antwort verfügbar und das Paket vollständig prüfbar.
     Der Absender bleibt ein Programm-Kennzeichen statt Python-urllib.
     """
-    monkeypatch.setattr(updates, "packaged", lambda: is_packaged)
+    monkeypatch.setattr(install, "packaged", lambda: is_packaged)
     if test_override is None:
         monkeypatch.delenv("SOLIDON_UPDATE_TEST", raising=False)
     else:
@@ -367,6 +367,7 @@ def test_a_lead_needs_its_note_in_every_language(
     dem Feld, in das sie gehört (Regel 17). Ohne Vorspann gibt es nichts zu
     wiederholen, und eine fehlende Sprache fällt wie bisher zurück.
     """
+    from app import branding
     from app.core import changes
     from app.i18n.catalog import available_languages
     from tools import make_download
@@ -397,7 +398,7 @@ def test_a_lead_needs_its_note_in_every_language(
     changes.forget_cache()
     monkeypatch.setattr(changes, "folder", lambda: tmp_path)
     monkeypatch.setattr(make_download, "CHANGELOG", tmp_path)
-    monkeypatch.setattr(make_download, "APP_VERSION", "9.9.9")
+    monkeypatch.setattr(branding, "APP_VERSION", "9.9.9")
     monkeypatch.setattr(make_download, "VERSION_FILE", version_file)
     try:
         if said is not None:
@@ -773,7 +774,7 @@ def test_a_flatpak_can_be_replaced_from_inside(monkeypatch: pytest.MonkeyPatch) 
     die einzige Plattform ohne Update aus der Anwendung heraus. Das AppImage
     kommt ab der nächsten Version hinzu, ersetzt sich aber nicht selbst.
     """
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_FLATPAK)
 
     release = updates.check(fetch=answering(linux_payload()))
@@ -791,7 +792,7 @@ def test_an_appimage_still_only_gets_the_hint(monkeypatch: pytest.MonkeyPatch) -
     Plattform fragt, kann die zwei nicht trennen — und bot dem AppImage-Nutzer
     ein ``flatpak install`` an, das scheitern muss.
     """
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_APPIMAGE)
 
     release = updates.check(fetch=answering(linux_payload()))
@@ -804,7 +805,7 @@ def test_an_appimage_still_only_gets_the_hint(monkeypatch: pytest.MonkeyPatch) -
 def test_running_from_source_offers_no_package(monkeypatch: pytest.MonkeyPatch) -> None:
     """Wer aus den Quellen fährt, hat nichts, was ein Installer ersetzen
     könnte."""
-    monkeypatch.setattr(updates, "packaged", lambda: False)
+    monkeypatch.setattr(install, "packaged", lambda: False)
 
     release = updates.check(fetch=answering(with_package()))
 
@@ -818,7 +819,7 @@ def test_running_from_source_offers_no_package(monkeypatch: pytest.MonkeyPatch) 
 
 def test_running_from_source_is_no_installation(monkeypatch: pytest.MonkeyPatch) -> None:
     """Aus den Quellen gefahren gibt es nichts, was ein Installer ersetzen könnte."""
-    monkeypatch.setattr(updates, "packaged", lambda: False)
+    monkeypatch.setattr(install, "packaged", lambda: False)
 
     assert updates.install_kind("win32") == updates.KIND_SOURCE
     assert updates.install_kind("linux") == updates.KIND_SOURCE
@@ -832,7 +833,7 @@ def test_each_system_names_its_own_way(monkeypatch: pytest.MonkeyPatch) -> None:
     ausgeführt — so sind fünf Stellen entstanden, an denen Linux und macOS
     weniger konnten als Windows. Dieser Test läuft auf jeder der drei.
     """
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     monkeypatch.setattr(updates.discover, "in_flatpak", lambda: False)
     monkeypatch.delenv("APPIMAGE", raising=False)
 
@@ -843,7 +844,7 @@ def test_each_system_names_its_own_way(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_linux_tells_its_three_formats_apart(monkeypatch: pytest.MonkeyPatch) -> None:
     """Drei Arten, ein Plattformschlüssel — und nur eine lässt sich einspielen."""
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
 
     monkeypatch.setattr(updates.discover, "in_flatpak", lambda: True)
     assert updates.install_kind("linux") == updates.KIND_FLATPAK

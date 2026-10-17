@@ -419,30 +419,30 @@ def test_everything_that_holds_a_leash_can_be_told_to_let_go() -> None:
     gleich heißen.
     """
     import ast
-    from pathlib import Path
 
-    holders: dict[str, Path] = {}
-    for path in sorted(Path("app/ui").glob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ClassDef):
-                continue
-            source = ast.get_source_segment(path.read_text(encoding="utf-8"), node) or ""
-            if "WorkerLeash(" in source:
-                holders[node.name] = path
+    from tests import source_tree
+
+    # Je Datei und Klasse: Nach dem rekursiven Lesen kann derselbe Klassenname
+    # in zwei Dateien stehen, und ein Wörterbuch über den Namen allein verlöre
+    # einen von beiden still.
+    holders: list[tuple[str, ast.ClassDef]] = []
+    for path in source_tree.python_files("app/ui"):
+        text = path.read_text(encoding="utf-8")
+        for node in ast.walk(ast.parse(text)):
+            if isinstance(node, ast.ClassDef) and "WorkerLeash(" in (
+                ast.get_source_segment(text, node) or ""
+            ):
+                holders.append((source_tree.relative(path), node))
 
     assert len(holders) >= 10, (
         f"nur {len(holders)} Leinen-Halter gefunden — sucht das noch richtig?"
     )
 
     without = []
-    for name, path in sorted(holders.items()):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == name:
-                methods = {m.name for m in node.body if isinstance(m, ast.FunctionDef)}
-                if "release" not in methods:
-                    without.append(f"{name} ({path.name})")
+    for where, node in holders:
+        methods = {m.name for m in node.body if isinstance(m, ast.FunctionDef)}
+        if "release" not in methods:
+            without.append(f"{node.name} ({where})")
 
     assert not without, "hält Arbeiter, kennt aber kein release(): " + ", ".join(without)
 
@@ -570,7 +570,8 @@ def test_every_filter_on_a_mortal_widget_unwatches_it() -> None:
     hat.
     """
     import ast
-    from pathlib import Path
+
+    from tests import source_tree
 
     #: Was auf der ``QCoreApplication`` installiert, braucht kein Abbestellen —
     #: sie überlebt jeden Filter. Erkannt am Namen des Empfängers, nicht an
@@ -580,7 +581,7 @@ def test_every_filter_on_a_mortal_widget_unwatches_it() -> None:
     own: list[str] = []
     without: list[str] = []
     foreign: list[str] = []
-    for path in sorted(Path("app/ui").glob("*.py")):
+    for path in source_tree.python_files("app/ui"):
         source = path.read_text(encoding="utf-8")
         if "installEventFilter" not in source:
             continue
@@ -598,7 +599,7 @@ def test_every_filter_on_a_mortal_widget_unwatches_it() -> None:
                 root = root.value
             if isinstance(root, ast.Name) and root.id in immortal:
                 continue
-            where = f"{path.name}:{node.lineno}"
+            where = f"{source_tree.relative(path)}:{node.lineno}"
             argument = node.args[0]
             if isinstance(argument, ast.Name) and argument.id == "self":
                 own.append(where)

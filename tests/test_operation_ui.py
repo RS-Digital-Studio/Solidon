@@ -19,6 +19,7 @@ import contextlib
 import inspect
 import textwrap
 import threading
+import time
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,7 @@ from app.ui.settings import UiSettings
 from tests import ui_helpers
 from tests.helpers import exact_kernel
 from tests.ui_helpers import session as session
+from tests.window_leftovers import close_after
 
 
 def test_the_value_of_an_expression_is_written_like_any_other_number() -> None:
@@ -1614,6 +1616,7 @@ def test_a_choice_in_an_operation_dialog_says_what_it_does(qt_app: QApplication)
 
 def test_typing_the_equals_sign_into_the_number_opens_the_expression(
     qt_app: QApplication,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Drei Texte des Programms versprechen genau das — und es ging nicht.
 
@@ -1635,6 +1638,7 @@ def test_typing_the_equals_sign_into_the_number_opens_the_expression(
 
     spec = REGISTRY.get("create_box")
     dialog = OperationDialog(spec, [], None, parameter_values={"breite": 60.0})
+    close_after(request, dialog)
     field = dialog._editors["width"]
     assert isinstance(field, ValueField)
     assert not field.toggle.isChecked(), "das Feld beginnt als Zahl"
@@ -2010,7 +2014,12 @@ def test_the_register_says_what_a_body_must_bring() -> None:
     from app.core.registry.registry import BODY_REQUIREMENTS
 
     declared = {spec.name: spec.requires_body for spec in REGISTRY.all() if spec.requires_body}
-    assert declared == {"thicken": "open", "split_bodies": "parts", "lattice_fill": "cavity"}
+    assert declared == {
+        "thicken": "open",
+        "split_bodies": "parts",
+        "lattice_fill": "cavity",
+        "slots_from_texture": "colour",
+    }
     assert set(declared.values()) <= set(BODY_REQUIREMENTS)
 
 
@@ -2021,6 +2030,7 @@ def test_a_dead_end_is_greyed_out_with_the_sentence_the_operation_would_say(
     öffneten *Offene Fläche schließen*, *In Einzelteile zerlegen* und *Gitter
     füllen* einen Dialog, dessen Vorschau nur „Keine Vorschau: …" sagen
     konnte. Jetzt steht der Eintrag ausgegraut da — mit demselben Satz."""
+    from app.core.geom.colour_ops import NO_COLOUR
     from app.core.geom.lattice import NO_CAVITY
     from app.core.geom.mesh_ops import ALREADY_CLOSED
     from app.core.geom.prepare_ops import ONE_PIECE
@@ -2032,6 +2042,7 @@ def test_a_dead_end_is_greyed_out_with_the_sentence_the_operation_would_say(
         ("thicken", ALREADY_CLOSED),
         ("split_bodies", ONE_PIECE),
         ("lattice_fill", NO_CAVITY),
+        ("slots_from_texture", NO_COLOUR),
     ):
         action = window._op_actions[name]
         assert not action.isEnabled(), name
@@ -2545,9 +2556,17 @@ def test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_
     Schritts, also einen anderen Auftrag als den gemerkten. Das ist keine
     Eingabe des Kunden und darf den getragenen Klick nicht als „Werte
     geändert“ verwerfen (``MainWindow._binds_for_the_waiting_click``).
+
+    **Auch nicht, wenn die Vorschau des Klicks länger rechnet als die
+    Entprellung des Merkmalfensters** (300 ms): Der Neuaufbau meldete die
+    Werte des Schritts und stellte die Uhr; lief sie vor der Vorschau ab,
+    band sie die alten Werte und der Klick verfiel still (CI macOS Intel,
+    Lauf 38815410592). Der Fall hält die Vorschau an und lässt die Uhr
+    ablaufen, statt auf einen langsamen Rechner zu hoffen.
     """
     from app.core.scene.placement import top_face
     from app.ui.op_dialog import ValueField
+    from app.ui.session import _PreviewWorker
 
     object_id = select(window)
     face = top_face(window.session.last_result.scene.objects[object_id].features)
@@ -2587,17 +2606,34 @@ def test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_
         return evaluate(self, *args, **kwargs)
 
     monkeypatch.setattr(Session, "run_evaluation", held)
+    previewed = threading.Event()
+    work = _PreviewWorker.work
+    monkeypatch.setattr(_PreviewWorker, "work", lambda self: (previewed.wait(15), work(self))[1])
     try:
         window.session.evaluate_async()
         assert window.session.busy, "die Lage: die Szene rechnet denselben Stand nach"
         panel._apply.click()
         assert window._click_after_evaluation is not None, "der Klick wartet"
         gate.set()
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and (
+            window._preview_approval is None or window._preview_approval.pending_click is None
+        ):
+            QApplication.processEvents()
+            time.sleep(0.01)
+        assert window._preview_approval is not None
+        assert window._preview_approval.pending_click is not None, "die Lage: er wartet aufs Bild"
+        if window._feature_preview.isActive():
+            # Die Uhr läuft ab, solange die Vorschau des Klicks noch rechnet.
+            window._feature_preview.stop()
+            window._preview_feature_change()
+        previewed.set()
         for _ in range(3):
             assert window.session.wait_for_idle(60_000)
             QApplication.processEvents()
     finally:
         gate.set()
+        previewed.set()
 
     assert len(window.session.project.document.ops) == count, "kein neuer Schritt"
     updated = window.session.project.document.ops[-1]
@@ -5124,7 +5160,9 @@ def test_a_field_that_is_no_circle_has_no_toggle(qt_app: QApplication) -> None:
         field.deleteLater()
 
 
-def test_a_typed_measurement_stretches_the_drawing(qt_app: QApplication) -> None:
+def test_a_typed_measurement_stretches_the_drawing(
+    qt_app: QApplication, request: pytest.FixtureRequest
+) -> None:
     """Robert, 03.09.2026: „mach die felder bedienbar, zeichnung folgt".
 
     Bis dahin sperrte der Dialog Länge und Breite, sobald eine Zeichnung
@@ -5170,6 +5208,7 @@ def test_a_typed_measurement_stretches_the_drawing(qt_app: QApplication) -> None
     )
     spec = REGISTRY.get("sketch_extrude")
     dialog = OperationDialog(spec, {}, values={"sketch": sketch_to_text(quadrat)})
+    close_after(request, dialog)
     dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
     dialog.show()
     qt_app.processEvents()
@@ -5279,6 +5318,7 @@ def test_a_chosen_but_empty_drawing_holds_the_accept_button(qt_app: QApplication
 
 def test_the_shape_stays_locked_while_a_drawing_decides_the_outline(
     qt_app: QApplication,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Die Grundform bleibt gesperrt, und das ist keine halbe Sache.
 
@@ -5305,6 +5345,7 @@ def test_the_shape_stays_locked_while_a_drawing_decides_the_outline(
     )
     spec = REGISTRY.get("sketch_extrude")
     dialog = OperationDialog(spec, {}, values={"sketch": sketch_to_text(dreieck)})
+    close_after(request, dialog)
     dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
     dialog.show()
     qt_app.processEvents()
@@ -6276,6 +6317,9 @@ def test_exact_group_scope_previews_and_commits_the_same_members(
     panel = window.feature_panel
     key = next(key for key, entry in panel._runs.items() if entry.op == "move_feature")
     panel._arm(key)
+    # Übernommen wird erst eine Änderung (FD-99).
+    row = next(row for row in panel._shown_rows.values() if row.key == key)
+    row.widgets["x"].set_value_mm(row.widgets["x"].value_mm() + 1.0)
     window._preview_feature_change()
     single = _exact_difference(window)
     requests[-1][0](single)
@@ -6467,6 +6511,9 @@ def test_a_too_fine_refinement_offers_the_length_that_goes_inside_the_dialog(
     }
     take = buttons.get(str(tr("Die kleinste Kantenlänge nehmen, die noch geht.")))
     assert take is not None, list(buttons)
+    # Der Weg steht als Knopf und nicht noch einmal als Satz darüber (RB2-2).
+    said = dialog._refusal.text().splitlines()
+    assert not [label for label in buttons if label in said], said
     take.click()
     QTest.qWait(350)
     assert window.session.wait_for_idle()
@@ -7225,15 +7272,15 @@ def test_a_checkbox_row_answers_on_its_whole_width(qt_app: QApplication) -> None
 
         # Ein Doppelklick schaltet auf beiden Hälften der Zeile gleich oft —
         # das Kästchen zählt ihn als zweiten Druck, die Beschriftung also auch.
-        # Die echte Folge ist Druck, Loslassen, Doppelklick, Loslassen;
-        # ``QTest.mouseDClick`` allein schickt am Widget nur das dritte
-        # Ereignis, und danach schaltet nicht einmal das Kästchen.
+        # Die echte Folge ist Druck, Loslassen, Doppelklick, Loslassen
+        # (``qt_clicks.double_click``); ``QTest.mouseDClick`` allein
+        # schickt am Widget nur das dritte Ereignis, und danach schaltet nicht
+        # einmal das Kästchen.
         def double_click(target: QWidget, at: QPoint) -> int:
+            from tools.qt_clicks import double_click as customer_double_click
+
             before = len(toggles)
-            QTest.mousePress(target, Qt.MouseButton.LeftButton, pos=at)
-            QTest.mouseRelease(target, Qt.MouseButton.LeftButton, pos=at)
-            QTest.mouseDClick(target, Qt.MouseButton.LeftButton, pos=at)
-            QTest.mouseRelease(target, Qt.MouseButton.LeftButton, pos=at)
+            customer_double_click(target, at)
             return len(toggles) - before
 
         box.setEnabled(True)

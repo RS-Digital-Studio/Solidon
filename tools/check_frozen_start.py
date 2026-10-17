@@ -53,11 +53,13 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.branding import APP_NAME, APP_VERSION  # noqa: E402
+from app import branding  # noqa: E402
+from app.branding import APP_NAME  # noqa: E402
 from app.core.log import fatal_records  # noqa: E402
-from app.core.paths import PROFILE_VARIABLES  # noqa: E402
+from app.core.paths import PROFILE_VARIABLES, isolate_secrets  # noqa: E402
 from app.ui.start_check import FORMAT, REPORT_VARIABLE, SECONDS  # noqa: E402
-from tools.check_frozen_helper import application, image_of, is_the_application  # noqa: E402
+from tools import check_frozen_helper  # noqa: E402
+from tools.check_frozen_helper import application, is_the_application  # noqa: E402
 
 #: Was das Paket unter Linux aus Slicer-AppImages entpacken muss: zstd für die
 #: Orca-Familie, gzip für Cura (``app.core.export.squashfs``).
@@ -144,6 +146,7 @@ def environment_for(args: argparse.Namespace, report: Path, profile: Path) -> di
     if not args.flatpak:
         for name in PROFILE_VARIABLES:
             env[name] = str(profile)
+    isolate_secrets(env)  # Schlüsselbund und Chat-Schlüssel des Nutzers bleiben ungefragt.
     # Der Runner hat kein FUSE; das AppImage packt sich dann selbst aus.
     if args.executable and Path(args.executable).suffix == ".AppImage":
         env["APPIMAGE_EXTRACT_AND_RUN"] = "1"
@@ -213,9 +216,10 @@ def judge(
         return problems
     if report.get("format") != FORMAT:
         problems.append(f"Bericht in Fassung {report.get('format')!r}, erwartet {FORMAT}.")
-    if report.get("version") != APP_VERSION:
+    started = report.get("version")
+    if started != branding.APP_VERSION:
         problems.append(
-            f"Gestartet wurde {report.get('version')!r}, erwartet {APP_VERSION}: falsches Paket."
+            f"Gestartet wurde {started!r}, erwartet {branding.APP_VERSION}: falsches Paket."
         )
     if not report.get("window", {}).get("visible"):
         problems.append("Das Hauptfenster war nicht sichtbar.")
@@ -289,7 +293,7 @@ def survivors(report: dict[str, Any] | None, *, flatpak: bool) -> list[int]:
     executable = Path(report.get("executable", ""))
     alive = []
     for pid in report.get("helpers", []):
-        image = image_of(int(pid))
+        image = check_frozen_helper.image_of(int(pid))
         if image is not None and is_the_application(image, executable):
             alive.append(int(pid))
     return alive

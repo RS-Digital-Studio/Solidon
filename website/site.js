@@ -565,17 +565,30 @@
 
     const hint = variants.get(choice).cloneNode(true);
 
-    /* Solange die Karte unten steht, hält die Seite ihren Platz frei
-       (`--language-hint-space` in `style.css`): Das Seitenende lässt sich
-       über sie hinausrollen, und was den Fokus bekommt, rollt über ihr in den
-       Blick. Steht sie bei wenig Höhe im Fluss, braucht sie keinen. */
+    /* Solange die Karte unten steht, hält die Seite ihren Platz frei: ein
+       leerer Block in ihrer Höhe am Ende der Seite, und
+       `--language-hint-space` an der Wurzel für `scroll-padding-bottom`
+       (`style.css`). Das Seitenende lässt sich über die Karte hinausrollen,
+       und was den Fokus bekommt, rollt über ihr in den Blick. Steht sie bei
+       wenig Höhe im Fluss, braucht sie keinen.
+       Ein eigener Block und kein Polster an `body`: Ein Polster, gesetzt
+       während die Seite lädt, rechnet Chromium erst mit dem nächsten Bild
+       nach — bis dahin lagen die Fußverweise am Seitenende unter der Karte,
+       in QtWebEngine ohne Bild (Prüfstand) dauerhaft. Ein neu eingefügter
+       Block steht sofort in seiner Höhe; spätere Höhenwechsel gehen über
+       sein Stilattribut und brauchen wieder ein Bild. */
     const root = document.documentElement;
+    const spacer = document.createElement("div");
+    spacer.className = "language-hint-space";
+    spacer.setAttribute("aria-hidden", "true");
     const reserve = () => {
       const style = getComputedStyle(hint);
       const space = style.position === "fixed"
         ? hint.offsetHeight + 2 * parseFloat(style.bottom)
         : 0;
-      root.style.setProperty("--language-hint-space", `${Math.ceil(space)}px`);
+      const value = `${Math.ceil(space)}px`;
+      root.style.setProperty("--language-hint-space", value);
+      spacer.style.height = value;
     };
     const watch = window.ResizeObserver ? new ResizeObserver(reserve) : null;
 
@@ -584,6 +597,7 @@
       watch?.disconnect();
       window.removeEventListener("resize", reserve);
       root.style.removeProperty("--language-hint-space");
+      spacer.remove();
       hint.remove();
       remember("closed");
       /* Der Fokus darf nicht mit der Karte verschwinden: Er geht an das
@@ -596,6 +610,7 @@
     });
     template.before(hint);
     reserve();
+    document.body.append(spacer);
     watch?.observe(hint);
     window.addEventListener("resize", reserve);
   } catch (problem) {

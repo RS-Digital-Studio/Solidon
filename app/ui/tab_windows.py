@@ -23,9 +23,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import guides
 from app.i18n import tr
+from app.ui import style
 from app.ui.leash import stop_watching_the_dying
-from app.ui.style import NORMAL, fit_dialog_to_screen
+from app.ui.style import NORMAL
 
 
 def reachable_geometry(saved: object, rooms: list[QRect]) -> QRect | None:
@@ -62,6 +64,7 @@ class _PanelWindow(QMainWindow):
         layout = QVBoxLayout(body)
         layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         back = QPushButton(tr("Zurück in Solidon"), body)
+        back.setProperty(guides.TARGET_PROPERTY, "tabs.return")
         back.clicked.connect(self._return)
         layout.addWidget(back)
         layout.addWidget(page, 1)
@@ -119,6 +122,8 @@ class DetachableTabs(QTabWidget):
 
     def _prepare_bar(self, bar: QTabBar) -> None:
         bar.setMovable(True)
+        # Ein Rechtsklick auf die Reiterleiste öffnet ihr Menü (``tabs.bar``).
+        bar.setProperty(guides.TARGET_PROPERTY, "tabs.bar")
         bar.installEventFilter(self)
         bar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         bar.customContextMenuRequested.connect(self._menu)
@@ -213,7 +218,7 @@ class DetachableTabs(QTabWidget):
         window.show()
         if at is not None:
             window.move(at)
-        fit_dialog_to_screen(window)
+        style.fit_dialog_to_screen(window)
         window.raise_()
         window.activateWindow()
         page.show()
@@ -325,7 +330,7 @@ class DetachableTabs(QTabWidget):
         """x/y gehören zum Rahmen, Breite/Höhe zum Inhalt: entsprechend zurücksetzen."""
         window.resize(rect.size())
         window.move(rect.topLeft())
-        fit_dialog_to_screen(window)
+        style.fit_dialog_to_screen(window)
 
     def _menu(self, at: QPoint) -> None:
         index = self.tabBar().tabAt(at)
@@ -339,6 +344,7 @@ class DetachableTabs(QTabWidget):
         action = menu.addAction(
             tr("Zurück in Solidon") if detached else tr("In eigenem Fenster öffnen")
         )
+        action.setObjectName("tabs.attach" if detached else "tabs.detach")
         action.triggered.connect(
             lambda: self.return_page(page) if detached else self.detach_page(page)
         )

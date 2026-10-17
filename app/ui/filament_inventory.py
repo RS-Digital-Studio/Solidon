@@ -43,13 +43,13 @@ from PySide6.QtWidgets import (
     QMenu,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from app.core import guides
 from app.core.errors import AppError, InternalError, OperationCancelled, ValidationError
 from app.core.knowledge import filaments
 from app.core.log import get_logger
@@ -66,10 +66,12 @@ from app.ui.filament_picker import (
     stock_label,
     swatch,
 )
+from app.ui.grouped_spin import GroupedNumberSpin
 from app.ui.icons import icon
-from app.ui.labels import NumberSpin, calendar_day, local_timestamp, localised
+from app.ui.labels import calendar_day, local_timestamp, localised
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying, weak_slot
 from app.ui.panels import collapsible
+from app.ui.scroll_areas import PassingScrollArea
 from app.ui.style import NORMAL, SPACE, TIGHT, WIDE, make_primary, set_level
 
 _log = get_logger(__name__)
@@ -465,6 +467,7 @@ class InventoryView(QWidget):
         set_level(self.summary, "caption")
         header.addWidget(self.summary, 1, 1)
         self.add_button = QPushButton(tr("Spule von Hand anlegen"), self)
+        self.add_button.setProperty(guides.TARGET_PROPERTY, "filament.add")
         self.add_button.setIcon(icon("add", self.add_button))
         self.add_button.clicked.connect(self._add)
         make_primary(self.add_button)
@@ -516,9 +519,8 @@ class InventoryView(QWidget):
         )
         self.booking_mode.currentIndexChanged.connect(self._booking_mode_changed)
         settings_layout.addWidget(self.booking_mode)
-        self.low_stock_threshold = NumberSpin(shelf)
+        self.low_stock_threshold = GroupedNumberSpin(shelf)
         self.low_stock_threshold.setRange(0, 100)
-        self.low_stock_threshold.setDecimals(0)
         self.low_stock_threshold.setSuffix(f" {tr('%')}")
         self.low_stock_threshold.setValue(self._low_stock_percent)
         self.low_stock_threshold.setAccessibleName(tr("Warnschwelle für niedrigen Bestand"))
@@ -549,6 +551,7 @@ class InventoryView(QWidget):
         layout.addWidget(self.threshold_row)
         layout.addWidget(self.settings_panel)
         self.import_button = QPushButton(tr("Aus dem Slicer übernehmen"), shelf)
+        self.import_button.setProperty(guides.TARGET_PROPERTY, "filament.import")
         self.import_button.clicked.connect(self._import)
         # **Der Leerzustand ist ein Ort, kein Satz über der Leere.** Vorher
         # stand er unter der Suchleiste, ein Knopf oben rechts, der andere
@@ -574,18 +577,20 @@ class InventoryView(QWidget):
         empty_buttons.setSpacing(NORMAL)
         empty_buttons.addStretch(1)
         self.empty_add_button = QPushButton(tr("Spule von Hand anlegen"), self.empty_actions)
+        self.empty_add_button.setProperty(guides.TARGET_PROPERTY, "filament.add")
         self.empty_add_button.setIcon(icon("add", self.empty_add_button))
         self.empty_add_button.clicked.connect(self._add)
         make_primary(self.empty_add_button)
         empty_buttons.addWidget(self.empty_add_button)
         self.empty_import_button = QPushButton(tr("Aus dem Slicer übernehmen"), self.empty_actions)
+        self.empty_import_button.setProperty(guides.TARGET_PROPERTY, "filament.import")
         self.empty_import_button.clicked.connect(self._import)
         empty_buttons.addWidget(self.empty_import_button)
         empty_buttons.addStretch(1)
         empty_layout.addWidget(self.empty_actions)
         empty_layout.addStretch(1)
         layout.addWidget(self.empty_panel, 1)
-        self.page_scroll = QScrollArea(shelf)
+        self.page_scroll = PassingScrollArea(shelf)
         self.page_scroll.setWidgetResizable(True)
         self.page_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.shelves = QWidget(self.page_scroll)
@@ -602,7 +607,7 @@ class InventoryView(QWidget):
         layout.addLayout(actions)
         self.pages.addWidget(shelf)
         self.detail = QWidget(self)
-        detail_scroll = QScrollArea(self)
+        detail_scroll = PassingScrollArea(self)
         detail_scroll.setWidgetResizable(True)
         detail_scroll.setFrameShape(QFrame.Shape.NoFrame)
         detail_scroll.setWidget(self.detail)

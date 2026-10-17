@@ -15,6 +15,7 @@ paths:
   - "app/ui/app_events.py"
   - "app/ui/placement_flow.py"
   - "app/ui/comfy_dialog.py"
+  - "app/ui/waiting_click.py"
 ---
 
 # Regeln für Wartezeit und Nebenläufigkeit
@@ -238,14 +239,9 @@ wird genau gerechnet.
   unvollständig".
 * **Die Merkmale bleiben erkennbar:** Jede alte Ecke liegt höchstens
   `units.MAX_FACET_SAG` neben der neuen Fläche (`deviation(grob, genau)`),
-  Geschlecht und erkannter Bohrungsdurchmesser bleiben die des genauen
-  Körpers. Ein Ziel unter dem, was der Sehnenfehler allein erreicht, reißt
-  beides. Braucht eine Form (Figur, Scan) bei 0,05 mm mehr Dreiecke als die
-  Schranke, wird sie gröber — „grob" steht auch dann.
-* **Beim Rückweg ins Netz** fallen Splitter (`kernel_jobs.without_slivers`), und
-  `mesh_ops._as_mesh` verschweißt nur, wo das Netz dicht bleibt (wie
-  `boolean._tidied`).
-* **Auch `change_op` nimmt die Stufe** (`_coarse_steps_before`).
+  Geschlecht und Bohrungsdurchmesser bleiben die des genauen Körpers.
+* **Auch `change_op` nimmt die Stufe** (`_coarse_steps_before`); Rückweg ins
+  Netz und Hilfsprozess: `regel-wartezeit.md`.
 * **Die Dialogvorschau erkennt keine Merkmale** (`detect_features=False`),
   außer ein späterer Schritt oder eine Passung braucht eines. Der
   Agentenvorschlag (`preview_scene` ohne Rückruf) erkennt weiter und rechnet
@@ -253,19 +249,9 @@ wird genau gerechnet.
 * **Gibt der Kern am groben Netz auf** (`_kernel_gave_up`: `GeometryError`)
   oder scheitert die Verkleinerung, rechnet die Vorschau genau; ein ungültiger
   Wert (`ValidationError`, `UserError`) rechnet nicht zweimal.
-* **Die Verkleinerung rechnet aus einem Arbeiter im Hilfsprozess**
-  (`geom.kernel_process`, RM-212; GIL: `kern.md`), aus dem Hauptthread
-  gerufen hier — gewartet wäre dort genauso.
 * **Was an der Dreieckszahl hängt, zählt das Original, nicht die Kopie**
-  (`OperationSpec.expected_triangles`, `_counted_ahead`): Eine Absage ist die
-  Antwort, mit den Handlungen, die der Dialog selbst einlöst
-  (`OperationDialog.show_refusal`, `MainWindow._refusal_handlers`) — *Dreiecke
-  verringern und erneut versuchen* ist eine Transaktion. Ändert eine Operation
-  nur das Netz (`retriangulates`) und wüchse es über die Schranke, ist die
-  geschätzte Zahl die Vorschau (`TriangleCounts`); sonst rechnet der Schritt
-  am Original, bei `retriangulates` ohne Booleschen Vergleich
-  (`compare_scenes(retriangulated=…)`). Exakte Eingänge und der Agentenweg
-  werden nicht vorab gezählt.
+  (`OperationSpec.expected_triangles`, `_counted_ahead`); Absage, Schätzung
+  und `retriangulates`: `regel-wartezeit.md`.
 
 ### Die Vorschau über zwei Sekunden, und was ihr Band sagt
 
@@ -292,7 +278,9 @@ wird genau gerechnet.
   *Abbrechen* still. Bindet ein neuer Auftrag nicht über `_set_preview_order`
   (Vorschlag ohne Vorschauweg, Zug am Netz), verwirft der Eigentümer. Neu
   aufgebaute Eigentümer tragen ihn (`_carry_click`, bei gleichem Stand); die
-  Formsitzung läuft ohne Freigabe nach.
+  Formsitzung läuft ohne Freigabe nach. Ein Neuaufbau ohne Eingabe des
+  Kunden ersetzt und räumt keine noch gültige Freigabe mit wartendem Klick und
+  zeigt danach dessen Werte (`app/ui/waiting_click.py`).
 * **Gehört eine Handlung vor das Übernehmen, sperrt das Band den Knopf**
   (`block_apply`, bei `repair_and_retry`, `split_and_retry`,
   `recount_and_retry`) — sonst endet sie als angehaltener Schritt (Regel 19).

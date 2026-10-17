@@ -35,6 +35,12 @@ Version, Tag und Upload werden erst nach diesen beiden Abschlüssen und den
 Releaseprüfungen aus `/erzeugen` ausgeführt. Danach folgen Phase 3 und 4
 weiterhin vollständig und gründlich.
 
+**0.6.2 vor Phase 3** (Robert, 17.10.2026: „okay dann machen wir 0.6.1 wie
+geplant und nacha abarbeiten aller punkte 0.6.2“): Direkt nach 0.6.1 werden
+alle eingetragenen Funde aus RM-812 und die offenen Codestruktur-Funde aus
+RM-813 (CS-28, CS-29, CS-41 bis CS-46) behoben und als 0.6.2 ausgeliefert;
+Codestruktur Schritt 1 und die Kundenpakete folgen danach in Phase 3.
+
 **Die vier Phasen laufen ohne Datum in ihrer festen Reihenfolge, jede sauber bis zu
 Ende** (Robert, 12.10.2026): Keine Phase wartet auf einen Termin, kein Schritt
 wird für einen Termin gekürzt. Der Verkaufsstart in RM-061 ist ein
@@ -81,6 +87,34 @@ ausdrücklich mitzuprüfen. Bestätigte Funde stehen in der Funddatei;
 ein neues Bild wird nach einer Korrektur erneut tatsächlich gelesen.
 
 ## Verlauf
+
+- 17.10.2026, Phase 2 abgeschlossen: Schlusslauf am echten Fenster (L1 bis
+  L6; L4 69/69 und L5 15/15 an `d9f7a81f9`, 63 Vorhersagen vor dem Klick
+  gebunden, beide versiegelt); Nachurteile in den Runden A, B, C1, C2a und C3
+  mit drei Prüfern — jede Zeile von D4, D8 und D10 hat ihr Urteil, alle 53
+  Prüfpunkte liegen bei mindestens 90 %, `report` ohne Abweisung. Fixe, die am
+  echten Lauf nicht hielten (FD-99-Rest, FD-235, FD-88, FD-90, FD-20,
+  FD-109/110) und der Fokus nach dem Ladeschleier sind vor 0.6.1 behoben, die
+  Bildanleitungen laufen wieder in sechs Sprachen. Neue Funde FD-204 bis FD-323
+  stehen in RM-812 für 0.6.2. Releasetor am Code grün (Sammelgruppe 31 440,
+  Fenstergruppe 6 576, ruff, format, mypy; Spätfixe 15 607 betroffene Tests),
+  Review der Spätfixe integrierbar, Version 0.6.1. **Als Nächstes:** nativer
+  Endblock (Fix-Nachweis, Bildanleitungen, Handbuch- und Verkaufsbilder),
+  Handbuch, Leistungslauf, main, CI, Tag, Pakete, Upload; dann 0.6.2.
+
+- 16.10.2026, Welle 5 vollständig: `welle5` steht auf `a25ac8cb2` mit
+  Codestruktur Schritt 0 (Pakete R, R2, M, Q, P1, P2, W13, Plattform,
+  Restpaket CS0 und die Wächterfixe), dem CI-Fix, den Restpaketen A (mit B, D,
+  F2a) und C, FD-135, FD-188, FD-197/203, FD-201/202, FD-212, den
+  Beispielprojekten in Format 53 und main `fd7952a92`. Robert 15:50: Umfang
+  eingefroren — fertig wird, was bis FD-203 und CS-40 vergeben ist; neue Funde
+  stehen in RM-812 und kommen nach 0.6.1. Robert 16:05: der native Schlusslauf
+  darf nachts laufen, wenn er nicht am Rechner ist. Unterlagen zu Schritt 0
+  (Paket U): Karten, Regel 6 in `AGENTS.md`, `/liefern`, Funddatei bis CS-40,
+  RM-723 bis RM-727, RM-729 und RM-730 im Archiv, Schritt 1 als RM-813.
+  **Als Nächstes:** Funddatei-Nachtrag, Paket K (CS-11), Bereichsnachweis,
+  Review der Merge-Auflösungen, nativer Schlusslauf, Nachurteilsrunde, Tor,
+  Bescheid an Robert, main, CI; danach Release 0.6.1.
 
 - 15.10.2026, D0 vor der Landung: Robert verlangt Phase 2 vollständig, nichts
   offen — auch die leichten Funde werden vor 0.6.1 behoben; gearbeitet wird

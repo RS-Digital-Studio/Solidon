@@ -1259,19 +1259,20 @@ def _placed_like_the_cut(tool, normal, position):
 
 def test_drill_preview_and_actual_cut_share_the_same_local_tool(profile, monkeypatch):
     import app.core.geom.prepare as module
+    from app.core.geom import boolean as geom_boolean
 
     load_operations()
     mesh = MeshData.of(trimesh.creation.box((40.0, 30.0, 8.0)))
     values = {"diameter": 4.0, "depth": 3.0, "compensate": False}
     preview = placement.prepare_tool(REGISTRY.get("drill_hole"), values, profile).mesh
     captured = []
-    original = module.boolean
+    original = geom_boolean.boolean
 
     def record(kind, meshes, **kwargs):
         captured.append(meshes[1])
         return original(kind, meshes, **kwargs)
 
-    monkeypatch.setattr(module, "boolean", record)
+    monkeypatch.setattr(geom_boolean, "boolean", record)
     module.drill(
         mesh, position=(0.0, 0.0, 4.0), axis="z", normal=(0.3, 0.4, 0.5), profile=profile, **values
     )
@@ -1620,7 +1621,7 @@ def test_a_pin_on_the_underside_uses_its_material_base(profile):
 def test_existing_feature_tool_matches_free_placement_and_preserves_ids(
     operation, profile, monkeypatch
 ):
-    import app.core.geom.prepare_ops as module
+    from app.core.geom import boolean as geom_boolean
     from app.core.geom.boolean import boolean
     from app.core.types import SceneObject
     from tests.helpers import run_operation as run
@@ -1653,14 +1654,14 @@ def test_existing_feature_tool_matches_free_placement_and_preserves_ids(
     values = placement.surface_values(spec, hit, feature=feature, source=source)
     tool = placement.prepare_tool(spec, values, profile, source=source, feature=feature).mesh
     captured = []
-    original = module.boolean
+    original = geom_boolean.boolean
 
     def record(kind, meshes, **kwargs):
         if kind == "difference":
             captured.append(meshes[1])
         return original(kind, meshes, **kwargs)
 
-    monkeypatch.setattr(module, "boolean", record)
+    monkeypatch.setattr(geom_boolean, "boolean", record)
     result = run(operation, source, profile, **values).outputs[0]
     matrix = np.eye(4)
     matrix[:3, :3] = np.column_stack((hit.frame.x_axis, hit.frame.y_axis, hit.normal))
@@ -2108,6 +2109,7 @@ def test_regular_polygon_edges_need_round_provenance_before_being_hidden(sides):
 def test_drill_preview_and_actual_operation_use_the_objects_material(profile, monkeypatch):
     """Die Körperwahl gilt für den sichtbaren Werkzeugkörper und den tatsächlichen Abtrag."""
     import app.core.geom.prepare as module
+    from app.core.geom import boolean as geom_boolean
     from app.core.types import SceneObject
     from tests.helpers import run_operation as run
 
@@ -2129,13 +2131,13 @@ def test_drill_preview_and_actual_operation_use_the_objects_material(profile, mo
         REGISTRY.get("drill_hole"), values, profile, source=source
     ).mesh
     captured = []
-    original = module.boolean
+    original = geom_boolean.boolean
 
     def record(kind, meshes, **kwargs):
         captured.append(meshes[1])
         return original(kind, meshes, **kwargs)
 
-    monkeypatch.setattr(module, "boolean", record)
+    monkeypatch.setattr(geom_boolean, "boolean", record)
     run("drill_hole", source, profile, **values, z=5.0, nx=0.3, ny=0.4, nz=0.5)
     assert captured[0].raw.vertices == pytest.approx(
         _placed_like_the_cut(preview, (0.3, 0.4, 0.5), (0.0, 0.0, 5.0)), abs=1e-12
@@ -3243,7 +3245,9 @@ def test_bore_originators_leave_ambiguous_native_candidates_unclaimed(profile, m
 
     project, history, _result, first, selected = _bore_history(profile, "brep")
     module = import_module("app.core.scene.evaluate")
-    original = module.match
+    from app.core.perceive import matching
+
+    original = matching.match
 
     def contested(old, new, centre, diagonal, *, check_cancelled=None):
         holes = tuple(name for name, feature in new.items() if feature.kind == "hole")
@@ -3252,7 +3256,7 @@ def test_bore_originators_leave_ambiguous_native_candidates_unclaimed(profile, m
             return MatchResult(ambiguous={old_hole: holes}, fresh=holes)
         return original(old, new, centre, diagonal, check_cancelled=check_cancelled)
 
-    monkeypatch.setattr(module, "match", contested)
+    monkeypatch.setattr(matching, "match", contested)
     # Erzwungen wird die Mehrdeutigkeit, die übrig bleibt: Die Lage der
     # Oberfläche entschiede die erfundene sonst gleich wieder — am exakten
     # Körper fragt die Auswertung sie ebenso (``matching.settled_twins``).

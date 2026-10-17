@@ -65,7 +65,7 @@ LIMITS: dict[str, Limit] = {
 FROZEN_COUNTS: dict[str, int] = {
     "announcement": 1,
     "error_detail": 36,
-    "op_doc": 39,
+    "op_doc": 38,
     "param_doc": 53,
     "tooltip": 2,
 }
@@ -284,6 +284,11 @@ def test_a_growing_list_turns_the_guard_red() -> None:
         ("Zwei Sätze. Hier der zweite.", 2),
         ("Mit Abkürzung, z. B. Holz. Und noch einer.", 2),
         ("Eine Zahl 1.5 mm bleibt ein Satz.", 1),
+        # FD-97: „ca.“ ist eine Abkürzung nur als ganzes Wort — am Wortende
+        # von „rosca.“ und „placa.“ endet der Satz.
+        ("Pasador para un agujero de rosca. Es más corto.", 2),
+        ("Gira la pieza sobre la placa. Cada cara cuenta.", 2),
+        ("Mede ca. 5 mm de largura.", 1),
     ],
 )
 def test_sentences_are_counted_as_a_reader_counts_them(text: str, count: int) -> None:
@@ -299,29 +304,72 @@ ACTION_MAKERS = frozenset({"QAction", "addAction", "_add_action", "menuAction", 
 
 
 def status_tips_off_actions(sources: Iterable[tuple[str, str]]) -> list[str]:
-    """Jeder ``setStatusTip`` an etwas, das keine Menüaktion ist."""
+    """Jeder ``setStatusTip`` an etwas, das keine Menüaktion ist — gerufen oder gereicht.
+
+    Gefragt wird das Attribut, nicht nur der Aufruf: Die Maßgruppe setzte ihren
+    Sperrgrund über ``for setter in (knopf.setToolTip, knopf.setStatusTip, …)``,
+    der graue Knopf sagte ihn so in der Statuszeile, und der Wächter sah keinen
+    Aufruf (FD-88).
+
+    Menüaktion ist ein Empfänger nur durch seine Bindung, nie durch seinen
+    Namen: ``self.action`` des Installationsdialogs ist ein Knopf.
+    """
     found: list[str] = []
     for path, source in sources:
         tree = ast.parse(source)
-        made: dict[str, set[str]] = {}
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Assign | ast.AnnAssign) and isinstance(node.value, ast.Call):
-                maker = _callee(node.value)
-                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-                for target in targets:
-                    made.setdefault(ast.unparse(target), set()).add(maker)
-        for node in ast.walk(tree):
-            if not (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "setStatusTip"
-            ):
-                continue
-            receiver = ast.unparse(node.func.value)
-            if "action" in receiver.lower() or made.get(receiver, set()) & ACTION_MAKERS:
-                continue
-            found.append(f"{path}:{node.lineno} {receiver}")
+        parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+        tips = [
+            n for n in ast.walk(tree) if isinstance(n, ast.Attribute) and n.attr == "setStatusTip"
+        ]
+        for node in sorted(tips, key=lambda tip: tip.lineno):
+            if not _bound_to_action(node, tree, parents):
+                found.append(f"{path}:{node.lineno} {ast.unparse(node.value)}")
     return found
+
+
+def _bound_to_action(
+    node: ast.Attribute, tree: ast.Module, parents: dict[ast.AST, ast.AST]
+) -> bool:
+    """Ob der Empfänger von ``node`` an seinem Ort nachweislich eine ``QAction`` ist.
+
+    Ein Name gilt in seiner Funktion, ein Attribut wie ``self.x`` in der Datei.
+    Eine Menüaktion ist er, wenn jede Bindung aus ``ACTION_MAKERS`` stammt, er
+    als ``QAction`` annotiert ist oder ein umgebendes ``isinstance(…, QAction)``
+    ihn darauf festlegt.
+    """
+    receiver = ast.unparse(node.value)
+    scope: ast.AST = tree
+    if isinstance(node.value, ast.Name):
+        place: ast.AST | None = node
+        while place is not None and not isinstance(place, ast.FunctionDef | ast.AsyncFunctionDef):
+            place = parents.get(place)
+        scope = place or tree
+    makers: set[str] = set()
+    for bound in ast.walk(scope):
+        if isinstance(bound, ast.arg) and bound.arg == receiver:
+            makers.add(ast.unparse(bound.annotation) if bound.annotation else "")
+        elif isinstance(bound, ast.Assign | ast.AnnAssign):
+            targets = bound.targets if isinstance(bound, ast.Assign) else [bound.target]
+            if any(ast.unparse(target) == receiver for target in targets):
+                value = bound.value
+                makers.add(_callee(value) if isinstance(value, ast.Call) else "")
+        elif isinstance(bound, ast.NamedExpr) and ast.unparse(bound.target) == receiver:
+            makers.add(_callee(bound.value) if isinstance(bound.value, ast.Call) else "")
+        elif isinstance(bound, ast.For) and ast.unparse(bound.target) == receiver:
+            makers.add("")
+    if makers and makers <= ACTION_MAKERS:
+        return True
+    narrowed = f"isinstance({receiver}, QAction)"
+    child: ast.AST = node
+    while (place := parents.get(child)) is not None:
+        if (
+            isinstance(place, ast.If)
+            and child in place.body
+            and narrowed in ast.unparse(place.test)
+        ):
+            return True
+        child = place
+    return False
 
 
 def _interface_sources() -> Iterator[tuple[str, str]]:
@@ -346,3 +394,47 @@ def test_a_status_tip_on_a_button_turns_the_guard_red() -> None:
         "    button.setStatusTip('Öffnet eine Datei.')\n"
     )
     assert status_tips_off_actions([("app/ui/sample.py", source)]) == ["app/ui/sample.py:6 button"]
+
+
+def test_a_status_tip_handed_on_as_a_setter_turns_the_guard_red() -> None:
+    """Gegenprobe: Auch als gereichte Methode ist der Statustipp am Knopf rot (FD-88)."""
+    source = (
+        "def build(button, action: QAction):\n"
+        "    for setter in (button.setToolTip, button.setStatusTip):\n"
+        "        setter('Grund')\n"
+        "    for setter in (action.setToolTip, action.setStatusTip):\n"
+        "        setter('Grund')\n"
+    )
+    assert status_tips_off_actions([("app/ui/sample.py", source)]) == ["app/ui/sample.py:2 button"]
+
+
+def test_a_button_named_action_is_no_menu_action() -> None:
+    """Gegenprobe: Der Name macht keine Aktion — nur die Bindung (Zwilling von FD-88).
+
+    ``self.action`` des Installationsdialogs war ein Knopf mit Statustipp; der
+    Wächter sah „action“ im Namen und schwieg. Ebenso entschuldigt ein Name,
+    der in einer anderen Funktion an ``addAction`` hängt, keinen Knopf.
+    """
+    source = (
+        "class Row:\n"
+        "    def __init__(self, menu):\n"
+        "        self.action = QPushButton('Installieren')\n"
+        "        self.action.setStatusTip('Grund')\n"
+        "        entry = menu.addAction('Öffnen')\n"
+        "        entry.setStatusTip('Öffnet.')\n"
+        "    def other(self, field):\n"
+        "        entry = field.spin\n"
+        "        entry.setStatusTip('')\n"
+        "    def shown(self, target: QWidget | QAction, loose):\n"
+        "        if isinstance(target, QAction):\n"
+        "            target.setStatusTip('Grund')\n"
+        "        else:\n"
+        "            target.setStatusTip('Grund')\n"
+        "        loose.setStatusTip('Grund')\n"
+    )
+    assert status_tips_off_actions([("app/ui/sample.py", source)]) == [
+        "app/ui/sample.py:4 self.action",
+        "app/ui/sample.py:9 entry",
+        "app/ui/sample.py:14 target",
+        "app/ui/sample.py:15 loose",
+    ]

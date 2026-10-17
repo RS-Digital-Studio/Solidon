@@ -17,7 +17,8 @@ wurde.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, Final
+from dataclasses import dataclass
+from typing import Any, Final, Literal
 
 from app.core.knowledge import standards
 from app.core.registry import (
@@ -33,7 +34,7 @@ from app.core.registry import tool_schemas as op_schemas
 from app.core.registry.params import condition_text
 from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
 from app.core.types import ParamSpec
-from app.i18n import _, tr
+from app.i18n import TranslatableText, _, tr
 
 #: Name der Zusatz-Eigenschaft, die jedes Operationswerkzeug trägt: auf welche
 #: Objekte es wirkt. Das Parameterschema weiß nichts von der Szene, also kommt
@@ -403,7 +404,7 @@ def tool_schemas(
     machen zusammen die Hälfte der 110 KB aus, und ein lokales Modell mit
     kleinem Kontextfenster verliert daran mehr, als es gewinnt.
     """
-    return (*operation_tools(registry, compact=compact), *extra_tools())
+    return (*operation_tools(registry, compact=compact), *extra_tools(compact=compact))
 
 
 def operation_tools(
@@ -603,207 +604,300 @@ def operation_tools(
     return tuple(schemas)
 
 
-def extra_tools() -> tuple[dict[str, Any], ...]:
-    """Die Zusatzwerkzeuge aus der Tabelle in §26.2."""
-    return (
-        {
-            "name": ASK_USER,
-            "description": str(
-                _(
-                    "Frage den Nutzer, wenn die Anfrage mehrdeutig ist. "
-                    "Lieber einmal fragen als einmal falsch raten."
-                )
-            ),
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "question": {"type": "string", "description": str(_("Die Frage."))},
-                    "options": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": str(_("Antwortmöglichkeiten zur Auswahl.")),
+#: Wo ein Zusatzwerkzeug seinen Zwilling im Fenster hat: in der Menüleiste,
+#: rechts in der Karte oder links in der Parameterleiste.
+ToolPlace = Literal["menue", "karte", "leiste"]
+
+
+@dataclass(frozen=True, slots=True)
+class ExtraToolPlace:
+    """Der Fensterort eines Zusatzwerkzeugs (FD-129).
+
+    ``path`` sind die Katalogschlüssel, mit denen das Fenster die Stelle
+    beschriftet — bei ``menue`` dieselben ``_()``-Texte wie in
+    ``MainWindow._build_menus`` (``tests/test_agent_tool_places.py`` prüft sie
+    an der gebauten Menüleiste). ``rows`` nennt weitere Zeilen der
+    Funktionsliste, die dieselbe Handlung zeigen (Dialog, Kontexteintrag);
+    die Zeile eines Menüeintrags ergibt sich aus ``path``.
+    """
+
+    place: ToolPlace
+    path: tuple[TranslatableText, ...]
+    rows: tuple[str, ...] = ()
+
+
+#: Die Zusatzwerkzeuge, die auch der Kunde im Fenster hat. Ohne Eintrag:
+#: ``ask_user`` und die lesenden Werkzeuge — sie sind Auskunft für den Agenten.
+EXTRA_TOOL_PLACES: Final[dict[str, ExtraToolPlace]] = {
+    ADD_PARAMETER: ExtraToolPlace(
+        "menue", (_("Bearbeiten"), _("Parameter anlegen …")), ("dialog:parameter_dialog",)
+    ),
+    SET_PARAMETER: ExtraToolPlace(
+        "leiste", (_("Parameter links"), _("Wert in der Zeile")), ("menu:parameters.edit",)
+    ),
+    ADD_FIT: ExtraToolPlace(
+        "karte",
+        (_("Handlungen rechts"), _("bei zwei gewählten Merkmalen"), _("Passung anlegen")),
+    ),
+    UNDO_TRANSACTION: ExtraToolPlace("menue", (_("Bearbeiten"), _("Rückgängig"))),
+    FIND_PART: ExtraToolPlace(
+        "menue", (_("Datei"), _("Bausteinkatalog …")), ("dialog:part_catalog",)
+    ),
+    SET_PRINT_TARGET: ExtraToolPlace("menue", (_("Datei"), _("An den Slicer übergeben …"))),
+}
+
+
+def extra_tool_place(name: str) -> tuple[ToolPlace, str] | None:
+    """Ort und Weg eines Zusatzwerkzeugs in der Anzeigesprache — oder ``None``.
+
+    Dieselbe Form wie ``menu_place``/``menu_path`` der Operationen: Der Weg
+    trennt mit „ → “, und die Auswahl, die eine Stelle der Karte braucht, steht
+    in Klammern hinter „Handlungen rechts“.
+    """
+    entry = EXTRA_TOOL_PLACES.get(name)
+    if entry is None:
+        return None
+    parts = [str(part) for part in entry.path]
+    if entry.place == "karte" and len(parts) > 2:
+        parts = [f"{parts[0]} ({parts[1]})", *parts[2:]]
+    return entry.place, " → ".join(parts)
+
+
+def extra_tool_rows(name: str) -> tuple[str, ...]:
+    """Die Zeilen der Funktionsliste, die die Handlung eines Zusatzwerkzeugs zeigen.
+
+    Ein Menüeintrag heißt dort wie sein Weg in der Quellsprache
+    („Bearbeiten/Parameter anlegen …“, ``function_list.window_command_rows``);
+    dazu die ausdrücklich genannten Dialog- und Kontextzeilen.
+    """
+    entry = EXTRA_TOOL_PLACES.get(name)
+    if entry is None:
+        return ()
+    menu = ("/".join(part.msgid for part in entry.path),) if entry.place == "menue" else ()
+    return (*menu, *entry.rows)
+
+
+def _placed(entry: dict[str, Any], *, compact: bool) -> dict[str, Any]:
+    """Hängt ausführlich „Ort: …“ an die Beschreibung, wie bei den Operationen."""
+    place = None if compact else extra_tool_place(str(entry["name"]))
+    if place is None:
+        return entry
+    return {
+        **entry,
+        "description": f"{entry['description']} " + tr("Ort: {place}.").format(place=place[1]),
+    }
+
+
+def extra_tools(*, compact: bool = False) -> tuple[dict[str, Any], ...]:
+    """Die Zusatzwerkzeuge aus der Tabelle in §26.2 — mit ihrem Ort im Fenster.
+
+    Wie bei den Operationen steht der Ort nur in der ausführlichen
+    Beschreibung (:func:`extra_tool_place`); kompakt fällt er weg.
+    """
+    return tuple(
+        _placed(entry, compact=compact)
+        for entry in (
+            {
+                "name": ASK_USER,
+                "description": str(
+                    _(
+                        "Frage den Nutzer, wenn die Anfrage mehrdeutig ist. "
+                        "Lieber einmal fragen als einmal falsch raten."
+                    )
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "question": {"type": "string", "description": str(_("Die Frage."))},
+                        "options": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": str(_("Antwortmöglichkeiten zur Auswahl.")),
+                        },
                     },
-                },
-                "required": ["question"],
-            },
-        },
-        {
-            "name": UNDO_TRANSACTION,
-            "description": str(_("Nimm eine Transaktion aus dem Verlauf zurück.")),
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "transaction": {
-                        "type": "string",
-                        "description": str(_("Kennung aus dem Verlauf, zum Beispiel t3.")),
-                    }
-                },
-                "required": ["transaction"],
-            },
-        },
-        {
-            "name": ADD_PARAMETER,
-            "description": str(
-                _("Lege ein Hauptmaß als Projektparameter an, statt es als Zahl zu setzen.")
-            ),
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "value": {"type": "number"},
-                    "unit": {"type": "string", "description": str(_("Standard ist mm."))},
-                    "title": {"type": "string"},
-                    "minimum": {
-                        "type": "number",
-                        "description": str(_("Kleinster Wert, den die Parameterleiste annimmt.")),
-                    },
-                    "maximum": {
-                        "type": "number",
-                        "description": str(_("Größter Wert, den die Parameterleiste annimmt.")),
-                    },
-                },
-                "required": ["name", "value"],
-            },
-        },
-        {
-            "name": SET_PARAMETER,
-            "description": str(_("Ändere den Wert eines bestehenden Projektparameters.")),
-            "input_schema": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}, "value": {"type": "number"}},
-                "required": ["name", "value"],
-            },
-        },
-        {
-            "name": ADD_FIT,
-            "description": str(
-                _("Lege ein Passungspaar an. Die Toleranz kommt aus dem Materialprofil.")
-            ),
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "a": {
-                        "type": "string",
-                        "description": str(_("Erstes Merkmal als obj_1:hole_2.")),
-                    },
-                    "b": {
-                        "type": "string",
-                        "description": str(_("Zweites Merkmal als obj_2:pin_1.")),
-                    },
-                    "kind": {
-                        "type": "string",
-                        "enum": ["clearance", "press", "thread"],
-                    },
-                },
-                "required": ["name", "a", "b"],
-            },
-        },
-        {
-            "name": READ_REPORT,
-            "description": str(_("Lies den Prüfbericht, wahlweise nur ab einer Schwere.")),
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "severity": {"type": "string", "enum": ["info", "warning", "error"]}
-                },
-            },
-        },
-        {
-            "name": FIND_PART,
-            "description": str(
-                _("Suche einen passenden Baustein, bevor du Geometrie selbst zusammensetzt.")
-            ),
-            "input_schema": {
-                "type": "object",
-                "properties": {"description": {"type": "string"}},
-                "required": ["description"],
-            },
-        },
-        {
-            "name": READ_DIGEST,
-            "description": str(
-                _(
-                    "Lies den Steckbrief der Szene neu — mit den Merkmalen und "
-                    "IDs, die deine bisherigen Schritte erzeugt haben."
-                )
-            ),
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    OBJECTS_FIELD: {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": str(
-                            _("Nur diese Objekte zeigen; ohne Angabe die ganze Szene.")
-                        ),
-                    }
+                    "required": ["question"],
                 },
             },
-        },
-        {
-            "name": READ_STANDARD,
-            "description": str(
-                _(
-                    "Schlage Normteilmaße nach: Kernloch, Durchgangsloch, "
-                    "Schlüsselweite und mehr — statt sie zu raten."
-                )
-            ),
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "kind": {"type": "string", "enum": list(STANDARD_KINDS)},
-                    "size": {
-                        "type": "string",
-                        "description": str(_("Die Größe, zum Beispiel M4 oder 6x3.")),
+            {
+                "name": UNDO_TRANSACTION,
+                "description": str(_("Nimm eine Transaktion aus dem Verlauf zurück.")),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "transaction": {
+                            "type": "string",
+                            "description": str(_("Kennung aus dem Verlauf, zum Beispiel t3.")),
+                        }
                     },
-                },
-                "required": ["kind", "size"],
-            },
-        },
-        {
-            "name": READ_ANALYSIS,
-            "description": str(
-                _(
-                    "Lies eine Analyse: Druckbarkeit (Überhang, Inseln, Brücken), "
-                    "Zeit- und Materialschätzung, Einstellungsrat oder "
-                    "Orientierungssuche. Nur lesend, Herkunft wird ausgewiesen."
-                )
-            ),
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "kind": {
-                        "type": "string",
-                        "enum": ["printability", "estimate", "advice", "orientation"],
-                    },
-                    OBJECTS_FIELD: {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": str(
-                            _("Nur diese Objekte rechnen; ohne Angabe die ganze Szene.")
-                        ),
-                    },
-                },
-                "required": ["kind"],
-            },
-        },
-        {
-            "name": SET_PRINT_TARGET,
-            "description": str(
-                _(
-                    "Wechsle Drucker oder Material des Projekts. Toleranzen sind "
-                    "Verweise ins Materialprofil und rechnen sich mit um."
-                )
-            ),
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "printer": {"type": "string"},
-                    "material": {"type": "string"},
+                    "required": ["transaction"],
                 },
             },
-        },
+            {
+                "name": ADD_PARAMETER,
+                "description": str(
+                    _("Lege ein Hauptmaß als Projektparameter an, statt es als Zahl zu setzen.")
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "value": {"type": "number"},
+                        "unit": {"type": "string", "description": str(_("Standard ist mm."))},
+                        "title": {"type": "string"},
+                        "minimum": {
+                            "type": "number",
+                            "description": str(
+                                _("Kleinster Wert, den die Parameterleiste annimmt.")
+                            ),
+                        },
+                        "maximum": {
+                            "type": "number",
+                            "description": str(_("Größter Wert, den die Parameterleiste annimmt.")),
+                        },
+                    },
+                    "required": ["name", "value"],
+                },
+            },
+            {
+                "name": SET_PARAMETER,
+                "description": str(_("Ändere den Wert eines bestehenden Projektparameters.")),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}, "value": {"type": "number"}},
+                    "required": ["name", "value"],
+                },
+            },
+            {
+                "name": ADD_FIT,
+                "description": str(
+                    _("Lege ein Passungspaar an. Die Toleranz kommt aus dem Materialprofil.")
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "a": {
+                            "type": "string",
+                            "description": str(_("Erstes Merkmal als obj_1:hole_2.")),
+                        },
+                        "b": {
+                            "type": "string",
+                            "description": str(_("Zweites Merkmal als obj_2:pin_1.")),
+                        },
+                        "kind": {
+                            "type": "string",
+                            "enum": ["clearance", "press", "thread"],
+                        },
+                    },
+                    "required": ["name", "a", "b"],
+                },
+            },
+            {
+                "name": READ_REPORT,
+                "description": str(_("Lies den Prüfbericht, wahlweise nur ab einer Schwere.")),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "severity": {"type": "string", "enum": ["info", "warning", "error"]}
+                    },
+                },
+            },
+            {
+                "name": FIND_PART,
+                "description": str(
+                    _("Suche einen passenden Baustein, bevor du Geometrie selbst zusammensetzt.")
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"description": {"type": "string"}},
+                    "required": ["description"],
+                },
+            },
+            {
+                "name": READ_DIGEST,
+                "description": str(
+                    _(
+                        "Lies den Steckbrief der Szene neu — mit den Merkmalen und "
+                        "IDs, die deine bisherigen Schritte erzeugt haben."
+                    )
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        OBJECTS_FIELD: {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": str(
+                                _("Nur diese Objekte zeigen; ohne Angabe die ganze Szene.")
+                            ),
+                        }
+                    },
+                },
+            },
+            {
+                "name": READ_STANDARD,
+                "description": str(
+                    _(
+                        "Schlage Normteilmaße nach: Kernloch, Durchgangsloch, "
+                        "Schlüsselweite und mehr — statt sie zu raten."
+                    )
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "kind": {"type": "string", "enum": list(STANDARD_KINDS)},
+                        "size": {
+                            "type": "string",
+                            "description": str(_("Die Größe, zum Beispiel M4 oder 6x3.")),
+                        },
+                    },
+                    "required": ["kind", "size"],
+                },
+            },
+            {
+                "name": READ_ANALYSIS,
+                "description": str(
+                    _(
+                        "Lies eine Analyse: Druckbarkeit (Überhang, Inseln, Brücken), "
+                        "Zeit- und Materialschätzung, Einstellungsrat oder "
+                        "Orientierungssuche. Nur lesend, Herkunft wird ausgewiesen."
+                    )
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "kind": {
+                            "type": "string",
+                            "enum": ["printability", "estimate", "advice", "orientation"],
+                        },
+                        OBJECTS_FIELD: {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": str(
+                                _("Nur diese Objekte rechnen; ohne Angabe die ganze Szene.")
+                            ),
+                        },
+                    },
+                    "required": ["kind"],
+                },
+            },
+            {
+                "name": SET_PRINT_TARGET,
+                "description": str(
+                    _(
+                        "Wechsle Drucker oder Material des Projekts. Toleranzen sind "
+                        "Verweise ins Materialprofil und rechnen sich mit um."
+                    )
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "printer": {"type": "string"},
+                        "material": {"type": "string"},
+                    },
+                },
+            },
+        )
     )
 
 

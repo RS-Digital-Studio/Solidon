@@ -28,27 +28,24 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app import branding, i18n
 from app.branding import (
     APP_NAME,
-    APP_VERSION,
     DISTRIBUTION_NAME,
     PLANNED_SALE_START,
     PROJECT_SUFFIX,
     SUPPORT_ADDRESS,
     WEBSITE_URL,
 )
-from app.core import activation, manual
-from app.core.bootstrap import load_operations, load_user_parts
+from app.core import activation, bootstrap, manual
+from app.core import scene as core_scene
+from app.core.bootstrap import load_user_parts
 from app.core.errors import CANCEL, AppError, OperationCancelled, UserError, ValidationError
-from app.core.export import readback
-from app.core.export.writer import FORMAT_SUFFIX, plan_export, write_plan
+from app.core.export import readback, writer
+from app.core.export.writer import FORMAT_SUFFIX
+from app.core.ingest import loader
 from app.core.ingest.archive import is_archive, model_from_archive
-from app.core.ingest.loader import (
-    detect_unit,
-    plausible_reach,
-    read_local_payload,
-    read_model,
-)
+from app.core.ingest.loader import detect_unit, plausible_reach, read_model
 from app.core.ingest.plan import import_plan, names_in_use
 from app.core.knowledge import profiles
 from app.core.log import configure
@@ -56,7 +53,7 @@ from app.core.paths import installed_language, user_config_dir
 from app.core.perceive.local import forget_out_of_memory
 from app.core.registry import REGISTRY, cli_commands, documentation
 from app.core.registry.params import LIST_KINDS, NUMBER_KINDS, TEXT_KINDS
-from app.core.scene import History, OperationDraft, ResultCache, disk_backed_cache, evaluate
+from app.core.scene import History, OperationDraft, ResultCache, disk_backed_cache
 from app.core.scene.history import (
     RevisionPlan,
     discarded,
@@ -77,8 +74,7 @@ from app.core.scene.revision import dependencies as revision_dependencies
 from app.core.scene.revision import revise
 from app.core.types import Source
 from app.core.units import format_length
-from app.i18n import _, set_language, tr
-from app.i18n.catalog import install_language
+from app.i18n import _, catalog, tr
 
 #: Wie die Kommandozeile den Text eines Arguments in einen Wert wandelt.
 #:
@@ -214,7 +210,7 @@ def run_evaluation(project: Project, path: Path, quiet: bool = False) -> Any:
     je Befehl zwei- bis dreimal. Festgehalten wird wie im Fenster am Stapel;
     in die Datei gelangen die Antworten nur, wenn der Befehl sie speichert.
     """
-    result = evaluate(
+    result = core_scene.evaluate(
         project.document,
         profile_of(project),
         progress=(lambda fraction, text: None) if quiet else TerminalProgress(),
@@ -308,11 +304,10 @@ def command_profiles(args: argparse.Namespace) -> int:
         title = str(profiles.shown_printer_title(printer))
         print(f"  {identifier:<24} {title:<28} {width:.0f} x {depth:.0f} x {height:.0f} mm")
     print(tr("Material"))
+    from app.core.knowledge.calibration import state_text
+
     for identifier, material in sorted(profiles.material_profiles().items()):
-        state = (
-            tr("kalibriert") if material.calibrated else tr("Startwert", context="Kalibrierstand")
-        )
-        print(f"  {identifier:<24} {material.title:<28} {state}")
+        print(f"  {identifier:<24} {material.title:<28} {state_text(material)}")
     return 0
 
 
@@ -491,7 +486,7 @@ def command_import(args: argparse.Namespace) -> int:
         print(tr("Die Datei gibt es nicht: {path}", path=incoming), file=sys.stderr)
         return 1
 
-    payload = read_local_payload(incoming)
+    payload = loader.read_local_payload(incoming)
     name = incoming.name
     if is_archive(name):
         # Wie im Fenster: eingebettet wird das Modell im ZIP, nicht das
@@ -595,7 +590,7 @@ def _revised(
     plan: RevisionPlan = planned(history, context)
 
     def run(document: Any) -> Any:
-        return evaluate(
+        return core_scene.evaluate(
             document,
             profile_of(project),
             progress=TerminalProgress(),
@@ -822,7 +817,7 @@ def command_export(args: argparse.Namespace) -> int:
             values={"requested": ", ".join(unknown), "known": ", ".join(result.scene.objects)},
         )
 
-    plan = plan_export(
+    plan = writer.plan_export(
         [result.scene.objects[entry] for entry in wanted],
         project_name=path.stem,
         profile=profile_of(project),
@@ -836,13 +831,15 @@ def command_export(args: argparse.Namespace) -> int:
         document=project.document,
         # Was die Auswertung schon fand und der Export weitersagt (RM-419).
         evaluated=result.scene.report.findings,
+        # Ein entfernter Passungspartner beim Namen wie im Bericht (RB2-5).
+        names=result.object_names,
     )
     # Die Prüfung spricht, bevor die Dateien existieren — eine Warnung ist
     # also eine Warnung über das, was geschrieben wird, nicht über das, was
     # geschrieben wurde (§29).
     print_findings(plan.findings, _object_names(result.scene))
 
-    written = write_plan(plan, Path(args.directory), args.export_format)
+    written = writer.write_plan(plan, Path(args.directory), args.export_format)
     for target in written:
         print(tr("Geschrieben: {path}", path=target))
     # Dieselbe Gegenprobe wie im Fenster (RM-090): die Datei zurücklesen.
@@ -860,7 +857,7 @@ def command_export(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=DISTRIBUTION_NAME,
-        description=f"{APP_NAME} {APP_VERSION}",
+        description=f"{APP_NAME} {branding.APP_VERSION}",
     )
     parser.add_argument("--debug", action="store_true", help=tr("Ausführliches Protokoll"))
     commands = parser.add_subparsers(dest="command", required=True)
@@ -1166,8 +1163,8 @@ def _install_language() -> None:
     if not language:
         language = installed_language() or ""
     if language:
-        install_language(language)
-        set_language(language)
+        catalog.install_language(language)
+        i18n.set_language(language)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1176,7 +1173,7 @@ def main(argv: list[str] | None = None) -> int:
     _install_language()
     if _demo_is_over():
         return 1
-    load_operations()
+    bootstrap.load_operations()
     # Die eigenen Bausteine gelten auch hier (§24.5): ein Skript, das einen
     # eigenen Baustein setzt, ist derselbe Anwendungsfall wie das Menü. Ihre
     # Befunde gehen ins Protokoll — die Kommandozeile hat keinen Prüfbericht

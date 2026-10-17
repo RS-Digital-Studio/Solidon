@@ -18,8 +18,7 @@ import dataclasses
 import math
 from typing import Any, cast
 
-from app.core.brep import edit, profiles
-from app.core.brep.features import features_of
+from app.core.brep import edit, features, profiles
 from app.core.brep.kernel import Solid, require
 from app.core.errors import (
     CANCEL,
@@ -242,10 +241,16 @@ def _frame_of(ctx: OpContext, plane: str) -> PlaneFrame | None:
     keiner Tabelle des Kerns, und ohne diesen Rahmen läge die Zeichnung auf
     der Grundebene statt zwanzig Millimeter darüber — der Vertrag wäre eine
     Angabe, die niemand einlöst. Ihr Abstand darf ein Projektparameter sein,
-    deshalb reisen die Werte mit."""
+    deshalb reisen die Werte mit.
+
+    Eine Absage nennt das Feld ``sketch``: Dort steht die Ebene, und jede
+    Skizzenoperation führt es. ``plane`` gibt es in keinem ihrer Dialoge, und
+    *Eine andere Ebene wählen* führte ins Leere (FD-182)."""
     if not (is_feature_plane(plane) or is_derived_plane(plane)):
         return None
-    return frame_for_sketch(plane, ctx.scene.objects.values(), _parameter_values(ctx))
+    return frame_for_sketch(
+        plane, ctx.scene.objects.values(), _parameter_values(ctx), field="sketch"
+    )
 
 
 def _regions_for(
@@ -457,7 +462,7 @@ def _created(
         name=name or fallback,
         mesh=solid,
         kind="brep",
-        features=features_of(solid, cancelled=cancelled),
+        features=features.features_of(solid, cancelled=cancelled),
     )
 
 
@@ -687,7 +692,7 @@ def sketch_join(ctx: OpContext) -> OpResult:
             source,
             mesh=joined,
             kind="brep",
-            features=features_of(joined, cancelled=ctx.cancelled),
+            features=features.features_of(joined, cancelled=ctx.cancelled),
         )
     else:
         on = frame if frame is not None else planes.frame_for_plane(plane)
@@ -1203,7 +1208,7 @@ def cut_regions(
                 source,
                 mesh=solid,
                 kind="brep",
-                features=features_of(solid, cancelled=ctx.cancelled),
+                features=features.features_of(solid, cancelled=ctx.cancelled),
             )
         ],
         findings=[*findings, *([nothing] if nothing is not None else [])],
@@ -1263,7 +1268,7 @@ class SketchRevolveParams(BaseParams):
         #
         # Der ``doc``-Satz bleibt vorerst, wie er ist: Er ist ein Katalogtext
         # in fünf Sprachen, und beim Vieleck steht ohnehin der Grund der
-        # Sperre an der Zeile statt seiner (``_explain`` in ``op_dialog.py``).
+        # Sperre an der Zeile statt seiner (``form_fields.explain`` im Operationsdialog).
         depends_on=("shape", ("rectangle", "slot")),
         placement="advanced",
     )
@@ -2749,7 +2754,7 @@ def _cut_with_tool(
                 source,
                 mesh=solid,
                 kind="brep",
-                features=features_of(solid, cancelled=ctx.cancelled),
+                features=features.features_of(solid, cancelled=ctx.cancelled),
             )
             solver = SolverInfo(strategy="direct", attempted=("direct",))
         else:

@@ -64,31 +64,23 @@ OUTLINE_SEGMENTS = 64
 
 #: Der Knopf im Maß des Bohrungsdurchmessers: Radius und Höhe.
 #:
-#: Er sitzt auf dem Rand des Lochs und darf es nicht zudecken — und er muss
-#: getroffen werden können. Die Ansicht deckelt ihn nach unten über
-#: :meth:`app.ui.viewport.Viewport._handle_radius` (Untergrenze
-#: ``FACE_HANDLE_MINIMUM``), denn ein Loch von einem Millimeter hat keinen
-#: Griff, den man mit der Maus fände; und der Griff selbst deckelt nach oben
-#: (:data:`WIDEST_KNOB_SHARE`), damit er das Loch nicht zudeckt.
+#: Er steht außen am Scheitel des Lochs (:meth:`SlotHandle._knob_centre`) und
+#: deckt die Öffnung nicht zu — ein Klick ins Loch trifft das Loch, nicht den
+#: Griff („Ein Klick auf die Bohrung traf den Griff statt des Körpers",
+#: Robert, 03.09.2026) —, und er muss getroffen werden können. Die Ansicht
+#: deckelt ihn nach unten über :meth:`app.ui.viewport.Viewport._handle_radius`
+#: (Untergrenze ``FACE_HANDLE_MINIMUM``), denn ein Loch von einem Millimeter
+#: hat keinen Griff, den man mit der Maus fände. Eine Obergrenze braucht er
+#: außen nicht mehr: Auf dem Rand musste er schrumpfen, um die Öffnung frei zu
+#: lassen, und war an kleinen Löchern kaum zu greifen.
 KNOB_RADIUS_SHARE = 0.22
 KNOB_HEIGHT_SHARE = 0.30
 
 #: Wie rund der Knopf gezeichnet wird.
 KNOB_SEGMENTS = 24
 
-#: Ruhende Knöpfe lassen die Öffnung durchscheinen; Treffergeometrie bleibt.
+#: Ruhende Knöpfe bleiben durchscheinend; Treffergeometrie bleibt.
 KNOB_IDLE_OPACITY = 0.45
-
-#: Wie breit die zwei Knöpfe zusammen höchstens werden, im Maß der Länge.
-#:
-#: **Sonst decken sie zu, was sie anfassen sollen.** Gemessen am Anteil der
-#: Mündungsfläche, den sie in Achsrichtung verdecken: bei Ø 1 volle 100 Prozent,
-#: bei Ø 2 noch 57,7 — und unter Ø 1,68 überlappten sie einander. Sie sind
-#: anklickbar und stehen vorn; damit war die Lehre von ``_face_handle`` zurück
-#: („Ein Klick auf die Bohrung traf den Griff statt des Körpers", Robert,
-#: 03.09.2026). Vier Zehntel der Länge lassen zwischen den beiden Knöpfen
-#: immer eine Lücke, durch die das Loch selbst zu treffen ist.
-WIDEST_KNOB_SHARE = 0.4
 
 #: Die Hervorhebung beim Überfahren — dieselbe wie an Pfeilen, Ringen und
 #: Würfel, damit alle Griffe dieselbe Sprache sprechen.
@@ -102,7 +94,6 @@ __all__ = [
     "KNOB_HEIGHT_SHARE",
     "KNOB_RADIUS_SHARE",
     "OUTLINE_SEGMENTS",
-    "WIDEST_KNOB_SHARE",
     "SlotHandle",
     "dragged_slot",
     "plane_axes",
@@ -323,10 +314,8 @@ class SlotHandle:
         self.angle = _normalised_angle(angle)
         self._start_length = self.length
         self._start_angle = self.angle
-        # Nach oben gedeckelt: Zwei Knöpfe, die zusammen breiter sind als die
-        # Lücke zwischen ihnen, verstecken das Loch, an dem sie sitzen.
-        widest = self.length * WIDEST_KNOB_SHARE / (2.0 * KNOB_RADIUS_SHARE)
-        self._knob_size = min(float(knob_size), widest)
+        self._knob_size = float(knob_size)
+        self._knob_radius = self._knob_size * KNOB_RADIUS_SHARE
         self._held: int | None = None
         self._hovered: int | None = None
         self.pressing = False
@@ -345,12 +334,12 @@ class SlotHandle:
         ziehe driften die ziehpunkte für das langloch ab … sie bewegen sich
         entgegengesetzt")."""
         for index in range(2):
-            seat = self._knob_seat(index, self.length, self.angle)
+            seat = self._knob_centre(index, self.length, self.angle)
             self._built_seats.append(seat)
             vertices, faces = shapes.cylinder(
                 seat,
                 tuple(self._axis),
-                radius=self._knob_size * KNOB_RADIUS_SHARE,
+                radius=self._knob_radius,
                 height=self._knob_size * KNOB_HEIGHT_SHARE,
                 segments=KNOB_SEGMENTS,
             )
@@ -397,6 +386,27 @@ class SlotHandle:
         seat = self._centre + along * reach
         return (float(seat[0]), float(seat[1]), float(seat[2]))
 
+    def _knob_centre(self, index: int, length: float, angle: float) -> Vec3:
+        """Wo ein Knopf gezeichnet steht: außen am Scheitel, die Öffnung frei.
+
+        Auf dem Scheitel zentriert ragte jeder Knopf zur Hälfte in die Öffnung,
+        und zwei durchscheinende Zylinder über dem Rand machten die gewählte
+        Bohrung schlechter lesbar als jede andere (FD-70). Gerechnet wird der
+        Zug weiter vom Scheitel (:meth:`_knob_seat`): Der Griff merkt sich beim
+        Drücken den Abstand der Hand dazu (:meth:`_grab_at`).
+        """
+        seat = np.asarray(self._knob_seat(index, length, angle), dtype=float)
+        outward = seat - self._centre
+        span = float(np.linalg.norm(outward))
+        if span <= EPS_GEOM:
+            x_axis, y_axis = plane_axes(self._axis)
+            turn = math.radians(angle)
+            outward = math.cos(turn) * x_axis + math.sin(turn) * y_axis
+            outward = outward if index == 0 else -outward
+            span = 1.0
+        drawn = seat + outward / span * self._knob_radius
+        return (float(drawn[0]), float(drawn[1]), float(drawn[2]))
+
     @property
     def items(self) -> tuple[Item, ...]:
         """Was der Griff im Bild hält — für Beschriftung und Tests."""
@@ -419,19 +429,29 @@ class SlotHandle:
 
     @property
     def knob_seats(self) -> tuple[Vec3, ...]:
-        """Wo die Knöpfe gerade sitzen — die Beschriftung stellt ihr L dahinter.
+        """Wo die Knöpfe am Loch ansetzen: die Scheitel — die Beschriftung stellt ihr L dahinter.
 
         Gerechnet und nicht am Aktor abgelesen: ``Item.position()`` trägt den
         **Versatz** gegen die gebaute Geometrie, nicht den Ort. Wer ihn für
-        eine Stelle hält, beschriftet den Weltursprung.
+        eine Stelle hält, beschriftet den Weltursprung. Gezeichnet stehen die
+        Knöpfe außen daneben (:attr:`knob_centres`).
         """
         return tuple(self._knob_seat(index, self.length, self.angle) for index in (0, 1))
 
     @property
+    def knob_centres(self) -> tuple[Vec3, ...]:
+        """Wo die zwei Zylinder gerade gezeichnet stehen — außen am Scheitel."""
+        return tuple(self._knob_centre(index, self.length, self.angle) for index in (0, 1))
+
+    @property
     def clearance(self) -> tuple[Vec3, float]:
-        """Mitte und Reichweite der Knöpfe, die Maßfelder frei halten müssen."""
+        """Mitte und Reichweite der Knöpfe bis zu ihrem äußeren Rand.
+
+        Maßfelder halten sie frei, und der Bewegungsgriff an der Öffnung lässt
+        seine Pfeile erst dahinter beginnen (FD-70).
+        """
         centre: Vec3 = (float(self._centre[0]), float(self._centre[1]), float(self._centre[2]))
-        return centre, self.length / 2.0 + self._knob_size * KNOB_RADIUS_SHARE
+        return centre, self.length / 2.0 + 2.0 * self._knob_radius
 
     @property
     def dragging(self) -> bool:
@@ -665,7 +685,7 @@ class SlotHandle:
         zeichnet — während des Zugs dem Rückruf der Ansicht.
         """
         for index, item in enumerate(self._knobs):
-            seat = np.asarray(self._knob_seat(index, self.length, self.angle), dtype=float)
+            seat = np.asarray(self._knob_centre(index, self.length, self.angle), dtype=float)
             offset = seat - np.asarray(self._built_seats[index], dtype=float) + self._shift
             item.set_position((float(offset[0]), float(offset[1]), float(offset[2])))
         points = slot_outline(self._centre, self._axis, self._diameter, self.length, self.angle)

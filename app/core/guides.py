@@ -91,6 +91,19 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # Das Wertfeld der ersten Zeile unter „Parameter" — über die Reihenfolge,
         # weil ein benanntes Maß in jeder Sprache anders heißt
         "parameters.first",
+        # Die Beschriftung derselben Zeile — ein Rechtsklick dort öffnet ihr Menü
+        # (``menu:parameters.edit``) — und *Zahlen an Maße binden …* darunter
+        "parameters.first.label",
+        "parameters.bind",
+        # *Auswahl als Baustein speichern …* im offenen Bausteinkatalog
+        "parts.save",
+        # *Spule von Hand anlegen* im Filamentlager, im Fenster der neuen Spule
+        # *Wählen …* am Profil des Slicers und der erste Farbknopf
+        "filament.add",
+        "filament.profile",
+        "filament.colour",
+        # Die erste Spule aus dem Lager in einem Filamentfeld — ein Ort in seiner Liste
+        "filament.spool",
         # „Zeichnen" in der Werkzeugleiste und „Fertig" im Zeichenmodus
         "toolbar.draw",
         "sketch.done",
@@ -113,6 +126,42 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # Die Seiten *Chat* und *Tour* der rechten Karte
         "chat",
         "tour",
+        # *PayPal im Browser öffnen* beim Unterstützen und *Download-Seite öffnen*
+        # im Fenster der neuen Version — Wege zu den Meldungen, wenn kein Browser öffnet
+        "donation.paypal",
+        "update.page",
+        # In *Zusätzliche Programme*: *Installieren* einer Zeile, *Details anzeigen*
+        # nach einem Fehlschlag, *ComfyUI einrichten …* und *Ort angeben …* eines Dienstes
+        "install.action",
+        "install.details",
+        "install.follow.comfyui",
+        "install.locate",
+        # *Aus dem Slicer übernehmen* im Filamentlager
+        "filament.import",
+        # Die erste Zeile mit Filament unter *Filamente* in der Kopfzeile — ein Ort
+        # in der Liste; ein Doppelklick öffnet die Druckwerte dieser Spule
+        "filaments.first",
+        # *Filament abziehen …* in der Zeile über der Ansicht nach einem Export
+        "usage.review",
+        # Die Reiterleiste der rechten Karte (ihr Rechtsklick öffnet das Menü mit
+        # *In eigenem Fenster öffnen*) und *Zurück in Solidon* im eigenen Fenster
+        "tabs.bar",
+        "tabs.return",
+        # Im Chat das erste Beispiel und *Senden*; im KI-Hinweis *Solidon-Datenschutz
+        # lokal öffnen*; *Offline aktivieren …* beim Freischalten
+        "request.example",
+        "request.send",
+        "disclosure.privacy",
+        "activation.offline",
+        # Die Beschreibung und *Erzeugen* in *Modell erzeugen*, *KI-Anfrage
+        # fortsetzen* im KI-Hinweis
+        "generate.prompt",
+        "generate.start",
+        "disclosure.continue",
+        # Im Skizzeneditor *Koordinaten …* am gewählten Punkt und *Neue Ebene …* im
+        # Ebenenfeld — ein Eintrag seiner Liste, ein Ort
+        "sketch.coordinates",
+        "sketch.new_plane",
     }
 )
 
@@ -133,6 +182,13 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #: * ``section:shaping`` — ein Abschnitt im Auswahlfenster über eine Kategorie
 #:   des Registers; im Bild seine Überschrift, die ihn auf- und zuklappt;
 #: * ``sketch:rectangle`` — ein Werkzeug des Zeichenmodus;
+#: * ``sketch.point:1`` — ein Punkt der Skizze, wo er gezeichnet steht, gezählt
+#:   ab 1 über die Punkte aller Elemente;
+#: * ``sketch.at:20_10`` — eine Stelle der Zeichenebene in Millimetern
+#:   (waagerecht, senkrecht), dort klickt ein Zeichenwerkzeug;
+#: * ``sketch.constraint:distance`` — die erste Zeile der Bedingungsliste mit
+#:   einer Bedingung dieser Art; die Liste zeigt, was an der Auswahl hängt;
+#: * ``sketch.constrain:distance`` — der Knopf einer Bedingung über ihre Art;
 #: * ``history:edit`` — ein Eintrag im Kontextmenü des Verlaufs (``edit``,
 #:   ``insert``, ``switch``, ``delete``), solange das Menü offen ist; derselbe
 #:   Eintrag wie ``menu:history.edit``, als Name der Anleitungen geblieben;
@@ -205,6 +261,10 @@ TARGET_KINDS: Final[tuple[str, ...]] = (
     "message",
     "message.button",
     "setting.section",
+    "sketch.point",
+    "sketch.at",
+    "sketch.constraint",
+    "sketch.constrain",
 )
 
 #: Das erste Glied jedes Namens einer Zeile der Menüleiste (:func:`menubar_name`).
@@ -237,6 +297,10 @@ _PATTERNS: Final[dict[str, re.Pattern[str]]] = {
     "dialog": re.compile(r"[a-z][a-z0-9_]*"),
     "message": re.compile(_WORD),
     "message.button": re.compile(rf"{_WORD}\.{_DOTTED}"),
+    "sketch.point": re.compile(r"[1-9][0-9]*"),
+    "sketch.at": re.compile(r"[0-9]+_[0-9]+"),
+    "sketch.constraint": re.compile(_WORD),
+    "sketch.constrain": re.compile(_WORD),
 }
 
 #: Die Umlaute in einem Namen aus der deutschen Quelle.
@@ -529,8 +593,13 @@ GUIDES: Final[tuple[Guide, ...]] = (
         ),
         steps=(
             step(_("Klicken Sie auf dem Startbildschirm auf *Neues Projekt*."), "start.new"),
+            # **Rechts in der Karte, nicht im Menü:** Ohne Auswahl stehen die
+            # Erzeuger seit RM-735 unter *Auswahl*, und das Ziel zeigt zuerst
+            # auf ihren Knopf (``guide_targets.area_for``). Mit dem Menüweg im
+            # Satz rahmte das Bild den Knopf rechts, während links das Menü
+            # offen stand, und kein Zuschnitt fasste beides (Probe 16.10.2026).
             step(
-                _("Öffnen Sie oben *Erzeugen → Grundformen → Quader anlegen*."),
+                _("Rechts unter *Auswahl*: Klicken Sie auf *Quader anlegen*."),
                 "operation:create_brep_box",
             ),
             step(

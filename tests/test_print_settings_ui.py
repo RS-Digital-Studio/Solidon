@@ -56,6 +56,7 @@ from app.core.types import (
     SlotOverride,
 )
 from app.i18n import tr
+from app.ui import dialogs
 from app.ui import main_window as preflight_main
 from app.ui import print_settings_dialog as print_dialog
 from app.ui.dialogs import offered_actions
@@ -363,13 +364,13 @@ def test_late_slicer_profile_outcomes_keep_the_outer_frame(
 
     dialog = PrintSettingsDialog(session, UiSettings())
     queued: list[ContentFitIntent] = []
-    queue_refit = dialog._queue_refit
+    queue_refit = dialog.queue_refit
 
     def record_intent(intent: ContentFitIntent) -> None:
         queued.append(intent)
         queue_refit(intent)
 
-    monkeypatch.setattr(dialog, "_queue_refit", record_intent)
+    monkeypatch.setattr(dialog, "queue_refit", record_intent)
     dialog.show()
     try:
         # Warten, nicht schließen: ``wait_for_workers`` setzt den Dialog auf
@@ -789,6 +790,9 @@ def test_plate_job_adds_its_identity_without_replacing_project_process_values(
         _foundation_cache=None,
         _map_request=None,
         _announcement_document=document,
+        # Keine Quittung steht; der nächste Schritt hätte nichts abzuräumen (FD-162).
+        _announcement="",
+        _action_notice=SimpleNamespace(isVisible=lambda: False, outlived_by=lambda _steps: False),
         _follow_the_run_in_the_report=lambda: None,
         _split_points=(),
         _quiet_host=None,
@@ -1793,10 +1797,10 @@ def test_filament_override_refuses_a_number_until_it_is_corrected(
         line = editor.lineEdit()
         line.setFocus()
         line.selectAll()
-        QTest.keyClicks(line, "401")
+        QTest.keyClicks(line, "501")
         refusal = editor.refusal()
-        assert editor.refused_value() == pytest.approx(401)
-        assert "Obergrenze" in refusal and "400" in refusal
+        assert editor.refused_value() == pytest.approx(501)
+        assert "Obergrenze" in refusal and "500" in refusal
         assert dialog._refusals["temperature.nozzle"].isVisibleTo(dialog)
         ok = dialog._ok_button
         assert ok is not None
@@ -1913,7 +1917,7 @@ def test_the_printer_header_refuses_out_of_range_numbers(
 @pytest.mark.parametrize(
     ("path", "invalid", "boundary", "bound_word"),
     [
-        ("layers.layer_height", 1.5, 1.2, "Obergrenze"),
+        ("layers.layer_height", 4.5, 4.0, "Obergrenze"),
         ("shell.wall_count", 21, 20, "Obergrenze"),
         ("shell.wall_count", 0, 1, "Untergrenze"),
     ],
@@ -3966,14 +3970,14 @@ def test_closing_ignores_a_worker_error_already_waiting_in_qt(
     dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein eingereihtes Ergebnis darf nach dem Dialogausgang kein Fenster mehr öffnen."""
-    from app.ui import print_settings_dialog as module
+    from app.ui import dialogs
 
     source = tmp_path / "source.gcode"
     source.write_bytes(b"G1 X1\n")
     blocker = tmp_path / "not-a-folder"
     blocker.write_text("x", encoding="utf-8")
     shown: list[object] = []
-    monkeypatch.setattr(module, "show_error", lambda problem, parent=None: shown.append(problem))
+    monkeypatch.setattr(dialogs, "show_error", lambda problem, parent=None: shown.append(problem))
 
     dialog._start_gcode_save(((source, blocker / "target.gcode"),))
     worker = dialog._worker
@@ -3998,6 +4002,7 @@ def test_only_a_finished_slicer_start_counts_as_handed_over(
     import types as types_module
 
     from app.core.errors import ExternalToolError
+    from app.ui import dialogs
     from app.ui import print_settings_dialog as module
 
     executable = tmp_path / "prusa-slicer-console.exe"
@@ -4031,7 +4036,7 @@ def test_only_a_finished_slicer_start_counts_as_handed_over(
         return handover.SliceOutcome(gcode_path=output, metrics=gcode.GcodeMetrics())
 
     monkeypatch.setattr(module.handover, "slice_model", slicing)
-    monkeypatch.setattr(module, "show_error", lambda *args, **kwargs: None)
+    monkeypatch.setattr(dialogs, "show_error", lambda *args, **kwargs: None)
     handed: list[bool] = []
     dialog.handedOver.connect(lambda: handed.append(True))
 
@@ -4855,14 +4860,14 @@ def test_a_gcode_write_error_is_shown_as_a_recoverable_error(
 ) -> None:
     """Ein gesperrtes Ziel reißt den Speicherarbeiter nicht aus dem Dialog."""
     from app.core.errors import FileWriteError
-    from app.ui import print_settings_dialog as module
+    from app.ui import dialogs
 
     source = tmp_path / "source.gcode"
     source.write_bytes(b"G1 X1\n")
     blocker = tmp_path / "not-a-folder"
     blocker.write_text("x", encoding="utf-8")
     shown: list[object] = []
-    monkeypatch.setattr(module, "show_error", lambda problem, parent=None: shown.append(problem))
+    monkeypatch.setattr(dialogs, "show_error", lambda problem, parent=None: shown.append(problem))
 
     dialog._start_gcode_save(((source, blocker / "target.gcode"),))
     deadline = time.monotonic() + 2.0
@@ -4879,7 +4884,7 @@ def test_a_plate_write_error_does_not_retry_an_old_gcode_copy(
 ) -> None:
     """Der Fehler der 3MF-Vorbereitung gehört nicht zum vorigen Speicherauftrag."""
     from app.core.errors import FileWriteError
-    from app.ui import print_settings_dialog as module
+    from app.ui import dialogs
 
     source = tmp_path / "alt.gcode"
     source.write_bytes(b"G1 X1\n")
@@ -4893,7 +4898,7 @@ def test_a_plate_write_error_does_not_retry_an_old_gcode_copy(
         if handler is not None:
             handler(problem)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(module, "show_error", choose_retry)
+    monkeypatch.setattr(dialogs, "show_error", choose_retry)
 
     dialog._slice_failed(FileWriteError(str(tmp_path / "platte.3mf"), detail="voll"))
 
@@ -6806,10 +6811,10 @@ def test_a_failed_slicer_run_leaves_its_reason_in_the_dialog(
     Fehlerdialog wird dabei stillgelegt: ``exec`` wartet auf einen Menschen.
     """
     from app.core.errors import ARRANGE_ON_BED, ExternalToolError
-    from app.ui import print_settings_dialog as modul
+    from app.ui import dialogs
 
     gezeigt: list[object] = []
-    monkeypatch.setattr(modul, "show_error", lambda problem, parent=None: gezeigt.append(problem))
+    monkeypatch.setattr(dialogs, "show_error", lambda problem, parent=None: gezeigt.append(problem))
     dialog.state.setText("Der Slicer rechnet …")
 
     dialog._slice_failed(
@@ -6830,9 +6835,9 @@ def test_a_failed_slicer_run_returns_the_plate_findings(
     """Der externe Abbruch darf die genauere Vorprüfung nicht verschlucken."""
     from app.core.errors import ExternalToolError
     from app.core.types import Finding
-    from app.ui import print_settings_dialog as modul
+    from app.ui import dialogs
 
-    monkeypatch.setattr(modul, "show_error", lambda *args, **kwargs: None)
+    monkeypatch.setattr(dialogs, "show_error", lambda *args, **kwargs: None)
     returned: list[list[Finding]] = []
     dialog.reported.connect(returned.append)
     finding = Finding(
@@ -7447,7 +7452,7 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     # „0 >= 23" ist kein Befund über Stauchung, sondern über ein Layout, das
     # es noch nicht gibt (dieselbe Falle wie `isVisible` vor dem Anzeigen).
     dialog.show()
-    # Gemessen wird gesammelt im nächsten Umlauf (``_queue_refit``): Ein
+    # Gemessen wird gesammelt im nächsten Umlauf (``queue_refit``): Ein
     # einzelnes ``processEvents`` sah die Anfangsgröße noch nicht, und das
     # Aufklappen ging in der noch wartenden Anfangsmessung auf.
     for _ in range(8):
@@ -9645,8 +9650,8 @@ def test_print_advice_keeps_its_layers_when_only_the_advice_changes(qt_app, monk
     Körper noch einmal. Hier ändert ein Feld den Rat, während geschnitten wird:
     geschnitten wird einmal, und der Rat gilt dem neuen Stand.
     """
+    from app.core.slice import analysis
     from app.core.types import SliceResult
-    from app.ui import print_settings_dialog as module
 
     entered = threading.Event()
     release = threading.Event()
@@ -9658,7 +9663,7 @@ def test_print_advice_keeps_its_layers_when_only_the_advice_changes(qt_app, monk
         assert release.wait(5)
         return SliceResult(layers=(), support_volume=0, first_layer_area=100)
 
-    monkeypatch.setattr(module, "slice_body", measure)
+    monkeypatch.setattr(analysis, "slice_body", measure)
     dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
     dialog._start_advice()
     assert entered.wait(3)
@@ -9682,6 +9687,7 @@ def test_print_advice_takes_the_layers_the_report_already_has(qt_app, monkeypatc
     demselben Raster, Winkel und derselben Brückenbreite (``findings.analysed``).
     Am Bohrmaschinenhalter schnitt der Dialog sie danach noch einmal, 2,3 s.
     """
+    from app.core.slice import analysis
     from app.core.types import SliceResult
     from app.ui import print_settings_dialog as module
 
@@ -9696,7 +9702,7 @@ def test_print_advice_takes_the_layers_the_report_already_has(qt_app, monkeypatc
         raise AssertionError("die Schichten des Prüfberichts genügen")
 
     monkeypatch.setattr(module, "remembered_analysis", remembered)
-    monkeypatch.setattr(module, "slice_body", measure)
+    monkeypatch.setattr(analysis, "slice_body", measure)
     dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
     dialog._start_advice()
     _wait_for_print_advice(dialog, qt_app)
@@ -9707,8 +9713,8 @@ def test_print_advice_takes_the_layers_the_report_already_has(qt_app, monkeypatc
 
 def test_print_advice_restarts_for_actual_layers_and_rejects_cancelled_results(qt_app, monkeypatch):
     """Ein neuer Schichtwert löst den alten Auftrag ab, auch wenn dessen Ergebnis schon wartet."""
+    from app.core.slice import analysis
     from app.core.types import SliceResult
-    from app.ui import print_settings_dialog as module
 
     entered = threading.Event()
     release = threading.Event()
@@ -9730,7 +9736,7 @@ def test_print_advice_restarts_for_actual_layers_and_rejects_cancelled_results(q
             assert release.wait(5)
         return SliceResult(layers=(), support_volume=0, first_layer_area=100)
 
-    monkeypatch.setattr(module, "slice_body", measure)
+    monkeypatch.setattr(analysis, "slice_body", measure)
     dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
     initial = (dialog.settings.layers.layer_height, dialog.settings.layers.first_layer_height)
     dialog._start_advice()
@@ -9761,8 +9767,8 @@ def test_print_advice_remembers_measured_layers_across_dialogs(qt_app, monkeypat
     """
     from types import SimpleNamespace
 
+    from app.core.slice import analysis
     from app.core.types import SliceResult
-    from app.ui import print_settings_dialog as module
 
     calls: list[tuple[float, float]] = []
 
@@ -9770,7 +9776,7 @@ def test_print_advice_remembers_measured_layers_across_dialogs(qt_app, monkeypat
         calls.append((height, first_layer_height))
         return SliceResult(layers=(), support_volume=0, first_layer_area=100)
 
-    monkeypatch.setattr(module, "slice_body", measure)
+    monkeypatch.setattr(analysis, "slice_body", measure)
     cube = _print_advice_cube()
     first = _print_advice_dialog(qt_app, [cube])
     session = first.session
@@ -9880,8 +9886,15 @@ def test_empty_print_dialog_explains_an_impossible_flow_and_recovers(qt_app, whe
 
     Vor dem Öffnen gesetzt heißt: früher selbst gewählt. Ohne Herkunft wären
     die Werte seit Stufe A Grundlage und kämen beim Öffnen aus dem Profil.
+
+    An einer 1-mm-Düse: An der 0,4er bringt der Rat Schicht und Bahn auf
+    höchstens 0,3 × 0,8 mm, und unter 0,5 mm³/s Volumenstrom geht das noch
+    (``advise.WIDE_LINE_SHARE``, Nachprüfung FD-197 NP-3).
     """
+    printer = profiles.printer(profiles.DEFAULT_PRINTER)
+    profiles.save_printer(replace(printer, nozzle_diameter=1.0, extrusion_width=1.05))
     session = Session()
+    assert session.profile.printer.nozzle_diameter == pytest.approx(1.0)
     settings = print_settings.resolve(session.profile)
     invalid = settings
     for path, value in (
@@ -9921,8 +9934,8 @@ def test_print_advice_failure_has_a_retry_and_never_claims_the_part_is_ready(
 ):
     """Eine fehlende Analyse bleibt sichtbar unvollständig und kann neu angefordert werden."""
     from app.core.errors import ValidationError
+    from app.core.slice import analysis
     from app.core.types import SliceResult
-    from app.ui import print_settings_dialog as module
 
     attempts = []
 
@@ -9934,7 +9947,7 @@ def test_print_advice_failure_has_a_retry_and_never_claims_the_part_is_ready(
             raise ValueError("review analysis failure")
         return SliceResult(layers=(), support_volume=0, first_layer_area=100)
 
-    monkeypatch.setattr(module, "slice_body", measure)
+    monkeypatch.setattr(analysis, "slice_body", measure)
     dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
     deadline = time.monotonic() + 5
     while dialog._advice_pending and time.monotonic() < deadline:
@@ -9954,7 +9967,7 @@ def test_print_advice_failure_has_a_retry_and_never_claims_the_part_is_ready(
 def test_print_advice_offers_executable_actions_and_removes_stale_buttons(qt_app, monkeypatch):
     """Ein Analysefehler reicht seinen konkreten Rückweg und dieselben Fehlerdaten weiter."""
     from app.core.errors import Action, AppError
-    from app.ui import print_settings_dialog as module
+    from app.core.slice import analysis
 
     problem = AppError(
         detail="Profil konnte nicht gelesen werden <Datei>.",
@@ -9968,7 +9981,7 @@ def test_print_advice_offers_executable_actions_and_removes_stale_buttons(qt_app
     def fail(*_args, **_kwargs):
         raise problem
 
-    monkeypatch.setattr(module, "slice_body", fail)
+    monkeypatch.setattr(analysis, "slice_body", fail)
     dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
     handled = []
     monkeypatch.setattr(dialog, "error_handlers", lambda: {"show_output": handled.append})
@@ -9997,7 +10010,7 @@ def test_print_advice_offers_executable_actions_and_removes_stale_buttons(qt_app
 def test_cancelled_print_advice_keeps_its_state_when_a_late_error_arrives(qt_app, monkeypatch):
     """Ein überholter Fehler ersetzt weder den Abbruch noch den ausdrücklichen Neuversuch."""
     from app.core.errors import ValidationError
-    from app.ui import print_settings_dialog as module
+    from app.core.slice import analysis
 
     entered = threading.Event()
     release = threading.Event()
@@ -10007,7 +10020,7 @@ def test_cancelled_print_advice_keeps_its_state_when_a_late_error_arrives(qt_app
         assert release.wait(5)
         raise ValidationError(field="temperature.nozzle", detail="Überholter Profilfehler")
 
-    monkeypatch.setattr(module, "slice_body", measure)
+    monkeypatch.setattr(analysis, "slice_body", measure)
     dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
     dialog._start_advice()
     assert entered.wait(3)
@@ -10026,8 +10039,8 @@ def test_cancelled_print_advice_keeps_its_state_when_a_late_error_arrives(qt_app
 
 def test_closing_cancels_the_print_advice_worker_without_waiting_in_qt(qt_app, monkeypatch):
     """Der Schließweg lässt keine Geometriearbeit hinter einem verschwundenen Dialog zurück."""
+    from app.core.slice import analysis
     from app.core.types import SliceResult
-    from app.ui import print_settings_dialog as module
 
     entered = threading.Event()
     release = threading.Event()
@@ -10039,7 +10052,7 @@ def test_closing_cancels_the_print_advice_worker_without_waiting_in_qt(qt_app, m
         assert release.wait(5)
         return SliceResult(layers=(), support_volume=0, first_layer_area=100)
 
-    monkeypatch.setattr(module, "slice_body", measure)
+    monkeypatch.setattr(analysis, "slice_body", measure)
     dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
     dialog._start_advice()
     assert entered.wait(3)
@@ -10204,17 +10217,17 @@ def test_print_advice_reanalyses_when_line_width_invalidates_the_overhang_calibr
     qt_app, monkeypatch
 ):
     """Die Schichtgeometrie folgt der Probe, bis eine andere Bahnbreite sie ungültig macht."""
-    from app.ui import print_settings_dialog as module
+    from app.core.slice import analysis
 
     _profile, settings, body = _calibrated_advice_case(monkeypatch)
-    measure = module.slice_body
+    measure = analysis.slice_body
     calls = []
 
     def recorded(*args, **kwargs):
         calls.append((kwargs["overhang_angle"], threading.get_ident()))
         return measure(*args, **kwargs)
 
-    monkeypatch.setattr(module, "slice_body", recorded)
+    monkeypatch.setattr(analysis, "slice_body", recorded)
     dialog = _print_advice_dialog(qt_app, [body], settings=settings)
     _wait_for_print_advice(dialog, qt_app)
     calibrated = dialog.slice_result
@@ -12097,7 +12110,7 @@ def test_queued_preflight_failure_after_cancel_button_is_suppressed(
         _failed_save_copies=None,
         state=SimpleNamespace(setText=events.append),
     )
-    monkeypatch.setattr(print_dialog, "show_error", lambda problem, *_args: events.append(problem))
+    monkeypatch.setattr(dialogs, "show_error", lambda problem, *_args: events.append(problem))
 
     PrintSettingsDialog._slice_failed(
         host, ExternalToolError(values={"constraint": "slicer_build_volume", "part_index": 0})
@@ -12359,7 +12372,7 @@ def test_preflight_failure_of_a_replaced_job_is_discarded(
         state=SimpleNamespace(setText=changed.append),
         reported=_PreflightSignalLog(),
     )
-    monkeypatch.setattr(print_dialog, "show_error", lambda problem, *_args: shown.append(problem))
+    monkeypatch.setattr(dialogs, "show_error", lambda problem, *_args: shown.append(problem))
     problem = ExternalToolError(values={"constraint": "slicer_build_volume", "part_index": 1})
 
     PrintSettingsDialog._slice_failed(host, problem, [Finding("old", "info", "Alter Auftrag")])
@@ -12417,7 +12430,7 @@ def test_a_save_failure_without_print_job_context_still_appears(
         _failed_save_copies=None,
         state=SimpleNamespace(setText=lambda _text: None),
     )
-    monkeypatch.setattr(print_dialog, "show_error", lambda problem, *_args: shown.append(problem))
+    monkeypatch.setattr(dialogs, "show_error", lambda problem, *_args: shown.append(problem))
     problem = FileWriteError()
 
     PrintSettingsDialog._slice_failed(host, problem)
@@ -12513,6 +12526,9 @@ def _preflight_scale_host(
             profile=profiles.make_profile("prusa-mini", "pla"),
             history=SimpleNamespace(discardable=False),
             apply=lambda *args, **kwargs: events.append(("applied", args)),
+            # Die Kette hält nicht an; run_operation fragt das vor dem Dialog (FD-104).
+            inserting=None,
+            halt_in_the_way=lambda: None,
         ),
         object_tree=SimpleNamespace(
             selected_objects=lambda: [selected[0]],

@@ -78,10 +78,10 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 
 | Datei | Zweck |
 |---|---|
-| `session.py` | die Brücke (§7, §15.6): Stapel, Auswertung, Vorschau, Import, Einfügemarke, Fragen des Kerns (`AskRequest`), `one_step` (mehrere `apply` als eine Transaktion); `evaluation_profile` (Profil der Auswertung samt Stützschwelle, `druckrat.md`), `evaluation_follows` (spät gelesene Grundlage wertet neu aus) |
-| `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `wait_for_all`, `weak_slot`; `collect_in_main_thread`, GC-Zähler mit Zustandswahrung; `stop_watching_the_dying` für Filter, die ihr Objekt überleben; `configure_gil_switching`, 1-ms-Takt in `Worker.run`; `RightOfWay`: Vortritt fürs Bild |
+| `session.py` | die Brücke (§7, §15.6): Stapel, Auswertung, Vorschau, Import, Fragen des Kerns (`AskRequest`); mehr: `karte-app-ui.md` |
+| `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `weak_slot`, `stop_watching_the_dying`; mehr: `karte-app-ui.md` |
 | `app_events.py` | der eine Ereignisfilter an der Anwendung; Zuhörer melden dort ihre Ereignisarten an (`listen`), wer es tut, sagt der Modul-Docstring |
-| `layout_lifetime.py` | `detach_from_layout`: Widget aus seinem haltenden Layout lösen, auch verschachtelt oder an externem Host; Elternschaft und wiederverwendete Widgets bleiben erhalten |
+| `layout_lifetime.py` | `detach_from_layout`: Widget aus seinem haltenden Layout lösen, auch verschachtelt oder an externem Host; Elternschaft und wiederverwendete Widgets bleiben erhalten · `borrowed_items`/`layout_parts`: Layoutelemente lesen, ohne ihre Hüllen zu behalten |
 | `change_lock.py` | ob geändert werden darf, für jeden Zugang |
 | `loading.py` | Ladeanzeige über der Ansicht (§2.8); `ProgressTiming` führt je Auswertung eine Uhr und einen Zeittext für Statuszeile und Schleier |
 
@@ -89,7 +89,9 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 
 | Datei | Zweck |
 |---|---|
-| `viewport.py` | Szene/Picks/Merkmale; Griffe (`_dispatch_pointer`), Vorschau/Differenz (`_cover_body`), Analyse/Schnitt/`PreviewBanner`; Zuordnung mit Kandidat/Vorbezug; Bettmaßtext: `_sketch_label_colour` |
+| `viewport.py` | Szene/Picks/Merkmale; Griffe (`_dispatch_pointer`), Vorschau/Differenz (`_cover_body`), Analyse/Schnitt/`PreviewBanner`; Zuordnung mit Kandidat/Vorbezug |
+| `waiting_click.py` | Ein Neuaufbau ohne Eingabe hält die Freigabe mit wartendem Klick und zeigt seine Werte (`kept_through_rebuild`); Begründung in `regel-wartezeit.md` |
+| `bed_scale.py` | Bettzahlen und -raster (§19.3) |
 | `render/` | der Renderer hinter der Ansicht — eigene Karte |
 | `overlay.py` | Zonen über der Ansicht (§2.5): `OverlayHost`, `CardColumn`, `CardGrip`, `is_room_taker`, `FittedScroller`; natives Fenster nur für direkte Kinder (`keep_widgets_alien`, `hold_above_the_view`) |
 | `cursors.py` | Mauszeiger (§19.3, Regel 18) |
@@ -101,7 +103,8 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 |---|---|
 | `placement_flow.py` | Flächenplatzierung und Maße im Bild (§18.5), Dialog/`QuietHost` über `PlacementHost`; Maßgruppengröße im Ereignisfilter; Ablauf in `karte-app-ui.md`, `measured_frame` in `operationen.md` |
 | `measure_card_drag.py` | `MeasureCardDrag`/`CardPlace`: Auftragslage, Titel-/Freiflächenzug; Feldgesten bleiben; aktive Mausgesten nur `QWidget`, `QWindow` durchlassen; `update_room`/`placed_rect`/`reset` |
-| `measure_field_places.py` | Platz der Maßfelder bei Enge |
+| `measure_field_places.py` | Platz der Maßfelder bei Enge und nach Wachsen (`grown_place`) |
+| `measure_card.py` · `tab_stops.py` | `MeasureCard`: Tab nach Layout im Kreis, Fokus beim Verbergen an die Ansicht; `stands_in` · Halte nach Layout, `chain_after` |
 | `slot_handle.py` | der Langlochgriff: zwei Knöpfe am gewählten Loch, der Zug gibt Länge und Richtung (`slotDragged`); übernommen wird im Merkmalfenster |
 | `scale_widget.py` | der Skalierwürfel am Gizmo (§18.11) |
 | `transform_bar.py` | die Bewegen-Leiste: drei Rollen, die Zahlen daneben (§18.11) |
@@ -111,6 +114,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `panels.py` | die Panels links und der Prüfbericht rechts (§2.5): `ObjectTree`, `ParameterPanel`, `HistoryPanel`, `ReportPanel` mit `BodyChoiceDialog`, dazu das Merkmalfenster `FeaturePanel` (Handlungen, Kanten, Bausteine, Schutz vor Trennnähten, Passung anlegen) |
+| `feature_footer.py`, `parameter_length.py`, `report_rows.py` | Fußzeile unter scharfer Handlung; Parameterlängen; umbrechende Listenzeilen |
 | `feature_editing.py` | `advanced_fields` für Maßgruppe und rechte Zeile; `configure_scope`, `explain_value_help`; panelgebundene Hauptaktionspriorität `FeatureEditPriority` |
 | `card_width.py` | Natürliche Breite des eingebetteten Auswahlreiters (§2.5), Paar- und Koordinatenraster; Schnittstellen in `karte-app-ui.md` |
 | `selection_operations.py` | Auswahlhandlungen aus dem Register und Suchfeld mit Trefferliste; Auswahlregeln und Schnittstellen in `karte-app-ui.md` |
@@ -123,6 +127,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `sculpt_bar.py` | Leiste der Formsitzung (§25): vier Werkzeugknöpfe, Stufe 1–10, *Spiegeln*; `GestureAnalysis` teilt Karte und Befund mit dem Skelett |
 | `pose_bar.py` | Leiste des Skeletts (§25): Zustand, Hinweis, *Fertig*; danach bleiben Karte, Befund und Schließen |
 | `facts.py` | was das Teil kostet, während man daran baut (§22, §29) |
+| `status_line.py` | Statusleiste: `StatusLine` kürzt die Meldung statt ihrer Nachbarn, `settle_in_bar` legt ein Feld mit gewachsenem Text sofort in seine Breite |
 
 ### Dialoge
 
@@ -131,7 +136,9 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `op_dialog.py` | aus dem Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence`, `front_fields` (Einfachform) und die Lesezeile *Stelle*, hinten die Klappe mit `advanced_summary`; `show_seat` (*Auf das Bett*) |
 | `feature_list.py` | `FeatureList`: Inhaltshöhe und Pixelrollweg für `FeatureSetField`; Vertrag in `karte-app-ui.md` |
 | `dialog_footer.py` | `DialogFooter`: vollständige Aktionsleiste bei automatischer und manueller Breite; Vertrag in `karte-app-ui.md` |
-| `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
+| `first_change.py` | Satz am grauen *Übernehmen* vor der ersten Änderung (Maßgruppe, Dialog, Merkmalfenster) |
+| `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung, Spende, Über, `confirm_export`/`_handover`, `open_link`, `align_to_the_front` |
+| `parameter_dialog.py` · `form_fields.py` · `refusal_details.py` | Projektmaß (§13) · Name und Satz je Formularfeld, Wächter `unnamed_inputs` · Absage in Fensterwörtern |
 | `message_dialog.py` | Meldung und Ansage (`announce`), Quittung am Ort (`acknowledge`, `withdraw`), Knopfnamen (`name_button`) |
 | `input_dialog.py` | Eingaben ohne Ort (`ask_text`, `ask_choice`) |
 | `place_popup.py` | Eingabe am Ort: Farbwähler, Wertfeld (`PlacePopup`) |
@@ -209,18 +216,20 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `theme.py` | hell und dunkel (§19.3); eigene Bett-Rasterrolle `bed_grid`, getrennt von Bauraum und Zeichenraster |
 | `window_chrome.py` | Windows malt die Titelleiste mit Anwendungsfarben; idempotenter Ereigniswächter |
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |
+| `scroll_areas.py` | Rollbereich ohne Tab-Halt oder als Lesebereich |
+| `wrapped_height.py` | Höhe umbrochener Sätze (`fit_wrapped`, Mindest- und Höchsthöhe) an echter Breite, Text und Schrift |
 | `icons.py` | Symbole als themenabhängige SVGs (§19.3, Regel 18); `svg_pixmap` rastert scharf auf HiDPI |
 | `motion.py` | Bewegung an einer Stelle, nicht an zwanzig |
-| `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht; Zuordnungen folgen `tabMoved` |
+| `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht; Zuordnungen folgen `tabMoved`; Tab geht in die vordere Seite |
 | `tab_windows.py` | Reiter mit stabiler Inhaltshülle, Umordnung, eigenen OS-Fenstern und Rückweg; lokale Anordnung über `UiSettings.tab_layout`, vorhandene Bildschirme begrenzen die Geometrie |
-| `labels.py` | Befundwerte über `value_text` in Anzeigeeinheiten; Kurztexte (`slicer_title`, `feature_measure`, `cavity_name`, `group_summary`, `body_requirement`, `DateField`); `choice_label` mit Wert/Einheit aus `core/registry/surfaces.py`; `wheel_needs_focus` |
+| `labels.py` | Befundwerte (`value_text`) und Kurztexte in Anzeigeeinheiten, `choice_label`, `wheel_needs_focus`; Liste in `karte-app-ui.md` |
 
 ### Hilfe und Bedienung
 
 | Datei | Zweck |
 |---|---|
 | `manual_window.py` | Suche in `core/manual_search.py`; F1-Anker nur für geprüfte `MarkdownNoHTML`-Überschriften (`core/manual.py`) |
-| `guide_targets.py` | Gemeinsame Ziele für Tour, Anleitungen und Prüfstand: `TARGET_PROPERTY`, Menü-`objectName`, `next_click`; `view.edge:<körper>`/`edge_point_for` wählt eine gepickte Kante. Fehlend: `MissingTargetError`; API in `karte-app-ui.md` |
+| `guide_targets.py`, `guide_wheel.py`, `guide_finders.py` | Gemeinsame Ziele für Tour, Anleitungen, Prüfstand: `TARGET_PROPERTY`, Menü-`objectName`, `next_click`; Rad, Kennzeichen, Orte in den Teilen. Fehlt: `MissingTargetError`; API: `karte-app-ui.md` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
 | `shortcut_schemes.py` | Kürzel und Plattformtasten; `nothing_to_take_back`: Strg+Z/Y ans Fenster, wenn das Feld nichts zurückzunehmen hat; weitere Helfer in `karte-app-ui.md` |
@@ -251,11 +260,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   `handlingArmed` ändert keine Werte. Feldhilfe nennt zuerst `ActionField.doc`,
   danach die Maßherkunft; Ausdrucksinnenfelder behalten Grammatik und Ablehnung.
   `editingOffered` meldet den Auftrag unabhängig von vorübergehenden Sperren.
-  Maßkarten: Handlungstitel `section`, Herkunft `caption`.
-  Freie Orte beziehen sich auf den Abgaberaum; Randorte bleiben angedockt.
-  Raumgrenzen, Klappen und Werte ändern den Wunschort nicht. Neue Aufträge
-  oder andere Gruppen setzen ihn zurück; Parken trennt `positionChanged`
-  über `_links`. Die Karte bleibt Hindernis für andere Maßfelder.
+  Maßkarten: Handlungstitel `section`, Herkunft `caption`; ihr Ort in
+  `karte-app-ui.md`, „Muster“.
 - **Wiederverwendung:** `FeaturePanel` und `PlacementFlow` erhalten Zeilen,
   Maßgruppen und schwebende Bedienelemente; Signaturen, Zustandsvergleich und
   Abschluss in `karte-app-ui.md`, „Muster“.
@@ -292,12 +298,9 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   Tiefenstufe sammelt `place` nichts. Tiefenfeld und Wandzahl gehören zu den
   angehobenen Kantenmaßen, sonst liegen sie unter der Leiste. Projektparameter
   gehören in den Werkzeugschlüssel, auch bei unverändertem Skizzentext.
-- `FeaturePanel.footer` gehört zum Träger: `isHidden`, nicht `isVisibleTo(panel)`.
-  Neue Layoutzeilen ausdrücklich über `_set_shown` verbergen;
+- Neue Layoutzeilen ausdrücklich über `_set_shown` verbergen;
   `_q_showIfNotHidden` beachtet `WA_WState_ExplicitShowHide`.
-- Kontextmenü je Klick als Panel-Kind erzeugen, nach `exec` mit `deleteLater`
-  räumen. `customContextMenuRequested` des Objektbaums liefert bereits
-  Viewport-Koordinaten; keine zweite Umrechnung über die Kopfzeile.
+- Kontextmenü je Klick, nach `exec` `deleteLater`; Baumkoordinaten in `karte-app-ui.md`.
 - Wahldialoge (Filament, Slicerprofil, Körper) und Katalog nach Antwort im
   `finally` löschen; Katalog zuerst `release`, damit Timer-Rückrufe die
   Hülle nicht über die native Löschung hinaus halten. `weak_slot` braucht
@@ -313,18 +316,13 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   je `SceneObject`, als vollständiger Ast. Eine einzelne Bausteinzeile trägt
   selbst den Namen statt eines zusätzlichen Dachs; eine funktionale Gruppe
   hängt unter der Zeile ihres Ankers.
-- Warnungsmarken sind Zustand; Ring/Text nur Darstellung. Neuaufbau nutzt
-  Punkt/Text/Körper, verlängert keine Frist. Andere Platte/verborgener Körper
-  versteckt beide; ein neues Ergebnis verwirft beide.
 - `ensure_ai_disclosure` vor `propose_async` und Ollama-Werkzeugprobe;
   Generierung verwendet `generation_disclosure_*`. Nur fertiger Dialog gibt
   frei; Abbruch/Fehler senden nichts. KI-/Drucknachweise gehören in `UiSettings`.
 - Fremde Handbuchressourcen erhalten leere Daten, niemals `None` (Qt-Dateileser);
   ausschließlich `figure:` verwendet den Abbildungskatalog.
 - Sprachabhängige Formate lesen `QLocale(get_language())`.
-- Kartenbewegung endet mit `DeleteWhenStopped`, auch beim Ersetzen.
-- `overlay.is_room_taker` prüft vier Methoden; kein `runtime_checkable Protocol`
-  beim Shiboken-Resize mit unvollständigen Typdaten.
+- Kartenbewegung (`DeleteWhenStopped`), `is_room_taker`: `karte-app-ui.md`.
 
 ## Druckbewertung und Übergabe
 

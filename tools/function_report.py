@@ -35,9 +35,9 @@ import copy
 import datetime
 import functools
 import hashlib
-import html
 import json
 import re
+import sys
 import tomllib
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -45,8 +45,18 @@ from pathlib import Path
 from typing import Any, Final
 
 from app.ui.op_dialog import MAX_FRONT_FIELDS, USUAL_FRONT_SHARE
+from tools import function_promises as promises
+from tools.function_agreement import (
+    Round,
+    Share,
+    agreement,
+    checklist_lines,
+    round_agreement,
+    subject_of,
+    unpaired,
+)
+from tools.function_agreement import subject_order as _subject_order
 from tools.function_checks import (
-    AGREEMENT,
     CHECKPOINTS,
     COARSE_NOTE,
     CRITERIA,
@@ -68,6 +78,16 @@ from tools.function_judges import compare_themes, judge_sizes
 from tools.function_list import NOT_APPLICABLE_REASONS, ROW_KINDS
 from tools.function_points import judge_case, judge_design, judge_licence
 from tools.function_samples import BrokenSample, sample_context, sample_protocol
+from tools.function_verdict_rules import (
+    RunSeals,
+    bound_problems,
+    fix_problems,
+    git_ancestry,
+    prediction_problems,
+    release_problems,
+    releases_of,
+    stale_findings,
+)
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 
@@ -113,6 +133,7 @@ VERDICT_KEYS: Final = frozenset(
         "not_applicable",
         "design_judgement",
         "prediction",
+        "prediction_bound",
         "comparison",
         "steps",
         "misclicks",
@@ -253,41 +274,23 @@ def _translated(msgid: str) -> Callable[[str], str]:
     return in_language
 
 
-@functools.cache
-def _manual_index() -> tuple[frozenset[str], dict[str, frozenset[str]]]:
-    """Seiten und Sprungmarken des Handbuchs, einmal erzeugt."""
-    from app.core import manual
-
-    keys = frozenset(page.key for page in manual.pages())
-    anchors = {
-        key: frozenset(anchor for anchor, _title in manual.reference_anchors(key))
-        for key in keys
-        if key.startswith(manual.REFERENCE_PAGE_PREFIX)
-    }
-    return keys, anchors
-
-
 def manual_place(row: Mapping[str, Any]) -> str | None:
-    """Seite und Stelle im Handbuch (``manual.help_for``) — nur, wenn es sie gibt."""
+    """Seite und Stelle im Handbuch — nur, wenn es sie gibt.
+
+    Was die Zeilenspezifikation nennt (``spec.manual``, FD-150), sonst die
+    Stelle einer Operation (``manual.help_for``).
+    """
     from app.core import manual
     from app.core.registry import REGISTRY
 
+    named = (row.get("spec") or {}).get("manual")
+    if named is not None:
+        return None if promises.manual_problem(named) else str(named)
     name = str(row.get("id", ""))
     if not REGISTRY.has(name):
         return None
     page, anchor = manual.help_for(name)
-    keys, anchors = _manual_index()
-    if page not in keys:
-        return None
-    if anchor and anchor.lstrip("#") not in anchors.get(page, frozenset()):
-        return None
-    return f"{page}{anchor}"
-
-
-@functools.cache
-def _website_text(path: Path) -> str:
-    raw = path.read_text(encoding="utf-8")
-    return html.unescape(re.sub(r"<[^>]+>", " ", raw)).lower()
+    return None if promises.manual_problem(f"{page}{anchor}") else f"{page}{anchor}"
 
 
 def _website_pages() -> dict[str, Path]:
@@ -303,10 +306,18 @@ def _website_pages() -> dict[str, Path]:
 
 
 def _website_hits(row: Mapping[str, Any]) -> tuple[str, ...]:
-    """Welche Funktionsseiten den Titel der Operation in ihrer Sprache nennen."""
+    """Welche Funktionsseiten die Funktion nennen.
+
+    Die Abschnitte, die die Zeilenspezifikation nennt (``spec.website``, in
+    jeder Sprache, FD-150), sonst die Seiten, die den Titel der Operation in
+    ihrer Sprache tragen — im Fließtext, in Bildtexten oder Titeln.
+    """
     from app.core.registry import REGISTRY
     from app.i18n import source_text
 
+    named = (row.get("spec") or {}).get("website")
+    if isinstance(named, list):
+        return tuple(promises.website_places(named)[0])
     name = str(row.get("id", ""))
     if not REGISTRY.has(name):
         return ()
@@ -314,24 +325,34 @@ def _website_hits(row: Mapping[str, Any]) -> tuple[str, ...]:
     hits = []
     for language, path in sorted(_website_pages().items()):
         said = _translated(title)(language).lower()
-        if said and said in _website_text(path):
+        if said and said in promises.page_text(path):
             hits.append(path.relative_to(ROOT).as_posix())
     return tuple(hits)
 
 
 def agent_place(row: Mapping[str, Any]) -> tuple[str, str] | None:
-    """Ort und Menüpfad, die das Agentenwerkzeug nennt.
+    """Ort und Weg, die das Agentenwerkzeug einer Zeile nennt.
 
-    Der Ort kommt aus ``registry.menu_place`` — derselben Verzweigung, der
-    ``menu_path`` folgt —, nicht aus einer zweiten Herleitung über Kategorien.
+    Bei einer Operation aus ``registry.menu_place`` — derselben Verzweigung,
+    der ``menu_path`` folgt —, nicht aus einer zweiten Herleitung über
+    Kategorien. Jede andere Zeile hat ein Werkzeug, wenn ein Zusatzwerkzeug sie
+    unter seinen Zeilen nennt (``extra_tool_rows``, FD-129): *Parameter
+    anlegen* über ``add_parameter``, *Ändern …* der Parameterleiste über
+    ``set_parameter``. Ort und Weg nennt dann ``extra_tool_place``.
     """
+    from app.core.agent.tools import EXTRA_TOOL_PLACES, extra_tool_place, extra_tool_rows
     from app.core.registry import REGISTRY, menu_path, menu_place
 
     name = str(row.get("id", ""))
-    if row.get("kind") != "operation" or not REGISTRY.has(name):
-        return None
-    spec = REGISTRY.get(name)
-    return menu_place(spec), menu_path(spec)
+    if row.get("kind") == "operation":
+        if not REGISTRY.has(name):
+            return None
+        spec = REGISTRY.get(name)
+        return menu_place(spec), menu_path(spec)
+    for tool in sorted(EXTRA_TOOL_PLACES):
+        if name in extra_tool_rows(tool):
+            return extra_tool_place(tool)
+    return None
 
 
 def repository_context() -> Context:
@@ -346,6 +367,7 @@ def repository_context() -> Context:
         manual_place=manual_place,
         website_hits=_website_hits,
         agent_place=agent_place,
+        promise_problems=promises.reference_problems,
         common_goal_targets=frozenset(read_common_goals().values()),
     )
 
@@ -387,15 +409,6 @@ def finding_solutions(app_root: Path = ROOT / "app") -> dict[str, bool]:
 
 
 # --- Urteile (Konzept §5, Stufe B) ---------------------------------------------------------
-
-
-def subject_of(entry: Mapping[str, Any]) -> int | str | None:
-    """Prüfpunkt oder Kriterium eines Urteils."""
-    if "point" in entry:
-        point = entry["point"]
-        return point if isinstance(point, int) else None
-    criterion = entry.get("criterion")
-    return str(criterion) if criterion is not None else None
 
 
 def read_verdict_file(path: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -602,6 +615,7 @@ def _verdict_problems(
             problems.append(f"Vergleich an einer Zeile ohne {COMPARISON_ROW}")
     if subject == "V4" and not str(entry.get("prediction") or "").strip():
         problems.append("V4 ohne vorher geschriebene Vorhersage")
+    problems += bound_problems(entry)
     if subject == "Z7":
         if reviewer != "stufe_c":
             problems.append("Z7 urteilt nur Stufe C")
@@ -644,10 +658,22 @@ def check_verdicts(
     outcomes: Mapping[str, CaseOutcome] | None = None,
     rows: Iterable[str] | None = None,
     findings: Mapping[str, Finding] | None = None,
+    round_rules: bool = True,
+    seals: Mapping[str | None, RunSeals] | None = None,
 ) -> Checked:
     """Prüft Urteile gegen das Format, die Messung der Stufe A und die Funddatei.
 
-    Das Format steht in Konzept §5, Stufe B.
+    Das Format steht in Konzept §5, Stufe B. ``round_rules`` prüft dazu, was
+    eine Runde zur Zeit ihrer Auswertung einhalten muss
+    (``tools/function_verdict_rules.py``): V4 nur mit vor dem Klick gebundener
+    Vorhersage (FD-148) und die Kennzeichnung nach dem Stand der Funddatei
+    (M-Fix). ``report`` prüft sie immer — ein Urteil, das der heutige Stand der
+    Funde nicht mehr trägt, steht als abgewiesen in der Abhakliste und wird
+    nachgeurteilt. Der Wächter über die versionierten Urteile prüft ihre Form
+    ohne sie: Die Funddatei wächst und wird behoben, die Urteile einer Runde
+    bleiben, was sie zu ihrer Zeit waren. ``seals`` sind die Läufe der
+    Urteilsdatei mit den Bindungen, die ihr Vorhersagetor freigab, und dem Ort
+    ihrer Siegeldateien (:func:`seals_of`, FD-168, RC-1).
     """
     known = frozenset(rows) if rows is not None else None
     accepted: list[dict[str, Any]] = []
@@ -655,6 +681,11 @@ def check_verdicts(
     seen: set[tuple[str, str, str]] = set()
     for entry in entries:
         problems = _verdict_problems(entry, outcomes or {}, known, findings)
+        if round_rules:
+            subject = subject_of(entry)
+            problems += prediction_problems(entry, subject)
+            problems += release_problems(entry, subject, seals)
+            problems += fix_problems(entry, subject, findings)
         key = (str(entry.get("row")), str(subject_of(entry)), str(entry.get("reviewer")))
         if key in seen:
             problems.append("doppeltes Urteil derselben Stufe")
@@ -813,49 +844,7 @@ def check_finding_rows(
     return problems
 
 
-# --- Zwei Prüfer und Paketanteile ------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Share:
-    """Ein gemessener Anteil gegen seine Schwelle."""
-
-    hits: int
-    total: int
-    threshold: float
-
-    @property
-    def value(self) -> float | None:
-        return self.hits / self.total if self.total else None
-
-    @property
-    def flagged(self) -> bool:
-        """Unter der Schwelle — oder gar nicht gemessen, was nie „erfüllt“ heißt."""
-        return self.value is None or self.value < self.threshold
-
-    def text(self) -> str:
-        if self.value is None:
-            return "nicht gemessen"
-        return f"{self.value:.0%} ({self.hits} von {self.total})"
-
-
-def agreement(entries: Iterable[Mapping[str, Any]]) -> dict[str, Share]:
-    """Übereinstimmung von Stufe B und Zweitprüfer je Prüfpunkt und Kriterium."""
-    first: dict[tuple[str, str], str] = {}
-    second: dict[tuple[str, str], str] = {}
-    for entry in entries:
-        key = (str(entry.get("row")), str(subject_of(entry)))
-        if entry.get("reviewer") == "stufe_b":
-            first[key] = str(entry.get("verdict"))
-        elif entry.get("reviewer") == "zweitpruefer":
-            second[key] = str(entry.get("verdict"))
-    pairs: dict[str, list[bool]] = {}
-    for key in sorted(set(first) & set(second)):
-        pairs.setdefault(key[1], []).append(first[key] == second[key])
-    return {
-        subject: Share(sum(same), len(same), AGREEMENT)
-        for subject, same in sorted(pairs.items(), key=lambda item: _subject_order(item[0]))
-    }
+# --- Paketanteile (die Übereinstimmung der Prüfer: ``tools/function_agreement.py``) -----
 
 
 def input_share(inputs: Iterable[int]) -> Share:
@@ -911,14 +900,6 @@ _BADNESS: Final = {
     "entfaellt": 1,
     "nicht_gelaufen": 0,
 }
-
-
-def _subject_order(subject: int | str) -> tuple[int, int, str]:
-    """Prüfpunkte nach Nummer, dann Kriterien in der Reihenfolge E, V, G, Z, I."""
-    if isinstance(subject, int) or str(subject).isdigit():
-        return (0, int(subject), "")
-    key = str(subject)
-    return (1, "EVGZI".find(key[:1]), key)
 
 
 def _merge(outcomes: Sequence[Outcome]) -> Outcome:
@@ -1131,6 +1112,11 @@ class PackageValues:
     solutions: Solutions
     agreement: Mapping[str, Share]
     second_review: Share
+    #: Zellen ohne Gegenurteil an den Zeilen des Zweitprüfers (FD-144).
+    unpaired: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    #: Die bindende Übereinstimmung der Urteilsrunde (FD-145); ``None``: das
+    #: Paket ist seine eigene Runde.
+    pooled: Round | None = None
 
 
 def package_values(
@@ -1139,11 +1125,13 @@ def package_values(
     *,
     common_goals: Mapping[str, str],
     solutions: Mapping[str, bool],
+    pooled: Round | None = None,
 ) -> PackageValues:
     """E2-, E5- und I3-Anteil, I4-Zahl und die Übereinstimmung der Prüfer eines Pakets.
 
     I3 zählt je Kundenziel, dessen Zeile (``target``) im Paket gemessen ist;
-    zwei Ziele an derselben Zeile zählen beide.
+    zwei Ziele an derselben Zeile zählen beide. Die Übereinstimmung des Pakets
+    ist Auskunft, bindend ist die der Runde (``pooled``, FD-145).
     """
     inputs = [
         int(case.criteria["E2"].measurement["inputs"])
@@ -1175,6 +1163,8 @@ def package_values(
         solution_count(solutions),
         agreement(verdicts),
         Share(len(reviewed & set(cases)), len(cases), SECOND_REVIEW_SHARE),
+        unpaired(verdicts),
+        pooled,
     )
 
 
@@ -1304,13 +1294,7 @@ def render_checklist(
         f"| I4-Zahl | {values.solutions.text()} | Zahl genannt | — |",
         _value_line("Zweitprüfer", values.second_review, f"≥ {SECOND_REVIEW_SHARE:.0%} der Zeilen"),
     ]
-    if values.agreement:
-        lines += [
-            _value_line(f"Übereinstimmung {subject}", share, f"≥ {AGREEMENT:.0%}")
-            for subject, share in values.agreement.items()
-        ]
-    else:
-        lines.append(f"| Übereinstimmung | keine Doppelprüfung | ≥ {AGREEMENT:.0%} | markiert |")
+    lines += checklist_lines(values.agreement, values.unpaired, values.pooled)
     if verdicts.rejected:
         lines += [
             "",
@@ -1553,6 +1537,66 @@ def _rows_of(out: Path, protocols: Sequence[Mapping[str, Any]]) -> list[dict[str
     return list(rows.values())
 
 
+def seals_of(
+    out: Path,
+    runs: Iterable[Mapping[str, Any]],
+    released: Mapping[str, frozenset[str]],
+    store: Path | None = None,
+) -> dict[str | None, RunSeals]:
+    """Die Läufe einer Urteilsdatei, an denen eine Bindung an V4 gelten kann (RC-1).
+
+    Der Laufordner ist ``out`` mit den Bindungen seiner Protokolle; liest
+    ``report`` aus einer bildlosen Kopie, liegt die Siegeldatei im Lauf selbst
+    unter ``store`` (``--runs``, die Ablage der Läufe, in der ``[[run]].name``
+    steht). Ein Lauf mit Kennung liegt nur dort; seine Bindungen kommen aus
+    seinen eigenen Protokollen.
+    """
+    listed = list(runs)
+    main = run_folder(listed)
+    sealed = next((str(run.get("seal") or "") for run in listed if run.get("key") is None), "")
+    seals: dict[str | None, RunSeals] = {
+        None: RunSeals(
+            (out, *((store / main,) if store is not None and main else ())),
+            dict(released),
+            sealed,
+        )
+    }
+    for run in listed:
+        if run.get("key") is None:
+            continue
+        folder = store / str(run.get("name") or "") if store is not None else None
+        protocols = [p for _where, p in read_protocols(folder)[0]] if folder else []
+        seals[str(run["key"])] = RunSeals(
+            (folder,) if folder else (), releases_of(protocols), str(run.get("seal") or "")
+        )
+    return seals
+
+
+def write_all(
+    out: Path,
+    *,
+    packages: Sequence[str],
+    verdicts: Path | None,
+    checklist: Path | None,
+    runs: Path | None,
+) -> int:
+    """``file_acceptance.py report`` je genanntem Paket oder für alle.
+
+    Ausgang 1 nur bei ungültigen Eingaben: ein Urteil ohne Bild, ein fremder
+    Grund, ein ungültiges Protokoll — Funde nicht.
+    """
+    if (verdicts or checklist) and len(packages) != 1:
+        print(
+            "--verdicts und --checklist verlangen genau ein --package.", file=sys.stderr, flush=True
+        )
+        return 1
+    codes = [
+        write(out, package=package, verdicts=verdicts, checklist=checklist, runs=runs)
+        for package in (packages or [None])
+    ]
+    return 1 if any(codes) else 0
+
+
 def write(
     out: Path,
     *,
@@ -1567,13 +1611,19 @@ def write(
     solutions: Mapping[str, bool] | None = None,
     common_goals: Mapping[str, str] | None = None,
     state: Path = STATE,
+    runs: Path | None = None,
 ) -> int:
     """Beurteilt einen Lauf und schreibt Ergebnisse und Abhakliste je Paket.
+
+    ``runs`` ist die Ablage der Läufe, in der die ``[[run]]`` der Urteile
+    liegen; dort liest ``report`` die Siegeldateien der Vorhersagen (RC-1).
 
     Ausgang 1 nur bei ungültigen Eingaben (Kommandozeile des Prüfstands,
     ``file_acceptance.py report``): kein Protokoll, ein unlesbares oder
     ungültiges Protokoll, ein Fall, an dem das Urteil scheitert, ein
-    abgewiesenes Urteil, eine fehlerhafte Funddatei. Eine Abhakliste bekommt nur
+    abgewiesenes Urteil, eine fehlerhafte Funddatei oder eine, die nicht
+    nachgezogen ist (FD-153: offen, obwohl der genannte Fix im Laufkopf liegt).
+    Eine Abhakliste bekommt nur
     ein Paket mit mindestens einem Fall — ein leerer oder verirrter Laufordner
     überschreibt keine; sie nennt abgewiesene Urteile in einem eigenen Abschnitt.
     """
@@ -1584,6 +1634,7 @@ def write(
             print(f"ungültig: {problem}")
         return 1
     protocols = [protocol for _where, protocol in readings]
+    released = releases_of(protocols)
     all_rows = [dict(row) for row in rows] if rows is not None else _rows_of(out, protocols)
     used = context if context is not None else repository_context()
     judged: list[tuple[str, Mapping[str, Any], CaseOutcome]] = []
@@ -1627,24 +1678,56 @@ def write(
     commits = sorted(
         {str((p.get("version") or {}).get("commit")) for p in protocols if p.get("version")}
     )
+    # Vor der Abhakliste: Kein Fund steht offen, dessen Fix im Laufkopf liegt (FD-153).
+    invalid += [
+        f"funde.md: {problem}"
+        for problem in stale_findings(found.values(), commits, git_ancestry(ROOT))
+    ]
     shown_commit = commit or (", ".join(commits) if commits else "unbekannt")
     shown_date = date or datetime.date.today().isoformat()
     goals = common_goals if common_goals is not None else read_common_goals()
     kinds = solutions if solutions is not None else finding_solutions()
-    for name in packages:
-        package_rows = [
+    # Jedes gemessene Paket wird geprüft, auch wenn nur eines eine Abhakliste
+    # bekommt: Bindend ist die Übereinstimmung der Runde, aller Pakete, deren
+    # Urteile denselben Laufordner nennen (FD-145).
+    rows_of: dict[str, list[dict[str, Any]]] = {}
+    cases_of: dict[str, dict[str, CaseOutcome]] = {}
+    read: dict[str, tuple[list[dict[str, Any]], list[dict[str, Any]]]] = {}
+    checked_of: dict[str, Checked] = {}
+    rounds: dict[str, dict[str, Sequence[Mapping[str, Any]]]] = {}
+    for name in sorted(measured_packages, key=lambda name: int(name[1:])):
+        rows_of[name] = [
             row for row in all_rows if package_name(str(row.get("package", "D0"))) == name
         ]
-        ids = {str(row.get("id")) for row in package_rows}
-        cases = {row: case for row, case in merged.items() if row in ids}
-        entries, runs = read_verdict_file(verdicts or state / f"urteile-{package_slug(name)}.toml")
-        checked = check_verdicts(entries, outcomes=cases, rows=ids, findings=found)
+        ids = {str(row.get("id")) for row in rows_of[name]}
+        cases_of[name] = {row: case for row, case in merged.items() if row in ids}
+        given = verdicts if verdicts is not None and packages == [name] else None
+        read[name] = read_verdict_file(given or state / f"urteile-{package_slug(name)}.toml")
+        checked_of[name] = check_verdicts(
+            read[name][0],
+            outcomes=cases_of[name],
+            rows=ids,
+            findings=found,
+            seals=seals_of(out, read[name][1], released, runs),
+        )
+        run = run_folder(read[name][1]) or str(out)
+        rounds.setdefault(run, {})[name] = checked_of[name].accepted
+    for name in packages:
+        package_rows, cases, checked = rows_of[name], cases_of[name], checked_of[name]
+        entries, runs = read[name]
         invalid += [
             f"{name} {entry.get('row')} {subject_of(entry)}: {'; '.join(reasons)}"
             for entry, reasons in checked.rejected
         ]
         invalid += [f"{name}: {problem}" for problem in check_runs(runs, entries, commits)]
-        values = package_values(cases, checked.accepted, common_goals=goals, solutions=kinds)
+        run = run_folder(runs) or str(out)
+        values = package_values(
+            cases,
+            checked.accepted,
+            common_goals=goals,
+            solutions=kinds,
+            pooled=round_agreement(run, rounds[run]),
+        )
         text = render_checklist(
             name,
             rows=package_rows,

@@ -14,7 +14,7 @@ import pytest
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
-from app.core import updates
+from app.core import install, updates
 from app.ui.update_dialog import CHANGES_START_HEIGHT, UpdateDialog
 
 
@@ -58,7 +58,7 @@ def test_the_window_says_what_is_new(qt_app: QApplication, monkeypatch: pytest.M
     Adresse als Text. Wer vor der Frage steht, ob er aktualisieren soll, hatte
     nichts, woran er sie beantworten könnte.
     """
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())
@@ -72,7 +72,7 @@ def test_the_change_list_starts_at_its_content_height_and_can_grow(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Kurze Hinweise lassen keinen leeren Rollbereich; längere wachsen beim Ziehen."""
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     short = UpdateDialog(release(changes={"de": ("Erster kurzer Punkt.", "Zweiter kurzer Punkt.")}))
@@ -143,7 +143,7 @@ def test_the_window_shows_the_headings_of_the_changelog(
     """
     from app.core.changes import Group
 
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(
@@ -175,7 +175,7 @@ def test_a_release_without_groups_still_lists_its_points(
     liegt im Kern (``Release.grouped``), nicht im Fenster; geprüft wird er
     hier, weil hier steht, was der Kunde sieht.
     """
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())
@@ -205,7 +205,7 @@ def test_the_changelog_box_opens_no_browser_and_lets_you_copy(
     """
     from PySide6.QtCore import Qt
 
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())
@@ -231,7 +231,7 @@ def test_a_link_from_the_server_stays_a_harmless_sentence(
     """
     from app.core.changes import Group
 
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(
@@ -252,7 +252,7 @@ def test_without_points_the_list_stays_away(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein leerer Kasten ist eine Überschrift ohne Inhalt."""
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release(changes={}))
@@ -262,7 +262,7 @@ def test_without_points_the_list_stays_away(
 
 
 def test_the_offer_names_the_size(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())
@@ -279,7 +279,7 @@ def test_where_nothing_can_be_started_the_page_takes_the_lead(
     Ein Knopf, der nichts kann, ist schlimmer als keiner — also verschwindet
     er, und der Weg zur Seite bekommt den Hauptknopf.
     """
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     # Das ausgepackte Archiv unter Linux, wieder ohne ``sys.platform`` des
     # ganzen Prozesses zu verstellen (``_windows_setup``).
     monkeypatch.setattr(updates, "install_kind", lambda system="": updates.KIND_TARBALL)
@@ -300,7 +300,7 @@ def test_a_ready_package_still_needs_a_click(
     der die ganze Regel trägt — und das Fenster sagt vorher, was danach
     passiert.
     """
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
     package = tmp_path / "Solidon3D-Setup-99.0.0.exe"
     package.write_bytes(b"ein Paket")
@@ -324,7 +324,7 @@ def test_cancelling_says_that_nothing_is_left(
 ) -> None:
     """Ein Abbruch ist kein Fehler (§15.6) — und die Auskunft, dass nichts
     liegen bleibt, nimmt die Frage vorweg."""
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())
@@ -345,7 +345,7 @@ def test_escape_while_loading_cancels_the_download(
 
     from app.core.errors import OperationCancelled
 
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
     seen: list[bool] = []
     gate = threading.Event()
@@ -372,7 +372,7 @@ def test_escape_while_loading_cancels_the_download(
 
 def test_a_problem_offers_the_page(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
     """Regel 17: Ein Fehler endet nie mit „fehlgeschlagen"."""
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
     from app.core.errors import ExternalToolError
 
@@ -386,7 +386,7 @@ def test_a_problem_offers_the_page(qt_app: QApplication, monkeypatch: pytest.Mon
 def test_the_progress_counts_in_the_bar(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())
@@ -406,7 +406,7 @@ def test_a_capped_list_points_at_the_full_changelog(
     ausgerechnet der Punkt weg, der einen gemeldeten Absturz beantwortete;
     ohne diesen Satz sähe die gekürzte Liste aus wie die ganze.
     """
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release(changes_total=115))
@@ -427,7 +427,7 @@ def test_a_complete_list_says_nothing_about_a_website(
     sie stimmt, oder sie nennt gar keine — eine Versionsdatei von vor dieser
     Fassung.
     """
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     for total in (2, 0):
@@ -441,7 +441,7 @@ def test_the_link_follows_the_language_of_the_window(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein deutscher Satz mit einer englischen Seite dahinter wäre halb übersetzt."""
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
     monkeypatch.setattr("app.ui.update_dialog.get_language", lambda: "pt")
 
@@ -500,7 +500,7 @@ def test_the_note_and_the_lead_stand_highlighted_above_the_list(
     """Hinweis und Vorspann oben im Kasten, die Gebiete darunter (Entscheidung Robert)."""
     from app.ui.changes_dialog import LEAD_BOX
 
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(_with_lead())
@@ -521,7 +521,7 @@ def test_the_note_and_the_lead_stand_highlighted_above_the_list(
 def test_without_a_note_the_lead_takes_its_place(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(_with_lead(notes=""))
@@ -534,7 +534,7 @@ def test_without_a_note_the_lead_takes_its_place(
 def test_a_note_that_says_the_same_stands_once(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(_with_lead(notes=DEMO))
@@ -550,7 +550,7 @@ def test_a_flat_list_keeps_its_first_point_in_the_list(
     ``Release.grouped`` macht daraus **eine** titellose Gruppe; hervorgehoben
     würde sonst die ganze Liste.
     """
-    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(install, "packaged", lambda: True)
     _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())

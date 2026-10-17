@@ -1,0 +1,61 @@
+# Zeilenspezifikationen für D2 — Bausteine, Erzeugen, Nachbauen, Varianten.
+# Format: Bauplan D0 §2.4. Eine Zeile ohne Eintrag hier ist „ungeprüft“.
+
+# Der Bausteinkatalog öffnet auch ohne Körper; einsetzen braucht erst einer (FD-175).
+[row."dialog:part_catalog"]
+route = [{ target = "menu:menubar.bausteinkatalog" }]
+
+[row."part:*"]
+route = [{ target = "menu:menubar.bausteinkatalog" }]
+
+# *Modell erzeugen …* zeigt ohne ComfyUI, dass kein Generator da ist — fest, nicht
+# vom Rechner abhängig.
+[row."dialog:generate_dialog"]
+preconditions = { comfyui = "fehlt" }
+route = [{ target = "menu:menubar.modell_erzeugen" }]
+
+# Die Fächer des Organizers teilt der Knopf seines Felds *Fächer* auf.
+[row."dialog:organizer_dialog"]
+route = [{ target = "operation:create_organizer" }, { target = "field:layout" }]
+
+# *Modell nachbauen* steht in der Karte der Auswahl eines vollständigen Körpers.
+[row."dialog:rebuild_dialog"]
+route = [{ target = "selection.rebuild" }]
+
+# *Varianten erzeugen …* zeigt Parameter erst, wenn das Projekt einen hat.
+[row."dialog:variants_dialog"]
+start_scene = "parameter.exakt"
+route = [{ target = "menu:menubar.varianten_erzeugen" }]
+
+# Die Einrichtung von ComfyUI ist der zweite Schritt nach seiner Installation:
+# *ComfyUI einrichten …* in *Zusätzliche Programme* (Naht ``installation``).
+[row."dialog:comfy_setup_dialog"]
+preconditions = { installation = "comfyui_installiert" }
+route = [
+  { target = "menu:menubar.zusaetzliche_programme" },
+  { target = "install.follow.comfyui" },
+]
+
+# Ein Versuch, der noch nicht im Projekt ist, und Solidon soll schließen: Der
+# Generator antwortet sofort (Naht ``erzeugung``). Beschreibung tippen,
+# *Erzeugen*, im KI-Hinweis *KI-Anfrage fortsetzen*, dann *Beenden* (FD-175).
+[row."generate.prompt"]
+preconditions = { erzeugung = "antwortet" }
+route = [{ target = "menu:menubar.modell_erzeugen" }]
+
+[row."generate.start"]
+preconditions = { erzeugung = "antwortet" }
+route = [
+  { target = "menu:menubar.modell_erzeugen" },
+  { target = "generate.prompt", text = "Würfel" },
+]
+
+[row."meldung:confirm_generation_loss"]
+preconditions = { erzeugung = "antwortet" }
+route = [
+  { target = "menu:menubar.modell_erzeugen" },
+  { target = "generate.prompt", text = "Würfel" },
+  { target = "generate.start" },
+  { target = "disclosure.continue" },
+  { target = "menu:menubar.beenden" },
+]

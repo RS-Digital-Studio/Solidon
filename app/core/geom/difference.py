@@ -23,16 +23,9 @@ from shapely.geometry.base import BaseGeometry
 
 from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS, GeometryError
-from app.core.geom import kernel_process
-from app.core.geom.boolean import boolean
-from app.core.geom.mesh import (
-    MeshData,
-    as_mesh_data,
-    face_components,
-    on_surface,
-    signed_volume,
-    surface_index,
-)
+from app.core.geom import boolean, kernel_process
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData, face_components, on_surface, signed_volume, surface_index
 from app.core.geom.transform import turned
 from app.core.log import get_logger
 from app.core.scene.cancel import NeverCancelled
@@ -560,8 +553,12 @@ def _clipped_to_the_change(
         )
     )
     try:
-        clipped_before = boolean("intersection", [before, box], quality=quality, allow_empty=True)
-        clipped_after = boolean("intersection", [after, box], quality=quality, allow_empty=True)
+        clipped_before = boolean.boolean(
+            "intersection", [before, box], quality=quality, allow_empty=True
+        )
+        clipped_after = boolean.boolean(
+            "intersection", [after, box], quality=quality, allow_empty=True
+        )
     except (*PROGRAMMING_ERRORS, *kernel_process.NOT_A_KERNEL_FAILURE):
         raise
     except Exception as problem:  # Kerne scheitern auf kerneigene Arten
@@ -754,7 +751,7 @@ def _cut_parts(
             if len(parts) == 1:
                 operands.append(parts[0])
             else:
-                outcome = boolean("union", parts, quality=quality)
+                outcome = boolean.boolean("union", parts, quality=quality)
                 operands.append(outcome.mesh)
                 solvers.append(outcome.solver)
         mesh = operands[0]
@@ -924,7 +921,7 @@ def compare_scenes(
         # — und still ist schwerer zu finden. Der Weg von B-Rep zu Mesh steht
         # jederzeit offen (§30); verglichen wird auf der Tessellation.
         try:
-            first, second = as_mesh_data(earlier.mesh), as_mesh_data(entry.mesh)
+            first, second = geom_mesh.as_mesh_data(earlier.mesh), geom_mesh.as_mesh_data(entry.mesh)
         except GeometryError:
             # Ein Körper, der keiner der beiden Kerne ist, hat keine Dreiecke
             # zum Vergleichen. Die Differenz ist eine Auskunft und keine
@@ -1007,7 +1004,7 @@ def _whole_body(
     nicht.
     """
     try:
-        mesh = as_mesh_data(entry.mesh)
+        mesh = geom_mesh.as_mesh_data(entry.mesh)
     except GeometryError:
         # Dieselbe Haltung wie beim Vergleich zweier Körper: Was keine
         # Dreiecke hat, fehlt in der Ansicht, statt den Zug abzubrechen.
@@ -1052,7 +1049,7 @@ def _cut(
         # Im Protokoll des ersten Kunden mit 0.1.3 stand das zwölfmal, mit einem
         # Befund im Prüfbericht daneben — für zwei Zustände, zwischen denen sich
         # schlicht nichts geändert hatte.
-        outcome = boolean("difference", [keep, subtract], quality=quality, allow_empty=True)
+        outcome = boolean.boolean("difference", [keep, subtract], quality=quality, allow_empty=True)
     except (*PROGRAMMING_ERRORS, *kernel_process.NOT_A_KERNEL_FAILURE):
         raise
     except Exception as problem:  # Kerne scheitern auf kerneigene Arten

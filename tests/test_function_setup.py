@@ -935,3 +935,17 @@ def test_a_menubar_child_that_never_answers_is_a_message(
     monkeypatch.setattr(file_acceptance.subprocess, "run", hangs)
     with pytest.raises(RuntimeError, match="antwortete"):
         file_acceptance.menubar(tmp_path)
+
+
+def test_an_export_of_a_case_lands_in_its_profile() -> None:
+    """Der Speicherdialog eines Falls beginnt im Profilordner, nie im Arbeitsordner (FD-175).
+
+    Ohne gemerkten Ordner schlug *Exportieren …* nur den Dateinamen vor, und Qt
+    legte die Datei im Arbeitsordner des Prozesses ab — im Baum des Prüfstands.
+    """
+    from app.ui.settings import load_settings, settings_path
+
+    function_setup.write_profile(function_setup.Variant())
+    folder = load_settings().export_dir(None)
+    assert folder is not None and folder.is_dir()
+    assert folder.is_relative_to(settings_path().parent)

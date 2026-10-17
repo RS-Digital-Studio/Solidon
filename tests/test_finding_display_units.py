@@ -22,6 +22,7 @@ from app.core.geom.mesh import MeshCodec, MeshData
 from app.core.geom.prepare import check_build_volume
 from app.core.geom.transform import apply, translation
 from app.core.knowledge import print_settings
+from app.core.knowledge.print_fields import shown_value
 from app.core.scene.cache import CachedResult, DiskCache
 from app.core.scene.evaluate import EvaluationResult
 from app.core.scene.serialise import finding_from_data, finding_to_data
@@ -29,7 +30,7 @@ from app.core.slice.advise import warnings_for
 from app.core.types import Action, Finding, Profile, Report, Scene, SceneObject
 from app.i18n import _, get_language, set_language, tr
 from app.i18n.catalog import install_language
-from app.ui.labels import localised_value, set_display_unit, value_line, value_text
+from app.ui.labels import localised, set_display_unit, value_line, value_text
 from app.ui.loading import DELAY_MS
 from app.ui.panels import _BODIES_ROLE, FILTER_FROM, ObjectTree, ReportPanel
 from app.ui.settings_dialog import SettingsDialog
@@ -348,8 +349,6 @@ def test_unit_refresh_keeps_selected_and_unselected_body_expansion(
         ("stress", 30.0),
         ("flow_limit", 12.0),
         ("needed", MINIMUM_COMFYUI_TEXT),
-        ("needed", 3.5),
-        ("needed", "3.50"),
         ("needed", "10,00 mm"),
         ("needed", "mindestens 10.00 mm"),
     ],
@@ -359,7 +358,25 @@ def test_non_geometric_values_are_not_reinterpreted(key: str, value: object) -> 
     set_display_unit("in")
     assert value_line(key, value) == before
     if key == "gap" and isinstance(value, float):
-        assert value_text(key, value) == localised_value(value)
+        # Eine Druckeinstellung steht wie im Druckdialog: mit der Einheit ihres
+        # Felds und ohne Umrechnung (FD-188; vorher die nackte Zahl „0,2“).
+        assert value_text(key, value) == shown_value("support.z_gap", value, localise=localised)
+        assert value_text(key, value).endswith(" mm")
+
+
+@pytest.mark.parametrize("value", [3.5, "3.50"])
+def test_a_numeric_required_length_follows_the_unit(value: object) -> None:
+    """Ein nackter ``needed`` ist überall eine Länge in mm (FD-188).
+
+    Er kommt aus ``lid_hinge`` (Augenhöhe, ``round(hanging, 3)``) und der
+    Lochwand-Zunge in ``mounting`` (``f"{step:.2f}"``) — beide Millimeter. Die
+    Mindestversion von ComfyUI unter demselben Schlüssel bleibt Text (oben).
+    """
+    assert value_text("needed", value) == value_text("needed_mm", 3.5)
+    assert value_text("needed", value).endswith(" mm")
+    set_display_unit("in")
+    assert value_text("needed", value) == value_text("needed_mm", 3.5)
+    assert value_text("needed", value).endswith(" in")
 
 
 def test_existing_numeric_margin_and_suffix_still_convert(language: str) -> None:

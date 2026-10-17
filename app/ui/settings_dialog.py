@@ -49,6 +49,7 @@ from app.core.types import PrinterProfile
 from app.core.units import DISPLAY_UNITS
 from app.i18n import TranslatableText, _, language_name, tr
 from app.i18n.catalog import available_languages
+from app.ui import settings as ui_settings
 from app.ui.ai_disclosure import clear_disclosure
 from app.ui.dialogs import align_to_the_front
 from app.ui.first_run import (
@@ -66,6 +67,7 @@ from app.ui.first_run import (
     slicer_printer_ids,
     valid_printer_choice,
 )
+from app.ui.grouped_spin import IdentifierIntSpin
 from app.ui.guide_targets import section_heading
 from app.ui.icons import icon
 from app.ui.labels import TrackSlider, by_title, slicer_title, wheel_needs_focus
@@ -73,7 +75,6 @@ from app.ui.leash import WAIT_TIMEOUT_MS, WorkerLeash
 from app.ui.palette import DIFF_PALETTES
 from app.ui.panels import collapsible, open_section
 from app.ui.print_settings_dialog import _SlicerWorker
-from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import SCHEMES
 from app.ui.style import (
     NORMAL,
@@ -176,7 +177,7 @@ def section(title: TranslatableText, content: QWidget, **options: Any) -> QWidge
     return wrapper
 
 
-def searchable_options(settings: UiSettings) -> dict[str, str]:
+def searchable_options(settings: ui_settings.UiSettings) -> dict[str, str]:
     """Was die Suche aus diesem Dialog anbietet — nur sichtbare Zeilen.
 
     „Richtung umkehren" allein sagt in der Suche nicht, wessen Richtung;
@@ -198,7 +199,7 @@ class SettingsDialog(QDialog):
 
     def __init__(
         self,
-        settings: UiSettings,
+        settings: ui_settings.UiSettings,
         parent: QWidget | None = None,
         *,
         slicer_path: str | None = None,
@@ -335,7 +336,8 @@ class SettingsDialog(QDialog):
         # Französisch von 566 auf 768 Bildpunkte — gemessen, dann verworfen.
         self.remote = QCheckBox(titles["remote"], self)
         self.remote.setChecked(settings.remote_enabled)
-        self.remote_port = QSpinBox(self)
+        # Eine Portnummer ist eine Kennung, keine Anzahl: ohne Gruppen.
+        self.remote_port = IdentifierIntSpin(self)
         self.remote_port.setRange(1024, 65535)
         self.remote_port.setValue(settings.remote_port)
         self.remote.setToolTip(
@@ -517,7 +519,11 @@ class SettingsDialog(QDialog):
         self._natural_advanced_width = self._reserve_advanced_width()
         heading = self.advanced.findChild(QToolButton)
         assert heading is not None
-        heading.toggled.connect(self._fit_explicit_soon)
+        # Jede Klappe misst ausdrücklich, nicht nur *Weitere Einstellungen*:
+        # Zugeklappt gaben *Anwendung* und *Vorgaben für neue Projekte* bis zu
+        # 418 Punkte nicht zurück (P1, Zwilling von FD-198).
+        for flap in self.findChildren(QToolButton, "sectionHeading"):
+            flap.toggled.connect(self._fit_explicit_soon)
         tab_order = (
             self.language,
             self.unit,
@@ -941,7 +947,7 @@ class SettingsDialog(QDialog):
         if chosen and chosen != self.settings.language:
             self.done(LANGUAGE_CHANGED)
 
-    def apply_to(self, settings: UiSettings) -> UiSettings:
+    def apply_to(self, settings: ui_settings.UiSettings) -> ui_settings.UiSettings:
         """Schreibt die Antworten zurück. Nur beim Annehmen aufgerufen."""
         settings.language = str(self.language.currentData())
         settings.display_unit = str(self.unit.currentData())

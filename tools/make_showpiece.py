@@ -63,13 +63,14 @@ if str(ROOT) not in sys.path:
 
 import numpy as np  # noqa: E402
 
-from app.core.bootstrap import load_operations  # noqa: E402
+from app.core import bootstrap  # noqa: E402
 
-load_operations()
+bootstrap.load_operations()
 
+from app.core import scene as core_scene  # noqa: E402
 from app.core.geom.sculpt import Stroke, strokes_to_text  # noqa: E402
 from app.core.knowledge import profiles  # noqa: E402
-from app.core.scene import History, OperationDraft, evaluate  # noqa: E402
+from app.core.scene import History, OperationDraft  # noqa: E402
 from app.core.scene.project import (  # noqa: E402
     Project,
     ProjectSources,
@@ -297,7 +298,7 @@ def build() -> tuple[Project, int]:
         except Exception as problem:
             print(f"{title:26} {'ABGELEHNT':10} {'—':>6}  {problem}")
             continue
-        result = evaluate(document, profile)
+        result = core_scene.evaluate(document, profile)
         if not result.complete:
             blamed = [
                 f"{entry.code}: {entry.message}"
@@ -579,7 +580,7 @@ def build_holder() -> tuple[Project, int]:
         except Exception as problem:
             print(f"{title:26} {'ABGELEHNT':10} {'—':>6}  {problem}")
             continue
-        result = evaluate(document, profile)
+        result = core_scene.evaluate(document, profile)
         if not result.complete:
             blamed = [
                 f"{entry.code}: {entry.message}"
@@ -642,7 +643,7 @@ def build_adapted() -> tuple[Project, int, int]:
     """
     source, _ = build_holder()
     profile = profiles.make_profile()
-    scene = evaluate(source.document, profile).scene
+    scene = core_scene.evaluate(source.document, profile).scene
     # Nur der Halter selbst — die beiden Achsen sind eigene Objekte und kämen
     # als lose Stücke in einer Datei an.
     body = next(entry for entry in scene.objects.values() if entry.name.startswith("Rollenhalter"))
@@ -705,7 +706,7 @@ def build_adapted() -> tuple[Project, int, int]:
         # ``ProjectSources`` ist die Brücke. Ohne sie endet der erste Schritt
         # in ``op.load.InternalError`` — eine Meldung, die nach Programmfehler
         # klingt und einen fehlenden Zugang meint.
-        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        result = core_scene.evaluate(project.document, profile, sources=ProjectSources(project))
         if not result.complete:
             for entry in result.scene.report.findings:
                 if entry.code.startswith("op."):
@@ -839,7 +840,7 @@ def build_stone() -> tuple[Project, int, int]:
             except Exception as problem:
                 print(f"{title:26} {'ABGELEHNT':10} {'—':>9}  {problem}")
                 continue
-            result = evaluate(project.document, profile)
+            result = core_scene.evaluate(project.document, profile)
             if not result.complete:
                 for entry in result.scene.report.findings:
                     if entry.code.startswith("op."):
@@ -859,7 +860,7 @@ def build_stone() -> tuple[Project, int, int]:
         return done
 
     built += run(blank)
-    stone = next(iter(evaluate(project.document, profile).scene.objects.values())).mesh
+    stone = next(iter(core_scene.evaluate(project.document, profile).scene.objects.values())).mesh
     shaping: list[tuple[str, list[OperationDraft]]] = [
         (
             "Daumenmulde",
@@ -911,7 +912,9 @@ def main() -> int:
     # jeder Schritt gebaut, und darunter nichts. ``load`` findet seine Datei
     # nur über ``ProjectSources``; für die beiden anderen Bauarten ist der
     # Leser leer und ändert nichts.
-    result = evaluate(project.document, profiles.make_profile(), sources=ProjectSources(project))
+    result = core_scene.evaluate(
+        project.document, profiles.make_profile(), sources=ProjectSources(project)
+    )
     print(f"\n{built} von {total} Schritten, {len(result.scene.objects)} Körper")
     for entry in result.scene.objects.values():
         print(f"   {entry.name:26} {entry.mesh.triangle_count:7} Dreiecke")

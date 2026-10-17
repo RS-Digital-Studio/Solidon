@@ -32,7 +32,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
-from app.core.brep.kernel import Solid, box_limits, copy_shape, require
+from app.core.brep import kernel
+from app.core.brep.kernel import Solid, box_limits, require
 from app.core.errors import CANCEL, CHOOSE_ANOTHER_FILE, ValidationError
 from app.core.log import get_logger
 from app.core.types import CancelToken
@@ -1166,7 +1167,7 @@ def _write_bodies(bodies: Sequence[StepExport], assembly: str) -> bytes:
             # Der Transfer verändert auch bei gültigen Rundflächen interne
             # Kennzeichen. Szene und Cache behalten ausschließlich ihre eigene
             # Form; die Kopie führt die Flächenzuordnung mit.
-            working, faces, _edges = copy_shape(body.solid.shape)
+            working, faces, _edges = kernel.copy_shape(body.solid.shape)
             working, faces = _without_root_location(working, faces)
             label = shapes.AddShape(working, False)
             _set_name(label, body.name or "Solidon")

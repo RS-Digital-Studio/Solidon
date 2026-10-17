@@ -14,9 +14,9 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import ValidationError
+from app.core.geom import sketch_solid
 from app.core.geom.contours import polygons_of
 from app.core.geom.mesh import MeshData
-from app.core.geom.sketch_solid import MAX_OUTLINE_POINTS
 from app.core.knowledge.parts.section import CONTOUR_SAG, Section
 from app.core.knowledge.parts.shapes import Form
 from app.core.sketch.profile import Profile as SketchProfile
@@ -135,7 +135,7 @@ def _read_signature(text: str) -> tuple[str, Any, Any]:
         if not isinstance(value, list) or len(value) < 4:
             raise _signature_error()
         count += len(value)
-        if count > MAX_OUTLINE_POINTS:
+        if count > sketch_solid.MAX_OUTLINE_POINTS:
             raise _signature_error()
         for point in value:
             if (
@@ -194,7 +194,7 @@ def support_geometry(
     """
     from shapely.ops import unary_union
 
-    from app.core.errors import CANCEL, CHANGE_SELECTION, GeometryError
+    from app.core.errors import CANCEL, CHANGE_FACES, GeometryError
     from app.core.geom.faces import (
         FLAT_ENOUGH_FOR_A_TOOL,
         _must_be_flat,
@@ -240,7 +240,7 @@ def support_geometry(
         # lesbar", auch beim ersten Klick, als es noch keine gab.
         raise GeometryError(
             detail=_("Für eine Dichtnut wählen Sie eine ebene Trägerfläche."),
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FACES, CANCEL),
         )
     projected = unary_union([_polygon(triangle[:, :2]) for triangle in local]).simplify(
         EPS_GEOM,
@@ -417,7 +417,7 @@ def _round_tube(
     import manifold3d
 
     points = list(_single(path.cross).exterior.coords)[:-1]
-    if len(points) > MAX_OUTLINE_POINTS:
+    if len(points) > sketch_solid.MAX_OUTLINE_POINTS:
         raise _closed_path()
     angle = min(MAX_FACET_ANGLE, 2 * math.acos(max(0.0, 1 - _SEAL_SAG / radius)))
     steps = max(8, 4 * math.ceil(math.tau / angle / 4))

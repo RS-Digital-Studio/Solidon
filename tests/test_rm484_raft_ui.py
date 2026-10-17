@@ -197,7 +197,7 @@ def test_actual_row_refresh_matches_effective_raft_without_supports(monkeypatch,
             # der Stütze steht unter „Kühlung“ (RM-583).
             for group in {fields[path].group for path in rows}
         },
-        _queue_refit=lambda reason: None,
+        queue_refit=lambda reason: None,
     )
     host._inactive_paths = lambda: dialog.PrintSettingsDialog._inactive_paths(host)
     dialog.PrintSettingsDialog._update_inactive_setting_rows(host)

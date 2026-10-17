@@ -23,6 +23,7 @@ from app.ui.main_window import MainWindow
 from app.ui.session import ProposalPreview, Session
 from app.ui.settings import UiSettings
 from tests.scripted_backend import ScriptedBackend
+from tests.ui_helpers import wait_until
 
 #: Die echte Rechnerauskunft — ``tests/conftest.py`` setzt je Test einen
 #: neutralen Rechner ein.
@@ -513,7 +514,7 @@ def test_the_invitation_waits_for_the_model_question_instead_of_asking_itself(
         if threading.get_ident() == main:
             asked_on_main.append("first_available")
 
-    monkeypatch.setattr("app.ui.session.first_available", first_available)
+    monkeypatch.setattr("app.core.backends.llm.first_available", first_available)
     monkeypatch.setattr(llm, "first_available", first_available)
     session = Session()
     window = MainWindow(session, UiSettings())
@@ -572,7 +573,7 @@ def test_a_failed_acceptance_shows_the_error_and_keeps_the_proposal(
     monkeypatch.setattr(window.session, "accept_proposal", refusing)
     shown: list[object] = []
     monkeypatch.setattr(
-        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+        "app.ui.dialogs.show_error", lambda error, *args, **kwargs: shown.append(error)
     )
 
     window._on_proposal_accepted()
@@ -1061,44 +1062,54 @@ def test_the_key_dialog_separates_cloud_and_local_paths(
     Die beiden Wege stehen als benannte Abschnitte da — flache Überschriften
     wie in jedem Dialog (RM-518); der Cloud-Weg nennt Anbieter, Datengrenze und
     das Feld selbst, der lokale Weg bleibt davon sichtbar getrennt.
+
+    Die Breite misst der Fall in der Betriebslage und mit echter Schrift
+    (``tests/bundled_fonts.py``): Offscreen unter Windows misst jede Familie
+    synthetisch, und der Hinweis kam dort auf 980 statt seiner wirklichen Breite.
     """
     from PySide6.QtWidgets import QLabel, QToolButton
 
     from app.core.backends import keys
     from app.ui.dialogs import KeyDialog
+    from app.ui.style import apply_style
+    from app.ui.theme import apply_theme
+    from tests.bundled_fonts import bundled_font
 
-    monkeypatch.setattr(keys, "_keyring", lambda: None)
-    dialog = KeyDialog()
+    with bundled_font(qt_app, 9):
+        apply_theme(qt_app, "light")
+        apply_style(qt_app, "light")
+        monkeypatch.setattr(keys, "_keyring", lambda: None)
+        dialog = KeyDialog()
 
-    headings = {
-        button.text(): button
-        for button in dialog.findChildren(QToolButton)
-        if button.objectName() == "sectionHeading"
-    }
-    assert {"Cloud-Modell", "Lokales Modell"} <= set(headings)
-    assert dialog.field.accessibleName() == "API-Schlüssel"
-    cloud = dialog.cloud_model_section
-    assert cloud.isAncestorOf(headings["Cloud-Modell"])
-    assert not cloud.isAncestorOf(headings["Lokales Modell"]), "die Wege sind getrennt"
-    text = " ".join(label.text() for label in cloud.findChildren(QLabel))
-    assert "Anthropic" in text, "der Schlüssel nennt seinen Anbieter"
-    for disclosed in (
-        "Chatnachrichten",
-        "Textzusammenfassung",
-        "Namen",
-        "Maße",
-        "Positionen",
-        "Formen wie Bohrungen",
-        "Parameter",
-        "Druckeinstellungen",
-        "Bearbeitungsschritte",
-        "Prüfhinweise",
-        "Quelldateinamen",
-        "Vorschaubilder",
-    ):
-        assert disclosed in text, f"die Cloud-Auskunft verschweigt {disclosed}"
-    assert "Bleibt lokal: die eigentliche Projektdatei" in text
-    assert dialog.sizeHint().width() <= 760, "der Hinweis sprengt kleine Bildschirme"
+        headings = {
+            button.text(): button
+            for button in dialog.findChildren(QToolButton)
+            if button.objectName() == "sectionHeading"
+        }
+        assert {"Cloud-Modell", "Lokales Modell"} <= set(headings)
+        assert dialog.field.accessibleName() == "API-Schlüssel"
+        cloud = dialog.cloud_model_section
+        assert cloud.isAncestorOf(headings["Cloud-Modell"])
+        assert not cloud.isAncestorOf(headings["Lokales Modell"]), "die Wege sind getrennt"
+        text = " ".join(label.text() for label in cloud.findChildren(QLabel))
+        assert "Anthropic" in text, "der Schlüssel nennt seinen Anbieter"
+        for disclosed in (
+            "Chatnachrichten",
+            "Textzusammenfassung",
+            "Namen",
+            "Maße",
+            "Positionen",
+            "Formen wie Bohrungen",
+            "Parameter",
+            "Druckeinstellungen",
+            "Bearbeitungsschritte",
+            "Prüfhinweise",
+            "Quelldateinamen",
+            "Vorschaubilder",
+        ):
+            assert disclosed in text, f"die Cloud-Auskunft verschweigt {disclosed}"
+        assert "Bleibt lokal: die eigentliche Projektdatei" in text
+        assert dialog.sizeHint().width() <= 760, "der Hinweis sprengt kleine Bildschirme"
 
 
 def test_the_key_dialog_remembers_the_model_without_a_key(
@@ -1683,7 +1694,7 @@ def test_stopping_the_turn_shows_no_error_and_no_report(
     shown: list[object] = []
     reported: list[object] = []
     monkeypatch.setattr(
-        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+        "app.ui.dialogs.show_error", lambda error, *args, **kwargs: shown.append(error)
     )
     monkeypatch.setattr(window, "report_error", lambda error, *args: reported.append(error))
     started = _turn_waiting_for_cancel(window)
@@ -1709,7 +1720,7 @@ def test_a_new_project_stops_the_turn_and_hands_the_request_back(
 
     shown: list[object] = []
     monkeypatch.setattr(
-        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+        "app.ui.dialogs.show_error", lambda error, *args, **kwargs: shown.append(error)
     )
     started = _turn_waiting_for_cancel(window)
 
@@ -2682,11 +2693,10 @@ def test_the_probe_result_keeps_the_buttons_inside_the_visible_dialog(
     dialog.show()
     qt_app.processEvents()
     dialog._probe_done(True, llm.Speed(tokens_per_second=850.0))
-    qt_app.processEvents()
-
-    assert dialog.height() >= dialog.sizeHint().height(), (
-        "das Fenster muss nach dem dynamischen Ergebnis mindestens seine Wunschhöhe haben"
-    )
+    # Das Fenster muss nach dem dynamischen Ergebnis mindestens seine Wunschhöhe
+    # haben. Gewachsen wird ein paar Umläufe später; ein einzelner Umlauf reichte
+    # nur, solange über den Knöpfen ein leerer Streifen stand (FD-198).
+    wait_until(qt_app, lambda: dialog.height() >= dialog.sizeHint().height())
     from PySide6.QtWidgets import QDialogButtonBox
 
     buttons = dialog.findChild(QDialogButtonBox)

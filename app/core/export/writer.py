@@ -50,9 +50,10 @@ from app.core.export.slicer_keys import (
     reads_assembly_file,
     takes_mesh_settings,
 )
-from app.core.geom import transform
-from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
-from app.core.geom.prepare import arrange_on_bed, check_build_volume
+from app.core.geom import mesh as geom_mesh
+from app.core.geom import prepare, transform
+from app.core.geom.mesh import MeshData, concatenated
+from app.core.geom.prepare import check_build_volume
 from app.core.knowledge.print_settings import read_path, same_value
 from app.core.log import get_logger
 from app.core.types import (
@@ -243,6 +244,7 @@ def plan_export(
     document: Document | None = None,
     checked: Sequence[Finding] | None = None,
     evaluated: Sequence[Finding] = (),
+    names: Mapping[ObjectId, str] | None = None,
 ) -> ExportPlan:
     """Ermittelt die Dateinamen und führt die Prüfung vor dem Export aus.
 
@@ -298,6 +300,7 @@ def plan_export(
             scene=scene,
             document=document,
             evaluated=evaluated,
+            names=names,
         )
     )
     if export_format != "step":
@@ -718,7 +721,7 @@ def _first_layer_outline(mesh: MeshData, settings: PrintSettings) -> BaseGeometr
     """
     from app.core.slice.analysis import cross_sections
 
-    data = as_mesh_data(mesh)
+    data = geom_mesh.as_mesh_data(mesh)
     height = float(data.bounds.minimum[2]) + settings.layers.first_layer_height / 2.0
     section = cross_sections(data, [height])[0]
     if section is None or section.is_empty:
@@ -921,6 +924,7 @@ def check_before_export(
     document: Document | None = None,
     cancelled: CancelToken | None = None,
     evaluated: Sequence[Finding] = (),
+    names: Mapping[ObjectId, str] | None = None,
 ) -> list[Finding]:
     """Ein Bericht vor dem Schreiben, keine Sperre (§29).
 
@@ -943,6 +947,10 @@ def check_before_export(
     Selbstdurchdringung zu prüfen — die Auswertung hat es um die bewegten
     Stellen schon getan, und was ein späterer Schritt behoben hat, steht dort
     nicht mehr.
+
+    **Und die Namen der Auswertung** (``names``, ``EvaluationResult.object_names``):
+    Ein entfernter Passungspartner hieß hier „ein entferntes Objekt“, im
+    Prüfbericht daneben beim Namen (RB2-5).
     """
     from app.core.scene.cancel import NeverCancelled
 
@@ -952,7 +960,7 @@ def check_before_export(
     meshes = []
     for entry in objects:
         token.raise_if_cancelled()
-        meshes.append(as_mesh_data(entry.mesh))
+        meshes.append(geom_mesh.as_mesh_data(entry.mesh))
     token.raise_if_cancelled()
 
     if export_format in SOLID_ONLY_FORMATS:
@@ -1022,7 +1030,7 @@ def check_before_export(
         )
     )
     findings.extend(_licence_findings(sources))
-    findings.extend(_fits_and_walls(objects, profile, scene, document, token))
+    findings.extend(_fits_and_walls(objects, profile, scene, document, token, names))
     exported = {entry.id for entry in objects}
     findings.extend(
         finding
@@ -1044,6 +1052,7 @@ def _fits_and_walls(
     scene: Scene | None,
     document: Document | None,
     cancelled: CancelToken,
+    names: Mapping[ObjectId, str] | None = None,
 ) -> list[Finding]:
     """Die zwei Fragen aus §29, die ein einzelner Körper nicht beantwortet.
 
@@ -1073,7 +1082,9 @@ def _fits_and_walls(
     related = {fit.name for fit in scene.fits if {fit.a.object_id, fit.b.object_id} & wanted}
     findings = [
         finding
-        for finding in check_fits(scene, profile, document=document, cancelled=cancelled)
+        for finding in check_fits(
+            scene, profile, document=document, cancelled=cancelled, names=names
+        )
         if (
             finding.object_id is None
             or finding.object_id in wanted
@@ -1199,13 +1210,13 @@ def mesh_for_export(body: Mesh, profile: Profile) -> MeshData:
     das hier ist die Datei, und die geht in den Slicer.
     """
     if not isinstance(body, BRepBody):
-        return as_mesh_data(body)
+        return geom_mesh.as_mesh_data(body)
     wanted = profile.export_deflection
     if wanted >= body.deflection - EPS_GEOM:
-        return as_mesh_data(body)
+        return geom_mesh.as_mesh_data(body)
     tessellated = body.to_mesh(deflection=wanted)
     if not isinstance(tessellated, MeshData):
-        return as_mesh_data(body)
+        return geom_mesh.as_mesh_data(body)
     _log.info(
         "tessellated an exact body for export at %.4f mm instead of %.4f mm",
         wanted,
@@ -1904,7 +1915,7 @@ def _lowered_foot_findings(parts: Sequence[tuple[ObjectId, Mapping[str, str]]]) 
                 "erste Schicht wird so breit wie das Modell.",
                 value=format_length(float(keys["elefant_foot_compensation"])),
             ),
-            values={"value": keys["elefant_foot_compensation"]},
+            values={"value": float(keys["elefant_foot_compensation"]), "unit": "mm"},
             object_id=part,
         )
         for part, keys in parts
@@ -2400,7 +2411,7 @@ def _arrange_for_cli(
         if len(ready) == len(meshes) and not arrangement_holds(ready, profile):
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
-            ready = arrange_on_bed(
+            ready = prepare.arrange_on_bed(
                 ready, profile, plates=1, object_ids=[entry.id for entry in entries]
             ).meshes
         if cancelled is not None:
@@ -2433,6 +2444,7 @@ def write_assembly(
     job: Sequence[SceneObject] | None = None,
     mesh_plan: tuple[dict[str, MeshData], bool] | None = None,
     before_write: Callable[[], None] | None = None,
+    names: Mapping[ObjectId, str] | None = None,
     comparison: Callable[
         [
             Sequence[tuple[SceneObject, MeshData, PrintSettings | None]],
@@ -2510,6 +2522,7 @@ def write_assembly(
             scene=scene,
             document=document,
             cancelled=cancelled,
+            names=names,
         )
     )
     if profile.printer.is_resin:
@@ -2751,7 +2764,8 @@ def write_assembly(
             for slot in threemf.merge_slots(
                 [
                     threemf.AssemblyPart(
-                        mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                        mesh=geom_mesh.as_mesh_data(entry.mesh),
+                        slots=threemf.slots_for_object(entry),
                     )
                     for entry in chosen
                 ]
@@ -2813,7 +2827,7 @@ def write_assembly(
             slots = threemf.merge_slots(
                 [
                     threemf.AssemblyPart(
-                        as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                        geom_mesh.as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
                     )
                     for entry in chosen
                 ]
@@ -2918,7 +2932,7 @@ def write_assembly(
     # ``objects`` und nicht aus ``chosen``: Letzteres *ist* die Platte.
     whole_job = [
         threemf.AssemblyPart(
-            mesh=as_mesh_data(entry.mesh),
+            mesh=geom_mesh.as_mesh_data(entry.mesh),
             name=source_text(entry.name),
             slots=threemf.slots_for_object(entry),
         )
@@ -3216,7 +3230,9 @@ def _assembly_plates(bodies: Sequence[SceneObject]) -> dict[int, list[threemf.As
     plates: dict[int, list[threemf.AssemblyPart]] = {}
     for body in bodies:
         plates.setdefault(body.plate, []).append(
-            threemf.AssemblyPart(mesh=as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
+            threemf.AssemblyPart(
+                mesh=geom_mesh.as_mesh_data(body.mesh), slots=threemf.slots_for_object(body)
+            )
         )
     return plates
 

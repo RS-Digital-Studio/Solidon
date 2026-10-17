@@ -232,6 +232,25 @@ nächste Lauf sofort — dann wird kein `False` gemeldet, sonst flackert die
 Anzeige beim Ziehen an einem Schieber im Sekundentakt. Dieselbe Begründung,
 aus der `evaluationCancelled` einen ersetzten Lauf nicht meldet.
 
+### Ein Neuaufbau ohne Eingabe hält den wartenden Klick
+
+*Übernehmen* vor dem Bild wartet an seiner Freigabe (`_PreviewApproval.pending_click`).
+Baut das Merkmalfenster in dieser Zeit neu auf — die Antwort des
+Merkmalsarbeiters an Körpern ab `ANSWERS_IN_WORKER_FROM` Dreiecken samt neuer
+Maßgruppe, eine wiederhergestellte Auswahl, die Meldung beider Merkmale einer
+Bohrung mit Senkung —, räumte der Aufbau die Vorschau ab und band die Werte
+des Schritts neu: kein Schritt, kein Satz (Review 1 des CI-Fixes, RCI-2; seit
+0.6.0). Entscheidung: Ein Neuaufbau ohne Eingabe des Kunden ersetzt und räumt
+keine noch gültige Freigabe mit wartendem Klick (`app/ui/waiting_click.py`,
+`kept_through_rebuild`; Stellen `_set_preview_order` und `_clear_preview`),
+die Vorschau rechnet weiter, und Maßgruppe und Merkmalfenster zeigen danach die
+Werte des Klicks (`show_waiting_values`, Nachprüfung R2-2) — sonst glaubte der
+Kunde dem Feld, tippte seinen Wert noch einmal und verlor den Klick. Ein
+anderer Wert verwirft ihn mit `_not_applied("values")`. Gültig heißt
+`_preview_is_current`: dasselbe Dokument, Ergebnis und dieselbe Auswahl — ein
+anderes Merkmal räumt wie bisher ab. Belegt in
+`tests/test_waiting_click_rebuild.py`.
+
 ### Umbau und Export rechnen im Arbeiter
 
 **Ein Umbau des Verlaufs rechnet im Arbeiter und übernimmt im Hauptfaden**
@@ -670,6 +689,35 @@ wo die genaue Vorschau ein Ergebnis hat. Ein ungültiger Wert
 nicht zweimal. Der Kunde sieht davon nichts außer der längeren Wartezeit —
 und die hat seit RM-208 über zwei Sekunden Balken und *Abbrechen*.
 Nachweis: `test_evaluation.py::test_a_coarse_preview_the_kernel_refuses_is_computed_exactly`.
+
+### Aus der Regel: Einzelheiten der groben Stufe
+
+Beim Merge von welle5 (16.10.2026) aus `wartezeit.md` hierher verschoben,
+damit die Ladelast von `main_window.py` und `placement_flow.py` unter der
+Grenze bleibt; die Regel nennt die Stelle.
+
+Ein Verkleinerungsziel unter dem, was der Sehnenfehler allein erreicht,
+reißt Geschlecht und erkannten Bohrungsdurchmesser. Braucht eine Form (Figur,
+Scan) bei 0,05 mm mehr Dreiecke als die Schranke, wird sie gröber — „grob“
+steht auch dann.
+
+**Beim Rückweg ins Netz** fallen Splitter (`kernel_jobs.without_slivers`), und
+`mesh_ops._as_mesh` verschweißt nur, wo das Netz dicht bleibt (wie
+`boolean._tidied`).
+
+**Die Verkleinerung rechnet aus einem Arbeiter im Hilfsprozess**
+(`geom.kernel_process`, RM-212; GIL: `kern.md`), aus dem Hauptthread gerufen
+hier — gewartet wäre dort genauso.
+
+**Was an der Dreieckszahl hängt, zählt das Original:** Eine Absage ist die
+Antwort, mit den Handlungen, die der Dialog selbst einlöst
+(`OperationDialog.show_refusal`, `MainWindow._refusal_handlers`) — *Dreiecke
+verringern und erneut versuchen* ist eine Transaktion. Ändert eine Operation
+nur das Netz (`retriangulates`) und wüchse es über die Schranke, ist die
+geschätzte Zahl die Vorschau (`TriangleCounts`); sonst rechnet der Schritt am
+Original, bei `retriangulates` ohne Booleschen Vergleich
+(`compare_scenes(retriangulated=…)`). Exakte Eingänge und der Agentenweg
+werden nicht vorab gezählt.
 
 ### Die Vorschau über zwei Sekunden, und was ihr Band sagt
 

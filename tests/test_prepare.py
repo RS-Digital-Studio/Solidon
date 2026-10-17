@@ -1506,14 +1506,13 @@ def test_what_the_chain_behind_the_pins_says_reaches_the_split(
     Befund nimmt denselben Weg wie der des Rasters.
     """
     from app.core.geom import boolean as boolean_module
-    from app.core.geom import pins
 
     real = boolean_module.boolean
 
     def welded_only(kind, meshes, **options):
         return real(kind, meshes, **{**options, "stages": ("welded",)})
 
-    monkeypatch.setattr(pins, "boolean", welded_only)
+    monkeypatch.setattr(boolean_module, "boolean", welded_only)
     entry = SceneObject(id="obj_1", name="Würfel", mesh=cube_mesh())
 
     result = _run_op("split_pinned", entry, profile, axis="z", position=0.0, pins=2)
@@ -3044,10 +3043,10 @@ def test_moving_a_countersunk_bore_passes_the_source_id_to_its_chain_union(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Auch der Kettenzweig bindet einen Vorprüfungsfehler an den Szenenkörper."""
-    from app.core.geom import prepare_ops
+    from app.core.geom import boolean as geom_boolean
 
     entry, bore, _countersink = _plate_with_a_countersunk_bore()
-    original = prepare_ops.boolean
+    original = geom_boolean.boolean
     seen: list[object] = []
 
     def record(kind: str, meshes: list[MeshData], **kwargs: object):
@@ -3055,7 +3054,7 @@ def test_moving_a_countersunk_bore_passes_the_source_id_to_its_chain_union(
             seen.append(kwargs.get("object_ids"))
         return original(kind, meshes, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(prepare_ops, "boolean", record)
+    monkeypatch.setattr(geom_boolean, "boolean", record)
     feature = entry.features[bore]
     centre = feature.params["centre"]
 

@@ -46,6 +46,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from app.core.registry.registry import BODY_REQUIREMENTS  # noqa: E402
+from tools import function_scenes  # noqa: E402
 from tools.function_scan import UiScan, scan_ui, statements  # noqa: E402
 from tools.function_scenes import (  # noqa: E402
     DATA,
@@ -53,7 +55,6 @@ from tools.function_scenes import (  # noqa: E402
     MESH,
     FunctionListError,
     Scene,
-    load_scenes,
     registry,
     save_scenes,
     validate_scenes,
@@ -191,7 +192,9 @@ DIALOG_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "UsageDialog": ("D9", "koerper:1"),
     "SlicerFilamentDialog": ("D10", "koerper:1"),
     "ParameterDialog": ("D10", "leer"),
-    "BindingDialog": ("D10", "merkmal:hole"),
+    # Gebunden werden feste Zahlen an Projektmaße: Der Knopf steht in der
+    # Parameterleiste, sobald eine passt — ein Merkmal braucht es nicht (FD-101).
+    "BindingDialog": ("D10", "parameter"),
     "CalibrationDialog": ("D10", "leer"),
     "CounterpartDialog": ("D10", "koerper:2"),
     "RecipeDialog": ("D10", "koerper:1"),
@@ -212,6 +215,19 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "statusbar": ("D12", "leer"),
     "parameters": ("D10", "leer"),
     "parameters.first": ("D10", "parameter"),
+    # Die Beschriftung derselben Zeile öffnet ihr Menü, der Bindeknopf darunter den
+    # Bindedialog, *Auswahl als Baustein speichern …* im Katalog das Rezept — alles
+    # Parameter (FD-101).
+    "parameters.first.label": ("D10", "parameter"),
+    "parameters.bind": ("D10", "parameter"),
+    "parts.save": ("D10", "parameter"),
+    # *Spule von Hand anlegen* gehört zum Filamentlager (D9); *Wählen …* und die
+    # Farbe der neuen Spule öffnen Slicerprofile und Farbwähler (D10).
+    "filament.add": ("D9", "leer"),
+    "filament.profile": ("D10", "leer"),
+    "filament.colour": ("D10", "leer"),
+    # Eine Spule aus dem Lager im Filamentfeld eines Operationsdialogs (FD-101).
+    "filament.spool": ("D10", "koerper:1"),
     # Der Prüfbericht ist eine Ansicht der Szene, keine Handlung an einer Auswahl:
     # Er braucht einen Körper, aber keinen gewählten (Probelauf F-33, Z3).
     "report": ("D8", "ansicht"),
@@ -257,6 +273,34 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     # *Abbrechen* steht nur während einer langen Rechnung.
     "progress.cancel": ("D12", "langsam"),
     "preview.banner": ("D11", "koerper:1"),
+    # Die Knöpfe auf den Wegen zu Meldungen ohne Browser und zu den Fenstern der
+    # Zusatzprogramme (FD-175): D12; *Aus dem Slicer übernehmen* im Lager: D9.
+    "donation.paypal": ("D12", "leer"),
+    "update.page": ("D12", "leer"),
+    "install.action": ("D12", "leer"),
+    "install.details": ("D12", "leer"),
+    "install.follow.comfyui": ("D12", "leer"),
+    "install.locate": ("D12", "leer"),
+    "filament.import": ("D9", "leer"),
+    # Die Zeile eines Filaments unter *Filamente* in der Kopfzeile: Druckwerte der Spule.
+    "filaments.first": ("D9", "koerper:1"),
+    # *Filament abziehen …* nach einem Export als 3MF: die Buchung im Lager.
+    "usage.review": ("D9", "koerper:1"),
+    # Reiter in eigenem Fenster und zurück: Ansicht und Anordnung sind D11.
+    "tabs.bar": ("D11", "leer"),
+    "tabs.return": ("D11", "leer"),
+    # Chat, KI-Hinweis und Freischalten: D12.
+    "request.example": ("D12", "leer"),
+    "request.send": ("D12", "leer"),
+    "disclosure.privacy": ("D12", "leer"),
+    "activation.offline": ("D12", "leer"),
+    "disclosure.continue": ("D12", "leer"),
+    # Beschreibung und *Erzeugen* gehören zu *Modell erzeugen*: D2.
+    "generate.prompt": ("D2", "leer"),
+    "generate.start": ("D2", "leer"),
+    # *Koordinaten …* und *Neue Ebene …* im Skizzeneditor: D7.
+    "sketch.coordinates": ("D7", "leer"),
+    "sketch.new_plane": ("D7", "leer"),
 }
 
 #: Wortschatznamen mit Art, die Zeilen tragen: Präfix → Paket und Anforderung.
@@ -388,6 +432,7 @@ REQUIREMENT_SCENES: Final[dict[str, str]] = {
     "zustand:open": "offen.netz",
     "zustand:parts": "mehrteilig.netz",
     "zustand:cavity": "hohlraum.{kernel}",
+    "zustand:colour": "farbig.netz",
     "baustein": "baustein.{kernel}",
     "befund": "unter_dem_bett.netz",
     # Netzoperationen (Glätten, Ausdünnen, Formen, Skelett) an einem fein vernetzten
@@ -1261,7 +1306,7 @@ def rows(menubar: Iterable[MenuEntry] = (), *, with_specs: bool = True) -> list[
     from app.core.guides import TARGETS
 
     source = registry()
-    scenes = load_scenes()
+    scenes = function_scenes.load_scenes()
     scan = scan_ui(ui_sources())
     issues: list[str] = []
     collected: list[Row] = []
@@ -1326,8 +1371,9 @@ FEATURE_SELECTIONS: Final[frozenset[str]] = frozenset({"baustein", "textur", "gl
 #: Die Anforderung, deren Auswahl eine Kante ist: erst der Körper, dann ein Klick ins Bild.
 EDGE_SELECTION: Final = "kante"
 #: Anforderungen, deren Auswahl der erste Körper ist — bei der Kante als erster Klick.
+#: Jeder Körperzustand aus dem Register gehört dazu, auch ein neuer (FD-135: ``colour``).
 BODY_SELECTIONS: Final[frozenset[str]] = frozenset(
-    {EDGE_SELECTION, "zustand:open", "zustand:parts", "zustand:cavity", "netzkoerper"}
+    {EDGE_SELECTION, "netzkoerper", *(f"zustand:{state}" for state in BODY_REQUIREMENTS)}
 )
 
 
@@ -1343,9 +1389,8 @@ def selection_route(row: Row, scenes: Mapping[str, Scene]) -> tuple[dict[str, st
     Baumzeile, die die Szene in ``select`` nennt, ein Befund seine Zeile im
     Bericht — bei einer Befundhandlung der Befund, an dem sie steht. Eine Kante
     wählt nur ein Klick ins Bild: erst die Baumzeile des Körpers, dann
-    ``view.edge:`` auf eine seiner Kanten. Eine Operation über die ganze Szene
-    steht am gewählten ersten Körper. Ohne Auswahl (leer, Startbildschirm,
-    Ansicht) ist der Weg leer.
+    ``view.edge:`` auf eine seiner Kanten. Ohne Auswahl (leer, Startbildschirm,
+    Ansicht, eine Operation über die ganze Szene) ist der Weg leer.
     """
     action = row.id.removeprefix("finding.action:") if row.id.startswith("finding.") else ""
     return route_for(row.requirement, row.start_scene, scenes, action)
@@ -1383,11 +1428,11 @@ def route_for(
         return (_click("tree.row:obj_1"), _click("view.edge:obj_1"))
     if requirement in BODY_SELECTIONS:
         return (_click("tree.row:obj_1"),)
-    if requirement == "szene":
-        # Eine Operation über die ganze Szene steht in der Karte am gewählten
-        # Körper (selection_operations.body_operations) — ohne Auswahl fand
-        # der Sprachfall *Druckoptimal ausrichten* nicht (Probelauf F-32).
-        return (_click("tree.row:obj_1"),)
+    # Eine Operation über die ganze Szene steht seit RM-735 nur ohne Auswahl in der
+    # Karte (``SelectionOperationsPanel``: die Handlungen für alle Körper gehören
+    # zur Stufe ohne Auswahl und zu keiner anderen). Der Weg wählte den ersten
+    # Körper, und *Anordnen*, *Kollisionen prüfen* und *Druckoptimal ausrichten*
+    # hießen „nicht auffindbar“ (FD-101). Ohne Auswahl ist der Weg leer.
     return ()
 
 
@@ -1429,7 +1474,7 @@ def problems(menubar: Iterable[MenuEntry] = ()) -> list[str]:
         return list(error.problems)
     issues = missing_scenes(found)
     issues += missing_selections(found)
-    scenes = load_scenes()
+    scenes = function_scenes.load_scenes()
     issues += validate_scenes(scenes)
     issues += scene_precondition_problems(scenes)
     issues += validate_specs(found, load_specs(), scenes)
@@ -1464,6 +1509,14 @@ SPEC_KEYS: Final[frozenset[str]] = frozenset(
         "not_applicable",
         "budget_s",
         "budget_ref",
+        # Prüfpunkt 11 auch für Zeilen ohne Operation (FD-150): die Handbuchstelle
+        # ``<seite>#<anker>`` und die Website-Stellen; ihre Werte prüft
+        # ``tools/function_promises.py``.
+        "manual",
+        "website",
+        # Der Griff, an dem Z1 zieht, wenn erst die Handlung der Zeile ihn zeigt
+        # (FD-73: ``handle:slot.end`` nach *Zum Langloch ziehen*).
+        "drag",
     }
 )
 PROBE_ORIGINS: Final[tuple[str, ...]] = ("slicer", "cad", "fragebogen")
@@ -1532,6 +1585,26 @@ PRECONDITIONS: Final[dict[str, tuple[str, ...]]] = {
     # Alle Zustände; welche ein Lauf erreicht, hängt am Paket (:func:`licence_states`).
     "licence": (*LICENCE_STATES, STARTUP_LICENCE),
     "printer": ("filament", "resin"),
+    # Der einmalige Druckhinweis (§29): Im Profil jedes Falls gilt er als gesehen,
+    # damit er keine Zielfläche verdeckt; offen braucht ihn nur seine eigene Zeile
+    # (FD-121, ``function_setup.PRINT_HINT``).
+    "druckhinweis": ("gesehen", "offen"),
+    # Zustände, die keine Maschine liefert, über die Nähte des Prüfstands
+    # (``function_seams.SEAMS``, FD-175): eine neue Version, ein Browser, der nicht
+    # öffnet, eine Installation, die scheitert, ein Slicer, der abstürzt,
+    # Filamente, die im Slicer eingelegt sind, eine Sicherung neben dem zuletzt
+    # geöffneten Projekt, ein lokales Sprachmodell für den Chat, ein Kaufcode,
+    # dessen Geräteanfrage ohne Schlüssel entsteht, und ein Generator, der sofort
+    # antwortet.
+    "update": ("neu",),
+    "browser": ("fehlt",),
+    "installation": ("scheitert", "comfyui_installiert"),
+    "slicerlauf": ("absturz",),
+    "slicerfilamente": ("eingelegt",),
+    "sicherung": ("neben_projekt",),
+    "chatmodell": ("lokal",),
+    "aktivierung": ("anfrage",),
+    "erzeugung": ("antwortet",),
 }
 
 
@@ -1640,6 +1713,13 @@ def validate_specs(
                 issues.append(f"{where}: Zusatztaste {step.get('modifier')!r} unbekannt")
             if step.get("button", "left") not in BUTTONS:
                 issues.append(f"{where}: Taste {step.get('button')!r} unbekannt")
+            if not isinstance(step.get("text", ""), str):
+                issues.append(
+                    f"{where}: Eingabe auf dem Weg zu {step.get('target')!r} ist kein Text"
+                )
+        drag = spec.get("drag")
+        if drag is not None and not (str(drag).startswith("handle:") and is_target(str(drag))):
+            issues.append(f"{where}: Zug an {drag!r} ist kein Griff")
         if "inputs" in spec and not spec.get("example_goal"):
             issues.append(f"{where}: Eingaben ohne Beispielziel")
         for name in spec.get("inputs", {}):

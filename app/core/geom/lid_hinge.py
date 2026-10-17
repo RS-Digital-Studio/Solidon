@@ -40,7 +40,7 @@ from numpy.typing import NDArray
 from app.core.errors import (
     ARRANGE_ON_BED,
     CANCEL,
-    CHANGE_SELECTION,
+    CHANGE_FEATURE,
     CHANGE_THIS_STEP,
     CHANGE_THREAD_STEP,
     CORRECT_INPUT,
@@ -48,7 +48,9 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.geom import bore_pin, transform
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
+from app.core.knowledge import profiles
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, form_of, pin, thread, union
 from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
@@ -58,7 +60,6 @@ from app.core.knowledge.parts.mechanics import (
     barrel_hinge,
     hinge_eye,
 )
-from app.core.knowledge.profiles import for_object
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.registry.params import ZERO_AUTOMATIC, ZERO_FROM_PROFILE, validate
 from app.core.types import (
@@ -497,7 +498,7 @@ def _hole_of(source: SceneObject, name: str) -> Feature:
             value=name,
             constraint="not_a_hole",
             values={"known": ", ".join(sorted(source.features))},
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     # Die Einführfase einer Einpressbuchse ist als Bohrung erklärt, aber kein
     # Hohlraum für sich: Der Stift dort war eine Scheibe Ø 4,75 und 0,5 hoch (Review G, F2).
@@ -507,7 +508,7 @@ def _hole_of(source: SceneObject, name: str) -> Feature:
             detail=_("Das ist die Einführfase der Bohrung darunter. Wählen Sie die Bohrung."),
             value=name,
             constraint="lead_in",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     return feature
 
@@ -582,7 +583,7 @@ def pin_for_bore(ctx: OpContext) -> OpResult:
     params = cast(PinForBoreParams, ctx.params)
     source = ctx.inputs[0]
     hole = _hole_of(source, params.at_feature)
-    clearance = params.clearance or for_object(ctx.profile, source).material.clearance
+    clearance = params.clearance or profiles.for_object(ctx.profile, source).material.clearance
     if params.shape == bore_pin.PLAIN_PIN:
         if hole.kind != "hole":
             raise ValidationError(
@@ -597,7 +598,7 @@ def pin_for_bore(ctx: OpContext) -> OpResult:
     if cavity.thread is None and not cavity.widenings:
         return _plain_pin(ctx, source, hole, clearance)
     bore_pin.check_in_the_body(
-        as_mesh_data(source.mesh), cavity.origin, cavity.axis, cavity.sections, hole.id
+        geom_mesh.as_mesh_data(source.mesh), cavity.origin, cavity.axis, cavity.sections, hole.id
     )
     made = _matched_pin(ctx, source, cavity, clearance)
     return dataclasses.replace(made, answered={**made.answered, **answered})
@@ -659,7 +660,7 @@ def _plain_pin(ctx: OpContext, source: SceneObject, hole: Feature, clearance: fl
             constraint="positive",
             suggestions=(CORRECT_INPUT, CANCEL),
         )
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     origin = np.asarray(hole.params["centre"], dtype=np.float64).reshape(3)
     direction = np.asarray(hole.params.get("axis", _Z), dtype=np.float64).reshape(3)
     direction /= max(float(math.hypot(*direction)), EPS_GEOM)
@@ -793,7 +794,7 @@ def _matched_pin(
     """
     params = cast(PinForBoreParams, ctx.params)
     gap = clearance / 2.0
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     origin, axis = cavity.origin, cavity.axis
     zone = cavity.thread
     # Am Kegel ist das weiteste Ende maßgeblich — die Mündung (RM-544).
@@ -821,7 +822,7 @@ def _matched_pin(
                 field="length",
                 detail=bore_pin.TOO_LONG_FOR_THE_BORE,
                 value=params.length,
-                values={"maximum": round(top - deepest, 3), "length": params.length},
+                values={"maximum": round(top - deepest, 3), "length": params.length, "unit": "mm"},
                 constraint="maximum",
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
@@ -971,7 +972,7 @@ def _printable_thread(
                 length=_format(top - bottom),
                 maximum=_format(longest),
             ),
-            values={"maximum": round(longest, 3), "length": round(top - bottom, 3)},
+            values={"maximum": round(longest, 3), "length": round(top - bottom, 3), "unit": "mm"},
             constraint="maximum",
             suggestions=(CORRECT_INPUT, CANCEL),
         )
@@ -980,7 +981,7 @@ def _printable_thread(
     if top - shortest < deepest - EPS_GEOM:
         room = max(top - deepest, 0.0)
         step = source.features[zone.feature].created_by if zone.feature in source.features else None
-        values: dict[str, Any] = {"minimum": shortest, "room": round(room, 3)}
+        values: dict[str, Any] = {"minimum": shortest, "room": round(room, 3), "unit": "mm"}
         if step is not None:
             raise ValidationError(
                 field="length",
@@ -1102,7 +1103,7 @@ def _bolt(
         )
     measured = bore_pin.thread_turn(
         np.asarray(carrier.raw.vertices, dtype=np.float64),
-        np.asarray(as_mesh_data(placed).raw.vertices, dtype=np.float64),
+        np.asarray(geom_mesh.as_mesh_data(placed).raw.vertices, dtype=np.float64),
         cavity.origin,
         cavity.axis,
         (max(zone.start, bottom), min(zone.end, top)),

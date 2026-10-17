@@ -37,11 +37,10 @@ from app.core.errors import (
     NotManifoldError,
     ValidationError,
 )
-from app.core.geom import kernel_process, mesh_edits
-from app.core.geom.attributes import transfer
+from app.core.geom import attributes, kernel_process, mesh_edits, repair
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.mesh import (
     MeshData,
-    as_mesh_data,
     edge_table,
     face_components,
     max_distance_to_surface,
@@ -51,7 +50,6 @@ from app.core.geom.mesh import (
     stable_vertex_normals,
     unique_edges,
 )
-from app.core.geom.repair import merge_vertices
 from app.core.geom.texture import face_colours
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -294,7 +292,7 @@ def _decimate_with_solver(
             )
     _log.info("decimated %d to %d triangles", mesh.triangle_count, len(reduced.faces))
     return (
-        transfer(source.replacing(reduced), [mesh], tolerance=math.inf),
+        attributes.transfer(source.replacing(reduced), [mesh], tolerance=math.inf),
         "fast_simplification",
         None,
     )
@@ -464,7 +462,7 @@ def _clustered_for_display(mesh: MeshData, target: int, sag: float | None) -> Me
         cell *= 2.0
         merged, mapped = _clustered_once(vertices, faces, low, cell)
     reduced = trimesh.Trimesh(vertices=merged, faces=mapped, process=False)
-    return transfer(MeshData.of(reduced), [mesh], tolerance=math.inf)
+    return attributes.transfer(MeshData.of(reduced), [mesh], tolerance=math.inf)
 
 
 def _clustered_once(
@@ -554,7 +552,7 @@ def _welded_for_simplify(mesh: MeshData) -> MeshData:
     """
     if len(mesh.raw.vertices) <= mesh.triangle_count * LOOSE_VERTEX_RATIO:
         return mesh
-    welded, gone = merge_vertices(mesh)
+    welded, gone = repair.merge_vertices(mesh)
     _log.info("welded %d vertices before simplifying", gone)
     return welded
 
@@ -1430,7 +1428,7 @@ def _as_mesh(mesh: MeshData, arrays: dict[str, np.ndarray]) -> MeshData:
             welded.is_watertight or not body.is_watertight
         ):
             body = welded
-    return transfer(MeshData.of(body), [mesh], tolerance=math.inf)
+    return attributes.transfer(MeshData.of(body), [mesh], tolerance=math.inf)
 
 
 def _needs_welding(vertices: np.ndarray, faces: np.ndarray) -> bool:
@@ -1685,7 +1683,7 @@ class DecimateParams(BaseParams):
 def decimate_mesh(ctx: OpContext) -> OpResult:
     params = cast(DecimateParams, ctx.params)
     source = ctx.inputs[0]
-    before = as_mesh_data(source.mesh)
+    before = geom_mesh.as_mesh_data(source.mesh)
     if params.method == "fast":
         return _decimated_fast(source, before, params.triangles, ctx.cancelled)
     after, solver, measured = _decimate_with_solver(before, params.triangles, ctx.cancelled)
@@ -1785,7 +1783,7 @@ class SmoothParams(BaseParams):
 def smooth_mesh(ctx: OpContext) -> OpResult:
     params = cast(SmoothParams, ctx.params)
     source = ctx.inputs[0]
-    before = as_mesh_data(source.mesh)
+    before = geom_mesh.as_mesh_data(source.mesh)
     after = smooth(before, params.iterations)
     # Die Messung danach kostet ein Vielfaches der Rechnung; wer abgebrochen
     # hat, wartet nicht auf sie (23.09.2026).
@@ -2015,7 +2013,7 @@ class RemeshParams(BaseParams):
 def remesh_mesh(ctx: OpContext) -> OpResult:
     params = cast(RemeshParams, ctx.params)
     source = ctx.inputs[0]
-    before = as_mesh_data(source.mesh)
+    before = geom_mesh.as_mesh_data(source.mesh)
     after = remesh(before, params.edge, cancelled=ctx.cancelled)
     ctx.cancelled.raise_if_cancelled()
     findings = [
@@ -2157,7 +2155,7 @@ def remesh_uniform(ctx: OpContext) -> OpResult:
     """
     params = cast(UniformParams, ctx.params)
     source = ctx.inputs[0]
-    before = as_mesh_data(source.mesh)
+    before = geom_mesh.as_mesh_data(source.mesh)
     after = uniform(before, params.edge, params.deviation, cancelled=ctx.cancelled)
     ctx.cancelled.raise_if_cancelled()
     findings = [
@@ -2243,7 +2241,7 @@ def subdivide_surface(ctx: OpContext) -> OpResult:
     """
     params = cast(SubdivideParams, ctx.params)
     source = ctx.inputs[0]
-    before = as_mesh_data(source.mesh)
+    before = geom_mesh.as_mesh_data(source.mesh)
     after = subdivided(before, params.edge, params.angle, cancelled=ctx.cancelled)
     ctx.cancelled.raise_if_cancelled()
     findings = _deviation_findings(before, after, source.id, cancelled=ctx.cancelled)
@@ -2498,8 +2496,10 @@ ALREADY_CLOSED: Final = _(
     consumes=1,
     produces=1,
     requires_body="open",
+    # „Dicke“ im ersten Satz: Der Bericht führt mit *Dicke geben* hierher, und
+    # der Dialog sagte nur „Wand“ unter einem anderen Titel (FD-112).
     doc=_(
-        "Gibt einer offenen Fläche eine Wand und macht sie damit zu einem Körper. "
+        "Gibt einer offenen Fläche eine Dicke und macht sie damit zu einem Körper. "
         "Der Weg für ein Netz, das als Fläche ankommt statt als Volumen."
     ),
 )
@@ -2521,7 +2521,7 @@ def thicken(ctx: OpContext) -> OpResult:
     """
     params = cast(ThickenParams, ctx.params)
     source = ctx.inputs[0]
-    before = as_mesh_data(source.mesh)
+    before = geom_mesh.as_mesh_data(source.mesh)
     if before.raw.is_watertight:
         # **Der häufigste Griff daneben, und er kam vom Titel.** Bis zum
         # 23.08.2026 hieß diese Operation „Fläche aufdicken" und stand im

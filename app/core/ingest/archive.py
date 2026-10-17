@@ -35,8 +35,8 @@ from typing import Any, Final
 from urllib.parse import unquote, urlsplit
 
 from app.core.errors import CANCEL, CHOOSE_ANOTHER_FILE, ValidationError
+from app.core.ingest import loader
 from app.core.ingest.loader import (
-    MAX_FILE_BYTES,
     GltfReference,
     check_limits,
     check_unpacked,
@@ -189,7 +189,7 @@ def _read_entry(container: zipfile.ZipFile, entry: str, size: int) -> bytes:
     """Ein Eintrag, höchstens ``size`` Bytes und nie mehr als eine Datei darf."""
     check_limits(size, 0)
     with container.open(entry) as stream:
-        data = stream.read(min(size, MAX_FILE_BYTES) + 1)
+        data = stream.read(min(size, loader.MAX_FILE_BYTES) + 1)
     if len(data) > size:
         raise ValidationError(
             suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),

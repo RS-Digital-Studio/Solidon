@@ -305,7 +305,10 @@ def test_the_finding_actions_come_from_the_kernel_and_the_table(rows: list[fl.Ro
     assert fl.ERROR_DIALOG_ACTIONS["save_elsewhere"] == "D1"
     assert set(fl.ERROR_DIALOG_ACTIONS.values()) <= set(fl.PACKAGES)
     by_id = _by_id(rows)
-    assert by_id["finding.action:change_selection"].start_scene == "halt"
+    # Kantenfehler bieten seit FD-123 andere Kanten (``change_step``) an; andere
+    # Objekte rät der Befund, dass ein Körper keine Farbe trägt.
+    assert by_id["finding.action:change_selection"].start_scene == "ohne_farbe.netz"
+    assert by_id["finding.action:change_step"].start_scene
     assert by_id["finding.action:correct_input"].start_scene == "halt"
     assert by_id["finding.action:use_reachable"].start_scene == "zu_fein.netz"
     assert by_id["finding.action:orient_for_print"].start_scene
@@ -758,11 +761,12 @@ def test_there_are_light_scenes_on_both_kernels() -> None:
 @pytest.mark.parametrize("key", [key for key, scene in _scenes().items() if scene.heavy])
 def test_a_heavy_scene_is_a_valid_stack(key: str) -> None:
     """Schwere Szenen rechnet nur der Werkzeuglauf; hier nimmt ``History.apply`` jeden
-    Schritt an, und die Zusage nennt Dreiecke oder Sekunden."""
+    Schritt an, und die Zusage nennt Dreiecke oder Sekunden. Ein Schritt genügt: Die
+    Platte über der Erkennungsgrenze wird geladen, nicht erst verfeinert (FD-101)."""
     scenes = _scenes()
     project = fscenes.build_scene(key, scenes)
     _sources, steps = fscenes.recipe(key, scenes)
-    assert len(project.document.ops) == len(steps) >= 2
+    assert len(project.document.ops) == len(steps) >= 1
     assert {"triangles_over", "seconds_over"} & set(scenes[key].promises)
 
 
@@ -949,9 +953,9 @@ def test_every_selecting_row_carries_its_selection_clicks(rows: list[fl.Row]) ->
     assert targets("finding.action:place_on_bed") == [("finding:arrange.below_bed", "")]
     assert targets("feature:part.move") == [("tree.row:obj_1.screw_hole_bore_1", "")]
     assert targets("create_box") == []
-    # Eine Operation über die ganze Szene steht in der Karte am gewählten Körper
-    # (Probelauf F-32: ohne Auswahl fand der Sprachfall sie nicht).
-    assert targets("arrange_bed") == [("tree.row:obj_1", "")]
+    # Eine Operation über die ganze Szene steht seit RM-735 nur ohne Auswahl in
+    # der Karte; am gewählten Körper hieß sie „nicht auffindbar“ (FD-101).
+    assert targets("arrange_bed") == []
     # Eine Kante wählt ein Klick ins Bild, nachdem der Körper gewählt ist
     # (gestufte Tiefe, §18.5) — vorher wählte der Weg nur den Körper, und keine
     # Kantenzeile lief an einer Kante (Durchsicht welle4 C-M4).
@@ -975,7 +979,7 @@ def test_a_feature_scene_without_its_selection_turns_red(
     darauf der Auswahlweg — das ist rot, nicht still leer."""
     scenes = fscenes.load_scenes()
     scenes["merkmal.hole.exakt"] = dataclasses.replace(scenes["merkmal.hole.exakt"], select="")
-    monkeypatch.setattr(fl, "load_scenes", lambda path=fscenes.SCENES: scenes)
+    monkeypatch.setattr(fscenes, "load_scenes", lambda path=fscenes.SCENES: scenes)
 
     found = fl.problems()
 

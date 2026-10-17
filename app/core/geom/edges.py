@@ -38,15 +38,16 @@ import numpy as np
 from app.core import units
 from app.core.errors import (
     CANCEL,
-    CHANGE_SELECTION,
+    CHANGE_EDGES,
+    CHANGE_FEATURE,
     CORRECT_INPUT,
     REPAIR_AND_RETRY,
     SHOW_LOCATION,
     GeometryError,
     ValidationError,
 )
-from app.core.geom import lathe, transform
-from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, boolean, deepest
+from app.core.geom import boolean, lathe, transform
+from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, deepest
 from app.core.geom.measure import SHARP_EDGE_ANGLE
 from app.core.geom.mesh import (
     MeshData,
@@ -729,7 +730,7 @@ def named_edges[AnyEdge: SelectableEdge](
             raise GeometryError(
                 detail=_("Die gewählte Kante ist nicht eindeutig — wählen Sie sie am Körper neu."),
                 values={"key": key, "matches": len(matches)},
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_EDGES, CANCEL),
             )
         if matches:
             selected.append(matches[0])
@@ -802,7 +803,7 @@ def wanted[AnyEdge: SelectableEdge](
         raise GeometryError(
             detail=_("Für diese Auswahl ist noch keine Kante benannt — wählen Sie eine aus."),
             values={"choice": choice},
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_EDGES, CANCEL),
         )
     if keys:
         chosen = named_edges(edges, keys)
@@ -813,7 +814,7 @@ def wanted[AnyEdge: SelectableEdge](
                     "ein Schritt davor hat sie verändert. Wählen Sie die Kanten neu."
                 ),
                 values={"edges": len(keys), "missing": len(keys) - len(chosen)},
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_EDGES, CANCEL),
             )
         return chosen
     chosen = choose(edges, choice, rings_by_plane=rings_by_plane)
@@ -821,7 +822,7 @@ def wanted[AnyEdge: SelectableEdge](
         raise GeometryError(
             detail=_("Zu dieser Auswahl gehört keine Kante."),
             values={"choice": choice},
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_EDGES, CANCEL),
         )
     return chosen
 
@@ -1227,7 +1228,7 @@ def check_varying_radius(
                         "vorn am Ring. Geben Sie beiden denselben Radius, und legen Sie den "
                         "Verlauf über Zwischenstellen."
                     ),
-                    suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+                    suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
                     values={
                         "radius_mm": round(radius_first, 3),
                         "largest_mm": round(radius_last, 3),
@@ -1243,7 +1244,7 @@ def check_varying_radius(
                 "eine Innenkante zusammentreffen. Wählen Sie einen gleichbleibenden Radius, "
                 "oder lassen Sie eine dieser Kanten aus."
             ),
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
         )
     for radii in radii_at.values():
         if len(radii) > 1 and max(radii) - min(radii) > EPS_GEOM:
@@ -1252,7 +1253,7 @@ def check_varying_radius(
                     "An einer Ecke treffen gewählte Kanten mit verschiedenen Radien zusammen. "
                     "Geben Sie ihnen dort denselben Radius, oder verrunden Sie sie einzeln."
                 ),
-                suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+                suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
                 values={"radius_mm": round(min(radii), 3), "largest_mm": round(max(radii), 3)},
             )
 
@@ -1500,7 +1501,7 @@ def rounding_tool(
     # Häute ohne Dicke stehen. Der Körper war danach wasserdicht und trug sein
     # richtiges Volumen, aber ``body_count`` zählte drei Teile, und der
     # Prüfbericht meldet so etwas dem Kunden als Zerfall.
-    return boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
+    return boolean.boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
 
 
 #: Wie weit ein Zug von einem Stück zum nächsten höchstens abbiegen darf, damit
@@ -1729,7 +1730,7 @@ def _without_an_angle(radius: float) -> GeometryError:
             "zusammen — das Netz ist dort gefaltet oder eben. Reparieren Sie "
             "das Modell, oder wählen Sie eine andere Kante."
         ),
-        suggestions=(REPAIR_AND_RETRY, CHANGE_SELECTION, CANCEL),
+        suggestions=(REPAIR_AND_RETRY, CHANGE_EDGES, CANCEL),
         values={"radius": radius},
     )
 
@@ -2069,7 +2070,7 @@ def _varying_tool(
         raise _without_an_angle(law.largest)
     if len(pieces) == 1:
         return pieces[0]
-    return boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
+    return boolean.boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
 
 
 def _loft(sections: list[list[np.ndarray]], along: np.ndarray, overshoot: float) -> MeshData | None:
@@ -2651,7 +2652,7 @@ def _corner_tools(
     ball = _corner_hull(ball_points, vertex)
     if local is None or ball is None:
         return None
-    removed = boolean(
+    removed = boolean.boolean(
         "difference", [local, ball], quality=quality, allow_empty=True, cancelled=cancelled
     )
     return kind, removed.mesh, [removed]
@@ -2699,7 +2700,7 @@ def _check_corner_region(
     cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Der örtliche Ersatz muss ausschließlich die drei gewählten Flächen treffen."""
-    clipped = boolean(
+    clipped = boolean.boolean(
         "intersection", [mesh, region], quality=quality, allow_empty=True, cancelled=cancelled
     )
     shifted = np.asarray(clipped.mesh.raw.triangles, dtype=np.float64) - frame[:3, 3]
@@ -2715,11 +2716,11 @@ def _check_corner_region(
                 "Die Eckbearbeitung würde ein weiteres Detail verändern. Wählen Sie "
                 "ein kleineres Maß oder bearbeiten Sie die Kanten einzeln."
             ),
-            values={"size": size},
+            values={"size_mm": size},
             # Der Satz nennt zwei Wege, und beide sind Handlungen am Schritt —
             # nicht „Reparieren", die Vorgabe des Geometriefehlers: Am Netz ist
             # hier nichts kaputt, die Ecke ist nur zu eng für das Maß.
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
         )
     return clipped
 
@@ -3324,7 +3325,7 @@ def too_large_for_the_faces(
                 "der größte unter {largest} bleibt, oder bearbeiten Sie weniger Kanten.",
                 largest=shown,
             ),
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
             values={"size_mm": round(size, 3), "largest_mm": largest},
         )
     if second:
@@ -3335,7 +3336,7 @@ def too_large_for_the_faces(
                 "unter {largest}, oder bearbeiten Sie weniger Kanten.",
                 largest=shown,
             ),
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
             values={"size_mm": round(size, 3), "largest_mm": largest, "field": "second_distance"},
         )
     return GeometryError(
@@ -3354,7 +3355,7 @@ def too_large_for_the_faces(
                 largest=shown,
             )
         ),
-        suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+        suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
         values={"size_mm": round(size, 3), "largest_mm": largest},
     )
 
@@ -3459,7 +3460,7 @@ def _grouped_edge_work(
                 "eine Außen- und eine Innenkante zusammentreffen. Wählen Sie gleiche "
                 "Breiten, oder lassen Sie eine der Kanten an dieser Ecke aus."
             ),
-            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
         )
     if len(groups) == 1 or not mixed:
         return _placed_edge_work(
@@ -3716,7 +3717,7 @@ def _edge_work(
     for _star, (frame, complement) in mixed:
         region, target = _mixed_corner_region(size, rounded=rounded)
         if complement:
-            reversed_target = boolean(
+            reversed_target = boolean.boolean(
                 "difference", [region, target], quality=quality, cancelled=cancelled
             )
             runs.append(reversed_target)
@@ -3734,7 +3735,7 @@ def _edge_work(
     if regions:
         clipped_inner = []
         for tool in inner:
-            clipped = boolean(
+            clipped = boolean.boolean(
                 "difference",
                 [tool, *regions],
                 quality=quality,
@@ -3751,7 +3752,7 @@ def _edge_work(
     for kind, tools in (("difference", outer), ("union", inner)):
         if not tools:
             continue
-        outcome = boolean(kind, [body, *tools], quality=quality, cancelled=cancelled)
+        outcome = boolean.boolean(kind, [body, *tools], quality=quality, cancelled=cancelled)
         body = outcome.mesh
         runs.append(outcome)
     # Ohne Kante hätte ``wanted`` angehalten, und ``rounding_tool`` wirft,
@@ -3821,7 +3822,7 @@ def sharp_corner(
     axis = axis / _length(axis)
     normals, neighbours = _around(mesh, triangles, axis, feature.params.get("centre"), features)
     if len(normals) != THROUGH:
-        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_FEATURE, CANCEL))
     first, second = normals[0], normals[1]
     line, point = _plane_cut(first, neighbours[0], second, neighbours[1])
 
@@ -3922,7 +3923,7 @@ def _plane_cut(
         (first, second, line), (units.dot3(first, on_first), units.dot3(second, on_second), 0.0)
     )
     if point is None:
-        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_FEATURE, CANCEL))
     return line, point
 
 
@@ -3967,7 +3968,7 @@ def unround(
             ),
         )
     kind: BooleanKind = "union" if corner.convex else "difference"
-    outcome = boolean(kind, [mesh, filler], quality=quality, cancelled=cancelled)
+    outcome = boolean.boolean(kind, [mesh, filler], quality=quality, cancelled=cancelled)
     return BooleanOutcome(mesh=outcome.mesh, solver=outcome.solver, findings=list(outcome.findings))
 
 
@@ -4101,7 +4102,7 @@ def radial_rounding(
     if not skin.is_watertight or not skin.is_winding_consistent:
         raise GeometryError(detail=_("Diese Zylinderfläche hat keinen geschlossenen Rand."))
     subtracted = (radius > fitted.radius) == fitted.inward
-    outcome = boolean(
+    outcome = boolean.boolean(
         "difference" if subtracted else "union",
         [mesh, MeshData.of(skin)],
         quality=quality,
@@ -4211,7 +4212,7 @@ def bead_edges(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         tools.extend(_rod_along(entry, radius))
-    return boolean("union", [mesh, *tools], quality=quality, cancelled=cancelled)
+    return boolean.boolean("union", [mesh, *tools], quality=quality, cancelled=cancelled)
 
 
 def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:

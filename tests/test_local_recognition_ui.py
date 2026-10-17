@@ -212,7 +212,11 @@ def test_local_worker_preserves_the_error_cause_for_the_dialog(monkeypatch):
         complete=False, scene=SimpleNamespace(report=SimpleNamespace(findings=[finding]))
     )
     monkeypatch.setattr(local, "History", lambda _document: Mock())
-    monkeypatch.setattr(local, "evaluate", lambda *_args, **_kwargs: result)
+    monkeypatch.setattr(
+        importlib.import_module("app.core.scene.evaluate"),
+        "evaluate",
+        lambda *_args, **_kwargs: result,
+    )
     worker = Mock(document={}, original_ray=None, revision=7)
 
     local._RecognitionWorker.work(worker)
@@ -269,7 +273,11 @@ def test_feature_workers_cancel_the_separate_body_proof_without_remembering_it(
             "History",
             lambda _document: Mock(apply=Mock(return_value=SimpleNamespace(ops=("op_1",)))),
         )
-        monkeypatch.setattr(local, "evaluate", lambda *_args, **_kwargs: result)
+        monkeypatch.setattr(
+            importlib.import_module("app.core.scene.evaluate"),
+            "evaluate",
+            lambda *_args, **_kwargs: result,
+        )
         monkeypatch.setattr(local, "features_in_region", lambda *_args, **_kwargs: (feature.id,))
         worker = local._RecognitionWorker(
             new_project().document,
@@ -382,8 +390,10 @@ def make_dialog(
 
     load_operations()
     evaluation = importlib.import_module("app.core.scene.evaluate")
+    from app.core.perceive import local as perceive_local
+
     if not full_detection:
-        monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
+        monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
         monkeypatch.setattr(evaluation, "CONFIRMED_FEATURE_LIMIT_TRIANGLES", 1)
     project = new_project()
     project.document.parameters = {parameter.name: parameter for parameter in parameters}
@@ -575,16 +585,16 @@ def choose_action(dialog, op):
 def test_search_and_actions_run_outside_qt_and_leave_the_source_unchanged(
     qt_app, profile, monkeypatch
 ):
-    import app.ui.local_recognition as local
+    from app.core.perceive import actions
 
     threads = []
-    original = local.actions_for
+    original = actions.actions_for
 
     def measured(*args, **kwargs):
         threads.append(threading.get_ident())
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(local, "actions_for", measured)
+    monkeypatch.setattr(actions, "actions_for", measured)
     dialog, project, before = make_dialog(profile, monkeypatch)
     document = copy.deepcopy(project.document)
     results, selected = [], []
@@ -712,11 +722,11 @@ def test_invalidation_rejects_late_worker_and_edit_results(qt_app, profile, monk
 def test_radius_queue_keeps_only_the_latest_request_and_cancels_the_running_one(
     qt_app, profile, monkeypatch
 ):
-    import app.ui.local_recognition as local
+    from app.core import scene
 
     dialog, _project, _before = make_dialog(profile, monkeypatch)
     entered, unblock, calls = threading.Event(), threading.Event(), []
-    original = local.evaluate
+    original = scene.evaluate
 
     def held(document, *args, **kwargs):
         calls.append(document.ops[-1].params["radius"])
@@ -726,7 +736,7 @@ def test_radius_queue_keeps_only_the_latest_request_and_cancels_the_running_one(
                 kwargs["cancelled"].raise_if_cancelled()
         return original(document, *args, **kwargs)
 
-    monkeypatch.setattr(local, "evaluate", held)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", held)
     try:
         wait_until(qt_app, entered.is_set)
         dialog.radius.set_value(0.5)
@@ -863,14 +873,14 @@ def test_original_ray_respects_the_current_section_planes(qt_app, profile, monke
 
 
 def test_unexpected_worker_error_leaves_a_visible_recovery_state(qt_app, profile, monkeypatch):
-    import app.ui.local_recognition as local
+    from app.core.perceive import actions
 
     dialog, _project, _before = make_dialog(profile, monkeypatch)
 
     def crash(*_args, **_kwargs):
         raise RuntimeError("own worker probe")
 
-    monkeypatch.setattr(local, "actions_for", crash)
+    monkeypatch.setattr(actions, "actions_for", crash)
     try:
         wait_until(qt_app, lambda: dialog._worker is None and not dialog._pending)
         assert dialog.inspection is None and not dialog.save_button.isEnabled()

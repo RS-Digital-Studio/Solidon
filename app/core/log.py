@@ -31,7 +31,7 @@ from types import TracebackType
 from typing import Any, Final
 from urllib.parse import urlsplit, urlunsplit
 
-from app.branding import APP_VERSION
+from app import branding
 from app.core.paths import ensure_dir, lock_file, user_log_dir
 
 ROOT_LOGGER: Final = "app"
@@ -672,7 +672,10 @@ def install_crash_logging(directory: Path | None = None) -> Path | None:
             folder = ensure_dir(directory or user_log_dir())
             _prune_crashes(folder)
             stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-            path = folder / f"crash-{stamp}-{APP_VERSION}-{os.getpid()}-{secrets.token_hex(8)}.log"
+            path = (
+                folder
+                / f"crash-{stamp}-{branding.APP_VERSION}-{os.getpid()}-{secrets.token_hex(8)}.log"
+            )
             # Erst die Sperre, dann die sichtbare Protokolldatei: Ein parallel
             # startendes Fenster kann die neue, noch leere Datei nicht löschen.
             lease_descriptor = os.open(

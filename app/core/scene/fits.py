@@ -13,7 +13,7 @@ Projekte erreichen, die vor ihr gebaut wurden.
 from __future__ import annotations
 
 import math
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
 from typing import cast
 
@@ -29,7 +29,8 @@ from app.core.errors import (
 )
 from app.core.expressions import resolve as resolve_parameters
 from app.core.expressions import resolve_value
-from app.core.knowledge.profiles import for_object, resolve_tolerance, thread_share
+from app.core.knowledge import profiles
+from app.core.knowledge.profiles import resolve_tolerance, thread_share
 from app.core.log import get_logger
 from app.core.perceive.features import EPS_ANGLE
 from app.core.scene.cancel import NeverCancelled
@@ -43,6 +44,7 @@ from app.core.types import (
     Finding,
     Fit,
     FitKind,
+    ObjectId,
     Operation,
     Profile,
     Scene,
@@ -389,7 +391,7 @@ def _producing(document: Document, object_ids: Collection[str]) -> tuple[set[str
 
 
 #: Schritte, die ein Loch um die Lochkorrektur des Materials weiten, wenn ihr
-#: Haken *Materialtoleranz berücksichtigen* steht (``compensate``). Gefragt
+#: Haken *Druckabweichung ausgleichen* steht (``compensate``). Gefragt
 #: wird am Merkmal des fertigen Körpers: Ein gestopftes Loch ist fort, und ein
 #: ohne Haken nachgebohrtes nennt seinen letzten Schritt.
 COMPENSATING_HOLE_OPS: frozenset[str] = frozenset(
@@ -759,8 +761,14 @@ def check(
     *,
     document: Document | None = None,
     cancelled: CancelToken | None = None,
+    names: Mapping[ObjectId, str] | None = None,
 ) -> list[Finding]:
-    """Prüft jede Passung der Szene. Verletzungen sind nie still (§14)."""
+    """Prüft jede Passung der Szene. Verletzungen sind nie still (§14).
+
+    ``names`` sind die Namen, die Körper in der Auswertung trugen
+    (``EvaluationResult.object_names``): Ein entfernter Partner steht im Befund
+    mit seinem letzten Namen statt mit seiner Kennung (RB-6).
+    """
     if document is None and any(fit.when_positive is not None for fit in scene.fits):
         raise InternalError(detail="Bedingte Passungen brauchen ihr Dokument für die Prüfung.")
     token = cancelled if cancelled is not None else NeverCancelled()
@@ -789,13 +797,22 @@ def check(
                 )
             )
             continue
-        findings.extend(_check_one(scene, fit, profile, token))
+        findings.extend(_check_one(scene, fit, profile, token, names or {}))
     token.raise_if_cancelled()
     return findings
 
 
-def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken) -> list[Finding]:
-    return [*_check_pair(scene, fit, profile, cancelled), *_standard_size_notes(scene, fit)]
+def _check_one(
+    scene: Scene,
+    fit: Fit,
+    profile: Profile,
+    cancelled: CancelToken,
+    names: Mapping[ObjectId, str],
+) -> list[Finding]:
+    return [
+        *_check_pair(scene, fit, profile, cancelled, names),
+        *_standard_size_notes(scene, fit),
+    ]
 
 
 def _standard_size_notes(scene: Scene, fit: Fit) -> list[Finding]:
@@ -836,7 +853,42 @@ def _standard_size_notes(scene: Scene, fit: Fit) -> list[Finding]:
     return notes
 
 
-def _check_pair(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken) -> list[Finding]:
+def _kind_title(kind: str) -> TranslatableText | str:
+    """Wie eine Merkmalsart heißt, wenn sie jemand liest — „Bohrung“, nie „hole“."""
+    from app.core.registry.registry import FEATURE_TITLES
+
+    return FEATURE_TITLES.get(kind, kind)
+
+
+def _shown(
+    scene: Scene, reference: FeatureRef, names: Mapping[ObjectId, str]
+) -> TranslatableText | str:
+    """Ein Partner der Passung für die Berichtszeile: Körper beim Namen, Merkmal bei der Art.
+
+    ``a`` und ``b`` stehen als Namen in der Zeile; ``str(fit.a)`` schrieb
+    „obj_1:hole_1“ dorthin (FD-105). Ein Merkmal, das es nicht mehr gibt, hat
+    keine Art — dann bleibt der Körper allein. Ein Körper, den es nicht mehr
+    gibt, behält den Namen, den er zuletzt trug (RB-6: nach *Objekt entfernen*
+    stand „obj_2:dowel_pin_1“ da); ohne bekannten Namen sagt der Satz, was er ist.
+    """
+    entry = scene.objects.get(reference.object_id)
+    if entry is None:
+        last = names.get(reference.object_id)
+        return last or _("ein entferntes Objekt")
+    body = entry.name or str(reference.object_id)
+    feature = entry.features.get(reference.feature_id)
+    if feature is None:
+        return body
+    return _("{body}: {feature}", body=body, feature=_kind_title(feature.kind))
+
+
+def _check_pair(
+    scene: Scene,
+    fit: Fit,
+    profile: Profile,
+    cancelled: CancelToken,
+    names: Mapping[ObjectId, str],
+) -> list[Finding]:
     first = resolve(scene, fit.a)
     second = resolve(scene, fit.b)
     if first is None or second is None:
@@ -864,7 +916,11 @@ def _check_pair(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken
                     "Ein Merkmal dieser Passung gibt es nicht mehr, oder es ist nach einem "
                     "späteren Schritt nicht mehr erkennbar."
                 ),
-                values={"fit": fit.name, "a": str(fit.a), "b": str(fit.b)},
+                values={
+                    "fit": fit.name,
+                    "a": _shown(scene, fit.a, names),
+                    "b": _shown(scene, fit.b, names),
+                },
                 # Ein Merkmal, das es nicht mehr gibt, lässt sich nicht
                 # ansteuern — der Körper aber schon. Das ist die zweite Stufe
                 # der Zusage aus §18.4, und ohne diese Zeile war es keine.
@@ -875,7 +931,11 @@ def _check_pair(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken
     problem = _pair_problem(fit.kind, first, second)
     if problem is not None:
         code, message = problem
-        values = {"fit": fit.name, "a": str(fit.a), "b": str(fit.b)}
+        values = {
+            "fit": fit.name,
+            "a": _shown(scene, fit.a, names),
+            "b": _shown(scene, fit.b, names),
+        }
         if code == "fit.pitch_mismatch":
             values.update(
                 first_pitch=format_length(float(first.params["pitch"])),
@@ -1127,10 +1187,12 @@ def _geometry_findings(
     if not _pose_proven(scene, fit, first_feature, second_feature, first_ref, second_ref):
         return []
     first, second = scene.objects[first_ref.object_id], scene.objects[second_ref.object_id]
+    # **Die Namen, nicht die Kennungen** (FD-105): ``a`` und ``b`` stehen als
+    # Namen in der Berichtszeile, und dort stand „— Quader · obj_1 · obj_2“.
     values: dict[str, float | str | TranslatableText] = {
         "fit": fit.name,
-        "a": first.id,
-        "b": second.id,
+        "a": first.name or first.id,
+        "b": second.name or second.id,
     }
     severity: Severity = "warning"
     flush = fit.kind == "flush"
@@ -1371,7 +1433,7 @@ def _thread_wanted(
 
 def _profile_of(scene: Scene, reference: FeatureRef, profile: Profile) -> Profile:
     """Das Profil des Körpers, auf den ein Passungsverweis zeigt."""
-    return for_object(profile, scene.objects.get(reference.object_id))
+    return profiles.for_object(profile, scene.objects.get(reference.object_id))
 
 
 def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
@@ -1391,7 +1453,11 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
                 code="fit.not_measurable",
                 severity="warning",
                 message=_("Eine bündige Passung braucht zwei Flächen."),
-                values={"fit": fit.name, "a": first.kind, "b": second.kind},
+                values={
+                    "fit": fit.name,
+                    "a": _kind_title(first.kind),
+                    "b": _kind_title(second.kind),
+                },
                 object_id=fit.a.object_id,
                 feature_ids=(fit.a.feature_id,),
                 # Regel 17: Das Merkmal zeigt, welches Maß fehlt.

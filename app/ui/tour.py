@@ -37,10 +37,10 @@ from app.core.examples import Example
 from app.core.tour import Tour
 from app.core.types import Document
 from app.i18n import tr
+from app.ui import session as ui_session
 from app.ui.icons import icon
 from app.ui.leash import weak_slot
 from app.ui.overlay import ContentScroller, tell_the_zone
-from app.ui.session import Session
 from app.ui.style import NORMAL, TIGHT, make_primary, set_level
 
 
@@ -200,7 +200,7 @@ class TourPanel(QWidget):
     """Das nächste Beispiel, wenn die Tour zu Ende ist und jemand weitermachen
     will — trägt seine Kennung."""
 
-    def __init__(self, session: Session, parent: QWidget | None = None) -> None:
+    def __init__(self, session: ui_session.Session, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._session = session
         self._tour: Tour | None = None

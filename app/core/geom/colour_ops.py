@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import dataclasses
 import re
-from typing import cast
+from typing import Final, cast
 
 from app.core.errors import (
     CHANGE_SELECTION,
     ValidationError,
 )
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.attributes import counts, validate_full_faces, with_slots
-from app.core.geom.mesh import as_mesh_data
 from app.core.geom.texture import to_slots
 from app.core.knowledge.filaments import MAX_COLOURS, profile_name
 from app.core.log import get_logger
@@ -149,7 +149,7 @@ def clear_filament(ctx: OpContext) -> OpResult:
 
     params = cast(ClearFilamentParams, ctx.params)
     source = ctx.inputs[0]
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     feature_ids = tuple(
         dict.fromkeys((*params.at_features, *((params.at_feature,) if params.at_feature else ())))
     )
@@ -311,6 +311,12 @@ class SlotsFromTextureParams(BaseParams):
     )
 
 
+#: Warum *Textur in Filamente umrechnen* an einem Körper nichts tun kann —
+#: derselbe Satz im Befund und am Menüeintrag (``requires_body="colour"``,
+#: ``labels.body_requirement``, FD-135).
+NO_COLOUR: Final = _("Dieses Objekt trägt keine Farbinformation.")
+
+
 @register_op(
     name="slots_from_texture",
     # 2 seit dem 22.09.2026: Ein zu kleiner Farbfleck nimmt beim Wegfallen die
@@ -322,6 +328,7 @@ class SlotsFromTextureParams(BaseParams):
     params=SlotsFromTextureParams,
     consumes=1,
     produces=1,
+    requires_body="colour",
     deterministic=False,
     doc=_(
         "Rechnet die Textur eines Objekts auf die Anzahl eingelegter Filamente um "
@@ -340,7 +347,7 @@ def slots_from_texture(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     seed = ctx.seed or 0
 
-    mesh, slots = to_slots(as_mesh_data(source.mesh), params.filaments, seed)
+    mesh, slots = to_slots(geom_mesh.as_mesh_data(source.mesh), params.filaments, seed)
     if not slots:
         return OpResult(
             outputs=[source],
@@ -348,7 +355,7 @@ def slots_from_texture(ctx: OpContext) -> OpResult:
                 Finding(
                     code="colour.no_texture",
                     severity="warning",
-                    message=_("Dieses Objekt trägt keine Farbinformation."),
+                    message=NO_COLOUR,
                     object_id=source.id,
                     # Regel 17: Die Farbe trägt ein anderes Objekt.
                     suggestions=(CHANGE_SELECTION,),

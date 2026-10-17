@@ -13,8 +13,8 @@ from PySide6.QtWidgets import QComboBox, QLabel, QPushButton, QVBoxLayout, QWidg
 
 from app.core.errors import AppError
 from app.core.export.threemf import slot_identity, slots_for_object
-from app.core.geom.attributes import used_slots
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom import attributes
+from app.core.geom import mesh as geom_mesh
 from app.core.knowledge import filaments
 from app.core.types import SceneObject
 from app.i18n import tr
@@ -94,6 +94,9 @@ class QuickFilamentPicker(QWidget):
         self._objects: list[SceneObject] = []
         self._selected_features: tuple[tuple[str, str], ...] = ()
         self._part = False
+        self.current_colours: str | None = None
+        """Die Farben der aktuellen Zuweisung, wenn es genau eine ist — das
+        Farbfeld der Kopfzeile „Filament und Druck“ (FD-19); sonst ``None``."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(TIGHT)
@@ -146,8 +149,9 @@ class QuickFilamentPicker(QWidget):
     def refresh(self) -> None:
         """Neue Lagerwerte stehen sofort zur Wahl, die Szene bleibt dabei unverändert."""
         face_owners = {owner for owner, _feature in self._selected_features}
+        self.current_colours = None
         occupied = {
-            obj.id: set(used_slots(as_mesh_data(obj.mesh)))
+            obj.id: set(attributes.used_slots(geom_mesh.as_mesh_data(obj.mesh)))
             for obj in self._objects
             if obj.id not in face_owners
         }
@@ -203,6 +207,7 @@ class QuickFilamentPicker(QWidget):
             keys = {slot_identity(slot) for slot in slots}
             if len(keys) == 1 and all_assigned:
                 current = tr("Im Projekt: {filament}").format(filament=slots[0].name)
+                self.current_colours = slot_colours(int(slots[0].index), slots[0])
             elif not keys:
                 current = tr("Noch kein Filament zugewiesen")
             else:
@@ -265,7 +270,7 @@ class QuickFilamentPicker(QWidget):
     def _has_assigned_selection(self, occupied: dict[str, set[int]]) -> bool:
         """Nur tatsächliche Zuweisungen im gewählten Wirkungsbereich lassen sich entfernen."""
         for body in self._objects:
-            mesh = as_mesh_data(body.mesh)
+            mesh = geom_mesh.as_mesh_data(body.mesh)
             targets = [feature for owner, feature in self._selected_features if owner == body.id]
             if targets:
                 if any(

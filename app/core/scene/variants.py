@@ -20,12 +20,13 @@ import copy
 import dataclasses
 from dataclasses import dataclass, field
 
+from app.core import scene as core_scene
 from app.core.errors import ValidationError
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
 from app.core.geom.transform import apply, translation
 from app.core.log import get_logger
 from app.core.scene.cache import ResultCache, disk_backed_cache
-from app.core.scene.evaluate import evaluate
 from app.core.types import (
     CancelToken,
     Document,
@@ -158,6 +159,9 @@ def build(
         )
 
     made = VariantSet(parameter=parameter)
+    # Die Einheit des Parameters reist mit dem Wert (``values["unit"]``, FD-188):
+    # „Wert: 0,4“ unter einer Absage ließ offen, ob Millimeter oder Grad.
+    unit = document.parameters[parameter].unit
     offset = 0.0
     # Derselbe Cache für alle Varianten, mit der Plattenebene der Anwendung
     # (``disk_backed_cache``): Ein zweiter Kalibrierdruck mit denselben Werten
@@ -179,7 +183,7 @@ def build(
                 """Der Anteil über alle Läufe, nicht der des einzelnen."""
                 progress((done + max(0.0, min(1.0, share))) / count, text)
 
-            result = evaluate(
+            result = core_scene.evaluate(
                 working,
                 profile,
                 quality=quality,
@@ -197,7 +201,11 @@ def build(
                         code="variants.stopped",
                         severity="error",
                         message=_("Eine Variante ließ sich nicht rechnen."),
-                        values={"parameter": parameter, "value": round(value, 3)},
+                        values={
+                            "parameter": parameter,
+                            "value": round(value, 3),
+                            **({"unit": unit} if unit else {}),
+                        },
                     )
                 )
                 made.variants.append(variant)
@@ -211,6 +219,7 @@ def build(
                 offset,
                 result.scene.profile if mark else None,
                 quality,
+                unit=unit,
             )
             offset += width + gap
             made.variants.append(variant)
@@ -300,6 +309,8 @@ def _place(
     offset: float,
     profile: Profile | None = None,
     quality: Quality = "draft",
+    *,
+    unit: str = "",
 ) -> float:
     """Rückt einen Lauf aus dem Weg des vorigen und benennt ihn nach seinem
     Wert.
@@ -309,8 +320,12 @@ def _place(
     ineinander, und die gemeldete Breite war die des breitesten
     Einzelkörpers statt der Gruppe (Fund des Gesamtreviews vom 25.08.2026).
     Die Lagen der Körper zueinander gehören zur Variante.
+
+    ``unit`` ist die Einheit des Parameters; sie steht im Befund neben dem Wert.
     """
-    meshes = {object_id: as_mesh_data(entry.mesh) for object_id, entry in scene.objects.items()}
+    meshes = {
+        object_id: geom_mesh.as_mesh_data(entry.mesh) for object_id, entry in scene.objects.items()
+    }
     if not meshes:
         return 0.0
     group_min = min(float(mesh.bounds.minimum[0]) for mesh in meshes.values())
@@ -342,6 +357,7 @@ def _place(
                 values={
                     "parts": ", ".join(unmarked),
                     "value": round(value, 4),
+                    **({"unit": unit} if unit else {}),
                 },
             )
         )

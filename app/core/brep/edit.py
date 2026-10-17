@@ -21,11 +21,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final, Literal, cast
 
+from app.core.brep import kernel
 from app.core.brep.canonical import CylinderSurface
 from app.core.brep.kernel import (
     DEFLECTION,
     Solid,
-    boolean_builder,
     carried_face_slots,
     keep_filament_boundaries,
     listed,
@@ -35,13 +35,14 @@ from app.core.brep.kernel import (
 from app.core.errors import (
     BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
     CANCEL,
-    CHANGE_SELECTION,
+    CHANGE_EDGES,
     CORRECT_INPUT,
     PROGRAMMING_ERRORS,
     GeometryError,
     InternalError,
     OperationCancelled,
 )
+from app.core.geom import edges as geom_edges
 from app.core.geom.edges import (
     LOOP_START,
     ChamferShape,
@@ -60,7 +61,6 @@ from app.core.geom.edges import (
 from app.core.geom.edges import EdgeChoice as SharedEdgeChoice
 from app.core.geom.edges import choose as choose_by_place
 from app.core.geom.edges import named_edges as edges_named
-from app.core.geom.edges import wanted as edges_wanted
 from app.core.geom.mesh import MeshData
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
@@ -1012,7 +1012,7 @@ def _wanted(
     „alle senkrechten Kanten" hier bald etwas anderes bedeutet als am Netz —
     bei derselben Menüzeile und demselben Parameter.
     """
-    return edges_wanted(edges_of(solid), choice, keys, rings_by_plane=rings_by_plane)
+    return geom_edges.wanted(edges_of(solid), choice, keys, rings_by_plane=rings_by_plane)
 
 
 def fillet(
@@ -1952,7 +1952,7 @@ def _chamfer_sides_unknown() -> GeometryError:
             "An dieser Kante lassen sich die beiden Flächen der Fase nicht bestimmen. "
             "Wählen Sie gleiche Breiten oder eine andere Kante."
         ),
-        suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+        suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
     )
 
 
@@ -2432,7 +2432,7 @@ def clipped_bore_tool(solid: Solid, planes: Sequence[SectionPlane]) -> Solid:
         face = BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(*origin), gp_Dir(*normal))).Face()
         inside = gp_Pnt(*(origin[i] - normal[i] for i in range(3)))
         half = BRepPrimAPI_MakeHalfSpace(face, inside).Solid()
-        builder = boolean_builder("intersection", solid.shape, half)
+        builder = kernel.boolean_builder("intersection", solid.shape, half)
         builder.Build()
         if not builder.IsDone():
             raise GeometryError(
@@ -4060,7 +4060,7 @@ def _reround(
     Ohne ausdrückliche Auswahl bleibt der ältere Suchmodus über Lage und
     Radius bestehen.
     """
-    from app.core.errors import CHANGE_SELECTION
+    from app.core.errors import CHANGE_FEATURE
     from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
 
     if collect_triangles:
@@ -4078,7 +4078,7 @@ def _reround(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     if edge is None:
-        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_FEATURE, CANCEL))
     if collect_triangles:
         checked = sharp.checked_edge_indices((edge,))
         working = replace(sharp)
@@ -4118,7 +4118,7 @@ def _boolean_pair(
     """Baut einen Booleschen Schritt und gibt Form, Filamentslots und Historie zurück."""
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    operation = boolean_builder(kind, shape, other.shape)
+    operation = kernel.boolean_builder(kind, shape, other.shape)
     operation.Build()
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -4199,7 +4199,7 @@ def _fuzzy_retry(
     for fuzz in BOOLEAN_FUZZ:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        operation = boolean_builder(kind, shape, tool, tolerance=fuzz)
+        operation = kernel.boolean_builder(kind, shape, tool, tolerance=fuzz)
         operation.Build()
         if operation.IsDone() and _holds(operation.Shape(), shape):
             _log.info("boolean %s held only with fuzzy value %g", kind, fuzz)

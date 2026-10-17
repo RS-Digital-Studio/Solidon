@@ -27,6 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.core import bootstrap
 from app.core.agent.offer import ToolOffer
 from app.core.agent.prompt import system_prompt
 from app.core.backends.llm import (
@@ -34,9 +35,8 @@ from app.core.backends.llm import (
     Message,
     OllamaBackend,
 )
-from app.core.bootstrap import load_operations
 from app.core.registry import REGISTRY
-from tools.measure_local_model import model_state, unload
+from tools import measure_local_model
 
 #: Was das Modell in jedem Fall über die Szene erfährt — ein Körper mit
 #: Kennung, damit eine Operation überhaupt ein Ziel hat, und ein Verlauf mit
@@ -119,7 +119,7 @@ def check(model: str) -> bool:
     # der Maschine wären nicht vergleichbar: Ein Modell mit guter Quote in
     # 700 Sekunden ist für den Kunden schlechter als eines mit knapper Quote
     # in zehn, und diese Abwägung darf nicht aus getrennten Läufen entstehen.
-    on_gpu, share = model_state()
+    on_gpu, share = measure_local_model.model_state()
     where = (
         "ungemessen"
         if on_gpu is None
@@ -128,7 +128,7 @@ def check(model: str) -> bool:
     # **Erst messen, dann entladen.** Die erste Fassung räumte vor der
     # Abfrage auf und meldete deshalb bei jedem Modell „ungemessen" — das
     # Aufräumen ist richtig, es stand nur an der falschen Stelle.
-    unload(model)
+    measure_local_model.unload(model)
     middle = statistics.median(times) if times else 0.0
     print(f"  {model}")
     print(
@@ -160,7 +160,7 @@ def main() -> int:
     # daran hat diese Prüfung beim ersten Anlauf vorbeigemessen: dasselbe
     # Modell traf mit den damals sieben Zusatzschemata fünf von fünf und fiel
     # mit dem vollständigen Register in Fließtext.
-    load_operations()
+    bootstrap.load_operations()
     schemas = ToolOffer.for_turn(REGISTRY, ["Hallo."]).schemas()
     print(f"Werkzeuge: {len(schemas)} ({len(json.dumps(schemas)) // 1024} KB Grundlast)\n")
     good = [model for model in chosen if check(model)]

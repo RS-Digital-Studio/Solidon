@@ -25,21 +25,22 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, ValidationError
-from app.core.geom import lathe, transform
+from app.core.geom import boolean, lathe, transform
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.autosplit import upright_normal
-from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest, shared_volume
+from app.core.geom.boolean import BOOLEAN_OVERLAP, deepest, shared_volume
 from app.core.geom.lid_hinge import HINGE_SIDES, HINGES
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData
+from app.core.knowledge import profiles as knowledge_profiles
+from app.core.knowledge.parts import shapes as parts_shapes
 from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.shapes import (
     ThreadProfile,
     mesh_only,
     moved,
     ridge_depth,
-    thread_body,
     turn_segments,
 )
-from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.registry.params import ZERO_AUTOMATIC, ZERO_FROM_PROFILE, ZERO_NONE, ZERO_TOP_EDGE
@@ -716,7 +717,7 @@ def reason_against(source: SceneObject, name: str) -> str | None:
     """
     try:
         z, direction = opening_frame(source, name, None)
-        mesh = as_mesh_data(source.mesh)
+        mesh = geom_mesh.as_mesh_data(source.mesh)
         if direction != _UP:
             mesh = transform.apply(mesh, upright_normal(direction))
         opening(mesh, z - BELOW_RIM)
@@ -855,7 +856,7 @@ def build(
                 # nichts, fällt er weg wie am exakten Weg (``exact_build``):
                 # Ohne ``allow_empty`` hielt die Rückfallkette das leere
                 # Ergebnis für eine Absage, und die Zeile darunter lief nie.
-                trimmed = boolean(
+                trimmed = boolean.boolean(
                     "intersection",
                     [MeshData.of(body), keep],
                     quality=quality,
@@ -877,7 +878,7 @@ def build(
         return MeshData.of(bodies[0]), deepest(stages) if stages else None
     joined = MeshData.of(bodies[0])
     for entry in bodies[1:]:
-        outcome = boolean(
+        outcome = boolean.boolean(
             "union", [joined, MeshData.of(entry)], quality=quality, cancelled=cancelled
         )
         joined = outcome.mesh
@@ -902,7 +903,7 @@ def _mesh_collar_collision(
             high[1] - low[1]
         ):
             continue
-        common = boolean(
+        common = boolean.boolean(
             "intersection",
             [MeshData.of(collar), housing],
             quality=quality,
@@ -1144,7 +1145,7 @@ def create_lid(ctx: OpContext) -> OpResult:
             else list(cavities)
         )
     else:
-        mesh = as_mesh_data(source.mesh)
+        mesh = geom_mesh.as_mesh_data(source.mesh)
         if direction != _UP:
             mesh = transform.apply(mesh, turn)
         outline, cavities = opening(mesh, z - BELOW_RIM)
@@ -1161,14 +1162,14 @@ def create_lid(ctx: OpContext) -> OpResult:
                 detail=_("Ohne Profil muss das Spiel angegeben werden."),
                 constraint="no_profile",
             )
-        clearance = for_object(ctx.profile, source).material.clearance
+        clearance = knowledge_profiles.for_object(ctx.profile, source).material.clearance
 
     # **Mit Scharnier** (RM-184, Audit §6): Achse, Augen und der Raum, in dem
     # jeder Kragen beim Öffnen frei bleibt, entstehen vor dem Deckel — der
     # Kragen wird gleich beim Bauen darauf geschnitten.
     plan = (
         _hinge_plan(
-            as_mesh_data(upright) if exact else mesh,
+            geom_mesh.as_mesh_data(upright) if exact else mesh,
             z,
             footprints,
             params,
@@ -1456,7 +1457,7 @@ def _hinged(
         parts = [
             _edited(part, turned_back, cancelled=cancelled)
             if exact
-            else transform.apply(as_mesh_data(part), turned_back)
+            else transform.apply(geom_mesh.as_mesh_data(part), turned_back)
             for part in parts
         ]
         housing_features = moved_features(housing_features, _rows(turned_back))
@@ -1496,9 +1497,9 @@ def _united(
         from app.core.brep import edit
 
         return edit.unified(edit.boolean("union", [body, *parts]))
-    outcome = boolean(
+    outcome = boolean.boolean(
         "union",
-        [as_mesh_data(body), *(as_mesh_data(part) for part in parts)],
+        [geom_mesh.as_mesh_data(body), *(geom_mesh.as_mesh_data(part) for part in parts)],
         quality=quality,
         cancelled=cancelled,
     )
@@ -1672,7 +1673,7 @@ def _pipe(
     # Dieselbe Stufe wie die vier anderen Booleschen des Drehdeckels: fest auf
     # „fine" konnte dieser eine Schnitt beim Iterieren bis zur Voxelstufe laufen,
     # während der Rest in Entwurfsqualität nach Stufe 2 endet (§17.2, §31).
-    return boolean(
+    return boolean.boolean(
         "difference",
         [MeshData.of(shell), MeshData.of(bore)],
         quality=quality,
@@ -1923,7 +1924,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
         outlines, cavities = exact_opening(upright, z - BELOW_RIM, cancelled=ctx.cancelled)
         outline_width = _exact_width(outlines, cancelled=ctx.cancelled)
     else:
-        mesh = as_mesh_data(source.mesh)
+        mesh = geom_mesh.as_mesh_data(source.mesh)
         if direction != _UP:
             mesh = transform.apply(mesh, turn)
         outline, cavities = opening(mesh, z - BELOW_RIM)
@@ -1937,7 +1938,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
                 detail=_("Ohne Profil muss das Spiel angegeben werden."),
                 constraint="no_profile",
             )
-        clearance = for_object(ctx.profile, source).material.clearance
+        clearance = knowledge_profiles.for_object(ctx.profile, source).material.clearance
 
     major, bore = neck_diameters(outline_width, cavities)
     if params.neck:
@@ -1995,11 +1996,11 @@ def screw_lid(ctx: OpContext) -> OpResult:
             ctx.cancelled,
             sections=sections,
         )
-        bounded = boolean(
+        bounded = boolean.boolean(
             "intersection",
             [
                 mesh_only(
-                    thread_body(
+                    parts_shapes.thread_body(
                         major,
                         params.pitch,
                         _thread_tool_height(params),
@@ -2017,8 +2018,10 @@ def screw_lid(ctx: OpContext) -> OpResult:
         turns = _lifted(bounded.mesh, z)
         neck = mesh_only(moved(neck, (centre_x, centre_y, 0.0)))
         turns = mesh_only(moved(turns, (centre_x, centre_y, 0.0)))
-        with_neck = boolean("union", [mesh, neck], quality=ctx.quality, cancelled=ctx.cancelled)
-        with_thread = boolean(
+        with_neck = boolean.boolean(
+            "union", [mesh, neck], quality=ctx.quality, cancelled=ctx.cancelled
+        )
+        with_thread = boolean.boolean(
             "union", [with_neck.mesh, turns], quality=ctx.quality, cancelled=ctx.cancelled
         )
         threaded = with_thread.mesh
@@ -2182,7 +2185,7 @@ def _screw_cap(
     # beschnitten. Eine kürzer aufgebaute Wendel ließe den letzten Nutumlauf
     # weg, obwohl das passende Außengewinde dort noch Material trägt.
     groove = mesh_only(
-        thread_body(
+        parts_shapes.thread_body(
             inside,
             params.pitch,
             _thread_tool_height(params),
@@ -2194,14 +2197,16 @@ def _screw_cap(
         )
     )
 
-    cutter = boolean("union", [MeshData.of(hollow), groove], quality=quality, cancelled=cancelled)
-    bounded = boolean(
+    cutter = boolean.boolean(
+        "union", [MeshData.of(hollow), groove], quality=quality, cancelled=cancelled
+    )
+    bounded = boolean.boolean(
         "intersection",
         [cutter.mesh, _pipe(outer * 2.0, 0.0, skirt + BOOLEAN_OVERLAP, -BOOLEAN_OVERLAP)],
         quality=quality,
         cancelled=cancelled,
     )
-    cut = boolean(
+    cut = boolean.boolean(
         "difference", [MeshData.of(body), bounded.mesh], quality=quality, cancelled=cancelled
     )
     return cut.mesh, deepest([cutter.solver, bounded.solver, cut.solver])

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from copy import deepcopy
 from pathlib import Path
 
@@ -283,7 +284,7 @@ def test_editing_a_container_lid_keeps_the_fit_in_preview_commit_and_undo(
     window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, lid: str
 ) -> None:
     """Ein anderer Deckel ersetzt das Passungspaar auch in der Vorschau, mitsamt Rückweg."""
-    import app.ui.session as session_module
+    from app.core import scene
     from app.core.lid_flow import fit_for_container
 
     dialog = _open_container(window, insert=True)
@@ -294,7 +295,7 @@ def test_editing_a_container_lid_keeps_the_fit_in_preview_commit_and_undo(
     before = deepcopy(window.session.project.document)
     step = next(op for op in before.ops if op.op == "create_container")
     observed = []
-    original_evaluate = session_module.evaluate
+    original_evaluate = scene.evaluate
 
     def evaluate_with_fit(document, *args, **kwargs):
         current = next((op for op in document.ops if op.id == step.id), None)
@@ -304,7 +305,9 @@ def test_editing_a_container_lid_keeps_the_fit_in_preview_commit_and_undo(
             assert expected in document.fits
         return original_evaluate(document, *args, **kwargs)
 
-    monkeypatch.setattr(session_module, "evaluate", evaluate_with_fit)
+    monkeypatch.setattr(
+        importlib.import_module("app.core.scene.evaluate"), "evaluate", evaluate_with_fit
+    )
     window.edit_operation(step.id, given={"lid": lid})
     dialog = window._op_dialog
     assert dialog is not None

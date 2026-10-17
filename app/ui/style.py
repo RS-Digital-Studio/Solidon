@@ -51,7 +51,9 @@ from PySide6.QtWidgets import (
 
 from app.core.log import get_logger
 from app.core.types import Action
-from app.ui import app_events
+from app.ui import app_events, style_follow
+from app.ui.layout_lifetime import borrowed_items, layout_parts
+from app.ui.scroll_areas import PassingScrollArea
 from app.ui.theme import THEMES, Theme
 
 _log = get_logger(__name__)
@@ -73,6 +75,9 @@ WIDE = SPACE * 4
 #: Desktopknopf bleibt kompakt; nur ein über :func:`make_large_target`
 #: markierter Einstieg nimmt dieses Maß ein.
 TARGET_SIZE = 44
+
+#: Was Qt als „keine Obergrenze“ für Breite oder Höhe kennt (``QWIDGETSIZE_MAX``).
+UNBOUNDED: Final = 16_777_215
 
 #: Die vier Stufen, in absteigender Lautstärke.
 LEVELS = ("title", "section", "body", "caption")
@@ -230,7 +235,7 @@ class WrappedNote(QLabel):
             self.grown.emit()
 
 
-class DialogScrollArea(QScrollArea):
+class DialogScrollArea(PassingScrollArea):
     """Dialoginhalt in natürlicher Größe, bei Platzmangel scrollbar.
 
     Die Aktionsknöpfe bleiben außerhalb. Anders als der gewöhnliche Rollbereich
@@ -244,7 +249,7 @@ class DialogScrollArea(QScrollArea):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._content_hint: QSize | None = None
-        self._content_height: object | None = None
+        self.content_height: object | None = None
         self._screen_window: QWindow | None = None
         self._screen: QScreen | None = None
         self.setWidgetResizable(True)
@@ -286,8 +291,8 @@ class DialogScrollArea(QScrollArea):
             height = min(height, max(0, self.sizeHint().height()))
         if (
             self.isVisible()
-            and isinstance(self._content_height, ContentHeight)
-            and self._content_height.initial_fit_done
+            and isinstance(self.content_height, ContentHeight)
+            and self.content_height.initial_fit_done
         ):
             # Der Ausschnitt gibt Platz an größere äußere Knöpfe ab. Seine
             # alte Höhe ist keine Untergrenze; eine lesbare Inhaltszeile samt
@@ -327,7 +332,7 @@ class DialogScrollArea(QScrollArea):
             handle = window.windowHandle()
             if handle is not None:
                 self._watch_screen(handle)
-            height = self._content_height
+            height = self.content_height
             if isinstance(height, ContentHeight):
                 height.fit_to_screen(window)
             else:
@@ -384,7 +389,9 @@ def fit_dialog_to_screen(dialog: QWidget) -> None:
         dialog.move(x, y)
 
 
-ContentFitIntent = Literal["initial", "explicit", "passive"]
+#: ``font``: Die Schrift der Anwendung hat gewechselt (``style_follow``); der
+#: Dialog misst wie beim Aufklappen und darf dabei kleiner werden (FD-195).
+ContentFitIntent = Literal["initial", "explicit", "passive", "font"]
 
 
 def _natural_item_width(item: QLayoutItem | None) -> int:
@@ -407,18 +414,16 @@ def form_natural_width(form: QFormLayout) -> int:
     label_width = 0
     field_width = 0
     spanning_width = 0
-    for index in range(form.count()):
-        item = form.itemAt(index)
-        if item is None:
-            continue
-        _, role = cast(tuple[int, QFormLayout.ItemRole], form.getItemPosition(index))
-        width = _natural_item_width(item)
-        if role == QFormLayout.ItemRole.LabelRole:
-            label_width = max(label_width, width)
-        elif role == QFormLayout.ItemRole.FieldRole:
-            field_width = max(field_width, width)
-        elif role == QFormLayout.ItemRole.SpanningRole:
-            spanning_width = max(spanning_width, width)
+    with borrowed_items(form) as items:
+        for index, item in items:
+            _, role = cast(tuple[int, QFormLayout.ItemRole], form.getItemPosition(index))
+            width = _natural_item_width(item)
+            if role == QFormLayout.ItemRole.LabelRole:
+                label_width = max(label_width, width)
+            elif role == QFormLayout.ItemRole.FieldRole:
+                field_width = max(field_width, width)
+            elif role == QFormLayout.ItemRole.SpanningRole:
+                spanning_width = max(spanning_width, width)
     spacing = form.horizontalSpacing()
     if spacing < 0:
         spacing = max(0, form.spacing())
@@ -435,13 +440,9 @@ def _side_margins(owner: QLayout | QWidget) -> int:
 
 def _layout_holding(layout: QLayout, widget: QWidget) -> QLayout | None:
     """Das Layout, in dem ``widget`` unmittelbar steht — auch verschachtelt."""
-    for index in range(layout.count()):
-        item = layout.itemAt(index)
-        if item is None:
-            continue
-        if item.widget() is widget:
+    for held, inner in layout_parts(layout):
+        if held is widget:
             return layout
-        inner = item.layout()
         if inner is not None and (found := _layout_holding(inner, widget)) is not None:
             return found
     return None
@@ -529,7 +530,7 @@ def _content_size_for_intent(
         if height <= current.height():
             return None
         return QSize(current.width(), height)
-    if intent == "explicit":
+    if intent in ("explicit", "font"):
         height = natural.height()
         if available_height is not None:
             height = min(height, available_height)
@@ -539,6 +540,12 @@ def _content_size_for_intent(
         width = max(width, natural.width())
     width = max(width, natural_width)
     return QSize(width, max(natural.height(), height_floor))
+
+
+#: So viele Schachtelungsebenen reicht eine Layout-Anfrage nach dem Legen
+#: hinauf: Jede Ebene stellt ihre erst, wenn die darunter gelegt ist, und
+#: Qt arbeitet in einem Aufruf nur ab, was vor ihm anstand (FD-198).
+_LAYOUT_LEVELS: Final = 8
 
 
 def _hidden_height(scroll: QScrollArea) -> int:
@@ -721,7 +728,7 @@ class ContentHeight:
         Ausdrückliches Klappen hält die Überschrift unter dem Zeiger; danach
         rückt auch nachgereichter Inhalt den Dialog nicht mehr hinauf.
         """
-        return intent == "explicit" or (intent == "passive" and self._anchored)
+        return intent in ("explicit", "font") or (intent == "passive" and self._anchored)
 
     def fit(
         self,
@@ -736,7 +743,10 @@ class ContentHeight:
         """Misst Inhalt nach dem Anlass, der ihn geändert hat.
 
         ``initial`` passt die Anfangsgröße an; ``explicit`` hält Breite und
-        Anker; ``passive`` — nachgereichter Inhalt, Status, Suche — hält die
+        Anker; ``font`` misst nach einem Schriftwechsel wie ``explicit``,
+        darf also auch Höhe zurückgeben, ohne den Anker für spätere passive
+        Messungen festzuhalten, und lässt eine Größe des Kunden stehen
+        (FD-195); ``passive`` — nachgereichter Inhalt, Status, Suche — hält die
         Breite und wächst höchstens auf die Bildschirmhöhe; fehlt unter dem
         Dialog Platz, rückt er nur so weit hinauf wie nötig, nach einem
         ausdrücklichen Klappen nicht mehr (RM-487). Vor der Anfangsmessung
@@ -746,7 +756,7 @@ class ContentHeight:
         die Bildschirmgrenze gilt weiterhin.
         """
         if isinstance(scroll, DialogScrollArea):
-            scroll._content_height = self
+            scroll.content_height = self
         layout = dialog.layout()
         if layout is None or not dialog.isVisible():
             return
@@ -758,41 +768,88 @@ class ContentHeight:
         # aufgeklappte Inhalt, und die Einstellungen gaben ihre Höhe nicht zurück.
         QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
         floor = self.floor(dialog)
-        if intent == "passive" and (self.user is not None or not self._initialized):
+        if intent in ("passive", "font") and (self.user is not None or not self._initialized):
             return
         if (
             (intent == "initial" and natural_size is None)
             or (intent == "passive" and natural_width > 0)
         ) and self.user is None:
             self._widen_before_measuring(dialog, grow_width=grow_width, natural_width=natural_width)
-        scroll.updateGeometry()
-        layout.invalidate()
-        layout.activate()
-        if intent == "passive":
-            # Gewachsen wird um das, was im Rollbereich verdeckt läge — nicht
-            # auf einen Größenwunsch, der auch ohne verdeckten Inhalt größer sein
-            # kann (ein Umbruch, gemessen an einer anderen Breite).
-            wanted = QSize(dialog.width(), dialog.height() + _hidden_height(scroll))
-        else:
-            wanted = natural_size if natural_size is not None else dialog.sizeHint()
-        target = _content_size_for_intent(
-            dialog.size(),
-            wanted,
-            intent,
-            grow_width=grow_width,
-            natural_width=natural_width,
-            height_floor=floor,
-            available_height=(
-                self._available_height_at_anchor(dialog)
-                if self._keeps_anchor(intent)
-                else self._available_height_on_screen(dialog)
-                if intent == "passive"
-                else None
-            ),
-        )
-        if target is None:
-            return
-        self.settle(dialog, target.width(), target.height(), intent=intent)
+        # **Gemessen und gelegt ohne vorläufigen Rollbalken** (R1, FD-198): Nach
+        # dem Aufklappen steht der senkrechte Balken einen Umlauf lang. In seiner
+        # Enge bricht ein Satz eine Zeile mehr um, und Qt behält ihn auch in der
+        # gewachsenen Höhe, weil es in der alten Ausschnittbreite nachrechnet —
+        # über den Knöpfen blieb die Zeile leer. Braucht der Inhalt den Balken
+        # wirklich, kommt er beim Zurückstellen wieder; ein dauernder bleibt.
+        # **Nie passiv:** Ein Satz, der seine Höhe selbst pinnt, meldet nach
+        # jedem Ein- und Ausschalten eine andere Höhe, die passive Messung käme
+        # wieder, und *Modell erzeugen* schaltete mit einem langen Status ohne
+        # Ende hin und her.
+        bar = scroll.verticalScrollBarPolicy()
+        provisional = bar == Qt.ScrollBarPolicy.ScrollBarAsNeeded and intent != "passive"
+        if provisional:
+            scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # **Ein zweites Mal, wenn das Legen den Wunsch verschiebt** (FD-198): Ein
+        # Satz, der seine Höhe in der neuen Breite selbst neu pinnt, braucht
+        # danach eine Zeile weniger; passiv gäbe der Dialog sie nie zurück. Er
+        # bekommt die Breite erst mit den Layout-Anfragen, die das Legen stellt.
+        for attempt in range(2):
+            if attempt:
+                for _ in range(_LAYOUT_LEVELS):
+                    QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
+            scroll.updateGeometry()
+            layout.invalidate()
+            layout.activate()
+            if intent == "passive":
+                # Gewachsen wird um das, was im Rollbereich verdeckt läge — nicht
+                # auf einen Größenwunsch, der auch ohne verdeckten Inhalt größer sein
+                # kann (ein Umbruch, gemessen an einer anderen Breite).
+                wanted = QSize(dialog.width(), dialog.height() + _hidden_height(scroll))
+            else:
+                wanted = natural_size if natural_size is not None else dialog.sizeHint()
+            target = _content_size_for_intent(
+                dialog.size(),
+                wanted,
+                intent,
+                grow_width=grow_width,
+                natural_width=natural_width,
+                height_floor=floor,
+                available_height=(
+                    self._available_height_at_anchor(dialog)
+                    if self._keeps_anchor(intent)
+                    else self._available_height_on_screen(dialog)
+                    if intent == "passive"
+                    else None
+                ),
+            )
+            if target is None or (attempt and target == dialog.size()):
+                break
+            self.settle(dialog, target.width(), target.height(), intent=intent)
+            content = scroll.widget()
+            measured = content.layout() if content is not None else None
+            if intent != "passive" and self.user is None and measured is not None:
+                assert content is not None
+                # **Quer rollt nur, wofür der Bildschirm keine Breite hat**
+                # (FD-199): Reicht die Höhe am Bildschirmrand nicht, kommt der
+                # senkrechte Balken und nimmt dem Inhalt seine Breite; ein
+                # Dialog, der seine Breite nie misst, rollte schon beim Öffnen.
+                viewport = scroll.viewport()
+                need = measured.totalHeightForWidth(viewport.width())
+                if need < 0:
+                    need = content.sizeHint().height()
+                missing = content.minimumSizeHint().width() - viewport.width()
+                # Ein dauernder Balken steckt schon im Ausschnitt; einer, den der
+                # Aufrufer für seine Messung ausgeschaltet hat, kommt wieder.
+                if bar != Qt.ScrollBarPolicy.ScrollBarAlwaysOn and need > viewport.height():
+                    missing += scroll.verticalScrollBar().sizeHint().width()
+                if missing > 0:
+                    self._widen_before_measuring(
+                        dialog, grow_width=False, natural_width=dialog.width() + missing
+                    )
+                    continue
+            if intent == "passive" or natural_size is not None:
+                break
+        scroll.setVerticalScrollBarPolicy(bar)
 
 
 def select_data(box: QComboBox, identifier: str) -> None:
@@ -1522,15 +1579,14 @@ QPushButton[targetSize="large"] {{
     min-height: {TARGET_SIZE - 2 * TIGHT - 2}px;
 }}
 QPushButton:hover {{ background: {hover}; }}
-/* Das Info-Zeichen neben einer Überschrift: ein Kreis mit „i" darin, dessen
-   Tooltip den Absatz trägt, der vorher unter der Zeile stand. Die Erklärung
-   verschwindet damit nicht, sie belegt nur keine drei Zeilen mehr, solange
-   niemand sie liest (Robert, 10.09.2026: „die beschreibungen die über den
-   buttons zum übernehmen dastehen auch in einen tooltipp"). Der Buchstabe ist
-   die zweite Kodierung neben der Form — Regel 18 gilt auch für ein Zeichen,
-   das nur eine Erklärung ankündigt. */
+/* Das Info-Zeichen neben einer Überschrift: das Symbol eines Kreises mit „i"
+   darin (FD-96), dessen Tooltip den Absatz trägt, der vorher unter der Zeile
+   stand. Die Erklärung verschwindet damit nicht, sie belegt nur keine drei
+   Zeilen mehr, solange niemand sie liest (Robert, 10.09.2026). Den Kreis
+   zeichnet das Symbol selbst; der Rahmen bleibt durchsichtig, damit Hover
+   und Fokus die Breite nicht ändern. */
 QToolButton#infoDot {{
-    border: 1px solid {line};
+    border: 1px solid transparent;
     border-radius: 9px;
     min-width: 18px;
     max-width: 18px;
@@ -2148,7 +2204,12 @@ QProgressBar::chunk:disabled {{ background: {disabled}; }}
 
 def apply_style(application: QApplication, theme: Theme) -> None:
     """Legt das Stylesheet über die Anwendung. Wirkt sofort und überall."""
+    # Ein Zuhörer folgt danach jedem Schriftwechsel (FD-194) und hebt die
+    # Knöpfe auf ihre Beschriftung (FD-185) — ``style_follow``.
+    style_follow.install()
     font = application.font()
-    application.setStyleSheet(
-        stylesheet(theme, max(font.pointSize(), 1), arrow_files(theme), check_files(theme))
-    )
+    sheet = stylesheet(theme, max(font.pointSize(), 1), arrow_files(theme), check_files(theme))
+    # Derselbe Text noch einmal hieße, jedes Widget neu zu polieren — für nichts.
+    if sheet != application.styleSheet():
+        application.setStyleSheet(sheet)
+    style_follow.remember(application)

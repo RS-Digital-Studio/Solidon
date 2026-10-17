@@ -99,6 +99,9 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 | Ort / Frage | Vertrag |
 |---|---|
 | `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export samt `_warm_the_slicer`, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
+| `action_notice.py` | `ActionNotice`, die Quittung über der Ansicht, und `free_spot`, ihre Stelle ohne Fenster gerechnet; Regel im Absatz zu `announce` unten (FD-108, FD-162) |
+| `status_line.py` | `StatusLine`, die Meldung der Statusleiste: `text()` bleibt der ganze Satz, gezeichnet wird gekürzt, gekürzt steht er in der Kurzhilfe. Sie gibt als Erste nach; die Zahlenzeile (`facts.PrintFacts`) ist nie schmaler als ihre zwei Zeilen (FD-90) |
+| `waiting_click.py` | Ein Neuaufbau ohne Eingabe hält die Freigabe, an der ein Klick wartet (`kept_through_rebuild`, `waiting_approval`) |
 
 *Früher unter „Die Karte › Rahmen und Einstieg“, HEAD-Fassung.*
 
@@ -122,12 +125,23 @@ einen zweiten Bericht über den Prozessschutz auszulösen.
 *Früher unter „Kopf der Karte“.*
 
 `MainWindow.announce` gibt dieselbe Rückmeldung zusätzlich als passive,
-umgebrochene Quittung am Maus- beziehungsweise Tastaturort aus. `_ActionNotice`
-verwendet die vorhandene `SketchSelectionBadge`-Darstellung im bestehenden
-Overlay. Fortschritt besitzt ihren Text und Zeitgeber nicht; neue Meldungen
-ersetzen die alte. Projektwechsel, ausgeblendeter Arbeitsbereich und
-Fensterabbau räumen Quittung und Zeitgeber gemeinsam ab. Die Statuszeile
-bleibt erhalten, ein zweites Live-Ereignis wird nicht erzeugt.
+umgebrochene Quittung nahe dem Maus- beziehungsweise Tastaturort aus.
+`action_notice.ActionNotice` verwendet die vorhandene
+`SketchSelectionBadge`-Darstellung im bestehenden Overlay. Fortschritt besitzt
+ihren Text und Zeitgeber nicht; neue Meldungen ersetzen die alte.
+Projektwechsel, ausgeblendeter Arbeitsbereich und Fensterabbau räumen Quittung
+und Zeitgeber gemeinsam ab. Die Statuszeile bleibt erhalten, ein zweites
+Live-Ereignis wird nicht erzeugt.
+**Nie über einer Karte** (FD-108, FD-162): Hindernis ist jedes frei gesetzte
+Kind der Fläche und der Seiten der Ansicht, die ein Layout trägt — Zonen,
+Maßkarte, Leisten —, nicht die Zeichenfläche und kein Schleier über allem.
+`free_spot` nimmt die freie Stelle nächst dem Ort der Handlung, nie über ihm;
+ohne Platz steht der Satz nur in der Statuszeile. Solange die Quittung gilt,
+hört sie über `app_events.listen` auf Zeigen, Verbergen, Wandern und Größe der
+schwebenden Kinder und rückt nach. **Weg mit dem nächsten Schritt:**
+`remember` merkt die Transaktionsfolge beim Sagen; ein späterer Schritt ohne
+eigene Quittung räumt Statuszeile und Blase ab (`outlived_by`). Gesagt in
+derselben Runde der Ereignisschleife wie der Schritt, gehört sie zu ihm.
 **Ein Hinweis ist keine Quittung:** `announce(text, receipt=False)` schreibt
 nur die Statuszeile, solange der Hinweis gilt, und ein leerer Hinweis stellt
 die letzte Quittung wieder her — so laufen die Griffsätze der Ansicht
@@ -210,6 +224,16 @@ für neue Projekte sind ein eigener Weg in den Einstellungen.
 
 `session.py` (§7, §15.6) · `leash.py` (die Halteleine für Arbeiter-Threads — und für Ereignisfilter,
 die ihr überwachtes Objekt überleben: `stop_watching_the_dying`)
+
+*Aus `app/ui/CLAUDE.md` beim Merge von welle5 (16.10.2026), wegen der Ladelast.*
+
+`session.py` kennt außerdem die Einfügemarke, `one_step` (mehrere `apply` als
+eine Transaktion), `evaluation_profile` (Profil der Auswertung samt
+Stützschwelle, `druckrat.md`) und `evaluation_follows` (spät gelesene
+Grundlage wertet neu aus). `leash.py` führt dazu `wait_for_all`,
+`collect_in_main_thread` mit GC-Zähler und Zustandswahrung,
+`configure_gil_switching` mit dem 1-ms-Takt in `Worker.run` und `RightOfWay`,
+den Vortritt fürs Bild.
 
 *Früher unter „Kopf der Karte“.*
 
@@ -1414,6 +1438,30 @@ ungebrochene Titel steht als `operationTitle` am Knopf, weil `text()` sich
   lokale Zahlenanzeige wie im Maßfeld. Unsichere Zuordnung wird erklärt, nicht
   als unbeantwortbare Frage formuliert.
 
+*F4 „Karten“ (FD-19, 93, 125, 136, 139):* `scroll_areas.py` trägt die zwei
+Rollbereiche — `PassingScrollArea` für Behälter (NoFocus, Tab geht in den
+Inhalt, Qt rollt das fokussierte Kind ins Bild) und `ReadingScrollArea` für
+Lesetext (Halt mit Name und Beschreibung, Pfeil- und Bildtasten).
+`DialogScrollArea`, `FittedScroller`, `ContentScroller` und `ColumnScroller`
+leiten von der ersten ab. `feature_footer.py` hängt die Knopfzeile des
+Merkmalfensters unter die scharfe Handlung und holt sie über `keep_in_sight`
+ins Sichtfeld des Rollbereichs, mit möglichst wenig Rollweg auch, während die
+Karte noch wächst (`_Follower`); ihr eigener Titel entfällt dort. `report_rows.WrappedRowDelegate` misst Befundzeilen eine
+Zeichenbreite schmaler, als sie gezeichnet werden — bei gebrochener
+Skalierung brauchte eine knapp passende Zeile sonst beim Zeichnen eine zweite
+und wurde gekürzt. `parameter_length.py` gibt der Parameterleiste Längenfelder
+in der Anzeigeeinheit (Einheit in der Auswahl daneben, kein Suffix) und die
+Helfer, über die jede Stelle der Leiste in Millimetern liest und setzt. Das
+Panel der Handlungen hat keine feste Mindesthöhe mehr; die Liste wächst nicht
+über ihren Wunsch, und „Filament und Druck“ steht unter den Hauptaktionen.
+
+*Restpaket A (FD-177):* `tab_stops.py` liest die Halte der Tabulatortaste aus
+dem Layout (`tab_stops`, vorher in `measure_card.py`; ein Lesebereich ist selbst
+ein Halt) und legt sie mit `chain_after` hinter einen Einstieg. Die Reiterleiste
+der rechten Karte (`SignalTabBar.focusNextPrevChild`) tut das für die vordere
+Seite, bevor Tab sie verlässt: Bericht und Auswahl entstehen vor der Leiste, ihre
+Felder später oder an anderer Stelle, und Qt reihte sie nach der Entstehung ein.
+
 ### Dialoge
 
 `FeatureSetField` verwendet `feature_list.FeatureList`. Die Liste nimmt für
@@ -1458,8 +1506,19 @@ steht in `fenster.md`; der Quellenwächter ist `test_dialog_lifetime.py`.
 
 | Datei | Besonderheit |
 |---|---|
-| `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen. `block_apply(reason)` sperrt *Übernehmen* von außen mit Grund — für das Band, dessen Grund eine Handlung trägt. `offer_naming=True` hängt vorn den Haken *Maße als Parameter anlegen* an, `names_dimensions()` liest ihn; die Parameter legt das Fenster an (`_named_dimensions`, §13). Die Stückzahl (`produces_from`) ist ein `CountField`: fx wie jedes Zahlenfeld, zur ganzen Zahl aufgelöst, bevor sie den Stapel erreicht (die Kennungen vergibt er vorher). `aim_again` führt nach Escape aus der Platzierung zurück in Stufe 1 (RM-205). Die Lesezeile *Stelle* bauen `place_fields` und `place_text` |
+| `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen. `block_apply(reason)` sperrt *Übernehmen* von außen mit Grund — für das Band, dessen Grund eine Handlung trägt. `offer_naming=True` hängt vorn den Haken *Maße als Parameter anlegen* an, `names_dimensions()` liest ihn; die Parameter legt das Fenster an (`_named_dimensions`, §13). Die Stückzahl (`produces_from`) ist ein `CountField`: fx wie jedes Zahlenfeld, zur ganzen Zahl aufgelöst, bevor sie den Stapel erreicht (die Kennungen vergibt er vorher). `aim_again` führt nach Escape aus der Platzierung zurück in Stufe 1 (RM-205). Die Lesezeile *Stelle* bauen `place_fields` und `place_text`. Im Änderungsweg (`changing=True`, `MainWindow.edit_operation`) heißt der Hauptknopf *Übernehmen* und wartet auf die erste Änderung (`first_change`, FD-99). Vor Anfangs- und Klappenmessung zieht der Dialog auf seine Breite und lässt jede Merkmalsliste ihre Höhe setzen (`FeatureList.fit_now`, FD-45) |
 | `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung über PayPal oder GoFundMe (`DonationDialog`: Satz von Robert, drei Punkte „wofür" mit Symbol, zwei gleichwertige Anbieterknöpfe ohne Akzent, die Grenze als eine `caption`-Zeile, *Ohne Geld helfen* mit Link-Kopie und `feedback_wanted` für den vorhandenen Rückmeldedialog; `AboutDialog.support_wanted` für den Verweis). Eine Adresse im Browser öffnet `open_link`: ohne Browser liegt sie danach in der Zwischenablage und steht im Satz — `QDesktopServices.openUrl` direkt ruft niemand, der den Rückgabewert nicht liest |
+| `parameter_dialog.py` | Projektmaß anlegen oder ändern (§13), aus `dialogs.py` gelöst (Codestruktur, Regel 6). Längen stehen und werden getippt in der Anzeigeeinheit (`shown_number`, `stored_number`, `number_places`, auch für `recipe_dialog`); ein unberührtes Feld gibt den gespeicherten Wert zurück. Ein abgelehnter Name steht am Namensfeld, mit einem freien Namen als Knopf (`suggested_name`) |
+| `form_fields.py` | Ein Weg für alle Formulare (FD-94, FD-11): `name_rows` gibt jedem Eingabefeld den Text seiner Beschriftung als Namen und hängt die Beschriftung an das erste Eingabefeld (`setBuddy` allein hängt nur das Tastenkürzel an); `explain`/`explain_row` setzen den Satz an Feld, Beschriftung und Innenfelder. `unnamed_inputs` und `repeated_names` sind die Wächter, mit denselben Arten wie `function_capture._input_widgets` |
+| `feature_set_field.py` | `FeatureSetField`, aus `op_dialog.py` gelöst (Regel 6): benannte Flächen wählen. Eine Pflichtliste hat keinen Haken für die leere Wahl, auch keinen verborgenen, und die Liste heißt wie ihre Zeile (FD-94) |
+| `first_focus.py` | `select_on_first_focus`: Ein vorgegebener Text (der Name beim Umbenennen) ist beim ersten Fokus markiert; ein Mausklick setzt den Cursor, wohin geklickt wurde (FD-114) |
+| `required_inputs.py` | `missing_input`: welche Pflichtangabe fehlt — Bild, Datei oder Text — als Satz für den Knopf; `OperationDialog.source_missing` fragt hier, und ohne sie rechnet keine Vorschau (FD-134, RM-775) |
+| `grouped_spin.py` | Ganzzahlfelder in Dreiergruppen wie `count_text`; lesen Leerzeichen zwischen Ziffern und Punkt oder Komma vor genau drei Ziffern als Gruppentrennung (FD-124). `GroupedSpin` lehnt jenseits der Grenzen ab, `GroupedNumberSpin` klemmt, `GroupedIntSpin` ist ein `QSpinBox` mit `int`-Wert. Kennungen ohne Gruppen: `IdentifierSpin` (Schema `identifier=True`), `IdentifierIntSpin` (Startwert, Port). Jedes Ganzzahlfeld der Oberfläche entsteht hier (FD-184, Wächter `test_grouped_count_fields.py`) |
+| `wrapped_caption.py` | `keep_whole_lines`: Eine umgebrochene Beschriftung mit fester Breite bekommt die Höhe ihres Textes als Untergrenze, neu gezählt nach Schrift-, Stil- und Breitenwechsel; `dialogs.align_to_the_front` ruft es für jede Rückseitenbeschriftung (FD-183) |
+| `unlisted_choice.py` | `unlisted_text`: wie ein Wert heißt, den die Liste eines Feldes nicht führt — Merkmal nach Art und Nummer, Objekt, Datei, Bild, Kante aus ihrem Schlüssel nach Lage und Ort; `edge_lie_word` und `edge_place` teilt `labels.edge_label` (FD-187, FD-189) |
+| `fine_length_spin.py` | `FineLengthSpin`: Längenfeld mit einer Stelle mehr als die Einheit sonst zeigt, für die Feinmaße in *Material kalibrieren* (FD-176); `finer` ist die eine Quelle für „wie viel feiner“, auch für feine Felder im Operationsdialog (R6) |
+| `refusal_details.py` | Was eine Absage zeigt: `where_lines` (Stelle in der Anzeigeeinheit, Körpername, Schritt mit Titel) für *Einzelheiten*; `StepValuesDialog` mit Feldnamen, Werten in der Anzeigeeinheit und Höhe aus dem Inhalt; `field_ways`/`silent_ways`: *Eingabe korrigieren* und *Eine andere Ebene wählen* im offenen Eingabedialog als Sprung ins Feld aus `values["field"]`, nur wo `focus_field(…, check_only=True)` es erreicht; sonst fällt *Eingabe korrigieren* weg, und jeder andere Weg steht als Rat (FD-182) |
+| `wrapping_button.py` | `WrappingButton`: Knopf, dessen Beschriftung an Wortgrenzen umbricht, statt sein Fenster zu verbreitern; Mindestbreite ist das längste Wort, `text()` bleibt ganz. Die Handlungen im Hinweis einer Absage (`dialogs.ErrorNotice`) (FD-182) |
 | `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29). An einem Resin-Drucker zeigt er nur, was gilt (`_reduce_for_resin`, `_fit_to_technology` nach einem Druckerwechsel): Drucker, Material, Platten, Programm und *Im Slicer öffnen* als Hauptknopf — Stufe, Wände, Füllung, Vorschläge, Düse, Slicen und Druckdatei sind verborgen, `settings_for_export` gibt keine Werte mit. Ein Programm ohne Familie (`other`) sperrt Slicen mit Grund und lässt Öffnen frei. Den Drucker, auf den Cura eingestellt ist, bietet er nur für eine aktive Maschine an und übernimmt ihn erst nach Klick. Seine Fehlerhandlungen öffnen die Druckerwahl. Vor *Slicen* und *Im Slicer öffnen* fragt `dialogs.confirm_handover`, wenn der Prüfbericht Fehler der gewählten Platten trägt (`_may_hand_over`). Die Erhebung aus `first_run` läuft über `_PrinterSurvey`, `printers_on_offer` und `SlicerPrinters`; die Düsenvariante folgt Profilidentität, Modell und Hersteller |
 | `print_disclosure.py` | Der Hinweis davor: dass diese Werte Erfahrungswerte sind und mit einer 3MF mitreisen — und die Wahl, ob sie das sollen (§29) |
 | weitere | `settings_dialog` · `generate_dialog` (Weg 3) · `recipe_dialog` · `variants_dialog` · `comfy_dialog` · `install_dialog` · `support_dialog` · `update_dialog` · `changes_dialog` |
@@ -2178,7 +2237,9 @@ den Eintrag stünde sie an keiner der beiden Stellen.
 
 *Früher unter „Die Karte › Editor“, HEAD-Fassung.*
 
-`sketch_editor.py` (§30.1, Stufe zwei)
+`sketch_editor.py` (§30.1, Stufe zwei) · `sketch_focus.py` (wohin die
+Tastatur beim Betreten geht: ohne auflösbare Ebene in *Zeichenebene*, sonst
+in die Ansicht; aufgerufen am Ende von `MainWindow.start_sketch`, FD-190)
 
 *Früher unter „Vorschau und Auswahl“.*
 
@@ -2277,13 +2338,25 @@ den Einstellungen entfernt beide Nachweise erst beim Speichern.
 
 *Früher unter „§29 — was die Datei mitnimmt › Erscheinung“, HEAD-Fassung.*
 
-`style.py` (Stylesheet, Typografie-Skala, Abstandsraster, §19.3) · `theme.py`
+`style.py` (Stylesheet, Typografie-Skala, Abstandsraster, §19.3) ·
+`button_floor.py` (wie hoch ein Knopf mindestens sein muss: seine
+Beschriftung; die `min-height` des Stylesheets wird sonst zur ausdrücklichen
+Mindesthöhe von 26 Punkten, und ein enges Layout staucht die Schrift, FD-185) ·
+`style_follow.py` (der eine Zuhörer dazu: setzt bei `ApplicationFontChange`
+den Stil neu, nur über Solidons eigenem Stylesheet, und hebt Knöpfe nach
+Polieren, Stil- und Schriftwechsel, FD-194; ein `style.WrappedNote` misst nach
+einem Schriftwechsel neu, M1) · `toolbar_follow.py` (die
+Hauptleiste wählt Wörter oder Zeichen nach einem Schriftwechsel neu, L1) ·
+`theme.py`
 (hell und dunkel) · `window_chrome.py` (die Titelleiste trägt die Farben der
 Anwendung — Windows malt sie weiter, es bekommt nur gesagt, in welcher Farbe;
 ein Wächter am Ereignisstrom, damit kein Dialog vergessen wird) ·
 `palette.py` (**Farbe trägt nie allein Bedeutung**,
 §19.1) · `icons.py` · `motion.py` (Bewegung an einer Stelle, nicht an
-zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen; dazu
+zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen —
+`slicer_title`, `feature_measure`, `cavity_name`, `group_summary`,
+`body_requirement`, `DateField`, `choice_label` mit Wert/Einheit aus
+`core/registry/surfaces.py`, `fill_parameter_units` mit der Anzeigeeinheit; dazu
 `wheel_needs_focus`, damit das Rad ein Feld erst mit Fokus dreht — Regel in
 `oberflaeche.md`)
 
@@ -2309,8 +2382,13 @@ Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.
 ### Hilfe und Bedienung
 
 `guide_targets` teilt `widget_under`, `zone_of`, `search_hits`,
-`menubar_entries`, `point_for` und `next_click` zwischen Tour, Bildanleitungen
-und Prüfstand. `area_for` deckt die Zielfläche einschließlich verschachtelter
+`menubar_entries`, `point_for`, `next_click` und `unclipped` (der sichtbare,
+von keinem Elternteil abgeschnittene Teil eines Widgets; `function_walk._shown`
+misst damit Rollflächen) zwischen Tour, Bildanleitungen und Prüfstand. Den
+Wrapper des zuletzt geholten modalen Dialogs und des zuletzt getroffenen
+Fensters hält es (`_HELD`, `_PROBED`), damit die Wrapper ihrer Kinder nicht
+verfallen; `release_held` gibt beide frei, am Ende jeder Fläche und jedes
+Falls des Prüfstands. `area_for` deckt die Zielfläche einschließlich verschachtelter
 Rollbereiche auf; `next_click` geht den tatsächlichen Kundenweg ohne solches
 Aufdecken. Es rollt mit Radereignissen am tatsächlichen Rollbereich, bis ein
 Feld, das hineinpasst, mit beiden Kanten frei steht; ein kurzer Restschritt
@@ -2326,7 +2404,7 @@ Die ausführlichen Zuordnungen der kompakten Karte:
 
 | Ort / Frage | Vertrag |
 |---|---|
-| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError` |
+| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError`. Was die Größengrenze nicht mehr fasst, steht in `guide_wheel.py` (`takes_wheel`: nimmt ein Rollbereich das Rad selbst, oder reicht er es am Anschlag weiter) und `guide_finders.py` (Finder fester Namen wie `parameters.first.label`, `parameters.bind`; die Kennzeichen `MARKED`/`MARKED_KINDS`; Orte, die ihren Weg selbst kennen, über `place_click`: `filament.spool`, `filaments.first`, `sketch.new_plane`, `sketch.point:N`, `sketch.at:X_Y`, `sketch.constraint:<art>`; `active_sketch_panel` für Skizzeneditor und Zeichenmodus) |
 
 Die ausführlichen Zuordnungen der kompakten Karte:
 
@@ -2427,6 +2505,13 @@ leere Vorschau — ihr Befund ist die Auskunft, kein Grund
 endgültigen Platzierungswerten geprüft. Ein früher Klick wartet auf das Bild
 seiner eigenen Freigabe — nie auf ein älteres: eine geänderte Zahl, ein
 geändertes Dokument oder ein Projektwechsel entwerten die Freigabe samt Klick.
+Ein Neuaufbau ohne Eingabe des Kunden entwertet sie nicht: Während
+`waiting_click.kept_through_rebuild` (Merkmalswahl, Bohrung mit Senkung,
+Antwort des Merkmalsarbeiters) und bei `_set_preview_order(..., rebuilt=True)`
+(Maßgruppe vor ihrem ersten Zug) bleibt eine noch gültige Freigabe mit
+wartendem Klick stehen — samt laufender Vorschau —, und Maßgruppe und
+Merkmalfenster zeigen danach seine Werte. Ein anderer Wert verwirft ihn mit
+Satz. Begründung in `regel-wartezeit.md`.
 Identische Platzierungswerte lösen keine erneute Änderung aus. Die Revision
 und der geprüfte Auftrag gehören dem Hauptfenster, die Träger halten keine
 zweite Vorschauverwaltung. Auch Chat-Übernehmen und die Rückkehr zu einem
@@ -2495,6 +2580,16 @@ dazu Tippmerker zurück. Was der Empfänger hineingehängt hatte (der Haken
 zurückgegebene Gruppe mit einer frisch gebauten Zustand für Zustand
 (`test_feature_panel.py`, `_measure_group_state`). Nach `_lay_out_now` gemäß
 `ansicht.md` bündelt `PlacementFlow.flush_frame` die fertigen Maßbilder.
+
+*Früher in der Karte unter „Panel und Bild“: der Ort der Maßkarte.*
+
+Freie Orte beziehen sich auf den Abgaberaum; Randorte bleiben angedockt.
+Raumgrenzen, Klappen und Werte ändern den Wunschort nicht. Neue Aufträge
+oder andere Gruppen setzen ihn zurück; Parken trennt `positionChanged`
+über `_links`. Die Karte bleibt Hindernis für andere Maßfelder. Ohne
+Wunschort wählt der Fluss den Platz; wächst die Karte, behält sie ihn und
+rückt nur um das Nötige (`measure_field_places.grown_place`, FD-87), gleitend
+über `motion.glide`.
 
 ## Stolperfallen
 
@@ -2617,11 +2712,13 @@ sichtbar lassen.
 
 *Früher unter „Die Karte › Ansicht“.*
 
-**Die Knopfzeile wohnt beim Träger, nicht im Rollinhalt** (`FeaturePanel.footer`,
-13.09.2026). `MainWindow._build_feature_dock` hängt sie unter den Rollbereich;
-wer das Panel allein baut, findet sie unten in seinem Layout. Wegen dieses
-Umzugs beantwortet `isVisibleTo(panel)` an ihren Knöpfen nicht mehr, was sie
-soll — gefragt wird `isHidden()` (`_apply_stands`).
+**Die Knopfzeile steht unter der offenen Handlung, im Rollinhalt** (FD-136).
+Unter dem Rollbereich (13.09.2026) stand sie am Kartenende, das Feld ganz
+oben; jetzt hängt `feature_footer.place_below` sie unter die scharfe Handlung,
+und `keep_in_sight` holt sie nach jedem Wechsel ins Sichtfeld. Ob ihre Knöpfe
+gerade stehen, fragt `isHidden()` (`_apply_stands`), nicht `isVisibleTo`: Das
+hängt an der Elternkette und sagt an einem offscreen nie gezeigten Fenster
+„nein“.
 
 *Früher unter „§29 — was die Datei mitnimmt › Hilfe und Bedienung“.*
 

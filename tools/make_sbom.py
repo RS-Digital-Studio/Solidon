@@ -37,7 +37,8 @@ from packaging.markers import default_environment
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
-from app.branding import APP_NAME, APP_VERSION, DISTRIBUTION_NAME
+from app import branding
+from app.branding import APP_NAME, DISTRIBUTION_NAME
 from app.core.knowledge import licences
 
 ROOT: Final = Path(__file__).resolve().parent.parent
@@ -727,7 +728,7 @@ def artifact_files(
         owner: str
         if package_root.casefold() == "app":
             owner = str(canonicalize_name(DISTRIBUTION_NAME))
-            version = APP_VERSION
+            version = branding.APP_VERSION
         elif distributions:
             owner = str(canonicalize_name(min(distributions, key=str.casefold)))
             try:
@@ -1243,7 +1244,7 @@ def build_bom(
     distribution: DistributionLookup = metadata.distribution,
     extras: Iterable[str] = RUNTIME_EXTRAS,
     environment: Mapping[str, str] | None = None,
-    version: str = APP_VERSION,
+    version: str = branding.APP_VERSION,
     platform: str | None = None,
     included_distributions: Iterable[str] | None = None,
     customer_artifact: Path | None = None,

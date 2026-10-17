@@ -20,7 +20,7 @@ from typing import Final, Literal, cast
 import numpy as np
 
 from app.core.brep import edit, from_mesh, profiles
-from app.core.brep.features import features_of
+from app.core.brep import features as brep_features
 from app.core.brep.kernel import Solid, require
 from app.core.errors import (
     CANCEL,
@@ -32,6 +32,7 @@ from app.core.errors import (
     NotManifoldError,
     ValidationError,
 )
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     NOTHING_LEFT_DETAIL,
@@ -39,7 +40,7 @@ from app.core.geom.boolean import (
     without_effect,
 )
 from app.core.geom.hollow import below_printable_wall, hollowed, too_thin
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData
 from app.core.geom.ops import as_transform
 from app.core.geom.prepare import (
     bore_diameter,
@@ -771,7 +772,7 @@ def thread_exact(ctx: OpContext) -> OpResult:
         name=params.name or str(_("Gewindebolzen")),
         mesh=solid,
         kind="brep",
-        features=features_of(solid, cancelled=ctx.cancelled, known_threads=(thread,)),
+        features=brep_features.features_of(solid, cancelled=ctx.cancelled, known_threads=(thread,)),
     )
     return OpResult(outputs=[entry])
 
@@ -852,7 +853,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     # wurde *alles* abgetragen.
     # Am Zwilling gefragt, nicht am exakten Integral (Durchsicht 0.5.1,
     # BOHRUNG-10): An einer BSpline-Rundung kostet es eine halbe Minute.
-    if solid.face_count == 0 or as_mesh_data(solid).volume <= EPS_GEOM:
+    if solid.face_count == 0 or geom_mesh.as_mesh_data(solid).volume <= EPS_GEOM:
         raise GeometryError(
             title=NOTHING_LEFT_TITLE,
             detail=NOTHING_LEFT_DETAIL,
@@ -919,7 +920,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
             shape.slot_angle,
         ):
             found = over_the_edge_along(
-                body, end, normal, cut, body=as_mesh_data(body), reach=reach, along=along
+                body, end, normal, cut, body=geom_mesh.as_mesh_data(body), reach=reach, along=along
             )
             if found:
                 findings.extend(found)
@@ -931,7 +932,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
                 (params.x, params.y, params.z),
                 normal,
                 cut,
-                body=as_mesh_data(body),
+                body=geom_mesh.as_mesh_data(body),
                 reach=reach,
                 along=along,
             )
@@ -943,7 +944,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
                 (params.x, params.y, params.z),
                 cast(Axis, params.axis),
                 cut,
-                body=as_mesh_data(body),
+                body=geom_mesh.as_mesh_data(body),
                 reach=reach,
                 along=along,
             )
@@ -1196,7 +1197,7 @@ def mesh_to_exact(ctx: OpContext) -> OpResult:
         # Schritt verspricht. Das Menü bietet ihn an einem exakten Körper
         # weiter nicht an (``requires_kind``).
         return OpResult(outputs=[source], findings=[_already_exact(source)])
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     ctx.progress(0.0, str(_STAGES["regions"]))
     # Dieselbe Erkennung wie die Auswertung — ihr Merker liefert sie, wenn der
     # Körper schon untersucht ist. ``source.features`` genügt nicht: In der
@@ -1414,13 +1415,20 @@ def brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
 
 def _object(name: str, solid: Solid, *, cancelled: CancelToken) -> SceneObject:
     return SceneObject(
-        id="", name=name, mesh=solid, kind="brep", features=features_of(solid, cancelled=cancelled)
+        id="",
+        name=name,
+        mesh=solid,
+        kind="brep",
+        features=brep_features.features_of(solid, cancelled=cancelled),
     )
 
 
 def _replaced(source: SceneObject, solid: Solid, *, cancelled: CancelToken) -> SceneObject:
     return dataclasses.replace(
-        source, mesh=solid, kind="brep", features=features_of(solid, cancelled=cancelled)
+        source,
+        mesh=solid,
+        kind="brep",
+        features=brep_features.features_of(solid, cancelled=cancelled),
     )
 
 

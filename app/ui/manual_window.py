@@ -68,7 +68,7 @@ from app.branding import APP_NAME, WEBSITE_URL
 from app.core import drawing, figures, manual, manual_search, markup
 from app.core.log import get_logger
 from app.i18n import get_language, tr
-from app.ui.dialogs import open_link
+from app.ui import dialogs
 from app.ui.icons import OVERSAMPLING
 from app.ui.style import SPACE
 
@@ -420,7 +420,7 @@ class ManualWindow(QMainWindow):
         if address.scheme() == "https" and address.host() == QUrl(WEBSITE_URL).host():
             # Über ``open_link``: Ohne Browser liegt die Adresse danach in der
             # Zwischenablage, statt dass der Klick wortlos verpufft.
-            open_link(address.toString(), self)
+            dialogs.open_link(address.toString(), self)
 
     # --- Inhalt ---------------------------------------------------------------
 

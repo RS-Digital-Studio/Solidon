@@ -57,26 +57,28 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListView,
     QPushButton,
-    QSpinBox,
     QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from app import i18n
 from app.branding import APP_NAME
 from app.core import activation, discover, tools
 from app.core.activation import TRIAL_DAYS
 from app.core.backends import llm
 from app.core.errors import CANCEL, CHOOSE_SLICER, AppError, UserError
-from app.core.export import slicer_profiles
-from app.core.export.handover import detect
+from app.core.export import handover, slicer_profiles
 from app.core.knowledge import print_settings, profiles
 from app.core.log import get_logger
 from app.core.types import PrinterProfile, PrintTechnology
-from app.core.units import SMALLEST_NOZZLE
-from app.i18n import _, format_decimal, language_name, set_language, tr
-from app.i18n.catalog import available_languages, install_language
-from app.ui.dialogs import show_error
+from app.core.units import LARGEST_NOZZLE, SMALLEST_NOZZLE
+from app.i18n import _, catalog, format_decimal, language_name, tr
+from app.i18n.catalog import available_languages
+from app.ui import dialogs
+from app.ui import settings as ui_settings
+from app.ui.grouped_spin import GroupedIntSpin
 from app.ui.icons import icon
 from app.ui.labels import (
     NumberSpin,
@@ -86,8 +88,13 @@ from app.ui.labels import (
     slicer_title,
     wheel_needs_focus,
 )
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying
-from app.ui.settings import UiSettings
+from app.ui.leash import (
+    WAIT_TIMEOUT_MS,
+    Worker,
+    WorkerLeash,
+    stop_watching_the_dying,
+    weak_slot,
+)
 from app.ui.style import (
     NORMAL,
     SPACE,
@@ -207,7 +214,7 @@ class _PrinterSurvey(Worker):
         self.executable = executable
 
     def work(self) -> None:
-        flavour = detect(self.executable).flavour
+        flavour = handover.detect(self.executable).flavour
         found = slicer_profiles.discover_printers(self.executable, flavour)
         known = {profile.id: profile for profile in found}
         identifiers = slicer_printer_ids(self.executable, found)
@@ -309,7 +316,7 @@ class FirstRunDialog(QDialog):
 
     def __init__(
         self,
-        settings: UiSettings,
+        settings: ui_settings.UiSettings,
         parent: QWidget | None = None,
         *,
         discovered_printers: Mapping[str, PrinterProfile] | None = None,
@@ -481,7 +488,7 @@ class FirstRunDialog(QDialog):
         dimensions.addStretch(1)
         custom_form.addRow(tr("Bauraum B × T × H"), volume)
         self.printer_nozzle = NumberSpin(self.custom_printer)
-        self.printer_nozzle.setRange(SMALLEST_NOZZLE, 10)
+        self.printer_nozzle.setRange(SMALLEST_NOZZLE, LARGEST_NOZZLE)
         self.printer_nozzle.setDecimals(2)
         self.printer_nozzle.setSingleStep(0.1)
         self.printer_nozzle.setSuffix(" " + tr("mm"))
@@ -490,7 +497,7 @@ class FirstRunDialog(QDialog):
         # Wie viele davon: Eine Düse mit Wechselstation spült bei jedem
         # Filamentwechsel, und danach richtet sich, ob Filamente auf eigene
         # Platten kommen. Der Druckdialog führt dasselbe Feld.
-        self.printer_nozzles = QSpinBox(self.custom_printer)
+        self.printer_nozzles = GroupedIntSpin(self.custom_printer)
         self.printer_nozzles.setRange(1, 8)
         self.printer_nozzles.setValue(template.nozzles)
         self.printer_nozzles.setToolTip(
@@ -705,6 +712,16 @@ class FirstRunDialog(QDialog):
         self._scroll = DialogScrollArea(self)
         self._scroll.setWidget(self._contents)
         self._scroll.contentSizeChanged.connect(self._grow_soon)
+        # Zugeklappt gibt der Dialog die Höhe zurück (FD-198).
+        flap = self.extras_section.findChild(QToolButton, "sectionHeading")
+        if flap is not None:
+            flap.toggled.connect(weak_slot(self, FirstRunDialog._grow_soon, "explicit"))
+        # Ein Schriftwechsel misst über die eigenen Schritte von
+        # ``_grow_to_content`` (``style_follow.refit_dialogs``); direkt gemessen
+        # blieben nach 9 → 14 → 9 pt 12 Punkte leer (L5).
+        self.queue_refit: Callable[..., None] = weak_slot(
+            self, FirstRunDialog._grow_soon, forward=True
+        )
         for editor in self._contents.findChildren(QComboBox):
             wheel_needs_focus(editor)
         for spin in (*self._contents.findChildren(NumberSpin), self.printer_nozzles):
@@ -840,8 +857,8 @@ class FirstRunDialog(QDialog):
         align_forms(self)
         self._grow_initial_soon()
 
-    def _grow_soon(self) -> None:
-        QTimer.singleShot(0, self, self._grow_to_content)
+    def _grow_soon(self, intent: ContentFitIntent = "passive") -> None:
+        QTimer.singleShot(0, self, weak_slot(self, FirstRunDialog._grow_to_content, intent))
 
     def _grow_initial_soon(self) -> None:
         QTimer.singleShot(0, self, self._grow_initial_content)
@@ -981,8 +998,8 @@ class FirstRunDialog(QDialog):
             return
         if not self._carry_over(self.settings):
             return
-        install_language(chosen)
-        set_language(chosen)
+        catalog.install_language(chosen)
+        i18n.set_language(chosen)
         application = QApplication.instance()
         if application is not None:
             from app.ui.app import install_qt_translations
@@ -992,7 +1009,7 @@ class FirstRunDialog(QDialog):
 
     # --- result -----------------------------------------------------------------
 
-    def apply_to(self, settings: UiSettings) -> UiSettings:
+    def apply_to(self, settings: ui_settings.UiSettings) -> ui_settings.UiSettings:
         """Übernimmt die Antworten und markiert die angenommene Einrichtung als beendet.
 
         Angenommen wird erst nach der Druckersuche (:meth:`accept`); läuft
@@ -1008,7 +1025,7 @@ class FirstRunDialog(QDialog):
         settings.first_run_done = True
         return settings
 
-    def _carry_over(self, settings: UiSettings) -> bool:
+    def _carry_over(self, settings: ui_settings.UiSettings) -> bool:
         """Bewahrt Antworten beim Sprachwechsel, ohne die Einrichtung abzuschließen."""
         chosen = str(self.slicer.currentData() or "")
         if chosen and not discover.same_program(chosen, discover.remembered_path("slicer")):
@@ -1454,7 +1471,7 @@ def ask_slicer_program(parent: QWidget) -> str:
 def _another_program(parent: QWidget, program: str) -> bool:
     """Sagt, dass Solidon mit diesem Programm nicht arbeitet — und ob ein anderes gewählt wird."""
     again: list[bool] = []
-    show_error(
+    dialogs.show_error(
         UserError(
             title=_("Mit diesem Programm arbeitet Solidon nicht zusammen."),
             detail=_(
@@ -2028,6 +2045,6 @@ def _chat_text() -> str:
     )
 
 
-def should_run(settings: UiSettings) -> bool:
+def should_run(settings: ui_settings.UiSettings) -> bool:
     """Nur einmal, und nur, wenn er nicht vorher übersprungen wurde."""
     return not settings.first_run_done

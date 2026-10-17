@@ -94,10 +94,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_NAME, APP_VERSION
-from app.core import figures, guides
-from app.core.bootstrap import load_operations
-from app.i18n import install_catalog, set_language, tr
+from app import branding, i18n
+from app.branding import APP_NAME
+from app.core import bootstrap, figures, guides
+from app.core.paths import isolate_secrets
+from app.i18n import install_catalog, tr
 from app.i18n.catalog import read_catalog
 from tools import make_figures as shots
 from tools import make_guide_video as film
@@ -338,36 +339,6 @@ def annotate(
     return canvas
 
 
-def _shows_the_window(image: QImage, window: Any) -> bool:
-    """Ob die Menüzeile im Bild die ist, die Qt für dieses Fenster zeichnet.
-
-    Verglichen wird an einem Raster von 20 mal 20 Punkten. Kantenglättung und ein Farbstich
-    zählen nicht; liegt aber ein anderes Fenster darüber, weicht mehr als ein
-    Fünftel der Punkte deutlich ab.
-    """
-    bar = window.menuBar()
-    if bar is None or not bar.isVisible():
-        return True
-    drawn = bar.grab().toImage().convertToFormat(QImage.Format.Format_RGB32)
-    corner = bar.mapTo(window, QPoint(0, 0))
-    shown = image.copy(QRect(corner, drawn.size())).convertToFormat(QImage.Format.Format_RGB32)
-    if shown.size() != drawn.size() or drawn.width() < 20 or drawn.height() < 4:
-        return True
-    wrong = 0
-    for column in range(20):
-        for row in range(20):
-            x = (drawn.width() - 1) * column // 19
-            y = (drawn.height() - 1) * row // 19
-            expected, found = QColor(drawn.pixel(x, y)), QColor(shown.pixel(x, y))
-            apart = (
-                abs(expected.red() - found.red())
-                + abs(expected.green() - found.green())
-                + abs(expected.blue() - found.blue())
-            )
-            wrong += apart > 90
-    return wrong <= 80
-
-
 def _small(spot: Spot) -> bool:
     return spot.point or min(spot.rect.width(), spot.rect.height()) < SMALL
 
@@ -448,6 +419,10 @@ def _badge_centre(
     gleicher Ruhe gilt die Reihenfolge unten. Eine abgesetzte Nummer hat dafür
     acht Richtungen in zwei Abständen: Mit den vier Ecken allein lag in einem
     dichten Dialog jede Stelle auf Text.
+
+    **Ihr Pfeil läuft nicht über fremden Text**, solange eine Stelle ohne das
+    bleibt, auch im Bildrand. Die Unruhe allein wog zu wenig: Am Verrunden
+    deckte der Pfeil das Wort *Radius* zu, das der Schritt nennt (17.10.2026).
     """
     reach = BADGE + 3
     middle = frame.center()
@@ -490,13 +465,16 @@ def _badge_centre(
             )
         )
 
+    def tip_of(centre: QPointF) -> QPointF:
+        return QPointF(
+            min(max(centre.x(), frame.left()), frame.right()),
+            min(max(centre.y(), frame.top()), frame.bottom()),
+        )
+
     def unrest(centre: QPointF) -> float:
         score = _busyness(picture, centre, reach)
         if away:
-            tip = QPointF(
-                min(max(centre.x(), frame.left()), frame.right()),
-                min(max(centre.y(), frame.top()), frame.bottom()),
-            )
+            tip = tip_of(centre)
             # Die unruhigste Stelle des Wegs zählt: Eine einzige Textzeile,
             # die der Pfeil kreuzt, stört, auch wenn der Rest leer ist. Kurz
             # vor der Spitze wird nicht gemessen, dort beginnt das Ziel selbst.
@@ -504,12 +482,29 @@ def _badge_centre(
             score += max(_busyness(picture, point, 5.0) for point in path)
         return score
 
+    # Fremd ist Text, der den eigenen Bereich nicht berührt: Eine Liste, in der
+    # die Kachel steht, trägt den Pfeil, die Beschriftung daneben nicht.
+    inner = frame.adjusted(PADDING, PADDING, -PADDING, -PADDING)
+    foreign = [area for area in protected or () if not area.intersects(inner)]
+
+    def crosses(centre: QPointF) -> bool:
+        # Alle vier Punkte, und mit der halben Pfeilbreite um jeden Text: Ein
+        # langer Pfeil aus dem Bildrand sprang sonst über eine schmale
+        # Überschrift oder streifte ihre Oberkante (*Objekt* beim Deckel).
+        tip = tip_of(centre)
+        box = QRectF(centre, tip).normalized().adjusted(-6, -6, 6, 6)
+        near = [area.adjusted(-5, -5, 5, 5) for area in foreign if area.intersects(box)]
+        count = max(16, int(math.hypot(tip.x() - centre.x(), tip.y() - centre.y()) / 4))
+        path = [centre + (tip - centre) * (share / count) for share in range(2, count)]
+        return away and any(area.contains(point) for point in path for area in near)
+
     usable = [rank for rank, centre in enumerate(candidates) if free(centre)]
-    if not usable:
+    clear = [rank for rank in usable if not crosses(candidates[rank])]
+    if not clear:
         # Ein dichter Dialog kann ringsum nur Text tragen. Im zusätzlichen
         # Bildrand bleibt ein sicherer Platz; eine Nummer verdeckt nie Text.
         margin = BADGE + 3
-        candidates = [
+        rim = [
             point
             for distance in range(margin, int(bounds.width()) - margin, 2 * margin + 4)
             for point in (QPointF(distance, margin), QPointF(distance, bounds.bottom() - margin))
@@ -518,15 +513,18 @@ def _badge_centre(
             for distance in range(margin, int(bounds.height()) - margin, 2 * margin + 4)
             for point in (QPointF(margin, distance), QPointF(bounds.right() - margin, distance))
         ]
-        usable = [rank for rank, centre in enumerate(candidates) if free(centre)]
+        spots = [point for point in rim if free(point) and not crosses(point)]
+        if not spots and not usable:
+            spots = [point for point in rim if free(point)]
+        if spots:
+            return min(
+                spots,
+                key=lambda point: (point.x() - middle.x()) ** 2 + (point.y() - middle.y()) ** 2,
+            )
         if not usable:
             raise ValueError("Kein freier Platz für die Schrittnummer; Bildausschnitt vergrößern.")
-        return min(
-            (candidates[rank] for rank in usable),
-            key=lambda point: (point.x() - middle.x()) ** 2 + (point.y() - middle.y()) ** 2,
-        )
     chosen = candidates[
-        min(usable, key=lambda rank: unrest(candidates[rank]) + CALM_ORDER * rank) if usable else 0
+        min(clear or usable, key=lambda rank: unrest(candidates[rank]) + CALM_ORDER * rank)
     ]
     x = min(max(chosen.x(), bounds.left() + reach), bounds.right() - reach)
     y = min(max(chosen.y(), bounds.top() + reach), bounds.bottom() - reach)
@@ -775,7 +773,7 @@ class GuideRun:
             self.settle(2)
             image = grab(self.window)
             other = shots.foreign_window_over(self.window)
-            if not other and _shows_the_window(image, self.window):
+            if not other and web.shows_the_window(image, self.window):
                 return image
             print(
                 f"  … über Schritt {number} lag beim Abgreifen etwas anderes "
@@ -1050,11 +1048,10 @@ def story_first_part(run: GuideRun) -> None:
     guide_targets.widget_for(run.window, "start.new").click()
     run.settle(30)
 
-    box = guide_targets.action_for(run.window, "operation:create_brep_box")
-    _open_menu(run, box)
+    # Rechts unter *Auswahl*, wie der Schritt sagt: Die Aufnahme holt die Seite
+    # nach vorn, und der Klick trifft den Knopf dort (RM-735).
     run.capture(2)
-    _close_menus(run)
-    box.trigger()
+    guide_targets.widget_for(run.window, "operation:create_brep_box").click()
     run.settle(40)
     dialog = run.window._op_dialog
     if dialog is None or not dialog.isVisible():
@@ -1759,7 +1756,7 @@ def _write_stamp(folder: Path, taken: list[guides.Guide]) -> None:
         stamp = json.loads(path.read_text(encoding="utf-8"))
     for guide in taken:
         stamp["guides"][guide.key] = {
-            "version": APP_VERSION,
+            "version": branding.APP_VERSION,
             "fingerprint": guides.fingerprint(guide),
         }
     path.write_text(
@@ -1840,18 +1837,20 @@ def _child(language: str, keys: list[str], target: Path, film_target: Path) -> i
             "Die Anleitungen entstehen nur isoliert, über den Elternprozess: "
             f"{user_config_dir()} ist ein echtes Profil."
         )
+    from app.ui import cursors
     from app.ui.app import install_qt_translations
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
     from app.ui.theme import apply_theme
 
-    load_operations()
+    bootstrap.load_operations()
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     apply_theme(app, "dark")
+    cursors.install(app)  # Zeiger auch für später entstehende Fenster, wie ``app.py``
     install_catalog(language, read_catalog(language))
-    set_language(language)
+    i18n.set_language(language)
     install_qt_translations(app, language)
 
     folder = target / language
@@ -1902,8 +1901,7 @@ def _take(language: str, keys: list[str], target: Path, film_target: Path) -> No
     """Eine Sprache in einem eigenen Prozess mit eigenen Nutzerverzeichnissen."""
     with tempfile.TemporaryDirectory(prefix="solidon-anleitungen-") as room:
         environment = dict(os.environ)
-        for name in ISOLATED_VARIABLES:
-            environment[name] = room
+        isolate_secrets(environment).update(dict.fromkeys(ISOLATED_VARIABLES, room))
         environment[ROOM_VARIABLE] = room
         environment.pop("QT_QPA_PLATFORM", None)
         environment.pop("QT_SCALE_FACTOR", None)

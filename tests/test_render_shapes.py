@@ -98,13 +98,6 @@ def test_a_polygon_fans_out_from_its_first_point() -> None:
     assert len(none) == 0
 
 
-def test_a_grid_covers_the_plate_in_steps() -> None:
-    points, spans = shapes.grid_lines((10.0, 5.0, 0.0), 40.0, 20.0, 10.0)
-    assert spans == [2] * ((4 + 1) + (2 + 1))
-    assert points[:, 0].min() == pytest.approx(-10.0) and points[:, 0].max() == pytest.approx(30.0)
-    assert points[:, 1].min() == pytest.approx(-5.0) and points[:, 1].max() == pytest.approx(15.0)
-
-
 def test_a_circle_lies_in_the_plane_of_its_normal_and_closes() -> None:
     circle = shapes.circle_points((1.0, 2.0, 3.0), (0.0, 1.0, 0.0), 2.5, 12)
     assert np.allclose(circle[:, 1], 2.0)

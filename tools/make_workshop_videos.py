@@ -2433,7 +2433,8 @@ class Tutorial:
     ) -> None:
         """Einen Schritt im Verlauf per Doppelklick öffnen und ihm andere Werte geben."""
         from PySide6.QtCore import Qt
-        from PySide6.QtTest import QTest
+
+        from tools.qt_clicks import double_click
 
         lf._fit(self.window, self.recorder.app)
         history = self.window.history_panel
@@ -2459,18 +2460,11 @@ class Tutorial:
             8.0,
             target=history.list.viewport().mapToGlobal(centre),
         )
-        QTest.mouseDClick(
-            history.list.viewport(),
-            Qt.MouseButton.LeftButton,
-            Qt.KeyboardModifier.NoModifier,
-            centre,
-        )
+        # Klick, Doppelklick, Loslassen wie beim Kunden (FD-142): Ohne den Klick
+        # davor meldet die Liste keinen Doppelklick, ohne das Loslassen hielt Qt
+        # die Taste für den Rest der Aufnahme gedrückt.
+        double_click(history.list.viewport(), centre)
         self.settle(15)
-        if self.window._op_dialog is None:
-            # Ein synthetischer Doppelklick erreicht die Liste nicht in jeder Lage;
-            # ``_on_activated`` ist genau der Slot, an dem der echte Doppelklick hängt.
-            history._on_activated(item)
-            self.settle(15)
         dialog = self.window._op_dialog
         if dialog is None:
             raise RuntimeError("Der Doppelklick im Verlauf hat keinen Dialog geöffnet.")
@@ -3855,23 +3849,24 @@ def main() -> int:
     folder = args.output.resolve() / args.story / LANGUAGE
     folder.mkdir(parents=True, exist_ok=True)
     profile = folder / "profile"
-    for name, child in (
-        ("APPDATA", "roaming"),
-        ("LOCALAPPDATA", "local"),
-        ("XDG_CONFIG_HOME", "config"),
-        ("XDG_CACHE_HOME", "cache"),
-    ):
-        target = profile / child
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from app.core.paths import drawing_profile_variables, isolate_secrets
+
+    # Jeder Nutzerordner eines zeichnenden Profils, je einer für sich
+    # (``HOME`` nur unter macOS); eine Quelle mit dem Prüfstand (C-1).
+    for name in drawing_profile_variables():
+        target = profile / name.lower()
         target.mkdir(parents=True, exist_ok=True)
         os.environ[name] = str(target)
     os.environ.pop("QT_QPA_PLATFORM", None)
-    if str(ROOT) not in sys.path:
-        sys.path.insert(0, str(ROOT))
+    isolate_secrets(os.environ)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     if args.inputs_only:
         print([str(path) for path in make_inputs(folder / "sources", args.story)], flush=True)
         return 0
+    from app import i18n
     from tools import make_longform_video
 
     lf = make_longform_video
@@ -3890,7 +3885,7 @@ def main() -> int:
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     lf.install_catalog(LANGUAGE, lf.read_catalog(LANGUAGE))
-    lf.set_language(LANGUAGE)
+    i18n.set_language(LANGUAGE)
     lf.install_qt_translations(app, LANGUAGE)
     lf.apply_theme(app, "dark")
     if args.encode_only:

@@ -548,10 +548,10 @@ nav.lang a.cta:hover {
    Gegenstück zu `scroll-padding-top` für die Kopfzeile. Ohne ihn lagen auf
    dem Telefon die Rechtsverweise der Fußzeile für immer unter der Karte,
    und dreizehn Ziele verschwanden beim Fokus dahinter (WCAG 2.4.11). Die
-   Höhe setzt `site.js` am Wurzelelement, solange die Karte da ist. */
+   Höhe setzt `site.js` am Wurzelelement, solange die Karte da ist; den
+   Platz am Seitenende hält dort ein leerer Block in derselben Höhe. */
 :root { --language-hint-space: 0px; }
 html { scroll-padding-bottom: var(--language-hint-space); }
-body { padding-bottom: var(--language-hint-space); }
 
 /* **Bei wenig Höhe steht die Karte im Fluss über der Kopfzeile** und rollt
    mit der Seite weg. Fest gestellt ließ sie bei 400 % Vergrößerung neben der
@@ -568,6 +568,7 @@ body { padding-bottom: var(--language-hint-space); }
 
 @media print {
   .language-hint { display: none; }
+  .language-hint-space { display: none; }
 }
 
 /* ── Aufmacher ─────────────────────────────────────────────────────────── */

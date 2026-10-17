@@ -368,6 +368,30 @@ def test_a_menu_path_in_a_step_is_the_one_the_menu_shows(language: str) -> None:
                 assert path in text, f"{language}, {guide.key} Schritt {number}: {path!r}"
 
 
+def test_a_creator_step_points_at_the_selection_card_and_not_at_the_menu() -> None:
+    """Ein Erzeuger steht ohne Auswahl rechts unter *Auswahl*, und dorthin zeigt sein Rahmen.
+
+    Seit RM-735 stehen Grundformen und Schriftzug ohne Auswahl als Knöpfe in der
+    Auswahlkarte (``selection_operations.scene_creators``), und
+    ``guide_targets.area_for`` fragt zuerst den Knopf. Ein Schritt mit Menüweg
+    rahmte deshalb den Knopf rechts, während die Aufnahme links das Menü
+    öffnete: Kein Zuschnitt fasste beides, und ``make_guides`` brach in *Das
+    erste eigene Teil* bei Schritt 2 ab (Probe 16.10.2026).
+    """
+    from app.core.registry import REGISTRY
+    from app.ui.selection_operations import scene_creators
+
+    creators = {spec.name for spec in scene_creators(REGISTRY.all())}
+    for guide in guides.GUIDES:
+        for number, one in enumerate(guide.steps, 1):
+            text = source_text(one.text)
+            for mark in one.marks:
+                kind, _separator, name = mark.target.partition(":")
+                if kind == "operation" and name in creators:
+                    where = f"{guide.key} Schritt {number}: {name}"
+                    assert "→" not in text and "*Auswahl*" in text, where
+
+
 @pytest.mark.parametrize(
     "language", [language for language in available_languages() if language != SOURCE_LANGUAGE]
 )
@@ -794,6 +818,36 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "feature.every",
         "measure.reference",
         "measure.apply",
+        # Ohne Parameter keine Zeile; Katalog, Filamentlager und das Fenster einer
+        # neuen Spule sind am frischen Fenster nicht offen (FD-101)
+        "parameters.first.label",
+        "parts.save",
+        "filament.add",
+        "filament.profile",
+        "filament.colour",
+        "filament.spool",
+        # Die Wege zu Meldungen ohne Browser, die Fenster der Zusatzprogramme, das
+        # Filamentlager, die Liste unter *Filamente* und ein Reiter in eigenem
+        # Fenster sind am frischen Fenster nicht offen (FD-175)
+        "donation.paypal",
+        "update.page",
+        "install.action",
+        "install.details",
+        "install.follow.comfyui",
+        "install.locate",
+        "filament.import",
+        "filaments.first",
+        "tabs.return",
+        # Der KI-Hinweis, das Freischalten und *Modell erzeugen* sind am frischen
+        # Fenster nicht offen
+        "disclosure.privacy",
+        "disclosure.continue",
+        "activation.offline",
+        "generate.prompt",
+        "generate.start",
+        # Der Skizzeneditor ist am frischen Fenster nicht offen
+        "sketch.coordinates",
+        "sketch.new_plane",
         *printing,
     }
     window = MainWindow(Session(), UiSettings())
@@ -807,12 +861,19 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
             "dialog.naming",
             "dialog.more",
             "parameters.first",
+            "parameters.first.label",
+            "parts.save",
+            "filament.add",
+            "filament.profile",
+            "filament.colour",
             *printing,
         ):
             with pytest.raises(guide_targets.MissingTargetError):
                 guide_targets.widget_for(window, name)
         with pytest.raises(guide_targets.MissingTargetError):
             guide_targets.area_for(window, "history.last")
+        with pytest.raises(guide_targets.MissingTargetError):
+            guide_targets.next_click(window, "filament.spool")
     finally:
         window.close()
         window.deleteLater()
@@ -841,6 +902,57 @@ def test_step_number_never_covers_text_even_in_a_full_dialog(away):
             for old in taken
         )
         taken.append(point)
+
+
+@pytest.mark.parametrize(
+    ("label_top", "label_height"), [(184, 20), (197, 10)], ids=["darauf", "knapp-darunter"]
+)
+def test_the_arrow_of_a_step_number_leaves_the_label_of_its_field_readable(
+    label_top: int, label_height: int
+) -> None:
+    """Läuft der Pfeil der einzigen freien Stelle über eine Beschriftung, steht die Nummer im Rand.
+
+    Nachgestellt nach *Verrunden* (Probe 17.10.2026): Rechts endet der
+    Ausschnitt am Feld, oben und unten steht Text, links bleibt eine freie
+    Stelle — und ihr Pfeil deckte das Wort *Radius* zu, das der Schritt nennt.
+    Ein Pfeil ist acht Punkte breit: Drei Punkte über der Oberkante streift er
+    sie noch (*Objekt* beim Deckel).
+    """
+    from PySide6.QtCore import QRectF
+
+    from tools.make_guides import BORDER, _badge_centre
+
+    bounds = QRectF(0, 0, 600 + 2 * BORDER, 400 + 2 * BORDER)
+    frame = QRectF(BORDER + 500, BORDER + 180, 80, 28)
+    label = QRectF(BORDER + 430, BORDER + label_top, 60, label_height)
+    above = QRectF(BORDER, BORDER, 600, 170)
+    below = QRectF(BORDER, BORDER + 220, 600, 180)
+    point = _badge_centre(frame, [], bounds, [], away=True, protected=[label, above, below])
+    assert point.x() > frame.right(), point
+
+
+def test_a_long_arrow_from_the_margin_does_not_jump_over_a_narrow_heading() -> None:
+    """Der lange Pfeil aus dem Bildrand wird dicht geprüft, nicht an sechzehn Stellen.
+
+    Nachgestellt nach *Deckel erzeugen* (17.10.2026): Keine Stelle am Ziel ist
+    frei, und der Pfeil vom nahen rechten Rand liefe über eine schmale
+    Überschrift. Mit sechzehn Prüfpunkten sprang er über sie hinweg.
+    """
+    from PySide6.QtCore import QRectF
+
+    from tools.make_guides import BORDER, _badge_centre
+
+    bounds = QRectF(0, 0, 600 + 2 * BORDER, 400 + 2 * BORDER)
+    frame = QRectF(BORDER + 300, BORDER + 180, 80, 28)
+    above = QRectF(BORDER, BORDER, 600, 170)
+    below = QRectF(BORDER, BORDER + 220, 600, 180)
+    # Über und unter der Pfeilzeile, nah genug, um jede Stelle am Ziel zu sperren.
+    left = QRectF(200, 222, 120, 10)
+    right = QRectF(480, 252, 100, 10)
+    heading = QRectF(600, 232, 8, 20)
+    protected = [above, below, left, right, heading]
+    point = _badge_centre(frame, [], bounds, [], away=True, protected=protected)
+    assert point.x() < frame.left(), point
 
 
 def test_capture_protects_visible_dialog_text_and_item_views(qt_app):

@@ -1,0 +1,78 @@
+# Zeilenspezifikationen für D9 — Druck, Slicer und Filamentlager.
+# Format: Bauplan D0 §2.4. Eine Zeile ohne Eintrag hier ist „ungeprüft“.
+
+# *Spule von Hand anlegen* steht im Filamentlager, das sein Menüeintrag öffnet
+# (FD-101).
+[row."filament.add"]
+route = [{ target = "menu:menubar.filamentlager" }]
+
+# Die neue Spule legt *Spule von Hand anlegen* im Filamentlager an (FD-175).
+[row."dialog:new_filament_dialog"]
+route = [{ target = "menu:menubar.filamentlager" }, { target = "filament.add" }]
+
+# Der Druckdialog: *An den Slicer übergeben …* mit dem gewählten Körper; der
+# Druckhinweis gilt im Profil als gesehen (FD-121, FD-175).
+[row."dialog:print_settings_dialog"]
+route = [{ target = "menu:menubar.an_den_slicer_uebergeben" }]
+
+# Die Farbwahl des Filaments im Druckdialog (``_ColourButton._choose``).
+[row."meldung:_choose"]
+route = [
+  { target = "menu:menubar.an_den_slicer_uebergeben" },
+  { target = "print:filament.colour" },
+]
+
+# *Aus dem Slicer übernehmen* im Filamentlager liest die Filamentprofile des
+# Slicers; die Szene verlangt einen (FD-175).
+[row."filament.import"]
+route = [{ target = "menu:menubar.filamentlager" }]
+
+[row."dialog:slicer_spool_dialog"]
+start_scene = "quader_mit_slicer.exakt"
+preconditions = { slicerfilamente = "eingelegt" }
+route = [{ target = "menu:menubar.filamentlager" }, { target = "filament.import" }]
+
+# Eine Spule aus dem Lager auf eine Fläche, deren Körper keine freie Nummer mehr
+# hat: Die Schnellwahl unter *Filament und Druck* fragt, welches Filament sie
+# ersetzt (Szene mit belegten Filamenten 1–7 und einer Spule im Lager, FD-175).
+[row."meldung:_assign_inventory_spool"]
+start_scene = "sieben_filamente.netz"
+route = [
+  { target = "tree.row:obj_1.face_1" },
+  { target = "filament.picker" },
+  { target = "filament.spool" },
+]
+
+# Der Slicer stürzt beim Schneiden ab (Naht ``slicerlauf``, startet keinen):
+# *Slicen*, dann in der Meldung *Ausgabe des Slicers zeigen*.
+[row."meldung:_show_slicer_output"]
+start_scene = "quader_mit_slicer.exakt"
+preconditions = { slicerlauf = "absturz" }
+route = [
+  { target = "menu:menubar.an_den_slicer_uebergeben" },
+  { target = "print.slice" },
+  { target = "message.button:error.show_output" },
+]
+
+# Die Druckwerte einer Spule öffnet ein Doppelklick auf ihre Zeile unter
+# *Filamente* in der Kopfzeile; die Szene trägt sieben Filamente (FD-175).
+[row."filaments.first"]
+start_scene = "sieben_filamente.netz"
+
+[row."dialog:filament_override_dialog"]
+start_scene = "sieben_filamente.netz"
+route = [{ target = "filaments.first", button = "double" }]
+
+# Nach einem Export als 3MF bietet die Zeile über der Ansicht an, das Filament im
+# Lager abzubuchen; *Filament abziehen …* öffnet die Buchung. Der Speicherdialog
+# schlägt einen Namen im Profilordner des Falls vor, *Speichern* übernimmt ihn
+# (FD-175).
+[row."usage.review"]
+route = [{ target = "menu:menubar.exportieren" }, { target = "dialog.accept" }]
+
+[row."dialog:usage_dialog"]
+route = [
+  { target = "menu:menubar.exportieren" },
+  { target = "dialog.accept" },
+  { target = "usage.review" },
+]

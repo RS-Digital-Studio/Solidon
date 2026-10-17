@@ -23,23 +23,25 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QListView,
     QListWidget,
     QListWidgetItem,
     QPlainTextEdit,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
-from app.core import activation
+from app.core import activation, guides
 from app.core.agent.context import is_discarded
 from app.core.types import ChatEntry, Document
 from app.i18n import TranslatableText, _, tr
 from app.ui.labels import volume
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import SEVERITY_ENCODING
+from app.ui.report_rows import WrappedRowDelegate
+from app.ui.scroll_areas import PassingScrollArea
 from app.ui.style import NORMAL, make_primary, set_level
 from app.ui.theme import UNDONE_COLOUR
 
@@ -137,6 +139,11 @@ class ChatPanel(QWidget):
         self.turns = QListWidget(self)
         self.turns.setAccessibleName(tr("Gesprächsverlauf"))
         self.turns.setWordWrap(True)
+        # Gemessen, wie gezeichnet wird, und bei jeder Breite neu: Qt misst
+        # ohne die Auswahlkante und ohne Runden bei 125 % und kürzte so im
+        # Prüfbericht die letzte Zeile auf „…“ (FD-109).
+        self.turns.setResizeMode(QListView.ResizeMode.Adjust)
+        self.turns.setItemDelegate(WrappedRowDelegate(self.turns))
         self.turns.setAlternatingRowColors(False)
         # Ein Gespräch ist ein Arbeitsbereich und kein Text: seine Höhe folgt
         # nicht dem, was schon darin steht. Ohne diese Zeile war die Karte im
@@ -205,6 +212,7 @@ class ChatPanel(QWidget):
         self.input.setFixedHeight(self.input.fontMetrics().lineSpacing() * 3 + 12)
         self.input.installEventFilter(self)
         self.send = QPushButton(tr("Senden"), self)
+        self.send.setProperty(guides.TARGET_PROPERTY, "request.send")
         self.send.clicked.connect(self._send)
 
         entry_row = QHBoxLayout()
@@ -239,6 +247,9 @@ class ChatPanel(QWidget):
             button.installEventFilter(self)
             self.starter_buttons.append(button)
             starters_layout.addWidget(button)
+        # Das erste Beispiel trägt seinen Namen im Wortschatz (``request.example``).
+        if self.starter_buttons:
+            self.starter_buttons[0].setProperty(guides.TARGET_PROPERTY, "request.example")
 
         self.summary = QLabel("", self)
         self.summary.setWordWrap(True)
@@ -333,7 +344,7 @@ class ChatPanel(QWidget):
         self.content_layout.addWidget(self.starters)
         self.content_layout.addWidget(self.decision)
 
-        self.content_scroll = QScrollArea(self)
+        self.content_scroll = PassingScrollArea(self)
         self.content_scroll.setWidgetResizable(True)
         self.content_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)

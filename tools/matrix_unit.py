@@ -96,17 +96,18 @@ import app  # noqa: E402
 
 assert Path(app.__file__).resolve().is_relative_to(ROOT), app.__file__
 
-from app.core.bootstrap import load_operations  # noqa: E402
+from app.core import bootstrap, scene  # noqa: E402
 
-load_operations()
+bootstrap.load_operations()
 
 from app.core.errors import AppError  # noqa: E402
 from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles  # noqa: E402
-from app.core.geom.mesh import as_mesh_data  # noqa: E402
-from app.core.ingest.loader import detect_unit, read_local_payload, read_model  # noqa: E402
+from app.core.geom import mesh  # noqa: E402
+from app.core.ingest import loader  # noqa: E402
+from app.core.ingest.loader import detect_unit, read_model  # noqa: E402
 from app.core.ingest.plan import import_plan, names_in_use  # noqa: E402
 from app.core.knowledge import print_settings, profiles  # noqa: E402
-from app.core.scene import History, OperationDraft, evaluate  # noqa: E402
+from app.core.scene import History, OperationDraft  # noqa: E402
 from app.core.scene.project import (  # noqa: E402
     ProjectSources,
     embedded_source_path,
@@ -121,11 +122,8 @@ from app.core.slice.estimate import (  # noqa: E402
 )
 from app.core.slice.gcode import DEVIATION_LIMIT as TIME_DEVIATION  # noqa: E402
 from app.core.types import Source  # noqa: E402
-from app.ui.print_settings_dialog import (  # noqa: E402
-    _AdviceWorker,
-    _PlateJob,
-    _prepare_plate,
-)
+from app.ui import print_settings_dialog  # noqa: E402
+from app.ui.print_settings_dialog import _AdviceWorker, _PlateJob  # noqa: E402
 from tools import matrix_gcode  # noqa: E402
 
 assert Path(matrix_gcode.__file__).resolve().parent == HERE, matrix_gcode.__file__
@@ -162,7 +160,7 @@ def _recording_ask(question: object, choices: Any) -> object:
 def load(model: Path) -> tuple[list[Any], list[str]]:
     """Die Körper, wie sie nach ``solidon3d import`` in der Szene stehen, dazu die Befunde."""
     project = new_project("centauri-carbon-2", MATERIAL)
-    payload = read_local_payload(model)
+    payload = loader.read_local_payload(model)
     source_id = next_source_id(project.document.sources)
     project.document.sources[source_id] = Source(
         id=source_id, kind="import", path=embedded_source_path(model.name, source_id), sha256=""
@@ -179,9 +177,11 @@ def load(model: Path) -> tuple[list[Any], list[str]]:
     history.apply(plan.title, [plan.draft])
     scene_profile = profiles.scene_profile("centauri-carbon-2", MATERIAL)
     sources = ProjectSources(project, base_dir=model.parent)
-    result = evaluate(project.document, scene_profile, sources=sources, ask=_recording_ask)
+    result = scene.evaluate(project.document, scene_profile, sources=sources, ask=_recording_ask)
     objects = [
-        entry for entry in result.scene.objects.values() if as_mesh_data(entry.mesh).triangle_count
+        entry
+        for entry in result.scene.objects.values()
+        if mesh.as_mesh_data(entry.mesh).triangle_count
     ]
     # **Wie ein Kunde dem Prüfbericht folgt**: Sagt er, anders gedreht brauche
     # ein Teil weniger Stützen, klickt der Kunde *Druckoptimal ausrichten*.
@@ -192,7 +192,9 @@ def load(model: Path) -> tuple[list[Any], list[str]]:
         from app.core.slice.findings import orientation_findings
 
         for entry in objects:
-            for finding in orientation_findings(entry.id, as_mesh_data(entry.mesh), scene_profile):
+            for finding in orientation_findings(
+                entry.id, mesh.as_mesh_data(entry.mesh), scene_profile
+            ):
                 if finding.code == "orient.saves_support":
                     turned[str(entry.id)] = dict(finding.values or {})
         if turned:
@@ -206,7 +208,9 @@ def load(model: Path) -> tuple[list[Any], list[str]]:
                     )
                 ],
             )
-            result = evaluate(project.document, scene_profile, sources=sources, ask=_recording_ask)
+            result = scene.evaluate(
+                project.document, scene_profile, sources=sources, ask=_recording_ask
+            )
             # Scheitert das Ausrichten, hält die Kette an, und die Szene ist der
             # letzte ganze Stand davor — so sieht sie auch der Kunde im
             # Druckdialog. Die Matrix rechnet damit weiter, sagt es aber an
@@ -221,7 +225,7 @@ def load(model: Path) -> tuple[list[Any], list[str]]:
             objects = [
                 entry
                 for entry in result.scene.objects.values()
-                if as_mesh_data(entry.mesh).triangle_count
+                if mesh.as_mesh_data(entry.mesh).triangle_count
             ]
     findings = sorted(
         {f"{f.severity}:{f.code}" for f in result.scene.report.findings if f.severity != "info"}
@@ -269,7 +273,7 @@ def arranged_for(objects: list[Any], profile: Any, settings: Any) -> tuple[list[
     crowded = []
     for plate in plates:
         meshes = [
-            as_mesh_data(o.mesh) for o in objects if int(getattr(o, "plate", 0) or 0) == plate
+            mesh.as_mesh_data(o.mesh) for o in objects if int(getattr(o, "plate", 0) or 0) == plate
         ]
         if len(meshes) < 2:
             continue
@@ -292,9 +296,11 @@ def arranged_for(objects: list[Any], profile: Any, settings: Any) -> tuple[list[
         ],
     )
     scene_profile = profiles.scene_profile(profile.printer.id, MATERIAL)
-    result = evaluate(document, scene_profile, sources=LOADED["sources"])
+    result = scene.evaluate(document, scene_profile, sources=LOADED["sources"])
     moved = [
-        entry for entry in result.scene.objects.values() if as_mesh_data(entry.mesh).triangle_count
+        entry
+        for entry in result.scene.objects.values()
+        if mesh.as_mesh_data(entry.mesh).triangle_count
     ]
     return moved, {
         "crowded_plates": crowded,
@@ -317,7 +323,7 @@ def narrow_webs(objects: list[Any]) -> dict[str, Any]:
     total = 0.0
     lost: dict[str, float] = {"r1.0": 0.0, "r1.5": 0.0, "r2.5": 0.0}
     for entry in objects:
-        tm = as_mesh_data(entry.mesh).raw
+        tm = mesh.as_mesh_data(entry.mesh).raw
         z = float(tm.bounds[0][2]) + 0.1
         try:
             section = tm.section(plane_origin=(0, 0, z), plane_normal=(0, 0, 1))
@@ -776,7 +782,7 @@ def plate_run(
         with_comparison=True,
     )
     try:
-        run = _prepare_plate(job, plate)
+        run = print_settings_dialog._prepare_plate(job, plate)
         row["keep_arrangement"] = run.keep_arrangement
         row["written"] = str(run.model)
         row["export_findings"] = sorted(
@@ -1414,7 +1420,7 @@ def main() -> int:
         )
         save()
         return 1
-    meshes = [as_mesh_data(o.mesh) for o in objects]
+    meshes = [mesh.as_mesh_data(o.mesh) for o in objects]
     plates = sorted({int(getattr(o, "plate", 0) or 0) for o in objects})
     result.update(
         bodies=len(objects),

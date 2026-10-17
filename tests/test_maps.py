@@ -22,6 +22,7 @@ from app.core.geom.transform import apply, place_on_bed, rotation
 from app.core.ingest.loader import normalise
 from app.core.perceive import maps
 from app.core.perceive.features import detect
+from app.core.slice import analysis as slice_analysis
 from app.core.types import (
     Feature,
     FeatureRef,
@@ -1220,7 +1221,7 @@ def test_support_budget_interrupts_inside_the_solid_field(
     now = [0.0]
     deadline = maps._MapDeadline(None, 3.0, clock=lambda: now[0])
     monkeypatch.setattr(
-        maps,
+        slice_analysis,
         "slice_body",
         lambda *_args, **_kwargs: SliceResult(
             layers=(), support_volume=0.0, first_layer_area=0.0, source="internal"
@@ -1271,7 +1272,7 @@ def test_support_checks_the_budget_after_an_atomic_stage(
     now = [0.0]
     deadline = maps._MapDeadline(None, 3.0, clock=lambda: now[0])
     monkeypatch.setattr(
-        maps,
+        slice_analysis,
         "slice_body",
         lambda *_args, **_kwargs: SliceResult(
             layers=(), support_volume=0.0, first_layer_area=0.0, source="internal"

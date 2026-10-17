@@ -111,9 +111,11 @@ def test_empty_measurements_leave_their_room_to_the_printer(qt_app: QApplication
 
     result = EvaluationResult(scene=Scene(objects={"obj_1": make_object()}))
     header.show_project("Halter", result, "mm")
-    assert header.bounds.full_text() and header._layout.columnStretch(1) > 0, "Maße dehnen"
+    QApplication.processEvents()
+    assert header.bounds.full_text() and header.bounds.width() > 0, "Maße stehen da"
     header.show_project("Unbenannt", None, "mm")
-    assert header._layout.columnStretch(1) == 0, "wieder leer, wieder ohne Dehnung"
+    QApplication.processEvents()
+    assert header.bounds.width() == 0, "wieder leer, wieder ohne Platz"
 
 
 def test_long_single_word_profile_names_do_not_push_the_header_into_overflow(
@@ -446,7 +448,7 @@ def test_the_plate_filter_never_lies_over_the_printer(qt_app: QApplication) -> N
 
     Gemessen wird am Ort: Der Wähler endet, bevor der Drucker beginnt — nach
     dem Zeigen, und noch einmal, nachdem er wieder verschwunden und wieder
-    gekommen ist. Gegenprobe ohne ``_stretch_the_plate_column`` beim Zeigen:
+    gekommen ist. Gegenprobe mit ``Ignored`` am Wähler und ohne Spaltendehnung:
     der Wähler beginnt bei derselben x-Stelle wie der Drucker, rot.
     """
 

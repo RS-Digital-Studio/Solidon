@@ -20,6 +20,7 @@ import trimesh
 
 from app.core import errors
 from app.core.brep import edit, profiles, step
+from app.core.brep import kernel as brep_kernel
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, tessellate
 from app.core.errors import GeometryError, NeedsSolidError, ValidationError
@@ -1174,6 +1175,7 @@ def test_a_narrow_piece_keeps_the_complete_native_edges_of_its_neighbours(
     from dataclasses import replace
 
     from app.core.geom import edge_ops, edges
+    from app.core.geom import mesh as geom_mesh
 
     solid, mesh = _subdivided_native_box()
     rim = edges.wanted(edges.edges_of(mesh), "top", ())
@@ -1213,7 +1215,7 @@ def test_a_narrow_piece_keeps_the_complete_native_edges_of_its_neighbours(
     assert bindings[0] != bindings[2]
     # Nur die Breitenmessung wird gezielt gestört. Netzherkunft, vollständige
     # Kurvenzuordnung und die anschließende erneute Abdeckung bleiben echt.
-    monkeypatch.setattr(edge_ops, "as_mesh_data", lambda source: mesh)
+    monkeypatch.setattr(geom_mesh, "as_mesh_data", lambda source: mesh)
     monkeypatch.setattr(edges, "edges_of", lambda source: chosen)
     monkeypatch.setattr(edges, "contact_band_limits", lambda *args, **kwargs: {id(a): 0.5})
     selected, findings = edge_ops._group_that_fits(
@@ -1239,6 +1241,7 @@ def test_missing_native_face_sources_never_expand_to_all_edges(
 ) -> None:
     """Ohne Herkunft bleibt die ganze Auswahl ausdrücklich ungebunden."""
     from app.core.geom import edge_ops
+    from app.core.geom import mesh as geom_mesh
     from app.core.geom.edges import edges_of, wanted
 
     solid = block()
@@ -1248,7 +1251,7 @@ def test_missing_native_face_sources_never_expand_to_all_edges(
     assert len(chains) == 4
     assert edit.native_edges_of_chains(solid, mesh, chains) == ((), (), (), ())
     assert len(edit.choose(solid, "vertical")) == 4
-    monkeypatch.setattr(edge_ops, "as_mesh_data", lambda source: mesh)
+    monkeypatch.setattr(geom_mesh, "as_mesh_data", lambda source: mesh)
     with pytest.raises(GeometryError) as failure:
         edge_ops._group_that_fits(
             SceneObject("body", "Quader", solid, kind="brep"),
@@ -2130,7 +2133,7 @@ def test_rounding_failures_offer_editing_instead_of_mesh_repair(
         else:
             edit.unround(source, centre, 3.0)
 
-    offered = "change_selection" if failure == "missing_edge" else "correct_input"
+    offered = "change_step" if failure == "missing_edge" else "correct_input"
     assert {action.id for action in failed.value.suggestions} == {offered, "cancel"}
     assert source.volume == pytest.approx(before, abs=EPS_GEOM)
 
@@ -4231,7 +4234,7 @@ def test_a_hole_that_cannot_be_cut_is_refused_with_the_sentence_of_its_way(
         def IsDone(self) -> bool:  # noqa: N802 - Name der externen OCP-API
             return False
 
-    monkeypatch.setattr(profiles, "boolean_builder", lambda *args, **kwargs: Refusing())
+    monkeypatch.setattr(brep_kernel, "boolean_builder", lambda *args, **kwargs: Refusing())
     square = Outline(
         segments=(
             Segment("line", (-10.0, -10.0), (10.0, -10.0)),

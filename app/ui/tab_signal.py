@@ -19,16 +19,17 @@ in Tooltip und zugänglichem Namen stehen dazu, bis der Reiter vorn war.
 from __future__ import annotations
 
 import math
-from typing import Final
+from typing import Final, override
 
 from PySide6.QtCore import QAbstractAnimation, QPointF, QRectF, Qt, QVariantAnimation
 from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPalette, QPen
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QTabBar, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QTabBar, QTabWidget, QWidget
 
 from app.i18n import tr
-from app.ui.motion import animations_enabled
+from app.ui import motion
 from app.ui.palette import ROLES, SEVERITY_ENCODING, readable_on
 from app.ui.style import SPACE, TIGHT
+from app.ui.tab_stops import chain_after
 
 #: Ein Atemzug des Reiters: von still zur vollen Tönung und zurück.
 CYCLE_MS: Final = 1200
@@ -222,7 +223,7 @@ class SignalTabBar(QTabBar):
         self._describe(index)
         if before not in (-1, index):
             self._describe(before)
-        if not animations_enabled():
+        if not motion.animations_enabled():
             self._settle()
             return
         animation = QVariantAnimation(self)
@@ -387,6 +388,23 @@ class SignalTabBar(QTabBar):
         return QRectF(
             centre.x() - UNSEEN_DOT, centre.y() - UNSEEN_DOT, 2 * UNSEEN_DOT, 2 * UNSEEN_DOT
         )
+
+    # --- Tabulatortaste --------------------------------------------------------
+
+    @override
+    def focusNextPrevChild(self, next: bool) -> bool:
+        """Tab von der Leiste geht in die Seite, die vorn steht — von oben (FD-177).
+
+        Bericht und Auswahl entstehen vor der Leiste, ihre Felder später oder an
+        anderer Stelle; Qt reihte sie danach ein, und vom Reiter *Prüfbericht*
+        ging es zur Kopfzeile. Vor dem Schritt legt :func:`tab_stops.chain_after`
+        die Halte der vorderen Seite in Layoutfolge hinter die Leiste.
+        """
+        holder = self.parentWidget()
+        page = holder.currentWidget() if isinstance(holder, QTabWidget) else None
+        if next and page is not None and page.window() is self.window():
+            chain_after(self, page)
+        return super().focusNextPrevChild(next)
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802 - Qt-Name
         tint = self.tint()

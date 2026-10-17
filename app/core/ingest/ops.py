@@ -20,7 +20,8 @@ from app.core.errors import (
     InternalError,
     ValidationError,
 )
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
 from app.core.geom.prepare import (
     FreeSpot,
     free_spot_param,
@@ -607,7 +608,7 @@ def _group_on_bed(
 
 def _bounds_of(outputs: Sequence[SceneObject]) -> BoundingBox:
     """Der gemeinsame Hüllquader aller Körper einer Datei."""
-    boxes = [as_mesh_data(entry.mesh).bounds for entry in outputs]
+    boxes = [geom_mesh.as_mesh_data(entry.mesh).bounds for entry in outputs]
     low = [min(float(box.minimum[axis]) for box in boxes) for axis in range(3)]
     high = [max(float(box.maximum[axis]) for box in boxes) for axis in range(3)]
     return BoundingBox((low[0], low[1], low[2]), (high[0], high[1], high[2]))
@@ -619,7 +620,8 @@ def _moved(outputs: list[SceneObject], findings: list[Finding], offset: Vec3) ->
     # Ein Befund mit Ort zeigt auf den Körper, und der steht jetzt woanders.
     findings[:] = moved_findings(findings, offset)
     return [
-        dataclasses.replace(entry, mesh=apply(as_mesh_data(entry.mesh), lift)) for entry in outputs
+        dataclasses.replace(entry, mesh=apply(geom_mesh.as_mesh_data(entry.mesh), lift))
+        for entry in outputs
     ]
 
 

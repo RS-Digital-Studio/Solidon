@@ -20,7 +20,7 @@ it into `website/version.json`.
 ### Operation and system
 
 - Measurement cards can be moved and grow with open fields. Clearer action titles and bed dimensions, quieter toolbars and handles, and a clearer light-theme grid help keep the model in view.
-- Fixed a crash that could occur when switching features or projects.
+- Fixed a crash that could occur when switching features or projects, or when opening a dialog.
 - The note for “Place on the bed” now also applies to bodies below the bed.
 - Lists of feature actions now stay entirely in the selected language.
 - On the Mac, Solidon may now load the 3Dconnexion driver (3DxWare) for the 3D mouse. From version 0.4.1 to 0.6.0, macOS did not allow this.
@@ -52,6 +52,11 @@ it into `website/version.json`.
 - A screen reader now reads the name and explanation of every number field in a dialog.
 - After an action in the *Report*, the report stays in front, and Ctrl+Z takes it back straight away. Until now the *Selection* tab jumped to the front.
 - Bed and adhesion messages use the chosen unit. Switching mm/in keeps the selected finding, open details, tab and body expansion state.
+- The numbers along the print bed follow the chosen unit and name it. Version 0.6.0 showed millimetres there even when inches were set.
+- The bed grid counts from the centre of the bed, every 10 mm in millimetres and every half inch in inches. Every number sits at a bold line.
+- In *Orthographic* view, clicking a finding shows its location at a suitable size. Until now the previous zoom stayed.
+- Clicking a finding without a location of its own shows the whole body, and an opened project fits entirely in the view.
+- A selected hole stays visible, rim included. The pull knobs sit outside the rim, and the arrows start beyond them.
 - Ctrl+Z and Ctrl+Y also work when the cursor sits in an empty field, such as the search field. If you typed there, your typing is undone first.
 - Without activation, actions that change something in the *Report*, *Selection* tab, context menus and filament choice are greyed out with the reason. The refusal used to come after the click.
 - Without activation, *Create parameter …*, *Move*, *Split*, the history keys and the dimensions in the view are greyed out too. Every reason names the way, such as *Help → Unlock Solidon …*.
@@ -67,10 +72,62 @@ it into `website/version.json`.
 - The selection card follows content and font, preserving text and action columns. Detached tabs keep their size. When a feature edit is offered, “Apply” is the primary action.
 - Counterparts ask for pair and size first and explain both halves. Shape and fit are under “More settings”. The initial dialog height fits its content.
 - After a preview is refused, the next preview's text remains fully readable.
+- The status line with material and print time now says “since the last step” only for what a step changed. While the slicer profile values are still being read, it says “provisional”.
+- Material and print time always show in full in the status bar. When the bar is full, the message beside them is shortened, and its full sentence is in the tooltip.
+- The header shortens the printer name only when the row is full. Project name and dimensions stand together on the left, the printer on the right next to *Print settings …*.
+- If *Split automatically* finds no cut, the status line says why. Until now it then reported that the part already fits on the bed.
+- The short confirmation after an action stands beside the cards instead of over them, for example beside the report. The next step clears it and the status line, including an old “Undone”.
+- On a finding of a generated model, *Generate again* opens the generator with its description and the next seed.
+- When the analysis map refuses a model as too large, the triangle counts are shown in groups of three, such as 2 103 472.
+- When the chain stops, a function that would add a step behind it no longer opens a dialog with a greyed-out button. The stop and the way on are shown right away.
+- In the check report, the Tab key reaches the offered action, and no scroll area is a separate unnamed stop any more.
+- Double-clicking a dimension change in the history opens that dimension for editing, and a printer or material change opens *Print settings …*.
+- The dimensions column in the object tree shows every dimension in full; the left card grows wider when needed. Otherwise the name is shortened, and its tooltip shows it in full.
+- Finding rows in the check report show in full, their measurement included, and name each body only once.
+- The parameter bar shows lengths in inches when inches are set. Right-clicking the value field opens *Change …*.
+- The *Create parameter …* dialog explains every field, including the lower and upper bound, and a screen reader names every field.
+- If a parameter name does not work, the reason appears right under the name field, with a button for a name that does.
+- If you work in inches, you enter length parameters in inches in *Create parameter …* and when saving a part. Version 0.6.0 showed only millimetres there.
+- The *Calibrate material* dialog calls an unmeasured material “not calibrated yet”, also on the command line. It used to say “starting values”.
+- A refusal in a dialog no longer repeats its title underneath. *Correct the input* puts the cursor into the field concerned.
+- The *Details* window names the body and the step and gives the location in the chosen unit. *Show the values* shows the field names and is only as tall as needed.
+- The fields of the *Analysis* and *Split* bars, the description in *Generate model*, the *Type* choice and the “Include values” checkbox explain themselves in tooltips and to screen readers.
+- From a tab of the card on the right, the Tab key goes into the page in front and moves through it from top to bottom.
+- A project dimension without a unit stays a plain number in the history and the parameter bar, also in inches. Version 0.6.0 added “mm” to it in the history.
+- A screen reader names every field of every operation dialog, including drop-down lists, checkboxes and feature lists.
+- Large whole numbers appear in groups of three in input fields too, such as 1 051 736 triangles or 10 000 mm/s² *Acceleration*. You can type them with or without separators.
+- Long field names under *More settings* show every line, even with a large font. In version 0.6.0, *Drill a bore* for example lost the last word of a wrapped field name.
+- Operation dialogs are as tall as their content, also after expanding *More settings*. In version 0.6.0, *Repeat feature* for example left an empty strip above the buttons.
+- Dialogs with collapsible sections such as *Create parameter* are as tall as their content after expanding and collapsing. They only scroll sideways when the screen is too narrow.
+- If a required field such as the text of *Lettering as a body* is empty, the field says what goes in and the button waits. Version 0.6.0 showed an error there on opening.
+- When you change a step, you confirm with *Apply*. The button stays grey until something has changed and names the field to change.
+- The *Calibrate material* dialog shows clearance, interference, hole compensation, elephant foot and wall in the chosen unit, inches included, and keeps the third decimal place.
+- A long button under a refusal wraps at large font sizes instead of widening the dialog.
+- Buttons are no longer squashed at large font sizes. In version 0.6.0 the actions of a finding in the check report were cut off at the top and bottom.
+- When the system font size changes, Solidon follows at once, open dialogs included. Version 0.6.0 only picked it up after a restart.
+- A combined line in the check report names at most fifteen of those affected, by kind and body, in its tooltip. In version 0.6.0 a screen reader read every sentence there.
+- The *Added* and *Removed* legend appears in the preview bar only when the preview adds or removes material. *Rename object* therefore shows none.
+- On a body without colour, *Convert texture to filaments* is greyed out and gives the reason, instead of refusing only in the preview.
+- For parameters, fits, printer, material and undo, the chat names the place in the window where you can do the same yourself.
+- The check report and the check before export name the bodies of a fit instead of showing an internal identifier, including a body that has since been removed.
+- Messages name a feature by kind and number, such as “Hole 2”, instead of an internal identifier.
+- Measurements under a message carry their unit, with lengths in the chosen unit. Version 0.6.0 often showed only the number there, such as the smallest edge length still possible in *Refine edges*.
+- English and Portuguese now tell the protrusion of a hook, or of a body below the plate, apart from an overhang in printing.
+- In Spanish and Portuguese, menu, search and dialog show only the first sentence again for *Pin for hole* and *Orient for printing*.
+- Several translations read more clearly, among them the introduction of *Create parameter …*. The peg starts with a capital in every language.
+- Explanations in the panels are as tall as their text, also in a wide panel. In version 0.6.0 some languages left empty lines there, for example below two selected faces.
+- A selection field names a value its list does not offer, such as “Face 1 · not suitable here”, and an edge by direction and position. Version 0.6.0 showed an internal identifier.
+- In the *Unlock Solidon …* window, *Buy Solidon* stays available on an activated computer. Greyed-out buttons state their reason, and *Check key* also the way to a new key.
+- In French, the first day of a month now reads “1er”, as in “1er décembre 2026”.
+- Without a graphics driver, for example in a virtual machine, Solidon now reliably exits after closing. In version 0.6.0 the program could keep running there invisibly.
 
 ### Printing and slicer handover
 
 - If the chosen slicer is a file that is not a program, Solidon now says so at once and offers to choose another slicer. In version 0.6.0 slicing waited until someone closed a Windows message.
+- The *Flow on bridges* field shows its value in percent and accepts 50 to 200 %. In version 0.6.0 it showed 2 %, and changing it sent 1 or 2 % bridge flow to the slicer.
+- A project from version 0.6.0 with 1 or 2 % bridge flow opens with the value without your own setting, and the report says so.
+- Print settings show values from the slicer profile in full, such as 40,000 mm/s² acceleration. In version 0.6.0 the field showed its upper limit instead.
+- A line width above twice the nozzle, such as 4 instead of 0.4 mm, now gets a warning and a suggestion for the widest clean line.
 
 ### Editing and sketching
 
@@ -81,6 +138,31 @@ it into `website/version.json`.
 - If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
 - For holes, the view and *Selection* show the same edit. Size, depth and a linked entrance stay in front; print compensation and fine settings are under “More values”.
 - Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
+- In the *Selection* tab, *Apply* sits directly below the open action, “Filament and printing” sits at the top with the colour of the assignment, and no empty space is left below the list.
+- A changed hole keeps its place in the object tree.
+- Actions that do not work on a feature read “Not possible here: …” with their reason.
+- When you cut out a cube to try a fit, you now choose its position under *Cube position*. The *Place* line above shows it.
+- The dialog behind *Add thickness* says in its first line that it gives the surface a thickness.
+- In the measurement card, the Tab key goes from the fields to the checkbox for matching features, then *Apply* and *Cancel*, and back. The checkbox now sits above the buttons.
+- After *Cancel* or Esc in the measurement card, the keyboard is back in the 3D view, as after *Apply*. Previously it landed on the *Objects* card.
+- In the measurement card, *Apply* stays grey until a value or the checkbox for matching features changes, and names the first field. Previously one click into a field enabled it, to no effect.
+- When the measurement card rejects a value, the reason appears once, directly below the field. Previously the same sentence was repeated above the buttons and in the status bar.
+- When a note makes the measurement card taller, it stays put and moves only as far as the view edge or handle requires, with a short movement. Previously it jumped elsewhere.
+- Text that a dialog fills in is selected when it opens, and typing replaces it. *Rename object* thus starts with the current name, and without a new name no step is added.
+- In the *Selection* tab, *Apply* stays grey until a value changes and names the first field. Rotating or duplicating with their preset values still works right away.
+- Drilling, filling, slots and hole fields call the adjustment “Compensate for printing deviations” as the dimension group does, and it adds the material's hole compensation.
+- After an unreadable drawing plane, *Pick a different plane* opens the step with the cursor in its sketch.
+- When a button in the check report leads into sketch mode, the keyboard lands where the work continues: in the *Drawing plane* field if the plane is missing, otherwise in the view.
+- If only slivers remain beside one printable part, *Split into separate parts* names them and offers *Keep slivers*. Before, it said the body was all one piece.
+- If a fillet radius or chamfer width is too large for the edges, the message offers *Pick different edges*.
+- If a selected face does not suit *Apply draft angle* or *Offset face*, the message offers *Pick different faces*.
+- The same applies to *Hollow out*, *Seal groove with gasket* and *Apply texture*. If a fillet cannot be traced back to an edge, the message offers *Pick a different feature*.
+- If a selected feature does not fit, such as a hole, a thread, a chamber or a closure, the message offers *Pick a different feature*.
+- The buttons *Pick different edges*, *Pick different faces* and *Pick a different feature* open the step with the cursor in the matching field, also behind *More settings*.
+- If a message belongs to no step, as with *Counterpart to the thread*, it gives its way as a sentence, for example *Pick a different feature*, and shows only buttons that do something there.
+- Clicking *Apply* on a feature during a calculation keeps the change, even when the preview takes longer. In version 0.6.0 it was silently lost on larger models.
+- A displayed texture no longer computes a preview without a change and no longer offers *Cancel*.
+- A project with your own part from an earlier version no longer reports a false change and still offers *Use the saved version*. In version 0.6.0 this was missing for projects from 0.5.
 
 ## 0.6.0
 

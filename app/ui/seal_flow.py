@@ -9,7 +9,8 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QDialog
 from shiboken6 import isValid
 
-from app.core.scene import EvaluationResult, evaluate
+from app.core import scene
+from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.project import Project, ProjectSources
 from app.core.sketch.planes import frame_in_scene
@@ -93,7 +94,9 @@ class SealFlow(QObject):
         profile, cache = self.profile, self.window.session.cache
         cancelled = self._cancel
         self.window.session.placement_async(
-            lambda: evaluate(document, profile, cache=cache, sources=sources, cancelled=cancelled),
+            lambda: scene.evaluate(
+                document, profile, cache=cache, sources=sources, cancelled=cancelled
+            ),
             self._ready,
             self._failed,
         )

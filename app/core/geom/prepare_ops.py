@@ -22,11 +22,14 @@ from app.core.deferred import trimesh
 from app.core.errors import (
     BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
     CANCEL,
+    CHANGE_FACES,
+    CHANGE_FEATURE,
     CHANGE_SELECTION,
     CHANGE_SIZE,
     CHANGE_THIS_STEP,
     CHOOSE_PRINTER,
     CORRECT_INPUT,
+    KEEP_SPLINTERS,
     RECOUNT_AND_RETRY,
     REPAIR_AND_RETRY,
     RESIZE_THE_WIDENING,
@@ -42,7 +45,9 @@ from app.core.errors import (
     InternalError,
     ValidationError,
 )
-from app.core.geom import kernel_process, lathe, transform
+from app.core.geom import boolean, kernel_process, lathe, orient, prepare, transform
+from app.core.geom import mesh as geom_mesh
+from app.core.geom import pins as geom_pins
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     DRAFT_CHAIN,
@@ -50,7 +55,6 @@ from app.core.geom.boolean import (
     NOTHING_LEFT_TITLE,
     BooleanKind,
     BooleanOutcome,
-    boolean,
     deepest,
     shared_volume,
     without_effect,
@@ -58,7 +62,6 @@ from app.core.geom.boolean import (
 from app.core.geom.hollow import VENT_DIAMETER, HollowResult, below_printable_wall, hollow
 from app.core.geom.mesh import (
     MeshData,
-    as_mesh_data,
     face_components,
     lifted_caps,
     row_dots,
@@ -73,20 +76,16 @@ from app.core.geom.ops import as_transform
 from app.core.geom.orient import (
     NoFittingOrientationError,
     NoStandingOrientationError,
-    fitting_transform,
     orient_for_print,
-    ranked_orientations,
 )
 from app.core.geom.pins import (
     PIN_COUNT,
     PIN_MAX,
     FeatureSide,
     PinnedPair,
-    add_pins,
     connector_glue_finding,
     feature_side,
     next_connector_index,
-    plan_pins,
 )
 from app.core.geom.prepare import (
     ARRANGE_SPACING,
@@ -98,7 +97,6 @@ from app.core.geom.prepare import (
     BoreAnchor,
     BoreResult,
     OpeningSpace,
-    arrange_on_bed,
     bore_diameter,
     bore_geometry_error,
     check_build_volume,
@@ -142,7 +140,8 @@ from app.core.geom.transform import (
     place_on_bed,
     translation,
 )
-from app.core.knowledge.profiles import analysis_limits, for_object, material
+from app.core.knowledge import profiles
+from app.core.knowledge.profiles import analysis_limits
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
 from app.core.registry.params import ZERO_AUTOMATIC, ZERO_NONE, ZERO_THROUGH, ZERO_UNCHANGED
 from app.core.scene.placement import SIDE_KEYS, side_of
@@ -606,10 +605,13 @@ class DrillParams(BaseParams):
         ),
     )
     compensate: bool = param(
-        title=_("Materialtoleranz berücksichtigen"),
+        title=_("Druckabweichung ausgleichen"),
         default=True,
         placement="advanced",
-        doc=_("Vergrößert die Bohrung um den Wert aus dem Materialprofil."),
+        doc=_(
+            "Gibt dem Durchmesser die Lochkorrektur aus dem Materialprofil dazu, weil gedruckte "
+            "Bohrungen enger ausfallen. Aus: Die Bohrung erhält genau das eingegebene Maß."
+        ),
     )
 
 
@@ -733,7 +735,7 @@ def bore_shape(params: DrillParams, *, within: Mesh | None = None) -> BoreShape:
     deterministic=False,
     shortcut="Ctrl+B",
     doc=_(
-        "Bohrt ein rundes Loch oder ein Langloch — auf Wunsch um die Materialtoleranz vergrößert."
+        "Bohrt ein rundes Loch oder ein Langloch, auf Wunsch mit der Lochkorrektur des Materials."
     ),
 )
 def drill_hole(ctx: OpContext) -> OpResult:
@@ -754,10 +756,12 @@ def drill_hole(ctx: OpContext) -> OpResult:
             # (``edit._fuzzy_retry``), bohrt das Netz. Der Körper ist danach
             # ein Netz, und die Auswertung sagt es
             # (``evaluate.exact_became_mesh``); Rückgängig stellt ihn her.
-            source = dataclasses.replace(source, mesh=as_mesh_data(source.mesh), kind="mesh")
+            source = dataclasses.replace(
+                source, mesh=geom_mesh.as_mesh_data(source.mesh), kind="mesh"
+            )
     shape = bore_shape(params, within=source.mesh)
     result = drill(
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         position=(params.x, params.y, params.z),
         axis=cast(Axis, params.axis),
         normal=(params.nx, params.ny, params.nz),
@@ -767,7 +771,7 @@ def drill_hole(ctx: OpContext) -> OpResult:
         widening_depth=shape.widening_depth,
         transition_angle=params.transition_angle,
         anchor=cast(BoreAnchor, params.anchor),
-        profile=for_object(ctx.profile, source),
+        profile=profiles.for_object(ctx.profile, source),
         compensate=params.compensate,
         quality=ctx.quality,
         seed=ctx.seed,
@@ -994,14 +998,14 @@ def _refuse_if_another_part_changed(ctx: OpContext, result: OpResult) -> None:
         return
     if any(finding.code == "boolean.parts_united" for finding in result.findings):
         return
-    before = as_mesh_data(source.mesh)
+    before = geom_mesh.as_mesh_data(source.mesh)
     if before.component_count < 2:
         return
     named = getattr(ctx.params, "at_features", None) or (getattr(ctx.params, "at_feature", ""),)
     features = [source.features[name] for name in named if name in source.features]
     if not features:
         return
-    after = as_mesh_data(output.mesh)
+    after = geom_mesh.as_mesh_data(output.mesh)
     if not _another_part_changed(before, after, features, source.features, ctx.cancelled):
         return
     offer = split_offer(before, features[0])
@@ -1849,7 +1853,7 @@ def _chain_plug(
         transform.rotation_between(np.array([0.0, 0.0, 1.0]), axis),
     )
     shift_body(plug, centre + axis * float(along.min() + along.max()) / 2.0)
-    return boolean(
+    return boolean.boolean(
         "intersection",
         [MeshData.of(plug), shell(mesh)],
         quality=quality,
@@ -1936,7 +1940,7 @@ def _cavity_tool(
         bodies.append(part)
     if len(bodies) == 1:
         return bodies[0]
-    return boolean("union", bodies, quality=quality, seed=seed, cancelled=cancelled).mesh
+    return boolean.boolean("union", bodies, quality=quality, seed=seed, cancelled=cancelled).mesh
 
 
 def _section_closed(
@@ -1999,7 +2003,7 @@ def _section_closed(
             return None
         tools.append(tool)
 
-    shut = boolean(
+    shut = boolean.boolean(
         "union",
         [mesh, filled],
         quality=quality,
@@ -2037,7 +2041,7 @@ def _section_closed(
             moved = tool.raw.copy()
             if step:
                 shift_body(moved, axis * (reach * step / steps))
-            cut = boolean(
+            cut = boolean.boolean(
                 "difference",
                 [body, MeshData.of(moved)],
                 quality=quality,
@@ -2123,7 +2127,7 @@ def _no_longer_through(
         ),
     )
     shift_body(column, np.asarray(centre, dtype=float))
-    left = boolean(
+    left = boolean.boolean(
         "intersection",
         [MeshData.of(column), mesh],
         quality=quality,
@@ -2600,7 +2604,7 @@ def _closed_at(
         own = _body_from_faces(mesh, feature.face_indices, allowed_rings=(2,))
         if own is not None:
             return _without_scars(
-                boolean(
+                boolean.boolean(
                     "union",
                     [mesh, own],
                     quality=quality,
@@ -2666,7 +2670,7 @@ def _closed_at(
         # Umriss des ganzen Teils und lässt einen Überstand stehen, der in eine
         # Nut oder einen Innenraum ragt (siehe :func:`_between_the_mouths`).
         limit = _between_the_mouths(mesh, feature, centre) or shell(mesh)
-        tool = boolean(
+        tool = boolean.boolean(
             "intersection", [tool, limit], quality=quality, seed=seed, cancelled=cancelled
         ).mesh
     if cavity and feature.params.get("open"):
@@ -2681,14 +2685,14 @@ def _closed_at(
             transform.rotation_between([0.0, 0.0, 1.0], outward),
         )
         shift_body(envelope, mouth)
-        tool = boolean(
+        tool = boolean.boolean(
             "intersection",
             [tool, MeshData.of(envelope)],
             quality=quality,
             seed=seed,
             cancelled=cancelled,
         ).mesh
-    outcome = boolean(
+    outcome = boolean.boolean(
         "union" if cavity else "difference",
         [mesh, tool],
         quality=quality,
@@ -2740,7 +2744,7 @@ def _rim_planes(mesh: Mesh, feature: Feature) -> tuple[SectionPlane, ...]:
     """
     if feature.kind not in ("hole", "slot") or not feature.face_indices:
         return ()
-    body = as_mesh_data(mesh)
+    body = geom_mesh.as_mesh_data(mesh)
     if int(max(feature.face_indices)) >= len(body.raw.faces):
         return ()
     planes = _bore_end_planes(body, feature, {feature.id: feature}, grows=False)
@@ -2936,7 +2940,7 @@ def _tool_for(
             detail=NO_BODY_FROM_FACES if alone else NO_OWN_BODY,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     if rooted and not is_a_cavity(feature):
         built = _rooted(mesh, feature, built, quality=quality, seed=seed, cancelled=cancelled)
@@ -3043,7 +3047,7 @@ def _air_of_the_bore(
     transform.moved(envelope, transform.rotation_between([0.0, 0.0, 1.0], up))
     shift_body(envelope, mouth - up * (height / 2.0))
     try:
-        air = boolean(
+        air = boolean.boolean(
             "difference",
             [MeshData.of(envelope), mesh],
             quality=quality,
@@ -3064,7 +3068,7 @@ def _exact_air_of_the_bore(source: SceneObject, feature: Feature) -> _OwnCavity 
     """
     from app.core.brep import edit
 
-    twin = as_mesh_data(source.mesh)
+    twin = geom_mesh.as_mesh_data(source.mesh)
     frame = _bore_air_frame(twin, feature)
     if frame is None or hole_is_clear(twin, feature):
         return None
@@ -3081,7 +3085,7 @@ def _exact_air_of_the_bore(source: SceneObject, feature: Feature) -> _OwnCavity 
         edit.cylinder(2.0 * (radius + 2.0 * FEATURE_OVERLAP), height), as_transform(matrix)
     )
     air = edit.boolean("difference", [envelope, _exact_body(source)])
-    if air.face_count == 0 or as_mesh_data(air).volume <= EPS_GEOM:
+    if air.face_count == 0 or geom_mesh.as_mesh_data(air).volume <= EPS_GEOM:
         return None
     plane = SectionPlane(
         normal=(float(up[0]), float(up[1]), float(up[2])), position=units.dot3(mouth, up)
@@ -3238,7 +3242,7 @@ def _placing_tool(
 
         solid = tool
         if material_tool is not None:
-            solid = boolean(
+            solid = boolean.boolean(
                 "union",
                 [tool, material_tool],
                 quality=ctx.quality,
@@ -3263,14 +3267,14 @@ def _placing_tool(
         ]
         carrier = body
         if through:
-            carrier = boolean(
+            carrier = boolean.boolean(
                 "union",
                 [body, *through],
                 quality=ctx.quality,
                 seed=ctx.seed,
                 cancelled=ctx.cancelled,
             ).mesh
-        material = boolean(
+        material = boolean.boolean(
             "intersection",
             [solid, carrier],
             quality=ctx.quality,
@@ -3422,7 +3426,7 @@ def _rooted(
         trimesh.repair.fix_normals(prism)  # type: ignore[no-untyped-call]
         if not prism.is_watertight or prism.volume <= EPS_GEOM:
             return built
-        return boolean(
+        return boolean.boolean(
             "union", [built, MeshData.of(prism)], quality=quality, seed=seed, cancelled=cancelled
         ).mesh
     return built
@@ -3471,7 +3475,7 @@ def _without_cavities(
         cutter = _cavity_cutter(asked, index, other, own_span=probe is not None)
         if cutter is None:
             continue
-        tool = boolean(
+        tool = boolean.boolean(
             "difference", [tool, cutter], quality=quality, seed=seed, cancelled=cancelled
         ).mesh
         if probe is None:
@@ -3717,7 +3721,7 @@ def feature_placement_geometry(
 
     feature = _movable_feature(source, feature.id, operation)
     _refuse_another_part_in_the_bore(source, feature)
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     state = cavity_chain_state_at(feature, source.features, body)
     chain = state.chain
     if (refused := cavity_refusal(state)) is not None:
@@ -3800,7 +3804,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
         )
     tool = geometry.mesh.raw.copy()
     transform.moved(tool, to_world)
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     findings: list[Finding] = []
     closed_solver = None
     if not duplicate:
@@ -3829,7 +3833,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
             # Die Kappen des Stopfens blieben sonst in der Fläche stehen, an
             # der Senkbohrung aus 768 Dreiecken 260 mehr je Zug (Durchsicht 0.5.1).
             closed = _without_scars(
-                boolean(
+                boolean.boolean(
                     "union",
                     [body, filler],
                     quality=ctx.quality,
@@ -3865,7 +3869,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
             seed=ctx.seed,
             cancelled=ctx.cancelled,
         )
-    placed = boolean(
+    placed = boolean.boolean(
         kind,
         [body, placing],
         quality=ctx.quality,
@@ -3990,10 +3994,10 @@ def _exact_place_oriented_cavity(
         overlaps=CUT_OVERLAPS if feature.params.get("through") else (1.0,),
         unify=feature.kind == "slot",
     )
-    findings = [*closing, *_edge_findings(as_mesh_data(base), [expected])]
+    findings = [*closing, *_edge_findings(geom_mesh.as_mesh_data(base), [expected])]
     findings += _without_opened_twice(
         _neighbour_bore_findings(
-            source, feature, as_mesh_data(tool), ctx, moved=True, copy=duplicate
+            source, feature, geom_mesh.as_mesh_data(tool), ctx, moved=True, copy=duplicate
         ),
         findings,
     )
@@ -4104,7 +4108,7 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
             detail=_("Dieses Merkmal gibt es an diesem Objekt nicht."),
             values={"feature": name, "object": source.id},
             constraint="unknown_feature",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     # Ein Kegelstück ohne eigenen Körper: derselbe Satz wie im Panel, bevor
     # ``_body_from_faces`` an seinem Rand scheitert. Eine Verengung ändert
@@ -4160,7 +4164,7 @@ def _refuse_like_the_card(
     from app.core.perceive.actions import action_refusal
 
     refusal = action_refusal(
-        op, feature, source.features, as_mesh_data(source.mesh), cancelled=cancelled
+        op, feature, source.features, geom_mesh.as_mesh_data(source.mesh), cancelled=cancelled
     )
     if refusal is None:
         return
@@ -4169,10 +4173,10 @@ def _refuse_like_the_card(
     ways: tuple[Action, ...] = ()
     offer: dict[str, str] = {}
     if refusal in SEPARATE_PART_REASONS:
-        offer = split_offer(as_mesh_data(source.mesh), feature)
+        offer = split_offer(geom_mesh.as_mesh_data(source.mesh), feature)
         ways = split_ways(offer)
     elif refusal in (HOLE_IS_NOT_EMPTY, NO_BODY_FROM_FACES, NEEDS_A_PLAIN_BORE, NOT_AT_THE_MOUTH):
-        ways = (CHANGE_SELECTION, CANCEL)
+        ways = (CHANGE_FEATURE, CANCEL)
     raise ValidationError(
         field="at_feature",
         detail=refusal,
@@ -4210,11 +4214,11 @@ def _refuse_another_part_in_the_bore(
     Stift darin verschmolz beim Drehen selbst.
     """
     reason = separate_part_reason(
-        as_mesh_data(source.mesh), feature, source.features, cancelled=cancelled
+        geom_mesh.as_mesh_data(source.mesh), feature, source.features, cancelled=cancelled
     )
     if reason is None:
         return
-    offer = split_offer(as_mesh_data(source.mesh), feature)
+    offer = split_offer(geom_mesh.as_mesh_data(source.mesh), feature)
     raise ValidationError(
         field="at_feature",
         detail=reason,
@@ -4963,7 +4967,7 @@ def filled_bore_refusal(mesh: MeshData, feature: Feature) -> ValidationError:
         values={"feature": feature.id, "kind": feature.kind, **offer},
         constraint="not_movable",
         suggestions=(
-            split_ways(offer) if reason is OTHER_PART_IN_THE_BORE else (CHANGE_SELECTION, CANCEL)
+            split_ways(offer) if reason is OTHER_PART_IN_THE_BORE else (CHANGE_FEATURE, CANCEL)
         ),
     )
 
@@ -5182,7 +5186,7 @@ def _slot_in_separate_carrier(
     from app.core.perceive.features import detect
 
     source = ctx.inputs[0]
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     if not _slot_has_multiple_bodies(body, ctx.cancelled):
         return None
     raw = _welded(body)
@@ -5397,9 +5401,9 @@ def _slot_in_separate_carrier(
                 )
             for index, part in enumerate(parts):
                 if index not in (carrier, far):
-                    cut_part = boolean(
+                    cut_part = boolean.boolean(
                         "difference",
-                        [as_mesh_data(part), tool_mesh],
+                        [geom_mesh.as_mesh_data(part), tool_mesh],
                         quality=ctx.quality,
                         seed=ctx.seed,
                         cancelled=ctx.cancelled,
@@ -5417,7 +5421,11 @@ def _slot_in_separate_carrier(
         assembled: Mesh = assembled_solid
         result_features = features_of(assembled_solid, cancelled=ctx.cancelled)
     else:
-        meshes = [as_mesh_data(part) for part in parts if as_mesh_data(part).triangle_count]
+        meshes = [
+            geom_mesh.as_mesh_data(part)
+            for part in parts
+            if geom_mesh.as_mesh_data(part).triangle_count
+        ]
         slots = tuple(
             slot for part in meshes for slot in (part.slots or (0,) * part.triangle_count)
         )
@@ -6515,7 +6523,8 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
     # 22: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
     # Verschweißweite, auch ein eng sitzender Stift (RM-661).
-    cache_version="22",
+    # 23: Wandbefunde bringen die Einheit ihrer Grenze mit (FD-188).
+    cache_version="23",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -6573,7 +6582,7 @@ def move_feature(ctx: OpContext) -> OpResult:
     if all(is_close(a, b) for a, b in zip(centre, target, strict=True)):
         return OpResult(outputs=[source], findings=[_already_in_place(feature.id, duplicate=False)])
 
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     state = cavity_chain_state_at(feature, source.features, body)
     chain = state.chain
     if (refused := cavity_refusal(state)) is not None:
@@ -6624,7 +6633,7 @@ def move_feature(ctx: OpContext) -> OpResult:
         # 304 → 470 Dreiecke beim ersten Versetzen, und nach dem Entfernen
         # trug eine Platte aus zwölf Dreiecken 374 (gemessen 23.09.2026).
         closed = _without_scars(
-            boolean(
+            boolean.boolean(
                 "union",
                 [body, cavity_body],
                 quality=ctx.quality,
@@ -6648,7 +6657,7 @@ def move_feature(ctx: OpContext) -> OpResult:
         shift_body(shifted_cavity, travel)
         cutting = MeshData.of(shifted_cavity)
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
-        placed = boolean(
+        placed = boolean.boolean(
             "difference",
             [closed.mesh, cutting],
             quality=ctx.quality,
@@ -6702,7 +6711,7 @@ def move_feature(ctx: OpContext) -> OpResult:
         )
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
         cutting = _placing_tool(ctx, body, source, feature, target, cavity, carried_from=centre)
-        placed = boolean(
+        placed = boolean.boolean(
             "difference" if cavity else "union",
             [closed.mesh, cutting],
             quality=ctx.quality,
@@ -6901,7 +6910,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
     # 22: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
     # Verschweißweite, auch ein eng sitzender Stift (RM-661).
-    cache_version="22",
+    # 23: Wandbefunde bringen die Einheit ihrer Grenze mit (FD-188).
+    cache_version="23",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -6954,7 +6964,7 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         return OpResult(outputs=[source], findings=[_already_in_place(feature.id, duplicate=True)])
     _refuse_like_the_card("duplicate_feature", source, feature, ctx.cancelled)
 
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     cavity = is_a_cavity(feature)
     from app.core.perceive.relations import cavity_chain_state_at
 
@@ -6980,7 +6990,7 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
     ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
     change: BooleanKind = "difference" if cavity else "union"
     cutting = _placing_tool(ctx, body, source, feature, target, cavity)
-    placed = boolean(
+    placed = boolean.boolean(
         change,
         [body, cutting],
         quality=ctx.quality,
@@ -7100,7 +7110,7 @@ def _duplicate_cavity_chain(
     gewählte Mitte, und jede Kopie bekommt ihre eigene Kennung; das Original
     behält seine.
     """
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     measured = np.asarray(feature.params["centre"], dtype=float)
     travel = np.asarray(target, dtype=float) - measured
     tool = _chain_copy_tool(ctx, body, feature, chain)
@@ -7108,7 +7118,7 @@ def _duplicate_cavity_chain(
     shift_body(shifted, travel)
     cutting = MeshData.of(shifted)
     ctx.progress(0.2, str(_("Der ganze Hohlraum wird an der neuen Stelle angelegt …")))
-    placed = boolean(
+    placed = boolean.boolean(
         "difference",
         [body, cutting],
         quality=ctx.quality,
@@ -7368,7 +7378,7 @@ def pattern_feature(ctx: OpContext) -> OpResult:
     """
     params = cast(PatternFeatureParams, ctx.params)
     source = ctx.inputs[0]
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     units = _pattern_units(source, params.at_features, body)
     centre: Vec3 = (0.0, 0.0, 0.0)
     answered: dict[str, float] = {}
@@ -7437,7 +7447,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
             field="at_features",
             detail=_("Wählen Sie mindestens ein Merkmal, das sich wiederholen soll."),
             constraint="required",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     units: list[_PatternUnit] = []
     covered: set[str] = set()
@@ -7449,7 +7459,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
                 detail=_("Dieses Merkmal gibt es an diesem Objekt nicht."),
                 values={"feature": name, "object": source.id},
                 constraint="unknown_feature",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         against = cone_piece_blocked(feature) or reason_against("pattern_feature", feature.kind)
         if against is not None:
@@ -7458,7 +7468,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
                 detail=against,
                 values={"feature": name, "kind": feature.kind},
                 constraint="not_movable",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         if feature.id in covered:
             continue
@@ -7472,7 +7482,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
                 ),
                 values={"feature": name},
                 constraint="not_evidenced",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         state = cavity_chain_state_at(feature, source.features, body)
         if (refused := cavity_refusal(state)) is not None:
@@ -7481,7 +7491,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
                 detail=refused,
                 values={"feature": name},
                 constraint="not_movable",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         chain = tuple(state.chain) if state.chain is not None else None
         members = chain if chain is not None else (feature,)
@@ -7756,7 +7766,7 @@ def _mesh_pattern_result(
     for change, tools in (("union", material), ("difference", hollow_tools)):
         if not tools:
             continue
-        outcome = boolean(
+        outcome = boolean.boolean(
             cast(BooleanKind, change),
             [placed, *tools],
             quality=ctx.quality,
@@ -7873,7 +7883,7 @@ def _exact_pattern_result(
             ),
         )
     copies = [copy for place in kept for copy in place.copies]
-    findings.extend(_edge_findings(as_mesh_data(solid), copies, rigid=True))
+    findings.extend(_edge_findings(geom_mesh.as_mesh_data(solid), copies, rigid=True))
     # Die Kopien stehen in der Reihenfolge der Glieder (:func:`_name_copies`);
     # die äußeren Zylinder einer Kette sind entlang der Achse frei.
     mouths = frozenset(
@@ -8185,7 +8195,7 @@ def remove_feature(ctx: OpContext) -> OpResult:
     measured = [float(value) for value in feature.params["centre"]]
     centre: Vec3 = (measured[0], measured[1], measured[2])
 
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     cavity = is_a_cavity(feature)
     chain = _cavity_chain_of(body, feature, source.features)
     if feature.kind == "torus":
@@ -8232,7 +8242,7 @@ def remove_feature(ctx: OpContext) -> OpResult:
                 constraint="not_movable",
             )
         closed = _without_scars(
-            boolean(
+            boolean.boolean(
                 "union",
                 [body, filled],
                 quality=ctx.quality,
@@ -8388,7 +8398,8 @@ class RotateFeatureParams(BaseParams):
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
     # 19: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
     # Verschweißweite, auch ein eng sitzender Stift (RM-661).
-    cache_version="19",
+    # 20: Wandbefunde bringen die Einheit ihrer Grenze mit (FD-188).
+    cache_version="20",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -8464,7 +8475,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     # neuen tut, füllt neben dem Loch und schneidet ein Kreuz hinein.
     spun = _with_turned_direction(feature, params.axis, params.angle)
     cavity = is_a_cavity(feature)
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     from app.core.perceive.relations import cavity_chain_state_at
 
     state = cavity_chain_state_at(feature, source.features, body)
@@ -8538,7 +8549,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         )
     else:
         tool = _placing_tool(ctx, body, source, spun, centre, cavity, axis=turned_axis)
-    placed = boolean(
+    placed = boolean.boolean(
         "difference" if cavity else "union",
         [closed.mesh, tool],
         quality=ctx.quality,
@@ -8648,7 +8659,7 @@ def _rotate_cavity_chain(
     gekippte Senkung über einer gekippten, durchgehenden Bohrung, und die
     Erkennung findet beide mit derselben Achse.
     """
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     pivot = np.asarray(feature.params["centre"], dtype=float)
     matrix = np.asarray(
         transform.rotation(axis, angle, cast(Vec3, tuple(float(value) for value in pivot))),
@@ -8670,7 +8681,7 @@ def _rotate_cavity_chain(
             constraint="not_movable",
         )
     closed = _without_scars(
-        boolean(
+        boolean.boolean(
             "union",
             [body, filled],
             quality=ctx.quality,
@@ -8688,7 +8699,7 @@ def _rotate_cavity_chain(
         cancelled=ctx.cancelled,
     )
     ctx.progress(0.6, str(_("Der Hohlraum wird gedreht gesetzt …")))
-    placed = boolean(
+    placed = boolean.boolean(
         "difference",
         [closed.mesh, turned_tool],
         quality=ctx.quality,
@@ -8866,7 +8877,7 @@ def _boxed_in(
         shift_body(box, foot - normal * (size / 2.0))
         boxes.append(MeshData.of(box))
     try:
-        outcome = boolean(
+        outcome = boolean.boolean(
             "intersection",
             [tool, *boxes],
             stages=DRAFT_CHAIN,
@@ -9553,7 +9564,7 @@ def _chain_tool(
         if part is None:
             return None
         bodies.append(part)
-    return boolean("union", bodies, quality="fine", seed=None).mesh
+    return boolean.boolean("union", bodies, quality="fine", seed=None).mesh
 
 
 def _stretched_section(
@@ -9702,7 +9713,7 @@ def _reject_oversized(field: str, diameter: float, mesh: Mesh, *, kind: str = "d
             ),
             value=diameter,
             constraint="maximum",
-            values={"maximum": limit},
+            values={"maximum": limit, "unit": "mm"},
         )
 
 
@@ -9842,7 +9853,8 @@ class ResizeFeatureParams(BaseParams):
     # 29: Das geänderte Gewinde behält Profil, Gangzahl, Drehsinn und Kegel und nennt
     # Vorschub und Drehsinn als Parameter (RM-544, Review GEW G6).
     # 30: Ein geänderter Kegel behält seine Bezugsebene (``gauge_offset``, Nachprüfung GEW N2).
-    cache_version="30",
+    # 31: Wandbefunde bringen die Einheit ihrer Grenze mit (FD-188).
+    cache_version="31",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -9912,15 +9924,15 @@ def resize_feature(ctx: OpContext) -> OpResult:
     scale = params.diameter / previous if previous > EPS_GEOM else 1.0
     cavity = is_a_cavity(feature)
     if cavity and feature.kind == "cone":
-        chain = _cavity_chain_of(as_mesh_data(source.mesh), feature, source.features)
+        chain = _cavity_chain_of(geom_mesh.as_mesh_data(source.mesh), feature, source.features)
         if chain is not None:
             return _resize_chain_countersink(ctx, source, feature, chain, params.diameter)
     if source.kind == "brep" and feature.kind in ("pin", "cone", "sphere"):
         return _exact_resize_by_faces(ctx, source, feature, centre, params.diameter, scale)
-    stands_alone = _stands_alone(as_mesh_data(source.mesh), feature, source.features)
+    stands_alone = _stands_alone(geom_mesh.as_mesh_data(source.mesh), feature, source.features)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = _closed_at(
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         feature,
         centre,
         cavity,
@@ -9931,13 +9943,13 @@ def resize_feature(ctx: OpContext) -> OpResult:
         alone=stands_alone,
     )
     ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
-    placed = boolean(
+    placed = boolean.boolean(
         "difference" if cavity else "union",
         [
             closed.mesh,
             _placing_tool(
                 ctx,
-                as_mesh_data(source.mesh),
+                geom_mesh.as_mesh_data(source.mesh),
                 source,
                 feature,
                 centre,
@@ -10053,7 +10065,7 @@ def _resize_chain_countersink(
             detail=side,
             values={"feature": feature.id},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     entrance, way, sections = side
     section = sections[-1]
@@ -10078,7 +10090,7 @@ def _resize_chain_countersink(
             ),
             value=diameter,
             constraint="minimum",
-            values={"minimum": 2.0 * below},
+            values={"minimum": 2.0 * below, "unit": "mm"},
             suggestions=(CORRECT_INPUT, CANCEL),
         )
     mouths = {feature.id: mouth}
@@ -10104,7 +10116,7 @@ def _resize_chain_countersink(
             )
         expected.append(dataclasses.replace(member, params=params, provenance="generated"))
     changed = next(member for member in expected if member.id == feature.id)
-    reach = float(as_mesh_data(source.mesh).bounds.diagonal)
+    reach = float(geom_mesh.as_mesh_data(source.mesh).bounds.diagonal)
     ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
     if source.kind == "brep":
         from app.core.sketch.planes import frame_of
@@ -10124,9 +10136,9 @@ def _resize_chain_countersink(
                 mouths=mouths,
             ),
         )
-        findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), [changed])]
+        findings = [*closing_findings, *_edge_findings(geom_mesh.as_mesh_data(filled), [changed])]
         findings += _without_opened_twice(
-            _neighbour_bore_findings(source, chain[0], as_mesh_data(tool), ctx), findings
+            _neighbour_bore_findings(source, chain[0], geom_mesh.as_mesh_data(tool), ctx), findings
         )
         return _exact_cavity_result(
             ctx,
@@ -10137,7 +10149,7 @@ def _resize_chain_countersink(
             findings=findings,
             mouths=_chain_mouths(chain),
         )
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     plug = _cavity_plug(body, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
     if plug is None:
         raise ValidationError(
@@ -10147,7 +10159,7 @@ def _resize_chain_countersink(
             constraint="not_movable",
         )
     closed = _without_scars(
-        boolean(
+        boolean.boolean(
             "union",
             [body, plug],
             quality=ctx.quality,
@@ -10164,7 +10176,7 @@ def _resize_chain_countersink(
     # Ohne Narben wie der Einlauf an einer Verengung (``_resize_bore_entrance``):
     # Die Kappe des Werkzeugs setzte eine Ecke in die Mitte jeder Wandkante.
     placed = _without_scars(
-        boolean(
+        boolean.boolean(
             "difference",
             [closed.mesh, cutting.mesh],
             quality=ctx.quality,
@@ -10304,8 +10316,8 @@ class ResizeHoleParams(BaseParams):
         default=False,
         placement="advanced",
         doc=_(
-            "Vergrößert den Ziel-Durchmesser um die Druckkorrektur aus dem Materialprofil. "
-            "Aus: Die Bohrung erhält genau das eingegebene Maß."
+            "Gibt dem Durchmesser die Lochkorrektur aus dem Materialprofil dazu, weil gedruckte "
+            "Bohrungen enger ausfallen. Aus: Die Bohrung erhält genau das eingegebene Maß."
         ),
     )
     legacy_slot_tool: bool = _saved_slot_tool_marker()
@@ -10395,7 +10407,7 @@ def _depth_wish(
     if through:
         outward = _kept_open(ctx, params, unit, answered)
     else:
-        air = _toward_the_air(as_mesh_data(source.mesh), feature)
+        air = _toward_the_air(geom_mesh.as_mesh_data(source.mesh), feature)
         if air is None:
             raise ValidationError(
                 field="depth",
@@ -10558,7 +10570,7 @@ def _depth_plan(closed: MeshData, wish: _DepthWish, profile: Profile, radius: fl
                         thickness=thickness,
                         minimum=minimum,
                     ),
-                    values={"thickness": round(thickness, 3), "minimum": minimum},
+                    values={"thickness": round(thickness, 3), "minimum": minimum, "unit": "mm"},
                     suggestions=(CORRECT_INPUT,),
                 )
             )
@@ -10704,7 +10716,8 @@ OPEN_BODY_DETAIL: Final = _(
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
     # 26: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
     # Verschweißweite, auch ein eng sitzender Stift (RM-661).
-    cache_version="26",
+    # 27: Wandbefunde bringen die Einheit ihrer Grenze mit (FD-188).
+    cache_version="27",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -10843,7 +10856,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
             closing_body, closing_findings = _exact_closing_base(ctx, source)
             filled = _exact_cavity_filled(closing_body, feature, planes=rims)
         if wish is not None and filled is not None:
-            plan = _depth_plan(as_mesh_data(filled), wish, ctx.profile, cut / 2.0)
+            plan = _depth_plan(geom_mesh.as_mesh_data(filled), wish, ctx.profile, cut / 2.0)
             centre, depth, through = plan.centre, plan.depth, plan.through
             depth_findings = list(plan.findings)
             floor_shift = plan.floor_shift
@@ -10884,7 +10897,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
                 depth=depth,
             )
         # Am Zwilling, nicht am exakten Integral (BOHRUNG-10).
-        if solid.face_count == 0 or as_mesh_data(solid).volume <= EPS_GEOM:
+        if solid.face_count == 0 or geom_mesh.as_mesh_data(solid).volume <= EPS_GEOM:
             raise GeometryError(
                 title=NOTHING_LEFT_TITLE,
                 detail=NOTHING_LEFT_DETAIL,
@@ -10928,7 +10941,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
                 diameter=cut,
                 travel=slot_travel_now,
                 angle_deg=slot_angle_of(feature, axis) if feature.kind == "slot" else 0.0,
-                body=as_mesh_data(asked),
+                body=geom_mesh.as_mesh_data(asked),
                 reach=depth / 2.0,
             )
         )
@@ -10993,7 +11006,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
             ),
         )
 
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     original_body = body
     # **Die Tiefe wird am Original gemessen, nicht am gestopften Körper.**
     # `_mesh_bore_depth` liest die Dreiecke, die `feature.face_indices`
@@ -11129,7 +11142,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
     # **Und die Toleranz wird auch beim Versetzen gemeldet.** `drill` erzeugt
     # den Befund nur bei `compensate=True`, und der Aufruf oben setzt `False`,
     # weil `cut` sie schon trägt — ohne diese Zeile verschwände die Auskunft
-    # „Die Bohrung wurde um die Materialtoleranz vergrößert" still, sobald das
+    # „Die Bohrung ist um die Lochkorrektur des Materials größer geschnitten.“ still, sobald das
     # Loch die Stelle wechselt (Fund des Reviews, 11.09.2026).
     moved_findings = (
         compensation_findings(params.diameter, cut, params.compensate) if redrilled else []
@@ -11360,12 +11373,12 @@ class SlotHoleParams(BaseParams):
         ),
     )
     compensate: bool = param(
-        title=_("Materialtoleranz berücksichtigen"),
+        title=_("Druckabweichung ausgleichen"),
         default=False,
         placement="advanced",
         doc=_(
-            "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. "
-            "Aus bleibt das gemessene Maß unverändert."
+            "Gibt der Breite die Lochkorrektur aus dem Materialprofil dazu, weil gedruckte "
+            "Langlöcher enger ausfallen. Aus: Die Breite bleibt, wie eingegeben oder gemessen."
         ),
     )
     # **Nur für Schritte aus Projekten bis Format 38** (Migration 38 → 39).
@@ -11438,7 +11451,8 @@ SLOT_FEATURE_RENAMED: Final = _(
     # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
     # 24: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
     # Verschweißweite, auch ein eng sitzender Stift (RM-661).
-    cache_version="24",
+    # 25: Wandbefunde bringen die Einheit ihrer Grenze mit (FD-188).
+    cache_version="25",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -11491,7 +11505,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     feature = _chosen_bore(source, params.at_feature, op="slot_hole")
     from app.core.perceive.relations import cavity_chain_state_at, cavity_is_shared
 
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     # **An beiden Kernen die Merkmale der Szene** — dieselben, die das
     # Merkmalfenster fragt und *Merkmal drehen* (RM-264). Am exakten Körper
     # stand hier seit dem 12.09.2026 die Netz-Erkennung seiner Tessellierung,
@@ -11510,7 +11524,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
             # An einer Kette mit Verengung deren Satz, nicht der über eine
             # Senkung — wie im Panel (Durchsicht 0.5.1).
             detail=narrowing_reason("slot_hole", state.chain) or NEEDS_A_PLAIN_BORE,
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     _refuse_like_the_card("slot_hole", source, feature, ctx.cancelled)
     if (
@@ -11708,7 +11722,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 overlap=overlap,
             )
         # Am Zwilling, nicht am exakten Integral (BOHRUNG-10).
-        if solid.face_count == 0 or as_mesh_data(solid).volume <= EPS_GEOM:
+        if solid.face_count == 0 or geom_mesh.as_mesh_data(solid).volume <= EPS_GEOM:
             raise GeometryError(
                 title=NOTHING_LEFT_TITLE,
                 detail=NOTHING_LEFT_DETAIL,
@@ -11744,7 +11758,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 diameter=diameter,
                 travel=0.0 if rounded else slot_travel(diameter=diameter, length=cut_length),
                 angle_deg=angle,
-                body=as_mesh_data(started),
+                body=geom_mesh.as_mesh_data(started),
                 reach=cut_depth / 2.0,
                 old_opening=old_opening,
             )
@@ -11826,7 +11840,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
             findings=findings,
         )
 
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     original_body = body
     # Am Original gemessen, nicht am gestopften Körper — die Begründung steht
     # bei derselben Zeile in `resize_hole`.
@@ -11874,7 +11888,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
         old_opening=old_opening,
     )
     # Zerfallen ist, was mehr Teile hat als vor dem Schritt — nicht mehr als der Stopfen.
-    result = _split_counted_from(as_mesh_data(source.mesh), result)
+    result = _split_counted_from(geom_mesh.as_mesh_data(source.mesh), result)
     if rounded:
         from app.core.perceive.features import detect
 
@@ -12015,7 +12029,7 @@ def _neighbour_bore_findings(
     from app.core.geom.measure import surface_gap
     from app.core.perceive.relations import cavity_chains
 
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     chains = cavity_chains(source.features, mesh)
     grouped = {section.id: chain for chain in chains for section in chain}
     own = grouped.get(feature.id, (feature,))
@@ -12068,6 +12082,7 @@ def _neighbour_bore_findings(
                 values={
                     "thickness": after_gap,
                     "minimum": threshold,
+                    "unit": "mm",
                     **({} if before_gap is None else {"previous": before_gap}),
                 },
                 suggestions=(CORRECT_INPUT,),
@@ -12169,7 +12184,7 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
         widening_at_the_mouth,
     )
 
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     chain = cavity_chain_at(feature, source.features, mesh)
     if chain is not None and len(chain) > 2:
         # Der nächste Abschnitt nach außen, auf jeder Seite, auf der das Merkmal
@@ -12562,7 +12577,7 @@ def bore_entrance(
     """
     from app.core.perceive.relations import cavity_chain_state_at, cavity_sides
 
-    mesh = as_mesh_data(body)
+    mesh = geom_mesh.as_mesh_data(body)
     if cavity is None and not touches_other:
         state = cavity_chain_state_at(feature, features, mesh)
         chain, touches = state.chain, state.touches_other
@@ -13057,7 +13072,9 @@ def _entrance_mesh_tool(
         # Eine gerade Bohrung bis zur Mündung — die Verengung verschwand mit
         # *Nur Bohrungsdurchmesser* (:func:`_side_tools`); zu vereinigen ist nichts.
         return BooleanOutcome(mesh=tools[0], solver=SolverInfo("direct", ("direct",)))
-    return boolean("union", tools, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
+    return boolean.boolean(
+        "union", tools, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+    )
 
 
 #: Befunde des Einlauf-Neuschnitts, die den **alten** Ort beschreiben —
@@ -13160,7 +13177,7 @@ def _moved_after_resizing(
     findings.extend(moved.findings)
     source = ctx.inputs[0]
     cavity = _paired_cavity_body(
-        as_mesh_data(body.mesh), *(body.features[entry.id] for entry in entrance.chain)
+        geom_mesh.as_mesh_data(body.mesh), *(body.features[entry.id] for entry in entrance.chain)
     )
     if cavity is not None:
         shifted = cavity.raw.copy()
@@ -13168,7 +13185,9 @@ def _moved_after_resizing(
         findings.extend(
             _neighbour_bore_findings(source, feature, MeshData.of(shifted), ctx, moved=True)
         )
-    findings.extend(split_findings(as_mesh_data(source.mesh), as_mesh_data(result.mesh)))
+    findings.extend(
+        split_findings(geom_mesh.as_mesh_data(source.mesh), geom_mesh.as_mesh_data(result.mesh))
+    )
     return OpResult(
         outputs=moved.outputs,
         solver=deepest((resized.solver, moved.solver)),
@@ -13262,7 +13281,7 @@ def _resize_bore_entrance(
     (:func:`_narrowing_after_resize`).
     """
     source = ctx.inputs[0]
-    original = as_mesh_data(source.mesh)
+    original = geom_mesh.as_mesh_data(source.mesh)
     reach = original.bounds.diagonal
     ctx.cancelled.raise_if_cancelled()
     stages: list[SolverInfo | None] = []
@@ -13329,8 +13348,8 @@ def _resize_bore_entrance(
             raise GeometryError(detail=OPEN_BODY_DETAIL, suggestions=(CORRECT_INPUT, CANCEL))
         changed: Mesh = exact_changed
         found = features_of(exact_changed, cancelled=ctx.cancelled)
-        tool = as_mesh_data(tool_solid)
-        before_cut = as_mesh_data(filled_body)
+        tool = geom_mesh.as_mesh_data(tool_solid)
+        before_cut = geom_mesh.as_mesh_data(filled_body)
     else:
         tool_outcome = _entrance_mesh_tool(entrance, diameter, reach, ctx, keep=keep)
         tool = tool_outcome.mesh
@@ -13361,7 +13380,7 @@ def _resize_bore_entrance(
         )
         if plug is None:
             raise _entrance_error()
-        filled_mesh = boolean(
+        filled_mesh = boolean.boolean(
             "union",
             [original, plug],
             quality=ctx.quality,
@@ -13370,7 +13389,7 @@ def _resize_bore_entrance(
             object_ids=(source.id, None),
             merge_face_contacts=True,
         )
-        cut_mesh = boolean(
+        cut_mesh = boolean.boolean(
             "difference",
             [filled_mesh.mesh, tool],
             quality=ctx.quality,
@@ -13407,7 +13426,7 @@ def _resize_bore_entrance(
     for target in targets.values():
         expected = float(target.params["diameter"])
         recognised = _recognised_resized_feature(
-            as_mesh_data(changed),
+            geom_mesh.as_mesh_data(changed),
             target,
             expected,
             original=original,
@@ -13417,13 +13436,15 @@ def _resize_bore_entrance(
         if recognised is not None:
             solver = deepest(stages)
             if solver is None or solver.strategy in ("direct", "welded"):
-                recognised = _with_nominal_bore(as_mesh_data(changed), recognised, target, expected)
+                recognised = _with_nominal_bore(
+                    geom_mesh.as_mesh_data(changed), recognised, target, expected
+                )
             preserved[target.id] = dataclasses.replace(recognised, id=target.id)
             floors = _resized_bore_floor(
                 original,
                 source.features[target.id],
                 source.features,
-                as_mesh_data(changed),
+                geom_mesh.as_mesh_data(changed),
                 recognised,
                 found,
                 check_cancelled=ctx.cancelled.raise_if_cancelled,
@@ -13434,7 +13455,7 @@ def _resize_bore_entrance(
             findings.append(_bore_no_longer_a_feature(feature, diameter))
     findings.extend(_neighbour_bore_findings(source, feature, tool, ctx))
     findings.extend(_entrance_edge_findings(before_cut, entrance, diameter))
-    findings.extend(split_findings(original, as_mesh_data(changed)))
+    findings.extend(split_findings(original, geom_mesh.as_mesh_data(changed)))
     params = cast(ResizeHoleParams, ctx.params)
     findings.extend(compensation_findings(params.diameter, diameter, params.compensate))
     if keep:
@@ -13445,8 +13466,8 @@ def _resize_bore_entrance(
             found,
             preserved,
             changed_ids,
-            as_mesh_data(changed),
-            old_body=as_mesh_data(source.mesh),
+            geom_mesh.as_mesh_data(changed),
+            old_body=geom_mesh.as_mesh_data(source.mesh),
         )
     # Der Beleg für die bewusst geänderten Abschnitte reist mit dem Ergebnis
     # (§21.2) — wie beim Ändern ohne Einlauf. Ohne ihn hielt am exakten Körper
@@ -13729,7 +13750,7 @@ def _floor_carried(
     ``face_8``). Die Operation kennt die Bewegung (``motion``, 4 x 4) und sagt
     der Zuordnung, wo er jetzt liegt — wie für Bohrung und Senkung selbst.
     """
-    floor = _cavity_floor(as_mesh_data(mesh), bore, features, None)
+    floor = _cavity_floor(geom_mesh.as_mesh_data(mesh), bore, features, None)
     if floor is None:
         return None
     params = dict(floor.params)
@@ -13960,7 +13981,7 @@ def _union_bore_space(
     from app.core.brep.kernel import Solid
     from app.core.perceive.relations import cavity_surface_indices
 
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     indices = cavity_surface_indices(mesh, chain, mouth_blends=True)
     ctx.cancelled.raise_if_cancelled()
     if isinstance(source.mesh, Solid) and isinstance(after, Solid):
@@ -13976,12 +13997,12 @@ def _union_bore_space(
     void = _body_from_faces(mesh, indices, allowed_rings=(1, 2), triangulated_rims=True)
     if void is None:
         return None
-    air_mesh = boolean(
+    air_mesh = boolean.boolean(
         "difference", [void, mesh], stages=DRAFT_CHAIN, allow_empty=True, cancelled=ctx.cancelled
     ).mesh
-    remaining_mesh = boolean(
+    remaining_mesh = boolean.boolean(
         "difference",
-        [air_mesh, as_mesh_data(after)],
+        [air_mesh, geom_mesh.as_mesh_data(after)],
         stages=DRAFT_CHAIN,
         allow_empty=True,
         cancelled=ctx.cancelled,
@@ -14010,7 +14031,7 @@ def union_bore_findings(ctx: OpContext, after: Mesh) -> list[Finding]:
         bores = [entry for entry in source.features.values() if entry.kind in ("hole", "slot")]
         if not bores:
             continue
-        mesh = as_mesh_data(source.mesh)
+        mesh = geom_mesh.as_mesh_data(source.mesh)
         checked: set[str] = set()
         for bore in bores:
             ctx.cancelled.raise_if_cancelled()
@@ -14052,7 +14073,7 @@ def union_bore_findings(ctx: OpContext, after: Mesh) -> list[Finding]:
                 opened, closed = 0, 0
                 partly = old_volume - remaining > volume_error
                 if after_mesh is None:
-                    after_mesh = as_mesh_data(after)
+                    after_mesh = geom_mesh.as_mesh_data(after)
                 for rim in rims:
                     ctx.cancelled.raise_if_cancelled()
                     from shapely.geometry import MultiPoint
@@ -14760,7 +14781,7 @@ def _exact_closing_base(ctx: OpContext, source: SceneObject) -> tuple[Any, list[
     if solid.solid_count < 2:
         return solid, []
     contact = parts_that_cross(
-        as_mesh_data(solid).raw,
+        geom_mesh.as_mesh_data(solid).raw,
         cancelled=ctx.cancelled,
         max_pairs=None,
         include_face_contacts=True,
@@ -14891,7 +14912,7 @@ def _exact_turned_blind_tool(
     """
     from app.core.brep import edit
 
-    twin = as_mesh_data(source.mesh)
+    twin = geom_mesh.as_mesh_data(source.mesh)
     if feature.kind == "hole" and not hole_is_clear(twin, feature):
         return None
     reach = _blind_reach(twin, feature, source.features, matrix)
@@ -14931,7 +14952,7 @@ def _exact_body_checked(solid: Any) -> Any:
     Zwilling braucht die Anzeige ohnehin, und das exakte Volumen rechnet der
     Auswertungsarbeiter danach für die Zahlenzeile (``session._warm_metrics``).
     """
-    if solid.face_count == 0 or as_mesh_data(solid).volume <= EPS_GEOM:
+    if solid.face_count == 0 or geom_mesh.as_mesh_data(solid).volume <= EPS_GEOM:
         raise GeometryError(
             title=NOTHING_LEFT_TITLE,
             detail=NOTHING_LEFT_DETAIL,
@@ -15068,9 +15089,9 @@ def _exact_features_after(
     matched = settled_twins(
         matched,
         {name: entry for name, entry in previous.items() if name not in intended},
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         detected,
-        as_mesh_data(solid),
+        geom_mesh.as_mesh_data(solid),
         bounds.diagonal,
     )
     if lost:
@@ -15216,9 +15237,13 @@ def _exact_move_cavity(
     expected = dataclasses.replace(
         feature, params={**feature.params, "centre": target}, provenance="generated"
     )
-    findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), [expected], rigid=True)]
+    findings = [
+        *closing_findings,
+        *_edge_findings(geom_mesh.as_mesh_data(filled), [expected], rigid=True),
+    ]
     findings += _without_opened_twice(
-        _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True), findings
+        _neighbour_bore_findings(source, feature, geom_mesh.as_mesh_data(tool), ctx, moved=True),
+        findings,
     )
     result = _exact_cavity_result(
         ctx, source, placed, op="move_feature", expected=expected, findings=findings
@@ -15251,9 +15276,11 @@ def _exact_duplicate_cavity(
         params={**feature.params, "centre": target},
         provenance="generated",
     )
-    findings = _edge_findings(as_mesh_data(solid), [copy], rigid=True)
+    findings = _edge_findings(geom_mesh.as_mesh_data(solid), [copy], rigid=True)
     findings += _without_opened_twice(
-        _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True, copy=True),
+        _neighbour_bore_findings(
+            source, feature, geom_mesh.as_mesh_data(tool), ctx, moved=True, copy=True
+        ),
         findings,
     )
     nothing = without_effect(solid, placed, "difference", ctx.profile)
@@ -15415,7 +15442,7 @@ def _exact_rotate_cavity(
     # Kante" nur aus dem, was schon in der Liste steht. Stand der Kantenbefund
     # erst danach darin, meldete der exakte Körper eine in die Nachbarin
     # gekippte Bohrung zweimal (Durchsicht seit 0.5.0, 25.09.2026).
-    findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), [expected])]
+    findings = [*closing_findings, *_edge_findings(geom_mesh.as_mesh_data(filled), [expected])]
     # **Bohrung und Langloch gleich** (Durchsicht 0.5.1, BOHRUNG-08): Das
     # Langloch schnitt gekippt über die ganze Zielhülle ohne Kappe — am
     # ``build_tray_v3.step`` fehlten danach 8 012 mm³ vor seiner Mündung, quer
@@ -15431,7 +15458,7 @@ def _exact_rotate_cavity(
     blind = _exact_turned_blind_tool(source, feature, spun, matrix)
     tool = blind if blind is not None else _exact_cavity_tool(filled, spun, centre, turned_axis)
     if feature.params.get("through") or blind is not None:
-        caps = _old_rim_caps(as_mesh_data(source.mesh), feature, source.features)
+        caps = _old_rim_caps(geom_mesh.as_mesh_data(source.mesh), feature, source.features)
         if caps:
             tool = edit.clipped_bore_tool(tool, caps)
     # Dieselbe Haltefrage wie beim Versetzen (BOHRUNG-06): ein Versuch, denn
@@ -15441,7 +15468,7 @@ def _exact_rotate_cavity(
         filled, lambda _overlap: tool, overlaps=(1.0,), unify=feature.kind == "slot"
     )
     findings += _without_opened_twice(
-        _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, turned=True),
+        _neighbour_bore_findings(source, feature, geom_mesh.as_mesh_data(tool), ctx, turned=True),
         findings,
     )
     return _exact_cavity_result(
@@ -15634,8 +15661,8 @@ def _exact_chain_filled(source: SceneObject, entrance: _BoreEntrance, solid: Any
     # Zwischenkörper, den danach niemand mehr misst. Ein fallen gelassener
     # Stopfen fehlt ganz; die Tessellierung verschiebt die Bilanz um wenige
     # Prozent, :data:`_PLUG_KEPT` trennt beides.
-    gained = as_mesh_data(filled).volume - as_mesh_data(solid).volume
-    if gained < as_mesh_data(plug).volume * _PLUG_KEPT:
+    gained = geom_mesh.as_mesh_data(filled).volume - geom_mesh.as_mesh_data(solid).volume
+    if gained < geom_mesh.as_mesh_data(plug).volume * _PLUG_KEPT:
         raise _chain_not_readable(entrance.chain)
     return filled
 
@@ -15677,7 +15704,7 @@ def _exact_chain_plug(source: SceneObject, entrance: _BoreEntrance) -> Any:
             planes_of=lambda _index, lower, upper: (lower, upper),
         )
     native = solid.faces_of_triangles(
-        cavity_surface_indices(as_mesh_data(source.mesh), entrance.chain)
+        cavity_surface_indices(geom_mesh.as_mesh_data(source.mesh), entrance.chain)
     )
     plug = (
         edit.solid_from_faces(solid, native, allowed_rings=(1, 2), fan_caps=True)
@@ -15741,7 +15768,7 @@ def _exact_chain_cut_holding(
         tool = tool_with(FEATURE_OVERLAP * factor)
         cut = edit.boolean("difference", [solid, tool])
         placed = edit.unified(cut) if unify else cut
-        if as_mesh_data(placed).is_watertight:
+        if geom_mesh.as_mesh_data(placed).is_watertight:
             return placed, tool
     raise GeometryError(
         title=_("Der Hohlraum lässt sich an dieser Stelle nicht sauber ausschneiden."),
@@ -15944,9 +15971,13 @@ def _exact_move_chain(
         )
         for related in chain
     ]
-    findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), expected, rigid=True)]
+    findings = [
+        *closing_findings,
+        *_edge_findings(geom_mesh.as_mesh_data(filled), expected, rigid=True),
+    ]
     findings += _without_opened_twice(
-        _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True), findings
+        _neighbour_bore_findings(source, feature, geom_mesh.as_mesh_data(tool), ctx, moved=True),
+        findings,
     )
     floor = _floor_carried(
         source.mesh, chain[0], source.features, translation((travel[0], travel[1], travel[2]))
@@ -15996,9 +16027,11 @@ def _exact_duplicate_chain(
                 provenance="generated",
             )
         )
-    findings = _edge_findings(as_mesh_data(solid), copies, rigid=True)
+    findings = _edge_findings(geom_mesh.as_mesh_data(solid), copies, rigid=True)
     findings += _without_opened_twice(
-        _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True, copy=True),
+        _neighbour_bore_findings(
+            source, feature, geom_mesh.as_mesh_data(tool), ctx, moved=True, copy=True
+        ),
         findings,
     )
     nothing = without_effect(solid, placed, "difference", ctx.profile)
@@ -16042,7 +16075,7 @@ def _exact_rotate_chain(
     ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
     filled = _exact_chain_filled(source, entrance, source.mesh)
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
-    caps = _old_rim_caps(as_mesh_data(source.mesh), chain[0], source.features, chain)
+    caps = _old_rim_caps(geom_mesh.as_mesh_data(source.mesh), chain[0], source.features, chain)
     placed, tool = _exact_chain_cut_holding(
         filled,
         lambda overlap: _exact_chain_tool_turned(
@@ -16059,12 +16092,13 @@ def _exact_rotate_chain(
             "axis": _turned(related, axis, angle),
         }
         expected.append(dataclasses.replace(related, params=params, provenance="generated"))
-    findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), expected)]
+    findings = [*closing_findings, *_edge_findings(geom_mesh.as_mesh_data(filled), expected)]
     # Dieselbe Nachbarwandprüfung wie am Netz (``_rotate_cavity_chain``) —
     # am exakten Körper fehlte sie (RM-220), und der Bericht schwieg, wo die
     # gekippte Senkung in die Bohrung daneben lief.
     findings += _without_opened_twice(
-        _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, turned=True), findings
+        _neighbour_bore_findings(source, feature, geom_mesh.as_mesh_data(tool), ctx, turned=True),
+        findings,
     )
     floor = _floor_carried(source.mesh, chain[0], source.features, matrix)
     if floor is not None:
@@ -16121,14 +16155,14 @@ def _exact_through_checked(
         },
     )
     lost = _throughness_lost(
-        as_mesh_data(output.mesh),
+        geom_mesh.as_mesh_data(output.mesh),
         slim,
         _bore_vector(bore, "centre"),
         op,
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
-        tool=as_mesh_data(tool),
+        tool=geom_mesh.as_mesh_data(tool),
     )
     if not lost:
         return result
@@ -16153,8 +16187,8 @@ def _exact_mouth_checked(
     """:func:`_mouth_covered` am Netz-Zwilling des exakten Ergebnisses."""
     covered = _mouth_covered(
         op,
-        as_mesh_data(source.mesh),
-        as_mesh_data(result.outputs[0].mesh),
+        geom_mesh.as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(result.outputs[0].mesh),
         feature,
         source.features,
         travel,
@@ -16217,7 +16251,7 @@ def _through_rims(source: SceneObject, feature: Feature) -> tuple[_Rim, ...]:
     :func:`_exact_place_tool`)."""
     if not feature.params.get("through"):
         return ()
-    rims = _bore_end_rims(as_mesh_data(source.mesh), feature, source.features, grows=True)
+    rims = _bore_end_rims(geom_mesh.as_mesh_data(source.mesh), feature, source.features, grows=True)
     return rims if len(rims) == 2 else ()
 
 
@@ -16295,8 +16329,8 @@ def _exact_body_filled(solid: Any, body: Any) -> Any | None:
     from app.core.brep import edit
 
     filled = edit.unified(edit.boolean("union", [solid, body]))
-    gained = as_mesh_data(filled).volume - as_mesh_data(solid).volume
-    if gained < as_mesh_data(body).volume * _PLUG_KEPT:
+    gained = geom_mesh.as_mesh_data(filled).volume - geom_mesh.as_mesh_data(solid).volume
+    if gained < geom_mesh.as_mesh_data(body).volume * _PLUG_KEPT:
         return None
     return filled
 
@@ -16323,7 +16357,7 @@ def _own_mouths(
     Oberfläche, je mit der Luftprobe — leer, wo es keine zwei flachen gibt.
     ``mouth_blends`` wie in ``relations.cavity_surface_indices``."""
     rims = _bore_end_rims(
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         feature,
         source.features,
         grows=True,
@@ -16378,7 +16412,7 @@ def _exact_chain_own_cavity(source: SceneObject, chain: Sequence[Feature]) -> _O
         return None
     solid = _exact_body(source)
     native = solid.faces_of_triangles(
-        cavity_surface_indices(as_mesh_data(source.mesh), tuple(chain), mouth_blends=True)
+        cavity_surface_indices(geom_mesh.as_mesh_data(source.mesh), tuple(chain), mouth_blends=True)
     )
     body = edit.solid_from_faces(solid, native, allowed_rings=(2,)) if native else None
     if body is None:
@@ -16400,7 +16434,7 @@ def _carries_a_blend(source: SceneObject, chain: Sequence[Feature]) -> bool:
     """
     from app.core.perceive.relations import cavity_blend_indices
 
-    return bool(cavity_blend_indices(as_mesh_data(source.mesh), tuple(chain)))
+    return bool(cavity_blend_indices(geom_mesh.as_mesh_data(source.mesh), tuple(chain)))
 
 
 def _exact_own_chain_filled(
@@ -16702,7 +16736,7 @@ def _exact_body_from_faces(source: SceneObject, feature: Feature) -> Any:
             detail=NO_BODY_FROM_FACES,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     return body
 
@@ -16756,7 +16790,10 @@ def _exact_placed_holds(before: Any, placed: Any) -> Any:
     Gefragt wird nur, wo der Körper vorher dicht war: Ein schon offenes
     eingelesenes Modell bleibt bearbeitbar.
     """
-    if not as_mesh_data(before).is_watertight or as_mesh_data(placed).is_watertight:
+    if (
+        not geom_mesh.as_mesh_data(before).is_watertight
+        or geom_mesh.as_mesh_data(placed).is_watertight
+    ):
         return placed
     if not _touches_along_a_line(placed):
         return placed
@@ -16780,7 +16817,9 @@ def _touches_along_a_line(solid: Any) -> bool:
 
     if not BRepCheck_Analyzer(solid.shape).IsValid():
         return True
-    edges = np.sort(np.asarray(as_mesh_data(solid).raw.edges_sorted, dtype=np.int64), axis=1)
+    edges = np.sort(
+        np.asarray(geom_mesh.as_mesh_data(solid).raw.edges_sorted, dtype=np.int64), axis=1
+    )
     _unique, counts = np.unique(edges, axis=0, return_counts=True)
     return not bool((counts == 1).any()) and bool((counts > 2).any())
 
@@ -16828,7 +16867,10 @@ def _exact_move_by_faces(
     # Dieselbe Frage wie am Netz (``move_feature`` mit ``_edge_findings``): Eine
     # Senkung, die über die Kante wandert, sagt es — bis zum 22.09.2026 gab der
     # Weg aus den Flächen hier keinen Befund zurück.
-    findings = [*closing_findings, *_edge_findings(as_mesh_data(cleared), [expected], rigid=True)]
+    findings = [
+        *closing_findings,
+        *_edge_findings(geom_mesh.as_mesh_data(cleared), [expected], rigid=True),
+    ]
     return _exact_cavity_result(
         ctx, source, placed, op="move_feature", expected=expected, findings=findings
     )
@@ -16860,7 +16902,7 @@ def _exact_duplicate_by_faces(
         params={**feature.params, "centre": target},
         provenance="generated",
     )
-    findings: list[Finding] = _edge_findings(as_mesh_data(solid), [copy], rigid=True)
+    findings: list[Finding] = _edge_findings(geom_mesh.as_mesh_data(solid), [copy], rigid=True)
     nothing = without_effect(solid, placed, change, ctx.profile)
     if nothing is not None:
         findings.append(nothing)
@@ -16908,14 +16950,14 @@ def _exact_resize_by_faces(
     ctx.cancelled.raise_if_cancelled()
     ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
     if feature.kind == "pin":
-        outward = _toward_the_air(as_mesh_data(solid), feature)
+        outward = _toward_the_air(geom_mesh.as_mesh_data(solid), feature)
         if outward is None:
             raise ValidationError(
                 field="at_feature",
                 detail=NO_BODY_FROM_FACES,
                 values={"feature": feature.id, "kind": feature.kind},
                 constraint="not_movable",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         wider = dataclasses.replace(feature, params={**feature.params, "diameter": diameter})
         tool = _exact_pin_tool(
@@ -16937,7 +16979,7 @@ def _exact_resize_by_faces(
     findings = [
         *closing_findings,
         *_widening_findings(source, feature, diameter),
-        *_edge_findings(as_mesh_data(cleared), [changed]),
+        *_edge_findings(geom_mesh.as_mesh_data(cleared), [changed]),
     ]
     return _exact_cavity_result(
         ctx, source, placed, op="resize_feature", expected=changed, findings=findings
@@ -17015,7 +17057,7 @@ def _torus_refusal(feature: Feature, *, whole: bool) -> ValidationError:
         detail=TORUS_IS_THE_BODY if whole else TORUS_NOT_SEPARABLE,
         values={"feature": feature.id, "kind": feature.kind},
         constraint="not_movable",
-        suggestions=(CHANGE_SELECTION, CANCEL),
+        suggestions=(CHANGE_FEATURE, CANCEL),
     )
 
 
@@ -17033,7 +17075,7 @@ def _torus_axis(feature: Feature, axis: Vec3 | None = None) -> np.ndarray:
             detail=FEATURE_WITHOUT_AXIS,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     return direction / length
 
@@ -17239,7 +17281,9 @@ def _torus_tool_mesh(mesh: MeshData, feature: Feature) -> MeshData:
     if not core.is_watertight or core.component_count != 1:
         raise _torus_refusal(feature, whole=False)
     cavity = is_a_cavity(feature)
-    return boolean("difference", [core, own] if cavity else [own, core], quality="fine").mesh
+    return boolean.boolean(
+        "difference", [core, own] if cavity else [own, core], quality="fine"
+    ).mesh
 
 
 def _exact_without_torus(source: SceneObject, feature: Feature) -> Any:
@@ -17274,9 +17318,9 @@ def _exact_torus_tool(
 
 def _torus_closed_mesh(ctx: OpContext, source: SceneObject, feature: Feature) -> BooleanOutcome:
     """Das Netz ohne Wulst oder Kehle: der beschnittene Ring abgetragen beziehungsweise gefüllt."""
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     tool = _torus_tool_mesh(body, feature)
-    return boolean(
+    return boolean.boolean(
         "union" if is_a_cavity(feature) else "difference",
         [body, tool],
         quality=ctx.quality,
@@ -17303,7 +17347,7 @@ def _torus_placed_mesh(
     tool = _torus_ring_mesh(
         centre, (float(direction[0]), float(direction[1]), float(direction[2])), ring, tube
     )
-    return boolean(
+    return boolean.boolean(
         "difference" if is_a_cavity(feature) else "union",
         [base, tool],
         quality=ctx.quality,
@@ -17403,7 +17447,7 @@ def _duplicate_torus(
         if nothing is not None:
             findings.append(nothing)
         return _exact_copy_result(ctx, source, placed_solid, [copy], findings)
-    body = as_mesh_data(source.mesh)
+    body = geom_mesh.as_mesh_data(source.mesh)
     placed = _torus_placed_mesh(ctx, body, feature, target)
     findings = [*placed.findings]
     nothing = without_effect(source.mesh, placed.mesh, change, ctx.profile)
@@ -17601,7 +17645,7 @@ def _thread_frame(feature: Feature) -> tuple[np.ndarray, np.ndarray, float]:
             detail=THREAD_WITHOUT_LENGTH,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     centre = np.asarray(_bore_vector(feature, "centre"), dtype=float)
     return centre, _torus_axis(feature), length
@@ -17664,7 +17708,7 @@ def _thread_corners(feature: Feature, source: SceneObject) -> tuple[np.ndarray, 
     """
     if source.kind == "brep" or not feature.face_indices:
         return None
-    raw = as_mesh_data(source.mesh).raw
+    raw = geom_mesh.as_mesh_data(source.mesh).raw
     corners = np.unique(np.asarray(raw.faces)[list(feature.face_indices)])
     relative = np.asarray(raw.vertices)[corners] - np.asarray(
         _bore_vector(feature, "centre"), dtype=float
@@ -17793,7 +17837,7 @@ def _thread_wall(
     kind = _thread_kind(feature)
     centre, axis, length = _thread_frame(feature)
     inner, outer = _thread_bounds(feature, source)
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
     normals = stable_normals(mesh.raw)[0]
     frame = frame_of((float(axis[0]), float(axis[1]), float(axis[2])), (0.0, 0.0, 0.0))
@@ -17853,6 +17897,7 @@ def _thread_wall(
                 "diameter": diameter,
                 "largest": largest,
                 "minimum": minimum,
+                "unit": "mm",
             },
             constraint="thread_wall",
             suggestions=(CORRECT_INPUT, CANCEL),
@@ -17898,7 +17943,7 @@ def _material_at(source: SceneObject, point: np.ndarray) -> bool:
         return classifier.State() in (TopAbs_IN, TopAbs_ON)
     from app.core.geom.mesh import on_surface
 
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     raw = mesh.raw
     flat = np.asarray(point, dtype=float).reshape(1, 3)
     closest, _distance, triangle = on_surface(raw, flat, index=surface_index_of(mesh))
@@ -18038,7 +18083,7 @@ def _combined(
         from app.core.brep import edit
 
         return edit.unified(edit.boolean(kind, [base, tool]))
-    return boolean(
+    return boolean.boolean(
         kind,
         [base, tool],
         quality=ctx.quality,
@@ -18114,7 +18159,7 @@ def _remove_thread(ctx: OpContext, source: SceneObject, feature: Feature) -> OpR
     )
     inner, outer = _thread_bounds(feature, source)
     reach = stop - start
-    base = _exact_body(source) if source.kind == "brep" else as_mesh_data(source.mesh)
+    base = _exact_body(source) if source.kind == "brep" else geom_mesh.as_mesh_data(source.mesh)
     if internal:
         ctx.progress(0.2, str(_("Das Merkmal wird geschlossen …")))
         # Der Stopfen greift um den Überlapp ins Material: Bündig mit dem Kamm
@@ -18148,7 +18193,7 @@ def _remove_thread(ctx: OpContext, source: SceneObject, feature: Feature) -> OpR
                 "difference", [sleeve, edit.moved(core, (0.0, 0.0, -BOOLEAN_OVERLAP))]
             )
         else:
-            ring = boolean(
+            ring = boolean.boolean(
                 "difference",
                 [sleeve, _shapes_moved(core, -BOOLEAN_OVERLAP)],
                 quality=ctx.quality,
@@ -18233,7 +18278,7 @@ def _aligned_facets(
     check_cancelled = cancelled.raise_if_cancelled if cancelled is not None else lambda: None
     check_cancelled()
 
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     carrier = patterns.carrier_of(feature, source.features)
     if carrier is None or not carrier.face_indices:
         return source, False
@@ -18401,7 +18446,7 @@ def _pattern_plug(
         from app.core.perceive.features import _one_body
         from app.core.perceive.patterns import _components
 
-        mesh = as_mesh_data(source.mesh)
+        mesh = geom_mesh.as_mesh_data(source.mesh)
         indices = np.asarray(feature.face_indices, dtype=np.int64)
         body = _one_body(mesh).raw
         plugs = []
@@ -18464,7 +18509,7 @@ def _pattern_plug(
             suggestions=(CORRECT_INPUT, CANCEL),
         )
 
-    plug = plug_for(as_mesh_data(source.mesh), feature, source.features)
+    plug = plug_for(geom_mesh.as_mesh_data(source.mesh), feature, source.features)
     if plug is None:
         # Der Satz nennt das Reparieren — dann steht es auch als Handlung da,
         # wie an jeder anderen Stelle, die das Netz nicht lesen konnte.
@@ -18501,7 +18546,7 @@ def _texture_plug_without_bores(
     from app.core.perceive.patterns import _convex_hull, _extruded, _plane_axes, frame_for
     from app.core.perceive.relations import boundary_rings
 
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     body = mesh.raw
     adjacency = np.asarray(body.face_adjacency, dtype=np.int64)
     touching = np.isin(adjacency, feature.face_indices)
@@ -18629,7 +18674,7 @@ def _texture_plug_without_bores(
         )
         cutting = MeshData.of(cutter)
         protected.append(cutting)
-        plug = boolean(
+        plug = boolean.boolean(
             "difference",
             [plug, cutting],
             stages=("direct",),
@@ -18665,7 +18710,7 @@ def _pattern_cleared(
     if feature.params.get("texture") and feature.params.get("carrier") == "cylinder":
         from app.core.perceive.patterns import cylinder_envelope
 
-        envelope = cylinder_envelope(as_mesh_data(source.mesh), feature, source.features)
+        envelope = cylinder_envelope(geom_mesh.as_mesh_data(source.mesh), feature, source.features)
         if envelope is None:
             from app.core.errors import SHOW_HISTORY
 
@@ -18679,7 +18724,7 @@ def _pattern_cleared(
                 constraint="pattern_carrier",
                 suggestions=(SHOW_HISTORY, CANCEL),
             )
-        plug = boolean(
+        plug = boolean.boolean(
             "intersection" if engraved else "difference",
             [plug, envelope],
             stages=("direct",),
@@ -18689,9 +18734,9 @@ def _pattern_cleared(
     if engraved and feature.params.get("texture"):
         plug, _protected = _texture_plug_without_bores(ctx, source, feature, plug, redraw=redraw)
     return _without_scars(
-        boolean(
+        boolean.boolean(
             "union" if engraved else "difference",
-            [as_mesh_data(source.mesh), plug],
+            [geom_mesh.as_mesh_data(source.mesh), plug],
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
@@ -18869,7 +18914,7 @@ def _resize_pattern(
             cleared, findings=[*cleared.findings, _facets_refused(source)]
         )
     ctx.progress(0.6, str(_("Das Muster wird mit dem neuen Maß gesetzt …")))
-    field = field_outline(as_mesh_data(source.mesh), feature, source.features)
+    field = field_outline(geom_mesh.as_mesh_data(source.mesh), feature, source.features)
     if field.around > 0.0:
         # Einmal um den Zylinder geht die Teilung im Umfang auf — wie beim
         # Aufbringen (``texture_ops.wrap_pitch``), sonst träfe an der Naht
@@ -18940,7 +18985,7 @@ def _resize_pattern(
     protected: list[MeshData] = []
     if feature.params.get("texture") and not engraved:
         tool, protected = _texture_plug_without_bores(ctx, source, feature, tool, redraw=True)
-    placed = boolean(
+    placed = boolean.boolean(
         "difference" if engraved else "union",
         [cleared.mesh, tool],
         quality=ctx.quality,
@@ -19072,7 +19117,7 @@ def _resize_thread(
     length = high - low
     _inner, outer = _thread_bounds(feature, source)
     reach = stop - start
-    base = _exact_body(source) if source.kind == "brep" else as_mesh_data(source.mesh)
+    base = _exact_body(source) if source.kind == "brep" else geom_mesh.as_mesh_data(source.mesh)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     if internal:
         # Der Stopfen greift um den Überlapp ins Material: Bündig mit dem Kamm
@@ -19284,7 +19329,7 @@ def _exact_rotate_cone(
             detail=NO_BODY_FROM_FACES,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     old_axis = np.asarray(_bore_vector(feature, "axis"), dtype=float)
     new_axis = np.asarray(turned_axis, dtype=float)
@@ -19322,15 +19367,17 @@ def _exact_rotate_cone(
         tilted = dataclasses.replace(
             feature, params={**feature.params, "axis": turned_axis}, provenance="generated"
         )
-        findings += _edge_findings(as_mesh_data(cleared), [tilted])
+        findings += _edge_findings(geom_mesh.as_mesh_data(cleared), [tilted])
         # Wie an der Kette: Was über die Mündung hinausragt, endet an der alten
         # Randebene, und die Nachbarwand wird gefragt (RM-220). Ohne die Kappe
         # schnitt die um 30° gekippte Senkung 80 mm³ aus einer Rippe davor.
-        caps = _old_rim_caps(as_mesh_data(source.mesh), feature, source.features)
+        caps = _old_rim_caps(geom_mesh.as_mesh_data(source.mesh), feature, source.features)
         if caps:
             tool = edit.clipped_bore_tool(tool, caps)
         findings += _without_opened_twice(
-            _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, turned=True),
+            _neighbour_bore_findings(
+                source, feature, geom_mesh.as_mesh_data(tool), ctx, turned=True
+            ),
             findings,
         )
     if cavity:
@@ -19720,10 +19767,10 @@ def _preserved_exact_features(
         intended[feature.id] = found_id
         if original is not None:
             floors = _resized_bore_floor(
-                as_mesh_data(original),
+                geom_mesh.as_mesh_data(original),
                 feature,
                 previous,
-                as_mesh_data(solid),
+                geom_mesh.as_mesh_data(solid),
                 detected[found_id],
                 detected,
                 check_cancelled=check_cancelled,
@@ -19755,9 +19802,9 @@ def _preserved_exact_features(
         matched = settled_twins(
             matched,
             {name: entry for name, entry in previous.items() if name not in intended},
-            as_mesh_data(original),
+            geom_mesh.as_mesh_data(original),
             detected,
-            as_mesh_data(solid),
+            geom_mesh.as_mesh_data(solid),
             bounds.diagonal,
         )
     if found_id is None:
@@ -19871,7 +19918,7 @@ def countersink_hole(ctx: OpContext) -> OpResult:
     if source.kind == "brep":
         return _exact_countersink(ctx, source, params)
     result = countersink(
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         position=(params.x, params.y, params.z),
         axis=cast(Axis, params.axis),
         diameter=params.diameter,
@@ -19942,7 +19989,7 @@ class PlugParams(BaseParams):
         ),
     )
     compensate: bool = param(
-        title=_("Materialtoleranz berücksichtigen"),
+        title=_("Druckabweichung ausgleichen"),
         default=True,
         placement="advanced",
         doc=_(
@@ -20028,7 +20075,7 @@ def plug_hole(ctx: OpContext) -> OpResult:
         measured = [float(value) for value in feature.params["centre"]]
         centre: Vec3 = (measured[0], measured[1], measured[2])
         filled = _closed_at(
-            as_mesh_data(source.mesh),
+            geom_mesh.as_mesh_data(source.mesh),
             feature,
             centre,
             True,
@@ -20045,7 +20092,7 @@ def plug_hole(ctx: OpContext) -> OpResult:
             findings=filled.findings,
         )
     result = plug(
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         position=(params.x, params.y, params.z),
         axis=cast(Axis, params.axis),
         diameter=params.diameter,
@@ -20080,7 +20127,7 @@ def _exact_countersink(ctx: OpContext, source: SceneObject, params: CountersinkP
     solid = _exact_body(source)
     axis = cast(Axis, params.axis)
     placement = sink_placement(
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         axis,
         (params.x, params.y, params.z),
         params.diameter,
@@ -20107,7 +20154,7 @@ def _exact_countersink(ctx: OpContext, source: SceneObject, params: CountersinkP
     # Dieselbe Kantenfrage wie am Netz (``prepare.countersink``).
     findings.extend(
         mouth_over_the_edge(
-            as_mesh_data(source.mesh),
+            geom_mesh.as_mesh_data(source.mesh),
             placement.position,
             cast(Vec3, tuple(float(-value) for value in outward)),
             params.diameter,
@@ -20155,7 +20202,7 @@ def _exact_plug(ctx: OpContext, source: SceneObject, params: PlugParams) -> OpRe
         )
     axis = cast(Axis, params.axis)
     centre, height = plug_placement(
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         axis,
         (params.x, params.y, params.z),
         params.depth,
@@ -20356,7 +20403,7 @@ def hollow_object(ctx: OpContext) -> OpResult:
 
         return shell_exact(ctx)
     result = hollow(
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         params.wall,
         vents=params.vents,
         vent_diameter=params.vent_diameter,
@@ -20455,7 +20502,7 @@ def _mesh_hollow_open(
     from app.core.geom.hollow import Opening, opening_plane
 
     params = cast(HollowParams, ctx.params)
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     chosen: list[Opening] = []
     for feature in _opening_faces(source, openings):
         triangles = tuple(int(index) for index in feature.face_indices)
@@ -20469,7 +20516,7 @@ def _mesh_hollow_open(
                 ),
                 value=feature.id,
                 constraint="not_planar",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FACES, CANCEL),
             )
         chosen.append(Opening(triangles=triangles, name=feature.id))
     if params.open_top:
@@ -20528,7 +20575,7 @@ def _exact_hollow_open(
     )
     findings: list[Finding] = []
     if shelled is None:
-        tessellated = as_mesh_data(solid)
+        tessellated = geom_mesh.as_mesh_data(solid)
         if not outward and not has_room_inside(tessellated, params.wall):
             findings.append(dataclasses.replace(too_thin(params.wall), suggestions=_THINNER))
             return OpResult(
@@ -20756,11 +20803,11 @@ def compensate_first_layer(ctx: OpContext) -> OpResult:
         raise InternalError(detail="the elephant foot compensation needs a profile")
 
     mesh, findings, solver = compensate_elephant_foot(
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         # Das Auseinanderlaufen gehört zum Material, und dieser Körper ist
         # vielleicht nicht im Material des Projekts (§12) — eine TPU-Dichtung
         # läuft weiter als das PETG um sie herum.
-        for_object(ctx.profile, source),
+        profiles.for_object(ctx.profile, source),
         height=params.height,
         amount=params.amount or None,
         quality=ctx.quality,
@@ -20809,7 +20856,7 @@ def set_material(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     chosen = params.material.strip()
     if chosen:
-        material(chosen)  # wirft mit der Liste der bekannten, wenn es keines ist
+        profiles.material(chosen)  # wirft mit der Liste der bekannten, wenn es keines ist
 
     return OpResult(
         outputs=[dataclasses.replace(source, material=chosen or None)],
@@ -20853,7 +20900,10 @@ class TestPieceParams(BaseParams):
         doc=_("Wie groß der Ausschnitt wird. Groß genug, dass die Passung Material hat."),
     )
     spot: str = param(
-        title=_("Stelle"),
+        # Nicht „Stelle“: So heißt vorn schon die Lesezeile mit den
+        # Koordinaten, und zweimal dasselbe Wort ließ raten, welches Feld die
+        # Stelle festlegt (FD-119).
+        title=_("Lage des Würfels"),
         # Vorgabe die genannte Stelle: Ein Schritt von vor diesem Feld bleibt,
         # was er war.
         default="point",
@@ -20936,7 +20986,7 @@ def test_piece(ctx: OpContext) -> OpResult:
     nebeneinander aufs Bett gelegt.
     """
     params = cast(TestPieceParams, ctx.params)
-    meshes = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
+    meshes = [geom_mesh.as_mesh_data(entry.mesh) for entry in ctx.inputs]
     answered: dict[str, Any] = {}
     centre: Vec3 = (params.x, params.y, params.z)
     if params.spot == "closest":
@@ -20972,7 +21022,7 @@ def test_piece(ctx: OpContext) -> OpResult:
         # Operation: ohne ``allow_empty`` probierte die Kette drei weitere
         # Stufen und würfe dann — und der Nutzer läse etwas über den
         # Voxel-Solver statt über das Loch, auf das er gezielt hat.
-        outcome = boolean(
+        outcome = boolean.boolean(
             "intersection",
             [mesh, mesh.replacing(window)],
             quality=ctx.quality,
@@ -21040,7 +21090,7 @@ def _closest_spot(first: MeshData, second: MeshData, ctx: OpContext) -> Vec3:
     from app.core.geom.mesh import on_surface
 
     if shared_volume(first.raw, second.raw) > EPS_GEOM:
-        common = boolean(
+        common = boolean.boolean(
             "intersection",
             [first, second],
             quality=ctx.quality,
@@ -21443,7 +21493,7 @@ def split_ways(offer: Mapping[str, str]) -> tuple[Action, ...]:
     Ohne Angebot — über :data:`SPLIT_LIMIT` Teile, Merkmal ohne Flächen — bliebe
     sonst nur *Abbrechen*, und das ist kein Weg (Regel 17, Nachprüfung I, N3).
     """
-    return (SPLIT_AND_RETRY, CANCEL) if offer else (CHANGE_SELECTION, CANCEL)
+    return (SPLIT_AND_RETRY, CANCEL) if offer else (CHANGE_FEATURE, CANCEL)
 
 
 def _split_limit() -> int:
@@ -21466,7 +21516,7 @@ def _carried_feature(
     feature = source.features.get(name)
     if feature is None:
         return None
-    walled = _with_walls(as_mesh_data(source.mesh), feature)
+    walled = _with_walls(geom_mesh.as_mesh_data(source.mesh), feature)
     if not walled.face_indices:
         return None
     chosen = np.asarray(walled.face_indices, dtype=np.int64)
@@ -21733,7 +21783,9 @@ ONE_PIECE: Final = _("Der Körper besteht aus einem Stück. Es gibt nichts aufzu
     requires_body="parts",
     # 2: Splitter misst der Drucker und die Schale, nicht das größte Teil
     # (RM-639); ein Teil unter einem Prozent kam als Splitter aus dem Cache.
-    cache_version="2",
+    # 3: Ein druckbares Teil mit Splittern sagt ab mit *Splitter behalten*
+    # statt „aus einem Stück“ (FD-113) — eine alte Absage käme sonst wieder.
+    cache_version="3",
     doc=_(
         "Macht aus einem Körper, der aus mehreren nicht verbundenen Teilen "
         "besteht, je ein eigenes Objekt. Was nicht zusammenhängt, ist nicht "
@@ -21755,7 +21807,7 @@ def split_bodies(ctx: OpContext) -> OpResult:
     """
     source = ctx.inputs[0]
     params = cast(SplitBodiesParams, ctx.params)
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     kept, dropped, groups = _loose_parts(
         mesh,
         keep_tiny=params.keep_tiny,
@@ -21777,6 +21829,36 @@ def split_bodies(ctx: OpContext) -> OpResult:
     # nachher eine andere Zahl liefert, hält die ganze Kette an. Ist zu wenig
     # da, wird das gesagt statt geraten — mit der Zahl, die passen würde.
     found = len(kept)
+    if found <= 1 and dropped and found + dropped > 1 and found < params.count:
+        # **Ein druckbares Teil und Splitter daneben ist nicht „ein Stück“**
+        # (FD-113): Der Prüfbericht zählt die Splitter mit und meldet mehrere
+        # Teile. Die Absage nennt sie und den einen Schalter, der sie behält —
+        # der Schritt öffnet mit dem Cursor dort (``KEEP_SPLINTERS``). Ein
+        # Splitter allein bleibt ein Stück; ihn zu behalten teilte nichts.
+        raise ValidationError(
+            field="keep_tiny",
+            detail=(
+                # Kein druckbares Teil, etwa nach einem kaputten Import (RB-5).
+                _(
+                    "Der Körper besteht nur aus {count} Splittern, die der Drucker nicht abbildet.",
+                    count=dropped,
+                )
+                if found == 0
+                else _(
+                    "Der Körper hat nur ein druckbares Teil und einen Splitter, den der Drucker "
+                    "nicht abbildet."
+                )
+                if dropped == 1
+                else _(
+                    "Der Körper hat nur ein druckbares Teil und {count} Splitter, die der "
+                    "Drucker nicht abbildet.",
+                    count=dropped,
+                )
+            ),
+            constraint="too_many_parts",
+            values={"count": str(params.count), "found": str(found)},
+            suggestions=(KEEP_SPLINTERS, CANCEL),
+        )
     if found < params.count:
         raise ValidationError(
             field="count",
@@ -22014,7 +22096,7 @@ def _cut_and_pin(
     an einer Stelle anders.
     """
     source = ctx.inputs[0]
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     # **Die erste Nummer nennt der Plan, wo es einen gibt** (RM-267): Auto
     # Split hat die Passungen dieser Naht schon mit ihr benannt. Nach den
     # Namen am Stück gezählt, zählte ein erkannter Stift ohne Zwilling mit.
@@ -22037,7 +22119,9 @@ def _cut_and_pin(
     # ließ damit 0,875 mm Wand stehen statt der geforderten 1,6 und band 4,5 mm
     # ein statt der nötigen 6,0 — ohne einen einzigen Befund.
     plan = (
-        plan_pins(mesh, plane, count=pins, shape=shape, diameter=diameter or None) if pins else None
+        geom_pins.plan_pins(mesh, plane, count=pins, shape=shape, diameter=diameter or None)
+        if pins
+        else None
     )
 
     # **``ctx.profile`` ist nach §9 keine Option**, und die zweite Bedingung
@@ -22063,11 +22147,11 @@ def _cut_and_pin(
         else plan
     )
     pair = (
-        add_pins(
+        geom_pins.add_pins(
             carrier,
             drilled,
             placed_plan,
-            for_object(ctx.profile, source),
+            profiles.for_object(ctx.profile, source),
             start=connector_start,
             play=play or None,
             quality=ctx.quality,
@@ -22661,7 +22745,7 @@ def edge_cut_through_middle(source: SceneObject, key: str) -> tuple[str, float] 
         direction[2] * base[0] - direction[0] * base[2],
         direction[0] * base[1] - direction[1] * base[0],
     )
-    low, high = as_mesh_data(source.mesh).raw.bounds
+    low, high = geom_mesh.as_mesh_data(source.mesh).raw.bounds
     middle = tuple(float(low[index] + high[index]) / 2.0 - start[index] for index in range(3))
     # n(t)·v = a·cos t + b·sin t verschwindet bei t = atan2(-a, b); in (-90°, 90°]
     # zeigt die Normale zur Achse hin, wie an jeder anderen Ebene des Schnitts.
@@ -22743,7 +22827,7 @@ def cut_away(ctx: OpContext) -> OpResult:
     """
     params = cast(CutAwayParams, ctx.params)
     source = ctx.inputs[0]
-    mesh = as_mesh_data(source.mesh)
+    mesh = geom_mesh.as_mesh_data(source.mesh)
     plane = _cut_away_plane(params, source, mesh, ctx.bound_edges.get("edge"))
     # Das Feld, das die Lage der Ebene trägt: die Position an einer Achse, sonst
     # der Abstand von Fläche, Kante oder Punkten — eine Absage zeigt dorthin.
@@ -22816,8 +22900,8 @@ def _cut_away_exact(
     ctx.cancelled.raise_if_cancelled()
     solid = edit.unified(edit.boolean("difference", [body, tool]))
     ctx.cancelled.raise_if_cancelled()
-    before = as_mesh_data(body).volume
-    after = as_mesh_data(solid).volume if solid.face_count else 0.0
+    before = geom_mesh.as_mesh_data(body).volume
+    after = geom_mesh.as_mesh_data(solid).volume if solid.face_count else 0.0
     if after <= EPS_GEOM or abs(before - after) <= EPS_GEOM:
         # Dieselbe Absage wie am Netz: Eine Ebene, die nichts oder alles
         # nimmt, trifft das Objekt nicht.
@@ -22828,7 +22912,7 @@ def _cut_away_exact(
             constraint="no_split",
         )
     checked = _exact_body_checked(solid)
-    kept, _dropped = _features_after_split(source.features, plane, as_mesh_data(body))
+    kept, _dropped = _features_after_split(source.features, plane, geom_mesh.as_mesh_data(body))
     features, continued, _lost = _exact_features_after(
         dataclasses.replace(source, features=kept), checked, expected=None, cancelled=ctx.cancelled
     )
@@ -23188,8 +23272,8 @@ def _arranged_in_filament_groups(
         # sagt, dass sie übervoll ist. Ein Teil, das still aus der Anordnung
         # fiele, wäre ein Teil, das nie gedruckt wird.
         start = min(next_plate, plates - 1)
-        arranged = arrange_on_bed(
-            [as_mesh_data(entry.mesh) for entry in members],
+        arranged = prepare.arrange_on_bed(
+            [geom_mesh.as_mesh_data(entry.mesh) for entry in members],
             ctx.profile,
             spacing,
             plates - start,
@@ -23336,7 +23420,7 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
     for number, entry in enumerate(ctx.inputs):
         ctx.cancelled.raise_if_cancelled()
         ctx.progress(number / len(ctx.inputs), str(_("Ausrichtung suchen")))
-        mesh = as_mesh_data(entry.mesh)
+        mesh = geom_mesh.as_mesh_data(entry.mesh)
         try:
             if params.thorough:
                 angle = analysis_limits(ctx.profile, entry)[1]
@@ -23367,7 +23451,9 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
                 key = (shape_key(mesh), angle)
                 earlier_fast = fast_searched.get(key)
                 reused_matrix = (
-                    fitting_transform(mesh, earlier_fast.chosen.direction, ctx.profile.printer)
+                    orient.fitting_transform(
+                        mesh, earlier_fast.chosen.direction, ctx.profile.printer
+                    )
                     if earlier_fast is not None
                     else None
                 )
@@ -23461,7 +23547,7 @@ def _the_way_out_of(
     # Ein einziges Teil ist der Körper selbst, und der hat gerade nicht
     # gepasst — die Untergrenze erspart nur, ihn ein zweites Mal zu prüfen.
     each_fits = 2 <= len(kept) <= limit and all(
-        ranked_orientations(
+        orient.ranked_orientations(
             mesh.replacing(part), limit=1, cancelled=ctx.cancelled, printer=ctx.profile.printer
         )
         for part, _volume, _slots in kept
@@ -23508,7 +23594,7 @@ def _laid_out_after_turning(
     """
     chosen = {entry.id for entry in turned}
     standing = [
-        (as_mesh_data(other.mesh), other.plate)
+        (geom_mesh.as_mesh_data(other.mesh), other.plate)
         for key, other in ctx.scene.objects.items()
         if key not in chosen
     ]
@@ -23529,8 +23615,8 @@ def _laid_out_after_turning(
             centre_slender=params.centre_slender,
         )
     else:
-        arrangement = arrange_on_bed(
-            [as_mesh_data(entry.mesh) for entry in turned],
+        arrangement = prepare.arrange_on_bed(
+            [geom_mesh.as_mesh_data(entry.mesh) for entry in turned],
             ctx.profile,
             params.spacing,
             params.plates,
@@ -23635,7 +23721,7 @@ class ArrangeParams(BaseParams):
 )
 def arrange_bed(ctx: OpContext) -> OpResult:
     params = cast(ArrangeParams, ctx.params)
-    meshes = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
+    meshes = [geom_mesh.as_mesh_data(entry.mesh) for entry in ctx.inputs]
     groups = filament_groups(ctx.profile, ctx.inputs) if params.by_material else None
     if groups is not None:
         result = _arranged_in_filament_groups(
@@ -23647,7 +23733,7 @@ def arrange_bed(ctx: OpContext) -> OpResult:
             centre_slender=params.centre_slender,
         )
     else:
-        result = arrange_on_bed(
+        result = prepare.arrange_on_bed(
             meshes,
             ctx.profile,
             params.spacing,
@@ -23750,7 +23836,7 @@ def _has_moved(entries: Sequence[SceneObject], result: Arrangement) -> bool:
     for entry, mesh, plate in zip(entries, result.meshes, result.plates, strict=True):
         if plate != entry.plate:
             return True
-        before = as_mesh_data(entry.mesh).bounds.minimum
+        before = geom_mesh.as_mesh_data(entry.mesh).bounds.minimum
         after = mesh.bounds.minimum
         if any(abs(a - b) > EPS_DISPLAY for a, b in zip(before, after, strict=True)):
             return True
@@ -23789,7 +23875,7 @@ class CollisionParams(BaseParams):
 )
 def check_collisions_op(ctx: OpContext) -> OpResult:
     params = cast(CollisionParams, ctx.params)
-    meshes = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
+    meshes = [geom_mesh.as_mesh_data(entry.mesh) for entry in ctx.inputs]
     findings = check_collisions(meshes, params.clearance)
     if not findings:
         # **Auch „keine“ ist eine Antwort** (§2.8): Ohne sie entstand ein
@@ -23916,8 +24002,8 @@ def check_join_path_op(ctx: OpContext) -> OpResult:
     seitlich passten und in der Höhe stirnseitig aufeinanderstießen.
     """
     params = cast(JoinPathParams, ctx.params)
-    moving = as_mesh_data(ctx.inputs[0].mesh)
-    fixed = as_mesh_data(ctx.inputs[1].mesh)
+    moving = geom_mesh.as_mesh_data(ctx.inputs[0].mesh)
+    fixed = geom_mesh.as_mesh_data(ctx.inputs[1].mesh)
     axis_vector = AXIS_NORMALS[cast(Axis, params.axis)]
     vector = list(axis_vector)
     if params.reverse:
@@ -23997,7 +24083,7 @@ def _drop_the_fillet(ctx: OpContext, source: SceneObject, name: str) -> OpResult
     from app.core.geom.edges import unround
 
     outcome = unround(
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         source.features[name],
         quality=ctx.quality,
         features=source.features,
@@ -24028,7 +24114,7 @@ def _reshape_the_fillet(
     from app.core.geom.edges import reround
 
     outcome = reround(
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         source.features[name],
         radius,
         quality=ctx.quality,
@@ -24052,7 +24138,7 @@ def _refuse_a_corner(feature: Feature) -> None:
     if "axis" not in feature.params:
         from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
 
-        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_FEATURE, CANCEL))
 
 
 def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float | None) -> OpResult:

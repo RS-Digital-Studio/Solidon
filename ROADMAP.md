@@ -183,20 +183,21 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-734 — Wer „boolesch“ tippt, findet die Booleschen Operationen nicht](#rm-734) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-735 — Zwei Suchen: Befehlspalette und Suchfeld der Karte](#rm-735) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-736 — Funktionsdurchgang: jede Funktion einmal über die Oberfläche benutzt, geprüft und abgehakt](#rm-736) | Bedienung und Darstellung | Konzept abgelegt; D0 (RM-737) zuerst, dann die Kundenpakete D1, D9, D8, D3, D4 (Phase 3), die übrigen in Phase 4 |
-| [RM-737 — Funktionsdurchgang D0: Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter](#rm-737) | Bedienung und Darstellung | D0 steht auf main; die offenen Funde der Funddatei über `welle5` beheben, Schlusslauf am echten Fenster, Nachurteilsrunde (≥ 90 % je Prüfpunkt gepoolt), dann abhaken — vor 0.6.1 |
+| [RM-737 — Funktionsdurchgang D0: Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter](#rm-737) | Bedienung und Darstellung | mit 0.6.1 abgehakt: Funde behoben, Schlusslauf am echten Fenster, jede Zeile von D4, D8, D10 geurteilt, ≥ 90 % je Prüfpunkt; offen nur der Rest von FD-34 (0.6.2) |
 | [RM-738 — Funktionsdurchgang D1: Datei und Projekt](#rm-738) | Bedienung und Darstellung | wartet auf D0; danach neue Schätzung an Robert |
 | [RM-739 — Funktionsdurchgang D2: Erzeugen](#rm-739) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-740 — Funktionsdurchgang D3: Verbinden und Abziehen, Transformation, Formgebung](#rm-740) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8 |
-| [RM-741 — Funktionsdurchgang D4: Merkmale](#rm-741) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8; dazu aus D0 FD-7 und FD-16 |
+| [RM-741 — Funktionsdurchgang D4: Merkmale](#rm-741) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8 |
 | [RM-742 — Funktionsdurchgang D5: Netz und Reparatur](#rm-742) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-743 — Funktionsdurchgang D6: Formen und Skelett](#rm-743) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-744 — Funktionsdurchgang D7: Zeichnen und Skizze](#rm-744) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-745 — Funktionsdurchgang D8: Druckvorbereitung](#rm-745) | Bedienung und Darstellung | wartet auf D0; Folge D1, D9, D8 |
 | [RM-746 — Funktionsdurchgang D9: Druckeinstellungen, Übergabe an den Slicer, Filamentlager](#rm-746) | Bedienung und Darstellung | wartet auf D0; Folge D1, D9, D8 |
-| [RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes](#rm-747) | Bedienung und Darstellung | wartet auf D0; Phase 4; dazu aus D0 FD-8, FD-9, FD-11 und FD-19 |
-| [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4; dazu aus D0 FD-20 |
+| [RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes](#rm-747) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
+| [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4 |
 | [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; Phase 4 |
 | [RM-790 — Ein nativer Abbruch nach Rückgängig bei gezeigter Maßgruppe, einmal gesehen](#rm-790) | Bedienung und Darstellung | 150 Zyklen unter Last ohne Wiederholung; beim nächsten Auftreten Stapel sichern und zuordnen |
+| [RM-812 — Funde des Funktionsdurchgangs für 0.6.2](#rm-812) | Bedienung und Darstellung | für 0.6.2: FD-204 bis FD-211, FD-218 bis FD-226, FD-228 bis FD-230, FD-233, FD-234 und FD-236 bis FD-325 der Funddatei beheben (Umfang eingefroren, Robert 16.10.; Ziel 0.6.2, Robert 17.10.) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -216,15 +217,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft](#rm-755) | Tests und Entwicklungswerkzeuge | Gefunden in SK: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` einzeln 1 von 2 rot; Ursache klären wie bei der Formsitzung (Zeitgeber beim Zustellen) |
 | [RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot](#rm-779) | Tests und Entwicklungswerkzeuge | Den Vorgänger finden, der Zustand hinterlässt, und ihn aufräumen |
 | [RM-719 — Ein Fenstertest wackelt mit vier Arbeitern](#rm-719) | Tests und Entwicklungswerkzeuge | Ursache des Wettlaufs finden |
-| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | Pakete R, W13, P1, P2, Plattform fertig und geprüft, M und Q in der Fixrunde; Integration über `welle5`, dann der erzeugte Schnitt K, Unterlagen, Tor — vor 0.6.1 |
-| [RM-723 — Quelltextprüfungen lesen `app/ui/` flach und übersehen `render/`](#rm-723) | Tests und Entwicklungswerkzeuge | Je Stelle rekursiv lesen oder den Geltungsbereich mit Grund nennen |
-| [RM-724 — Späte Importe in `tools/` prüft niemand](#rm-724) | Tests und Entwicklungswerkzeuge | Statische Importprüfung (W5) vorziehen, `_feature_item` öffentlich machen |
-| [RM-725 — `affected_tests` erkennt `glob(` nicht als Baumleser](#rm-725) | Tests und Entwicklungswerkzeuge | `glob` in `_TREE_READERS` aufnehmen, mit Test |
-| [RM-726 — Zwei Patches in der Suite sind wirkungslos](#rm-726) | Tests und Entwicklungswerkzeuge | Patch auf das lesende Modul mit Gegenprobe; `_cost_matrix` entfernen oder benutzen |
-| [RM-727 — Namenslisten überspringen fehlende Module stumm](#rm-727) | Tests und Entwicklungswerkzeuge | Jeder Name löst auf und trägt bei, sonst Fehler (W6 vorziehen) |
-| [RM-728 — Kopfkopien entziehen sich Patches](#rm-728) | Tests und Entwicklungswerkzeuge | Je Paar prüfen, über das Modul zugreifen oder den Patch umsetzen |
-| [RM-729 — Gegenproben der Oberflächensuche zählen nur Dateien](#rm-729) | Tests und Entwicklungswerkzeuge | Gegenproben verlangen die Definitionsmodule von `MainWindow`, `Viewport` und der Merkmalserkennung |
-| [RM-730 — `tools/matrix_unit.py` läuft in keiner Suite](#rm-730) | Tests und Entwicklungswerkzeuge | Rauchtest, der das Modul importiert und seine Aliaszugriffe auflöst |
+| [RM-813 — Codestruktur Schritt 1 und die offenen Punkte aus Schritt 0](#rm-813) | Tests und Entwicklungswerkzeuge | CS-28, CS-29 und CS-41 bis CS-46 in 0.6.2 (Robert 17.10.); danach Phase 3: Schritt 1 (`geom/prepare_ops.py`) und die Handfixe aus Paket M an ihrem Schritt |
 | [RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat](#rm-786) | Tests und Entwicklungswerkzeuge | Am Tag die Suite auslassen, wenn der main-Lauf zum Tag-Commit grün ist; Vertrag und Wächter nachziehen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -5841,9 +5834,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   stehen auf main. Der finale Lauf am echten Fenster (48 Fälle auf `2ec37b23b`) ist von zwei
   Prüfern geurteilt; Urteile und erzeugte Abhaklisten D4, D8, D10 sind versioniert, die Funde
   mit Stand und Nachweis in `.claude/.state/funktionsdurchgang-2026-10/funde.md`.
-  **Nächster Schritt:** die offenen Funde über `welle5` beheben (Phase 2, auch die leichten),
-  Schlusslauf der betroffenen Zeilen am echten Fenster über `tools/native_runs.py`, Nachurteilsrunde
-  mit zwei Prüfern nach den geschärften Kriterien, dann abhaken; alles vor 0.6.1.
+  Mit 0.6.1 (17.10.2026): Die Funde der Phase 2 sind über `welle5` behoben, der Schlusslauf
+  am echten Fenster (L4 und L5 an `d9f7a81f9`, versiegelt) ist der Laufordner der Urteile, und
+  die Nachurteile in fünf Runden geben jeder Zeile von D4, D8 und D10 ihr Urteil mit mindestens
+  90 % Übereinstimmung je Prüfpunkt (`report` ohne Abweisung, Abhaklisten neu).
+  **Nächster Schritt:** der Rest von FD-34 und die Funde aus RM-812 in 0.6.2.
   **Abnahme:** Wächter grün über dem Bestand; je Prüfpunkt eine Gegenprobe ohne Fenster, die
   rot wird; je eine Zeile der drei Arten der Funktionsliste (Operation, Fensterbefehl,
   Bedienfläche) am echten Fenster über Stufe A gefahren; Listen zu V1 und I3, Vergleichsbilder
@@ -5879,8 +5874,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-741 — Funktionsdurchgang D4: Merkmale.**
   Bohrung, Langloch, Senkung, Gewinde, Muster, erkannte Merkmale ändern und entfernen, örtliche
   Erkennung (Kategorie `holes` und die Zeilen des Merkmalfensters ihrer Operationen).
-  Kundenpaket in Phase 3, mit D3 nach D1, D9 und D8. Dazu aus D0 FD-7 („Materialtoleranz“ ist
-  ein Fachwort) und FD-16 (zwei Hauptknöpfe in der Auswahlkarte bei gewähltem Merkmal).
+  Kundenpaket in Phase 3, mit D3 nach D1, D9 und D8.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-742"></a>
@@ -5923,9 +5917,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes.**
   Filament und Farbe, Beschriftung, Passungen, Parameter, Zahlen binden, Gegenstücke, Als
   Baustein speichern (Kategorien `colour`, `label`, `fits`, `parameters`). In Phase 4
-  (Programmplan, Konzept §9). Dazu aus D0 FD-8 (Kalibrierstand „Startwert“), FD-9
-  (Beschreibung von *Schriftzug anlegen*), FD-11 (Felder von *Parameter anlegen*) und FD-19
-  (*Filament und Druck* liegt zugeklappt am Ende der Auswahlkarte).
+  (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-748"></a>
@@ -5933,8 +5925,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung.**
   Kamera, Griffe, Objektbaum, Auswahl, Verlauf und Vorher/Nachher, Karten verschieben, Suche.
   In Phase 4, nach den Komponenten der Klassen, die es berührt: `MainWindow` und
-  für Kamera und Griffe `Viewport` (Programmplan, Konzept §9). Dazu aus D0 FD-20
-  (die Maßspalte im Objektbaum schneidet krumme Maße ab).
+  für Kamera und Griffe `Viewport` (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-749"></a>
@@ -5958,6 +5949,139 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Fallordner ab; beim nächsten Auftreten dort sichern, zuordnen und beheben.
   **Abnahme:** Ursache belegt und behoben, mit einem Test, der vorher abbrach; oder 1 000 Zyklen
   ohne Abbruch, dann ins Archiv.
+
+<a id="rm-812"></a>
+
+- [ ] **RM-812 — Funde des Funktionsdurchgangs für 0.6.2.**
+  Funde, die nach dem Einfrieren des Umfangs (Robert, 16.10.2026, 15:50) eingetragen wurden; sie
+  werden in 0.6.2 behoben (Robert, 17.10.2026). Beleg, Ursache und Vorschlag stehen je Fund in
+  der Funddatei `.claude/.state/funktionsdurchgang-2026-10/funde.md`, Abschnitt „Funde nach dem
+  Einfrieren“. Mittel sind FD-233 (ein Druck ohne vorheriges Überfahren fasst den Körper statt
+  des Griffs), FD-234 (die Sprachfälle erreichen am echten Fenster nicht jede Fläche, 44 in D1,
+  D2, D7, D9, D11 und D12 und `orient_for_print` in D8; vor den Phase-3-Paketen beheben),
+  FD-236 (nach *Auf das Bett setzen* ragt der Körper oben aus dem Bild),
+  FD-237 (*Spule anlegen* in *Neues Filament* und *Baustein anlegen* sind grau, ohne zu sagen
+  warum),
+  FD-241 (nach einer Auswahl bleibt die rechte Karte auf *Prüfbericht*),
+  FD-242 (die Seite *Auswahl* rollt bei gewähltem Körper schon bei 2560 × 1369),
+  FD-246 (die Sprachflächen fr und it der Analyseleiste zeigen eine fremde Lage),
+  FD-251 (der Schlusslauf liefert Zoll- und Dunkelbilder nicht für jede Zeile mit Prüfpunkt 9),
+  FD-252 (das Nachher-Bild am Vorhersagetor entsteht vor dem Ende der Rechnung),
+  FD-253 (das Vorhersagetor nennt den Knopf nicht, den es klickt),
+  FD-254 (*Andere Objekte wählen* öffnet weder den Schritt noch eine Wahl),
+  FD-257 (*Zusätzliche Programme …* führt OpenCASCADE nicht),
+  FD-258 (*Flächenbearbeitung beenden und erneut versuchen* rundet nicht und hinterlässt einen
+  Splitter),
+  FD-259 (*In Flächen und Kanten umwandeln* endet hinter einem Halt in einer Absage mit sich
+  selbst),
+  FD-260 (*Alle Merkmale erkennen* fragt nach dem Laden eines geladenen Modells),
+  FD-262 (*Stellen zeigen* nimmt die Markierung weg),
+  FD-264 (der Objektbaum wächst mit neuen Zeilen nicht mit),
+  FD-265 (Stufe A übersieht den Knopf unter der Namensabsage von *Parameter anlegen*),
+  FD-268 (*Filament und Druck* beginnt nach einer Auswahl zugeklappt),
+  FD-271 (graue Knöpfe an der Maßgruppe nennen keinen Sperrgrund mit Ausweg),
+  FD-272 (die Rückmeldung von *Bohrung ändern* kommt am Schlusslauf zu spät),
+  FD-274 (Bohrung und Fläche tragen beim Überfahren keine Beschriftung),
+  FD-287 (das Material der Dichtung steht schon auf dem Projektmaterial, Regel 21),
+  FD-293 (*Sperren aufheben und erneut teilen* zeigt keine Teilung),
+  FD-294 (graue Befundhandlungen hinter einem Halt zeigen ihre Beschreibung statt eines
+  Sperrgrunds),
+  FD-296 (nach *Senken* öffnet sich ungefragt der Einstellmodus des ursprünglichen
+  Bohrungsschritts),
+  FD-314 (*Neues Filament* und *Auswahl als Baustein speichern* zeigen vorn sieben bis zwölf
+  Felder) und
+  FD-317 (das Filament einer Schrift liegt zwei Klicks vom gewählten Körper entfernt), alle
+  übrigen leicht:
+  FD-204 (Cura-Profile fehlen im Herstellerscan der Druckfeldgrenzen),
+  FD-205 (ein geladenes Merkzeichen weitet die Eingabespanne des Felds),
+  FD-206 (ein Hinweis beim Öffnen geht verloren, wenn die erste Auswertung abbricht),
+  FD-207 (die Kommandozeile zeigt die Hinweise eines geöffneten Projekts nicht),
+  FD-208 (der Rückzug wird nicht gegen den Extruder geprüft),
+  FD-209 (die Kurzhilfe der Waisen-Sammelzeile nennt die Mitglieder zweimal),
+  FD-210 (*Filament anlegen* öffnet mit Leerraum über den Knöpfen, bei 9 und 16 pt),
+  FD-211 (das Schlüsselfeld in *Solidon freischalten* folgt keiner kleineren Schrift),
+  FD-218 (Volumen und Mengen stehen in Befunden ohne Einheit),
+  FD-219 (die Skizzenabsage nennt das Maß ohne Einheit),
+  FD-220 (Sätze im Kern mit fester Millimeterlänge folgen der Zollanzeige nicht),
+  FD-221 („Ausrichtung“ zeigt einen Kosinus statt eines Winkels),
+  FD-222 (ein verlorener Anteil steht als Bruch),
+  FD-223 (der Kalibrierwert im Befund steht ohne Einheit),
+  FD-224 (große Anzahlen stehen in Absage und Bericht ohne Dreiergruppen),
+  FD-225 (die Seitenkarten gleiten auch bei ausgeschalteter Bewegung),
+  FD-226 (die Maßkarte kehrt nach Auf- und Zuklappen an verschiedene Lagen zurück),
+  FD-228 (das Merkmalfenster sperrt „Gewinde ändern“ mit einer falschen Begründung),
+  FD-229 (der Bausteinbau in einer Operation rechnet immer fein und ohne Abbruch),
+  FD-230 (ein Speicherfehler der örtlichen Nachmessung endet als interner Fehler),
+  FD-238 (Flächen im Objektbaum stehen ohne Dreiergruppen),
+  FD-239 (der Prüfstand zeigt die Kurzhilfe am grauen Hauptknopf in zwei modalen Dialogen nicht),
+  FD-240 (das Vorher-Bild am Vorhersagetor zeigt manchmal eine noch rechnende Vorschau),
+  FD-243 (über dem ersten Feld der Seite *Auswahl* stehen 34 bis 36 Wörter),
+  FD-244 (*Platte*, *Qualität* und ein unbeschriftetes Feld im Druckeinstellungsdialog ohne Satz),
+  FD-245 (*Startwert* im Generierungsdialog ohne Satz),
+  FD-247 (Analyse- und Werkzeugleiste halten Qts Abstand 6),
+  FD-248 („An den Slicer übergeben …“ im leeren Bericht außerhalb der Schriftstufen),
+  FD-249 (der Fehlfall von *Auf das Bett setzen* öffnet *Kanten verfeinern*),
+  FD-250 (die erste Rückmeldung von *Auf das Bett setzen* kommt nach 0,35 s),
+  FD-255 (*Eingabe korrigieren* markiert den Wert nicht),
+  FD-256 (Befundhandlungen, die einen Dialog öffnen, kündigen eine Sofortwirkung an),
+  FD-261 (*Verlauf zeigen* markiert den Schritt nicht),
+  FD-263 (*Stützbedarf zeigen* lässt die Unterseite außer Sicht),
+  FD-266 (*Anlegen* in *Parameter anlegen* ohne Überfahrzustand),
+  FD-267 (Mindestwand und Überhangwinkel tragen den Satz ihres Hakens),
+  FD-269 (die Liste in *Als Muster zusammenfassen* heißt „Zellen“, übersetzt klein),
+  FD-270 (Markdown-Sterne in der Kurzhilfe von *Bohrung verschließen*),
+  FD-273 (G3 misst Haken und Klappe der Maßgruppe gegen die Feldspalte),
+  FD-275 (Z1 findet an *Bohrung ändern* keinen Griff),
+  FD-276 (an *Senken* nimmt die Sprachfläche kein Vorschauband auf),
+  FD-277 (*Material kalibrieren* lässt kein Material wählen),
+  FD-278 (die Maßgruppe bleibt nach *Übernehmen* offen),
+  FD-279 (nach dem Senken andere Ausgangswerte in *Merkmal drehen* und *Merkmal verdoppeln*),
+  FD-280 (« allein am Zeilenende im französischen Leersatz des Objektbaums),
+  FD-281 (die Namensabsage nennt „Buchstaben“, lehnt aber Umlaute ab),
+  FD-282 (bei 125 % ist der Filamentpunkt im Objektbaum eckig),
+  FD-283 (Z1 hat keinen Grund für *entfällt* an Zeilen ohne Griff),
+  FD-284 (*Vor Trennnähten schützen* heißt in fr und es wie die Dichtung),
+  FD-285 (am exakten Körper färbt eine gewählte Bohrung den ganzen Körper),
+  FD-286 (das Handbuch sagt, Strg+Z nehme einen Schnitt der automatischen Teilung zurück),
+  FD-288 („Keine“ in *Aushöhlen* im falschen Geschlecht und als zugänglicher Name),
+  FD-289 (die Startszenen von Analyse, Schichten und Bericht zeigen die Versprechen nicht),
+  FD-290 (die Schichtanzeige nennt keine Zahl der Inseln),
+  FD-291 (wie Z3 an Ansichtswerkzeugen urteilt, ist nicht festgelegt),
+  FD-292 (Bericht und Druckdialog nennen verschiedene Überstände),
+  FD-295 (*Stelle zeigen* wiederholt nur den Klick auf den Befund),
+  FD-297 (*Aushöhlen* zeigt bei gewählter Öffnung eine Entlüftung, die das Ergebnis nicht hat),
+  FD-298 (die Gründe für *entfällt* kennen keinen Prüfpunkt, der nur an anderen Zeilen gilt),
+  FD-299 (ein Test prüft die Kamerafahrt nicht, die sein Name verspricht),
+  FD-300 (das Handbuch zu *Schichten* verspricht Inselzahl und Überhangfläche ohne
+  Einschränkung),
+  FD-301 (Felder der Bewegen- und der Schnittleiste tragen keinen Satz),
+  FD-302 (der Kriterientext von Prüfpunkt 8 nennt weniger Teile, als die Zuordnung rechnet),
+  FD-303 (drei Wirkungen von *Linie teilen* haben keinen Test),
+  FD-304 (die Textmessung meldet ein knapp zu breites Wort in einer Liste als ungekürzt),
+  FD-305 (der Satz zur ersten Änderung findet ein Feld hinter *Weitere Werte* zugeklappt nicht),
+  FD-306 (dass Berichtszeilen gewählt gerechnet werden, hält kein Test),
+  FD-307 (eine Einzelzeile mit dem Titel ihrer Bausteingruppe behält die Kurzhilfe des
+  Merkmals),
+  FD-308 (ein Test der Schichtanalyse zählt eine fremde Analyse mit),
+  FD-309 (am Startbildschirm schneidet die Bildanleitung die Beispielkarten an),
+  FD-310 (*print-a-model*, Schritt 5, rahmt nur den Drucker),
+  FD-311 (*housing-with-lid*, Schritt 6, ohne freie Stelle für die Schrittnummer),
+  FD-312 (Filmwerkzeuge und Oberflächenaudit ohne Zeiger-Wächter),
+  FD-313 (Felder in *Neues Filament*, *Zahlen an Maße binden*, Parameterzeile und
+  *Auswahl als Baustein speichern* ohne eigenen Satz),
+  FD-315 (Lagerseite und Ersatzwahl tragen zwei Akzente),
+  FD-316 (in *Neues Filament* stehen Feldkanten versetzt, Übergang von −1 ms),
+  FD-318 (*Zahlen an Maße binden* hält Abstände von 11, 9 und 6 px),
+  FD-319 (Stufe A zählt an der Spule einer Schrift Felder hinter der Klappe als vorn),
+  FD-320 (Website und Handbuch versprechen eine Zeile zum Bereichstest, die vor dem Anlegen
+  fehlt),
+  FD-321 (der Prüfstand nimmt den Bausteinkatalog vor den Vorschaubildern auf),
+  FD-322 (zwei Knöpfe *Abbrechen* beim Lesen der Slicerprofile),
+  FD-323 (vier Wirkungsversprechen zu Filament und Parametern haben keinen Test),
+  FD-324 (im Handbuchbild des Hauptfensters trägt der Kartengriff den Fokusrahmen),
+  FD-325 (der Alt-Text des Website-Bilds zum Druckschritt nennt etwas, das das Bild nicht zeigt).
+  **Abnahme:** je Fund ein Test, der am Stand davor rot war, und der Stand „behoben `<commit>`“
+  in der Funddatei; Kundenwirkung im Changelog der nächsten Version in sechs Sprachen.
 
 ## KI und Generatoren
 
@@ -6557,7 +6681,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 <a id="rm-722"></a>
 
-- [ ] **RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert.**
+- [x] **RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert.**
   Erster Schritt des Programms aus dem [Konzept
   Codestruktur](konzepte/konzept-codestruktur-2026-10.md) (4.1); das Programm beginnt nach der
   Veröffentlichung von 0.6.0 (Entscheidung Robert, 11.10.2026, Konzept 7), Schritt 0 direkt nach
@@ -6565,94 +6689,43 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Dateigrößen (die Zahl der Definitionen einer gelisteten Datei steigt nie), W2 Patch-Ziele, W3
   Registerabzug, W4 rekursive Quelltextprüfungen, W5 statisch auflösbare Importe in `app/`,
   `tools/` und `tests/`, W6 Namenslisten lösen auf; dazu das Verschiebewerkzeug
-  `tools/move_names.py` mit `ast`-Beweis. Die Ausnahme „Fenstertests lokal vor
-  Oberflächenschritten“ (Konzept 7, Punkt 2) kommt mit D0 (RM-737) in den gemeinsamen Satz in
-  `AGENTS.md`; Schritt 0 zieht nur noch `/liefern` nach.
-  **Nächster Schritt:** CS-2, CS-9, CS-10, CS-11 und CS-12 (RM-723, RM-726 bis RM-729) und die
-  12 `raising=False` auf `app.*` beheben, dann W1 bis W6 und das Werkzeug mit Test an einer
-  Paket-Attrappe.
+  `tools/move_names.py` mit `ast`-Beweis.
+  **Stand (welle5 `a25ac8cb2`):** gebaut, geprüft und integriert — der Auflöser
+  `tools/code_*.py` (Pakete R, R2), W1 und W3 (W13; Liste `625733390` mit 134 Dateien), W4 und
+  die Auswahl über Lesestellen (Q), W6 (P1, P2), W5 und W2 a), b), d), e) scharf, das Werkzeug
+  mit Modul-, Kopien- und Komponentenmodus (M). Behoben sind CS-2, CS-9, CS-10, CS-12 und die
+  13 `raising=False` auf `app.*` ([RM-723](ROADMAP-ARCHIV.md#rm-723) bis
+  [RM-727](ROADMAP-ARCHIV.md#rm-727), [RM-729](ROADMAP-ARCHIV.md#rm-729)), dazu CS-17 bis
+  CS-40 bis auf CS-26, CS-28 und CS-29 ([Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md),
+  „Schritt 0“). Karten, Regel 6 in `AGENTS.md` und `/liefern` sind nachgezogen.
+  **Stand (welle5 `ec28714cf`):** Paket K hat CS-11 und CS-26 als erzeugten Schnitt behoben
+  ([RM-728](ROADMAP-ARCHIV.md#rm-728)), W2 c) ist scharf, damit alle sechs Wächter; Review I
+  über die Merge-Auflösungen urteilt „integrierbar“, seine Funde zu K sind nachgezogen.
+  **Stand (17.10.2026):** Bereichsnachweis bestanden (`14eab43a3`), Releasetor grün, mit D0 und
+  0.6.1 auf main. Abgeschlossen; Schritt 1 und die offenen CS-Funde stehen in RM-813.
   **Abnahme:** alle sechs Wächter grün über dem Bestand, je Wächter eine Gegenprobe rot; das
   Werkzeug verschiebt an der Attrappe mit Beweis; Review. Erst danach Schritt 1
-  (`geom/prepare_ops.py`).
+  ([RM-813](#rm-813)).
 
-<a id="rm-723"></a>
+<a id="rm-813"></a>
 
-- [ ] **RM-723 — Quelltextprüfungen lesen `app/ui/` flach und übersehen `render/`.**
-  17 Stellen in sieben Testdateien lesen `app/ui/*.py` oder `perceive/*.py` über `glob("*.py")`;
-  die über `app/ui/` sehen `app/ui/render/` (11 Dateien) nicht, fast alle sind Verbotsprüfungen
-  (`assert not culprits`). Stellen und Beleg:
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-2.
-  **Nächster Schritt:** je Stelle entscheiden, ob `render/` absichtlich fehlt; sonst rekursiv
-  lesen.
-  **Abnahme:** kein flaches `glob` über `app/` in `tests/` und `tools/`; eine Gegenprobe mit
-  einem Verstoß unter `render/` ist rot.
-
-<a id="rm-724"></a>
-
-- [ ] **RM-724 — Späte Importe in `tools/` prüft niemand.**
-  mypy prüft nur `app`; späte Importe in Erzeugern brechen erst beim Release in `/erzeugen`.
-  `make_video.py` und `make_workshop_videos.py` holen das private `app.ui.panels._feature_item`,
-  mindestens neun Werkzeuge holen `MainWindow` in Funktionen.
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-3.
-  **Abnahme:** ein umbenannter Name, den nur ein später Import in `tools/` liest, macht einen
-  Test rot.
-
-<a id="rm-725"></a>
-
-- [ ] **RM-725 — `affected_tests` erkennt `glob(` nicht als Baumleser.**
-  `tools/affected_tests.py` kennt `rglob`, `walk_packages`, `iterdir` und `iter_modules`, aber
-  nicht `glob(`. Eine Testdatei, die den Baum über `glob` liest, wird bei einer Änderung nur
-  gewählt, wenn sie das Modul auch importiert.
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-6.
-  **Abnahme:** eine Testdatei, die `app/` nur über `glob` liest, wird bei einer Änderung
-  darunter gewählt; Gegenprobe rot.
-
-<a id="rm-726"></a>
-
-- [ ] **RM-726 — Zwei Patches in der Suite sind wirkungslos.**
-  `tests/test_first_run.py` ersetzt `filament_picker.configured_spools` und sichert
-  `assert_not_called()` zu; der einzige Aufrufer hält eine Kopfkopie
-  (`app/ui/filament_inventory.py`), die Zusicherung ist immer grün.
-  `tests/test_spatial_matching.py` verbietet `matching._cost_matrix`, die niemand ruft.
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-9.
-  **Abnahme:** beide Prüfungen sind rot, wenn der verbotene Aufruf erreicht wird; eine
-  Gegenprobe belegt, dass er ohne Patch erreicht wird.
-
-<a id="rm-727"></a>
-
-- [ ] **RM-727 — Namenslisten überspringen fehlende Module stumm.**
-  `scene/evaluate.py` `_step_ways` überspringt ein fehlendes Modul aus `_STEP_WAY_MODULES` ohne
-  Meldung, der Merkschlüssel eines Schritts verlöre still Funktionen. `tests/conftest.py`
-  `_pin_ui_widgets` überspringt ein Modul ohne `MainWindow`; ohne Pin droht der native Abriss.
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-10.
-  **Abnahme:** ein fehlender oder leerer Eintrag in jeder dieser Listen ist ein Fehler, mit
-  Test.
-
-<a id="rm-728"></a>
-
-- [ ] **RM-728 — Kopfkopien entziehen sich Patches.**
-  In 54 Fällen hält ein Modul per `from M import N` eine eigene Kopie eines Namens, den Tests an
-  `M` patchen, etwa `features.detect` in `scene/evaluate.py`; der Patch erreicht die Kopie
-  nicht. [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-11.
-  **Abnahme:** keine Kopfkopie eines gepatchten Namens mehr; W2 (RM-722) macht neue Fälle rot.
-
-<a id="rm-729"></a>
-
-- [ ] **RM-729 — Gegenproben der Oberflächensuche zählen nur Dateien.**
-  `tests/test_leash.py` `test_the_sweep_over_the_surface_finds_files_to_read` verlangt 20 oder
-  mehr Dateien unter `app/ui/` (der Kommentar nennt 52, heute 86), `test_features.py` zehn unter
-  `perceive/`. Wird `main_window.py` ein Paket, bleiben beide grün, obwohl die größte Datei
-  fehlt. [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-12.
-  **Abnahme:** fehlt eines der Definitionsmodule in der Suche, sind die Gegenproben rot.
-
-<a id="rm-730"></a>
-
-- [ ] **RM-730 — `tools/matrix_unit.py` läuft in keiner Suite.**
-  Das Werkzeug greift über Modulaliasse zu (`handover.detect` und weitere); bräche ein Name,
-  fiele es erst beim nächsten Matrixlauf auf.
-  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-13.
-  **Abnahme:** ein Test importiert das Modul und löst seine Aliaszugriffe auf; ein umbenannter
-  Name macht ihn rot.
+- [ ] **RM-813 — Codestruktur Schritt 1 und die offenen Punkte aus Schritt 0.**
+  In Phase 3 nach 0.6.1 (Programm, Robert 12. und 13.10.): Schritt 1 teilt `geom/prepare_ops.py`
+  nach Konzept 4.2 und 4.3. Aus Schritt 0 offen und an ihrem Schritt zu behandeln
+  ([Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), „Schritt 0“): CS-28 (das Modul
+  `scene/evaluate.py` hinter dem gleichnamigen trägen Export ist als Pfad nicht patchbar; das
+  Werkzeug fängt es ab), CS-29 (ein Fake auf dem Wirt bekommt nach einem Komponentenschnitt
+  die Komponente, Schritt 4d) und die Punkte 8, 9, 12 und 13 aus Paket M
+  (`importlib.reload` und `dir()` auf `slicer_keys` und `advise`, Aufruftexte in `tools/`,
+  Methoden mit `self.sender()`, `getattr` und Namensraumlesungen über offene Namen in
+  `main_window.py`). Dazu aus Paket U und K: CS-41 (Docstring in `tests/test_ui.py` nennt
+  `_pin_ui_widgets` statt `UI_PINS`), CS-42 (ein beim Import abgeleiteter Wert eines gepatchten
+  Namens, W2 c) sieht ihn nicht), CS-43 (der Schnitt bindet an 18 Stellen ein Modul lokal unter
+  zweitem Namen) und CS-44 (das Werkzeug meldet vervielfachte Ersetzungen nicht).
+  **Nächster Schritt:** die Zuschnittliste für `geom/prepare_ops.py` messen (Konzept 4.2,
+  Punkt 1).
+  **Abnahme:** Schritt 1 nach Konzept 4.5 abgenommen; jeder genannte Punkt hat beim Schnitt
+  seiner Datei einen Commit oder eine Entscheidung in der Funddatei.
 
 <a id="rm-786"></a>
 

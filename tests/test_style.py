@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.ui.style import LEVELS, NORMAL, ROOMY, SPACE, TIGHT, WIDE, stylesheet, type_scale
 from app.ui.theme import THEMES
+from tests import source_tree
 
 UI = Path(__file__).parent.parent / "app" / "ui"
 
@@ -55,457 +56,6 @@ def test_the_grid_is_one_number_and_its_multiples() -> None:
     assert TIGHT < NORMAL < ROOMY < WIDE
 
 
-def test_dialog_size_decision_follows_the_change_intent() -> None:
-    from PySide6.QtCore import QSize
-
-    from app.ui.style import _content_size_for_intent
-
-    current = QSize(700, 420)
-    natural = QSize(920, 680)
-    assert _content_size_for_intent(
-        current, natural, "initial", grow_width=True, natural_width=960
-    ) == QSize(960, 680)
-    assert _content_size_for_intent(current, natural, "explicit", available_height=250) == QSize(
-        700, 250
-    )
-    # Passiv wächst nur die Höhe, bis zum Bildschirmrand, und nichts schrumpft:
-    # nachgereichter Inhalt bekommt Platz, ein kürzerer Status lässt den Rahmen stehen.
-    assert _content_size_for_intent(current, natural, "passive") == QSize(700, 680)
-    assert _content_size_for_intent(current, natural, "passive", available_height=500) == QSize(
-        700, 500
-    )
-    assert _content_size_for_intent(current, natural, "passive", available_height=400) is None
-    assert _content_size_for_intent(current, QSize(920, 300), "passive") is None
-
-
-def test_screen_fit_does_not_consume_the_initial_content_fit() -> None:
-    from PySide6.QtCore import QSize
-
-    from app.ui.style import ContentHeight
-
-    class Layout:
-        def invalidate(self) -> None:
-            pass
-
-        def activate(self) -> None:
-            pass
-
-    class Scroll:
-        def updateGeometry(self) -> None:  # noqa: N802 — Qt-Name
-            pass
-
-        def widget(self) -> None:
-            return None
-
-    class Geometry:
-        def __init__(self) -> None:
-            self._size = QSize(680, 420)
-
-        def isVisible(self) -> bool:  # noqa: N802 — Qt-Name
-            return True
-
-        def size(self) -> QSize:
-            return QSize(self._size)
-
-        def width(self) -> int:
-            return self._size.width()
-
-        def height(self) -> int:
-            return self._size.height()
-
-        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
-            return QSize(720, 500)
-
-        def screen(self) -> None:
-            return None
-
-        def layout(self) -> Layout:
-            return Layout()
-
-        def resize(self, width: int, height: int) -> None:
-            self._size = QSize(width, height)
-
-    dialog = Geometry()
-    scroll = Scroll()
-    height = ContentHeight()
-
-    # Frühe passive Messung und der Bildschirmfit setzen fitted, aber noch
-    # nicht die natürliche Anfangsmessung.
-    height.fit(dialog, scroll, intent="passive")  # type: ignore[arg-type]
-    height.fit_to_screen(dialog)  # type: ignore[arg-type]
-    assert not height.initial_fit_done
-    assert height.fitted == QSize(680, 420)
-
-    height.fit(
-        dialog,  # type: ignore[arg-type]
-        scroll,  # type: ignore[arg-type]
-        grow_width=True,
-        intent="initial",
-        natural_width=980,
-    )
-    assert dialog.size() == QSize(980, 500)
-    assert height.initial_fit_done
-
-    # Der umgekehrte Ablauf verhindert, dass ein späterer Callback erneut passt.
-    height.fit(dialog, scroll, intent="initial")  # type: ignore[arg-type]
-    assert dialog.size() == QSize(980, 500)
-
-
-def test_late_content_grows_an_automatic_dialog_but_never_a_drawn_one() -> None:
-    """Nachgereichter Inhalt vergrößert den Rahmen, solange der Kunde nicht zog (RM-487).
-
-    Das Ergebnis einer Hintergrundprüfung kommt als passive Anpassung an. Sie
-    blieb ganz im Rollbereich, und der Knopf, den die Prüfung einblendet, lag
-    unter dem Rand. Jetzt wächst die Höhe — Breite und Lage bleiben —, ein
-    kürzerer Inhalt danach gibt nichts zurück, und eine gezogene Größe bleibt.
-    """
-    from types import SimpleNamespace
-
-    from PySide6.QtCore import QPoint, QRect, QSize, Qt
-
-    from app.ui.style import ContentHeight
-
-    class Layout:
-        def invalidate(self) -> None:
-            pass
-
-        def activate(self) -> None:
-            pass
-
-    #: Was um den Rollbereich herum steht: Ränder und Knopfleiste.
-    chrome = 100
-
-    class Viewport:
-        def __init__(self, dialog: Dialog) -> None:
-            self.dialog = dialog
-
-        def width(self) -> int:
-            return self.dialog.size().width()
-
-        def height(self) -> int:
-            return self.dialog.size().height() - chrome
-
-    class Content:
-        def __init__(self, dialog: Dialog) -> None:
-            self.dialog = dialog
-
-        def layout(self) -> None:
-            return None
-
-        def width(self) -> int:
-            return self.dialog.size().width()
-
-        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
-            return self.dialog.natural - QSize(0, chrome)
-
-        def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
-            return QSize(0, 0)
-
-    class Scroll:
-        def __init__(self, dialog: Dialog) -> None:
-            self._viewport = Viewport(dialog)
-            self._content = Content(dialog)
-
-        def updateGeometry(self) -> None:  # noqa: N802 — Qt-Name
-            pass
-
-        def widget(self) -> Content:
-            return self._content
-
-        def viewport(self) -> Viewport:
-            return self._viewport
-
-        def horizontalScrollBar(self) -> SimpleNamespace:  # noqa: N802 — Qt-Name
-            return SimpleNamespace(minimum=lambda: 0, maximum=lambda: 0)
-
-        def horizontalScrollBarPolicy(self) -> Qt.ScrollBarPolicy:  # noqa: N802 — Qt-Name
-            return Qt.ScrollBarPolicy.ScrollBarAsNeeded
-
-        def maximumViewportSize(self) -> QSize:  # noqa: N802 — Qt-Name
-            return QSize(self._viewport.width(), self._viewport.height())
-
-    class Dialog:
-        def __init__(self) -> None:
-            self._size = QSize(680, 420)
-            self.natural = QSize(680, 420)
-            self.moves: list[QPoint] = []
-
-        def isVisible(self) -> bool:  # noqa: N802 — Qt-Name
-            return True
-
-        def size(self) -> QSize:
-            return QSize(self._size)
-
-        def width(self) -> int:
-            return self._size.width()
-
-        def height(self) -> int:
-            return self._size.height()
-
-        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
-            return QSize(self.natural)
-
-        def frameGeometry(self) -> QRect:  # noqa: N802 — Qt-Name
-            return QRect(QPoint(40, 30), self._size)
-
-        def move(self, point: QPoint) -> None:
-            self.moves.append(point)
-
-        def screen(self) -> None:
-            return None
-
-        def layout(self) -> Layout:
-            return Layout()
-
-        def resize(self, width: int, height: int) -> None:
-            self._size = QSize(width, height)
-
-    dialog = Dialog()
-    scroll = Scroll(dialog)
-    height = ContentHeight()
-
-    dialog.natural = QSize(720, 480)
-    height.fit(dialog, scroll, intent="passive")  # type: ignore[arg-type]
-    assert dialog.size() == QSize(680, 420), "vor der Anfangsmessung misst nur ``initial``"
-
-    height.fit(dialog, scroll, grow_width=True, intent="initial")  # type: ignore[arg-type]
-    assert dialog.size() == QSize(720, 480)
-
-    dialog.natural = QSize(900, 536)
-    height.fit(dialog, scroll, intent="passive")  # type: ignore[arg-type]
-    assert dialog.size() == QSize(720, 536), "die Höhe wächst mit, die Breite bleibt"
-    assert height.user is None, "das eigene Wachsen ist kein Zug des Kunden"
-
-    dialog.natural = QSize(720, 300)
-    height.fit(dialog, scroll, intent="passive")  # type: ignore[arg-type]
-    assert dialog.size() == QSize(720, 536), "ein kürzerer Inhalt lässt den Rahmen stehen"
-
-    dialog.resize(720, 400)  # der Kunde zieht
-    dialog.natural = QSize(720, 700)
-    height.fit(dialog, scroll, intent="passive")  # type: ignore[arg-type]
-    assert dialog.size() == QSize(720, 400), "die gezogene Größe gehört dem Kunden"
-    assert height.user == QSize(720, 400)
-    assert dialog.moves == []
-
-
-def test_first_run_initial_width_after_screen_fit_is_not_treated_as_user_size() -> None:
-    from PySide6.QtCore import QSize
-
-    from app.ui.first_run import FirstRunDialog
-    from app.ui.style import ContentHeight
-
-    class Layout:
-        def invalidate(self) -> None:
-            pass
-
-        def activate(self) -> None:
-            pass
-
-    class Content:
-        def layout(self) -> Layout:
-            return Layout()
-
-        def findChildren(self, _kind: type) -> list[object]:  # noqa: N802 — Qt-Name
-            return []
-
-    class Scroll:
-        def updateGeometry(self) -> None:  # noqa: N802 — Qt-Name
-            pass
-
-        def widget(self) -> None:
-            return None
-
-    class PrinterForm:
-        def layout(self) -> None:
-            return None
-
-        def parentWidget(self) -> None:  # noqa: N802 — Qt-Name
-            return None
-
-    class Dialog:
-        def __init__(self) -> None:
-            self._size = QSize(680, 400)
-            self._height = ContentHeight()
-            self._height.fitted = QSize(self._size)
-            self._contents = Content()
-            self._scroll = Scroll()
-            self.custom_printer = PrinterForm()
-
-        def isVisible(self) -> bool:  # noqa: N802 — Qt-Name
-            return True
-
-        def layout(self) -> Layout:
-            return Layout()
-
-        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
-            return QSize(980, 620)
-
-        def minimumWidth(self) -> int:  # noqa: N802 — Qt-Name
-            return 0
-
-        def _natural_width(self) -> int:
-            return FirstRunDialog._natural_width(self)  # type: ignore[arg-type]
-
-        def width(self) -> int:
-            return self._size.width()
-
-        def height(self) -> int:
-            return self._size.height()
-
-        def resize(self, width: int, height: int) -> None:
-            self._size = QSize(width, height)
-
-        def screen(self) -> None:
-            return None
-
-        def size(self) -> QSize:
-            return QSize(self._size)
-
-    dialog = Dialog()
-
-    FirstRunDialog._grow_to_content(dialog, "initial")  # type: ignore[arg-type]
-
-    assert dialog.size() == QSize(980, 620)
-    assert dialog._height.user is None
-    assert dialog._height.initial_fit_done
-
-
-def test_natural_form_width_counts_each_hidden_and_spanning_item_once() -> None:
-    from PySide6.QtCore import QSize
-    from PySide6.QtWidgets import QFormLayout
-
-    from app.ui.style import form_natural_width
-
-    class Margins:
-        def left(self) -> int:
-            return 2
-
-        def right(self) -> int:
-            return 3
-
-    class Widget:
-        def __init__(self, width: int, minimum_width: int) -> None:
-            self.width = width
-            self.minimum_width = minimum_width
-
-        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
-            return QSize(self.width, 1)
-
-        def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
-            return QSize(0, 1)
-
-        def minimumSize(self) -> QSize:  # noqa: N802 — Qt-Name
-            return QSize(self.minimum_width, 1)
-
-    class Layout:
-        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
-            return QSize(210, 1)
-
-        def minimumSize(self) -> QSize:  # noqa: N802 — Qt-Name
-            return QSize(230, 1)
-
-    class Item:
-        def __init__(
-            self,
-            width: int,
-            widget: Widget | None = None,
-            layout: Layout | None = None,
-        ) -> None:
-            self.width = width
-            self._widget = widget
-            self._layout = layout
-
-        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
-            return QSize(self.width, 1)
-
-        def minimumSize(self) -> QSize:  # noqa: N802 — Qt-Name
-            return QSize(0, 1)
-
-        def widget(self) -> Widget | None:
-            return self._widget
-
-        def layout(self) -> Layout | None:
-            return self._layout
-
-    class Form:
-        def __init__(self) -> None:
-            self.items = [
-                (0, QFormLayout.ItemRole.LabelRole, Item(40)),
-                (0, QFormLayout.ItemRole.FieldRole, Item(100)),
-                # Verborgene Widget-Items melden leer, das Widget behält seine
-                # natürliche und festgelegte Mindestbreite.
-                (1, QFormLayout.ItemRole.FieldRole, Item(0, Widget(200, 220))),
-                # Die SpanningRole-Zelle liegt im Feldspeicher; eine Abfrage
-                # ihrer Zeile als FieldRole liefert deshalb dasselbe Element.
-                (2, QFormLayout.ItemRole.SpanningRole, Item(0, layout=Layout())),
-            ]
-
-        def contentsMargins(self) -> Margins:  # noqa: N802 — Qt-Name
-            return Margins()
-
-        def count(self) -> int:
-            return len(self.items)
-
-        def itemAt(  # noqa: N802 — Qt-Name
-            self, index: int, role: QFormLayout.ItemRole | None = None
-        ) -> Item | None:
-            if role is None:
-                return self.items[index][2]
-            for row, item_role, item in self.items:
-                if row == index and (
-                    item_role == role
-                    or (
-                        role == QFormLayout.ItemRole.FieldRole
-                        and item_role == QFormLayout.ItemRole.SpanningRole
-                    )
-                ):
-                    return item
-            return None
-
-        def getItemPosition(self, index: int) -> tuple[int, QFormLayout.ItemRole]:  # noqa: N802
-            row, role, _item = self.items[index]
-            return row, role
-
-        def horizontalSpacing(self) -> int:  # noqa: N802 — Qt-Name
-            return 8
-
-        def spacing(self) -> int:
-            return -1
-
-    assert form_natural_width(Form()) == 273  # type: ignore[arg-type]
-
-
-@pytest.mark.parametrize("chosen", [(630, 420), (700, 360)])
-def test_dialog_keeps_a_manually_chosen_width_and_height(chosen: tuple[int, int]) -> None:
-    from PySide6.QtCore import QSize
-
-    from app.ui.style import ContentHeight
-
-    class Geometry:
-        def __init__(self) -> None:
-            self.resize_calls = 0
-
-        def isVisible(self) -> bool:  # noqa: N802 — Qt-Name
-            return True
-
-        def size(self) -> QSize:
-            return QSize(*chosen)
-
-        def resize(self, _width: int, _height: int) -> None:
-            self.resize_calls += 1
-
-    dialog = Geometry()
-    height = ContentHeight()
-    height.fitted = QSize(700, 420)
-
-    assert height.floor(dialog) == chosen[1]
-    height.settle(dialog, 940, 760, intent="explicit")
-
-    assert height.user == QSize(*chosen)
-    assert height.fitted == QSize(*chosen)
-    assert dialog.resize_calls == 0
-
-
 #: ``setSpacing(…)`` und ``setContentsMargins(…)`` mit nackten Zahlen.
 _SPACING = re.compile(r"set(?:Spacing|ContentsMargins)\(([^)]*)\)")
 
@@ -518,14 +68,14 @@ def test_no_layout_invents_its_own_distance() -> None:
     eine Aussage, kein Zwischenwert.
     """
     off: dict[str, list[str]] = {}
-    for path in sorted(UI.glob("*.py")):
+    for path in source_tree.python_files("app/ui"):
         for match in _SPACING.finditer(path.read_text(encoding="utf-8")):
             for part in match.group(1).split(","):
                 value = part.strip()
                 if not value.isdigit() or int(value) == 0:
                     continue
                 if int(value) % SPACE:
-                    off.setdefault(path.name, []).append(match.group(0))
+                    off.setdefault(source_tree.relative(path), []).append(match.group(0))
 
     assert not off, (
         f"Diese Abstände liegen nicht auf dem Raster von {SPACE} px: {off}. "
@@ -929,7 +479,7 @@ def test_a_primary_button_carries_the_font_it_is_drawn_with(qt_app: QApplication
     )
 
 
-def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: object) -> None:
+def test_every_default_button_of_the_surface_goes_through_make_primary() -> None:
     """``setDefault(True)`` allein genügt nicht mehr, und das darf niemand
     wieder vergessen.
 
@@ -943,19 +493,21 @@ def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: o
     von selbst. ``test_no_window_wears_an_accent_it_never_asked_for`` weiter
     unten misst deshalb am **angezeigten** Fenster. Die beiden gehören
     zusammen gelesen; getrennt ist jeder von beiden blind für das, was der
-    andere sieht.
+    andere sieht. Gelesen wird nur Quelltext; der Fall braucht keine Anwendung
+    und läuft im Kernlauf.
     """
-    # Der Glob ist die Grundmenge, und ein umbenannter Ordner macht ihn leer,
-    # ohne dass jemand etwas merkt: Der Test bliebe grün und prüfte nichts.
-    dateien = sorted(UI.glob("*.py"))
-    assert len(dateien) > 20, f"nur {len(dateien)} Dateien unter {UI} — falscher Pfad?"
+    # Die Grundmenge ist der ganze Baum unter app/ui. Die Datei mit
+    # ``make_primary`` ist die eine Stelle, an der der Aufruf stehen darf —
+    # sie muss darin liegen, sonst nimmt die Ausnahme nichts mehr aus.
+    dateien = source_tree.python_files("app/ui")
+    primary = source_tree.definition_file("make_primary", "app/ui")
+    assert primary in dateien, f"{source_tree.relative(primary)} fehlt in der Grundmenge"
+    assert len(dateien) > 20, f"nur {len(dateien)} Dateien unter app/ui — falscher Pfad?"
 
     offenders = [
-        path.name
-        for path in sorted(UI.glob("*.py"))
-        # ``style.py`` selbst ist die eine Stelle, an der der Aufruf stehen
-        # darf — dort steht er in ``make_primary``.
-        if path.name != "style.py" and "setDefault(True)" in path.read_text(encoding="utf-8")
+        source_tree.relative(path)
+        for path in dateien
+        if path != primary and "setDefault(True)" in path.read_text(encoding="utf-8")
     ]
 
     assert not offenders, (
@@ -1235,14 +787,14 @@ def test_no_multiline_field_swallows_the_tab_key() -> None:
     bauen hieße, ein Sprachmodell und einen Lizenzserver zu brauchen.
     """
     offenders = []
-    for path in sorted(UI.glob("*.py")):
+    for path in source_tree.python_files("app/ui"):
         source = path.read_text(encoding="utf-8")
         for match in re.finditer(r"(\w+)\s*=\s*QPlainTextEdit\(", source):
             feld = match.group(1)
             if f"{feld}.setReadOnly(True)" in source:
                 continue
             if f"{feld}.setTabChangesFocus(True)" not in source:
-                offenders.append(f"{path.name}:{feld}")
+                offenders.append(f"{source_tree.relative(path)}:{feld}")
 
     assert not offenders, (
         f"Diese Felder schlucken den Tabulator: {offenders}. "
@@ -1405,12 +957,12 @@ def test_no_progress_bar_prints_its_number_over_the_moving_edge() -> None:
     ein neuer sonst stillschweigend wieder eine Zahl mitbringt.
     """
     offenders = []
-    for path in sorted(UI.glob("*.py")):
+    for path in source_tree.python_files("app/ui"):
         source = path.read_text(encoding="utf-8")
         if "QProgressBar(" not in source:
             continue
         if "setTextVisible(False)" not in source:
-            offenders.append(path.name)
+            offenders.append(source_tree.relative(path))
 
     assert not offenders, (
         f"Diese Balken schreiben ihre Zahl über die Füllung: {offenders}. "
@@ -2652,7 +2204,8 @@ _LAYOUTS = frozenset({"QVBoxLayout", "QHBoxLayout", "QFormLayout", "QGridLayout"
 #: Module der Karten des Hauptfensters: geprüft, auch wenn ihre Dialogklasse
 #: (``BodyChoiceDialog``) einmal umzieht. Ihre Höhen teilt
 #: ``OverlayHost._share_room`` und liest dabei die Abstände der Layouts (FD-23).
-_CARD_MODULES = frozenset({"panels.py"})
+#: Dazu die Maßgruppe im Bild mit Leiste und Karte (FD-103).
+_CARD_MODULES = frozenset({"panels.py", "placement_flow.py"})
 
 
 def _layouts_without_spacing(source: str) -> list[str]:
@@ -2711,14 +2264,14 @@ def test_every_layout_of_a_dialog_keeps_the_grid() -> None:
     """
     modules = [
         path
-        for path in sorted(UI.glob("*.py"))
+        for path in source_tree.python_files("app/ui")
         if path.name in _CARD_MODULES
         or re.search(r"^class \w+\(.*QDialog\b", path.read_text(encoding="utf-8"), re.MULTILINE)
     ]
     assert len(modules) > 20, f"nur {len(modules)} Dialogmodule — die Suche greift nicht"
     assert {path.name for path in modules} >= _CARD_MODULES, "die Karten fehlen in der Prüfung"
     missing = [
-        f"{path.name}:{entry}"
+        f"{source_tree.relative(path)}:{entry}"
         for path in modules
         for entry in _layouts_without_spacing(path.read_text(encoding="utf-8"))
     ]

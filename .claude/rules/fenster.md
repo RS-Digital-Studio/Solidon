@@ -77,11 +77,11 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   (`_SelectionPage.held`), nicht über eine Tour.
   Ein Zug im Bild, der Werte in eine Handlung legt (`FeaturePanel.valuesTaken`),
   holt ihn immer: Sein *Übernehmen* steht dort.
-- `MainWindow.announce` ergänzt die Statuszeile um eine passive Overlayquittung:
-  kein Fokus, keine Klicks, kein RichText; mindestens acht Sekunden, lange
-  Texte länger. Neue Quittung ersetzt alte, Fortschritt überschreibt sie nicht.
-  Kontextwechsel/Abbau beendet den Timer. Keine neue Zone und kein zweites
-  Live-Ereignis für Bildschirmleser.
+- `announce` ergänzt die Statuszeile um eine passive Quittung (`action_notice`):
+  ohne Fokus, Klick, RichText; ab acht Sekunden. Nie über einer Karte, ohne
+  Platz nur Statuszeile; der nächste Schritt nimmt beide mit. Fortschritt
+  überschreibt sie nicht. Keine neue Zone, kein zweites Live-Ereignis für
+  Bildschirmleser.
 - Einladungen (`survey.ViewNotice`) bleiben nichtmodal ohne Fokus über der
   Ansicht, nie unter Karten. Neue Overlays bei `keep_clear_of` anmelden.
   Erst Zeigen zählt als gesehen; nur erfolgreiche Datei, Slicen oder Öffnen
@@ -186,9 +186,8 @@ Stellen halten das, beide sind nötig:
   `add_generated`, `accept_proposal`). Die Absage trägt die Handlungen des Halts
   mit Schrittkennung, Werten und Körper, damit `error_handlers` sie ausführen
   kann. Weiter gehen Änderungen ohne Schritt (Parameter, Passung, Drucker — sie
-  können den Halt lösen), Rückgängig, *Schritt löschen* und die Wege des
-  Verlaufs (`change_params`, `repair_and_retry`, `split_and_retry`,
-  `recount_and_retry`, `decimate_and_retry`, `remesh_and_retry`).
+  können den Halt lösen), Rückgängig, *Schritt löschen* und die Wege am
+  haltenden Befund (`revision.halt_finding`, im Bericht `action_refusal(at_halt=)`).
 - **Die Oberfläche sagt es vorher** (`_halt_reason`, die erste Frage in
   `_reason_locked`): Aktion, Suche und Karte tragen den Grund mit
   Schrittnummer und Titel, ebenso Automatisch teilen, Einfügen, Erzeugen,
@@ -231,28 +230,25 @@ Stellen halten das, beide sind nötig:
   solche mit `_object_of`/`error.object_id` in `panels.NEEDS_LIVE_BODY`.
   Nur nackte `=@breite`-Bindungen (`expressions.bound_name`) führen in die
   Parameterleiste.
-- Bleibt nach `error_handlers` kein Knopf, bietet `handled_actions` *Eingabe
-  korrigieren* mit Rat als Tooltip; der Fehlerdialog zeigt Räte über
-  `dialogs.unhandled_advice` als Sätze. Knopfzeile, Kontextmenü und Vorwahl
-  benutzen denselben Abgleich.
+- Ohne Knopf nach `error_handlers` bietet `handled_actions` *Eingabe
+  korrigieren* mit Rat im Tooltip. Satz statt Knopf (`unhandled_advice`): ohne
+  Handler, `NEEDS_OP` ohne Schritt, nicht `left_out`. Knopfzeile, Kontextmenü
+  und Vorwahl teilen den Abgleich.
 - Vorgewählt werden nur Fehler und Warnungen mit Handlung (`_preselect`). Nach
   einer Befundhandlung bleibt der Fokus im Bericht (`_focus_parked`): an der
   nächsten Befundzeile, sonst an der Übergabe.
 - Lokale Erkennung behält die Zielkörper des Befunds; erst der Originaltreffer
   bestimmt einen. Baumauswahl ersetzt dieses Ziel nicht. Maus und Tastatur
   verwenden denselben Treffer.
-- Befundklick (§2.7): Ort → Kameraflug und `mark_finding`; sonst Körper → Auswahl;
-  sonst `op_id` → `HistoryPanel.point_at`. Ortsmarken verwenden `FINDING_COLOUR`
-  vor Material, Abstand als Radius, Titelgrund in Kamera-Oben-Richtung und
-  `Finding.outline` als Rand (`ansicht.md`, „Was gefärbt wird“). Marke nicht
-  nach vorn ziehen; nur Beschriftung `always_visible`. Szenenorte gehen durch
-  `view_point_of`, Kartenorte kommen in `_map_ready`. Mehrschritt-Transaktionen
-  tragen am Gruppenknoten nur `OPS_ROLE`.
+- Befundklick (§2.7): Ort → Kameraflug und `mark_finding`; sonst Körper → Auswahl
+  und Rahmen (`reset_camera`), neues Projekt → `frame_next_scene`;
+  sonst `op_id` → `HistoryPanel.point_at`. Ortsmarken: `ansicht.md`, „Was
+  gefärbt wird“, Einzelheiten in `regel-fenster.md`.
 
 ## Das Merkmalfenster
 
 - **Offen ist genau eine Handlung, die scharfe** (RM-510): `_arm` klappt auf
-  (`_open_only`), ein Kopf macht scharf, Zugeklapptes nennt seine Werte. Ohne
+  (`_open_only`), die Knopfzeile steht darunter (`feature_footer`), ein Kopf macht scharf, Zugeklapptes nennt seine Werte. Ohne
   Auswahl schweigt es; die Anleitung entfällt nach dem ersten Merkmalklick.
   Am Anker einer Gruppe („Kammer 1“ im Baum) führt ihre Handlung
   (`actions.group_action_first`), sonst stünde *Fläche versetzen* mit 0 mm offen.
@@ -271,8 +267,8 @@ Stellen halten das, beide sind nötig:
   lässt keine aus. *Merkmal verschieben* führt an Zapfen, Senkung, Kugel und Ring
   ins Bild wie *Bohrung ändern* (`MEASURED_WHILE_MOVED`).
 - **Ein zusammengelegter Grund spricht für alle, unter denen er steht:**
-  `_folded` macht aus gleich begründeten Absagen eine Zeile („Verschieben,
-  Ändern, Drehen, Verdoppeln und Entfernen — <Satz>“); der Satz verneint die
+  `_folded` macht aus gleich begründeten Absagen eine Zeile („Hier nicht möglich:
+  Verschieben, …, Entfernen. <Satz>“); der Satz verneint die
   **Voraussetzung**, nicht eine Handlung („trägt kein Maß, an dem sich Lage
   oder Größe ändern ließen“), und nennt den Weg, der bleibt.
 - **Die Spalte rollt nur senkrecht** (RM-488): `panels.ColumnScroller` nimmt
@@ -388,11 +384,11 @@ passiven Größenweg zu. Kurzer Anfangsbedarf ist kein dauerhaftes
 Viewport-Minimum: Der innere Rollbereich gibt Platz an die Knopfleiste ab.
 Beim Öffnen, Monitorwechsel, geänderter nutzbarer Fläche oder logischer DPI
 sichern `DialogScrollArea` und `fit_dialog_to_screen` die Erreichbarkeit.
-Anfangsbreite samt zugeklappten Teilen und Rollbalken rechnet allein
-`style.expanded_width` (RM-342 D-N5). Im sichtbaren Rollbereich zählt für die Wunschhöhe
-`maximumViewportSize`, nicht vorläufige Rollbalkenenge. `_hidden_height`
-zieht eine rangefreie AsNeeded-Querleiste nicht ab; nötige und dauernde
-Leisten bleiben berücksichtigt.
+Anfangsbreite samt zugeklappten Teilen und Balken: `style.expanded_width`
+(RM-342 D-N5). `ContentHeight.fit` misst und legt ohne senkrechten Balken
+und verbreitert um fehlende Mindestbreite samt Balken; jede Klappe misst
+`explicit` (FD-198 bis FD-200).
+`_hidden_height` zieht eine rangefreie AsNeeded-Querleiste nicht ab.
 
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
 (`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
@@ -430,7 +426,11 @@ Für Druckerwahl und Druckdialog gilt `druckerwahl.md`.
 ## `setParent(None)` macht ein Kind zum Fenster
 
 Vor Einzelabbau aus weiterlebendem Layout löst `layout_lifetime.detach_from_layout`
-das Widget; `removeWidget` entwertet gehaltene Itemhüllen. Weggeräumt wird mit
+das Widget; `removeWidget` entwertet gehaltene Itemhüllen. Gelesen werden
+Layoutelemente über `layout_lifetime.borrowed_items` oder `layout_parts`, nie
+über `itemAt(index)`: Die Hülle hängt am Layout und überlebt ein Element, das
+Qt löscht, bis ein neues `QObject` an derselben Adresse abreißt (FD-201,
+`test_layout_item_wrappers.py`). Weggeräumt wird mit
 `hide()` und `deleteLater()`, nie über den Elternteil.
 Nach `exec` Rückgabewerte im `try` lesen, den Dialog im `finally` freigeben.
 Nichtmodale Dialoge geben sich am `finished`, über `WA_DeleteOnClose` oder

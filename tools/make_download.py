@@ -38,7 +38,8 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.branding import APP_NAME, APP_VERSION
+from app import branding
+from app.branding import APP_NAME
 from app.core import changes
 from app.i18n import SOURCE_LANGUAGE
 from app.i18n.catalog import available_languages
@@ -563,7 +564,7 @@ def version_line(language: str, today: date | None = None) -> str:
         year=stamp.year,
         month_name=MONTH_NAMES[stamp.month - 1],
     )
-    text = VERSION_LINE[language].format(version=APP_VERSION, date=written)
+    text = VERSION_LINE[language].format(version=branding.APP_VERSION, date=written)
     return f'\n            <p class="version">{text}</p>'
 
 
@@ -923,7 +924,7 @@ def refuse_lead_without_a_note_in_every_language(
         problems.append(f"für {', '.join(silent)} einen Hinweis ohne den Vorspann")
     if problems:
         raise SystemExit(
-            f"Der Abschnitt ## {APP_VERSION} im Changelog beginnt mit einem Vorspann, "
+            f"Der Abschnitt ## {branding.APP_VERSION} im Changelog beginnt mit einem Vorspann, "
             f"aber {VERSION_FILE.name} hat unter 'notes_by_language' "
             f"{' und '.join(problems)}. Dort liest der Kunde die Meldung zweimal oder "
             "nicht hervorgehoben. Den Vorspann aus changelog/<sprache>.md je Sprache an "
@@ -1078,15 +1079,15 @@ def version_content(packages: list[Package]) -> str:
         }
 
     written_for = data.get("notes_version")
-    if data.get("notes_by_language") and written_for != APP_VERSION:
+    if data.get("notes_by_language") and written_for != branding.APP_VERSION:
         raise SystemExit(
             f"Der Hinweistext in {VERSION_FILE.name} ist für "
             f"{written_for or 'keine genannte Fassung'} geschrieben, gebaut wird "
-            f"{APP_VERSION}. Erst den Satz für diese Fassung schreiben und "
+            f"{branding.APP_VERSION}. Erst den Satz für diese Fassung schreiben und "
             "'notes_version' nachziehen — er steht im Update-Fenster über der Punkteliste."
         )
 
-    data["version"] = APP_VERSION
+    data["version"] = branding.APP_VERSION
     # **Vor der Kappung eingehängt**, aus demselben Grund wie die Gruppen: Die
     # Kappung misst die geschriebene Datei, und in der stehen die Pakete. Stand
     # die Zuweisung dahinter, maß sie die Einträge der *vorigen* Veröffentlichung
@@ -1096,12 +1097,12 @@ def version_content(packages: list[Package]) -> str:
         data["packages"] = entries
     else:
         data.pop("packages", None)
-    changes = changes_for(APP_VERSION)
+    changes = changes_for(branding.APP_VERSION)
     if changes:
         data["changes"] = changes
         # **Vor der Kappung eingehängt**, damit sie beide Sichten sieht: Sie
         # misst die geschriebene Datei, und die trägt dann auch die Gruppen.
-        grouped = grouped_for(APP_VERSION)
+        grouped = grouped_for(branding.APP_VERSION)
         refuse_lead_without_a_note_in_every_language(data, grouped)
         # Vor Zählung und Kappung: Der weggenommene Vorspann ist kein
         # fehlender Punkt, sonst verwiese das Fenster für nichts auf die Website.
@@ -1150,19 +1151,20 @@ def write_version(content: str) -> None:
     entries = data.get("packages") or {}
     changes = data.get("changes") or {}
     if entries:
-        print(f"  version.json: {APP_VERSION}, {len(entries)} startbare(s) Paket(e)")
+        print(f"  version.json: {branding.APP_VERSION}, {len(entries)} startbare(s) Paket(e)")
         if changes:
             count = len(next(iter(changes.values())))
             print(f"    {count} Punkt(e) in {len(changes)} Sprache(n)")
         else:
             print(
-                f"    kein Abschnitt ## {APP_VERSION} in changelog/ — "
+                f"    kein Abschnitt ## {branding.APP_VERSION} in changelog/ — "
                 "das Fenster zeigt dann nur den Hinweistext"
             )
         for key in entries:
             print(f"    {key}")
     else:
-        print(f"  version.json: {APP_VERSION}, ohne Pakete — die Anwendung zeigt auf die Seite")
+        remark = "ohne Pakete — die Anwendung zeigt auf die Seite"
+        print(f"  version.json: {branding.APP_VERSION}, {remark}")
 
 
 def main() -> int:

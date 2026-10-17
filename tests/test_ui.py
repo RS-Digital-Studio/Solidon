@@ -10,6 +10,7 @@ den fachlichen ``test_ui_*.py``-Modulen; ihre Fenster-Fixtures in ``ui_helpers``
 from __future__ import annotations
 
 import dataclasses
+import importlib
 import itertools
 import logging
 import math
@@ -37,7 +38,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import errors
-from app.core.export import handover
+from app.core.export import handover, writer
 from app.core.geom.measure import Measurement
 from app.core.registry import REGISTRY, catalogue_operations
 from app.core.scene import OperationDraft
@@ -52,6 +53,7 @@ from app.core.types import (
     SlotOverride,
 )
 from app.i18n import tr
+from app.ui import dialogs as ui_dialogs
 from app.ui import main_window as main_window_module
 from app.ui.leash import Worker
 from app.ui.main_window import MainWindow
@@ -70,6 +72,7 @@ from tests.ui_helpers import MESHES, wait_for_export, wait_for_print_findings, w
 from tests.ui_helpers import expire_trial as _expired
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
+from tests.window_leftovers import close_after
 
 
 @pytest.mark.parametrize("command", ["start_sketch", "start_sculpt", "start_armature"])
@@ -669,8 +672,9 @@ def test_legacy_paint_finding_opens_its_real_values_and_history(window, monkeypa
     buttons = {button.text(): button for button in window.report._offers.findChildren(QPushButton)}
     buttons["Werte ansehen"].click()
     assert len(opened) == 1
-    assert "radius" in opened[0] and "12.0" in opened[0]
-    assert all(name in opened[0] for name in ("x", "y", "z", "slot"))
+    # Lesbar statt roh (FD-105): Feldnamen und Längen wie im Dialog.
+    assert "Radius: 12,00 mm" in opened[0]
+    assert all(name in opened[0] for name in ("Position X", "Position Y", "Position Z", "Filament"))
     buttons["Verlauf zeigen"].click()
     assert visited == ["history"]
     assert window.session.project.document.ops[1].params["radius"] == pytest.approx(12.0)
@@ -791,7 +795,7 @@ def test_a_delayed_image_source_keeps_its_project_and_target(
     calls: list[dict[str, Any]] = []
     errors: list[Exception] = []
     monkeypatch.setattr(window, "run_operation", lambda spec, **kwargs: calls.append(kwargs))
-    monkeypatch.setattr(main_window_module, "show_error", lambda error, *args: errors.append(error))
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *args: errors.append(error))
     window.object_tree.select_object("obj_1")
     window._drop_image(filename)
     worker = window._source_worker
@@ -1067,7 +1071,7 @@ def test_matching_question_context_reaches_the_worker_request_and_is_cleared(
         assert kwargs["ask"]("Welche Einheit?", ["mm"]) == "mm"
         return preview
 
-    monkeypatch.setattr(module, "evaluate", evaluate)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", evaluate)
     session.askRequested.connect(answer, Qt.ConnectionType.DirectConnection)
     worker = module._EvaluationWorker(session)
     session._worker = worker
@@ -1702,9 +1706,7 @@ def test_cancelled_or_stale_organizer_editor_cannot_change_the_document(
     from app.ui.organizer_dialog import OrganizerDialog
 
     errors_seen = []
-    monkeypatch.setattr(
-        main_window_module, "show_error", lambda error, *a, **k: errors_seen.append(error)
-    )
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *a, **k: errors_seen.append(error))
     session = window.session
     assert session.apply(
         "Organizer", [OperationDraft(op="create_organizer", params=OrganizerParams().as_dict())]
@@ -3025,12 +3027,12 @@ def test_declined_and_failed_exports_do_not_count(
     # Das Schreiben scheitert.
     monkeypatch.setattr(main_window_module, "check_before_export", lambda *a, **k: [])
     shown: list[object] = []
-    monkeypatch.setattr(main_window_module, "show_error", lambda *args: shown.append(args))
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda *args: shown.append(args))
 
     def refuse(*args: Any, **kwargs: Any) -> Any:
         raise errors.FileWriteError(str(tmp_path / "gescheitert.stl"), detail="gesperrt")
 
-    monkeypatch.setattr(main_window_module, "write_plan", refuse)
+    monkeypatch.setattr(writer, "write_plan", refuse)
     _export_once(window, monkeypatch, tmp_path / "gescheitert.stl")
     assert shown, "der Fehler kam an"
     assert feedback.read().deliveries == 0
@@ -5760,11 +5762,15 @@ def test_the_apply_button_stays_in_sight_however_low_the_window_is(window: MainW
     ]
     assert not draussen, f"unter dem Rand: {draussen} (Fenster {dock.height()} hoch)"
 
-    # **Die strukturelle Hälfte derselben Zusage.** Was im Rollinhalt liegt,
-    # kann hinausgerollt werden — gleich wie es in dieser Höhe gerade steht.
-    inhalt = roller.widget()
-    assert inhalt is not None and not inhalt.isAncestorOf(panel.footer()), (
-        "die Knopfzeile rollt mit"
+    # **Die strukturelle Hälfte derselben Zusage** (FD-136): Die Knopfzeile
+    # steht im Rollinhalt direkt unter der offenen Handlung, nicht am
+    # Kartenende; im Bild hält sie ``feature_footer.keep_in_sight``, und das
+    # hat die erste Hälfte eben an einem Fenster gemessen, das zum Rollen zwingt.
+    knopfzeile = panel._footer
+    scharf = next(row.box for row in panel._shown_rows.values() if row.key == panel._armed)
+    assert knopfzeile.parentWidget() is panel, "die Knopfzeile steht im Merkmalfenster"
+    assert panel._rows.indexOf(knopfzeile) == panel._rows.indexOf(scharf) + 1, (
+        "die Knopfzeile steht unter der offenen Handlung"
     )
 
 
@@ -5834,7 +5840,11 @@ def test_a_halted_chain_locks_the_feature_panel_and_lets_go_after_undo(
         if widget.isVisibleTo(panel) and widget.property("handlingKey")
     ]
     assert felder, "ohne Felder prüft dieser Test nichts"
-    assert panel._apply.isEnabled(), "Voraussetzung: ohne Halt nimmt das Fenster Zahlen an"
+    # *Übernehmen* wartet ohnehin auf die erste Änderung (FD-99); die Zusage
+    # gilt den Feldern.
+    assert all(feld.isEnabled() for feld in felder), (
+        "Voraussetzung: ohne Halt nimmt das Fenster Zahlen an"
+    )
 
     window.session.apply(
         "Bohrung setzen",
@@ -5875,7 +5885,7 @@ def test_a_halted_chain_locks_the_feature_panel_and_lets_go_after_undo(
     QApplication.processEvents()
 
     assert window.session.last_result.stopped_at is None, "zurückgenommen rechnet sie wieder"
-    assert panel._apply.isEnabled(), "und das Fenster gibt ohne Neuauswahl wieder frei"
+    assert panel._apply.toolTip() != grund, "und das Fenster gibt ohne Neuauswahl wieder frei"
     assert not panel._lock_note.isVisibleTo(window.feature_dock)
     frei = [
         widget
@@ -7289,7 +7299,7 @@ def test_a_halted_chain_takes_no_new_step_and_names_the_way_on(
     # — als Dialog beim Kunden, nicht als Zeile auf stderr.
     refusals: list[errors.AppError] = []
     monkeypatch.setattr(
-        main_window_module, "show_error", lambda error, *args, **kwargs: refusals.append(error)
+        ui_dialogs, "show_error", lambda error, *args, **kwargs: refusals.append(error)
     )
     steps_before = len(document.ops)
     accepted = window.session.apply(
@@ -7794,6 +7804,7 @@ def test_the_history_counts_through_a_group_and_keeps_the_kernel_switch_last(
 
 def test_history_context_delete_uses_the_visible_multiple_selection(
     qt_app: QApplication,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Rechtsklick löscht dieselbe Mehrfachauswahl wie die Entf-Taste."""
     from app.core.types import Document, Operation, Transaction
@@ -7809,6 +7820,7 @@ def test_history_context_delete_uses_the_visible_multiple_selection(
         ],
     )
     panel = HistoryPanel()
+    close_after(request, panel)
     panel.show_document(document)
     panel.show()
     QApplication.processEvents()
@@ -10718,10 +10730,10 @@ def test_an_objectless_direct_error_has_no_repair_button(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Auch der modale Fehlerweg verspricht keine Reparatur ohne Ziel."""
-    from app.ui import main_window
+    from app.ui import dialogs as ui_dialogs
 
     shown: list[errors.AppError] = []
-    monkeypatch.setattr(main_window, "show_error", lambda error, _parent: shown.append(error))
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, _parent: shown.append(error))
 
     window._on_error(errors.NotManifoldError(open_edges=3))
 
@@ -11490,6 +11502,9 @@ def test_closing_is_no_advice_either(window: MainWindow) -> None:
             continue
         error = errors.AppError.__new__(value)
         object.__setattr__(error, "suggestions", list(suggestions))
+        # Ohne ``__init__`` fehlt auch die Schrittkennung; ``unhandled_advice``
+        # fragt sie seit RB-3 für Wege, die einen Schritt brauchen.
+        object.__setattr__(error, "op_id", None)
         assert str(CANCEL.label) not in unhandled_advice(error, known), (
             f"{name} schreibt das Abbrechen als Ratschlag in den Text"
         )
@@ -12658,6 +12673,12 @@ def test_the_catalog_grid_never_scrolls_sideways(qt_app: QApplication) -> None:
 
 def test_a_fitting_body_gets_the_same_passive_reply_at_the_action_and_in_status(window):
     """Der echte Menüweg bleibt ohne neue Operation und quittiert im Blickfeld."""
+    # Die Blase steht nur, wo über dem Bild Platz ist (FD-108): ein gezeigtes
+    # Fenster in Kundengröße, nicht die 640 mal 480 eines nie gezeigten.
+    window.resize(1600, 900)
+    window.show()
+    window._show_start_screen(False)
+    QApplication.processEvents()
     assert window.session.apply("Quader", [OperationDraft(op="create_box")])
     assert window.session.wait_for_idle(60_000)
     count = len(window.session.project.document.ops)
@@ -12677,6 +12698,12 @@ def test_a_fitting_body_gets_the_same_passive_reply_at_the_action_and_in_status(
 
 def test_evaluation_cancellation_replaces_the_action_reply_and_its_timer(window):
     """Das echte Sitzungssignal ersetzt eine alte Quittung an beiden sichtbaren Orten."""
+    # Die Blase steht nur, wo über dem Bild Platz ist (FD-108): ein gezeigtes
+    # Fenster in Kundengröße, nicht die 640 mal 480 eines nie gezeigten.
+    window.resize(1600, 900)
+    window.show()
+    window._show_start_screen(False)
+    QApplication.processEvents()
     window.announce("Vorherige Meldung")
     notice = window._action_notice
     # Ein alter Ablauf darf der neuen, längeren Meldung keine Restzeit leihen.
@@ -12697,6 +12724,12 @@ def test_evaluation_cancellation_replaces_the_action_reply_and_its_timer(window)
 
 def test_action_reply_survives_progress_and_replaces_its_previous_text(window):
     """Auslaufender Fortschritt überschreibt weder Karte noch Ergebnisquittung."""
+    # Die Blase steht nur, wo über dem Bild Platz ist (FD-108): ein gezeigtes
+    # Fenster in Kundengröße, nicht die 640 mal 480 eines nie gezeigten.
+    window.resize(1600, 900)
+    window.show()
+    window._show_start_screen(False)
+    QApplication.processEvents()
     window.announce("Erster Hinweis")
     notice = window._action_notice
     second = "<b>Lesbarer Klartext</b> " + "Längerer verständlicher Hinweis. " * 10
@@ -15493,9 +15526,9 @@ def test_the_object_tree_fits_its_measures_in_the_card(qt_app: QApplication) -> 
     header = tree.tree.header()
     needed = header.sectionSize(0) + header.sectionSize(1)
     assert needed <= LEFT_WIDTH, f"{needed} Pixel bei {LEFT_WIDTH} verfügbaren"
-    assert header.sectionSize(0) > header.sectionSize(1), (
-        "der Name ist die Auskunft, das Maß die Beigabe"
-    )
+    # Der Name steht ganz da, das Maß daneben auch (FD-20). Passen beide nicht,
+    # wird der Name gekürzt (``test_object_tree_columns``).
+    assert header.sectionSize(0) >= tree.tree.sizeHintForColumn(0), "der Name ist die Auskunft"
     tree.close()
     tree.deleteLater()
 
@@ -15678,7 +15711,9 @@ def test_another_project_does_not_inherit_a_refused_number(qt_app: QApplication)
     panel.close()
 
 
-def test_parameter_rows_recalculate_the_card_height(qt_app: QApplication) -> None:
+def test_parameter_rows_recalculate_the_card_height(
+    qt_app: QApplication, request: pytest.FixtureRequest
+) -> None:
     """Neue Zeilen dürfen nicht in der Höhe des leeren Zustands landen.
 
     Die schwebende linke Karte besitzt kein übergeordnetes Layout, das eine
@@ -15690,6 +15725,7 @@ def test_parameter_rows_recalculate_the_card_height(qt_app: QApplication) -> Non
     from app.ui.panels import ParameterPanel
 
     panel = ParameterPanel()
+    close_after(request, panel)
     panel.resize(260, panel.minimumHeight())
     panel.show_document(Document(format_version=1, app_version="0.0.1"))
     panel.show()
@@ -15721,12 +15757,23 @@ def test_parameter_rows_recalculate_the_card_height(qt_app: QApplication) -> Non
 def test_parameter_tab_keeps_titles_and_details_inside_the_scroll_area(
     qt_app: QApplication,
 ) -> None:
-    """Tab zum rechten Änderungsweg darf nicht sämtliche Maßnamen wegschieben."""
+    """Tab zum rechten Änderungsweg darf nicht sämtliche Maßnamen wegschieben.
+
+    In der Betriebslage, mit Thema und Stilblatt: Die Spalte hält für den
+    Rollbalken das Stilmaß frei, und das Stilblatt macht ihn schmaler. Ohne
+    Stilblatt zeichnet Fusion unter macOS offscreen einen Balken von 18 statt
+    14 Punkten, und der Inhalt rollte um die Differenz quer (CI-Lauf
+    38781742486) — eine Lage, die es in der Anwendung nicht gibt.
+    """
     from PySide6.QtTest import QTest
 
     from app.core.types import Document
     from app.ui.panels import ParameterPanel
+    from app.ui.style import apply_style
+    from app.ui.theme import apply_theme
 
+    apply_theme(qt_app, "light")
+    apply_style(qt_app, "light")
     document = Document(format_version=1, app_version="0.0.1")
     for index in range(12):
         name = f"wall_{index}"
@@ -16042,12 +16089,13 @@ def test_no_worker_hands_its_field_to_a_blind_lambda() -> None:
     """
     import re
 
-    ui = Path(__file__).parent.parent / "app" / "ui"
+    from tests import source_tree
+
     pattern = re.compile(r"finished\.connect\(\s*lambda[^)]*setattr", re.MULTILINE)
 
     culprits = [
-        path.relative_to(ui.parent.parent)
-        for path in sorted(ui.glob("*.py"))
+        source_tree.relative(path)
+        for path in source_tree.python_files("app/ui")
         if pattern.search(path.read_text(encoding="utf-8"))
     ]
 
@@ -16289,16 +16337,16 @@ def test_cancelling_frees_the_window_while_the_drive_still_reads(
     mit einem um 8 s verzögerten Lesen: frei nach 6,1 s. Gelesen wird seither
     in einem Daemon-Faden, und der Arbeiter endet auf den Klick.
     """
-    from app.ui import session as session_module
+    from app.core.ingest import loader
 
     release = threading.Event()
-    real = session_module.read_local_payload
+    real = loader.read_local_payload
 
     def hanging(path: Path) -> bytes:
         release.wait(30)
         return real(path)
 
-    monkeypatch.setattr(session_module, "read_local_payload", hanging)
+    monkeypatch.setattr(loader, "read_local_payload", hanging)
     finished: list[bool] = []
     window.session.importFinished.connect(finished.append)
     try:
@@ -16458,7 +16506,7 @@ def test_a_recent_file_that_vanished_leaves_the_list_after_the_attempt(
     „Zuletzt geöffnet“ prüft beim Aufbau; wer danach verschob und klickte, bekam
     den Hinweis — und denselben toten Eintrag wieder angeboten (Durchsicht 0.5.1).
     """
-    monkeypatch.setattr(main_window_module, "show_error", lambda *args, **kwargs: None)
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda *args, **kwargs: None)
     moved = tmp_path / "verschoben.stl"
     moved.write_bytes((MESHES / "cube_clean.stl").read_bytes())
     window.settings.recent = [str(moved)]
@@ -16485,9 +16533,7 @@ def test_a_file_without_a_model_leaves_no_step_and_no_recent_entry(
     einem Dialog abgewiesen, und die kaputte stand in „Zuletzt geöffnet“.
     """
     shown: list[Any] = []
-    monkeypatch.setattr(
-        main_window_module, "show_error", lambda error, *a, **k: shown.append(error)
-    )
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *a, **k: shown.append(error))
     broken = tmp_path / "kaputt.stl"
     broken.write_bytes(b"solid x\n facet normal 0 0 1\n  outer loop\n   vertex 0 0 nope\n" * 3)
     window.open_path(broken)
@@ -16590,7 +16636,9 @@ def test_import_dialog_keeps_its_reading_status_after_starting_the_project(
     assert status == tr("Modell einfügen …"), "der Projektanfang löschte den Ladehinweis"
     expected = "" if starting_fresh else "Bereit"
     assert announcement == expected, "nur ein neues Dokument verwirft die vorige Quittung"
-    assert window._announcement == expected
+    # Der Import ist ein Schritt ohne eigene Quittung: Er nimmt die vorige mit,
+    # die Statuszeile folgt dem letzten Schritt (FD-162).
+    assert window._announcement == ""
     assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
 
 
@@ -16611,7 +16659,7 @@ def test_a_broken_file_takes_the_wait_cursor_with_it(
     # was eine ersetzte Methode geworfen hätte.
     monkeypatch.setattr("app.ui.session.import_plan", refuse)
     monkeypatch.setattr(
-        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+        "app.ui.dialogs.show_error", lambda error, *args, **kwargs: shown.append(error)
     )
 
     window.open_path(MESHES / "cube_clean.stl")
@@ -16635,7 +16683,7 @@ def test_a_rejected_file_restores_status_before_showing_the_error(
     shown: list[tuple[Any, Any, str]] = []
     monkeypatch.setattr(window.session.history, "apply", refusing)
     monkeypatch.setattr(
-        "app.ui.main_window.show_error",
+        "app.ui.dialogs.show_error",
         lambda error, *_args, **_kwargs: shown.append(
             (error, QApplication.overrideCursor(), window.status_message.text())
         ),
@@ -16920,12 +16968,13 @@ def test_no_window_overrides_the_application_icon() -> None:
     """
     import re
 
-    ui = Path(__file__).parent.parent / "app" / "ui"
+    from tests import source_tree
+
     pattern = re.compile(r"^\s*(?!application\b)\w+\.setWindowIcon\(", re.MULTILINE)
 
     culprits = [
-        path.relative_to(ui.parent.parent)
-        for path in sorted(ui.glob("*.py"))
+        source_tree.relative(path)
+        for path in source_tree.python_files("app/ui")
         if pattern.search(path.read_text(encoding="utf-8"))
     ]
 
@@ -16992,7 +17041,7 @@ def test_a_dropped_model_page_says_where_the_file_is(
 ) -> None:
     """Der Satz statt des Verbotszeichens — und ohne Anfrage ins Netz."""
     shown: list[errors.AppError] = []
-    monkeypatch.setattr("app.ui.main_window.show_error", lambda error, _parent: shown.append(error))
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda error, _parent: shown.append(error))
     window._show_start_screen(on_start)
     project = window.session.project
     url = "https://www.printables.com/model/3161-3d-benchy"
@@ -17156,7 +17205,7 @@ def test_a_bad_address_says_so_before_a_worker_starts(
 ) -> None:
     """§32: Eine ``file:``-Adresse wandert gar nicht erst in einen Thread."""
     seen: list[object] = []
-    monkeypatch.setattr("app.ui.main_window.show_error", lambda error, _parent: seen.append(error))
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda error, _parent: seen.append(error))
 
     window.download_model("file:///C:/Windows/win.ini")
 
@@ -17209,7 +17258,7 @@ def test_a_rejected_download_never_claims_success(
     # echte Weg läuft und die Abweisung über ``importFailed`` ankommt.
     monkeypatch.setattr("app.ui.session.import_plan", refusing)
     monkeypatch.setattr(
-        "app.ui.main_window.show_error", lambda error, *_args, **_kwargs: shown.append(error)
+        "app.ui.dialogs.show_error", lambda error, *_args, **_kwargs: shown.append(error)
     )
 
     window._downloaded(
@@ -17360,9 +17409,10 @@ def test_a_finished_blink_leaves_no_animation_behind(
     from PySide6.QtCore import QVariantAnimation
     from PySide6.QtWidgets import QTabWidget, QWidget
 
+    from app.ui import motion as ui_motion
     from app.ui import tab_signal
 
-    monkeypatch.setattr(tab_signal, "animations_enabled", lambda: True)
+    monkeypatch.setattr(ui_motion, "animations_enabled", lambda: True)
     monkeypatch.setattr(tab_signal, "CYCLE_MS", 5)
     monkeypatch.setattr(tab_signal, "CYCLES", 1)
     tabs = QTabWidget()
@@ -22217,6 +22267,7 @@ def test_editing_a_box_offers_to_name_its_dimensions_in_one_step(window: MainWin
 
 def test_a_bounded_parameter_has_a_slider_and_a_drag_is_one_change(
     qt_app: QApplication,
+    request: pytest.FixtureRequest,
 ) -> None:
     """RM-359 F8: Ein Maß mit eigener Unter- und Obergrenze hat einen Regler (§13).
 
@@ -22231,6 +22282,7 @@ def test_a_bounded_parameter_has_a_slider_and_a_drag_is_one_change(
     from app.ui.panels import SLIDER_STEPS, ParameterPanel
 
     panel = ParameterPanel()
+    close_after(request, panel)
     document = Document(format_version=1, app_version="0.0.1")
     document.parameters["breite"] = Parameter(
         name="breite", value=40.0, minimum=10.0, maximum=110.0, title="Breite"
@@ -22274,7 +22326,7 @@ def test_two_named_boxes_get_distinct_rows_with_names(window: MainWindow) -> Non
     ändern“. Jetzt trägt der zweite Satz die Nummer seines Namens, und jedes
     Feld, jede Einheit und jeder Knopf heißt nach seinem Maß.
     """
-    from app.ui.labels import BoundedSpin
+    from app.ui.labels import BoundedLengthSpin, BoundedSpin
 
     spec = REGISTRY.get("create_box")
     for _round in range(2):
@@ -22304,7 +22356,10 @@ def test_two_named_boxes_get_distinct_rows_with_names(window: MainWindow) -> Non
     ]
     assert all(named), "kein Feld ohne Namen"
     assert len(named) == len(set(named)), f"doppelte Namen: {named}"
-    assert all(isinstance(editor, BoundedSpin) for editor in panel._editors.values())
+    # Längen in der Anzeigeeinheit (FD-125) lehnen ebenso ab, statt zu kürzen.
+    assert all(
+        isinstance(editor, BoundedSpin | BoundedLengthSpin) for editor in panel._editors.values()
+    )
     assert all(panel._titles[name].buddy() is editor for name, editor in panel._editors.items()), (
         "die Beschriftung zeigt auf ihr Feld"
     )
@@ -23152,9 +23207,7 @@ def test_a_failed_import_hands_no_name_to_the_next_one(monkeypatch: pytest.Monke
     shown: list[Any] = []
     remembered: list[Any] = []
     said: list[str] = []
-    monkeypatch.setattr(
-        main_window_module, "show_error", lambda error, *_a, **_k: shown.append(error)
-    )
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *_a, **_k: shown.append(error))
     monkeypatch.setattr(
         main_window_module,
         "QApplication",
@@ -23875,7 +23928,7 @@ def test_a_refused_derived_change_shows_the_valid_number_again(
     from app.core.scene import OperationDraft
 
     shown: list[errors.AppError] = []
-    monkeypatch.setattr(main_window_module, "show_error", lambda error, *_args: shown.append(error))
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda error, *_args: shown.append(error))
     window.show()
     session = window.session
     assert session.add_parameter(Parameter(name="breite", value=100.0, unit="mm"))
@@ -23902,7 +23955,7 @@ def test_remote_parameters_name_the_limit_and_keep_title_and_bounds(
     eingestellt.“, und ``add_parameter`` verlor ``minimum``, ``maximum`` und
     ``title``, obwohl das Werkzeugschema sie anbietet.
     """
-    monkeypatch.setattr(main_window_module, "show_error", lambda *_args: None)
+    monkeypatch.setattr(ui_dialogs, "show_error", lambda *_args: None)
     high = _bound_width_project(window.session)
 
     said = window._remote_parameter("set_parameter", {"name": "breite", "value": high + 4000.0})
@@ -24526,17 +24579,17 @@ def test_batch_import_discards_late_reads(session, qt_app, monkeypatch, interrup
     """Abbruch und Projektwechsel lassen einen verspäteten Sammelauftrag verfallen."""
     import threading
 
-    from app.ui import session as session_module
+    from app.core.ingest import loader
 
     entered, released = threading.Event(), threading.Event()
-    original = session_module.read_local_payload
+    original = loader.read_local_payload
 
     def delayed(path):
         entered.set()
         released.wait(5)
         return original(path)
 
-    monkeypatch.setattr(session_module, "read_local_payload", delayed)
+    monkeypatch.setattr(loader, "read_local_payload", delayed)
     session.import_models_async([MESHES / "cube_clean.stl", MESHES / "plate_holes.stl"])
     wait_until(qt_app, entered.is_set)
     if interruption == "cancel":
@@ -24572,11 +24625,11 @@ def test_batch_import_cancelled_during_evaluation_withdraws_the_whole_transactio
     """Abbruch nach dem Lesen räumt Schritte und Quellen; der Folgelauf bleibt möglich."""
     import threading
 
+    from app.core import scene as core_scene
     from app.core.errors import OperationCancelled
-    from app.ui import session as session_module
 
     entered, released = threading.Event(), threading.Event()
-    original = session_module.evaluate
+    original = core_scene.evaluate
     first = True
 
     def delayed(*args, **kwargs):
@@ -24588,7 +24641,7 @@ def test_batch_import_cancelled_during_evaluation_withdraws_the_whole_transactio
             raise OperationCancelled()
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(session_module, "evaluate", delayed)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", delayed)
     session.import_models_async([MESHES / "cube_clean.stl", MESHES / "plate_holes.stl"])
     wait_until(qt_app, entered.is_set)
     assert session.project.document.ops
@@ -24606,13 +24659,11 @@ def test_batch_import_cancelled_during_evaluation_withdraws_the_whole_transactio
 
 def test_batch_import_groups_recognition_permission_with_total_estimate(session, monkeypatch):
     """Zwei große Dateien stellen eine Frage mit gemeinsamer Zeitschätzung."""
-    import importlib
 
+    from app.core.perceive import local as perceive_local
     from app.ui import session as session_module
 
-    evaluation = importlib.import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
-    monkeypatch.setattr(session_module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(perceive_local, "FEATURE_LIMIT_TRIANGLES", 1)
     monkeypatch.setattr(session_module, "recognition_minutes", lambda *_a, **_kw: (4, 9))
     monkeypatch.setattr(session_module, "recognition_gigabytes", lambda *_: 3)
     asked = []
@@ -24708,7 +24759,7 @@ def test_model_page_clipboard_survives_url_dialog(window, monkeypatch, accepted)
         return url if accepted else None
 
     monkeypatch.setattr("app.ui.main_window.ask_text", answer)
-    monkeypatch.setattr("app.ui.main_window.show_error", lambda error, parent: shown.append(error))
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda error, parent: shown.append(error))
     try:
         window.action_import_url()
     finally:
@@ -24732,7 +24783,7 @@ def test_download_late_reply_cannot_change_a_new_context(
     shown = []
     monkeypatch.setattr(window._leash, "start", started.append)
     monkeypatch.setattr(window.session, "import_payload_async", lambda *a, **kw: imported.append(a))
-    monkeypatch.setattr("app.ui.main_window.show_error", lambda error, parent: shown.append(error))
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda error, parent: shown.append(error))
     window.download_model("https://example.invalid/first.stl")
     old = started[-1]
     request.addfinalizer(lambda: _release_unstarted_worker(window, "_download_worker", old))
@@ -24793,7 +24844,7 @@ def test_cancelled_archive_choice_keeps_the_current_project(window, qt_app, monk
         raise QuestionDeclined()
 
     monkeypatch.setattr(window.session, "ask_from_worker", cancel)
-    monkeypatch.setattr("app.ui.main_window.show_error", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.ui.dialogs.show_error", lambda *args, **kwargs: None)
     window._downloaded(
         FetchedModel(
             "models.zip", buffer.getvalue(), "https://example.invalid/models.zip", "2026-10-03"

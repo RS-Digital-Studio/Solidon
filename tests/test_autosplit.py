@@ -8,6 +8,7 @@ geteilt, ohne dass jemand einen Parameter anfasst. Alle drei stehen hier.
 from __future__ import annotations
 
 import math
+import sys
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,7 @@ import trimesh
 
 from app.core.bootstrap import load_operations
 from app.core.errors import BooleanFailedError, OperationCancelled, ValidationError
-from app.core.geom import autosplit, pins
+from app.core.geom import autosplit, boolean, pins
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.prepare import split_at_plane
 from app.core.geom.section import Axis, SectionPlane
@@ -630,10 +631,11 @@ def test_plan_split_stops_after_counting_fitting_pins(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from app.core import split as split_core
+    from app.core.geom import pins as geom_pins
 
     signal = CancelSignal()
     outcome = autosplit.split_to_fit(bar(), profile)
-    original = split_core.plan_pins
+    original = geom_pins.plan_pins
 
     def plan_and_cancel(*args: object, **kwargs: object):
         plan = original(*args, **kwargs)
@@ -641,7 +643,7 @@ def test_plan_split_stops_after_counting_fitting_pins(
         return plan
 
     monkeypatch.setattr(split_core, "split_to_fit", lambda *_args, **_kwargs: outcome)
-    monkeypatch.setattr(split_core, "plan_pins", plan_and_cancel)
+    monkeypatch.setattr(geom_pins, "plan_pins", plan_and_cancel)
 
     with pytest.raises(OperationCancelled):
         plan_split(bar(), "obj_1", profile, cancelled=signal)
@@ -1315,13 +1317,16 @@ def test_batched_connectors_equal_the_sequential_product_geometry(
 
     sequential = pins.add_pins(first, second, plan, profile, quality="draft")
     calls: list[str] = []
-    original = pins.boolean
+    original = boolean.boolean
 
     def record(kind: str, meshes: list[MeshData], **kwargs: object):
-        calls.append(kind)
+        # Gezählt werden die Produktbooleschen, nicht der Bau des Stifts in der
+        # Bausteinbibliothek — die Kette liest beide zur Aufrufzeit (CS-11).
+        if sys._getframe(1).f_globals.get("__name__") != "app.core.knowledge.parts.build":
+            calls.append(kind)
         return original(kind, meshes, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(pins, "boolean", record)
+    monkeypatch.setattr(boolean, "boolean", record)
     batched = pins.add_pins(first, second, plan, profile, quality="draft", batch=True)
 
     assert calls == ["union", "difference"]
@@ -1354,16 +1359,19 @@ def test_failed_connector_batch_uses_the_sequential_fallback(
     assert first is not None and second is not None
     plan = pins.plan_pins(whole, CONNECTOR_PLANE, count=2, shape="round")
     reference = pins.add_pins(first, second, plan, profile, quality="draft")
-    original = pins.boolean
+    original = boolean.boolean
     calls: list[tuple[str, object]] = []
 
     def fail_the_batch_once(kind: str, meshes: list[MeshData], **kwargs: object):
+        # Wie oben: nur die Produktbooleschen, nicht der Bau des Stifts (CS-11).
+        if sys._getframe(1).f_globals.get("__name__") == "app.core.knowledge.parts.build":
+            return original(kind, meshes, **kwargs)  # type: ignore[arg-type]
         calls.append((kind, kwargs.get("stages")))
         if len(calls) == 1:
             raise BooleanFailedError(detail="erzwungene Batch-Gegenprobe", attempted=("direct",))
         return original(kind, meshes, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(pins, "boolean", fail_the_batch_once)
+    monkeypatch.setattr(boolean, "boolean", fail_the_batch_once)
     result = pins.add_pins(first, second, plan, profile, quality="draft", batch=True)
 
     assert calls == [

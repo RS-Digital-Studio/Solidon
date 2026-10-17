@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import subprocess
 import zipfile
@@ -108,7 +109,7 @@ def _old_spool_dialog_state():
         session=SimpleNamespace(
             project=project,
             profile=profiles.make_profile(),
-            last_result=SimpleNamespace(scene=scene, stopped_at=None),
+            last_result=SimpleNamespace(scene=scene, stopped_at=None, object_names={}),
             picture=None,
             base_dir=None,
         ),
@@ -6791,6 +6792,11 @@ def test_a_slicer_that_cannot_start_is_an_answer(tmp_path: Path, way: str) -> No
     sagen jetzt dasselbe in eigenen Worten und bieten einen anderen Slicer an."""
     fake = tmp_path / "elegoo-slicer.exe"
     fake.write_text("kein programm", encoding="utf-8")
+    # Unter POSIX scheitert eine Datei ohne Ausführungsrecht schon an EACCES,
+    # und das ist eine andere Absage (``test_discover``). „Kein Programm“
+    # (ENOEXEC) entsteht erst, wenn das Recht da ist und der Inhalt nicht.
+    fake.chmod(0o755)
+    assert os.name == "nt" or os.access(fake, os.X_OK), "premise: die Datei ist ausführbar"
     setup = handover.SlicerSetup(executable=fake, flavour="orca")
     model = tmp_path / "teil.3mf"
     model.write_bytes(b"PK")
@@ -7203,6 +7209,8 @@ def test_a_slot_profile_follows_its_slot_across_plates(qt_app: object, tmp_path:
     dialog.session.last_result = SimpleNamespace(
         scene=Scene(objects={"A": erste, "B": zweite}, profile=dialog.session.profile),
         stopped_at=None,
+        # Die Exportprüfung nennt Passungspartner beim Namen (RB-5).
+        object_names={"A": "A", "B": "B"},
     )
     # Was der Kunde bei „Alle Platten" sieht und zuordnet: Rot, dann Weiß.
     assert [str(slot.name) for slot in dialog._plate_slots()] == ["Rot", "Weiß"]

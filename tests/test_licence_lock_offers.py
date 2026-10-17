@@ -17,7 +17,6 @@ Die Fläche ist die kleinste, für die Solidon gebaut ist: 1920 × 1080 logisch.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -34,21 +33,21 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import activation, guides
-from app.core.activation import store
 from app.core.errors import LicenceRequired
 from app.core.scene.history import OperationDraft
 from app.core.scene.project import save
 from app.core.types import Parameter
 from app.i18n import tr
 from app.ui import change_lock
-from app.ui.dialogs import ParameterDialog, licence_lock_line, show_error
+from app.ui.dialogs import ParameterDialog, show_error
 from app.ui.guide_targets import menu_entries, menubar_entries
 from app.ui.main_window import MainWindow
 from app.ui.message_dialog import MessageDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from tests.licence_states import set_licence
 from tests.ui_helpers import wait_for_print_findings
-from tools import function_scenes, function_setup
+from tools import function_scenes
 
 #: Die kleinste Arbeitsfläche (Festlegung Robert, Bauplan §19.3).
 SMALLEST = (1920, 1080)
@@ -78,17 +77,6 @@ def below_the_bed(qt_app: QApplication, tmp_path: Path) -> Iterator[MainWindow]:
     window.hide()
     window.deleteLater()
     qt_app.processEvents()
-
-
-def _set_licence(monkeypatch: pytest.MonkeyPatch, state: str) -> str:
-    """Den Zustand über die Nahtstelle der Suite setzen; zurück kommt der Sperrgrund."""
-    monkeypatch.setattr(store, "DEMO_UNTIL", None)
-    if state == "sale_without_trial":
-        monkeypatch.setattr(store, "TRIAL_FROM", None)
-    cached = function_setup.licence_activation(state, date.today())
-    assert getattr(cached, state), f"der Zustand {state} ließ sich nicht herstellen"
-    monkeypatch.setattr(activation, "_cached", cached)
-    return "" if cached.unlocked else licence_lock_line(cached)
 
 
 def _catch_messages(monkeypatch: pytest.MonkeyPatch) -> list[str]:
@@ -157,7 +145,7 @@ def test_every_offer_of_a_change_is_grey_with_its_reason(
 ) -> None:
     window = below_the_bed
     shown = _catch_messages(monkeypatch)
-    reason = _set_licence(monkeypatch, state)
+    reason = set_licence(monkeypatch, state)
     assert reason
     # Wie nach dem Freischaltdialog: Das Fenster stellt seine Einträge neu.
     window._update_actions()
@@ -241,11 +229,11 @@ def test_after_activation_the_offers_come_back_without_a_new_choice(
 ) -> None:
     """Kontrollfall und Rückweg: freigeschaltet ist alles bedienbar, auch ohne neue Wahl."""
     window = below_the_bed
-    _set_licence(monkeypatch, "needs_activation")
+    set_licence(monkeypatch, "needs_activation")
     window._update_actions()
     assert not _choose_the_finding(window).isEnabled()
 
-    assert _set_licence(monkeypatch, "licensed") == ""
+    assert set_licence(monkeypatch, "licensed") == ""
     window._update_actions()
     # Ein neues Kind eines sichtbaren Elternteils zeigt Qt in der nächsten Runde.
     qt_app.processEvents()
@@ -317,7 +305,7 @@ def test_no_window_command_that_changes_stays_open(
     assert window.session.wait_for_idle(60_000)
     qt_app.processEvents()
     assert window.parameters.findChildren(QAbstractSpinBox), "Voraussetzung: ein Zahlenfeld"
-    reason = _set_licence(monkeypatch, state)
+    reason = set_licence(monkeypatch, state)
     window._update_actions()
     found = _open_changes(window, reason)
     assert found == [], "\n".join(found)
@@ -345,7 +333,7 @@ def test_the_guard_sees_a_window_command_left_open(
 ) -> None:
     """Gegenprobe zu FD-26: Ohne die Sperre der Fensterbefehle meldet der Wächter die Zeile."""
     window = below_the_bed
-    reason = _set_licence(monkeypatch, "sale_without_trial")
+    reason = set_licence(monkeypatch, "sale_without_trial")
     monkeypatch.setattr(change_lock, "close_commands", lambda window: [])
     window._update_actions()
     found = _open_changes(window, reason)
@@ -360,12 +348,12 @@ def test_after_activation_every_window_command_comes_back(
     rows = {name: action for name, _menus, action in menubar_entries(window)}
     adding = rows["menubar.parameter_anlegen"]
     own = adding.toolTip()
-    _set_licence(monkeypatch, "needs_activation")
+    set_licence(monkeypatch, "needs_activation")
     window._update_actions()
     assert not adding.isEnabled()
     assert not window.parameters.add_button.isEnabled()
 
-    assert _set_licence(monkeypatch, "licensed") == ""
+    assert set_licence(monkeypatch, "licensed") == ""
     window._update_actions()
     assert adding.isEnabled() and adding.toolTip() == own
     assert window.parameters.add_button.isEnabled()
@@ -381,7 +369,7 @@ def test_a_finding_action_waiting_for_the_calculation_names_its_end(
     Beschreibung, und der Satz sagt, dass die Sperre mit der Berechnung fällt.
     """
     window = below_the_bed
-    _set_licence(monkeypatch, "licensed")
+    set_licence(monkeypatch, "licensed")
     window._update_actions()
     _choose_the_finding(window)
     window.report._show_running(True)
@@ -404,7 +392,7 @@ def with_a_hole(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> Iterat
     """Eine Platte mit Bohrungen, die Bohrung gewählt und ihre Maße im Bild (freigeschaltet)."""
     from tests.render_fakes import RecordingRenderer
 
-    _set_licence(monkeypatch, "licensed")
+    set_licence(monkeypatch, "licensed")
     window = MainWindow(Session(), UiSettings())
     window.resize(*SMALLEST)
     window.show()
@@ -436,7 +424,9 @@ def test_the_measure_group_says_what_comes_before_apply(
     """FD-31: *Übernehmen* der Maßgruppe war vor der ersten Eingabe grau ohne Grund.
 
     Der Satz nennt das erste Feld der Gruppe, wie der Kunde es liest, in
-    Kurzhilfe und Beschreibung; nach der ersten Eingabe fällt er.
+    Kurzhilfe und Beschreibung. Eine Taste ohne Änderung beginnt den Entwurf,
+    lässt den Knopf aber grau mit demselben Satz; mit der ersten Änderung
+    fällt er.
     """
     flow = with_a_hole._quiet_placement
     assert flow is not None and flow.measure_group is not None
@@ -453,6 +443,10 @@ def test_the_measure_group_says_what_comes_before_apply(
     QTest.keyClick(first.lineEdit(), Qt.Key.Key_End)
     qt_app.processEvents()
     assert flow.dialog.begun, "die Taste im Feld beginnt den Entwurf"
+    assert not apply.isEnabled() and apply.toolTip() == said, "aber sie ändert nichts"
+    QTest.keyClick(first, Qt.Key.Key_Up)
+    assert with_a_hole.session.wait_for_idle(30_000)
+    qt_app.processEvents()
     assert said not in (apply.toolTip(), apply.accessibleDescription())
 
 
@@ -478,7 +472,7 @@ def test_the_measure_group_takes_no_input_without_a_licence(
     ]
     assert fields, "die Maßgruppe trug kein offenes Feld — der Test prüfte nichts"
 
-    reason = _set_licence(monkeypatch, state)
+    reason = set_licence(monkeypatch, state)
     window._update_actions()
     qt_app.processEvents()
     for field in fields:
@@ -494,7 +488,7 @@ def test_the_measure_group_takes_no_input_without_a_licence(
     assert viewport._gizmo is None and viewport._slot_handle is None, "kein Griff an der Bohrung"
     assert viewport._placement_grip_item is None, "kein Griff an der Maßgruppe"
 
-    _set_licence(monkeypatch, "licensed")
+    set_licence(monkeypatch, "licensed")
     window._update_actions()
     qt_app.processEvents()
     still = [
@@ -521,7 +515,7 @@ def test_the_keys_and_the_drag_in_the_history_say_why(
     assert window.session.wait_for_idle(60_000)
     qt_app.processEvents()
     shown = _catch_messages(monkeypatch)
-    reason = _set_licence(monkeypatch, state)
+    reason = set_licence(monkeypatch, state)
     window._update_actions()
     history = window.history_panel
     keys = (
@@ -565,7 +559,7 @@ def test_changing_lock_reasons_return_the_own_text(
     )
     original = action.toolTip()
     for state in LOCKED:
-        reason = _set_licence(monkeypatch, state)
+        reason = set_licence(monkeypatch, state)
         window._update_actions()
         change_lock.hold_inputs(button, reason)
         assert button.toolTip() == reason and button.accessibleDescription() == reason
@@ -581,7 +575,7 @@ def test_changing_lock_reasons_return_the_own_text(
     change_lock.hold_inputs(button, "")
     assert button.toolTip() == "Neue Kurzhilfe"
     assert button.accessibleDescription() == "Neue Beschreibung"
-    _set_licence(monkeypatch, "licensed")
+    set_licence(monkeypatch, "licensed")
     window._update_actions()
     assert action.isEnabled() and action.toolTip() == original
 
@@ -595,7 +589,7 @@ def test_history_preview_preserves_comparison_while_changes_are_locked(
     assert window.session.wait_for_idle(60_000)
     history = window.history_panel
     for state in LOCKED:
-        reason = _set_licence(monkeypatch, state)
+        reason = set_licence(monkeypatch, state)
         window._update_actions()
         history.compare.setChecked(True)
         assert window.session.wait_for_idle(60_000)
@@ -616,7 +610,7 @@ def test_history_preview_preserves_comparison_while_changes_are_locked(
     assert window.session.wait_for_idle(60_000)
     history.timeline_slider.setValue(1)
     assert window.session.wait_for_idle(60_000)
-    _set_licence(monkeypatch, "licensed")
+    set_licence(monkeypatch, "licensed")
     window._update_actions()
     assert history.timeline_insert.isEnabled() and not history.timeline_insert.toolTip()
     history.timeline_insert.click()
@@ -633,7 +627,7 @@ def test_search_shows_the_licence_reason_once_and_preserves_other_reasons(
 
     window = below_the_bed
     panel = window.selection_operations
-    reason = _set_licence(monkeypatch, "needs_activation")
+    reason = set_licence(monkeypatch, "needs_activation")
     window._update_actions()
     panel._filter("Quader")
     assert len(panel._hits) >= 2, "mehrere gesperrte Treffer sind die Voraussetzung"
@@ -659,7 +653,7 @@ def test_search_shows_the_licence_reason_once_and_preserves_other_reasons(
     )
     item = SelectionOperationsPanel._hit_item(entry)
     assert own in item.text() and own in item.toolTip()
-    _set_licence(monkeypatch, "licensed")
+    set_licence(monkeypatch, "licensed")
     window._update_actions()
     panel._filter("Quader")
     assert panel._nothing.isHidden()

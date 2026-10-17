@@ -88,7 +88,7 @@ def test_revision_never_reads_the_old_import_before_the_new_operation(monkeypatc
     flow.row = {"id": "resize_hole", "target": "feature:resize_hole"}
     flow.data = empty_protocol(flow.row, {}, {})
     flow.data["states"] = {"before": {"ops": [1]}, "applied": {"ops": [1, 2]}}
-    flow.spec = {}
+    flow.spec = {"inputs": {"feature.field:resize_hole.diameter": 8.0}}  # Vorschau vor Übernehmen
     flow.apply_target = "measure.apply"
     document = SimpleNamespace(ops=["import"])
     flow.session = SimpleNamespace(project=SimpleNamespace(document=document), last_result=object())

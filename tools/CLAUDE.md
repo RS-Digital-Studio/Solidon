@@ -36,29 +36,43 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 | `check_message.py` | `commit-msg`-Hook: Ersatzschreibung statt Umlaut |
 | `check_new_texts.py` | `pre-commit`-Hook: Stehen die **neuen** `tr()`-Texte des Commits in jedem Katalog? Liest Quelltext, Sprachliste und Kataloge aus dem Index; bei Umbenennungen vergleicht es den alten HEAD-Pfad mit dem neuen Indexpfad |
 | `check_part_ranges.py` | Bereichsnachweis der Bausteine (§24.3): je Baustein ein frischer Prozess; temporäre Nutzerprofile werden nach dem Lauf entfernt. Schreibt `app/core/knowledge/data/part_ranges.toml`; `--check` vergleicht nur |
+| `scan_vendor_values.py` | Herstellerwerte der Slicer je Druckfeld → `tests/data/vendor_print_values.json` |
 
 ## Prüfen und messen — keines davon ist ein Testlauf
 
 | Werkzeug | Tut |
 |---|---|
-| `affected_tests.py` | Betroffene Testdateien aus dem Importgraphen über `app/`, `tools/`, `tests/`, einschließlich Paketinitialisierern und gelöschten Testhelfern. Git-Pfade werden NUL-getrennt gelesen; Umbenennungen zählen am alten und neuen Ort. Dazu Tests, die eine geänderte Textdatei oder ein geändertes Werkzeug beim Namen nennen — ein Werkzeug, das beim Import `sys.argv` liest, laden sie über den Pfad. `--why` nennt alle; `--split`/`--run` fahren Entwicklungstests sofort, Fenster- und Rendererfälle sowie Erzeugnisvergleiche nur mit `--release`, Leistung nie |
-| `list_windowed_tests.py` | Dateien mit Fensterfällen aus dem aufgelösten `qt_app`-Fixture-Graphen oder `windowed` sowie echten Rendererfällen über `require_graphics_adapter` oder `rendering`; als Laufplugin wählt `--window-group` je Test. `rendered` bleibt davon getrennt; liest je Datei die Programme der `slicer`-Fälle |
-| `ci_selection.py` | Zu einem Diff (`--diff`, Vorgabe `origin/main...HEAD`) oder Dateien die Fenster- und Slicerauswahlen für `fenster-auswahl.yml` und `slicer-auswahl.yml`, je Datei eine; Unterlagen (außer dem Markdown, das die Anwendung liest), `konzepte/` und Kataloge zählen nicht. `--programs` nennt die Slicer, die eine Auswahl installiert braucht; `--checked-base` in der CI den Kopf des letzten main-Laufs mit gefahrener Auswahl |
+| `affected_tests.py` | Betroffene Testdateien aus dem Importgraphen über `app/`, `tools/`, `tests/`, auch träge Importe, Paketinitialisierer und gelöschte Testhelfer. Dazu, wer den Ordner der Änderung liest (`tree_reads`), eine registrierte Op oder einen Baustein beim Namen nennt oder eine geänderte Textdatei oder ein Werkzeug nennt — ein Werkzeug, das beim Import `sys.argv` liest, laden sie über den Pfad; eine Datendatei zählt wie ihr Leser (`data_reads`), was eine `conftest.py` je Test ausführt, wie sie selbst. `--why` nennt alle; `--split`/`--run` fahren Entwicklungstests sofort, ab acht Dateien mit vier Arbeitern (`--workers N`, 0 seriell), Fenster- und Rendererfälle sowie Erzeugnisvergleiche nur mit `--release`, Leistung nie |
+| `list_windowed_tests.py` | Dateien mit Fensterfällen aus dem aufgelösten `qt_app`-Fixture-Graphen oder `windowed` sowie echten Rendererfällen über `require_graphics_adapter` oder `rendering`; als Laufplugin wählt `--window-group` je Test. `rendered` bleibt davon getrennt; liest je Datei die Programme der `slicer`-Fälle. Sammelt es im Prozess, stellt es Module, Suchpfad, Import-Haken und Umgebung zurück |
+| `ci_selection.py` | Zu einem Diff (`--diff`, Vorgabe `origin/main...HEAD`) oder Dateien die Fenster- und Slicerauswahlen für `fenster-auswahl.yml` und `slicer-auswahl.yml`, je Datei eine; Unterlagen (außer dem Markdown, das die Anwendung liest), `konzepte/` und Kataloge zählen nicht. Nur über eine Lesestelle gewählt, fährt eine Datei Fenster und Slicer, wenn ein solcher Fall die lesende Einheit erreicht. `--programs` nennt die Slicer, die eine Auswahl installiert braucht; `--checked-base` in der CI den Kopf des letzten main-Laufs mit gefahrener Auswahl |
 | `run_suite_isolated.py` | Je Testdatei ein Prozess; Fenster und Renderer nur mit `--release`, Erzeugnisvergleiche ebenfalls nur dort, Leistung getrennt. CI: `--release --ci-group contracts\|windowed\|rendering` (`rendering`: Rendererfälle ohne Fenster unter Linux und macOS), mehrfach genannt mit einer Sammlung und je Gruppe einem Berichtsordner, `--plan-only` plant ohne Lauf. Die Dateiauswahl lässt Gruppen ohne passende Fälle aus; Fehler und fehlende Berichte bleiben rot. Zeitgrenze je Datei `BUDGET_SECONDS`, in der CI mindestens `BUDGET_HEADROOM` mal die Messung aus der Fenstertabelle (`file_budget`) |
 | `ci_shards.py` | Die Verteilung für Läufer und `tests/conftest.py` (`--ci-shard I/N`): je Datei, längste zuerst in die leichteste Gruppe; als Befehl schreibt es eine Laufzeittabelle (`core`/`windows`) aus JUnit-Berichten neu |
 | `check_print_equal.py` | Druckgleich (§11.2) über Beispielprojekte und Modelldateien: `shoot` nimmt Abbilder im Baum `--tree` auf, `compare` hält zwei Ordner gegeneinander und nennt die größte Abweichung |
-| `qt_trace.py` | pytest-Erweiterung für die Jagd auf den Absturz beim Aufräumen |
+| `qt_trace.py` · `qt_clicks.py` | pytest-Erweiterung für die Jagd auf den Absturz beim Aufräumen · Doppelklick wie der Kunde |
 | `run_agent_suite.py` | 39 Referenzanfragen an den Agenten — **kostet Geld**, das Ergebnis ist eine Quote |
 | `run_model_suite.py` · `run_ui_audit.py` | Die Kette über einen Ordner echter Modelle · der ganze Bestand durch die laufende Oberfläche |
 | `matrix_driver.py` · `matrix_unit.py` · `matrix_report.py` | Die Slicer-Matrix (Releasearbeit, RM-281): jedes Modell über Solidons Übergabe an jeden Slicer und Drucker, mit dem Code des Druckdialogs statt eines Nachbaus · eine Einheit je Modell als eigener Prozess, wieder aufnehmbar und an den Codestand gebunden · der Bericht als Markdown. Die Code-Wurzel ist ein Argument und darf ein anderer Stand sein; die Geschwister `matrix_config.py` (installierte Slicer, Heimdrucker) und `matrix_gcode.py` (was eine Druckdatei tut) kommen aus diesem Ordner |
-| `file_acceptance.py` | Einziger Einstieg der Abnahme im echten Fenster (Releasearbeit): Einzeldateiabnahme je Fall in eigenem Prozess und Profil, Import bis Redo, je Schritt Bild und Netzabdruck; ebenso die Fälle des Funktionsdurchgangs (`inventory --functions`, `run --screen`, `report`). Ausgabe nur außerhalb des Repositorys, Bericht als JSON und Markdown |
-| `function_*.py` | Funktionsdurchgang: `_list`/`_scan`, `_scenes`, `_checks`, `_points`/`_judges`, `_samples`, `_report`; Prüfstand: `_bench`, `_machine`/`_walk`, `_setup`/`_start`, `_protocol`, `_guard`, `_language`, `_capture`/`_surface`, `_gestures`, `_switch`, `_revision`. Einstieg nur `file_acceptance`, Klicks über `guide_targets.next_click`; Rollen/Messverträge: `karte-tools.md`. `Walk.step`/`stable`: anfahren→`False`, Folgetakt Ziel/Rechteck/Freigabe/Treffer neu (`button=getter`). Direktes `click_button` bleibt synchron mit letztem Guard. `place_window` belässt maximierte Clientmaße ohne Ziel-/Größenwechsel. |
+| `file_acceptance.py` | Einziger Einstieg der Abnahme im echten Fenster (Releasearbeit): Einzeldateiabnahme je Fall in eigenem Prozess und Profil, Import bis Redo, je Schritt Bild und Netzabdruck; ebenso die Fälle des Funktionsdurchgangs (`inventory --functions`, `run --screen`, `seal`, `report`). Ausgabe nur außerhalb des Repositorys, Bericht als JSON und Markdown (`acceptance_summary.py`); `run --total`/`--binding`: Gesamtfrist und Siegel vor und nach jedem Fall (`acceptance_guard.py`); `seal`: SHA256 jeder Datei unter `cases/` für `[[run]].seal`, das `report` an V4 nachrechnet (`function_verdict_rules.py`) |
+| `function_*.py` | Funktionsdurchgang: `_list`/`_scan`, `_scenes`, `_cases`, `_checks`, `_points`/`_judges`, `_samples`, `_report`/`_agreement`/`_verdict_rules`/`_promises`; Prüfstand: `_bench`, `_machine`/`_walk`, `_setup`/`_seams`/`_start`, `_protocol`, `_guard`, `_language`, `_capture`/`_surface`/`_tooltips`/`_spot`, `_prediction`, `_gestures`, `_switch`, `_revision`, `_matrix`/`_fonts`/`_way`. Einstieg nur `file_acceptance`, Klicks über `guide_targets.next_click`; Rollen/Messverträge: `karte-tools.md`. `Walk.step`/`stable`: anfahren→`False`, Folgetakt Ziel/Rechteck/Freigabe/Treffer neu (`button=getter`). |
+| `native_runs.py` · `native_binding.py` · `native_measure_card.py` | Native Nachweise am echten Fenster: `bind` hält Kopf, Baum und den Hash jeder Datei unter `app/` und `tools/`, die drei Läufer als Siegel; `case` fährt einen Fall eines Inventars neu, `measure-card` die Maßkartenfolge je Sprache. Siegel vor dem Start, im Kind vor Qt und danach; Start nur mit `--native`, eigenes Profil, Frist und Abbau des eigenen Prozessbaums. Zeiger am nativen Fenster des Druckempfängers. Befehle: `/erzeugen` |
 | `check_local_model.py` · `measure_local_model.py` | Ruft ein lokales Modell die Werkzeuge wirklich auf? · Wie lange (kalt/warm getrennt, Median und Spanne, am Ende `keep_alive: 0`); `--count-tokens` zählt genau einen Auftrag ohne Geschwindigkeit |
 | `window_bench.py` · `window_memory.py` | Beispiel im **echten** Fenster, Wartezeit in Posten (`--drag-frames`, `--shot`) · was Fenster- und Sprachwechsel liegen lassen: Steigung des Arbeitssatzes über die **zweite** Hälfte der Runden |
 | `count_new_windows.py` | Welche Fenster während eines Befehls aufgehen (`EnumWindows`); Exit 1 bei einem neuen Konsolenfenster |
 | `twin_scan.py` · `docs_scan.py` | Zwillinge (vier Klassen in `konzepte/konzept-zwillinge-2026-09.md`) · Ladelast, doppelte Absätze, tote Verweise und leere `paths:` der Unterlagen. Der Doku-Scanner und `test_directory_docs.py` teilen die Kartenmenge aus Git einschließlich neuer Dateien; ignorierte Kopien zählen nicht. Teilpfade müssen vollständig passen. Beide Werkzeuge **nicht** im Tor — dort halten `test_shared_constants.py` und `test_directory_docs.py` |
 | `check_support.py` · `check_activation.py` | Kommt die Rückmeldung an? · Ist der Aktivierungsdienst über HTTPS bereit? |
 | `licence_admin.py` | Private Support-Oberfläche: Käufe Vorratsschlüsseln zuordnen, Käufer finden, Geräteplätze verwalten. Deutsch und ohne Kundenkatalog; Anlass und Handlung über feste Servercodes, nie über Beschriftungen |
+
+## Codestruktur: Auflöser, Wächter, Verschiebewerkzeug
+
+Schritt 0 aus `konzepte/konzept-codestruktur-2026-10.md` (4.1); Aufrufe und
+Ausgänge in den Docstrings, die Geschwister in `karte-tools.md`.
+
+| Werkzeug | Tut |
+|---|---|
+| `code_index.py` · `code_facts.py` · `code_values.py` · `code_cache.py` · `code_store.py` · `code_scripts.py` · `code_report.py` | Statischer Auflöser für Namen, Importe und Patch-Ziele (W2, W5, W6, `move_names`), auch in Skripten für `python -c` (`script:<art>`; nicht Faltbares zählt das Inventar, es ist kein Fund); `--inventory` nennt jede Stelle. Auszüge je Datei nach Inhaltshash, Antworten je Baumstand unter `tools/__pycache__/`, gestempelt mit dem geladenen Auflöser, nie mit der Platte |
+| `tree_reads.py` · `data_reads.py` | Wer welchen Ordner mit welchem Muster liest, selbst oder über eine bezogene Definition (W4, Auswahl) · welche Einheit unter `tests/` eine Datei außerhalb des Codes erreicht |
+| `move_names.py` | Verschiebewerkzeug: Zuschnittliste (TOML; `module`, `copies`, `component`) → Plan → Kandidatenbaum → Beweis → erst dann schreiben; `--proof` legt das Protokoll vor dem Baum ab, `--list-copies` nennt Originale mit Kopfkopien; fällt eine Modulzuweisung weg, fällt ihr ungelesener Ladeimport mit. Bedeutung fragt es nur `code_index` |
+| `size_ratchet.py` · `registry_dump.py` | W1: Dateien über 2 000 Zeilen halten ihre Zahl an Definitionen genau (`tests/data/size_ratchet.toml`; `--lower`, `--move`, `--raise`, `--init` nur einmal) · W3: Registerabzug, vor und nach einem Kernschritt bytegleich (`--compare`) |
 
 ## Erzeugen
 
@@ -88,7 +102,7 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 | `bump_version.py` | Die zwei Stellen der Version, dazu drei abgeleitete |
 | `build_slice_core.py` | Übersetzt Ebenenschnitt und Konturverkettung; nach jedem Python-Wechsel mit dem aktuellen Interpreter neu fahren |
 | `fix_unwind_info.py` | Korrigiert auf macOS Intel direkt nach jeder Installation die Abwicklungstabelle der OCC-Bibliotheken (RM-768); prüft je Eintrag den Prolog Byte für Byte, kennt nur geprüfte Radversionen samt Zahl der Korrekturen und bricht sonst ab; `--codesign` signiert ad hoc neu, `--check --package dist` prüft das ausgelieferte Paket (auf macOS die `.app`), `--scan` zählt jedes Rad |
-| `build_licence_module.py` · `make_licence_keys.py` | Prüfmodul und Lizenzmanifest nach `packaging/build/` · Kaufcodes |
+| `build_licence_module.py` · `make_licence_keys.py` | Prüfmodul und Lizenzmanifest nach `packaging/build/`, ein Modul im Unterordner hält an · Kaufcodes |
 | `make_installer.py` | Windows-Installer lokal, oder `--signing-handoff`: App-Baum und Installer-Eingänge als sortierte Pfadliste mit SHA-256 |
 | `windows_signed_installer.py` · `sign_release.py` | Schlüsselloser CI-Anschluss zwischen den zwei lokalen Signaturen · signiert **lokal** (`--check`, `--phase application`, `--phase installer`), Zertifikat per Fingerabdruck; eine rote Releaseakte sperrt die Ausgabe. Ablauf: `packaging/CLAUDE.md`, `Signierung/README.md` |
 | `make_linux_packages.py` · `make_macos_package.py` | AppImage, Flatpak und Archiv · das `.pkg`; beide schreiben ihre Vorlagen in `packaging/` |
@@ -110,55 +124,15 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
   übernimmt sichtbare Textträger und Listen aus Hauptfenster, Menüs und
   Dialogen. Ihre Rechtecke sperren die Nummernplatzierung. Findet sich im
   Bild kein freier Platz, steht die Nummer mit Verbindung im zusätzlichen
-  Bildrand; Bildunruhe allein ist kein Nachweis für freien Textplatz.
-- **Rohaufnahme und Schnitt sind getrennt.** Ein vollständiger `capture.json`
-  ist Voraussetzung für Sprache und Export. Szenen verweisen auf echte
-  Bildbereiche und Bildindizes; kurze Fassungen dürfen eigene Ausschnitte
-  verwenden. `minimum_seconds` schützt die Lesedauer von Dialogen auch bei
-  kurzem Sprechertext. Dateiauswahl, Einheitenfrage und Hinweise bekommen
-  eigene Abschnitte. Das Setup speichert die Druckerkennung als `printer_id`,
-  getrennt von der gleichnamigen Szene `printer`.
-- **Die Aufnahme greift nur das eigene Fenster ab.** Nach Kamerabewegungen
-  wird der Renderer vor dem Bild ausgerechnet; ein offener Dialog wird über
-  sein eigenes Widget ergänzt. Die Rohaufnahme aktiviert das Hauptfenster
-  nicht zwischen modalen Schritten. Lokale Dateipfade werden beim Schnitt
-  verdeckt, der gewählte Dateiname und die Handlung bleiben sichtbar.
-  `--screen-model` und `--screen-serial` wählen den Bildschirm anhand seiner
-  Identität. `--native-resolution` nimmt dessen volle Pixelgröße im eigenen
-  Vollbildfenster auf; `screen-evidence.json` belegt Bildschirm, Fenster und
-  Rohbildgröße. Der Recorder verwendet den Bildschirm des Fensters, nie
-  stillschweigend den Hauptbildschirm. Bereits sichtbare Kundendialoge werden
-  nur positioniert; ihre Modalität, Fensterflags und Größe bleiben erhalten.
-- **Eine Bedienhandlung ist kein Ergebnisstandbild.** `interaction.json`
-  hält echte Mauswege, Auswahl, Tasteneingabe und Übernehmen in getrennten
-  Bildbereichen fest. Der geführte Schnitt erklärt vor der Handlung und
-  spricht das neue Maß erst auf dem passenden Zustand. Die Gesten werden
-  nicht an kurze Sprachdateien angepasst. Vorher/Nachher verwendet dieselbe
-  native Kamera und Schattierung und trägt eindeutige Beschriftungen.
-  Der gemeinsame Szenenschnitt hält Ansage, Handlung und Ergebnis getrennt;
-  deren echte Ausschnitte dürfen sich pro Phase unterscheiden. Ein geöffnetes
-  Dropdown gehört vollständig in den Aktionsausschnitt. Tutorials entstehen
-  direkt in 2560 × 1440, Shorts in 1080 × 1920; der Exportbeleg nennt Quell-
-  und Ausgabegröße getrennt.
-  `hold_frames` kürzt nur ausdrücklich belegte Einzelbildhaltungen mit
-  Begründung; die umgebenden Maus- und Tastaturbilder behalten ihre Rohdauer.
-  Lange native Hinweiszeilen dürfen mit `wide_focus` mehr Bildbreite erhalten,
-  während die vollständige Karte daneben als Kontext sichtbar bleibt.
-- **Sprache und Musik bleiben nachprüfbar.** Satzzeiten stammen aus den
-  tatsächlich erzeugten WAV-Dateien. Shorts erhalten dieselben Zeiten als
-  eingebrannte Untertitel; Tutorials zusätzlich als SRT. Jede Themenmusik
-  hat ein eigenes prozedurales Arrangement. Der Mix senkt Musik unter Sprache
-  ab und prüft den fertigen H.264/AAC-Film vollständig. Eine technische
-  Prüfung ersetzt keine Sicht- oder Hörprüfung.
-  Externe Musik wird nur mit Dateihash, Quelle und Lizenznachweis gemischt;
-  die Sprachclips werden einzeln angeglichen, die Musik wird unter Sprache
-  abgesenkt. Tempo und Tonhöhe der Stimmen bleiben erhalten.
-  Zusammenhängende Sprecherabschnitte bleiben eine WAV-Datei. Eine separate
-  akustische Satzzuordnung kann die Untertitel verfeinern; ihr Dateihash, der
-  WAV-Hash, der unveränderte Text und die Zeitgrenzen werden vor Nutzung geprüft.
-  Nach allen Audiofiltern wird jeder Abschnitt auf seine genaue Zahl von
-  48-kHz-Samples gebracht. Die absolute Platzierung und Dateihashes stehen in
-  `narration-placement.json`; Lautheitsfilter dürfen keine Zeitdrift ansammeln.
+  Bildrand; Bildunruhe allein ist kein Nachweis für freien Textplatz. Auch
+  ihr Pfeil läuft nicht über fremden Text, solange eine Stelle ohne das
+  bleibt, notfalls im Rand.
+- **Filmaufnahmen halten Rohaufnahme, Bildschirm, Handlung und Ergebnis
+  getrennt** (`capture.json`, `screen-evidence.json`, `interaction.json`); die
+  einzelnen Fallen stehen in `karte-tools.md`, „Fallen“.
+- **Sprache und Musik bleiben nachprüfbar**: Satzzeiten aus den erzeugten
+  WAV-Dateien, fremde Musik nur mit Hash, Quelle und Lizenz, jeder Abschnitt
+  auf seine genaue Samplezahl; Einzelheiten in `karte-tools.md`.
 - **Lageraufnahmen schreiben ausschließlich in ein eigenes Profil.** Der
   Inventarhelfer prüft den tatsächlich verwendeten Katalogpfad vor dem ersten
   Zugriff. KI-Aufnahmen binden echte Anfrage, Backend, Antwort und gespeichertes

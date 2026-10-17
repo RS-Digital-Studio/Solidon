@@ -14,10 +14,11 @@ das Netz.
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
+from app.core.knowledge.parts.literal import literal
 from app.core.knowledge.parts.registry import PartSpec
 from app.core.types import BaseParams
 
@@ -38,14 +39,14 @@ def to_scad(spec: PartSpec, params: BaseParams | None = None) -> str:
 
     values = params or spec.params()
     produced = spec.fn(values)
-    mesh = as_mesh_data(produced.mesh)
+    mesh = geom_mesh.as_mesh_data(produced.mesh)
 
     lines = [
         HEADER.format(title=spec.title, name=spec.name, version=spec.version),
         "",
     ]
     for entry in values.spec():
-        lines.append(f"{entry.name} = {_literal(getattr(values, entry.name))};")
+        lines.append(f"{entry.name} = {literal(getattr(values, entry.name))};")
     lines.append("")
     lines.extend(_module(spec.name, mesh))
     for suffix, build, advice in (
@@ -55,7 +56,11 @@ def to_scad(spec: PartSpec, params: BaseParams | None = None) -> str:
         extra = build(values) if build is not None else None
         if extra is not None:
             lines.extend(
-                ["", f"// {advice}", *_module(f"{spec.name}_{suffix}", as_mesh_data(extra.mesh))]
+                [
+                    "",
+                    f"// {advice}",
+                    *_module(f"{spec.name}_{suffix}", geom_mesh.as_mesh_data(extra.mesh)),
+                ]
             )
     shown = shown_bores(spec, produced, upward=builds_upward(mesh))
     lines.extend(_shown_module(spec.name, shown))
@@ -110,15 +115,3 @@ def _module(name: str, mesh: MeshData) -> list[str]:
         lines.append(f"      [{triangle[0]}, {triangle[1]}, {triangle[2]}],")
     lines.extend(["    ],", "    convexity = 8", "  );", "}"])
     return lines
-
-
-def _literal(value: object) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, str):
-        # Maskiert wie JSON — OpenSCAD-Strings kennen dieselben
-        # Fluchtzeichen. Heute führt kein Baustein ein Freitextfeld; der
-        # erste, der eines bekommt, bräche hier sonst am ersten
-        # Anführungszeichen im Wert.
-        return json.dumps(value, ensure_ascii=False)
-    return f"{value}"

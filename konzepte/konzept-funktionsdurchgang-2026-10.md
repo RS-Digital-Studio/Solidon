@@ -89,18 +89,18 @@ hat eine Zählgröße und eine Schwelle (Tabellen unten).
 | 2 | Weg | Klicks, Pflichteingaben, Entscheidungen, Blickwechsel bis zum Beispielziel der Zeile | E1–E5 |
 | 3 | Vorschau | Zeigt sie vor dem Übernehmen, was passiert, und stimmt das? Bei grober Vorschau (ab `COARSE_PREVIEW_ABOVE`) wird der Satz im Vorschauband geprüft, sonst Volumen und Außenmaß gegen das Ergebnis | Bild und Kennzahl |
 | 4 | Ergebnis | Tut sie, was Titel und `doc` versprechen? Dieselben Werte über die Kommandozeile ergeben ein druckgleiches Netz (§35, zwei Wege gegeneinander) | Kennzahl gegen Erwartung, Netzabdruck |
-| 5 | Rückweg | Strg+Z stellt den Stand vorher genau her, Wiederholen (Strg+Y; unter Linux Strg+Umschalt+Z, auf dem Mac ⌘⇧Z) das Ergebnis; Escape und *Abbrechen* im Dialog verwerfen den Entwurf (§18.11) | Szenenabdruck vor, nach, nach Undo, nach Redo |
+| 5 | Rückweg | Strg+Z stellt den Stand vorher genau her, Wiederholen (Strg+Y; unter Linux Strg+Umschalt+Z, auf dem Mac ⌘⇧Z) das Ergebnis; Escape und *Abbrechen* im Dialog verwerfen den Entwurf (§18.11) — verlangt an Zeilen mit Entwurf oder Dialog | Szenenabdruck vor, nach, nach Undo, nach Redo |
 | 6 | Rückmeldung und Zeit | Sieht man, dass sie läuft und was sie geändert hat? Bleibt das Fenster bedienbar — größte Lücke im Hauptfaden ≤ 100 ms? Wo §31 ein Budget nennt, liegt sie darin; eine Überschreitung ist ein Verdacht, den `window_bench.py` oder die Leistungstests bestätigen; ohne Budget steht „kein Budget“ | gemessene Zeiten |
 | 7 | Fehlerweg | Falsche Auswahl, ungültige Eingabe, Fehler: Sperrgrund, Grenzablehnung, Handlungsvorschlag (Regel 17), jede angebotene Handlung geklickt und wirksam | je ein erzwungener Fehlfall, V5 |
 | 8 | Verständlich | ohne Handbuch zu verstehen, für jemanden aus dem Slicer ohne CAD-Kenntnisse | V1–V6 |
-| 9 | Sprachen und Darstellung | In allen sechs Sprachen passt jeder sichtbare Text in sein Element (Schriftmaß gegen Breite, gemessen); Anzeigeeinheit Zoll; keine Bedeutung allein über Farbe (Regel 18) | Messung je Sprache; Bilder auf Deutsch im hellen Thema und in der längsten Übersetzung der Zeile, das dunkle Thema als Stichprobe je Dialogart |
-| 10 | Tastatur und Zugänglichkeit | per Tastatur erreichbar; Tab-Folge folgt der Lesefolge, gemessen per Tastendruck und `focusWidget()`; kein leerer und kein doppelter `accessibleName`, der Name trägt die Handlung; der Fokus kehrt nach dem Dialog zurück. Bildschirmleser: ungeprüft, so vermerkt | Tab-Kette, Namensliste |
-| 11 | Versprechen | Deckt sie, was Website (`website/funktionen.html` und `website/{en,es,fr,it,pt}/`) und die Handbuchstelle (`manual.help_for`) sagen — und sagen beide, was sie kann? | Abgleich |
+| 9 | Sprachen und Darstellung | In allen sechs Sprachen passt jeder sichtbare Text in sein Element (Schriftmaß gegen Breite, gemessen; eine umbrochene Listenzeile gegen die Höhe ihrer Zelle) — im ganzen Fenster und in jedem Bild der Zeile (Fläche, Ergebnis, Fehlfall), auch Objektbaum, Kopf- und Statusleiste; ein Abschneiden außerhalb der Zielfläche hält den Punkt mit dem Fund seiner Wurzel offen. Anzeigeeinheit Zoll an jeder Zeile, deren Bilder eine Länge zeigen; keine Bedeutung allein über Farbe (Regel 18). Skalierung und Fenstergröße prüft Z6 | Messung je Sprache; Bilder auf Deutsch im hellen Thema und in der längsten Übersetzung der Zeile, das dunkle Thema als Stichprobe je Dialogart (Karte, Dialog, Leiste) aus einem Fall desselben Pakets, im Urteil mit Fallnummer |
+| 10 | Tastatur und Zugänglichkeit | per Tastatur erreichbar; Tab-Folge folgt der Lesefolge, gemessen per Tastendruck und `focusWidget()`, und erreicht die Zielhandlung der Zeile, bevor sie die Fläche verlässt; kein leerer und kein doppelter Name, wie ein Bildschirmleser ihn liest (zugänglicher Name, Formularzeile, Knopftext — ein Klassenname ist keiner), der Name trägt die Handlung; der Fokus kehrt nach dem Dialog zurück. Bildschirmleser: ungeprüft, so vermerkt | Tab-Kette, Namensliste |
+| 11 | Versprechen | Deckt sie, was Website (`website/funktionen.html` und `website/{en,es,fr,it,pt}/`, Fließtext, Bildtexte und Titel) und die Handbuchstelle sagen — und sagen beide, was sie kann? Ein Angebot (Feld, Haken, Handlung, Hinweis) deckt sein Bild an der Zielfläche, eine Wirkung („in einem Zug“, „ein Undo“, „nimmt mit“) nur ein gefahrener Weg oder ein Kommandozeilen- oder Testbeleg am Laufkopf; ein nicht gefahrenes Wirkungsversprechen hält den Punkt offen. Die Übersetzungen sind gedeckt, wenn sie dieselben Abschnitte tragen | Abgleich; Fundstellen einer Operation aus dem Register (`manual.help_for`, Titel auf den Funktionsseiten), jeder anderen Zeile aus ihrer Zeilenspezifikation (`manual`, `website`) — fehlen sie dort, nennt Stufe B die gefundene Stelle |
 | 12 | Nachträglich ändern | Öffnen *Diesen Schritt ändern* und ein Doppelklick im Verlauf den Schritt mit seinen Werten, und ändert eine neue Zahl ihn, ohne dass der Verlauf wächst (§2.1)? | Schrittzahl vorher und nachher |
 | 13 | Auswahlstufen | ohne Auswahl, ein Körper, mehrere Körper, ein Merkmal, mehrere Merkmale, eine Kante: angeboten, grau mit Grund oder nicht da, wie `grenzen.md` es verlangt | Matrix je Stufe |
 | 14 | Abbruch während der Rechnung | kommt über 2 s *Abbrechen*; danach steht der letzte vollständige Stand, ein wartender Klick verfällt (§15.6, `wartezeit.md`) | Abdruck nach Abbruch |
 | 15 | Halt und Einfügemarke | bei angehaltener Kette der Grund mit Schrittnummer; bei gesetzter Einfügemarke Ergebnis am Stand davor oder Absage mit *Einfügen beenden* (`fenster.md`) | je ein erzwungener Fall |
-| 16 | Projektwechsel | Ein Wechsel während Vorschau, Entwurf oder Rechnung räumt alles ab; nichts Spätes meldet ins neue Projekt | „Öffnen während der Rechnung“ |
+| 16 | Projektwechsel | Ein Wechsel während Vorschau, Entwurf oder Rechnung räumt alles ab; nichts Spätes meldet ins neue Projekt. Verlangt sind die Lagen, die die Zeile hat: ohne Eingaben kein Entwurf, ohne Vorschau keine Vorschau, und eine Rechnung, die vorbei ist, bevor der Kunde wechseln kann, ist keine Lage; hat sie keine, *entfällt* der Punkt (ohne Rechnung) | „Öffnen während der Rechnung“ |
 | 17 | Agentenweg | Das Agentenwerkzeug nennt denselben Ort (`menu_path` in `tool_schemas()`); ein Undo nimmt einen Vorschlag mit dieser Operation ganz zurück (Regel 16) | Ort offline; der Lauf in der Agenten-Suite |
 | 18 | Lizenzzustand | In Demo und nach Ablauf grau mit Grund, nur Lesendes läuft weiter; schreibendes Ziel frei oder versteckt statt grau: jeweils *mittel*. Auswahl und bei offenem Ziel der ganze Handlungsweg müssen gelaufen sein; Nullwerte und beschädigte Einträge sind ungemessen (`kern.md`, Lizenzgrenze) | zwei Läufe mit vorbereitetem Profil |
 | 19 | Gestaltung | Wirkt sie zeitgemäß, ruhig und hochwertig — und bleibt sie dabei einfach? Nutzt sie, was Solidon besser kann, statt eines klassischen Formulars? | G1–G9, Z1–Z7, I1–I6 |
@@ -179,7 +179,7 @@ Vorgaben, Vorschau, Aufklappen und Suche.
 | Z3 | Am Objekt: Nach dem Klick auf die Stelle ist die Handlung ohne Menü und ohne Suche da, als Feld oben im Merkmalfenster oder als Hauptaktion im Reiter *Auswahl* (§2.6); der Rechtsklick führt keine aus (§18.5) | ja je Zeile mit Merkmals- oder Körperbezug |
 | Z4 | Leere Zustände führen weiter (ergänzt E7, das den fehlenden Satz zählt) | hat ein leerer Zustand eine nächste Handlung — leere Szene, leerer Verlauf, leeres Lager —, steht sie als Knopf dabei; gewollt leere Karten und ein Prüfbericht ohne Befund ausgenommen |
 | Z5 | Rohe Qt-Fenster im Kundenweg: Instanzen von `QMessageBox`, `QInputDialog`, `QColorDialog` | 0, außer `QFileDialog` und den Ausnahmen aus Z2 |
-| Z6 | Größen und Skalierungen (Kontrast steht in G6, abgeschnittener Text in Prüfpunkt 9) | auf der kleinsten Arbeitsfläche (Bauplan §19.3; das maximierte Fenster auf 1920 × 1080 logisch, Taskleiste und Titelleiste abgezogen: `function_checks.SMALLEST_WINDOW`) braucht keine Vorderseite eine Rollleiste; Symbole bei 100, 150 und 200 % ohne Unschärfe, solange die logische Fläche nicht unter 1920 × 1080 fällt; was darunter liegt, ist kein Fall; hell und dunkel mit denselben Flächen und Akzenten |
+| Z6 | Größen und Skalierungen (Kontrast steht in G6, abgeschnittener Text in Prüfpunkt 9) | auf der kleinsten Arbeitsfläche (Bauplan §19.3; das maximierte Fenster auf 1920 × 1080 logisch, Taskleiste und Titelleiste abgezogen: `function_checks.SMALLEST_WINDOW`) braucht keine Vorderseite eine Rollleiste; Symbole bei 100, 125, 150 und 200 % ohne Unschärfe, solange die logische Fläche nicht unter 1920 × 1080 fällt; was darunter liegt, ist kein Fall; hell und dunkel mit denselben Flächen und Akzenten |
 | Z7 | Die ersten fünf Minuten (§2.3): vom Start bis zum ersten übernommenen Schritt an einem eigenen Modell | Schritte und Fehlklicks aus dem Protokoll von Stufe C, ohne Handbuch; jeder Fehlklick ist ein Fund |
 
 *Innovativ (urteilt Stufe B, an den genannten Zeilen):*
@@ -216,9 +216,28 @@ der nicht gilt, steht als *entfällt* mit einem Grund aus einer geschlossenen
 Liste (Operation ohne Rechnung, ohne Auswahlbezug, ohne Dialog, ohne Agenten-
 werkzeug, nur Stufe C).
 
+*Gut nach Fix* steht genau an Zellen, an denen die Funddatei einen behobenen
+Fund führt (Stand „behoben `<commit>`“, der Commit im Laufkopf; Zuordnung über
+„Funktion“ und „Prüfpunkt“, ein Punkt umfasst seine Kriterien: 2 die E1–E7,
+7 die V5, 8 die V1–V6, 19 die G, Z und I), und der eigene Befund am Lauf
+positiv ist. Ein offener Fund an der Zelle hält sie offen. Vor jeder
+Urteilsrunde zieht der Koordinator den Stand der Funde nach, deren Fix im
+Laufkopf liegt; `report` endet mit Ausgang 1, solange ein offener Fund einen
+Commit im Laufkopf nennt, ohne mit „Rest:“ zu sagen, was offen bleibt (FD-153),
+und weist ein Urteil ab, das dem Stand der Funddatei widerspricht
+(`tools/function_verdict_rules.py`). Wie Stufe B und Zweitprüfer
+E1–E4, V1, V4, Z3, I1 und I4 auslegen, steht unter den Kriterientabellen der
+Skills `ux-review` und `ui-design`.
+
 **Gleiche Urteile bei zwei Prüfern:** Je Paket prüft ein zweiter Agent 10 % der
-Zeilen unabhängig. Stimmen weniger als 90 % der Urteile je Prüfpunkt überein,
-wird das Kriterium geschärft, bevor das Paket weitergeht.
+Zeilen unabhängig. Stimmen weniger als 90 % der Urteile je Prüfpunkt und
+Kriterium überein, gezählt über alle Zweitprüferzeilen einer Urteilsrunde
+(alle Pakete, deren Urteile denselben Lauf nennen), wird das Kriterium
+geschärft, bevor die Pakete weitergehen. Die Werte je Paket stehen zur Auskunft in der
+Abhakliste; bei zwei bis drei Zeilen je Paket hieße 90 % sonst „keine
+Abweichung“. Gezählt werden Zellen, die beide geurteilt haben; jede Zelle mit
+nur einem Urteil an einer Zweitprüferzeile ist ausgewiesen, und ein Prüfpunkt
+ohne Paar ist nicht gemessen.
 
 ## 5 Wie ich über die Oberfläche teste
 
@@ -256,7 +275,9 @@ Aktion).
 Zeile und urteilt nach E1–E7, V1–V6, G9, Z3, Z4, I1–I6 und den Prüfpunkten 2, 8,
 9, 11 und 19. Die Urteile stehen je Paket in `urteile-<paket>.toml`, jedes mit
 Bild und Stelle; das Bild relativ zum Lauf, den die Datei mit Name, Kopf und
-Siegel nennt, oder mit dem Grund, warum der Lauf keines hat.
+Siegel nennt, oder mit dem Grund, warum der Lauf keines hat. Das Siegel schreibt
+`file_acceptance.py seal` am Laufende (SHA256 jeder Datei unter `cases/`);
+`report` rechnet es nach, bevor ein Urteil an V4 gilt.
 
 **Stufe C — von Hand am laufenden Fenster**, mit Maus und Tastatur
 (Computer-Steuerung), nur für das, was kein Skript kann: Dateidialoge des
@@ -390,7 +411,8 @@ Schritt in `/erzeugen` und ein `rendered`-Test wie die Handbuchbilder.
   steht als Vorschlag in der Funddatei.
 - Stufe C mit Protokoll: vier Hauptwege und die ersten fünf Minuten (Z7),
   Schritte und Fehlklicks.
-- Übereinstimmung der Prüfer ≥ 90 % je Prüfpunkt.
+- Übereinstimmung der Prüfer ≥ 90 % je Prüfpunkt über die Urteilsrunde (§4),
+  jeder Prüfpunkt mit Paaren.
 - Konzept, Funddatei und Nachweise in `konzepte/` samt Index; der Wiederholungslauf
   steht in `/erzeugen`.
 

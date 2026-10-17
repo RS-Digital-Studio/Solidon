@@ -22,11 +22,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app import branding
 from app.branding import (
     APP_ID,
     APP_NAME,
     APP_VENDOR,
-    APP_VERSION,
     PART_FILE_MIME_TYPE,
     PART_FILE_SUFFIX,
     PROJECT_SUFFIX,
@@ -274,7 +274,7 @@ def signing_handoff() -> dict[str, object]:
     return {
         "schema_version": 1,
         "app_name": APP_NAME,
-        "app_version": APP_VERSION,
+        "app_version": branding.APP_VERSION,
         "app_vendor": APP_VENDOR,
         "app_id": APP_ID,
         "app_url": WEBSITE_URL,
@@ -288,7 +288,7 @@ def signing_handoff() -> dict[str, object]:
         "licence": _handoff_name(licence),
         "icon": _handoff_name(icon),
         "licence_manifest": _handoff_name(manifest),
-        "setup_filename": f"{APP_NAME}-Setup-{APP_VERSION}.exe",
+        "setup_filename": f"{APP_NAME}-Setup-{branding.APP_VERSION}.exe",
         "input_sha256": {_handoff_name(path): _sha256(path) for path in files},
     }
 
@@ -328,7 +328,7 @@ def main() -> int:
         [
             str(compiler),
             f"/DAppName={APP_NAME}",
-            f"/DAppVersion={APP_VERSION}",
+            f"/DAppVersion={branding.APP_VERSION}",
             f"/DAppVendor={APP_VENDOR}",
             f"/DAppId={APP_ID}",
             f"/DAppUrl={WEBSITE_URL}",
@@ -348,7 +348,7 @@ def main() -> int:
     )
     if completed.returncode != 0:
         return completed.returncode
-    print(f"Installer: {OUTPUT_DIR / f'{APP_NAME}-Setup-{APP_VERSION}.exe'}")
+    print(f"Installer: {OUTPUT_DIR / f'{APP_NAME}-Setup-{branding.APP_VERSION}.exe'}")
     return 0
 
 

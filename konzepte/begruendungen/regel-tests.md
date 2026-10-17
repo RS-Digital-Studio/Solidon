@@ -148,6 +148,27 @@ gegen einen garantiert geschlossenen Port (`localhost:1`). Geleert wird die
 Liste der Backends, nicht die Prüfung selbst — sonst wird aus dem Test eine
 Attrappe, die nichts mehr misst.
 
+**Die echten Fassungen der Attrappen reicht `conftest.py` als Fixtures weiter**
+(`unpatched_find_program`, `unpatched_find_programs`, `unpatched_backends`;
+Codestruktur Schritt 0, Paket P1). Vorher legte die Suite sie mit
+`setattr(…, "unpatched_*", …, raising=False)` als Attribute an den
+Produktmodulen ab, und Tests lasen `discover.unpatched_find_program`. Einen
+solchen Namen definiert kein Modul: Der Auflöser fand drei Patch-Stellen ohne
+Ziel (W2 a) und drei `raising=False` (W2 b), und ein Schnitt, der `discover`
+teilt, hätte die Ablage still an der falschen Stelle gelassen.
+
+**Eine Sammlung im Prozess gibt auch `sys.meta_path` und `os.environ` zurück**
+(CS-25, Paket P1). Sie führt `tests/conftest.py` ein zweites Mal aus; dessen
+Import-Haken blieb vorn in `sys.meta_path`, und die umgebogenen
+Profilvariablen blieben im Arbeiter stehen.
+
+**Die bash der Suite kommt aus `tests/shell_helpers.bash_executable`** (CS-22,
+CS-30, CS-33). Der Starter aus Git für Windows (`bin\bash.exe`) stellt
+`/mingw64/bin:/usr/bin` vor den `PATH` und überdeckt Attrappen für `git` oder
+`python`, die ein Test vorn einträgt; solche Tests fragen
+`bash_executable(keep_path=True)` und tragen den Ordner der bash selbst ein,
+wenn das Skript Coreutils braucht.
+
 ### Isolation heißt Betriebslage, nicht Nullzustand
 
 Eine Rücksetz-Fixture stellt her, was der **Kunde** hat — nicht ein nacktes
@@ -463,6 +484,16 @@ niemanden sonst, und nach einem begründeten Verfahrenswechsel ist es richtig �
 ein Zähler, der Überschreitungen gegen eine alte Marke zählte, sagt gegen die
 neue nichts.
 
+### Warum die Bestmarke ein Median ist
+
+*Aus `tests.md` beim Merge von welle5 (16.10.2026), damit die Regel unter
+ihrer Größengrenze bleibt.*
+
+Ein Minimum kann nur sinken, der Median der letzten fünf Läufe folgt dem
+Maschinenzustand, und eine echte Verlangsamung reißt die Schwelle trotzdem
+sofort (`REGRESSION_STRIKES`). `MIN_RUNS = 3`: Zwei Läufe bewusst blind sind
+ehrlicher als zwei Läufe falsch rot.
+
 ## Fremdlast macht auch funktionale Tests rot, nicht nur Messungen langsam
 
 Der Abschnitt oben handelt von Zeiten, und deshalb liest man ihn als Regel für
@@ -525,6 +556,18 @@ gw13>`, keine Tests gesammelt). Wichtiger als der Absturz ist aber der Grund
 dahinter: Auf einer anderen Maschine ist `auto` etwas anderes, und ein Tor,
 das je nach Kernzahl anders misst, hat eine stille Variable. Dieselbe
 Begründung wie bei `.performance.json`.
+
+**`affected_tests.py --run` ab acht Dateien mit vier Arbeitern.** Die Gruppe
+ohne Fenster lief in einem Prozess; eine Auswahl über `viewport` und
+`main_window` brauchte so 1 bis 1,5 Stunden, das Tor dieselbe Menge mit
+Arbeitern 18 Minuten. Im Wechsel gemessen an Teilen der Auswahl für
+`chamber_ops` (Wanduhr / CPU-Zeit des Prozessbaums): zwei Dateien 27–37 s /
+26–34 s seriell gegen 16–17 s / 49–53 s mit `-n 4`, vier Dateien 87–106 s /
+86–98 s gegen 43–49 s / 132–135 s, acht Dateien 381–401 s / 329–339 s gegen
+139–144 s / 379–389 s, sechzehn 728 s / 770 s gegen 228 s / 887 s. Jeder
+Arbeiter startet und sammelt alle Dateien selbst; ab acht Dateien kostet das
+15 % mehr CPU-Zeit für ein Drittel der Wartezeit, darunter 40 bis 100 %. Vier
+statt mehr, weil Agenten nebeneinander laufen; `--workers 0` fährt seriell.
 
 **Zweimal fahren und die Mengen vergleichen, nicht die Zahlen.** Ein Test, der
 von einem Vorgänger abhängt, wird bei paralleler Ausführung nicht rot — er wird
@@ -622,6 +665,10 @@ Get-CimInstance Win32_Process -Filter "Name like '%python%'" |
 ```
 
 Wer nur die direkten Kinder zählt, findet den stehenden Lauf nicht.
+
+*Früher in der Regel; dort steht seither die Kurzfassung.* Ein Stapel in
+`MessageBoxW` ist ein unsichtbares Systemfenster; `Get-Process` nennt seinen
+Titel (`MainWindowTitle`).
 
 ### Wie viele Läufe trägt eine Aussage?
 
@@ -922,6 +969,12 @@ er, dass zwei Kopien derselben Zahl übereinstimmen.
 Verwandt mit „an der Aussage vorbei" oben (`str(op_id) in tooltip` war grün,
 weil „2" auch in „2,40 mm" steht): Beide Male stimmt der Vergleich zufällig.
 
+**Ein Plugin, das Testmodule umbiegt, findet sie über die gesammelten Fälle
+(`item.module`)** (Paket Plattform, Codestruktur Schritt 0). Ohne
+`tests/__init__.py` heißt die Datei für pytest `test_x`; `import tests.test_x`
+lädt eine zweite Kopie, und deren Patch sieht kein Test — die Gegenprobe
+bliebe grün, weil sie an einem Modul vorbei mutiert, das niemand ausführt.
+
 ## Ein Verbotstest über eine leere Menge ist immer grün
 
 Die häufigste Form eines Tests in diesem Projekt ist der Verbotstest: Er filtert
@@ -947,7 +1000,7 @@ läuft entlang einer Frage:
 
 | Herkunft | Beispiel | Zusicherung |
 |---|---|---|
-| Dateisystem | `UI.glob("*.py")`, `rglob` | **ja** — ein umbenannter Ordner ist still |
+| Dateisystem | `source_tree.python_files("app/ui")`, `rglob` (früher `UI.glob("*.py")`, das W4 seither verbietet) | **ja** — ein umbenannter Ordner ist still |
 | Ladevorgang | `rules.load()`, `manual.pages()`, `REGISTRY.all()` | **ja** — fehlende Daten sind still |
 | Gebaute Oberfläche | `findChildren(...)`, `panel._buttons.values()` | **ja** — ein Aufbaufehler ist still |
 | Rechenergebnis | `result.layers`, `island_layers(result)` | **ja** |
@@ -1106,7 +1159,9 @@ das Tor prüft beides.
 
 **Und welche Testdateien sonst noch betroffen sind, sagt der Importgraph,
 nicht das Gefühl:** `tools/affected_tests.py` liest, wer ein geändertes
-Modul mittelbar importiert, wer den Baum liest (`rglob`, `walk_packages`)
+Modul mittelbar importiert, wer den Ordner der Änderung liest (`glob`,
+`rglob`, `iterdir`, `walk`, `os.walk`, `walk_packages`, `copytree`,
+`git ls-files`, auch über einen Helfer; aufgelöst von `tools/tree_reads.py`)
 und wer eine geänderte Nicht-Python-Datei beim Namen nennt — `--why` nennt
 je Datei den Grund, `--split` die regulären Aufrufe, `--run` fährt sie ohne
 Fenstertests und Leistung. Nur beim Release schaltet `--release` die
@@ -1115,6 +1170,57 @@ Die Auswahl ist das Werkzeug *zwischen* den Schritten und auf Paket- und
 Fixzweigen mit ruff, format und mypy auch vor dem Commit; das Entwicklungstor
 vor jedem Stand, der nach main geht, bleibt `/pruefen`. Eine Änderung an `types.py` oder `errors.py`
 berührt über den Graphen fast alles, und das Werkzeug sagt das dann auch.
+
+**Was eine `conftest.py` je Test ausführt, wählt jede Testdatei unter ihr;
+was sie nur lädt, nicht** (Entscheidung Koordinator, CS-38). Je Test laufen
+ihre Haken und autouse-Fixtures und die Modulebene; deren Module ermittelt die
+Auswahl aus der Datei selbst, ein neuer Haken zieht sein Modul also mit. Der
+übrige Ladeabschluss sind über 200 Module, schon eine leere Testdatei lädt 208
+— als „jede Testdatei“ wäre die Auswahl für die meiste Kernarbeit die Suite,
+ohne einen Test mehr zu fangen: Ein Ladefehler macht jeden Test rot, auch jeden
+gewählten, und ein geändertes Verhalten wirkt nur, wo es gerufen wird. Wählt
+sonst nichts ein solches Modul, läuft die Gruppe der `conftest.py` doch.
+
+**Eine Datei, die kein Python ist, lesen Module unter `tests/` je Einheit**
+(Entscheidung Koordinator, Review 2 Q): `tests/helpers.py` nennt den Ordner
+`tests/data/meshes` und liest `plate_holes.stl` in einer Funktion — als ganzes
+Modul hingen daran 188 direkte und alle mittelbaren Importeure, 289
+Testdateien. `tools/data_reads.py` verfolgt die Funktion, die Konstante, die
+Fixture, die die Datei erreicht, mit den Werten an der Aufrufstelle: 157. Gegen
+die Ausführung von 20 Testdateien, elf davon mit 325 Fensterfällen, verfehlte
+das keine Datei.
+
+**Eine reine Teständerung wählt die Leser von `tests/`** (Review CS0 Q, RQ-1
+und F-12). Mit der Zusatzregel „Baumleser bei jeder Python-Änderung“ wählte
+eine Änderung an einer Testdatei 152 Baumleser und über `ci_selection` 47
+Fenster- und drei Slicerläufe. Gewählt wird seither nur, wessen aufgelöster
+Lesebereich `tests/` einschließt; gemessen an `test_wording.py`: 38 Leser und
+die Datei selbst. Die Zahl wächst mit jedem Wächter über `tests/`, deshalb
+steht sie hier und nicht in der Regel.
+
+**Ein Op-Modul, das nur über `bootstrap` lädt, erreicht seine Tests über den
+Op-Namen** (CS-31, Entscheidung Koordinator): als Zeichenkette (auch
+`insert_<baustein>`), über ein Op-Modul, das es importiert, über ein Modul, das
+einen Schritt von ihm anlegt, über eine Projektdatei, die es rechnet, und über
+jede Prüfung, die das ganze Register (`REGISTRY.all()`) oder die
+Beispielprojekte durchgeht. Die Modulliste als Kante hätte über `bootstrap`
+474 von 525 Testdateien gewählt. Eine Datendatei unter `app/`, `tests/data/`
+oder `website/` zählt wie eine Änderung an ihrem Leser — eine Änderung an
+`knowledge/data`, einem Katalog oder einem Beispielprojekt wählt damit fast
+die ganze Suite, und das ist richtig.
+
+**Den Index des echten Baums fragt ein Test über `code_index.shared()`**
+(CS-23). Baute jeder Prozess ihn selbst, hielte jeder rund 2 GB Auszüge und
+rechnete eine halbe Minute; im Tor taten das bis zu vier von acht Arbeitern
+(Spitze 6,9 GB). `shared()` liest den Ergebnisspeicher je Baumstand und baut
+nur, wenn es keinen gibt. Was daneben die Platte liest, vergleicht mit
+`index.digests` und meldet einen geänderten Baum als „Lauf neu starten“ statt
+eines rohen `KeyError` (RCS-3).
+
+**Eine Namensliste im Code bekommt ihre Prüfung in `test_name_lists.py`** (W6,
+CS-9b, CS-10). Modul- oder Funktionsnamen als Text prüft weder ein Import noch
+mypy; teilt ein Schnitt ein Modul, bleibt die Liste stehen, und wer sie liest,
+übersprang still, was fehlt, oder hielt einen Namen, den niemand mehr las.
 
 ## Eine Fremdmeldung ist ein Zeitpunkt, keine Ursache
 

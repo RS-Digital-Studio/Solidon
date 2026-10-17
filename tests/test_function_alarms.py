@@ -14,6 +14,7 @@ from __future__ import annotations
 import copy
 from collections.abc import Callable
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 from tests.bench_fakes import FakeClick, FakePorts, FakeTimer, FakeWidget, run_machine
@@ -673,8 +674,11 @@ def test_rows_without_a_way_to_their_surface_are_not_run() -> None:
     }
     assert function_surface.without_way(opened) == ""
     assert (
-        function_surface.without_way({"target": "operation:drill_hole", "start_scene": "q"}) == ""
+        function_surface.without_way({"target": "operation:drill_hole", "start_scene": "leer"})
+        == ""
     )
+    # Eine Startszene, die der Katalog nicht kennt, trägt keinen Weg (FD-101).
+    assert function_surface.without_way({"target": "operation:drill_hole", "start_scene": "q"})
 
 
 def _flow(spec: dict[str, Any], states: dict[str, Any] | None = None) -> Any:
@@ -901,8 +905,11 @@ def test_an_action_shown_in_the_view_is_typed_there_and_taken_there(
                 "weg zu measure.apply",
             ], names
         else:
+            # Nach dem Kopf prüft der Fall, ob noch eine fremde Handlung im Bild
+            # steht (FD-101: der Klick kann die Maßgruppe übergeben).
             assert names == [
                 "weg zu feature:resize_hole",
+                "im bild nach feature:resize_hole",
                 "weg zu feature.field:resize_hole.diameter",
                 "alles markieren feature.field:resize_hole.diameter",
                 "tippen feature.field:resize_hole.diameter",
@@ -965,16 +972,16 @@ def test_the_licence_run_finds_an_action_shown_in_the_view(monkeypatch: Any) -> 
     assert "handlung feature:resize_hole" in ran[-1], ran
 
 
-def test_a_whole_scene_operation_starts_at_a_chosen_body() -> None:
-    """F-32: *Druckoptimal ausrichten* steht in der Karte am gewählten Körper, nicht ohne Auswahl.
+def test_a_whole_scene_operation_starts_without_a_selection() -> None:
+    """FD-101: *Druckoptimal ausrichten* steht seit RM-735 nur ohne Auswahl in der Karte.
 
-    Vorher war der Weg einer Operation über die ganze Szene leer, und der
-    Sprachfall fand „keinen Knopf und keine Menüzeile“. Der Prüfbericht als
-    Ansicht bleibt ohne Auswahl (F-33).
+    Zur Zeit von F-32 stand sie am gewählten Körper, und der Weg wählte ihn;
+    seit die Handlungen für alle Körper zur Stufe ohne Auswahl gehören
+    (``SelectionOperationsPanel``), hieß sie damit „nicht auffindbar“. Der
+    Prüfbericht als Ansicht bleibt ohne Auswahl (F-33).
     """
     scenes = function_scenes.load_scenes()
-    route = function_list.route_for("szene", "zwei_koerper.exakt", scenes)
-    assert [step["target"] for step in route] == ["tree.row:obj_1"]
+    assert function_list.route_for("szene", "zwei_koerper.exakt", scenes) == ()
     assert function_list.route_for("ansicht", "quader.exakt", scenes) == ()
 
 
@@ -1012,7 +1019,12 @@ def test_a_message_after_the_click_is_not_the_surface_of_the_row() -> None:
         assert not function_surface.own_surface(operation, window), type(window).__name__
     assert function_surface.own_surface(operation, own)
     assert function_surface.own_surface({"target": "message:recovery"}, raw)
-    assert function_surface.own_surface({"target": "dialog:AskDialog"}, question)
+    # Die Zeile nennt den Dialog wie die Funktionsliste: ``dialog:<guides.dialog_name>``.
+    # Vorher stand hier der Klassenname, den keine echte Zeile trägt, und die
+    # Zeilen der Rückfrage und der Meldung maßen ihr eigenes Fenster als fremd (FD-175).
+    assert function_surface.own_surface({"target": "dialog:ask_dialog"}, question)
+    assert function_surface.own_surface({"target": "dialog:message_dialog"}, message)
+    assert not function_surface.own_surface({"target": "dialog:ask_dialog"}, message)
     assert function_surface.own_surface({"target": "", "source": "startablauf"}, raw)
 
 
@@ -1322,6 +1334,9 @@ def test_the_fault_case_asks_for_the_lock_reason_at_its_own_targets(monkeypatch:
     flow.picture = lambda label: None
     flow.session = SimpleNamespace(last_result=None)
     flow.window = None
+    # Ohne graues Ziel nimmt der Fehlfall kein Bild des Sperrgrunds auf (FD-149).
+    flow.widget = lambda name: None
+    flow.folder = flow.out = Path("cases")
 
     def run_steps(label: str, steps: list[Any]) -> bool:
         for step in steps:

@@ -79,12 +79,11 @@ from app.core.export import (
     slicer_keys,
     slicer_profiles,
     threemf,
+    writer,
 )
 from app.core.export.readback import Readback
 from app.core.export.slicer_keys import SlicerFlavour, knows_plates, takes_a_machine_profile
 from app.core.export.writer import (
-    arrangement_holds,
-    part_advice,
     prepare_slicer_meshes,
     shared_layer_plates,
     slicer_rim,
@@ -93,15 +92,15 @@ from app.core.export.writer import (
 )
 from app.core.filament_usage import StoredInputs, UsageRequest, from_gcode
 from app.core.filament_usage import prepare as prepare_usage
-from app.core.geom.attributes import used_slots
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import attributes
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.mesh import MeshData
 from app.core.knowledge import filaments, print_fields, print_settings, profiles
 from app.core.knowledge.print_fields import FIELDS, Field
 from app.core.log import get_logger
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.fits import allowances_for, fit_kinds_for
-from app.core.slice import advise, gcode
-from app.core.slice.analysis import slice_body
+from app.core.slice import advise, analysis, gcode
 from app.core.slice.estimate import PlateComparison, estimate, plate_comparison
 from app.core.slice.findings import remembered_analysis
 from app.core.types import (
@@ -124,15 +123,13 @@ from app.core.types import (
     SlotOverride,
     SlotProfileBinding,
 )
-from app.core.units import EPS_DISPLAY, SMALLEST_NOZZLE, is_close
+from app.core.units import EPS_DISPLAY, LARGEST_NOZZLE, SMALLEST_NOZZLE, is_close
 from app.i18n import TranslatableText, _, format_decimal, source_text, tr
-from app.ui.dialogs import (
-    confirm_handover,
-    handlers_of,
-    licence_lock_line,
-    problem_text,
-    show_error,
-)
+from app.ui import dialogs
+from app.ui import session as ui_session
+from app.ui import settings as app_ui_settings
+from app.ui import style as ui_style
+from app.ui.dialogs import confirm_handover, handlers_of, licence_lock_line, problem_text
 from app.ui.facts import duration, mass
 from app.ui.filament_picker import SWATCH_PIXELS, slot_colours, swatch
 from app.ui.filament_usage import UsageNotice, slot_title
@@ -147,6 +144,7 @@ from app.ui.first_run import (
     printers_on_offer,
     valid_printer_choice,
 )
+from app.ui.grouped_spin import GroupedSpin
 from app.ui.header import filament_names
 from app.ui.icons import icon
 from app.ui.labels import (
@@ -171,8 +169,7 @@ from app.ui.panels import align_forms, collapsible, even_fields
 from app.ui.place_popup import choose_colour
 from app.ui.print_contract import handoff_receipt
 from app.ui.print_disclosure import share_label
-from app.ui.session import Session
-from app.ui.settings import UiSettings, save_settings
+from app.ui.settings import save_settings
 from app.ui.style import (
     NORMAL,
     ROOMY,
@@ -184,7 +181,6 @@ from app.ui.style import (
     DialogScrollArea,
     WrappedNote,
     expanded_width,
-    fit_dialog_to_screen,
     leading_action,
     make_primary,
     select_data,
@@ -264,7 +260,7 @@ def _offer_choices(combo: QComboBox, path: str, program: str) -> None:
 
 #: Die eigene Beschreibung eines Zahlenfelds, bevor Grenzhinweise dazukommen.
 _REFUSAL_BASE_DESCRIPTION: Final = "solidonRefusalBaseDescription"
-_NOZZLE_RANGE_MM: Final[tuple[float, float]] = (SMALLEST_NOZZLE, 2.0)
+_NOZZLE_RANGE_MM: Final[tuple[float, float]] = (SMALLEST_NOZZLE, LARGEST_NOZZLE)
 
 #: Wie weit der Dialog beim Wachsen vom Rand der nutzbaren Bildschirmfläche
 #: bleibt, in Punkten — Platz für Rahmen und Titelleiste des Fensters.
@@ -333,7 +329,7 @@ def _toggle_of(section: QWidget) -> QToolButton | None:
 
 
 def settings_for_export(
-    document: Any, profile: Profile, ui_settings: UiSettings
+    document: Any, profile: Profile, ui_settings: app_ui_settings.UiSettings
 ) -> PrintSettings | None:
     """Welche Druckeinstellungen mit einer Datei hinausgehen — oder keine (§29).
 
@@ -371,7 +367,9 @@ def settings_for_export(
     )
 
 
-def _remembered_profiles_match(settings: UiSettings, printer_id: str, slicer: Path | None) -> bool:
+def _remembered_profiles_match(
+    settings: app_ui_settings.UiSettings, printer_id: str, slicer: Path | None
+) -> bool:
     """Profile gelten für denselben Drucker und Slicer; alte leere Marker bleiben gültig."""
     return (
         slicer is not None
@@ -381,7 +379,7 @@ def _remembered_profiles_match(settings: UiSettings, printer_id: str, slicer: Pa
 
 
 def remembered_setup(
-    settings: UiSettings,
+    settings: app_ui_settings.UiSettings,
     material: str = "",
     printer_id: str = "",
     *,
@@ -565,10 +563,16 @@ def _make_setting_editor(
         button.changed.connect(changed)
         editor = button
     else:
-        number = BoundedSpin(parent)
+        # Eine Anzahl und jedes Maß ohne Nachkomma stehen in Dreiergruppen wie
+        # jede andere Zahl (FD-184), und „1.000“ heißt dort tausend: Die
+        # *Beschleunigung* stand als „10000 mm/s²“ da, und „1.000“ in
+        # *Leerfahrt* wurde still 1 mm/s (Review F2a, R2).
+        whole = field.kind == "int" or field.decimals == 0
+        number = GroupedSpin(parent) if whole else BoundedSpin(parent)
+        if not whole:
+            number.setDecimals(field.decimals)
         number.setRange(field.minimum, field.maximum)
         number.setSingleStep(1 if field.kind == "int" else field.step)
-        number.setDecimals(0 if field.kind == "int" else field.decimals)
         if field.path == "adhesion.raft_gap":
             # Wie optionale Op-Felder: Sondertext eine Anzeigestufe unter null.
             number.setMinimum(field.minimum - 10.0**-field.decimals)
@@ -655,6 +659,12 @@ def _set_setting_editor(editor: QWidget, field: Field, value: object) -> None:
     elif isinstance(editor, _ColourButton):
         editor.set_value(str(value))
     elif isinstance(editor, QDoubleSpinBox):
+        # Ein geladener Wert jenseits der Grenzen bleibt, wie er ist (FD-203);
+        # die Spanne geht bei jedem Setzen von den Grenzen des Felds aus.
+        low, high = print_fields.shown_range(field, value)
+        if field.path == "adhesion.raft_gap":
+            low -= 10.0**-field.decimals
+        editor.setRange(low, high)
         editor.setValue(
             editor.minimum()
             if value is None and field.path == "adhesion.raft_gap"
@@ -973,7 +983,7 @@ class FilamentOverrideDialog(QDialog):
         if layout is not None:
             layout.activate()
         self.resize(self.width(), max(self._content_user_height, self.sizeHint().height()))
-        fit_dialog_to_screen(self)
+        ui_style.fit_dialog_to_screen(self)
         self._last_content_height = self.height()
         self._fitted_visible = self.isVisible()
 
@@ -1167,6 +1177,9 @@ class _PlateJob:
     #: Export, und ihr Bericht war bis dahin um diese zwei Zeilen ärmer.
     scene: Scene | None = None
     document: Document | None = None
+    #: Die Namen derselben Auswertung: Ein entfernter Passungspartner heißt im
+    #: Bericht der Übergabe wie im Prüfbericht (RB2-5).
+    names: Mapping[str, str] | None = None
     #: Der Abbruch des Arbeiters, der diesen Auftrag schreibt. Die Stützsperre
     #: für Kanäle rechnet an einem Gitterwerk eine Viertelminute
     #: (``writer._support_blocker``); ohne ihn griff *Abbrechen* erst danach.
@@ -1211,7 +1224,7 @@ def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceCompar
         objects = [entry for entry in job.objects if entry.plate == run.plate]
         parts = [
             threemf.AssemblyPart(
-                mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                mesh=geom_mesh.as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
             )
             for entry in objects
         ]
@@ -1231,7 +1244,7 @@ def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceCompar
         )
         for entry, part in zip(objects, parts, strict=True):
             if slicer_keys.has_filament_profiles(job.setup.flavour):
-                active = set(used_slots(part.mesh))
+                active = set(attributes.used_slots(part.mesh))
                 choices = [
                     effective.get(threemf.slot_identity(slot))
                     for slot in threemf.assembly_slots(part)
@@ -1303,7 +1316,7 @@ def _slots_with_profiles(
     slots = threemf.merge_slots(
         [
             threemf.AssemblyPart(
-                mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                mesh=geom_mesh.as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
             )
             for entry in objects
         ]
@@ -1325,8 +1338,12 @@ def _prepare_plates(job: _PlateJob) -> ProjectRun:
     chosen_objects = [entry for entry in job.objects if entry.plate in job.plates]
     _slots, chosen = _slots_with_profiles(job, chosen_objects)
     keep = all(
-        arrangement_holds(
-            [as_mesh_data(entry.mesh) for entry in chosen_objects if entry.plate == plate],
+        writer.arrangement_holds(
+            [
+                geom_mesh.as_mesh_data(entry.mesh)
+                for entry in chosen_objects
+                if entry.plate == plate
+            ],
             job.profile,
         )
         for plate in job.plates
@@ -1341,6 +1358,7 @@ def _prepare_plates(job: _PlateJob) -> ProjectRun:
         place_on_bed=keep,
         setup=job.setup,
         scene=job.scene,
+        names=job.names,
         document=job.document,
         cancelled=job.cancelled,
         for_window=job.for_window,
@@ -1372,7 +1390,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         rim=slicer_rim(local_settings, job.profile, job.setup) if job.with_settings else 0.0,
     )
     meshes = tuple(mesh_plan[0][entry.id] for entry in on_plate)
-    keep = arrangement_holds(meshes, job.profile)
+    keep = writer.arrangement_holds(meshes, job.profile)
     written_objects: Sequence[SceneObject] = on_plate
     name_bindings: tuple[_CliNameBinding, ...] = ()
     if job.setup.flavour == "prusa" and not job.for_window:
@@ -1409,6 +1427,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         place_on_bed=keep,
         setup=job.setup,
         scene=job.scene,
+        names=job.names,
         document=job.document,
         cancelled=job.cancelled,
         for_window=job.for_window,
@@ -1428,13 +1447,13 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         slots=handover.with_slot_profiles(slots, chosen),
         keep_arrangement=keep,
         model_height=max(
-            (as_mesh_data(entry.mesh).bounds.size[2] for entry in on_plate), default=None
+            (geom_mesh.as_mesh_data(entry.mesh).bounds.size[2] for entry in on_plate), default=None
         ),
         findings=tuple(findings),
         used_tools=threemf.tools_in_use(
             [
                 threemf.AssemblyPart(
-                    mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                    mesh=geom_mesh.as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
                 )
                 for entry in on_plate
             ]
@@ -1754,7 +1773,7 @@ class _AdviceWorker(Worker):
         for index, body in enumerate(self.objects):
             self.cancelled.raise_if_cancelled()
             self.progressed.emit(index + 1, len(self.objects), str(body.name))
-            mesh = as_mesh_data(body.mesh)
+            mesh = geom_mesh.as_mesh_data(body.mesh)
             own_profile = profiles.for_object(self.profile, body)
             # Dieselben Spulen, die der Export je Teil fragt (Entscheidung G).
             processes = handover.slot_processes(
@@ -1792,7 +1811,7 @@ class _AdviceWorker(Worker):
                 # Stützvolumen, das hier niemand liest (DRUCK-14).
                 result = remembered_analysis(mesh, self.settings, angle, wall)
             if result is None:
-                result = slice_body(
+                result = analysis.slice_body(
                     mesh,
                     self.settings.layers.layer_height,
                     first_layer_height=self.settings.layers.first_layer_height,
@@ -1868,7 +1887,7 @@ class _AdviceWorker(Worker):
                 merged = threemf.merge_slots(
                     [
                         threemf.AssemblyPart(
-                            mesh=as_mesh_data(body.mesh),
+                            mesh=geom_mesh.as_mesh_data(body.mesh),
                             slots=threemf.slots_for_object(body),
                         )
                         for body in self.objects
@@ -1930,9 +1949,9 @@ class _AdviceWorker(Worker):
         others: dict[str, list[tuple[str, object]]] = {}
         for body in self.objects:
             self.cancelled.raise_if_cancelled()
-            for entry in part_advice(
+            for entry in writer.part_advice(
                 body,
-                as_mesh_data(body.mesh),
+                geom_mesh.as_mesh_data(body.mesh),
                 split.base,
                 self.profile,
                 self.setup,
@@ -2010,9 +2029,9 @@ class _AdviceWorker(Worker):
             self.cancelled.raise_if_cancelled()
             if not self.rules_wanted:
                 return entries
-            for entry in part_advice(
+            for entry in writer.part_advice(
                 body,
-                as_mesh_data(body.mesh),
+                geom_mesh.as_mesh_data(body.mesh),
                 split.base,
                 self.profile,
                 self.setup,
@@ -2894,8 +2913,8 @@ class PrintSettingsDialog(QDialog):
 
     def __init__(
         self,
-        session: Session,
-        ui_settings: UiSettings,
+        session: ui_session.Session,
+        ui_settings: app_ui_settings.UiSettings,
         parent: QWidget | None = None,
         slice_result: SliceResult | None = None,
     ) -> None:
@@ -3397,10 +3416,8 @@ class PrintSettingsDialog(QDialog):
         # zwei Filamente ohne Spülgang (Entscheidung Robert, 19.09.2026). Sie
         # gehört wie der Durchmesser zum Drucker und wird in dessen Profil
         # abgelegt; die Tabelle führt jedes Gerät mit einer.
-        self.nozzle_count = BoundedSpin(self)
+        self.nozzle_count = GroupedSpin(self)
         self.nozzle_count.setRange(1, 8)
-        self.nozzle_count.setSingleStep(1)
-        self.nozzle_count.setDecimals(0)
         self.nozzle_count.setKeyboardTracking(False)
         self.nozzle_count.setAccessibleName(tr("Düsenzahl"))
         self.nozzle_count.setToolTip(
@@ -3748,7 +3765,7 @@ class PrintSettingsDialog(QDialog):
         found: OutOfBuildVolume | None = None
         if not printer.is_resin:
             for entry in bodies:
-                excess = size_excess(as_mesh_data(entry.mesh), printer)
+                excess = size_excess(geom_mesh.as_mesh_data(entry.mesh), printer)
                 if excess <= 0.0:
                     continue
                 name = source_text(entry.name) or entry.id
@@ -4741,21 +4758,21 @@ class PrintSettingsDialog(QDialog):
 
     def _unfold_tabs(self, _open_now: bool) -> None:
         """Die Tiefe wächst mit ihrer aktuellen Seite und gibt den Platz wieder frei."""
-        self._queue_refit("passive" if self._search_revealing else "explicit")
+        self.queue_refit("passive" if self._search_revealing else "explicit")
 
     def _unfold_sections(self, _open_now: bool) -> None:
         """Vorn und Vorschläge passen sich nur nach einer bewussten Klappe an."""
-        self._queue_refit("passive" if self._search_revealing else "explicit")
+        self.queue_refit("passive" if self._search_revealing else "explicit")
 
     def _refit_sections(self, _state: bool | int = False) -> None:
         """Passiv aktualisieren, etwa nach Reiter-, Such- oder Statusänderung."""
-        self._queue_refit("passive")
+        self.queue_refit("passive")
 
-    def _queue_refit(self, intent: ContentFitIntent) -> None:
+    def queue_refit(self, intent: ContentFitIntent) -> None:
         """Fasst gleichzeitige Größenwünsche mit Vorrang der bewussten Klappe zusammen."""
         if not self._built:
             return
-        priority = {"passive": 0, "explicit": 1, "initial": 2}
+        priority = {"passive": 0, "font": 1, "explicit": 2, "initial": 3}
         if priority[intent] > priority[self._size_refit_intent]:
             self._size_refit_intent = intent
         self._size_refit.start(0)
@@ -4769,7 +4786,7 @@ class PrintSettingsDialog(QDialog):
     def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
         """Passt die natürliche Dialoggröße genau beim ersten Anzeigen ein."""
         super().showEvent(event)
-        self._queue_refit("initial")
+        self.queue_refit("initial")
 
     def _resize_to_content(self, intent: ContentFitIntent = "passive") -> None:
         """Misst den Inhalt je nach Anlass, ohne passive Außenrahmensprünge."""
@@ -5188,7 +5205,7 @@ class PrintSettingsDialog(QDialog):
 
     def _unfold_slicer(self, _open_now: bool) -> None:
         """Nur eine bewusste Klappe darf den äußeren Rahmen anpassen."""
-        self._queue_refit(self._slicer_toggle_fit_intent or "explicit")
+        self.queue_refit(self._slicer_toggle_fit_intent or "explicit")
 
     def _forget_result(self) -> None:
         """Das Ergebnis des vorigen Slicers verwerfen.
@@ -6479,7 +6496,7 @@ class PrintSettingsDialog(QDialog):
         return threemf.merge_slots(
             [
                 threemf.AssemblyPart(
-                    mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                    mesh=geom_mesh.as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
                 )
                 for entry in objects
             ]
@@ -8078,7 +8095,7 @@ class PrintSettingsDialog(QDialog):
                 refusal = self._refusals.get(path)
                 if isinstance(editor, BoundedSpin) and refusal is not None:
                     form.setRowVisible(refusal, active and bool(editor.refusal()))
-        self._queue_refit("passive")
+        self.queue_refit("passive")
 
     def _editor_changed(self, path: str) -> None:
         """Ein Feld hat sich geändert: **genau dieses** wird eigene Wahl — und
@@ -9312,6 +9329,9 @@ class PrintSettingsDialog(QDialog):
             slot_profiles=slot_profiles,
             with_settings=with_settings,
             scene=None if self.session.last_result is None else self.session.last_result.scene,
+            names=(
+                None if self.session.last_result is None else self.session.last_result.object_names
+            ),
             document=self.session.project.document,
             inputs=StoredInputs.snapshot(
                 self.session.project,
@@ -9351,7 +9371,8 @@ class PrintSettingsDialog(QDialog):
             slots = threemf.merge_slots(
                 [
                     threemf.AssemblyPart(
-                        mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                        mesh=geom_mesh.as_mesh_data(entry.mesh),
+                        slots=threemf.slots_for_object(entry),
                     )
                     for entry in objects
                     if entry.plate == plate
@@ -9643,7 +9664,7 @@ class PrintSettingsDialog(QDialog):
             self._save_copies if isinstance(self._worker, _GcodeSaveWorker) else None
         )
         try:
-            show_error(problem, self)
+            dialogs.show_error(problem, self)
         finally:
             self._failed_save_copies = None
 

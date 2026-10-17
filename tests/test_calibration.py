@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import dataclasses
+import importlib
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from app.core import scene as core_scene
 from app.core.errors import FileWriteError, ValidationError
 from app.core.knowledge import calibration, profiles
 from app.core.knowledge.parts import PARTS
@@ -690,7 +692,7 @@ def test_the_steps_before_the_parameter_are_computed_once(
                 hits.append(key)
             return found
 
-    real_evaluate = variants.evaluate
+    real_evaluate = core_scene.evaluate
 
     def remembering(*args, **kwargs):  # type: ignore[no-untyped-def]
         qualities.append(kwargs["quality"])
@@ -699,7 +701,7 @@ def test_the_steps_before_the_parameter_are_computed_once(
     # Der gemeinsame Cache der Varianten kommt aus ``disk_backed_cache``; hier
     # ohne Platte, damit jeder Treffer aus diesem einen Aufruf stammt.
     monkeypatch.setattr(variants, "disk_backed_cache", Counting)
-    monkeypatch.setattr(variants, "evaluate", remembering)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", remembering)
 
     made = variants.build(
         project.document,
@@ -1369,3 +1371,40 @@ def test_the_dialog_shows_in_front_what_the_test_body_delivers(
         finally:
             dialog.close()
             dialog.deleteLater()
+
+
+def test_an_unmeasured_material_says_it_is_not_calibrated_yet(
+    own_profiles: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """FD-8: Der Stand hieß „Startwert“ — das Wort sagte nicht, dass noch nicht
+    gemessen wurde, und meint sonst den Startwert einer Erzeugung. Dialog,
+    Kommandozeile und Agentenauszug fragen dieselbe Quelle."""
+    import argparse
+
+    from app.cli.main import command_profiles
+
+    material = profiles.material("petg")
+    assert not material.calibrated, "Vorbedingung: das mitgelieferte Profil ist ungemessen"
+    assert str(calibration.state_text(material)) == "noch nicht kalibriert"
+    assert command_profiles(argparse.Namespace()) == 0
+    printed = capsys.readouterr().out
+    assert "noch nicht kalibriert" in printed
+    assert "Startwert" not in printed
+
+
+def test_the_dialog_heading_says_whether_the_material_is_measured(
+    own_profiles: Path, qt_app: object
+) -> None:
+    """FD-8 am Dialog: „PETG — noch nicht kalibriert“ statt „PETG — Startwert“."""
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.calibration_dialog import CalibrationDialog
+
+    dialog = CalibrationDialog("petg")
+    try:
+        texts = [label.text() for label in dialog.findChildren(QLabel)]
+        title = str(profiles.material("petg").title)
+        assert f"{title} — noch nicht kalibriert" in texts
+    finally:
+        dialog.close()
+        dialog.deleteLater()

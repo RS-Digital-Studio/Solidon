@@ -5664,12 +5664,21 @@ def test_a_new_search_forgets_the_held_stock(
     (base / "OrcaSlicer").mkdir(parents=True)
     # Auch die Nutzerwurzeln gealtert: Den Sitzungsordner berühren unter ``-n 6``
     # andere Tests desselben Arbeiters, und jünger als ``SETTLE_NS`` listete die
-    # Suche ihn neu (Kurzreview RM-628, N2).
-    for variable in ("APPDATA", "LOCALAPPDATA"):
+    # Suche ihn neu (Kurzreview RM-628, N2). Alle Wurzeln, nicht nur die von
+    # Windows: Unter Linux liest die Suche ``XDG_CONFIG_HOME``, unter macOS
+    # ``~/Library/Application Support``.
+    from app.core.paths import PROFILE_VARIABLES
+
+    for variable in PROFILE_VARIABLES:
         root = tmp_path / variable.casefold()
         root.mkdir()
         monkeypatch.setenv(variable, str(root))
+    (tmp_path / "home" / "Library" / "Application Support").mkdir(parents=True)
     _settle(tmp_path)
+    user_base = Path(sp.config_base(slicer))
+    assert user_base.is_relative_to(tmp_path), (
+        f"premise: die Nutzerwurzel ist gealtert: {user_base}"
+    )
     sp.find_profiles(slicer, "orca", ("machine",))
     sp._program_folders(base, "orcaslicer")
     reads = _counting(monkeypatch, "_read")

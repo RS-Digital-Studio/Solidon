@@ -82,7 +82,8 @@ from shapely.geometry import LineString
 from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.ops import unary_union
 
-from app.core.slice.analysis import _cross_shape, _material_cross
+from app.core.slice import analysis
+from app.core.slice.analysis import _cross_shape
 from app.core.types import CancelToken, PrintSettings, SliceResult
 from app.core.units import EPS_GEOM
 
@@ -475,7 +476,9 @@ def _materials(result: SliceResult) -> list[manifold3d.CrossSection]:
     crosses: list[manifold3d.CrossSection] = []
     for info in result.layers:
         shapes = [ShapelyPolygon(contour.outline, list(contour.holes)) for contour in info.contours]
-        crosses.append(_material_cross(unary_union(shapes).buffer(0)) if shapes else _EMPTY)
+        crosses.append(
+            analysis._material_cross(unary_union(shapes).buffer(0)) if shapes else _EMPTY
+        )
     return crosses
 
 
@@ -920,7 +923,10 @@ def _support_columns(
         pieces = result.layers[index].overhangs
         if pieces:
             hanging = manifold3d.CrossSection.batch_boolean(
-                [_material_cross(ShapelyPolygon(p.outline, list(p.holes))) for p in pieces],
+                [
+                    analysis._material_cross(ShapelyPolygon(p.outline, list(p.holes)))
+                    for p in pieces
+                ],
                 manifold3d.OpType.Add,
             )
             if above is None:

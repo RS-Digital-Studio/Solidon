@@ -47,18 +47,19 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListView,
     QListWidget,
     QListWidgetItem,
     QMenu,
     QPushButton,
     QSizePolicy,
-    QSpinBox,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 from shiboken6 import isValid
 
+from app.core import guides
 from app.core.errors import AppError, SketchConflictError, ValidationError
 from app.core.sketch import edit, shapes
 from app.core.sketch.planes import (
@@ -97,6 +98,7 @@ from app.core.types import (
 from app.core.units import DEGREE_UNIT, EPS_DISPLAY
 from app.i18n import TranslatableText, _, tr
 from app.ui import cursors, icons, style
+from app.ui.grouped_spin import GroupedIntSpin
 from app.ui.labels import (
     LengthSpin,
     circle_measure,
@@ -112,6 +114,7 @@ from app.ui.labels import (
 )
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import ROLES, text_colour
+from app.ui.report_rows import WrappedRowDelegate
 from app.ui.shortcut_schemes import delete_keys, deletes, redo_keys
 from app.ui.viewport import MEASURE_GAP
 
@@ -6476,7 +6479,7 @@ class SketchPanel(QWidget):
         # ihrem Werkzeug: Ein Feld, das bei jedem anderen Werkzeug dasteht,
         # ist eine Einstellung ohne Gegenstand — und es kostet die Zeile
         # Breite, die sie im Normalzustand nicht hat.
-        self.polygon_corners_field = QSpinBox(self)
+        self.polygon_corners_field = GroupedIntSpin(self)
         self.polygon_corners_field.setRange(LEAST_POLYGON_CORNERS, MOST_POLYGON_CORNERS)
         self.polygon_corners_field.setValue(DEFAULT_POLYGON_CORNERS)
         corners_note = tr("Wie viele Ecken das Vieleck bekommt — drei bis zwölf.")
@@ -6507,7 +6510,7 @@ class SketchPanel(QWidget):
         # Lochs. Wie Eckenzahl und Breite entscheiden sie, *was* entsteht, und
         # stehen nur bei ihrem Werkzeug da.
         columns_note = tr("Spalten des Lochrasters — Löcher in x-Richtung.")
-        self.grid_columns_field = QSpinBox(self)
+        self.grid_columns_field = GroupedIntSpin(self)
         self.grid_columns_field.setRange(1, MOST_HOLE_GRID_LINES)
         self.grid_columns_field.setValue(DEFAULT_GRID_COLUMNS)
         self.grid_columns_field.setToolTip(columns_note)
@@ -6520,7 +6523,7 @@ class SketchPanel(QWidget):
         )
         tools.addWidget(self.grid_columns_field)
         rows_note = tr("Zeilen des Lochrasters — Löcher in y-Richtung.")
-        self.grid_rows_field = QSpinBox(self)
+        self.grid_rows_field = GroupedIntSpin(self)
         self.grid_rows_field.setRange(1, MOST_HOLE_GRID_LINES)
         self.grid_rows_field.setValue(DEFAULT_GRID_ROWS)
         self.grid_rows_field.setToolTip(rows_note)
@@ -6533,7 +6536,7 @@ class SketchPanel(QWidget):
         )
         tools.addWidget(self.grid_rows_field)
         count_note = tr("Löcher auf dem Lochkreis.")
-        self.bolt_count_field = QSpinBox(self)
+        self.bolt_count_field = GroupedIntSpin(self)
         self.bolt_count_field.setRange(edit.LEAST_PATTERN_HOLES, edit.MOST_BOLT_CIRCLE_HOLES)
         self.bolt_count_field.setValue(DEFAULT_BOLT_COUNT)
         self.bolt_count_field.setToolTip(count_note)
@@ -6859,6 +6862,7 @@ class SketchPanel(QWidget):
         self.selection_tools.setAccessibleName(tr("Werkzeuge für die Auswahl"))
 
         self.coordinate_button = QToolButton(self.selection_tools)
+        self.coordinate_button.setProperty(guides.TARGET_PROPERTY, "sketch.coordinates")
         self.coordinate_button.setText(tr("Koordinaten …"))
         self.coordinate_button.setToolTip(
             tr("Den gewählten Punkt über genaue Koordinaten verschieben.")
@@ -6988,6 +6992,7 @@ class SketchPanel(QWidget):
                 )
             )
             constraint_button.clicked.connect(weak_slot(self, SketchPanel.request_constraint, kind))
+            constraint_button.setProperty(guides.TARGET_PROPERTY, f"sketch.constrain:{kind}")
             self._constraint_buttons[kind] = constraint_button
             constraints_row.addWidget(
                 constraint_button, position // CONSTRAINTS_PER_ROW, position % CONSTRAINTS_PER_ROW
@@ -7035,6 +7040,11 @@ class SketchPanel(QWidget):
         # Linie 1 Ende, Linie 2 Anfang" ist länger als die 254 Pixel der Spalte,
         # und ein abgeschnittener Eintrag wäre schlechter als die Zahlen vorher.
         self.constraint_list.setWordWrap(True)
+        # Gemessen, wie gezeichnet wird, und bei jeder Breite neu: Qt misst
+        # ohne die Auswahlkante und ohne Runden bei 125 % und kürzte so im
+        # Prüfbericht die letzte Zeile auf „…“ (FD-109).
+        self.constraint_list.setResizeMode(QListView.ResizeMode.Adjust)
+        self.constraint_list.setItemDelegate(WrappedRowDelegate(self.constraint_list))
         # Überfahren lässt die betroffene Geometrie aufleuchten (E19). Ohne das
         # ist „Deckung (1, 2)" nicht lesbar: welche zwei Punkte das sind, weiß
         # nur, wer die flache Nummerierung im Kopf hat.

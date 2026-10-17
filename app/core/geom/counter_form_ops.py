@@ -30,10 +30,11 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
-from app.core.geom import transform
-from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest, without_effect
-from app.core.geom.mesh import MeshData, as_mesh_data, stable_normals
-from app.core.knowledge.profiles import for_object
+from app.core.geom import boolean, transform
+from app.core.geom import mesh as geom_mesh
+from app.core.geom.boolean import BOOLEAN_OVERLAP, deepest, without_effect
+from app.core.geom.mesh import MeshData, stable_normals
+from app.core.knowledge import profiles
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
 from app.core.registry.params import ZERO_NONE
 from app.core.types import (
@@ -191,7 +192,7 @@ def cut_counter_form(ctx: OpContext) -> OpResult:
                 constraint="no_profile",
                 suggestions=(CORRECT_INPUT,),
             )
-        clearance = for_object(ctx.profile, insert).material.clearance
+        clearance = profiles.for_object(ctx.profile, insert).material.clearance
     u, v, w = _frame(params.axis, params.reverse)
     exact = isinstance(insert.mesh, BRepBody)
     insert_low, insert_high = _along(insert.mesh, w)
@@ -200,7 +201,7 @@ def cut_counter_form(ctx: OpContext) -> OpResult:
     pockets: list[tuple[Any, float]] = []
     for tool in tools:
         ctx.cancelled.raise_if_cancelled()
-        shape = as_mesh_data(tool.mesh)
+        shape = geom_mesh.as_mesh_data(tool.mesh)
         low, _high = _along(tool.mesh, w)
         outline = _silhouette(shape, u, v, w).buffer(clearance / 2.0, join_style=2)
         if params.grip > EPS_GEOM:
@@ -258,9 +259,9 @@ def cut_counter_form(ctx: OpContext) -> OpResult:
             known_threads=threads_to_read(insert.features),
         )
     else:
-        mesh = as_mesh_data(insert.mesh)
+        mesh = geom_mesh.as_mesh_data(insert.mesh)
         tool_meshes = [_mesh_pocket(outline, start, top, u, v, w) for outline, start in pockets]
-        outcome = boolean(
+        outcome = boolean.boolean(
             "difference",
             [mesh, *tool_meshes],
             quality=ctx.quality,

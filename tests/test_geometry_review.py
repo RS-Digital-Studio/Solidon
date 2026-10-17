@@ -14,6 +14,7 @@ Darum prüft fast jeder Test hier **Kennzahlen** gegen erwartete Werte statt
 from __future__ import annotations
 
 import math
+import sys
 from dataclasses import replace
 from typing import Any
 
@@ -24,13 +25,6 @@ import trimesh
 from app.core.bootstrap import load_operations
 from app.core.errors import OperationCancelled
 from app.core.geom import boolean as boolean_module
-from app.core.geom import hollow as hollow_module
-from app.core.geom import label_ops as label_module
-from app.core.geom import lattice as lattice_module
-from app.core.geom import lid as lid_module
-from app.core.geom import pins as pins_module
-from app.core.geom import prepare as prepare_module
-from app.core.geom import texture_ops as texture_module
 from app.core.geom.hollow import erosion_steps, hollow
 from app.core.geom.lattice import _cavity_mesh
 from app.core.geom.measure import ray_distances
@@ -608,6 +602,19 @@ def tin() -> MeshData:
     return hollow(cube(standing=True), 3.0, vents=0, open_top=True).mesh
 
 
+#: Wo die Bausteinbibliothek ihre Formen baut — heute fein und ohne Abbruch. Ob der Bau
+#: eines Bausteins in einer Op der Entwurfsstufe und dem Abbruch folgen soll, ist offen
+#: (FD-229); bis dahin zählen die Proben nur die Rechnung der Op selbst.
+PART_BUILD = "app.core.knowledge.parts.build"
+
+
+def _from_the_op() -> bool:
+    """Ob der Aufruf der Kette, den der Ersatz gerade sieht, aus der Op kommt und nicht aus
+    dem Bau eines Bausteins (zwei Rahmen tiefer: Ersatz, dann sein Aufrufer). Seit die Ops
+    die Kette zur Aufrufzeit lesen (CS-11), sieht ein Ersatz am Original beides."""
+    return sys._getframe(2).f_globals.get("__name__") != PART_BUILD
+
+
 def test_a_lid_without_a_collar_has_no_collar_feature(profile: Profile) -> None:
     """Eine Passung misst sonst Geometrie, die es nicht gibt — und meldet sie
     als in Ordnung, denn die Zahlen im Merkmal stimmen ja."""
@@ -678,19 +685,19 @@ def test_splitting_with_pins_reports_the_fallback_stage(profile: Profile) -> Non
 
 
 @pytest.mark.parametrize(
-    ("module", "op", "params"),
+    ("op", "params"),
     [
-        (hollow_module, "hollow_object", {"wall": 2.0, "vents": 0}),
-        (lid_module, "create_lid", {"thickness": 2.4, "collar": 4.0}),
-        (lid_module, "screw_lid", {"pitch": 3.0, "height": 8.0}),
-        (pins_module, "split_pinned", {"axis": "z", "position": 20.0, "pins": 2}),
-        (prepare_module, "compensate_first_layer", {"height": 0.6, "amount": 0.2}),
-        (lattice_module, "lattice_fill", {"structure": "cubic", "cell": 8.0, "wall": 1.2}),
+        ("hollow_object", {"wall": 2.0, "vents": 0}),
+        ("create_lid", {"thickness": 2.4, "collar": 4.0}),
+        ("screw_lid", {"pitch": 3.0, "height": 8.0}),
+        ("split_pinned", {"axis": "z", "position": 20.0, "pins": 2}),
+        ("compensate_first_layer", {"height": 0.6, "amount": 0.2}),
+        ("lattice_fill", {"structure": "cubic", "cell": 8.0, "wall": 1.2}),
     ],
     ids=["hollow", "lid", "screw_lid", "pins", "elephant_foot", "lattice"],
 )
 def test_the_quality_setting_reaches_the_boolean_chain(
-    module: Any, op: str, params: dict[str, Any], profile: Profile, monkeypatch: pytest.MonkeyPatch
+    op: str, params: dict[str, Any], profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Checkliste Punkt 5: beide Qualitätsstufen bedienen.
 
@@ -698,22 +705,23 @@ def test_the_quality_setting_reaches_the_boolean_chain(
     stehen — in Entwurfsqualität lief die volle Kette weiter, und §31 verlor
     genau dort seine Wirkung, wo eine Op teuer ist.
     """
-    seen: list[str] = []
-    # ``lattice`` importiert die Kette erst im Aufruf; dort muss die Quelle
-    # ausgetauscht werden, sonst greift der Ersatz an einem Namen, den niemand
-    # liest — und der Test wäre grün, ohne etwas zu messen.
-    target = module if hasattr(module, "boolean") else boolean_module
-    original = target.boolean
-
-    def recording(kind: str, meshes: list[Any], **kwargs: Any) -> Any:
-        seen.append(str(kwargs.get("quality", "fine")))
-        return original(kind, meshes, **kwargs)
-
-    monkeypatch.setattr(target, "boolean", recording)
     source = tin() if op in {"create_lid", "screw_lid", "lattice_fill"} else cube(standing=True)
     if op == "lattice_fill":
         source = hollow(cube(standing=True), 3.0, vents=0).mesh
     entry = SceneObject(id="obj_1", name="Teil", mesh=source)
+    seen: list[str] = []
+    original = boolean_module.boolean
+
+    def recording(kind: str, meshes: list[Any], **kwargs: Any) -> Any:
+        if _from_the_op():
+            seen.append(str(kwargs.get("quality", "fine")))
+        return original(kind, meshes, **kwargs)
+
+    # Ersetzt wird die Kette erst nach dem Bau der Vorlage, und zwar im eigenen
+    # Modul: Jede Op liest sie dort zur Aufrufzeit (CS-11) — sonst griffe der
+    # Ersatz an einem Namen, den niemand liest, und der Test wäre grün, ohne
+    # etwas zu messen.
+    monkeypatch.setattr(boolean_module, "boolean", recording)
 
     spec = REGISTRY.get(op)
     spec.fn(
@@ -735,16 +743,15 @@ def test_the_quality_setting_reaches_the_boolean_chain(
 
 
 @pytest.mark.parametrize(
-    ("module", "op", "params"),
+    ("op", "params"),
     [
-        (hollow_module, "hollow_object", {"wall": 2.0, "vents": 1}),
-        (lattice_module, "lattice_fill", {"structure": "cubic", "cell": 8.0, "wall": 1.2}),
-        (pins_module, "split_pinned", {"axis": "z", "position": 20.0, "pins": 2}),
-        (lid_module, "create_lid", {"thickness": 2.4, "collar": 4.0}),
-        (lid_module, "screw_lid", {"pitch": 3.0, "height": 8.0}),
-        (label_module, "label_text", {"text": "I", "size": 6.0, "depth": 0.6, "z": 40.0}),
+        ("hollow_object", {"wall": 2.0, "vents": 1}),
+        ("lattice_fill", {"structure": "cubic", "cell": 8.0, "wall": 1.2}),
+        ("split_pinned", {"axis": "z", "position": 20.0, "pins": 2}),
+        ("create_lid", {"thickness": 2.4, "collar": 4.0}),
+        ("screw_lid", {"pitch": 3.0, "height": 8.0}),
+        ("label_text", {"text": "I", "size": 6.0, "depth": 0.6, "z": 40.0}),
         (
-            texture_module,
             "apply_texture",
             {"pattern": "rib", "width": 4.0, "height": 4.0, "pitch": 2.0, "z": 40.0},
         ),
@@ -752,7 +759,7 @@ def test_the_quality_setting_reaches_the_boolean_chain(
     ids=["hollow", "lattice", "pins", "lid", "screw_lid", "label", "texture"],
 )
 def test_the_cancel_token_reaches_the_boolean_chain(
-    module: Any, op: str, params: dict[str, Any], profile: Profile, monkeypatch: pytest.MonkeyPatch
+    op: str, params: dict[str, Any], profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """§15.6: der Abbruch reicht bis in die Rückfallkette.
 
@@ -763,15 +770,6 @@ def test_the_cancel_token_reaches_the_boolean_chain(
     der Abbrechen-Knopf minutenlang still. Gemessen wird am Token selbst, nicht
     an einer Wirkung — der Wert muss ankommen.
     """
-    seen: list[Any] = []
-    target = module if hasattr(module, "boolean") else boolean_module
-    original = target.boolean
-
-    def recording(kind: str, meshes: list[Any], **kwargs: Any) -> Any:
-        seen.append(kwargs.get("cancelled"))
-        return original(kind, meshes, **kwargs)
-
-    monkeypatch.setattr(target, "boolean", recording)
     if op in {"create_lid", "screw_lid"}:
         source = tin()
     elif op == "lattice_fill":
@@ -780,6 +778,16 @@ def test_the_cancel_token_reaches_the_boolean_chain(
         source = cube(standing=True)
     entry = SceneObject(id="obj_1", name="Teil", mesh=source)
     token = NeverCancelled()
+    seen: list[Any] = []
+    original = boolean_module.boolean
+
+    def recording(kind: str, meshes: list[Any], **kwargs: Any) -> Any:
+        if _from_the_op():
+            seen.append(kwargs.get("cancelled"))
+        return original(kind, meshes, **kwargs)
+
+    # Wie oben: nach dem Bau der Vorlage, im eigenen Modul der Kette.
+    monkeypatch.setattr(boolean_module, "boolean", recording)
 
     spec = REGISTRY.get(op)
     spec.fn(

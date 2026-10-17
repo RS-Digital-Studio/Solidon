@@ -17,12 +17,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.core.bootstrap import load_operations
+from app.core import bootstrap, scene
 from app.core.examples import directory, render_preview
 from app.core.generate import from_text
 from app.core.knowledge import profiles
 from app.core.lid_flow import apply_lid
-from app.core.scene import History, OperationDraft, evaluate
+from app.core.scene import History, OperationDraft
 from app.core.scene.project import Project, ProjectSources, new_project, save
 from app.core.types import Parameter, Source, SourceKind
 from app.i18n import TranslatableText, _
@@ -690,7 +690,7 @@ def split_oversized() -> Project:
         ],
     )
     profile = profiles.make_profile()
-    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    result = scene.evaluate(project.document, profile, sources=ProjectSources(project))
     entry = result.scene.objects["obj_1"]
     # Derselbe Rand wie in der Oberfläche: der Abstand, mit dem danach
     # angeordnet wird — sonst passt ein Stück zum Teilen und liegt nach dem
@@ -1074,7 +1074,7 @@ def mark_translatable(project: Project) -> None:
 
 
 def main() -> int:
-    load_operations()
+    bootstrap.load_operations()
     # Die Vorgaben und **kein** benannter Drucker: Ein Beispiel soll den Weg
     # zeigen, nicht die Werkstatt dessen, der es gebaut hat. Trug es einen
     # Drucker, überschrieb es beim Öffnen die Wahl, die der Kunde im ersten
@@ -1096,7 +1096,7 @@ def main() -> int:
         project = BUILDERS[example.id]()
         fixed_seeds(project)
         mark_translatable(project)
-        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        result = scene.evaluate(project.document, profile, sources=ProjectSources(project))
         if not result.complete:
             print(f"-- {example.id}: Kette hält an")
             for finding in result.scene.report.findings:

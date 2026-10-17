@@ -37,10 +37,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import guides
 from app.core.backends import llm, mesh
 from app.core.log import get_logger
 from app.i18n import get_language, tr
-from app.ui.settings import UiSettings, is_utc_timestamp, save_settings, utc_timestamp
+from app.ui import settings as ui_settings
+from app.ui import style
+from app.ui.settings import is_utc_timestamp, save_settings, utc_timestamp
 from app.ui.style import (
     NORMAL,
     ROOMY,
@@ -48,7 +51,6 @@ from app.ui.style import (
     TIGHT,
     WIDE,
     DialogScrollArea,
-    fit_dialog_to_screen,
     make_primary,
     no_primary,
     set_level,
@@ -285,7 +287,7 @@ def clear_disclosure(settings: Any, target: AiDisclosureTarget | None = None) ->
 
 
 def ensure_ai_disclosure(
-    settings: UiSettings,
+    settings: ui_settings.UiSettings,
     backend_or_target: Any,
     parent: QWidget | None = None,
 ) -> DisclosureResult:
@@ -388,6 +390,7 @@ class AiDisclosureDialog(QDialog):
             tr("Öffnet die mit Solidon ausgelieferte Datenschutzerklärung ohne Netzverbindung."),
             self.provider_card,
         )
+        self.local_privacy_link.setProperty(guides.TARGET_PROPERTY, "disclosure.privacy")
         self.local_privacy_link.activated.connect(self._open_notice_link)
         provider_layout.addWidget(self.local_privacy_link)
 
@@ -456,6 +459,7 @@ class AiDisclosureDialog(QDialog):
         scroll_bar.rangeChanged.connect(self._scroll_range_changed)
 
         self.continue_button = QPushButton(tr("KI-Anfrage fortsetzen"), self)
+        self.continue_button.setProperty(guides.TARGET_PROPERTY, "disclosure.continue")
         self.continue_button.setAccessibleName(self.continue_button.text())
         self.continue_button.setAccessibleDescription(
             tr("Setzt den bereits angeforderten KI-Aufruf fort.")
@@ -588,7 +592,7 @@ class AiDisclosureDialog(QDialog):
             if wanted != self._wanted_height:
                 self._wanted_height = wanted
                 self.resize(self.width(), wanted)
-        fit_dialog_to_screen(self)
+        style.fit_dialog_to_screen(self)
         if own:
             self._fitted_height = self.height()
 

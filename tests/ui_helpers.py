@@ -560,10 +560,51 @@ def end_card_drag(widget, end):
     )
 
 
+def cards_at_rest(window: Any) -> bool:
+    """Ob keine Seitenkarte mehr gleitet und kein Setzen der Zonen vorgemerkt ist.
+
+    Eine Karte gleitet ``overlay.MOVE_MS`` zu ihrem Platz, auch offscreen nach
+    der Wanduhr. Wer währenddessen liest, sieht eine Zwischenlage, die der
+    Kunde nach dem Gleiten nicht mehr hat, und wie weit die Bewegung in einer
+    festen Zahl Ereignisrunden kommt, hängt an der Rechnerlast (FD-157). Jeder
+    Schritt der Karte setzt auch die Maßkarte neu und kostet ein Bild (FD-202).
+    """
+    overlay = window.overlay
+    return not overlay._moves and overlay._pending is None
+
+
+def wait_for_resting_cards(qt_app: QApplication) -> None:
+    """Ereignisse zustellen, bis in jedem gezeigten Hauptfenster die Karten ruhen.
+
+    Gewartet wird auf den Zustand, nicht auf eine Zahl Runden, mit
+    ``processEvents`` und ``time.sleep``: die Bewegung braucht Wanduhrzeit.
+    """
+    windows = [
+        widget
+        for widget in qt_app.topLevelWidgets()
+        if isinstance(widget, MainWindow) and widget.isVisible()
+    ]
+    deadline = time.monotonic() + 60
+    while not all(cards_at_rest(window) for window in windows) and time.monotonic() < deadline:
+        qt_app.processEvents()
+        time.sleep(0.01)
+    assert all(cards_at_rest(window) for window in windows), (
+        "eine Seitenkarte gleitet nach 60 s noch"
+    )
+
+
 def settle_measure_layout(qt_app):
-    """Layoutaufträge zustellen, ohne die Produktanordnung von Hand anzustoßen."""
+    """Layoutaufträge zustellen, ohne die Produktanordnung von Hand anzustoßen.
+
+    Erst die festen Runden (Layoutaufträge und Nullzeitgeber), dann bis die
+    Seitenkarten ruhen (:func:`wait_for_resting_cards`): Nach der Wahl einer
+    Bohrung gleiten sie 160 ms, und jeder Schritt setzt die Maßkarte neu. Der
+    Klappfall zählte diese Bilder als eigene Schleife, sobald die 20 Runden
+    schneller waren als die Bewegung (FD-202).
+    """
     for _ in range(20):
         qt_app.processEvents()
+    wait_for_resting_cards(qt_app)
 
 
 def measure_more_heading(flow):

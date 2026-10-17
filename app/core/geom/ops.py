@@ -22,18 +22,18 @@ from app.core.errors import (
     AppError,
     GeometryError,
 )
+from app.core.geom import attributes, boolean
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.align import align_matrix
-from app.core.geom.attributes import used_slots
 from app.core.geom.boolean import (
     NO_COMMON_PART_DETAIL,
     NO_COMMON_PART_TITLE,
     NOTHING_LEFT_DETAIL,
     NOTHING_LEFT_TITLE,
     BooleanKind,
-    boolean,
     without_effect,
 )
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData
 from app.core.geom.prepare import (
     free_spot_param,
     placed_at_free_spot,
@@ -212,7 +212,7 @@ def _held_on_bed(
     # Um die Körper der Platte, auf der er ankommt — nach einem Wechsel ist
     # das nicht mehr die, von der er kam.
     others = [
-        as_mesh_data(other.mesh)
+        geom_mesh.as_mesh_data(other.mesh)
         for key, other in ctx.scene.objects.items()
         if key != source.id and other.plate == moved.plate
     ]
@@ -1068,7 +1068,7 @@ def repair_object(ctx: OpContext) -> OpResult:
     params = cast(RepairParams, ctx.params)
     source = ctx.inputs[0]
     result = repair(
-        as_mesh_data(source.mesh),
+        geom_mesh.as_mesh_data(source.mesh),
         weld=params.weld,
         degenerate=params.degenerate,
         normals=params.normals,
@@ -1139,7 +1139,7 @@ def _material_slots_after_boolean(
     for entry in sources:
         for slot in entry.material_slots:
             known.setdefault(slot.index, slot)
-    present = set(used_slots(mesh))
+    present = set(attributes.used_slots(mesh))
     return [known[index] for index in sorted(known) if index in present]
 
 
@@ -1209,15 +1209,17 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
                     mesh=solid,
                     kind="brep",
                     features=features_of(solid, cancelled=ctx.cancelled),
-                    material_slots=_material_slots_after_boolean(ctx, kind, as_mesh_data(solid)),
+                    material_slots=_material_slots_after_boolean(
+                        ctx, kind, geom_mesh.as_mesh_data(solid)
+                    ),
                 )
             ],
             solver=SolverInfo(strategy="direct", attempted=("direct",)),
             findings=([nothing] if nothing is not None else [])
             + (union_bore_findings(ctx, solid) if kind == "union" else []),
         )
-    bodies = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
-    outcome = boolean(
+    bodies = [geom_mesh.as_mesh_data(entry.mesh) for entry in ctx.inputs]
+    outcome = boolean.boolean(
         kind,
         bodies,
         quality=ctx.quality,

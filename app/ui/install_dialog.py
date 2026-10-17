@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import discover, install, tools
+from app.core import discover, guides, install, tools
 from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.input_dialog import ask_text
@@ -194,6 +194,7 @@ class _Row(QWidget):
         self.where.setTextFormat(Qt.TextFormat.PlainText)
 
         self.action = QPushButton(tr("Installieren"), self)
+        self.action.setProperty(guides.TARGET_PROPERTY, "install.action")
         # Gebundene Methoden, keine Lambdas: Ein Lambda, das ``self`` fängt,
         # an einem Knopf, der Kind von ``self`` ist, schließt den Ring aus
         # ``wartezeit.md`` — die Zeile lebte dann bis zum Prozessende. Das
@@ -206,6 +207,8 @@ class _Row(QWidget):
         # kann. Wo das Requirement einen ``follow_up`` trägt, steht hier der
         # Knopf dafür, sobald das Programm da ist.
         self.follow = QPushButton(str(requirement.follow_up_title), self)
+        if requirement.follow_up == "comfyui":
+            self.follow.setProperty(guides.TARGET_PROPERTY, "install.follow.comfyui")
         self.follow.clicked.connect(self._request_follow_up)
         self.follow.setVisible(False)
         self.launch = QPushButton(tr("Lokal starten"), self)
@@ -219,10 +222,12 @@ class _Row(QWidget):
             tr("Lokale Anwendung auswählen oder eine Web-/Netzadresse verwenden.")
         )
         if self.tool is not None and self.tool.kind == "service" and self.tool.startable:
+            self.locate.setProperty(guides.TARGET_PROPERTY, "install.locate")
             location_menu = QMenu(self.locate)
             local_action = location_menu.addAction(tr("Lokale App auswählen …"))
             local_action.triggered.connect(self._choose_file)
             address_action = location_menu.addAction(tr("Web-/Netzadresse verwenden …"))
+            address_action.setObjectName("install.address")
             address_action.triggered.connect(self._choose_address)
             self.locate.setMenu(location_menu)
         else:
@@ -270,11 +275,11 @@ class _Row(QWidget):
         self._name_state(str(tr("Vorhanden") if here else tr("Fehlt")))
         self.action.setVisible(not here)
         self.action.setEnabled(not here and status.installable)
-        # Jeder neue Status ersetzt den Grund in allen drei Hilfekanälen.
-        # Eine alte Absage darf nach dem Freischalten nicht stehen bleiben.
+        # Jeder neue Status ersetzt den Grund in Tooltip und Beschreibung; ein
+        # Knopf trägt keinen Statustipp (RM-509). Eine alte Absage darf nach
+        # dem Freischalten nicht stehen bleiben.
         reason = "" if here or status.installable else str(status.reason)
         self.action.setToolTip(reason)
-        self.action.setStatusTip(reason)
         self.action.setAccessibleDescription(reason)
         # Der zweite Schritt erscheint, sobald der erste getan ist — vorher
         # wäre er ein Angebot, etwas einzurichten, das es nicht gibt.
@@ -567,6 +572,7 @@ class InstallDialog(QDialog):
         # Protokoll steht daneben für den, der es weitergeben will.
         self._details = ""
         self.details_button = QPushButton(tr("Details anzeigen"), self)
+        self.details_button.setProperty(guides.TARGET_PROPERTY, "install.details")
         self.details_button.setVisible(False)
         self.details_button.clicked.connect(self._show_details)
         # **Ein Knopf für alles Fehlende.** Sieben Zeilen einzeln zu drücken

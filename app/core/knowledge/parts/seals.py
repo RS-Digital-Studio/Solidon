@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
+from app.core.geom import mesh as geom_mesh
 from app.core.geom.boolean import BOOLEAN_OVERLAP
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData
 from app.core.geom.seal import seal_geometry
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.registry import (
@@ -171,7 +172,7 @@ def _surface(
 
 def seal_features(body: Form, *, gasket: bool, rounded: bool = False) -> dict[str, Feature]:
     """Geometrisch belegte Kontakt-, Boden- und Mantelbereiche eines neuen Rings."""
-    mesh = as_mesh_data(body)
+    mesh = geom_mesh.as_mesh_data(body)
     exact = None if isinstance(body, MeshData) else body
     normals = mesh.raw.face_normals
     if rounded:

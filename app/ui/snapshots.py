@@ -18,7 +18,7 @@ from typing import Any
 from PySide6.QtCore import QBuffer, QIODevice
 from PySide6.QtGui import QImage
 
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom import mesh
 from app.core.types import Scene
 from app.i18n import tr
 from app.ui.render.api import CameraPose, SurfaceStyle
@@ -41,7 +41,7 @@ def scene_views(scene: Scene) -> tuple[tuple[str, bytes], ...]:
     try:
         bounds: list[tuple[float, float, float, float, float, float]] = []
         for object_id, entry in scene.objects.items():
-            raw = as_mesh_data(entry.mesh).raw
+            raw = mesh.as_mesh_data(entry.mesh).raw
             item = view.add_surface(
                 np.asarray(raw.vertices, dtype=float),
                 np.asarray(raw.faces, dtype=np.int64),

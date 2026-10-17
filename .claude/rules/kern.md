@@ -274,9 +274,12 @@ Programmfehler sieht nie wie ein Bedienfehler aus, und umgekehrt.
 **Ein Befund, der sagt, was ein Schritt mit seinem Wert getan hat, öffnet
 diesen Schritt** (RM-374): `suggestions=(errors.CHANGE_…,)` mit der Kennung
 `change_step`, das Feld in `values["field"]`, eingetragen in
-`MEINT_DEN_SCHRITT` (`tests/test_finding_ways.py`). Ändert sich ein Befund
-einer Operation, steigt ihre `cache_version` — der Plattencache gäbe ihn sonst
-alt zurück.
+`MEINT_DEN_SCHRITT` (`tests/test_finding_ways.py`). Das Feld steht im
+Schema der Operation, sonst führt der Weg ins Leere (Skizzenebene: `sketch`,
+FD-182). Ändert sich ein Befund einer Operation, steigt ihre `cache_version`
+— der Plattencache gäbe ihn sonst alt zurück.
+Auswahlhandlungen (`CHANGE_EDGES`/`FACES`/`FEATURE`) passt die Auswertung an
+den auslösenden Schritt an (`scene.choice_ways`).
 
 Ins Protokoll gehen Kennzahlen, nie Geometriedaten; hinaus nur, wenn der
 Nutzer es selbst anhängt (§33.2) — sonst wäre es Telemetrie. **Der einzige Weg

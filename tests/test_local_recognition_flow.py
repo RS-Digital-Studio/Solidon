@@ -25,7 +25,9 @@ from tests.ui_helpers import wait_until
 def local_window(qt_app, monkeypatch, tmp_path):
     load_operations()
     evaluation = importlib.import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
+    from app.core.perceive import local
+
+    monkeypatch.setattr(local, "FEATURE_LIMIT_TRIANGLES", 1)
     monkeypatch.setattr(evaluation, "CONFIRMED_FEATURE_LIMIT_TRIANGLES", 1)
     path = tmp_path / "blind.stl"
     path.write_bytes(blind_cylinder().raw.export(file_type="stl"))
@@ -561,18 +563,18 @@ def test_the_search_reuses_what_the_session_already_computed(local_window, qt_ap
     vor jeder Suche, solange keine gelang (Durchsicht 0.5.1). Gezählt wird, ob
     der Ladeschritt in der Suche noch einmal gerechnet wird.
     """
-    from app.ui import local_recognition as recognition_module
+    from app.core import scene
 
     session = local_window.session
     assert session.quality == "draft", "die Sitzung rechnet im Entwurf"
     qualities: list[str] = []
-    real = recognition_module.evaluate
+    real = scene.evaluate
 
     def watched(document, profile, **kwargs):
         qualities.append(kwargs.get("quality"))
         return real(document, profile, **kwargs)
 
-    monkeypatch.setattr(recognition_module, "evaluate", watched)
+    monkeypatch.setattr(importlib.import_module("app.core.scene.evaluate"), "evaluate", watched)
     before = session.cache.statistics.misses
     _flow, dialog = start(local_window, qt_app)
     assert qualities and set(qualities) == {session.quality}, qualities

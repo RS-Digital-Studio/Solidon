@@ -57,6 +57,8 @@ class FakeWidget:
     name: str
     zone: str = "karte_rechts"
     children: list[FakeWidget] = field(default_factory=list)
+    #: Bis wann der Knopf grau steht, nach der Uhr des Zeitgebers (``Ports.enabled``).
+    grey_until: float = 0.0
 
     def isAncestorOf(self, other: FakeWidget) -> bool:  # noqa: N802 - Qts Name
         return any(child is other or child.isAncestorOf(other) for child in self.children)
@@ -159,6 +161,9 @@ class FakePorts:
 
     def aim(self, click: FakeClick, point: tuple[int, int]) -> tuple[int, int]:
         return point
+
+    def enabled(self, widget: FakeWidget) -> bool:
+        return self.timer.now >= widget.grey_until
 
 
 def run_machine(

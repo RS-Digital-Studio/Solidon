@@ -28,7 +28,7 @@ from app.core.export.handover import (
     override_for,
     settings_for_slot,
 )
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom import mesh as geom_mesh
 from app.core.knowledge import print_settings, profiles
 from app.core.scene.hashing import digest, profile_key
 from app.core.scene.migrations import SAVED_IRONING
@@ -161,6 +161,14 @@ STORED_INPUTS: Final = "stored-inputs-1"
 #: verlangt vom Abdruck nur einen nichtleeren Text; ein Formatschritt entfällt.
 STORED_MARK: Final = "si1-"
 
+#: Die Formatversion, mit der 0.6.0 die Fassung eines eigenen Rezepts rechnete.
+#: Bis FD-212 stand sie im Hash des Rezepts (``recipe.fingerprint``), und 0.6.0
+#: migrierte jedes Rezept auf 52; seither rechnet die Fassung ohne sie. Der
+#: Abdruck einer Buchung aus 0.6.0 für einen Körper aus eigenem Rezept trägt die
+#: alte Fassung und steht deshalb als Vorabdruck da (FD-232, ``verbrauch.md``:
+#: nie still ersetzen).
+PART_FORMAT_060: Final = 52
+
 
 def from_stored_inputs(fingerprint: str) -> bool:
     """Wurde dieser Abdruck aus gespeicherten Eingängen gebildet (ab 0.6.0)?"""
@@ -213,6 +221,13 @@ class StoredInputs:
             return dict(self.known)
         return _stored_bodies(self)
 
+    def bodies_of_060(self) -> dict[ObjectId, str] | None:
+        """Die Abdrücke, die 0.6.0 je Körper rechnete — ``None``, wo sie gleich
+        wären, weil kein Schritt ein eigenes Rezept setzt (FD-232)."""
+        if not _sets_a_recipe(self.document):
+            return None
+        return _stored_bodies(self, part_format=PART_FORMAT_060)
+
     def settled(self) -> StoredInputs:
         """Derselbe Stand mit gerechneten Abdrücken — für einen Arbeiter, der je
         Platte bucht: Ein Gang über den Stapel liest jede verknüpfte Quelle ganz
@@ -222,7 +237,17 @@ class StoredInputs:
         return replace(self, known=self.bodies())
 
 
-def _stored_bodies(stored: StoredInputs) -> dict[ObjectId, str]:
+def _sets_a_recipe(document: Document) -> bool:
+    """Setzt ein Schritt dieses Dokuments einen Baustein aus einem Rezept?"""
+    from app.core.knowledge.parts.registry import PARTS, used_parts
+
+    return any(
+        PARTS.has(name) and PARTS.get(name).recipe_data is not None
+        for name in used_parts(document.ops)
+    )
+
+
+def _stored_bodies(stored: StoredInputs, *, part_format: int | None = None) -> dict[ObjectId, str]:
     """Geht den Stapel wie die Auswertung durch, ohne ein Netz zu rechnen.
 
     Je Schritt gehen ein: Name, gespeicherte Werte, Startwert, die Abdrücke
@@ -264,7 +289,7 @@ def _stored_bodies(stored: StoredInputs) -> dict[ObjectId, str]:
                 operation.seed,
                 inputs,
                 _read_beside(spec, operation, live, stored),
-                _part_versions(operation),
+                _part_versions(operation, part_format=part_format),
                 _answers(operation.matches),
             )
         )
@@ -487,9 +512,13 @@ def _leaves(value: object) -> tuple[tuple[int, Any], ...]:
     return ((2, str(value)),)
 
 
-def _part_versions(operation: Operation) -> list[str]:
+def _part_versions(operation: Operation, *, part_format: int | None = None) -> list[str]:
     """Die Fassung des Bausteins, den ein Schritt setzt: Maßänderungen tragen
-    eine neue (``PartChange``), eigene Bausteine den Abdruck ihrer Datei."""
+    eine neue (``PartChange``), eigene Bausteine den Abdruck ihrer Datei.
+
+    ``part_format`` rechnet die Fassung eines Rezepts nach der Formel bis FD-212,
+    mit dieser Formatversion im Hash — so, wie 0.6.0 sie in seine Buchungen
+    schrieb (:data:`PART_FORMAT_060`)."""
     from app.core.knowledge.parts import recipe
     from app.core.knowledge.parts.registry import PARTS, used_parts
 
@@ -502,17 +531,21 @@ def _part_versions(operation: Operation) -> list[str]:
             continue
         seen.add(name)
         spec = PARTS.get(name)
-        versions.append(spec.version)
         if spec.recipe_data is None:
+            versions.append(spec.version)
             continue
         # Ein Rezept setzt Bibliotheksbausteine; deren Maßänderung ändert den
         # Druck, nicht aber das Rezept (Review RM-706, L3) — wie
         # ``recipe._collect_dependencies`` durch die Rezepte hindurch.
         try:
-            nested = recipe.from_data(dict(spec.recipe_data)).document.ops
+            read = recipe.from_data(dict(spec.recipe_data))
         except AppError, ValueError, KeyError, TypeError:
+            versions.append(spec.version)
             continue
-        pending.extend(used_parts(nested))
+        versions.append(
+            spec.version if part_format is None else recipe.fingerprint(read, as_format=part_format)
+        )
+        pending.extend(used_parts(read.document.ops))
     return versions
 
 
@@ -844,16 +877,21 @@ def prepare(
     """
     settings = bind_object_profiles(settings, objects)
     stored_bodies = inputs.bodies() if inputs is not None else None
+    bodies_060 = inputs.bodies_of_060() if inputs is not None else None
     step_materials = _step_materials(profile, inputs.document) if inputs is not None else []
     whole_job = [
-        threemf.AssemblyPart(as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
+        threemf.AssemblyPart(
+            geom_mesh.as_mesh_data(body.mesh), slots=threemf.slots_for_object(body)
+        )
         for body in objects
     ]
     requests = []
     for plate in sorted({entry.plate for entry in objects}):
         bodies = [entry for entry in objects if entry.plate == plate]
         parts = [
-            threemf.AssemblyPart(as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
+            threemf.AssemblyPart(
+                geom_mesh.as_mesh_data(body.mesh), slots=threemf.slots_for_object(body)
+            )
             for body in bodies
         ]
         supplied = slots_by_plate.get(plate) if slots_by_plate is not None else None
@@ -873,8 +911,9 @@ def prepare(
         active_keys: set[threemf.SlotKey] = set()
         geometry = []
         stored_geometry = []
+        geometry_060 = []
         for body in bodies:
-            mesh = as_mesh_data(body.mesh)
+            mesh = geom_mesh.as_mesh_data(body.mesh)
             checksum = hashlib.sha256(mesh.raw.vertices.tobytes())
             checksum.update(mesh.raw.faces.tobytes())
             used = set(mesh.slots) if mesh.slots else {0}
@@ -900,6 +939,15 @@ def prepare(
                         assigned,
                     )
                 )
+                if bodies_060 is not None:
+                    geometry_060.append(
+                        (
+                            str(body.id),
+                            bodies_060.get(body.id) or digest("unstored", checksum.hexdigest()),
+                            _body_profile(profile, body),
+                            assigned,
+                        )
+                    )
             keys = {threemf.slot_identity(slot) for slot in active}
             active_keys.update(keys)
             if len(keys) != 1:
@@ -1008,6 +1056,21 @@ def prepare(
                 _base_choice(base),
             )
             former = (evaluated,)
+            if bodies_060 is not None and geometry_060 != stored_geometry:
+                # Derselbe Druck, wie 0.6.0 ihn hieß (FD-232).
+                former += (
+                    STORED_MARK
+                    + digest(
+                        STORED_INPUTS,
+                        settings.inventory_project_id,
+                        plate,
+                        sorted(geometry_060),
+                        sorted(owned, key=digest),
+                        _fixed_profile(profile),
+                        step_materials,
+                        _base_choice(base),
+                    ),
+                )
         legacy_fingerprints = dict.fromkeys(
             digest(
                 settings.inventory_project_id,

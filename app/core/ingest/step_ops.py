@@ -14,8 +14,8 @@ import dataclasses
 from pathlib import Path
 from typing import Any, Final, cast
 
+from app.core.brep import features as brep_features
 from app.core.brep import step
-from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
 from app.core.errors import CANCEL, CORRECT_INPUT, InternalError, ValidationError
 from app.core.geom.prepare import (
@@ -51,7 +51,11 @@ _log = get_logger(__name__)
 def _object(name: str, solid: Solid, *, cancelled: CancelToken) -> SceneObject:
     """Ein exakter Körper als Szenenobjekt, mit seinen Merkmalen aus der Topologie."""
     return SceneObject(
-        id="", name=name, mesh=solid, kind="brep", features=features_of(solid, cancelled=cancelled)
+        id="",
+        name=name,
+        mesh=solid,
+        kind="brep",
+        features=brep_features.features_of(solid, cancelled=cancelled),
     )
 
 
@@ -319,7 +323,7 @@ def _assembly(
             else None
         )
         if features is None:
-            features = features_of(solid, cancelled=ctx.cancelled)
+            features = brep_features.features_of(solid, cancelled=ctx.cancelled)
             references.setdefault((body.geometry, body.mirrored), (placement, solid, features))
         else:
             carried += 1

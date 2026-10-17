@@ -22,8 +22,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from app.ui import app_events
-from app.ui.cursors import cursor
+from app.ui import app_events, cursors
 from app.ui.leash import stop_watching_the_dying
 from app.ui.overlay import CardPlace, card_rect, dropped_place
 
@@ -227,7 +226,7 @@ class MeasureCardDrag(QObject):
                             )
                             # Qts Druckempfänger behält auch außerhalb der Karte
                             # den Zug. Sein Cursor verändert keinen globalen Stapel.
-                            receiver.setCursor(cursor("move", receiver))
+                            receiver.setCursor(cursors.cursor("move", receiver))
                         self._moving = self._bounded(self._start.translated(delta))
                         self._card.move(self._moving.topLeft())
                         self.positionChanged.emit()

@@ -512,7 +512,7 @@ def test_a_fine_generated_mesh_keeps_resolution_within_the_recognition_budget(
     """
     import trimesh
 
-    from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
+    from app.core.perceive.local import FEATURE_LIMIT_TRIANGLES
 
     # Dieses feine Netz wurde von der alten 200-000-Grenze vereinfacht.
     mittel = trimesh.creation.icosphere(subdivisions=7, radius=30.0)

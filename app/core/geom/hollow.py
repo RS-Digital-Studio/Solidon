@@ -34,8 +34,8 @@ from app.core.errors import (
     BooleanFailedError,
     NotManifoldError,
 )
-from app.core.geom import kernel_process, lathe
-from app.core.geom.boolean import BooleanOutcome, boolean, deepest
+from app.core.geom import boolean, kernel_process, lathe
+from app.core.geom.boolean import BooleanOutcome, deepest
 from app.core.geom.mesh import MeshData, concatenated
 from app.core.geom.repair import open_edge_count
 from app.core.log import get_logger
@@ -265,7 +265,7 @@ def _hollow_inward(
 
     before = mesh.volume
     _step(progress, cancelled, 0.4, _("Hohlraum ausschneiden"))
-    outcome = boolean("difference", [mesh, cavity], quality=quality, cancelled=cancelled)
+    outcome = boolean.boolean("difference", [mesh, cavity], quality=quality, cancelled=cancelled)
     enclosed = _enclosed_cavity(mesh, cavity, outcome, before, quality, cancelled)
     body = outcome.mesh
     findings = [*outcome.findings, *enclosed.findings]
@@ -291,7 +291,9 @@ def _hollow_inward(
                 )
             )
         else:
-            opened = boolean("difference", [body, tool], quality=quality, cancelled=cancelled)
+            opened = boolean.boolean(
+                "difference", [body, tool], quality=quality, cancelled=cancelled
+            )
             body = opened.mesh
             findings.extend(opened.findings)
             stages.append(opened.solver)
@@ -379,7 +381,7 @@ def _hollow_outward(
         return HollowResult(mesh=mesh, findings=[too_thin(wall)])
     before = mesh.volume
     _step(progress, cancelled, 0.4, _("Wand legen"))
-    outcome = boolean("difference", [outer, mesh], quality=quality, cancelled=cancelled)
+    outcome = boolean.boolean("difference", [outer, mesh], quality=quality, cancelled=cancelled)
     body = outcome.mesh
     findings = list(outcome.findings)
     stages: list[SolverInfo | None] = [outcome.solver]
@@ -389,7 +391,9 @@ def _hollow_outward(
         opening = _outward_mouth(inner, direction, steps)
         tool = _meshed(opening, origin, pitch, mesh) if opening is not None else None
         if tool is not None:
-            opened = boolean("difference", [body, tool], quality=quality, cancelled=cancelled)
+            opened = boolean.boolean(
+                "difference", [body, tool], quality=quality, cancelled=cancelled
+            )
             body = opened.mesh
             findings.extend(opened.findings)
             stages.append(opened.solver)
@@ -489,7 +493,7 @@ def _hollow_with_openings(
             return HollowResult(mesh=mesh, findings=[too_thin(wall)])
         cavity = MeshData.of(mesh.raw.copy())
         _step(progress, cancelled, 0.4, _("Wand legen"))
-        outcome = boolean("difference", [outer, mesh], quality=quality, cancelled=cancelled)
+        outcome = boolean.boolean("difference", [outer, mesh], quality=quality, cancelled=cancelled)
     else:
         field = _inner_field(mesh, wall)
         found = _meshed(field[0], field[1], field[2], mesh) if field is not None else None
@@ -497,7 +501,9 @@ def _hollow_with_openings(
             return HollowResult(mesh=mesh, findings=[too_thin(wall)])
         cavity = found
         _step(progress, cancelled, 0.4, _("Hohlraum ausschneiden"))
-        outcome = boolean("difference", [mesh, cavity], quality=quality, cancelled=cancelled)
+        outcome = boolean.boolean(
+            "difference", [mesh, cavity], quality=quality, cancelled=cancelled
+        )
     body = outcome.mesh
     findings.extend(outcome.findings)
     stages.append(outcome.solver)
@@ -509,7 +515,7 @@ def _hollow_with_openings(
             findings.append(_opening_misses(opening))
             continue
         for tool in tools:
-            cut = boolean("difference", [body, tool], quality=quality, cancelled=cancelled)
+            cut = boolean.boolean("difference", [body, tool], quality=quality, cancelled=cancelled)
             body = cut.mesh
             findings.extend(cut.findings)
             stages.append(cut.solver)
@@ -530,7 +536,7 @@ def _hollow_with_openings(
 
 def _opening_misses(opening: Opening) -> Finding:
     """Unter dieser Fläche liegt kein Hohlraum — sie bleibt zu."""
-    from app.core.errors import CHANGE_SELECTION, CORRECT_INPUT
+    from app.core.errors import CHANGE_FACES, CORRECT_INPUT
 
     return Finding(
         code="hollow.opening_misses",
@@ -540,7 +546,7 @@ def _opening_misses(opening: Opening) -> Finding:
             "dünner als zwei Wände."
         ),
         feature_ids=(opening.name,) if opening.name else (),
-        suggestions=(CORRECT_INPUT, CHANGE_SELECTION),
+        suggestions=(CORRECT_INPUT, CHANGE_FACES),
     )
 
 
@@ -930,7 +936,7 @@ def _enclosed_cavity(
         volume = cavity.volume
         if volume > EPS_GEOM and abs(removed - volume) <= ENCLOSED_TOLERANCE * volume:
             return BooleanOutcome(mesh=cavity, findings=[], solver=outcome.solver)
-    return boolean("intersection", [mesh, cavity], quality=quality, cancelled=cancelled)
+    return boolean.boolean("intersection", [mesh, cavity], quality=quality, cancelled=cancelled)
 
 
 def hollowed(wall: float, removed_mm3: float) -> Finding:
@@ -1224,7 +1230,9 @@ def _vent(
         tool = lathe.cylinder(radius=diameter / 2.0, height=height, sections=VENT_SECTIONS)
         tool = apply(MeshData.of(tool), translation((x, y, bottom + height / 2.0)))
         try:
-            outcome = boolean("difference", [drilled, tool], quality=quality, cancelled=cancelled)
+            outcome = boolean.boolean(
+                "difference", [drilled, tool], quality=quality, cancelled=cancelled
+            )
         except (*PROGRAMMING_ERRORS, *kernel_process.NOT_A_KERNEL_FAILURE):
             raise
         except Exception as problem:  # eine Entlüftung, die nicht geht, ist nicht fatal

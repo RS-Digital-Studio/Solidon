@@ -147,7 +147,9 @@ def capture_step(tutorial: Any, step: dict[str, Any], body: str) -> None:
 
         checkbox = group.widgets.get("compensate")
         if not isinstance(checkbox, QCheckBox) or checkbox.isChecked():
-            raise RuntimeError("Die Materialtoleranz entspricht nicht dem geplanten Beispiel.")
+            raise RuntimeError(
+                "„Druckabweichung ausgleichen“ entspricht nicht dem geplanten Beispiel."
+            )
         scrollbar = flow._measure_scroll.verticalScrollBar()
 
         def scroll_to(key: Any) -> None:

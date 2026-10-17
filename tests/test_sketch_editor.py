@@ -582,7 +582,11 @@ def test_the_expression_dialog_keeps_its_hint_and_actions_inside_when_resized(
 ) -> None:
     dialog = ExpressionDialog({"width": 25.0})
     dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
-    dialog.resize(320, 120)
+    # Was der Inhalt braucht, hängt an der Schrift: mit DejaVu (Linux) genau
+    # 120, unter Windows 144. Zu klein ist eine Startgröße darunter.
+    small = 80
+    assert dialog.sizeHint().height() > small, "premise: die Startgröße ist zu klein"
+    dialog.resize(320, small)
     dialog.show()
     for _ in range(5):
         qt_app.processEvents()
@@ -596,7 +600,7 @@ def test_the_expression_dialog_keeps_its_hint_and_actions_inside_when_resized(
 
     try:
         assert_actions_fit()
-        assert dialog.height() > 120, "der Dialog wächst über die zu kleine Startgröße hinaus"
+        assert dialog.height() > small, "der Dialog wächst über die zu kleine Startgröße hinaus"
         opening_height = dialog.height()
 
         dialog.problem.setText("Der Ausdruck braucht eine Korrektur. " * 40)

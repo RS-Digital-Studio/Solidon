@@ -89,12 +89,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import tools
+from app.core import guides, tools
 from app.core.errors import AppError, InternalError
-from app.core.export import slicer_keys, slicer_profiles, threemf
-from app.core.export.handover import detect
-from app.core.geom.attributes import used_slots
-from app.core.geom.mesh import as_mesh_data
+from app.core.export import handover, slicer_keys, slicer_profiles, threemf
+from app.core.geom import attributes, mesh
 from app.core.knowledge import filaments, profiles
 from app.core.types import CancelToken, MaterialSlot, PrintSettings, SceneObject
 from app.i18n import tr
@@ -583,7 +581,7 @@ def slicer_filaments() -> tuple[slicer_profiles.SlicerProfile, ...]:
     if chosen is None:
         return ()
     try:
-        flavour = detect(chosen).flavour
+        flavour = handover.detect(chosen).flavour
         return tuple(slicer_profiles.find_profiles(chosen, flavour, kinds=("filament",)))
     except Exception:  # ein fremder Bestand scheitert auf viele Arten
         _log.exception("Der Filamentprofilbestand lässt sich nicht lesen.")
@@ -823,6 +821,7 @@ class NewFilamentDialog(QDialog):
         self.slicer_profile.setReadOnly(True)
         self.slicer_profile.setPlaceholderText(tr("kein Profil aus dem Slicer"))
         self.choose_profile = QPushButton(tr("Wählen …"), self)
+        self.choose_profile.setProperty(guides.TARGET_PROPERTY, "filament.profile")
         self.choose_profile.clicked.connect(self._choose_slicer_profile)
         self.clear_profile = QPushButton(tr("Entfernen"), self)
         self.clear_profile.clicked.connect(self._clear_slicer_profile)
@@ -1031,11 +1030,12 @@ class NewFilamentDialog(QDialog):
             )
         self.stock_hint.setText(text)
 
-    def focus_field(self, field: str) -> bool:
+    def focus_field(self, field: str, *, check_only: bool = False) -> bool:
         """Den Cursor in das Feld setzen, das der Kern in einer Abweisung nennt.
 
         Die Namen sind die der ``CatalogueFilament``-Felder; ein Feld hinter
-        „Weitere Angaben" klappt seinen Abschnitt dafür auf.
+        „Weitere Angaben" klappt seinen Abschnitt dafür auf. ``check_only``
+        fragt nur, ob der Sprung ginge (``refusal_details.field_ways``).
         """
         editors: dict[str, QWidget] = {
             "name": self.name,
@@ -1056,6 +1056,8 @@ class NewFilamentDialog(QDialog):
         editor = editors.get(field)
         if editor is None:
             return False
+        if check_only:
+            return True
         if self.more.isAncestorOf(editor):
             open_section(self.more)
         editor.setFocus()
@@ -1231,6 +1233,7 @@ class NewFilamentDialog(QDialog):
         for number, one in enumerate(self._colours):
             if number == len(self.colour_buttons):
                 button = QPushButton(self)
+                button.setProperty(guides.TARGET_PROPERTY, "filament.colour")
                 button.clicked.connect(weak_slot(self, NewFilamentDialog._pick_colour, number))
                 self._colour_row.addWidget(button, number // 2, number % 2)
                 self.colour_buttons.append(button)
@@ -1971,7 +1974,7 @@ class FilamentPanel(QWidget):
         for entry in objects:
             declared = {slot.index: slot for slot in threemf.slots_for_object(entry)}
             counted: set[threemf.SlotKey | None] = set()
-            for index in used_slots(as_mesh_data(entry.mesh)):
+            for index in attributes.used_slots(mesh.as_mesh_data(entry.mesh)):
                 slot = declared.get(index)
                 key = threemf.slot_identity(slot) if slot is not None else None
                 if key in counted:

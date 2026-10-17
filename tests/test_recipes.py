@@ -23,6 +23,7 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import ops as part_ops
 from app.core.knowledge.parts import recipe
+from app.core.knowledge.parts import registry as parts_registry
 from app.core.knowledge.parts.registry import PartRegistry
 from app.core.knowledge.parts.user import travelling_parts
 from app.core.registry.registry import Registry
@@ -852,7 +853,7 @@ def test_recipe_dimensions_do_not_collide_with_surface_normals(
     prepared = placement.prepare_surface(source.mesh, int(np.argmin(body.face_normals[:, 2])))
     hit = placement.at_point(prepared, (0.123456789012, 0.0, 0.0))
     operation = registry.get(part_ops.op_name(made.name))
-    monkeypatch.setitem(part_ops.PARTS._parts, made.name, spec)
+    monkeypatch.setitem(parts_registry.PARTS._parts, made.name, spec)
     preset = placement.surface_values(operation, hit)
     assert parameter not in preset
     assert tuple(preset[name] for name in normal) == pytest.approx((0.0, 0.0, -1.0))
@@ -1349,11 +1350,9 @@ def test_the_creator_of_a_loaded_recipe_counts_among_the_user_operations(
     Ein Rezept „box“ steht nicht für sich; ``create_box`` bleibt der Quader und
     keine Nutzeroperation.
     """
-    from app.core import bootstrap
-    from app.core.knowledge.parts import user
+    from app.core import bootstrap, paths
 
-    monkeypatch.setattr(user, "user_parts_dir", lambda: tmp_path)
-    monkeypatch.setattr(recipe, "user_parts_dir", lambda: tmp_path)
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: tmp_path)
     monkeypatch.setattr(bootstrap, "_user_loaded", False)
     monkeypatch.setattr(bootstrap, "_user_findings", ())
     monkeypatch.setattr(bootstrap, "_user_operations", ())

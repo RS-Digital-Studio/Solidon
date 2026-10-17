@@ -709,3 +709,46 @@ def test_every_start_path_hangs_up_the_pointer_watcher() -> None:
     )
     ohne = sorted(name for name, gefunden in wege.items() if not gefunden)
     assert not ohne, f"ohne Zeiger-Wächter: {ohne}"
+
+
+@pytest.mark.parametrize("werkzeug", ["make_guides.py", "make_figures.py", "make_web_images.py"])
+def test_every_picture_tool_hangs_up_the_pointer_watcher_after_the_theme(werkzeug: str) -> None:
+    """Die Bildwerkzeuge zeigen den Zeiger, den der Kunde sieht, auch in Panels und Leisten.
+
+    Sie setzen das Thema selbst und bauen das Fenster danach; ``apply_theme``
+    erreicht nur Fenster, die es schon gibt. Ohne den Wächter trug in den
+    Aufnahmen allein die Ansicht den Solidon-Zeiger (Befund Robert,
+    17.10.2026). Dieselbe Lesart wie der Test darüber: Jede Funktion, die das
+    Thema setzt, hängt auch den Wächter auf.
+    """
+    import ast
+    from pathlib import Path
+
+    quelle = Path(__file__).resolve().parents[1] / "tools" / werkzeug
+    baum = ast.parse(quelle.read_text(encoding="utf-8"))
+
+    def ruft(knoten: ast.AST, name: str, an: str | None = None) -> bool:
+        """Steht in dieser Funktion ``name(...)`` oder, mit ``an``, ``an.name(...)``?"""
+        for stelle in ast.walk(knoten):
+            if not isinstance(stelle, ast.Call):
+                continue
+            ziel = stelle.func
+            if an is None and isinstance(ziel, ast.Name) and ziel.id == name:
+                return True
+            if (
+                isinstance(ziel, ast.Attribute)
+                and ziel.attr == name
+                and isinstance(ziel.value, ast.Name)
+                and ziel.value.id == an
+            ):
+                return True
+        return False
+
+    setzen = [
+        knoten
+        for knoten in ast.walk(baum)
+        if isinstance(knoten, ast.FunctionDef) and ruft(knoten, "apply_theme")
+    ]
+    assert setzen, f"{werkzeug} setzt das Thema nirgends mehr — der Test ist zu prüfen"
+    ohne = sorted(knoten.name for knoten in setzen if not ruft(knoten, "install", "cursors"))
+    assert not ohne, f"{werkzeug}: Thema ohne Zeiger-Wächter in {ohne}"

@@ -20,7 +20,7 @@ scrive in `website/version.json`.
 ### Uso e sistema
 
 - Le schede delle misure si spostano e crescono con i campi aperti. Titoli e quote del piano più chiari, barre e maniglie più sobrie e griglia più visibile nel tema chiaro aiutano a vedere il modello.
-- Risolto un possibile arresto anomalo passando da una caratteristica o da un progetto all’altro.
+- Risolto un possibile arresto anomalo passando da una caratteristica o da un progetto all’altro, o aprendo una finestra di dialogo.
 - La spiegazione di «Appoggia sul piano» ora vale anche per i corpi che si trovano sotto il piano.
 - Gli elenchi delle azioni sulle caratteristiche usano interamente la lingua scelta.
 - Su Mac, Solidon ora può caricare il driver di 3Dconnexion (3DxWare) per il mouse 3D. Dalla versione 0.4.1 alla 0.6.0 macOS non lo consentiva.
@@ -52,6 +52,11 @@ scrive in `website/version.json`.
 - Uno screen reader legge il nome e la spiegazione di ogni campo numerico di una finestra di dialogo.
 - Dopo un'azione nel *Rapporto di verifica* il rapporto resta in primo piano e Ctrl+Z la annulla subito. Finora passava davanti la scheda *Selezione*.
 - Gli avvisi su piano e adesione usano l’unità scelta. Il cambio mm/pollici conserva segnalazione scelta, dettagli aperti, scheda e stato espanso dei corpi.
+- I numeri lungo il piano di stampa seguono l’unità scelta e la indicano. La versione 0.6.0 mostrava millimetri anche con i pollici impostati.
+- La griglia del piano parte dal centro del piano, ogni 10 mm in millimetri e ogni mezzo pollice in pollici. Ogni numero cade su una linea marcata.
+- Nella vista *Ortografica*, un clic su una segnalazione mostra il punto a una dimensione adatta. Finora restava lo zoom precedente.
+- Un clic su una segnalazione senza un punto proprio mostra l'intero corpo, e un progetto aperto sta tutto nella vista.
+- Un foro selezionato resta visibile insieme al bordo. Le maniglie stanno fuori dal bordo e le frecce partono oltre.
 - Ctrl+Z e Ctrl+Y funzionano anche con il cursore in un campo vuoto, per esempio nel campo di ricerca. Se lì ha scritto qualcosa, viene annullato prima il testo digitato.
 - Senza attivazione, le azioni che modificano qualcosa in *Rapporto di verifica*, *Selezione*, menu contestuali e filamento sono in grigio con il motivo. Prima il rifiuto arrivava dopo il clic.
 - Senza attivazione sono in grigio anche *Crea parametro …*, *Sposta*, *Dividi*, i tasti della cronologia e le misure nella vista. Ogni motivo indica la strada, come *Aiuto → Sblocca Solidon …*.
@@ -67,10 +72,62 @@ scrive in `website/version.json`.
 - La scheda di selezione segue contenuto e carattere, mantenendo testo e colonne. Le schede separate mantengono le dimensioni. Se è proposta una modifica, «Applica» è l’azione principale.
 - Le controparti chiedono coppia e dimensioni e spiegano entrambe le metà. Forma e accoppiamento sono in «Altre impostazioni». L’altezza iniziale del dialogo segue il contenuto.
 - Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
+- La riga con materiale e durata di stampa indica «dall'ultimo passaggio» solo ciò che un passaggio ha cambiato. Finché i valori del profilo dello slicer sono ancora in lettura, riporta «provvisorio».
+- Materiale e durata di stampa sono sempre interi nella barra di stato. Se la barra è piena, il messaggio accanto si accorcia e la frase intera compare nel suggerimento.
+- L'intestazione accorcia il nome della stampante solo quando la riga è piena. Nome del progetto e misure stanno insieme a sinistra, la stampante a destra accanto a *Impostazioni di stampa …*.
+- Se *Dividi automaticamente* non trova un taglio, la riga di stato dice perché. Finora diceva invece che il pezzo entrava già nel piano.
+- La breve conferma dopo un'azione compare accanto alle schede, non sopra, per esempio accanto al rapporto. Il passaggio successivo la toglie insieme alla riga di stato, anche un vecchio «Annullato».
+- Su una segnalazione di un modello generato, *Genera di nuovo* apre il generatore con la sua descrizione e il seme successivo.
+- Quando la mappa di analisi rifiuta un modello troppo grande, il numero di triangoli compare in gruppi di tre, come 2 103 472.
+- Quando la catena si ferma, una funzione che aggiungerebbe un passaggio dopo non apre più una finestra con il pulsante grigio. L'arresto e la via d'uscita compaiono subito.
+- Nel rapporto di controllo il tasto Tab raggiunge l'azione proposta, e nessuna area scorrevole è più una fermata a sé senza nome.
+- Un doppio clic su una modifica di quota nella cronologia apre quella quota per modificarla, e su un cambio di stampante o materiale *Impostazioni di stampa …*.
+- La colonna delle quote nell'albero degli oggetti mostra ogni quota per intero; se serve, la scheda a sinistra si allarga. Altrimenti si accorcia il nome, e il suggerimento lo mostra intero.
+- Le righe dei rilievi nel rapporto compaiono per intero, misura compresa, e nominano ogni corpo una volta sola.
+- La barra dei parametri mostra le lunghezze in pollici quando sono impostati i pollici. Un clic destro sul campo del valore apre *Cambia …*.
+- La finestra *Crea parametro …* spiega ogni campo, anche i limiti inferiore e superiore, e un lettore di schermo nomina ogni campo.
+- Se un nome di parametro non va, il motivo compare subito sotto il campo del nome, con un pulsante per un nome che va.
+- Chi lavora in pollici inserisce i parametri di lunghezza in pollici in *Crea parametro …* e nel salvare un blocco. La versione 0.6.0 lì mostrava solo millimetri.
+- La finestra *Calibra il materiale* chiama un materiale non misurato «non ancora calibrato», anche dalla riga di comando. Prima diceva «valori iniziali».
+- Un rifiuto in una finestra non ripete più il suo titolo sotto. *Correggi l'inserimento* porta il cursore nel campo interessato.
+- La finestra *Dettagli* nomina corpo e passaggio e dà il punto nell'unità scelta. *Mostra i valori* mostra i nomi dei campi ed è alto solo quanto serve.
+- I campi delle barre *Analisi* e *Dividi*, la descrizione in *Genera modello*, la scelta *Tipo* e la casella «Includi i valori» si spiegano nel suggerimento e allo screen reader.
+- Da una linguetta del riquadro a destra, il tasto Tab entra nella pagina in primo piano e la percorre dall'alto in basso.
+- Una misura di progetto senza unità resta un numero nella cronologia e nella barra dei parametri, anche in pollici. La versione 0.6.0 aggiungeva «mm» nella cronologia.
+- Un lettore di schermo nomina ogni campo di ogni finestra di operazione, anche elenchi a discesa, caselle di spunta ed elenchi di caratteristiche.
+- I numeri interi grandi compaiono anche nei campi a gruppi di tre cifre, come 1 051 736 triangoli o 10 000 mm/s² di *Accelerazione*. Si scrivono con o senza separatori.
+- I nomi lunghi dei campi in *Altre impostazioni* mostrano ogni riga, anche con caratteri grandi. Nella versione 0.6.0 *Pratica un foro* ne perdeva l'ultima parola.
+- Le finestre di operazione sono alte quanto il contenuto, anche dopo aver aperto *Altre impostazioni*. Nella versione 0.6.0 *Ripeti caratteristica* lasciava una striscia vuota sopra i pulsanti.
+- Le finestre con sezioni richiudibili, come *Crea parametro*, sono alte quanto il contenuto dopo averle aperte e chiuse. Scorrono in orizzontale solo se lo schermo è troppo stretto.
+- Se un campo obbligatorio come il testo di *Scritta come corpo* è vuoto, il campo dice cosa va inserito e il pulsante attende. La versione 0.6.0 mostrava lì un errore all'apertura.
+- Chi modifica un passo conferma con *Applica*. Il pulsante resta grigio finché qualcosa non cambia e indica il campo da cambiare.
+- La finestra *Calibra il materiale* mostra gioco, interferenza, compensazione dei fori, piede d'elefante e parete nell'unità scelta, anche in pollici, e conserva la terza decimale.
+- Un pulsante lungo sotto un rifiuto va a capo con caratteri grandi, invece di allargare la finestra.
+- I pulsanti non vengono più schiacciati con caratteri grandi. Nella versione 0.6.0 le azioni di un rilievo nel rapporto di verifica erano tagliate in alto e in basso.
+- Se cambia la dimensione dei caratteri di sistema, Solidon la segue subito, anche nelle finestre aperte. La versione 0.6.0 la applicava solo dopo un riavvio.
+- Una riga raggruppata del rapporto di verifica nomina nel suggerimento al massimo quindici elementi, con tipo e corpo. Nella versione 0.6.0 un lettore di schermo vi leggeva ogni frase.
+- La legenda *Aggiunto* e *Rimosso* compare nella barra dell'anteprima solo quando l'anteprima aggiunge o toglie materiale. Per questo *Rinomina oggetto* non la mostra.
+- Su un corpo senza colore, *Converti la texture in filamenti* è grigio e ne indica il motivo, invece di rifiutare solo nell'anteprima.
+- Per parametri, accoppiamenti, stampante, materiale e annulla, la chat indica il punto della finestra in cui fare lo stesso da sé.
+- Il rapporto di verifica e il controllo prima dell'esportazione nominano i corpi di un accoppiamento invece di mostrare un identificativo interno, anche un corpo nel frattempo rimosso.
+- I messaggi indicano una caratteristica con tipo e numero, come «Foro 2», invece di un identificativo interno.
+- Le misure sotto un messaggio riportano la loro unità, le lunghezze nell'unità scelta. La versione 0.6.0 mostrava spesso solo il numero, come la lunghezza minima dello spigolo in *Affina gli spigoli*.
+- L'inglese e il portoghese distinguono ora la sporgenza di un gancio, o di un corpo sotto il piatto, dallo sbalzo in stampa.
+- In spagnolo e portoghese menu, ricerca e finestra di dialogo mostrano di nuovo solo la prima frase di *Perno per foro* e *Orienta per la stampa*.
+- Diverse traduzioni si leggono con più chiarezza, tra cui l'introduzione di *Crea parametro …*. Il perno inizia con la maiuscola in tutte le lingue.
+- Le spiegazioni nelle schede sono alte quanto il loro testo, anche in una scheda larga. Nella versione 0.6.0 in alcune lingue restavano righe vuote, per esempio sotto due facce selezionate.
+- Un campo di scelta chiama per nome un valore assente dal suo elenco, come «Faccia 1 · non va bene qui», e uno spigolo per orientamento e posizione. La versione 0.6.0 mostrava un codice interno.
+- Nella finestra *Sblocca Solidon …*, *Acquista Solidon* resta disponibile su un computer attivato. I pulsanti in grigio indicano il motivo, *Verifica chiave* anche la via per una nuova chiave.
+- In francese il primo giorno del mese si scrive ora «1er», ad esempio «1er décembre 2026».
+- Senza driver grafico, ad esempio in una macchina virtuale, Solidon ora termina in modo affidabile alla chiusura. Nella versione 0.6.0 il programma poteva continuare a girare lì senza essere visto.
 
 ### Stampare e passare allo slicer
 
 - Se lo slicer scelto non è un programma, Solidon ora lo dice subito e propone di sceglierne un altro. Nella versione 0.6.0 lo slicing aspettava che qualcuno chiudesse un messaggio di Windows.
+- Il campo *Flusso sui ponti* mostra il valore in percentuale e accetta da 50 a 200 %. Nella versione 0.6.0 mostrava 2 %, e cambiarlo mandava allo slicer l'1 o il 2 %.
+- Un progetto della versione 0.6.0 con un flusso sui ponti dell'1 o del 2 % si apre con il valore senza impostazione propria, e il rapporto lo segnala.
+- Le impostazioni di stampa mostrano per intero i valori del profilo dello slicer, come 40 000 mm/s² di accelerazione. Nella versione 0.6.0 il campo mostrava il suo limite.
+- Una larghezza di linea oltre il doppio dell'ugello, come 4 invece di 0,4 mm, dà un avviso e propone la linea pulita più larga.
 
 ### Modificare e disegnare
 
@@ -81,6 +138,31 @@ scrive in `website/version.json`.
 - Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
 - Per i fori, vista e *Selezione* mostrano la stessa modifica. Misura, profondità e imbocco collegato sono davanti; compensazione di stampa e regolazioni fini, in «Altri valori».
 - I campi del foro e la casella per modificare insieme elementi uguali spiegano il loro effetto. «Compensare gli scostamenti di stampa» chiarisce la correzione del profilo del materiale.
+- Nella scheda *Selezione*, *Applica* sta subito sotto l'azione aperta, «Filamento e stampa» sta in alto con il colore dell'assegnazione, e sotto l'elenco non resta spazio vuoto.
+- Un foro modificato mantiene il suo posto nell'albero degli oggetti.
+- Le azioni che su un elemento non funzionano compaiono come «Qui non è possibile: …» con il loro motivo.
+- Per ritagliare un cubo e provare un accoppiamento, ora la posizione si sceglie in *Posizione del cubo*. La riga *Punto* sopra la mostra.
+- La finestra dietro *Dai spessore* dice nella prima riga che dà spessore alla superficie.
+- Nella scheda delle misure il tasto Tab va dai campi alla casella degli elementi uguali, poi ad *Applica* e *Annulla*, e torna indietro. La casella ora sta sopra i pulsanti.
+- Dopo *Annulla* o Esc nella scheda delle misure, la tastiera torna nella vista 3D, come dopo *Applica*. Prima finiva sulla scheda *Oggetti*.
+- Nella scheda delle misure *Applica* resta grigio finché non cambia un valore o la casella degli elementi uguali, e indica il primo campo. Prima bastava un clic in un campo, senza effetto.
+- Se la scheda delle misure rifiuta un valore, il motivo compare una sola volta, subito sotto il campo. Prima la stessa frase si ripeteva sopra i pulsanti e nella barra di stato.
+- Se un avviso fa crescere la scheda delle misure, resta al suo posto e si sposta solo quanto richiedono il bordo o la maniglia, con un breve movimento. Prima saltava altrove.
+- Un testo che la finestra propone è selezionato all'apertura, e digitando lo si sostituisce. Così *Rinomina oggetto* parte dal nome attuale, e senza un nome nuovo non nasce alcun passaggio.
+- Nella linguetta *Selezione*, *Applica* resta grigio finché non cambia un valore e indica il primo campo. Ruotare o duplicare con i valori predefiniti resta immediato.
+- Foratura, chiusura, asole e campi di fori chiamano la correzione «Compensare gli scostamenti di stampa», come il gruppo di quote, e aggiungono la compensazione dei fori.
+- Dopo un piano di disegno illeggibile, *Scegli un altro piano* apre il passaggio con il cursore nel suo schizzo.
+- Quando un pulsante del rapporto di verifica porta alla modalità schizzo, la tastiera si trova dove si prosegue: nel campo *Piano di disegno* se il piano manca, altrimenti nella vista.
+- Se accanto a un pezzo stampabile restano solo schegge, *Dividi in pezzi distinti* le nomina e offre *Tieni le schegge*. Prima diceva che il corpo era di un solo pezzo.
+- Se il raggio di un raccordo o la larghezza di uno smusso è troppo grande per gli spigoli, il messaggio offre *Scegli altri spigoli*.
+- Se una faccia selezionata non va bene per *Applica l'angolo di sformo* o *Scosta la faccia*, il messaggio offre *Scegli altre facce*.
+- Lo stesso vale per *Svuota*, *Scanalatura con guarnizione* e *Applica texture*. Se un raccordo non si può ricondurre a uno spigolo, il messaggio offre *Scegli un'altra caratteristica*.
+- Se una caratteristica selezionata non va bene, per esempio un foro, una filettatura, una camera o una chiusura, il messaggio offre *Scegli un'altra caratteristica*.
+- I pulsanti *Scegli altri spigoli*, *Scegli altre facce* e *Scegli un'altra caratteristica* aprono il passaggio con il cursore nel campo corrispondente, anche dietro *Altre impostazioni*.
+- Un messaggio senza passaggio, come con *Controparte della filettatura*, indica la via in una frase, ad esempio *Scegli un'altra caratteristica*, e mostra solo pulsanti che lì hanno effetto.
+- Un clic su *Applica* su un elemento durante un calcolo mantiene la modifica, anche se l'anteprima richiede più tempo. Nella versione 0.6.0 andava persa senza avviso sui modelli grandi.
+- Una texture visualizzata non calcola più un'anteprima senza modifiche e non offre più *Annulla*.
+- Un progetto con un pezzo proprio di una versione precedente non segnala più modifiche inesistenti e offre ancora *Usa lo stato salvato*. Nella versione 0.6.0 mancava per i progetti della 0.5.
 
 ## 0.6.0
 

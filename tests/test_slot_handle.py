@@ -1471,6 +1471,11 @@ def test_slot_grip_snap_labels_and_clearance_follow_the_preview(qt_app: object) 
         centre, radius = clearance
         for seat in handle.knob_seats:
             assert math.dist(centre, seat) < radius
+        # Die L stehen hinter den Knöpfen, und die stehen seit FD-70 außen am
+        # Scheitel: Wo die Weltlücke nicht reicht, schiebt die Anordnung sie
+        # aus der Knopfhülle. Gemessen wird deshalb die Seite, nicht die Zahl.
+        middle = np.asarray(handle.clearance[0], dtype=float)
+        outward_ways = [np.asarray(knob, dtype=float) - middle for knob in handle.knob_centres]
         # Seit RM-153 stehen davor X, Y und Z des Bewegungsgriffs; die zwei L
         # der Knöpfe stehen dahinter, und die Länge ist die letzte Marke — sie
         # folgt dem Zug wie die Knöpfe (Robert, 11.09.2026: „wenn man das
@@ -1479,6 +1484,9 @@ def test_slot_grip_snap_labels_and_clearance_follow_the_preview(qt_app: object) 
         assert viewport._gizmo_label_texts[-1] == length(handle.length), (
             "die Länge steht im Bild, mit dem Wert des Zugs"
         )
+        for point, way in zip(viewport._gizmo_label_base[-3:-1], outward_ways, strict=True):
+            beyond = float((np.asarray(point, dtype=float) - middle) @ way)
+            assert beyond >= float(way @ way) - 1e-9, "das L steht hinter seinem Knopf"
         # Jedes L steht bei seinem Knopf des aktuellen Zugs und neben dessen Hülle
         # im Bild, nicht mehr fest auf dem Weltpunkt der Lücke: Seit ``a408a0620``
         # weicht es der projizierten Knopfhülle aus (FD-73).
@@ -1819,15 +1827,14 @@ def test_a_click_without_a_drag_asks_for_nothing(qt_app: object) -> None:
 
 
 def test_the_knobs_leave_the_hole_they_sit_on_clickable(qt_app: object) -> None:
-    """Zwei Knöpfe, die zusammen breiter sind als ihre Lücke, verstecken das Loch.
+    """Zwei Knöpfe über der Mündung verstecken das Loch.
 
     Gemessen im Review: Bei Ø 1 deckten sie 100 Prozent der Mündung ab, bei Ø 2
     noch 57,7, und unter Ø 1,68 überlappten sie einander — die Lehre von
     ``_face_handle`` war zurück („Ein Klick auf die Bohrung traf den Griff
-    statt des Körpers", Robert, 03.09.2026).
+    statt des Körpers", Robert, 03.09.2026). Seit FD-70 stehen sie außen am
+    Scheitel: Kein Punkt eines Knopfs liegt in der Öffnung, an keinem Maß.
     """
-    from app.ui.slot_handle import KNOB_RADIUS_SHARE, WIDEST_KNOB_SHARE
-
     renderer = RecordingRenderer(size=(800, 600))
     for diameter in (1.0, 2.0, 6.0, 20.0):
         handle = SlotHandle(
@@ -1842,10 +1849,12 @@ def test_the_knobs_leave_the_hole_they_sit_on_clickable(qt_app: object) -> None:
             colour="#ff9f1c",
             release_callback=lambda _length, _angle: None,
         )
-        breite = 2.0 * handle._knob_size * KNOB_RADIUS_SHARE
-        assert breite <= handle.length * WIDEST_KNOB_SHARE + 1e-9, (
-            f"Ø {diameter}: die Knöpfe decken das Loch zu ({breite:.2f} von {handle.length:.2f})"
-        )
+        for knob in handle.knobs:
+            points = np.asarray(knob.points, dtype=float)
+            nearest = float(np.hypot(points[:, 0], points[:, 1]).min())
+            assert nearest >= diameter / 2.0 - 1e-6, (
+                f"Ø {diameter}: ein Knopf ragt {diameter / 2.0 - nearest:.2f} mm in die Öffnung"
+            )
         handle.remove()
 
 
@@ -1884,7 +1893,8 @@ def test_the_knobs_stay_on_the_outline_across_two_drags() -> None:
             zieh(bis)
             for index, item in enumerate(handle.knobs):
                 im_bild = gebaut[index] + np.asarray(item.position(), dtype=float)
-                soll = np.asarray(handle.knob_seats[index], dtype=float)
+                # Gezeichnet steht der Knopf außen am Scheitel (FD-70).
+                soll = np.asarray(handle.knob_centres[index], dtype=float)
                 assert np.allclose(im_bild, soll, atol=1e-9), (
                     f"Zug {nummer}, Knopf {index}: im Bild {im_bild}, gemeint {soll}"
                 )

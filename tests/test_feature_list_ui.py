@@ -75,7 +75,10 @@ def test_short_feature_lists_fit_the_actual_rows_in_both_dialogs(
             "Unter den Zeilen bleibt weniger als eine weitere Zeile leer."
         )
         assert editor.value() == list(choices)
-        assert editor.whole.isVisibleTo(dialog) == (operation == "hollow_object")
+        # Eine Pflichtliste hat keinen Haken für die leere Wahl, auch keinen
+        # verborgenen (FD-94).
+        assert (editor.whole is not None) == (operation == "hollow_object")
+        assert editor.whole is None or editor.whole.isVisibleTo(dialog)
     finally:
         dialog.close()
         dialog.deleteLater()
@@ -104,6 +107,18 @@ def test_empty_then_added_and_removed_features_resize_without_losing_the_selecti
     field.list.clear()
     _settle(qt_app)
     assert field.list.height() == empty
+
+
+def test_a_clicked_feature_without_label_is_named_not_shown_as_its_key(
+    field: FeatureSetField,
+) -> None:
+    """Ein Klick ins Modell ohne Bezeichnung zeigt den Namen, nie „face_9“ (D4 zu FD-187)."""
+    from app.ui.unlisted_choice import unlisted_text
+
+    field.add_feature("face_9", "")
+    text = field.list.item(0).text()
+    assert text == unlisted_text("face_9", "feature"), text
+    assert "face_9" not in text
 
 
 def test_a_font_change_grows_the_rows_and_a_changed_label_gets_its_full_height(

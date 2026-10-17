@@ -257,15 +257,15 @@ def main() -> int:
     args.output.mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, str(ROOT))
     with tempfile.TemporaryDirectory(prefix="solidon-feature-image-") as directory:
-        for name, child in (
-            ("APPDATA", "roaming"),
-            ("LOCALAPPDATA", "local"),
-            ("XDG_CONFIG_HOME", "config"),
-            ("XDG_CACHE_HOME", "cache"),
-        ):
-            target = Path(directory) / child
+        from app.core.paths import drawing_profile_variables, isolate_secrets
+
+        # Jeder Nutzerordner eines zeichnenden Profils, je einer für sich
+        # (``HOME`` nur unter macOS); eine Quelle mit dem Prüfstand (C-1).
+        for name in drawing_profile_variables():
+            target = Path(directory) / name.lower()
             target.mkdir()
             os.environ[name] = str(target)
+        isolate_secrets(os.environ)
         os.environ.pop("QT_QPA_PLATFORM", None)
         render(args.motif, args.output.resolve())
     return 0
