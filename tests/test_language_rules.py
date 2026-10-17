@@ -167,6 +167,7 @@ GERMAN_WORDS = frozenset(
 #: dort).
 GERMAN_STEMS = (
     "knoten",
+    "kanal",
     "deckungsgleich",
     "umlauf",
     "wofuer",
