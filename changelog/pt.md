@@ -82,7 +82,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Quando a cadeia para, uma função que acrescentaria um passo depois já não abre um diálogo com o botão cinzento. A paragem e o caminho a seguir aparecem logo.
 - No relatório de verificação, a tecla Tab chega à ação oferecida, e nenhuma área de deslocamento é já uma paragem própria sem nome.
 - Um duplo clique numa alteração de medida no histórico abre essa medida para a alterar, e numa mudança de impressora ou material abre *Definições de impressão …*.
-- A coluna de medidas da árvore de objetos mostra completas também as medidas com decimais; o cartão da esquerda alarga um pouco quando é preciso.
+- A coluna de medidas da árvore de objetos mostra completa cada medida, também as que têm decimais; o cartão da esquerda alarga um pouco quando é preciso. Se mesmo assim faltar espaço, é o nome que fica abreviado, e a sua dica mostra-o por inteiro.
 - As linhas de constatações do relatório mostram a medida completa e nomeiam cada corpo uma só vez.
 - A barra de parâmetros mostra os comprimentos em polegadas quando estão definidas as polegadas. Um clique direito no campo do valor abre *Alterar …*.
 - O diálogo *Criar parâmetro …* explica cada campo, incluindo os limites inferior e superior, e um leitor de ecrã nomeia cada campo.

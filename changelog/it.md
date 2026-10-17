@@ -82,7 +82,7 @@ scrive in `website/version.json`.
 - Quando la catena si ferma, una funzione che aggiungerebbe un passaggio dopo non apre più una finestra con il pulsante grigio. L'arresto e la via d'uscita compaiono subito.
 - Nel rapporto di controllo il tasto Tab raggiunge l'azione proposta, e nessuna area scorrevole è più una fermata a sé senza nome.
 - Un doppio clic su una modifica di quota nella cronologia apre quella quota per modificarla, e su un cambio di stampante o materiale *Impostazioni di stampa …*.
-- La colonna delle quote nell'albero degli oggetti mostra per intero anche le quote non tonde; se serve, la scheda a sinistra si allarga un poco.
+- La colonna delle quote nell'albero degli oggetti mostra per intero ogni quota, anche quelle non tonde; se serve, la scheda a sinistra si allarga un poco. Se lo spazio non basta comunque, si accorcia il nome, e il suo suggerimento lo mostra per intero.
 - Le righe dei rilievi nel rapporto mostrano la misura per intero e nominano ogni corpo una volta sola.
 - La barra dei parametri mostra le lunghezze in pollici quando sono impostati i pollici. Un clic destro sul campo del valore apre *Cambia …*.
 - La finestra *Crea parametro …* spiega ogni campo, anche i limiti inferiore e superiore, e un lettore di schermo nomina ogni campo.

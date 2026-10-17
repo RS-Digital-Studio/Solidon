@@ -2150,9 +2150,9 @@ class ObjectTree(QWidget):
         # 186 von 258 Pixeln — 70 für den Namen, schlechter als vorher. Beide
         # Spalten wollen Platz, und die Frage ist nicht, wer ihn bekommt,
         # sondern in welchem Verhältnis. Die Maßspalte bekommt, was sie braucht,
-        # und höchstens :data:`MEASURE_SHARE`; der Rest gehört dem Namen. Gesetzt
-        # wird in ``_size_columns``, denn beides ändert sich: der Inhalt und die
-        # Breite.
+        # der Rest gehört dem Namen, und die Karte wird breiter, bis der Name
+        # daneben seinen Anteil hat (:data:`MEASURE_SHARE`). Gesetzt wird in
+        # ``_size_columns``, denn beides ändert sich: der Inhalt und die Breite.
         header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
@@ -2502,7 +2502,12 @@ class ObjectTree(QWidget):
                 else tr("Flächen und Kanten bearbeitbar; Rundungen aus geraden Teilstücken")
             )
             triangles = tr("Dreiecke", context="Anzahl")
-            tip = f"{object_id} · {kind} · {entry.mesh.triangle_count} {triangles} · {state}"
+            # Der Name steht vorn: Wird er neben einem breiten Maß gekürzt
+            # (FD-20), steht er hier ganz.
+            tip = (
+                f"{entry.name} · {object_id} · {kind} · "
+                f"{entry.mesh.triangle_count} {triangles} · {state}"
+            )
             if entry.material:
                 tip += f" · {entry.material}"
             # §18.8: woher der Körper kommt. Ohne das ist ein Baum mit sieben
@@ -2735,7 +2740,9 @@ class ObjectTree(QWidget):
                         note = tr(
                             "{count} gleichartige Merkmale — anklicken zum Auf- und Zuklappen."
                         ).format(count=alike[label])
-                        roof.setToolTip(0, note)
+                        # Mit dem Namen, der neben einem breiten Maß gekürzt
+                        # stehen kann (FD-20).
+                        roof.setToolTip(0, f"{roof.text(0)} — {note}")
                         roof.setData(0, Qt.ItemDataRole.AccessibleDescriptionRole, note)
                         # Das gemeinsame Maß sagt seine Herkunft wie jedes Kind.
                         roof.setData(
@@ -2762,7 +2769,8 @@ class ObjectTree(QWidget):
                     # Und er weiß, aus welchem Schritt er kommt — daran hängt
                     # „Diesen Schritt ändern" (§21.2).
                     group.setData(0, _STEP_ROLE, step)
-                    group.setToolTip(0, _origin_text(step, document))
+                    step_origin = _origin_text(step, document)
+                    group.setToolTip(0, f"{title} · {step_origin}" if step_origin else title)
                     groups[step] = group
                     item.addChild(group)
                 group.addChild(child)
@@ -2922,13 +2930,15 @@ class ObjectTree(QWidget):
         self.filamentRequested.emit(object_id, feature_id)
 
     def _size_columns(self) -> None:
-        """Die Maßspalte so breit wie ihr Inhalt, höchstens ein Teil des Ganzen.
+        """Die Maßspalte so breit wie ihr Inhalt, der Name bekommt den Rest.
 
         Aufgerufen, wenn sich der Inhalt ändert und wenn sich die Breite ändert
         — an beidem hängt das Ergebnis. Ohne Breite (vor dem ersten Legen) gibt
         es nichts zu teilen.
         """
-        width = self.tree.viewport().width()
+        view = self.tree
+        header = view.header()
+        width = view.viewport().width()
         if width <= 0:
             return
         # **Die Filamentspalte wird abgezogen, bevor geteilt wird.** Sie ist
@@ -2936,32 +2946,49 @@ class ObjectTree(QWidget):
         # Anteil vom Ganzen und der Name bekäme, was danach übrig ist — bei
         # schmaler Karte waren das 25 Punkte gegen 39 für das Maß.
         free = max(0, width - FILAMENT_WIDTH)
-        needed = self.tree.sizeHintForColumn(1)
+        needed = view.sizeHintForColumn(1)
         # **Die Überschrift steht immer ganz da** (RM-519): ``sizeHintForColumn``
         # misst nur die Zeilen, und der Anteil allein schnitt in mancher
         # Sprache den Kopf ab. Ihr Platz geht dem Namen ab, nicht ihr Wort.
-        heading = self.tree.header().sectionSizeHint(1)
-        # **Der Anteil deckelt nur, wo beide nicht passen** (FD-20): Neben
-        # „Quader“ stand „253,44 x 190,08 x 12,67 mm“ in 117 von 152 Punkten,
-        # obwohl der Name den Rest nicht brauchte. Was die Namen übrig lassen,
-        # bekommt das Maß; erst wenn beide zusammen zu breit sind, gilt der
-        # Anteil, und der Name behält die Mehrheit. Zu den Namen zählt ihre
-        # Überschrift: Neben „Box“ blieb „Object“ sonst nur halb stehen.
-        names = max(self.tree.sizeHintForColumn(0), self.tree.header().sectionSizeHint(0))
-        shared = max(heading, min(needed, max(int(free * MEASURE_SHARE), free - names)))
-        self.tree.header().resizeSection(1, max(0, min(shared, free)))
-        # **Und reicht die Karte für beide nicht, wird sie breiter, bis LEFT_MAX**
-        # (FD-20): Name und Maß brauchten neben „Quader“ zehn Punkte mehr, als
-        # die 300 der Karte hergaben. Den Ausschlag gibt das Maß; ein langer
-        # Name zählt nur mit seinem gewohnten Anteil an der Grundbreite, sonst
-        # machte jeder lange Dateiname die Karte breit. Gerechnet an der
-        # Grundbreite, nicht an der jetzigen — sonst wüchse die Karte an sich
-        # selbst weiter.
-        name_room = min(names, int((LEFT_WIDTH - FILAMENT_WIDTH) * (1 - MEASURE_SHARE)))
-        chrome = max(0, self.tree.width() - width)
+        heading = header.sectionSizeHint(1)
+        # **Das Maß steht ganz, gekürzt wird der Name** (FD-20): Neben „Quader“
+        # stand „253,44 x 190,08 x 12,67 mm“ in 117 von 152 Punkten, und neben
+        # „Redondeo cóncavo (4)“ endete „Ø8,00 mm / Ø4,00…“ — eine halbe Zahl
+        # ist keine, ein gekürzter Name steht ganz in seiner Kurzhilfe. Die
+        # Überschrift der Namensspalte bleibt dabei stehen: Neben „Box“ blieb
+        # „Object“ sonst nur halb.
+        shared = max(heading, min(needed, free - header.sectionSizeHint(0)))
+        header.resizeSection(1, max(0, min(shared, free)))
+        # **Und die Karte wird so breit, dass beide stehen, bis LEFT_MAX**
+        # (FD-20). Den Ausschlag gibt das Maß. Der Name eines Körpers zählt nur
+        # mit seinem gewohnten Anteil an der Grundbreite, sonst machte jeder
+        # lange Dateiname die Karte breit — gerechnet an der Grundbreite, nicht
+        # an der jetzigen, sonst wüchse die Karte an sich selbst weiter.
+        # Merkmalsnamen benennt Solidon selbst, sie zählen ganz: Gedeckelt
+        # zählte „Redondeo cóncavo (4)“ nur mit 159 von 173 Punkten, die Karte
+        # blieb bei 332, und das Maß daneben bekam den Rest. Gezählt werden die
+        # sichtbaren Zeilen mit ihrem Einzug, wie ``sizeHintForColumn`` sie misst.
+        bodies = features = 0
+        row = view.model().index(0, 0)
+        while row.isValid():
+            depth, parent = 1, row.parent()
+            while parent.isValid():
+                depth, parent = depth + 1, parent.parent()
+            wide = view.sizeHintForIndex(row).width() + depth * view.indentation()
+            if depth == 1:
+                bodies = max(bodies, wide)
+            else:
+                features = max(features, wide)
+            row = view.indexBelow(row)
+        name_room = max(
+            min(bodies, int((LEFT_WIDTH - FILAMENT_WIDTH) * (1 - MEASURE_SHARE))),
+            features,
+            header.sectionSizeHint(0),
+        )
+        chrome = max(0, view.width() - width)
         least = min(chrome + FILAMENT_WIDTH + name_room + max(needed, heading), LEFT_MAX)
-        if least != self.tree.minimumWidth():
-            self.tree.setMinimumWidth(least)
+        if least != view.minimumWidth():
+            view.setMinimumWidth(least)
             tell_the_zone(self)
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
@@ -8190,14 +8217,15 @@ class MeasurementLabel(QLabel):
         self.setText(f"{text}   {note}" if note else text)
 
 
-#: Höchstanteil der Maßspalte im Objektbaum.
+#: Anteil der Maßspalte, mit dem die Karte rechnet, wenn sie für das Maß breiter wird.
 #:
 #: Beide Spalten wollen Platz: der Name, weil zwei Körper eines Projekts sich
 #: sonst nicht unterscheiden, und das Maß, weil eine halbe Zahl keine ist. Bei
 #: 258 Pixeln Breite bekam der Name mit Qts Vorgabe 128 und mit reiner
-#: Inhaltsbreite der Maßspalte 70 — beides zu wenig. Zwei Fünftel für das Maß
-#: lassen dem Namen die Mehrheit und reichen für „60 x 40 x 12 mm" in der
-#: Schrift, mit der wirklich gezeichnet wird.
+#: Inhaltsbreite der Maßspalte 70 — beides zu wenig. Das Maß steht ganz
+#: (FD-20); die linke Karte wird dafür breiter, bis neben ihm der Name eines
+#: Körpers drei Fünftel ihrer Grundbreite hat — ein längerer macht sie nicht
+#: breiter — und jeder Merkmalsname ganz.
 MEASURE_SHARE = 0.4
 
 #: Wie viele Zeilen eine Karte der linken Spalte mindestens hoch wird — drei,

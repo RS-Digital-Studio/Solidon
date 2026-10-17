@@ -5716,41 +5716,44 @@ def test_the_object_tree_gives_the_names_the_larger_half(qt_app: QApplication) -
 
     Den Deckel nur abzuschalten kippt es um: dann nimmt die Maßspalte ihre
     Inhaltsbreite, und bei „60 x 40 x 12 mm" waren das 186 von 258 — 70 für den
-    Namen. Geprüft wird deshalb das Verhältnis und nicht der Schalter: Der Name
-    behält die Mehrheit, das Maß bekommt höchstens seinen Anteil, und über die
-    Breite hinweg bleibt beides so.
+    Namen. Das war die synthetische Schrift von offscreen; geprüft wird in der
+    Prüfschrift, und dort steht das Maß ganz (FD-20), der Name behält die
+    Mehrheit, über die Breite hinweg.
     """
     from PySide6.QtWidgets import QTreeWidgetItem
 
-    from app.ui.panels import MEASURE_SHARE, ObjectTree
+    from app.ui.panels import ObjectTree
+    from tests.bundled_fonts import bundled_font
 
-    panel = ObjectTree()
-    try:
-        panel.resize(258, 400)
-        panel.show()
-        for name, size in (
-            ("Gehäuseboden", "60 x 40 x 12 mm"),
-            ("Gehäuseboden (Kopie) Prüfstück", "20 x 20 x 5 mm"),
-        ):
-            panel.tree.addTopLevelItem(QTreeWidgetItem([name, size]))
-        QApplication.processEvents()
+    with bundled_font(qt_app, 9):
+        panel = ObjectTree()
+        try:
+            panel.resize(258, 400)
+            panel.show()
+            for name, size in (
+                ("Gehäuseboden", "60 x 40 x 12 mm"),
+                ("Gehäuseboden (Kopie) Prüfstück", "20 x 20 x 5 mm"),
+            ):
+                panel.tree.addTopLevelItem(QTreeWidgetItem([name, size]))
+            QApplication.processEvents()
 
-        header = panel.tree.header()
-        assert not header.stretchLastSection(), (
-            "der Deckel überstimmt jede Einstellung der letzten Spalte"
-        )
-        for width in (258, 420, 700):
-            panel.resize(width, 400)
-            QApplication.processEvents()
-            panel._size_columns()
-            QApplication.processEvents()
-            names, measures = header.sectionSize(0), header.sectionSize(1)
-            assert names > measures, f"bei {width} px: Name {names}, Maß {measures}"
-            assert measures <= int(panel.tree.viewport().width() * MEASURE_SHARE) + 1, (
-                f"bei {width} px nimmt die Maßspalte {measures} und damit mehr als ihren Anteil"
+            header = panel.tree.header()
+            assert not header.stretchLastSection(), (
+                "der Deckel überstimmt jede Einstellung der letzten Spalte"
             )
-    finally:
-        panel.deleteLater()
+            for width in (258, 420, 700):
+                panel.resize(width, 400)
+                QApplication.processEvents()
+                panel._size_columns()
+                QApplication.processEvents()
+                names, measures = header.sectionSize(0), header.sectionSize(1)
+                assert names > measures, f"bei {width} px: Name {names}, Maß {measures}"
+                assert measures >= panel.tree.sizeHintForColumn(1), (
+                    f"bei {width} px steht das Maß in {measures} von "
+                    f"{panel.tree.sizeHintForColumn(1)} Punkten"
+                )
+        finally:
+            panel.deleteLater()
 
 
 def test_the_layer_readout_follows_the_unit(qt_app: object) -> None:
