@@ -1,10 +1,10 @@
-"""Die Maßspalte im Objektbaum zeigt ein krummes Maß ganz, wenn der Name Platz lässt (FD-20).
+"""Die Maßspalte im Objektbaum zeigt ein krummes Maß ganz (FD-20).
 
 Nach *Auf den Bauraum verkleinern* stand „253,44 × 190,08 × 12,67 mm“ in
 117 von 152 nötigen Punkten: Die Spalte war fest auf zwei Fünftel der Breite
 gedeckelt (``MEASURE_SHARE``), auch neben einem Namen wie „Quader“, der den
-Rest nicht brauchte. Der Deckel gilt jetzt nur, wo beide Spalten nicht
-zugleich passen — dann behält der Name die Mehrheit wie bisher.
+Rest nicht brauchte. Das Maß bekommt, was es braucht; passen beide nicht
+zugleich, wird der Name gekürzt.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QApplication, QTreeWidgetItem
 
 from app.ui.overlay import LEFT_WIDTH
-from app.ui.panels import MEASURE_SHARE, ObjectTree
+from app.ui.panels import ObjectTree
 
 
 @pytest.fixture(autouse=True)
@@ -67,8 +67,14 @@ def test_a_crooked_measure_beside_a_short_name_stands_whole(qt_app: QApplication
         tree.deleteLater()
 
 
-def test_long_names_keep_the_larger_half(qt_app: QApplication) -> None:
-    """Gegenprobe: Passen beide nicht, gilt der Anteil — der Name ist die Auskunft."""
+def test_a_long_name_yields_to_the_whole_measure(qt_app: QApplication) -> None:
+    """Passen beide nicht, wird der Name gekürzt und nicht das Maß.
+
+    Eine halbe Zahl ist keine; ein gekürzter Name steht ganz in seiner
+    Kurzhilfe. Bis zum Schlusslauf L4 galt hier der Anteil, und neben einem
+    langen Namen endete das Maß auf „24,5 × 19,5 × 20 …“. Die Überschrift
+    der Namensspalte bleibt ganz.
+    """
     tree = _tree(
         [
             ("Gehäuseboden (Kopie) Prüfstück mit Halter", "253,44 × 190,08 × 12,67 mm"),
@@ -77,11 +83,11 @@ def test_long_names_keep_the_larger_half(qt_app: QApplication) -> None:
     )
     try:
         header = tree.tree.header()
-        free = tree.tree.viewport().width()
-        assert header.sectionSize(1) <= max(
-            header.sectionSizeHint(1), int(free * MEASURE_SHARE) + 1
+        assert header.sectionSize(1) >= tree.tree.sizeHintForColumn(1), (
+            f"Maß in {header.sectionSize(1)} von {tree.tree.sizeHintForColumn(1)} Punkten"
         )
-        assert header.sectionSize(0) > header.sectionSize(1)
+        assert header.sectionSize(0) < tree.tree.sizeHintForColumn(0), "Voraussetzung"
+        assert header.sectionSize(0) >= header.sectionSizeHint(0), "die Überschrift bleibt ganz"
     finally:
         tree.close()
         tree.deleteLater()

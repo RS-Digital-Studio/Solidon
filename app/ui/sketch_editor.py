@@ -47,6 +47,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListView,
     QListWidget,
     QListWidgetItem,
     QMenu,
@@ -113,6 +114,7 @@ from app.ui.labels import (
 )
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import ROLES, text_colour
+from app.ui.report_rows import WrappedRowDelegate
 from app.ui.shortcut_schemes import delete_keys, deletes, redo_keys
 from app.ui.viewport import MEASURE_GAP
 
@@ -7038,6 +7040,11 @@ class SketchPanel(QWidget):
         # Linie 1 Ende, Linie 2 Anfang" ist länger als die 254 Pixel der Spalte,
         # und ein abgeschnittener Eintrag wäre schlechter als die Zahlen vorher.
         self.constraint_list.setWordWrap(True)
+        # Gemessen, wie gezeichnet wird, und bei jeder Breite neu: Unter dem
+        # Stylesheet maß Qt die Zeile ohne ihren Innenrand und kürzte die
+        # letzte Zeile auf „…“ — derselbe Fehler wie im Prüfbericht (FD-109).
+        self.constraint_list.setResizeMode(QListView.ResizeMode.Adjust)
+        self.constraint_list.setItemDelegate(WrappedRowDelegate(self.constraint_list))
         # Überfahren lässt die betroffene Geometrie aufleuchten (E19). Ohne das
         # ist „Deckung (1, 2)" nicht lesbar: welche zwei Punkte das sind, weiß
         # nur, wer die flache Nummerierung im Kopf hat.

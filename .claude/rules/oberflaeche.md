@@ -352,6 +352,12 @@ transparenten Hintergrund und Rahmenfarbe (`style.stylesheet`). Breite und
 Padding bleiben; Unterleisten, Eingaben, Hauptknöpfe und die vorhandenen
 Zustandsregeln ändern sich dadurch nicht. Wächter: `test_toolbar_rest_style.py`.
 
+## Umbrechende Listen messen, wie sie zeichnen
+
+Eine `QListWidget` mit Umbruch nimmt `report_rows.WrappedRowDelegate` und
+`ResizeMode.Adjust`: Qt misst unter dem Stylesheet ohne Innenrand und kürzt
+sonst auf „…“.
+
 ## Eine Auswahl fällt nie still auf etwas Größeres
 
 Fehlt ein gewähltes Merkmal im neuen Stand, hebt `ObjectTree.show_scene` die

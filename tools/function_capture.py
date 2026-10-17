@@ -721,12 +721,20 @@ def _item_texts(root: Any) -> list[dict[str, Any]]:
     (die Befundliste des Prüfberichts, F-15) braucht die Zeile so viel Höhe,
     wie ihre umbrochenen Zeilen tragen; ist die Zelle niedriger, kürzt Qt die
     letzte sichtbare Zeile („Überstand: 10,00 …“, FD-110) — ``axis`` ``hoehe``.
-    Ein Wort, das allein nicht in die Breite passt, ist auch umbrochen ein
-    Breitenfund.
+    Gelegt wird in der Textfläche, in die Qt zeichnet (``drawn_text_room``,
+    mit Innenrand und Auswahlkante aus dem Stylesheet). Ein Wort, das allein
+    nicht in die Breite passt, ist auch umbrochen ein Breitenfund.
     """
     from PySide6.QtCore import QModelIndex, Qt
     from PySide6.QtGui import QFont
-    from PySide6.QtWidgets import QAbstractItemView, QStyle
+    from PySide6.QtWidgets import (
+        QAbstractItemView,
+        QStyle,
+        QStyledItemDelegate,
+        QStyleOptionViewItem,
+    )
+
+    from app.ui.report_rows import drawn_text_room
 
     found: list[dict[str, Any]] = []
     for view in root.findChildren(QAbstractItemView):
@@ -764,12 +772,26 @@ def _item_texts(root: Any) -> list[dict[str, Any]]:
                     if wraps:
                         given = index.data(Qt.ItemDataRole.FontRole)
                         font = given if isinstance(given, QFont) else view.font()
-                        height, widest = _wrapped_height(text, font, shown - margin - symbol)
-                        if widest + margin + symbol > shown:
+                        # Gelegt wird in der Fläche, in die Qt zeichnet: unter dem
+                        # Stylesheet nach Innenrand und Kante der Zeile. Mit der
+                        # ganzen Zelle gemessen hieß „… mais a …“ ``cut=false`` (L4).
+                        drawn = QStyleOptionViewItem()
+                        view.initViewItemOption(drawn)
+                        delegate = view.itemDelegateForIndex(index)
+                        if isinstance(delegate, QStyledItemDelegate):
+                            delegate.initStyleOption(drawn, index)
+                        drawn.rect = cell
+                        selection = view.selectionModel()
+                        if selection is not None and selection.isSelected(index):
+                            drawn.state |= QStyle.StateFlag.State_Selected
+                        room, edge = drawn_text_room(drawn)
+                        text_width = room.width() - 2 * edge
+                        height, widest = _wrapped_height(text, font, text_width)
+                        if widest > text_width:
                             entry.update(axis="breite", need_px=widest + margin + symbol)
                             entry["width_px"] = shown
                         else:
-                            entry.update(axis="hoehe", need_px=height, width_px=cell.height())
+                            entry.update(axis="hoehe", need_px=height, width_px=room.height())
                     else:
                         first = text.splitlines()[:1]
                         need = max((metrics.horizontalAdvance(p) for p in first), default=0)

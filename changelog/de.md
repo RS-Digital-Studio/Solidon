@@ -107,8 +107,8 @@ Nutzen da und sonst nichts.
 - Hält die Kette an, öffnet eine Funktion, die einen Schritt dahinter anlegen würde, keinen Dialog mit grauem Knopf mehr. Der Halt und sein Weg weiter stehen gleich da.
 - Im Prüfbericht erreicht die Tabulatortaste die angebotene Handlung, und kein Rollbereich ist mehr ein eigener Halt ohne Namen.
 - Ein Doppelklick auf eine Maßänderung im Verlauf öffnet das Maß zum Ändern, auf einen Drucker- oder Materialwechsel die *Druckeinstellungen …*.
-- Die Maßspalte im Objektbaum zeigt auch krumme Maße ganz; die linke Karte wird dafür bei Bedarf etwas breiter.
-- Befundzeilen im Prüfbericht zeigen ihre Maßangabe vollständig und nennen jeden Körper nur einmal.
+- Die Maßspalte im Objektbaum zeigt jedes Maß ganz, auch krumme; die linke Karte wird dafür bei Bedarf breiter. Sonst wird der Name gekürzt, seine Kurzhilfe nennt ihn ganz.
+- Befundzeilen im Prüfbericht stehen ganz da, auch ihre Maßangabe, und nennen jeden Körper nur einmal.
 - Die Parameterleiste zeigt Längen in Zoll, wenn Zoll eingestellt ist. Ein Rechtsklick auf das Wertfeld öffnet *Ändern …*.
 - Der Dialog *Parameter anlegen …* erklärt jedes Feld, auch Unter- und Obergrenze, und ein Bildschirmleser nennt jedes Feld beim Namen.
 - Passt ein Parametername nicht, steht der Grund direkt unter dem Namensfeld, mit einem Knopf für einen Namen, der geht.

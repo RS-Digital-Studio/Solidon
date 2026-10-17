@@ -162,6 +162,13 @@ def test_chosen_place_survives_fold_value_and_missing_surface(
     """Vollständige Sprachkarten: Titel, Klappe, Wert und beide Anordnungswege."""
     window, _object_id, _hole_ids = selected_hole
     flow = window._quiet_placement
+    # Breiter als Full HD: Offscreen misst jede Schrift rund doppelt so breit,
+    # die aufgeklappte französische Karte wird fast tausend Punkte breit, und
+    # die linke Karte nimmt Merkmalsname und Maß der Platte ganz auf (FD-20).
+    # Auf 1920 blieb dazwischen kein Ort, an dem die aufgeklappte Karte stehen
+    # kann, ohne zu rücken — gefragt ist hier, ob sie an ihrem Ort bleibt.
+    window.resize(2560, 1080)
+    wait_until(qt_app, lambda: not window.overlay._moves and window.overlay._pending is None)
     settle_measure_layout(qt_app)
     group = flow._measure_group
     title = _title(flow)

@@ -203,6 +203,9 @@ Warum: `konzepte/begruendungen/regel-oberflaeche.md`, „Die linken Karten“.
 - **Objektbaum:** Die Filamentspalte trägt die Spule, das Wort steht in
   Kurzhilfe und Lesername; der Farbpunkt ist rund, ohne eigenes Filament
   gestrichelt (`filament_chip`). Die Maßspalte ist nie schmaler als ihr Kopf.
+  Das Maß steht ganz, gekürzt wird der Name, und seine Kurzhilfe beginnt mit
+  ihm; die Karte wächst bis `LEFT_MAX` für Maß und Merkmalsnamen, für den
+  Namen eines Körpers nur bis zu seinem Anteil (`ObjectTree._size_columns`).
 - **Verlauf:** Jede zugeklappte Zeile nennt die Nummern, die sie verbirgt
   (`step_span`), auch die Löschgruppe. Der Kernwechsel steht im Kontextmenü
   zuletzt hinter einem Trennstrich (`HistoryPanel.context_menu`).

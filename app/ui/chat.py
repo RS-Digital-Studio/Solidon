@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QListView,
     QListWidget,
     QListWidgetItem,
     QPlainTextEdit,
@@ -39,6 +40,7 @@ from app.i18n import TranslatableText, _, tr
 from app.ui.labels import volume
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import SEVERITY_ENCODING
+from app.ui.report_rows import WrappedRowDelegate
 from app.ui.scroll_areas import PassingScrollArea
 from app.ui.style import NORMAL, make_primary, set_level
 from app.ui.theme import UNDONE_COLOUR
@@ -137,6 +139,11 @@ class ChatPanel(QWidget):
         self.turns = QListWidget(self)
         self.turns.setAccessibleName(tr("Gesprächsverlauf"))
         self.turns.setWordWrap(True)
+        # Gemessen, wie gezeichnet wird, und bei jeder Breite neu: Unter dem
+        # Stylesheet maß Qt die Zeile ohne ihren Innenrand und kürzte die
+        # letzte Zeile auf „…“ — derselbe Fehler wie im Prüfbericht (FD-109).
+        self.turns.setResizeMode(QListView.ResizeMode.Adjust)
+        self.turns.setItemDelegate(WrappedRowDelegate(self.turns))
         self.turns.setAlternatingRowColors(False)
         # Ein Gespräch ist ein Arbeitsbereich und kein Text: seine Höhe folgt
         # nicht dem, was schon darin steht. Ohne diese Zeile war die Karte im
