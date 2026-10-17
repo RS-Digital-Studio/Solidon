@@ -172,3 +172,56 @@ def test_a_way_without_its_target_in_the_vocabulary_is_not_measured(
     assert "fehlt im Wortschatz" in flow.data["unmeasured"]["revise"]
     assert [entry["way"] for entry in flow.data["revise"]] == ["menue"]
     assert _judged_revise(flow.data["revise"]).verdict == "nicht_gelaufen"
+
+
+def test_a_step_row_without_inputs_waits_for_rest_not_for_a_preview() -> None:
+    """Schlusslauf: *Senkung* (``countersink_hole``) hat keine Eingaben — kein Entwurf.
+
+    Der Änderungsweg wartete trotzdem auf „vorschau steht“, zweimal 180 s. Wie
+    der Hauptweg wartet er ohne Eingaben nur auf Ruhe; mit Eingaben bleibt die
+    Vorschau.
+    """
+    flow = object.__new__(function_bench.FunctionFlow)
+    flow.spec = {}
+    flow.idle = lambda: True  # type: ignore[method-assign]
+    flow.preview_steps = lambda steps=(): [*steps, Step("vorschau steht", lambda m: None)]  # type: ignore[method-assign]
+    flow.wait_step = lambda name, ready, timeout_s=0: Step(name, lambda m: None)  # type: ignore[method-assign]
+    way = [Step("weg", lambda m: None)]
+    assert [step.name for step in flow.shown_steps(way)] == ["weg", "ruhe"]
+    flow.spec = {"inputs": {"feature.field:hole.diameter": 8.0}}
+    assert [step.name for step in flow.shown_steps(way)] == ["weg", "vorschau steht"]
+
+
+def test_the_revision_of_a_step_row_without_inputs_never_waits_for_a_preview(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Angeschlossen: ``phase_revise`` legt den Schritt ohne Warten auf ein Band an."""
+    document = SimpleNamespace(parameters={}, ops=[])
+    flow = object.__new__(function_bench.FunctionFlow)
+    flow.session = SimpleNamespace(project=SimpleNamespace(document=document), last_result=None)
+    flow.window = SimpleNamespace()
+    flow.spec = {}
+    flow.apply_target = "dialog.accept"
+    flow.data = {
+        "states": {"before": {"ops": []}, "applied": {"ops": ["countersink_hole"]}},
+        "unmeasured": {},
+        "errors": [],
+    }
+    marker = Step("marke", lambda machine: None)
+    flow.reset = lambda: True  # type: ignore[method-assign]
+    flow.idle = lambda: True  # type: ignore[method-assign]
+    flow.path_steps = lambda: [Step("weg", lambda m: None)]  # type: ignore[method-assign]
+    flow.input_steps = lambda inputs: []  # type: ignore[method-assign]
+    flow.preview_steps = lambda steps=(): [*steps, Step("vorschau steht", lambda m: None)]  # type: ignore[method-assign]
+    flow.apply_step = lambda: marker  # type: ignore[method-assign]
+    flow.wait_step = lambda name, ready, timeout_s=0: Step(name, lambda m: None)  # type: ignore[method-assign]
+    names: list[list[str]] = []
+
+    def run_steps(label: str, steps: list[Step], timeout_s: float = 0) -> bool:
+        names.append([step.name for step in steps])
+        return False  # nur die Schrittfolge zählt hier
+
+    flow.run_steps = run_steps  # type: ignore[method-assign]
+    flow.phase_revise()
+    assert len(names) == 2, names
+    assert all("vorschau steht" not in steps and "ruhe" in steps for steps in names), names

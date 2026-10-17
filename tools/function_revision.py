@@ -33,6 +33,17 @@ PARAMETER_ROUTES: Final[dict[str, tuple[tuple[str, str], ...]]] = {
 class RevisionPhase:
     """Prüfpunkt 12 als Phase von FunctionFlow, wie GesturePhases und SwitchPhase."""
 
+    def shown_steps(self: FunctionFlow, triggering: list[Step]) -> list[Step]:
+        """Weg und Eingaben, dann die Vorschau — ohne Eingaben nur Ruhe wie der Hauptweg.
+
+        Ohne Eingaben gibt es keinen Entwurf und kein Band; ``preview_steps``
+        wartete dann zweimal 180 s auf „vorschau steht“ (``countersink_hole``
+        im Schlusslauf).
+        """
+        if self.spec.get("inputs"):
+            return self.preview_steps(triggering)
+        return [*triggering, self.wait_step("ruhe", self.idle)]
+
     def phase_revise(self: FunctionFlow) -> None:
         """Prüfpunkt 12: Schritt über Kontextmenü und Doppelklick ändern, Verlauf gleich lang.
 
@@ -80,7 +91,7 @@ class RevisionPhase:
             previous = self.session.last_result
             accepted = self.run_steps(
                 f"übernehmen für {way}",
-                self.preview_steps(
+                self.shown_steps(
                     [*self.path_steps(), *self.input_steps(self.spec.get("inputs") or {})]
                 )
                 + ([self.apply_step()] if self.apply_target else [])
@@ -227,7 +238,7 @@ class RevisionPhase:
 
             accepted = self.run_steps(
                 f"anlegen für {way}",
-                self.preview_steps(
+                self.shown_steps(
                     [*self.path_steps(), *self.input_steps(self.spec.get("inputs") or {})]
                 )
                 + ([self.apply_step()] if self.apply_target else [])

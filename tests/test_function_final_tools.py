@@ -501,6 +501,35 @@ def test_the_reason_of_a_grey_apply_is_pictured_where_the_click_opens_the_surfac
     ]
 
 
+def test_a_tooltip_that_fades_in_is_pictured_after_its_animation(
+    qt_app: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Schlusslauf: Unter Windows blendet Qt die Kurzhilfe ein (``UI_AnimateTooltip``).
+
+    Sichtbar wird sie erst nach der Animation. Gefragt wurde nach einem einzigen
+    Ereignisdurchlauf, und jeder graue Hauptknopf hieß „Kurzhilfe gesetzt, aber
+    nicht gezeigt“. Nachgestellt: Die Kurzhilfe erscheint 200 ms nach dem Aufruf.
+    """
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QToolTip
+
+    from tools import function_tooltips
+
+    real = QToolTip.showText
+    shown: list[bool] = []
+
+    def animated(point: Any, text: str, widget: Any = None, *rest: Any) -> None:
+        QTimer.singleShot(200, lambda: (real(point, text, widget), shown.append(True)))
+
+    monkeypatch.setattr(QToolTip, "showText", animated)
+    button = _grey(qt_app)
+    try:
+        assert function_tooltips.reason_picture(button, tmp_path / "grund.png"), shown
+    finally:
+        button.close()
+    assert shown and (tmp_path / "grund.png").is_file()
+
+
 def test_grey_without_a_tooltip_is_named_in_the_protocol(qt_app: Any, tmp_path: Path) -> None:
     """Grau ohne Kurzhilfe: kein Bild, aber ``unmeasured`` sagt warum (RC2-3)."""
     from tools import function_tooltips
