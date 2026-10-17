@@ -84,7 +84,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el informe de comprobación, la tecla Tab llega a la acción ofrecida, y ninguna zona desplazable es ya una parada propia sin nombre.
 - Un doble clic en un cambio de medida del historial abre esa medida para editarla, y en un cambio de impresora o material, *Ajustes de impresión …*.
 - La columna de medidas del árbol de objetos muestra completa cada medida, también las que llevan decimales; la tarjeta izquierda se ensancha un poco si hace falta. Si aun así no hay sitio, se acorta el nombre, y su ayuda emergente lo muestra entero.
-- Las filas de hallazgos del informe muestran su medida completa y nombran cada cuerpo una sola vez.
+- Las filas de hallazgos del informe se ven completas, también su medida, y nombran cada cuerpo una sola vez.
 - La barra de parámetros muestra las longitudes en pulgadas cuando están ajustadas las pulgadas. Un clic derecho en el campo del valor abre *Cambiar …*.
 - El diálogo *Crear parámetro …* explica cada campo, también los límites inferior y superior, y un lector de pantalla nombra cada campo.
 - Si un nombre de parámetro no sirve, el motivo aparece justo debajo del campo del nombre, con un botón para un nombre que sí sirve.

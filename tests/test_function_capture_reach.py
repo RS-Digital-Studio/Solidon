@@ -158,6 +158,36 @@ def test_a_wrapped_row_tall_enough_and_a_short_row_are_not_cut(qt_app: Any) -> N
             listing.close()
 
 
+def test_a_wrapped_row_is_measured_where_the_stylesheet_draws_it(qt_app: Any) -> None:
+    """Pt „… mais a …“ und it „— Parallelepipedo · …“ hießen an Stufe A ``cut=false`` (L4).
+
+    Die Messung brach den Text auf die ganze Zellbreite um; gezeichnet wird er
+    unter dem Stylesheet erst nach dem Innenrand der Zeile. Hier ist der
+    Innenrand breit: Die Zeile ist so hoch, wie der Text auf der ganzen Breite
+    braucht — gezeichnet braucht er eine Zeile mehr.
+    """
+    from PySide6.QtCore import QSize
+    from PySide6.QtWidgets import QListWidget, QStyle
+
+    listing = _list(qt_app, LONG, wrap=True, lines=1)
+    try:
+        view = listing.findChild(QListWidget)
+        view.setStyleSheet("QListView::item { padding: 2px 40px; }")
+        qt_app.processEvents()
+        margin = 2 * (view.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1)
+        width = view.viewport().width()
+        full, _widest = capture._wrapped_height(LONG, view.font(), width - margin)
+        narrow, _widest = capture._wrapped_height(LONG, view.font(), width - margin - 80)
+        assert narrow > full, "Voraussetzung: der Innenrand kostet eine Zeile"
+        view.item(0).setSizeHint(QSize(width, full + 4))
+        qt_app.processEvents()
+        entry = _cell(listing)
+        assert entry["cut"] is True, entry
+        assert entry["axis"] == "hoehe", entry
+    finally:
+        listing.close()
+
+
 def test_a_row_without_wrapping_is_measured_across(qt_app: Any) -> None:
     """Ohne Umbruch zählt die Breite wie bisher — und eine kurze Zeile passt."""
     listing = _list(qt_app, LONG, wrap=False, lines=1)

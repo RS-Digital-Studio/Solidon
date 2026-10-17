@@ -348,6 +348,14 @@ transparenten Hintergrund und Rahmenfarbe (`style.stylesheet`). Breite und
 Padding bleiben; Unterleisten, Eingaben, Hauptknöpfe und die vorhandenen
 Zustandsregeln ändern sich dadurch nicht. Wächter: `test_toolbar_rest_style.py`.
 
+## Eine umbrechende Liste misst ihre Zeilen, wie sie gezeichnet werden
+
+Eine `QListWidget` mit `setWordWrap(True)` nimmt `report_rows.WrappedRowDelegate`
+und `ResizeMode.Adjust`: Unter dem Stylesheet misst Qt die Zeile mit voller
+Breite, zeichnet den Text aber erst nach Innenrand und Auswahlkante und kürzt
+die letzte Zeile auf „…“. Die Textmessung des Prüfstands legt in derselben
+Fläche (`drawn_text_room`). Wächter: `tests/test_report_rows.py`.
+
 ## Eine Auswahl fällt nie still auf etwas Größeres
 
 Fehlt ein gewähltes Merkmal im neuen Stand, hebt `ObjectTree.show_scene` die

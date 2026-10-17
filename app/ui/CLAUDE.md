@@ -114,7 +114,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `panels.py` | die Panels links und der Prüfbericht rechts (§2.5): `ObjectTree`, `ParameterPanel`, `HistoryPanel`, `ReportPanel` mit `BodyChoiceDialog`, dazu das Merkmalfenster `FeaturePanel` (Handlungen, Kanten, Bausteine, Schutz vor Trennnähten, Passung anlegen) |
-| `feature_footer.py`, `parameter_length.py`, `report_rows.py` | Fußzeile unter scharfer Handlung; Parameterlängen; Befundzeilen mit Reserve |
+| `feature_footer.py`, `parameter_length.py`, `report_rows.py` | Fußzeile unter scharfer Handlung; Parameterlängen; umbrechende Listenzeilen, gemessen wie gezeichnet |
 | `feature_editing.py` | `advanced_fields` für Maßgruppe und rechte Zeile; `configure_scope`, `explain_value_help`; panelgebundene Hauptaktionspriorität `FeatureEditPriority` |
 | `card_width.py` | Natürliche Breite des eingebetteten Auswahlreiters (§2.5), Paar- und Koordinatenraster; Schnittstellen in `karte-app-ui.md` |
 | `selection_operations.py` | Auswahlhandlungen aus dem Register und Suchfeld mit Trefferliste; Auswahlregeln und Schnittstellen in `karte-app-ui.md` |

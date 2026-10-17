@@ -84,7 +84,7 @@ dans `website/version.json`.
 - Dans le rapport de contrôle, la touche Tab atteint l'action proposée, et aucune zone défilante n'est plus un arrêt à part sans nom.
 - Un double-clic sur une modification de cote dans l'historique ouvre cette cote pour la modifier, et sur un changement d'imprimante ou de matériau, *Réglages d'impression …*.
 - La colonne des cotes de l'arborescence affiche chaque cote en entier, y compris les cotes non rondes ; la carte de gauche s'élargit un peu au besoin. Si la place manque encore, c'est le nom qui est raccourci, et son info-bulle l'affiche en entier.
-- Les lignes de constat du rapport affichent leur mesure en entier et ne nomment chaque corps qu'une fois.
+- Les lignes de constat du rapport s'affichent en entier, mesure comprise, et ne nomment chaque corps qu'une fois.
 - La barre des paramètres affiche les longueurs en pouces lorsque les pouces sont réglés. Un clic droit sur le champ de valeur ouvre *Modifier …*.
 - Le dialogue *Créer un paramètre …* explique chaque champ, y compris les bornes inférieure et supérieure, et un lecteur d'écran nomme chaque champ.
 - Si un nom de paramètre ne convient pas, la raison s'affiche juste sous le champ du nom, avec un bouton pour un nom qui convient.
