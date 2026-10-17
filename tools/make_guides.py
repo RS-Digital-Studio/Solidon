@@ -1837,6 +1837,7 @@ def _child(language: str, keys: list[str], target: Path, film_target: Path) -> i
             "Die Anleitungen entstehen nur isoliert, über den Elternprozess: "
             f"{user_config_dir()} ist ein echtes Profil."
         )
+    from app.ui import cursors
     from app.ui.app import install_qt_translations
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -1847,6 +1848,7 @@ def _child(language: str, keys: list[str], target: Path, film_target: Path) -> i
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     apply_theme(app, "dark")
+    cursors.install(app)  # Zeiger auch für später entstehende Fenster, wie ``app.py``
     install_catalog(language, read_catalog(language))
     i18n.set_language(language)
     install_qt_translations(app, language)

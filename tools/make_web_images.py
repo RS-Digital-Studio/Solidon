@@ -738,6 +738,7 @@ def _screens_child(language: str) -> int:
     from app.core import discover
     from app.core import tools as external_tools
     from app.core.registry import REGISTRY
+    from app.ui import cursors
     from app.ui.app import install_qt_translations
     from app.ui.catalog import PartCatalog
     from app.ui.main_window import MainWindow
@@ -752,6 +753,7 @@ def _screens_child(language: str) -> int:
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     apply_theme(app, "dark")
+    cursors.install(app)  # Zeiger auch für später entstehende Fenster, wie ``app.py``
     install_catalog(language, read_catalog(language))
     i18n.set_language(language)
     install_qt_translations(app, language)
