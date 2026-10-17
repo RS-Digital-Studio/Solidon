@@ -1,21 +1,26 @@
 <?php
 /**
- * Zeigt, was website/api/count.php gezählt hat — vorneweg als Sätze, danach
- * in vier Blöcken, die dem Weg eines Kunden folgen:
+ * Zeigt, was website/api/count.php gezählt hat — oben, was zuerst zählt,
+ * darunter drei Blöcke, die dem Weg eines Kunden folgen:
  *
- *   Auf einen Blick  Befunde aus den Zahlen darunter: Warnungen (Zähler
- *                    schweigt, Paket fehlt), Trends, Konversion, Herkunft,
- *                    Sprache, Systeme, Versionen, Seiten
- *   Jetzt        rollend bis heute, 7 und 30 Tage, mit der Veränderung zum
- *                gleich langen Zeitraum davor — unabhängig vom Monat
- *   Reichweite   Aufrufe, Besuche, Herkunft, Sprache, Seiten mit Einstieg,
- *                Ausstieg und Ausstiegsquote, Tiefe und Dauer, Uhrzeit und
- *                Wochentag
- *   Konversion   Downloads je Besuch, Version mal Zielsystem, die Seite vor
- *                dem Download, die Dateien im Ordner
- *   Versionen    Update-Prüfungen aller gespeicherten Tage: jede Version je
- *                Tag, je Version ihr Verlauf — wie schnell eine neue
- *                Version die alte ablöst
+ *   Auf einen Blick  Warnungen (Zähler schweigt, Paket fehlt) vor allem
+ *                    anderen; die letzten 7 Tage als vier gleich gebaute
+ *                    Karten — Downloads, Besuche, Update-Prüfungen,
+ *                    Seitenaufrufe — mit Veränderung, Wert davor, heute und
+ *                    30 Tagen; die Versionen derselben Woche als ein Balken;
+ *                    dann als Sätze, was nicht schon als Zahl darüber steht —
+ *                    aus dem gewählten Monat, wo ein Satz nichts anderes sagt
+ *   Reichweite   Besuche, Aufrufe, Herkunft, Sprache, Seiten mit Einstieg,
+ *                Ausstieg und Ausstiegsquote, Sprachwechsel, Tiefe und
+ *                Dauer, Wochentag und Uhrzeit
+ *   Konversion   Downloads je Besuch, Version mal Zielsystem samt Dateien im
+ *                Ordner, die Seite vor dem Download
+ *   Versionen    Update-Prüfungen aller gespeicherten Tage: die Anteile Tag
+ *                für Tag, je Version ihr Verlauf — wie schnell eine neue
+ *                Version die alte ablöst —, die Rohzahlen aufgeklappt
+ *
+ * Jede Karte trägt einen Gedanken, Karten einer Zeile sind gleich hoch, lange
+ * Ranglisten zeigen ihre ersten Zeilen und klappen den Rest auf.
  *
  * Alles daraus entsteht aus den fünf Feldern einer Zählzeile (Zeitpunkt,
  * Art, Wert, Verweis-Host, Tageskennzeichen); gespeichert wird für keine
@@ -86,6 +91,13 @@ const DISPLAY_ZONE = DAY_ZONE;
 
 /** Wie viele Zeilen die Ranglisten zeigen. */
 const TOP = 25;
+
+/** Ab wann eine Veränderung zum gleich langen Zeitraum davor deutlich ist:
+ *  um mindestens so viele Prozent, und nur, wenn der Zeitraum davor je
+ *  Kennzahl so viele Ereignisse hatte — aus drei Besuchen wird kein Trend.
+ *  Trendsätze und Kennzahlkarten lesen beide über `trend_tone()` hier. */
+const TREND_PERCENT = 10;
+const TREND_FLOOR = ['d' => 3, 'visits' => 5, 'u' => 5, 'p' => 5];
 
 /** Wie das Cookie heißt, das die Anmeldung merkt. */
 const COOKIE = 'solidon_stats';
@@ -1622,9 +1634,18 @@ $monthDays = $monthStart instanceof DateTimeImmutable && $month <= $current
 // zu klein ist, um etwas zu sagen, schweigt der Befund, statt aus drei
 // Besuchen einen Trend zu machen. Der Ton steht als Wort vor dem Satz und
 // zusätzlich als Farbe am Rand, nie als Farbe allein.
+//
+// Der Ort sagt, wo die Seite den Satz zeigt: `liste` unter „Was auffällt“,
+// `versionen` in der Versionskarte oben, `jetzt` gar nicht als Satz — die
+// Kennzahlkarten darüber tragen dieselben Zahlen und die Einstufung als ▲/▼.
+// Warnungen stehen immer vorn. Die JSON-Ausgabe führt jeden Befund, ohne Ort.
+// Die Sätze unter „Was auffällt“ rechnen über den gewählten Monat; wer einen
+// anderen Zeitraum meint, nennt ihn im Satz („der letzten 7 Tage“).
 $findings = [];
-$say = static function (string $tone, string $text) use (&$findings): void {
+$findingPlaces = [];
+$say = static function (string $tone, string $text, string $place = 'liste') use (&$findings, &$findingPlaces): void {
     $findings[] = ['tone' => $tone, 'text' => $text];
+    $findingPlaces[] = $place;
 };
 
 // Ein Zähler, der nicht mehr schreibt, sieht von außen aus wie eine Seite
@@ -1668,22 +1689,39 @@ if ($release !== '') {
     }
 }
 
+/**
+ * Wie deutlich eine Veränderung zum Zeitraum davor ist: `plus` oder `minus`
+ * ab `TREND_PERCENT` in die eine oder andere Richtung, `''` darunter — und
+ * `null`, wenn der Zeitraum davor weniger als `TREND_FLOOR` Ereignisse dieser
+ * Kennzahl hatte und die Veränderung nichts sagt. Die eine Regel für die
+ * Trendsätze und die Veränderungen in den Kennzahlkarten.
+ */
+function trend_tone(int $was, int $is, string $key): ?string
+{
+    if ($was <= 0 || $was < (TREND_FLOOR[$key] ?? PHP_INT_MAX)) {
+        return null;
+    }
+    $percent = ($is - $was) / $was * 100;
+    return $percent >= TREND_PERCENT ? 'plus' : ($percent <= -TREND_PERCENT ? 'minus' : '');
+}
+
 // Trends: nur mit vollständigem Vergleichszeitraum und genug Masse davor.
 $week = $windows[0];
 if ($week['before'] !== null) {
-    foreach (['visits' => ['Besuche', 5], 'd' => ['Downloads', 3]] as $key => [$label, $floor]) {
+    foreach (['visits' => 'Besuche', 'd' => 'Downloads'] as $key => $label) {
         $was = (int) $week['before'][$key];
         $is = (int) $week['now'][$key];
-        if ($was < $floor) {
+        $tone = trend_tone($was, $is, $key);
+        if ($tone === null) {
             continue;
         }
         $delta = ($is - $was) / $was * 100;
-        $tone = $delta >= 10 ? 'plus' : ($delta <= -10 ? 'minus' : 'info');
+        $tone = $tone === '' ? 'info' : $tone;
         $comparison = abs($delta) < 0.5
             ? 'genauso viele wie'
             : n(abs($delta)) . ' % ' . ($delta > 0 ? 'mehr' : 'weniger') . ' als';
         $say($tone, $label . ' der letzten 7 Tage: ' . n($is) . ' — ' . $comparison
-            . ' in den 7 Tagen davor (' . n($was) . ').');
+            . ' in den 7 Tagen davor (' . n($was) . ').', 'jetzt');
     }
 }
 
@@ -1778,7 +1816,7 @@ if ($monthSum['d'] > 0) {
 
 if ($updateCount > 0 && $release !== '') {
     if ($releaseLife === null) {
-        $say('info', 'Die aktuelle Version ' . $release . ' hat noch keine Update-Prüfung gemeldet.');
+        $say('info', 'Die aktuelle Version ' . $release . ' hat noch keine Update-Prüfung gemeldet.', 'versionen');
     } else {
         $text = $release . ($releaseLife['published_on'] !== null
             ? ' veröffentlicht am ' . day_label($releaseLife['published_on'])
@@ -1796,7 +1834,7 @@ if ($updateCount > 0 && $release !== '') {
                 : ', die Mehrheit seit ' . day_label($releaseLife['majority_from'])
                     . ($daysTo === 0 ? ' (am selben Tag)' : ' (nach ' . plural((int) $daysTo, 'Tag', 'Tagen') . ')');
         }
-        $say(($releaseLife['last_7_days_share_percent'] ?? 0) >= 50 ? 'plus' : 'info', $text . '.');
+        $say(($releaseLife['last_7_days_share_percent'] ?? 0) >= 50 ? 'plus' : 'info', $text . '.', 'versionen');
     }
     // Die älteste Version, die sich noch meldet: Bis dahin reicht, was ein
     // Supportfall voraussetzen kann.
@@ -1808,7 +1846,7 @@ if ($updateCount > 0 && $release !== '') {
     }
     if ($oldest !== null && $oldest['version'] !== $release) {
         $say('info', 'Älteste Version, die sich in den letzten 7 Tagen noch meldet: ' . $oldest['version']
-            . ' (' . plural($oldest['last_7_days'], 'Prüfung', 'Prüfungen') . ').');
+            . ' (' . plural($oldest['last_7_days'], 'Prüfung', 'Prüfungen') . ').', 'versionen');
     }
 }
 
@@ -1840,6 +1878,7 @@ $toneOrder = ['warnung' => 0, 'minus' => 1, 'plus' => 2, 'info' => 3];
 $order = array_keys($findings);
 usort($order, static fn (int $a, int $b): int => [$toneOrder[$findings[$a]['tone']], $a]
     <=> [$toneOrder[$findings[$b]['tone']], $b]);
+$findingPlaces = array_map(static fn (int $index): string => $findingPlaces[$index], $order);
 $findings = array_map(static fn (int $index): array => $findings[$index], $order);
 
 // -- Der Bericht: eine Struktur, zwei Ausgaben --------------------------------
@@ -1978,7 +2017,13 @@ function duration_text(?int $seconds): string
  * Vergleichszeitraum ein Strich mit dem Grund im Tooltip — die Daten reichen
  * nach der Löschfrist von zwei Monaten nicht immer sechzig Tage zurück, und
  * eine Veränderung gegen einen halb vorhandenen Zeitraum wäre eine Zahl, die
- * lügt. Vorzeichen als Text, nicht als Farbe.
+ * lügt. Die Richtung trägt das Vorzeichen als Text.
+ *
+ * Eine deutliche Veränderung nach `trend_tone()` — dieselbe Regel wie die
+ * Trendsätze, für jede der vier Kennzahlen und beide Zeiträume — bekommt
+ * zusätzlich ▲ oder ▼ mit Namen für Vorleser, die Regel als Tooltip und eine
+ * Farbe. Die Farbe steht nie allein (Regel 18); was die Zeichen bedeuten,
+ * sagt die Fußnote unter den Karten.
  */
 function change(?array $before, array $now, string $key): string
 {
@@ -1992,7 +2037,33 @@ function change(?array $before, array $now, string $key): string
     }
     $percent = ($is - $was) / $was * 100;
     $sign = $percent > 0.5 ? '+' : ($percent < -0.5 ? '−' : '±');
-    return '<span class="delta">' . $sign . n(abs($percent)) . ' %</span>';
+    $text = $sign . n(abs($percent)) . ' %';
+    $tone = trend_tone($was, $is, $key);
+    if ($tone === null || $tone === '') {
+        return '<span class="delta">' . $text . '</span>';
+    }
+    [$mark, $word] = $tone === 'plus' ? ['▲', 'deutlich mehr'] : ['▼', 'deutlich weniger'];
+    $rule = ucfirst($word) . ' als im Zeitraum davor: ab ' . TREND_PERCENT . ' % Veränderung bei mindestens '
+        . n(TREND_FLOOR[$key]) . ' davor';
+    return '<span class="delta ' . $tone . '" title="' . e($rule) . '"><span class="zeichen" role="img" aria-label="'
+        . e($word) . '">' . $mark . '</span>' . $text . '</span>';
+}
+
+/**
+ * Was ▲ und ▼ an den Kennzahlkarten bedeuten — aus derselben Regel gebaut,
+ * damit die Fußnote nie eine andere Schwelle nennt als die Zeichen.
+ *
+ * @param array<string, string> $labels Kennzahl => Name auf der Karte
+ */
+function trend_legend(array $labels): string
+{
+    $floors = [];
+    foreach ($labels as $key => $label) {
+        $floors[] = $label . ' ' . n(TREND_FLOOR[$key]);
+    }
+    return '▲ und ▼ markieren eine deutliche Veränderung: mindestens ' . TREND_PERCENT
+        . ' %, wenn der Zeitraum davor genug Masse hat (' . implode(', ', $floors)
+        . '). Ohne Zeichen ist sie kleiner, oder davor war zu wenig für eine Aussage.';
 }
 
 /**
@@ -2108,7 +2179,145 @@ foreach ($versionSeries as $item) {
 }
 
 $toneLabels = ['warnung' => 'Achtung', 'plus' => 'Gut', 'minus' => 'Rückgang', 'info' => ''];
-$metrics = ['visits' => 'Besuche', 'p' => 'Seitenaufrufe', 'd' => 'Downloads', 'u' => 'Update-Prüfungen'];
+
+// Die Befunde nach ihrem Ort auf der Seite. Warnungen stehen vor allem anderen,
+// die Sätze zu den Versionen in der Versionskarte; der Trend der Woche steht
+// nur als Zahl in den Karten und nicht noch einmal als Satz. Die JSON-Ausgabe
+// führt alle.
+$warnings = [];
+$versionNotes = [];
+$listed = [];
+foreach ($findings as $index => $finding) {
+    if ($finding['tone'] === 'warnung') {
+        $warnings[] = $finding;
+    } elseif ($findingPlaces[$index] === 'versionen') {
+        $versionNotes[] = $finding;
+    } elseif ($findingPlaces[$index] === 'liste') {
+        $listed[] = $finding;
+    }
+}
+
+// Die vier Kennzahlen oben, in der Reihenfolge der Fragen: Wird geladen, kommt
+// jemand, läuft die Anwendung — und erst dann, wie viel gelesen wird. Ab wann
+// eine Veränderung deutlich ist, sagt `trend_tone()`.
+$metrics = [
+    'd' => 'Downloads',
+    'visits' => 'Besuche',
+    'u' => 'Update-Prüfungen',
+    'p' => 'Seitenaufrufe',
+];
+
+// Die Versionen der letzten sieben Tage: einzeln die aktuelle und jede ab drei
+// Prozent, der Rest als eine Gruppe — eine einzelne übrige Version steht
+// trotzdem für sich, eine Gruppe aus einer wäre nur ein Umweg. Erst steht
+// fest, ob es eine Gruppe gibt, dann wird die Liste in ihrer Reihenfolge
+// geteilt: So bleibt auch eine einzelne kleine Version an ihrem Platz, die
+// neueste links.
+$weekLives = array_values(array_filter(
+    $timeline['versions'],
+    static fn (array $life): bool => $life['last_7_days'] > 0
+));
+$isRest = static fn (array $life): bool => !$life['current']
+    && ($life['last_7_days_share_percent'] ?? 0.0) < 3.0;
+$weekRest = array_values(array_filter($weekLives, $isRest));
+if (count($weekRest) < 2) {
+    $weekRest = [];
+}
+$weekShown = $weekRest === []
+    ? $weekLives
+    : array_values(array_filter($weekLives, static fn (array $life): bool => !$isRest($life)));
+$weekRestChecks = array_sum(array_column($weekRest, 'last_7_days'));
+
+/** Ein Anteil mit Einheit — oder ein Strich, wenn die Grundmenge fehlt. */
+function pct(?float $value, int $decimals = 1): string
+{
+    return $value === null ? '—' : n($value, $decimals) . ' %';
+}
+
+/**
+ * Eine Tabelle mit festen Spaltenbreiten.
+ *
+ * Fest, weil eine lange Rangliste in zwei Tabellen steht — die ersten Zeilen
+ * offen, der Rest hinter einem Aufklapper — und beide Teile nur mit denselben
+ * Spalten bündig untereinander stehen. Spalten ohne Breite teilen sich die
+ * übrige Breite, Text mindestens 9rem, ein Balken mindestens 3rem: Trägt die
+ * Tabelle einen Balken, nimmt er die Weite der Karte auf, und die Zahlen
+ * bleiben nah an ihrem Namen. Reicht die Breite nicht, rollt die Tabelle in
+ * ihrem Rahmen, statt die Seite zu verbreitern.
+ *
+ * @param list<array{0: string, 1: string, 2?: float|int}> $columns Kopf als
+ *        HTML, Art (`text`, `n` oder `balken`) und, wo fest, Breite in rem
+ * @param list<list<string>> $rows fertig maskierte Zellen
+ */
+function fixed_table(array $columns, array $rows, bool $head = true): string
+{
+    $minimum = 0.0;
+    $widths = '<colgroup>';
+    foreach ($columns as $column) {
+        if (isset($column[2])) {
+            $widths .= '<col style="width:' . $column[2] . 'rem">';
+            $minimum += $column[2];
+        } else {
+            $widths .= '<col>';
+            $minimum += $column[1] === 'balken' ? 3 : 9;
+        }
+    }
+    $html = '<table class="fest" style="min-width:' . $minimum . 'rem">' . $widths . '</colgroup>';
+    if ($head) {
+        $html .= '<tr>';
+        foreach ($columns as $column) {
+            $html .= '<th' . ($column[1] === 'n' ? ' class="n"' : '') . '>' . $column[0] . '</th>';
+        }
+        $html .= '</tr>';
+    }
+    foreach ($rows as $cells) {
+        $html .= '<tr>';
+        foreach ($cells as $index => $cell) {
+            $html .= '<td' . ($columns[$index][1] === 'n' ? ' class="n"' : '') . '>' . $cell . '</td>';
+        }
+        $html .= '</tr>';
+    }
+    return $html . '</table>';
+}
+
+/** Eine Rangliste: die ersten Zeilen offen, der Rest hinter einem Aufklapper. */
+function ranking(array $columns, array $rows, string $one, string $many, int $open = 10): string
+{
+    $html = '<div class="tabelle">' . fixed_table($columns, array_slice($rows, 0, $open)) . '</div>';
+    $rest = array_slice($rows, $open);
+    if ($rest !== []) {
+        $html .= '<details><summary>' . e(plural(count($rest), $one, $many)) . '</summary>'
+            . '<div class="tabelle">' . fixed_table($columns, $rest, false) . '</div></details>';
+    }
+    return $html;
+}
+
+/**
+ * Die Anteile der Versionen an den Prüfungen der letzten sieben Tage als ein
+ * Balken: die einzeln gezeigten von links nach rechts von neu nach alt, die
+ * Gruppe der übrigen zuletzt. Die Farben stehen nie allein: Die Legende
+ * darunter nennt jede Version mit Zahl und Anteil, der Tooltip dasselbe.
+ */
+function week_bar(array $shown, array $rest, int $restChecks, int $total, array $slotOf): string
+{
+    $parts = [];
+    $html = '';
+    foreach ($shown as $life) {
+        $text = $life['version'] . ' ' . pct($life['last_7_days_share_percent'], 0);
+        $parts[] = $text;
+        $html .= '<span class="' . e($slotOf[$life['version']] ?? 'vx') . '" style="flex-grow:' . $life['last_7_days']
+            . '" title="' . e($life['version'] . ': ' . plural($life['last_7_days'], 'Prüfung', 'Prüfungen')
+                . ', ' . pct($life['last_7_days_share_percent'], 0)) . '"></span>';
+    }
+    if ($rest !== []) {
+        $text = 'übrige ' . pct(percent($restChecks, $total), 0);
+        $parts[] = $text;
+        $html .= '<span class="vx" style="flex-grow:' . $restChecks . '" title="' . e(count($rest) . ' übrige Versionen: '
+            . plural($restChecks, 'Prüfung', 'Prüfungen')) . '"></span>';
+    }
+    return '<div class="anteil" role="img" aria-label="' . e('Anteile an den Update-Prüfungen der letzten 7 Tage: '
+        . implode(', ', $parts)) . '">' . $html . '</div>';
+}
 
 ?><!doctype html>
 <html lang="de">
@@ -2118,100 +2327,140 @@ $metrics = ['visits' => 'Besuche', 'p' => 'Seitenaufrufe', 'd' => 'Downloads', '
 <meta name="robots" content="noindex, nofollow">
 <title>Zugriffe — Solidon3D</title>
 <style>
-  /* Ein Armaturenbrett für einen Leser: oben die Sätze, darunter die Zahlen,
-     die sie belegen. Kacheln füllen die Breite, die Sprungleiste bleibt oben,
-     lange Tabellen klappen auf, statt die Seite zu verlängern. Die Farben der
-     Reihen kommen aus einer geprüften Palette (hell und dunkel getrennt
-     gewählt); Text trägt nie die Farbe einer Reihe. */
+  /* Ein Armaturenbrett für einen Leser. Oben steht, was zuerst zählt:
+     Warnungen, die letzten sieben Tage als vier gleich gebaute Karten und die
+     Versionen derselben Woche; darunter drei Blöcke, die dem Weg eines Kunden
+     folgen. Jede Karte trägt einen Gedanken, Karten einer Zeile sind gleich
+     hoch, lange Tabellen zeigen die ersten Zeilen und klappen den Rest auf.
+     Die Farben der Reihen kommen aus einer geprüften Palette (hell und dunkel
+     getrennt gewählt); Text trägt nie die Farbe einer Reihe, und neben jeder
+     Farbe steht ein Wort oder Zeichen. Schrift hält auf ihrem Grund 4,5 : 1. */
   :root {
     color-scheme: light dark;
-    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --dim: #52514e; --muted: #898781;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --dim: #52514e; --muted: #6b6a65;
     --line: #e1e0d9; --axis: #c3c2b7; --band: #f0efec;
-    --bar: #2a78d6; --bar-hover: #1c5cab;
+    --bar: #2a78d6; --bar-hover: #1c5cab; --link: #1c5cab; --focus: #1c5cab;
     --v1: #2a78d6; --v2: #eb6834; --v3: #1baf7a; --v4: #eda100; --v5: #e87ba4; --v6: #008300; --v7: #4a3aa7; --vx: #b4b2a9;
-    --warn: #fab219; --good: #0ca30c; --bad: #d03b3b;
+    --warn: #fab219; --warn-soft: #fff4d6; --warn-ink: #7a4f00;
+    --good: #0ca30c; --bad: #d03b3b; --good-ink: #1a7f37; --bad-ink: #b42318;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --dim: #c3c2b7; --muted: #898781;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --dim: #c3c2b7; --muted: #9a9891;
       --line: #2c2c2a; --axis: #383835; --band: #232321;
-      --bar: #3987e5; --bar-hover: #5598e7;
+      --bar: #3987e5; --bar-hover: #5598e7; --link: #5598e7; --focus: #5598e7;
       --v1: #3987e5; --v2: #d95926; --v3: #199e70; --v4: #c98500; --v5: #d55181; --v6: #008300; --v7: #9085e9; --vx: #5f5e59;
+      --warn-soft: #2b2416; --warn-ink: #ffd27a; --good-ink: #6fd08c; --bad-ink: #ff8a80;
     }
   }
   * { box-sizing: border-box; }
-  body { font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; padding: 1.25rem 2rem 4rem;
-         background: var(--page); color: var(--ink); }
-  a { color: var(--bar); }
-  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
-  h1 .abmelden { font-size: .8rem; font-weight: normal; margin-left: .75rem; vertical-align: middle; }
-  h2 { font-size: 1.15rem; margin: 2.25rem 0 .75rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem 1rem; }
-  h2 .sub { margin: 0; font-size: .88rem; font-weight: normal; }
-  .sub { color: var(--dim); margin: 0 0 1rem; }
-  nav.sprung { position: sticky; top: 0; z-index: 1; margin: .75rem -2rem 1rem; padding: .5rem 2rem;
-               background: var(--band); border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: .25rem 1.5rem; }
+  body { font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: var(--page); color: var(--ink); }
+  .kopf, main { max-width: 100rem; margin: 0 auto; padding: 0 2rem; }
+  .kopf { padding-top: 1.25rem; padding-bottom: .75rem; }
+  main { padding-bottom: 4rem; }
+  a { color: var(--link); }
+  a:focus-visible, summary:focus-visible, .tabelle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+  h1 { font-size: 1.4rem; margin: 0 0 .15rem; }
+  .kopf p { margin: 0; color: var(--dim); }
+  nav.sprung { position: sticky; top: 0; z-index: 1; background: var(--band); border-block: 1px solid var(--line); }
+  nav.sprung .innen { max-width: 100rem; margin: 0 auto; padding: .5rem 2rem; display: flex; flex-wrap: wrap;
+                      align-items: baseline; gap: .25rem 1.5rem; }
   nav.sprung .monate { margin-left: auto; color: var(--dim); }
-  nav.sprung .monate a { margin: 0 0 0 .75rem; }
-  .zahlen { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(10.5rem, 100%), 1fr)); gap: .75rem; margin: 0 0 1rem; }
-  .zahl { background: var(--surface); border: 1px solid var(--line); border-radius: .5rem; padding: .6rem 1rem; }
-  .zahl b { display: block; font-size: 1.55rem; font-weight: 600; line-height: 1.2; }
-  .zahl span { color: var(--dim); font-size: .8rem; }
-  .zahl .titel { display: block; color: var(--ink); font-size: .85rem; font-weight: 600; }
-  .zahl dl { display: grid; grid-template-columns: auto 1fr; gap: .1rem .6rem; margin: .5rem 0 0; font-size: .82rem; }
+  nav.sprung .monate a, nav.sprung .monate b { margin-left: .6rem; }
+  [id] { scroll-margin-top: 3.25rem; }
+  h2 { font-size: 1.2rem; margin: 2.5rem 0 .9rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+       display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem 1rem; }
+  main > section:first-child h2 { margin-top: 1.25rem; padding-top: 0; border-top: 0; }
+  h2 .sub { margin: 0; font-size: .88rem; font-weight: normal; }
+  h3 { font-size: .95rem; margin: 0 0 .35rem; }
+  h3.zwischen { font-size: 1rem; margin: 1.5rem 0 .6rem; }
+  h4 { margin: .9rem 0 .15rem; font-size: .82rem; font-weight: 600; color: var(--dim); }
+  .sub { color: var(--dim); }
+  p.sub { margin: 0 0 .6rem; font-size: .82rem; max-width: 80ch; }
+  .leer { color: var(--dim); font-style: italic; }
+  .hinweis { color: var(--dim); max-width: 75ch; font-size: .88rem; }
+  .fussnote { color: var(--dim); font-size: .8rem; margin: -.35rem 0 1rem; }
+  code { font-size: .9em; }
+
+  /* Warnungen: vor allem anderen, mit Wort, Rand und Fläche. */
+  .warnungen { margin: 0 0 1rem; padding: .7rem 1rem; border: 1px solid var(--warn); border-left-width: 6px;
+               border-radius: .5rem; background: var(--warn-soft); }
+  .warnungen ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
+  .ton { display: inline-block; font-size: .7rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; margin-right: .45rem; }
+  .warnungen .ton { color: var(--warn-ink); }
+
+  /* Kennzahlen: jede Karte in derselben Ordnung, damit sie sich nebeneinander
+     lesen. Gleich breit und gleich hoch je Zeile; bleibt eine allein, füllt sie
+     die Zeile. */
+  .zahlen { display: flex; flex-wrap: wrap; gap: .75rem; margin: 0 0 1rem; }
+  .zahl { flex: 1 1 9.5rem; display: flex; flex-direction: column; min-width: 0; background: var(--surface);
+          border: 1px solid var(--line); border-radius: .5rem; padding: .7rem 1rem .8rem; }
+  .zahl h3 { margin: 0; font-size: .85rem; }
+  .zahl .wert { margin: .1rem 0 0; font-size: 1.75rem; font-weight: 650; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .zahl .notiz { margin: .1rem 0 0; color: var(--dim); font-size: .8rem; }
+  .zahl dl { display: grid; grid-template-columns: auto 1fr; gap: .15rem .75rem; margin: auto 0 0; padding-top: .55rem; font-size: .85rem; }
   .zahl dt { color: var(--dim); }
-  .zahl dd { margin: 0; font-variant-numeric: tabular-nums; }
-  .kacheln { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
-  .stapel { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
-  @media (max-width: 69rem) {
-    .kacheln { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .stapel { grid-column: 1 / -1; flex-direction: row; align-items: flex-start; }
-    .stapel > * { flex: 1 1 0; min-width: 0; }
-  }
-  .kachel { background: var(--surface); border: 1px solid var(--line); border-radius: .5rem; padding: .75rem 1rem 1rem; min-width: 0; overflow-x: auto; }
-  .kachel h3 { margin: 0 0 .35rem; font-size: .95rem; }
-  .kachel h4 { margin: .75rem 0 .1rem; font-size: .82rem; font-weight: 600; color: var(--dim); }
-  .kachel .sub { font-size: .82rem; margin: 0 0 .6rem; }
-  .breit { grid-column: span 2; }
-  .ganz { grid-column: 1 / -1; }
+  .zahl dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .delta { display: inline-block; margin-left: .4rem; font-size: .8rem; font-weight: 600; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .wert .delta { font-size: .85rem; vertical-align: .3rem; }
+  .delta.plus { color: var(--good-ink); }
+  .delta.minus { color: var(--bad-ink); }
+  .delta.leer { font-weight: normal; font-style: normal; }
+  /* ▲ und ▼: die zweite Kodierung der Einstufung neben der Farbe. */
+  .delta .zeichen { font-size: .8em; margin-right: .2em; }
+  h3.zwischen + p.zeitraum { margin-top: -.35rem; }
+
+  /* Karten: Jede Zeile ist ein eigener Flex-Container. Eine Karte füllt ihre
+     Zeile, alle Karten einer Zeile sind gleich hoch, und wird es zu eng, steht
+     jede für sich — eine halbe letzte Reihe gibt es nicht. */
+  .karten { display: flex; flex-wrap: wrap; gap: 1rem; margin: 0 0 1rem; }
+  .karten > * { flex: 1 1 18rem; }
+  .karten > .breit { flex: 2 1 30rem; }
+  .karten.zwei > * { flex: 1 1 30rem; }
+  .kachel { min-width: 0; margin: 0 0 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: .5rem;
+            padding: .8rem 1rem 1rem; }
+  .karten > .kachel { margin: 0; }
   .drei { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); gap: 0 1.5rem; }
-  @media (max-width: 48rem) {
-    .kacheln { grid-template-columns: minmax(0, 1fr); }
-    .breit { grid-column: auto; }
-    .stapel { flex-direction: column; align-items: stretch; }
-    .stapel > * { flex: none; }
-    body { padding: 1rem; }
-    nav.sprung { margin: .75rem -1rem 1rem; padding: .5rem 1rem; }
-    nav.sprung .monate { margin-left: 0; }
-  }
+  .tabelle { overflow-x: auto; }
+
   table { border-collapse: collapse; width: 100%; font-size: .88rem; }
-  th, td { text-align: left; padding: .22rem .45rem; border-bottom: 1px solid var(--line); vertical-align: baseline; }
-  th { color: var(--dim); font-weight: normal; font-size: .78rem; white-space: nowrap; }
-  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.fest { table-layout: fixed; }
+  table.fest td:first-child { overflow-wrap: anywhere; }
+  th, td { text-align: left; padding: .24rem .45rem; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+  th { color: var(--dim); font-weight: normal; font-size: .78rem; vertical-align: bottom; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  td.n { white-space: nowrap; }
   td.null { color: var(--muted); }
   table.ohne-umbruch td, td.tag { white-space: nowrap; }
   tr.summe td { font-weight: 600; border-top: 2px solid var(--line); }
+  td small { display: block; color: var(--dim); font-size: .78rem; }
   .balken { display: block; height: .5rem; background: var(--bar); border-radius: 2px; min-width: 1px; }
-  .leer { color: var(--dim); font-style: italic; }
-  .hinweis { color: var(--dim); max-width: 75ch; font-size: .88rem; }
-  .delta { display: inline-block; font-size: .78rem; color: var(--dim); font-style: normal; margin-left: .35rem; }
-  .zahl b .delta { font-size: .8rem; font-weight: normal; vertical-align: .2rem; margin-left: .5rem; }
-  ul.pfade { columns: 2; column-gap: 2rem; margin: 0; padding-left: 1.25rem; font-size: .88rem; }
-  code { font-size: .9em; }
-  .warnung-block { border: 1px solid var(--warn); border-left-width: 4px; background: var(--surface); padding: .75rem 1rem; border-radius: .4rem; }
   details { margin-top: .6rem; }
   summary { cursor: pointer; color: var(--dim); font-size: .85rem; }
   details[open] summary { margin-bottom: .4rem; }
   .marke { display: inline-block; font-size: .72rem; line-height: 1.3; padding: 0 .35rem; border: 1px solid var(--axis);
-           border-radius: .6rem; color: var(--dim); white-space: nowrap; margin-left: .3rem; }
+           border-radius: .6rem; color: var(--dim); white-space: nowrap; margin-left: .3rem; font-weight: normal; }
   .farbe { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .4rem; vertical-align: -1px; }
+  ul.pfade { columns: 2; column-gap: 2rem; margin: 0; padding-left: 1.25rem; font-size: .88rem; }
 
-  /* Befunde: das Wort sagt den Ton, der Rand wiederholt ihn. */
-  ul.befunde { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr)); gap: .5rem .75rem; }
-  .befund { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--axis); border-radius: .4rem; padding: .5rem .8rem; }
-  .befund.warnung { border-left-color: var(--warn); }
+  /* Befunde: Sätze in zwei Spalten; das Wort sagt den Ton, der Rand wiederholt ihn. */
+  ul.befunde { list-style: none; margin: 0; padding: 0; display: grid;
+               grid-template-columns: repeat(auto-fit, minmax(min(26rem, 100%), 1fr)); gap: .45rem 1.75rem; }
+  .befund { padding: .1rem 0 .1rem .75rem; border-left: 3px solid var(--axis); }
   .befund.plus { border-left-color: var(--good); }
   .befund.minus { border-left-color: var(--bad); }
-  .befund .ton { display: inline-block; font-size: .7rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; margin-right: .4rem; }
+  .befund.plus .ton { color: var(--good-ink); }
+  .befund.minus .ton { color: var(--bad-ink); }
+  .kachel ul.befunde { margin: 0 0 .75rem; }
+
+  /* Die Woche der Versionen: ein Balken, darunter jede Version mit Zahl. */
+  .anteil { display: flex; gap: 2px; height: 1.4rem; margin: .25rem 0 .7rem; }
+  .anteil > span { flex-basis: 0; min-width: 3px; }
+  .anteil > span:first-child { border-radius: 3px 0 0 3px; }
+  .anteil > span:last-child { border-radius: 0 3px 3px 0; }
+  ul.woche { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+             gap: .5rem 1rem; font-size: .88rem; }
+  ul.woche .zahlwerte { display: block; padding-left: 1.1rem; color: var(--dim); font-variant-numeric: tabular-nums; }
 
   /* Säulen: eine Grundlinie, dünne Säulen mit gerundetem Kopf, die Höchstmarke
      oben links; den genauen Wert trägt der Tooltip. */
@@ -2237,53 +2486,69 @@ $metrics = ['visits' => 'Besuche', 'p' => 'Seitenaufrufe', 'd' => 'Downloads', '
   .v1 { background: var(--v1); } .v2 { background: var(--v2); } .v3 { background: var(--v3); } .v4 { background: var(--v4); }
   .v5 { background: var(--v5); } .v6 { background: var(--v6); } .v7 { background: var(--v7); } .vx { background: var(--vx); }
   ul.legende { display: flex; flex-wrap: wrap; gap: .2rem 1.1rem; list-style: none; padding: 0; margin: 0 0 .5rem; font-size: .85rem; }
-  @media (max-width: 40rem) { ul.pfade { columns: 1; } }
+
+  @media (max-width: 48rem) {
+    .kopf, main { padding-left: 1rem; padding-right: 1rem; }
+    .kopf { padding-top: 1rem; }
+    nav.sprung { position: static; }
+    nav.sprung .innen { padding: .5rem 1rem; gap: .25rem 1rem; }
+    nav.sprung .monate { margin-left: 0; width: 100%; }
+    nav.sprung .monate a, nav.sprung .monate b { margin: 0 .6rem 0 0; }
+    .zahlen { gap: .5rem; }
+    .zahl { padding: .6rem .75rem .7rem; }
+    .kachel { padding: .7rem .75rem .85rem; }
+    .zahl .wert { font-size: 1.45rem; }
+    ul.pfade { columns: 1; }
+  }
 </style>
 </head>
 <body>
 
-<h1>Zugriffe auf solidon3d.de <a class="abmelden" href="?abmelden=1">abmelden</a></h1>
-<p class="sub">Monat <?= e($month) ?>, Zeiten in <?= e(DISPLAY_ZONE) ?>.
-Dieselben Zahlen <a href="?m=<?= e($month) ?>&amp;format=json">als JSON</a>.
-Was hier gezählt wird und was nicht, steht <a href="#methode">unten</a>.</p>
+<header class="kopf">
+<h1>Zugriffe auf solidon3d.de</h1>
+<p>Stand <?= e(day_label($today)) ?>, <?= e($now->format('H:i')) ?> Uhr (<?= e(DISPLAY_ZONE) ?>) ·
+Monat <?= e($month) ?> · dieselben Zahlen <a href="?m=<?= e($month) ?>&amp;format=json">als JSON</a> ·
+<a href="?abmelden=1">abmelden</a></p>
+</header>
 
-<nav class="sprung"><a href="#befunde">Auf einen Blick</a><a href="#jetzt">Jetzt</a><a href="#reichweite">Reichweite</a><a href="#konversion">Konversion</a><a href="#nutzung">Versionen</a><a href="#methode">Methode</a><?php if (count($available) > 1): ?><span class="monate">Monat:
-  <?php foreach ($available as $option): ?>
-    <?php if ($option === $month): ?><b><?= e($option) ?></b>
-    <?php else: ?><a href="?m=<?= e($option) ?>"><?= e($option) ?></a><?php endif; ?>
-  <?php endforeach; ?></span><?php endif; ?></nav>
+<nav class="sprung" aria-label="Abschnitte"><div class="innen"><a href="#befunde">Auf einen Blick</a><a href="#reichweite">Reichweite</a><a href="#konversion">Konversion</a><a href="#nutzung">Versionen</a><a href="#methode">Methode</a><?php if (count($available) > 1): ?><span class="monate">Monat:<?php foreach ($available as $option): ?><?php if ($option === $month): ?><b aria-current="page"><?= e($option) ?></b><?php else: ?><a href="?m=<?= e($option) ?>"><?= e($option) ?></a><?php endif; ?><?php endforeach; ?></span><?php endif; ?></div></nav>
 
-<?php if (!$month_complete): ?>
-<p class="warnung-block"><b>Unvollständige Auswertung:</b> Die Monatsdatei überschreitet
-die sichere Grenze von 16 MiB oder 16.384 gültigen Zeilen. Die angezeigten Zahlen
-sind nicht vollständig; bitte die Datei archivieren und den Zähler prüfen.</p>
-<?php endif; ?>
+<main>
 
-<h2 id="befunde">Auf einen Blick <span class="sub">aus den Zahlen weiter unten gelesen — Monat <?= e($month) ?>,
-rollende Fenster und alle gespeicherten Tage</span></h2>
-<?php if (!$findings): ?>
-  <p class="leer">Noch zu wenig gezählt, um etwas daraus zu lesen.</p>
-<?php else: ?>
-<ul class="befunde">
-  <?php foreach ($findings as $finding): ?>
-  <li class="befund <?= e($finding['tone']) ?>"><?php if ($toneLabels[$finding['tone']] !== ''): ?><span class="ton"><?= e($toneLabels[$finding['tone']]) ?></span><?php endif; ?><?= e($finding['text']) ?></li>
+<section aria-labelledby="befunde">
+<?php /* Jeder Teil nennt seinen Zeitraum selbst: Die Karten und die Versionen
+         rechnen rollend bis heute, die Sätze unter „Was auffällt“ aus dem
+         gewählten Monat. Eine Zeile über allem stimmte für einen Teil nicht. */ ?>
+<h2 id="befunde">Auf einen Blick</h2>
+
+<?php if ($warnings || !$month_complete): ?>
+<section class="warnungen" aria-label="Warnungen">
+<ul>
+  <?php foreach ($warnings as $finding): ?>
+  <li><span class="ton"><?= e($toneLabels['warnung']) ?></span><?= e($finding['text']) ?></li>
   <?php endforeach; ?>
+  <?php if (!$month_complete): ?>
+  <li><b>Unvollständige Auswertung:</b> Die Monatsdatei <?= e($month) ?> überschreitet die sichere Grenze von
+  16 MiB oder 16.384 gültigen Zeilen. Die angezeigten Zahlen sind nicht vollständig; bitte die Datei
+  archivieren und den Zähler prüfen.</li>
+  <?php endif; ?>
 </ul>
+</section>
 <?php endif; ?>
 
-<h2 id="jetzt">Jetzt <span class="sub">rollend bis heute, unabhängig vom gewählten Monat — die kleine
-Zahl ist die Veränderung zum gleich langen Zeitraum davor<?php if (!$recentComplete): ?>;
-<b>eine Monatsdatei ist unvollständig gelesen, die Werte sind Untergrenzen</b><?php endif; ?></span></h2>
 <?php if ($recentDays === []): ?>
-  <p class="leer">Noch nichts gezählt.</p>
+  <p class="leer" id="jetzt">Noch nichts gezählt.</p>
 <?php else: ?>
 <?php [$week, $month30] = $windows; ?>
-<div class="zahlen">
+<p class="sub zeitraum">Die letzten 7 Tage bis heute gegen die 7 davor, dazu heute und 30 Tage — rollend über
+die Monatsgrenze, unabhängig vom gewählten Monat<?php if (!$recentComplete): ?>;
+<b>eine Monatsdatei ist unvollständig gelesen, die Werte sind Untergrenzen</b><?php endif; ?>.</p>
+<div class="zahlen" id="jetzt">
   <?php foreach ($metrics as $key => $label): ?>
   <div class="zahl">
-    <span class="titel"><?= e($label) ?></span>
-    <b><?= n($week['now'][$key]) ?><?= change($week['before'], $week['now'], $key) ?></b>
-    <span>letzte 7 Tage, <?= e(short_day($week['from'])) ?>–<?= e(short_day($week['to'])) ?></span>
+    <h3><?= e($label) ?></h3>
+    <p class="wert"><?= n($week['now'][$key]) ?><?= change($week['before'], $week['now'], $key) ?></p>
+    <p class="notiz">letzte 7 Tage, <?= e(short_day($week['from'])) ?>–<?= e(short_day($week['to'])) ?><?php if ($week['before'] !== null): ?> · davor <?= n($week['before'][$key]) ?><?php endif; ?></p>
     <dl>
       <dt>Heute</dt><dd><?= n($todayCounts[$key]) ?></dd>
       <dt>30 Tage</dt><dd><?= n($month30['now'][$key]) ?><?= change($month30['before'], $month30['now'], $key) ?></dd>
@@ -2291,29 +2556,86 @@ Zahl ist die Veränderung zum gleich langen Zeitraum davor<?php if (!$recentComp
   </div>
   <?php endforeach; ?>
 </div>
+<p class="fussnote"><?= e(trend_legend($metrics)) ?> <?php if ($week['before'] === null || $month30['before'] === null): ?>
+„—“ statt einer Veränderung: Die Daten reichen nicht bis zum gleich langen Zeitraum davor zurück, denn es
+bleiben nur der laufende und der vorige Monat.<?php endif; ?></p>
 <?php endif; ?>
 
+<?php if ($versions): ?>
+<article class="kachel" aria-labelledby="woche-versionen">
+<h3 id="woche-versionen">Versionen der letzten 7 Tage</h3>
+<?php if ($versionNotes): ?>
+<ul class="befunde">
+  <?php foreach ($versionNotes as $finding): ?>
+  <li class="befund <?= e($finding['tone']) ?>"><?php if ($toneLabels[$finding['tone']] !== ''): ?><span class="ton"><?= e($toneLabels[$finding['tone']]) ?></span><?php endif; ?><?= e($finding['text']) ?></li>
+  <?php endforeach; ?>
+</ul>
+<?php endif; ?>
+<?php if ($timeline['week_total'] === 0): ?>
+  <p class="leer">In den letzten 7 Tagen keine Update-Prüfung.</p>
+<?php else: ?>
+<?= week_bar($weekShown, $weekRest, $weekRestChecks, $timeline['week_total'], $slotOf) ?>
+<ul class="woche">
+  <?php foreach ($weekShown as $life): ?>
+  <li><span class="farbe <?= e($slotOf[$life['version']] ?? 'vx') ?>"></span><b><?= e($life['version']) ?></b><?php if ($life['current']): ?><span class="marke">aktuell</span><?php endif; ?>
+    <span class="zahlwerte"><?= e(plural($life['last_7_days'], 'Prüfung', 'Prüfungen')) ?> · <?= pct($life['last_7_days_share_percent'], 0) ?></span></li>
+  <?php endforeach; ?>
+  <?php if ($weekRest): ?>
+  <li><span class="farbe vx"></span><b><?= e(plural(count($weekRest), 'übrige Version', 'übrige Versionen')) ?></b>
+    <span class="zahlwerte"><?= e(plural($weekRestChecks, 'Prüfung', 'Prüfungen')) ?> · <?= pct(percent($weekRestChecks, $timeline['week_total']), 0) ?></span></li>
+  <?php endif; ?>
+</ul>
+<?php if ($weekRest): ?>
+<?php /* Jede übrige Version mit Zahl und Anteil, wie die einzeln gezeigten.
+         Der Anteil mit einer Stelle: Alle liegen unter drei Prozent, und
+         „0 %“ neben einer Prüfung läse sich wie keine. */ ?>
+<details><summary>Die übrigen Versionen einzeln</summary>
+<p class="sub"><?= e(implode(' · ', array_map(static fn (array $life): string => $life['version'] . ': '
+    . plural($life['last_7_days'], 'Prüfung', 'Prüfungen') . ', ' . pct($life['last_7_days_share_percent'], 1),
+    $weekRest))) ?></p>
+</details>
+<?php endif; ?>
+<?php endif; ?>
+</article>
+<?php endif; ?>
+
+<?php if ($listed): ?>
+<h3 class="zwischen">Was auffällt</h3>
+<p class="sub zeitraum">Im Monat <?= e($month) ?>, wo ein Satz keinen anderen Zeitraum nennt.</p>
+<ul class="befunde">
+  <?php foreach ($listed as $finding): ?>
+  <li class="befund <?= e($finding['tone']) ?>"><?php if ($toneLabels[$finding['tone']] !== ''): ?><span class="ton"><?= e($toneLabels[$finding['tone']]) ?></span><?php endif; ?><?= e($finding['text']) ?></li>
+  <?php endforeach; ?>
+</ul>
+<?php elseif (!$findings): ?>
+  <p class="leer">Noch zu wenig gezählt, um etwas daraus zu lesen.</p>
+<?php endif; ?>
+</section>
+
 <?php if (!$rows): ?>
+<section aria-labelledby="reichweite">
 <h2 id="reichweite">Reichweite</h2>
   <p class="leer">Für den Monat <?= e($month) ?> liegt nichts vor. Entweder hat
   noch niemand die Seite geöffnet, oder <code>count.php</code> kommt nicht an
   seinen privaten Ablageordner.</p>
+</section>
+<section aria-labelledby="konversion">
 <h2 id="konversion">Konversion</h2>
   <p class="leer">Ohne Zeilen keine Downloads.</p>
+</section>
 <?php else: ?>
 
+<section aria-labelledby="reichweite">
 <h2 id="reichweite">Reichweite <span class="sub">wer kommt, woher, und was gelesen wird — im Monat <?= e($month) ?></span></h2>
 
 <div class="zahlen">
-  <div class="zahl"><b><?= n($monthSum['p']) ?></b><span>Seitenaufrufe</span></div>
-  <div class="zahl"><b><?= n($visitCount) ?></b><span>Besuche (Summe der Tage)</span></div>
-  <div class="zahl"><b><?= n($pagesPerVisit, 1) ?></b><span>Seiten je Besuch</span></div>
-  <div class="zahl"><b><?= e(duration_text(median($durations))) ?></b><span>Besuchsdauer, Median aus <?= n(count($durations)) ?> Besuchen mit mehr als einem Schritt</span></div>
+  <div class="zahl"><h3>Besuche</h3><p class="wert"><?= n($visitCount) ?></p><p class="notiz">Summe der Tageswerte</p></div>
+  <div class="zahl"><h3>Seitenaufrufe</h3><p class="wert"><?= n($monthSum['p']) ?></p></div>
+  <div class="zahl"><h3>Seiten je Besuch</h3><p class="wert"><?= n($pagesPerVisit, 1) ?></p></div>
+  <div class="zahl"><h3>Besuchsdauer</h3><p class="wert"><?= e(duration_text(median($durations))) ?></p><p class="notiz">Median aus <?= n(count($durations)) ?> Besuchen mit mehr als einem Schritt</p></div>
 </div>
 
-<div class="kacheln">
-
-<article class="kachel ganz">
+<article class="kachel">
 <h3>Tag für Tag</h3>
 <div class="drei">
   <?php foreach (['visits' => ['Besuche', 'Besuch', 'Besuche'], 'p' => ['Seitenaufrufe', 'Aufruf', 'Aufrufe'], 'd' => ['Downloads', 'Download', 'Downloads']] as $key => [$label, $one, $many]): ?>
@@ -2329,11 +2651,12 @@ Zahl ist die Veränderung zum gleich langen Zeitraum davor<?php if (!$recentComp
 <details>
 <summary>Alle Tage als Tabelle</summary>
 <?php $dayPeak = max(1, max(array_map(static fn (array $d): int => $d['visits'], $days))); ?>
+<div class="tabelle">
 <table>
   <tr><th>Tag</th><th class="n">Besuche</th><th class="n">Aufrufe</th><th class="n">Downloads</th><th class="n">Update-Prüfungen</th><th style="width:34%"></th></tr>
   <?php foreach (array_reverse($days, true) as $day => $counts): ?>
     <tr>
-      <td><?= e(day_label((string) $day)) ?></td>
+      <td class="tag"><?= e(day_label((string) $day)) ?></td>
       <td class="n"><?= n($counts['visits']) ?></td>
       <td class="n"><?= n($counts['p']) ?></td>
       <td class="n"><?= n($counts['d']) ?></td>
@@ -2342,11 +2665,13 @@ Zahl ist die Veränderung zum gleich langen Zeitraum davor<?php if (!$recentComp
     </tr>
   <?php endforeach; ?>
 </table>
+</div>
 </details>
 <?php if ($monthRows): ?>
 <h4>Monate im Vergleich</h4>
 <?php $monthPeak = max(1, max(array_column($monthRows, 'visitors'))); ?>
-<table>
+<div class="tabelle">
+<table class="ohne-umbruch">
   <tr><th>Monat</th><th class="n">Besuche</th><th class="n">Aufrufe</th><th class="n">Downloads</th><th class="n">Update-Prüfungen</th><th style="width:25%"></th></tr>
   <?php foreach ($monthRows as $totals): ?>
     <tr>
@@ -2359,112 +2684,59 @@ Zahl ist die Veränderung zum gleich langen Zeitraum davor<?php if (!$recentComp
     </tr>
   <?php endforeach; ?>
 </table>
+</div>
 <?php endif; ?>
 </article>
 
-<article class="kachel breit">
+<div class="karten zwei">
+<article class="kachel">
 <h3>Woher</h3>
 <p class="sub">Je Besuch die verweisende Seite des ersten Aufrufs — und wie
 viele dieser Besuche etwas geladen haben. Suchmaschinen schicken ihre Herkunft
 oft nicht mehr mit; die stehen in der ersten Zeile.</p>
-<table>
-  <tr><th>Verweisende Seite</th><th class="n">Besuche</th><th class="n">Anteil</th><th class="n">Aufrufe</th><th class="n">mit Download</th><th class="n">Konversion</th></tr>
-  <tr>
-    <td class="leer">direkt oder ohne Herkunft</td>
-    <td class="n"><?= n($direct['visits']) ?></td>
-    <td class="n"><?= n(percent($direct['visits'], $visitCount), 1) ?> %</td>
-    <td class="n"><?= n($direct['pages']) ?></td>
-    <td class="n"><?= n($direct['downloaded']) ?></td>
-    <td class="n"><?= n(percent($direct['downloaded'], $direct['visits']), 1) ?> %</td>
-  </tr>
-  <?php foreach (array_slice($sources, 0, TOP, true) as $host => $counts): ?>
-    <tr>
-      <td><?= e($host) ?></td>
-      <td class="n"><?= n($counts['visits']) ?></td>
-      <td class="n"><?= n(percent($counts['visits'], $visitCount), 1) ?> %</td>
-      <td class="n"><?= n($counts['pages']) ?></td>
-      <td class="n"><?= n($counts['downloaded']) ?></td>
-      <td class="n"><?= n(percent($counts['downloaded'], $counts['visits']), 1) ?> %</td>
-    </tr>
-  <?php endforeach; ?>
-</table>
+<?php
+$sourceRows = [[
+    '<span class="leer">direkt oder ohne Herkunft</span>', n($direct['visits']), pct(percent($direct['visits'], $visitCount)),
+    n($direct['pages']), n($direct['downloaded']), pct(percent($direct['downloaded'], $direct['visits'])),
+]];
+foreach (array_slice($sources, 0, TOP, true) as $host => $counts) {
+    $sourceRows[] = [
+        e($host), n($counts['visits']), pct(percent($counts['visits'], $visitCount)), n($counts['pages']),
+        n($counts['downloaded']), pct(percent($counts['downloaded'], $counts['visits'])),
+    ];
+}
+?>
+<?= ranking([['Verweisende Seite', 'text'], ['Besuche', 'n', 4.5], ['Anteil', 'n', 4.5], ['Aufrufe', 'n', 4.5],
+    ['mit Download', 'n', 6], ['Konversion', 'n', 5.5]], $sourceRows, 'weitere Herkunft', 'weitere Herkünfte') ?>
 </article>
 
-
-<div class="stapel">
 <?php if ($languages || $withoutPage): ?>
 <article class="kachel">
 <h3>Nach Sprache</h3>
 <p class="sub">Die Sprachfassung der ersten Seite eines Besuchs. Direktdownloads
 ohne Seite haben keine Sprache und stehen in der letzten Zeile.</p>
-<table>
-  <tr><th>Sprache</th><th class="n">Besuche</th><th class="n">Anteil</th><th class="n">mit Download</th><th class="n">Downloads</th></tr>
-  <?php foreach ($languages as $code => $counts): ?>
-    <tr>
-      <td><?= e($languageNames[$code] ?? $code) ?></td>
-      <td class="n"><?= n($counts['visits']) ?></td>
-      <td class="n"><?= n(percent($counts['visits'], $visitCount), 1) ?> %</td>
-      <td class="n"><?= n($counts['downloaded']) ?></td>
-      <td class="n"><?= n($counts['downloads']) ?></td>
-    </tr>
-  <?php endforeach; ?>
-  <?php if ($withoutPage): ?>
-    <tr>
-      <td class="leer">ohne Seitenaufruf</td>
-      <td class="n"><?= n($withoutPage['visits']) ?></td>
-      <td class="n"><?= n(percent($withoutPage['visits'], $visitCount), 1) ?> %</td>
-      <td class="n"><?= n($withoutPage['downloaded']) ?></td>
-      <td class="n"><?= n($withoutPage['downloads']) ?></td>
-    </tr>
-  <?php endif; ?>
-</table>
-</article>
-<?php endif; ?>
-
-<?php if ($homeVisits > 0): ?>
-<article class="kachel">
-<h3>Wechsel von der deutschen Startseite</h3>
-<p class="sub">Von <?= n($homeVisits) ?> Besuchen, die auf <code>/</code> beginnen:
-die erste andere Sprachfassung, die sie danach öffnen — über den Sprachhinweis
-oder die Sprachverweise in Kopf- und Fußzeile, alle führen auf dieselbe Adresse.
-Die Wirkung des Hinweises zeigt der Vergleich mit der Zeit davor.</p>
-<table>
-  <tr><th>Wechsel nach</th><th class="n">Besuche</th><th class="n">Anteil</th><th class="n">mit Download</th></tr>
-  <?php foreach ($switches as $code => $counts): ?>
-    <tr>
-      <td><?= e($languageNames[$code] ?? (string) $code) ?></td>
-      <td class="n"><?= n($counts['visits']) ?></td>
-      <td class="n"><?= n(percent($counts['visits'], $homeVisits), 1) ?> %</td>
-      <td class="n"><?= n($counts['downloaded']) ?></td>
-    </tr>
-  <?php endforeach; ?>
-    <tr>
-      <td class="leer">blieben auf Deutsch</td>
-      <td class="n"><?= n($stayed['visits']) ?></td>
-      <td class="n"><?= n(percent($stayed['visits'], $homeVisits), 1) ?> %</td>
-      <td class="n"><?= n($stayed['downloaded']) ?></td>
-    </tr>
-</table>
-</article>
-<?php endif; ?>
-
-<?php if ($unread): ?>
-<article class="kachel">
-<h3>Ungelesene Seiten</h3>
-<p class="sub"><?= n(count($unread)) ?> der <?= n(count($sitemap)) ?> Seiten
-aus der Sitemap ohne einen einzigen Aufruf in diesem Monat.</p>
-<details>
-<summary>Liste zeigen</summary>
-<ul class="pfade">
-  <?php foreach ($unread as $path): ?>
-    <li><?= e($path) ?></li>
-  <?php endforeach; ?>
-</ul>
-</details>
+<?php
+$languageRows = [];
+foreach ($languages as $code => $counts) {
+    $languageRows[] = [
+        e($languageNames[$code] ?? $code), n($counts['visits']), pct(percent($counts['visits'], $visitCount)),
+        n($counts['downloaded']), n($counts['downloads']),
+    ];
+}
+if ($withoutPage) {
+    $languageRows[] = [
+        '<span class="leer">ohne Seitenaufruf</span>', n($withoutPage['visits']),
+        pct(percent($withoutPage['visits'], $visitCount)), n($withoutPage['downloaded']), n($withoutPage['downloads']),
+    ];
+}
+?>
+<div class="tabelle"><?= fixed_table([['Sprache', 'text'], ['Besuche', 'n', 4.5], ['Anteil', 'n', 4.5],
+    ['mit Download', 'n', 6], ['Downloads', 'n', 5.5]], $languageRows) ?></div>
 </article>
 <?php endif; ?>
 </div>
 
+<div class="karten">
 <article class="kachel breit">
 <h3>Seiten</h3>
 <p class="sub">Aufrufe je Seite, dazu wie oft ein Besuch dort begann und endete.
@@ -2472,64 +2744,86 @@ Die Ausstiegsquote ist der Anteil der Aufrufe, nach denen der Besuch vorbei war.
 <?php if (!$paths): ?>
   <p class="leer">Noch keine.</p>
 <?php else: ?>
-<?php $pathPeak = max(1, max($paths)); ?>
-<table>
-  <tr><th>Pfad</th><th class="n">Aufrufe</th><th class="n">Anteil</th><th class="n">Einstiege</th><th class="n">Ausstiege</th><th class="n">Ausstiegsquote</th><th style="width:22%"></th></tr>
-  <?php foreach (array_slice($paths, 0, TOP, true) as $path => $count): ?>
-    <tr>
-      <td><?= e($path) ?></td>
-      <td class="n"><?= n($count) ?></td>
-      <td class="n"><?= n(percent($count, $monthSum['p']), 1) ?> %</td>
-      <td class="n"><?= n($entryPages[$path] ?? 0) ?></td>
-      <td class="n"><?= n($exitPages[$path] ?? 0) ?></td>
-      <td class="n"><?= n(percent($exitPages[$path] ?? 0, $count), 0) ?> %</td>
-      <td><?= bar($count, $pathPeak) ?></td>
-    </tr>
+<?php
+$pathPeak = max(1, max($paths));
+$pathRows = [];
+foreach (array_slice($paths, 0, TOP, true) as $path => $count) {
+    $pathRows[] = [
+        e($path), n($count), pct(percent($count, $monthSum['p'])), n($entryPages[$path] ?? 0),
+        n($exitPages[$path] ?? 0), pct(percent($exitPages[$path] ?? 0, $count), 0), bar($count, $pathPeak),
+    ];
+}
+?>
+<?= ranking([['Pfad', 'text', 13], ['Aufrufe', 'n', 5], ['Anteil', 'n', 4.5], ['Einstiege', 'n', 5], ['Ausstiege', 'n', 5],
+    ['Ausstiegsquote', 'n', 6.5], ['', 'balken']], $pathRows, 'weitere Seite', 'weitere Seiten') ?>
+<?php endif; ?>
+<?php if ($unread): ?>
+<details>
+<summary><?= n(count($unread)) ?> von <?= n(count($sitemap)) ?> Seiten aus der Sitemap ohne einen einzigen Aufruf in diesem Monat</summary>
+<ul class="pfade">
+  <?php foreach ($unread as $path): ?>
+    <li><?= e($path) ?></li>
   <?php endforeach; ?>
-</table>
+</ul>
+</details>
 <?php endif; ?>
 </article>
 
+<?php if ($homeVisits > 0): ?>
+<article class="kachel">
+<h3>Wechsel von der deutschen Startseite</h3>
+<p class="sub">Von <?= n($homeVisits) ?> Besuchen, die auf <code>/</code> beginnen:
+die erste andere Sprachfassung, die sie danach öffnen — über den Sprachhinweis
+oder die Sprachverweise in Kopf- und Fußzeile, alle führen auf dieselbe Adresse.</p>
+<?php
+$switchRows = [];
+foreach ($switches as $code => $counts) {
+    $switchRows[] = [
+        e($languageNames[$code] ?? (string) $code), n($counts['visits']), pct(percent($counts['visits'], $homeVisits)),
+        n($counts['downloaded']),
+    ];
+}
+$switchRows[] = [
+    '<span class="leer">blieben auf Deutsch</span>', n($stayed['visits']), pct(percent($stayed['visits'], $homeVisits)),
+    n($stayed['downloaded']),
+];
+?>
+<div class="tabelle"><?= fixed_table([['Wechsel nach', 'text'], ['Besuche', 'n', 4.5], ['Anteil', 'n', 4.5],
+    ['mit Download', 'n', 6]], $switchRows) ?></div>
+</article>
+<?php endif; ?>
+</div>
 
-
-<div class="stapel">
+<div class="karten">
 <?php if ($visits): ?>
 <article class="kachel">
 <h3>Besuchstiefe</h3>
 <p class="sub">Wie viele Seiten ein Besuch umfasst.</p>
-<?php $depthPeak = max(1, max($depth)); ?>
-<table>
-  <tr><th>Seiten je Besuch</th><th class="n">Besuche</th><th class="n">Anteil</th><th style="width:40%"></th></tr>
-  <?php foreach ($depth as $label => $count): ?>
-    <tr><td><?= e($label) ?></td><td class="n"><?= n($count) ?></td><td class="n"><?= n(percent($count, array_sum($depth)), 0) ?> %</td><td><?= bar($count, $depthPeak) ?></td></tr>
-  <?php endforeach; ?>
-</table>
+<?php
+$depthPeak = max(1, max($depth));
+$depthRows = [];
+foreach ($depth as $label => $count) {
+    $depthRows[] = [e($label), n($count), pct(percent($count, array_sum($depth)), 0), bar($count, $depthPeak)];
+}
+?>
+<div class="tabelle"><?= fixed_table([['Seiten je Besuch', 'text', 8], ['Besuche', 'n', 4], ['Anteil', 'n', 3.5],
+    ['', 'balken']], $depthRows) ?></div>
 </article>
 
 <article class="kachel">
 <h3>Besuchsdauer</h3>
 <p class="sub">Vom ersten zum letzten Schritt, nur bei Besuchen mit mehr als einem.</p>
-<?php $durationPeak = max(1, max($duration)); ?>
-<table>
-  <tr><th>Dauer</th><th class="n">Besuche</th><th class="n">Anteil</th><th style="width:40%"></th></tr>
-  <?php foreach ($duration as $label => $count): ?>
-    <tr><td><?= e($label) ?></td><td class="n"><?= n($count) ?></td><td class="n"><?= n(percent($count, array_sum($duration)), 0) ?> %</td><td><?= bar($count, $durationPeak) ?></td></tr>
-  <?php endforeach; ?>
-</table>
+<?php
+$durationPeak = max(1, max($duration));
+$durationRows = [];
+foreach ($duration as $label => $count) {
+    $durationRows[] = [e($label), n($count), pct(percent($count, array_sum($duration)), 0), bar($count, $durationPeak)];
+}
+?>
+<div class="tabelle"><?= fixed_table([['Dauer', 'text', 8], ['Besuche', 'n', 4], ['Anteil', 'n', 3.5],
+    ['', 'balken']], $durationRows) ?></div>
 </article>
 <?php endif; ?>
-</div>
-
-<article class="kachel breit">
-<h3>Nach Uhrzeit</h3>
-<p class="sub">Seitenaufrufe je Stunde, über den Monat aufsummiert.</p>
-<?= columns(array_map(static fn (int $hour): array => [
-    'label' => (string) $hour,
-    'minor' => $hour % 3 !== 0,
-    'value' => $byHour[$hour],
-    'title' => $hour . '–' . ($hour + 1) . ' Uhr: ' . plural($byHour[$hour], 'Aufruf', 'Aufrufe'),
-], range(0, 23)), 'Seitenaufrufe je Stunde') ?>
-</article>
 
 <article class="kachel">
 <h3>Nach Wochentag</h3>
@@ -2540,24 +2834,38 @@ Die Ausstiegsquote ist der Anteil der Aufrufe, nach denen der Besuch vorbei war.
     'title' => $weekdayNames[$weekday] . ': ' . plural($byWeekday[$weekday], 'Aufruf', 'Aufrufe'),
 ], range(1, 7)), 'Seitenaufrufe je Wochentag') ?>
 </article>
-
 </div>
 
-<h2 id="konversion">Konversion <span class="sub">ob aus Besuchen Downloads werden — ein Besuch zählt einmal,
-auch wenn er dreimal auf den Knopf drückt</span></h2>
+<article class="kachel">
+<h3>Nach Uhrzeit</h3>
+<p class="sub">Seitenaufrufe je Stunde, über den Monat aufsummiert.</p>
+<?= columns(array_map(static fn (int $hour): array => [
+    'label' => (string) $hour,
+    'minor' => $hour % 3 !== 0,
+    'value' => $byHour[$hour],
+    'title' => $hour . '–' . ($hour + 1) . ' Uhr: ' . plural($byHour[$hour], 'Aufruf', 'Aufrufe'),
+], range(0, 23)), 'Seitenaufrufe je Stunde') ?>
+</article>
+</section>
+
+<section aria-labelledby="konversion">
+<h2 id="konversion">Konversion <span class="sub">ob aus Besuchen Downloads werden — im Monat <?= e($month) ?>; ein Besuch
+zählt einmal, auch wenn er dreimal auf den Knopf drückt</span></h2>
 
 <div class="zahlen">
-  <div class="zahl"><b><?= n($monthSum['d']) ?></b><span>Downloads</span></div>
-  <div class="zahl"><b><?= n($visitsWithDownload) ?></b><span>Besuche mit Download</span></div>
-  <div class="zahl"><b><?= $conversion === null ? '—' : n($conversion, 1) . ' %' ?></b><span>der Besuche laden</span></div>
-  <div class="zahl"><b><?= n($downloadsWithoutPage) ?></b><span>Downloads ohne Seitenaufruf am selben Tag (Direktlinks, Skripte)</span></div>
+  <div class="zahl"><h3>Downloads</h3><p class="wert"><?= n($monthSum['d']) ?></p></div>
+  <div class="zahl"><h3>Besuche mit Download</h3><p class="wert"><?= pct($conversion) ?></p><p class="notiz"><?= n($visitsWithDownload) ?> von <?= plural($visitCount, 'Besuch', 'Besuchen') ?></p></div>
+  <div class="zahl"><h3>Ohne Seitenaufruf</h3><p class="wert"><?= n($downloadsWithoutPage) ?></p><p class="notiz">Downloads ohne Seite am selben Tag: Direktlinks, Skripte</p></div>
 </div>
 
-<div class="kacheln">
-
-<?php if ($matrixRows): ?>
+<div class="karten">
 <article class="kachel breit">
 <h3>Version und Zielsystem</h3>
+<p class="sub">Downloads je Paket; die Version aus <code>version.json</code> steht auch ohne Abruf da.</p>
+<?php if (!$matrixRows): ?>
+  <p class="leer">Im Monat kein Download, und <code>version.json</code> nennt keine Version.</p>
+<?php else: ?>
+<div class="tabelle">
 <table>
   <tr><th>Version</th><?php foreach ($platforms as $platform): ?><th class="n"><?= e($platform) ?></th><?php endforeach; ?><th class="n">Summe</th></tr>
   <?php foreach ($matrixRows as $line): ?>
@@ -2575,43 +2883,17 @@ auch wenn er dreimal auf den Knopf drückt</span></h2>
   <?php if ($monthSum['d'] > 0): ?>
   <tr>
     <td class="leer">Anteil</td>
-    <?php foreach ($platforms as $platform): ?><td class="n"><?= n(percent($platformTotals[$platform], $monthSum['d']), 0) ?> %</td><?php endforeach; ?>
+    <?php foreach ($platforms as $platform): ?><td class="n"><?= pct(percent($platformTotals[$platform], $monthSum['d']), 0) ?></td><?php endforeach; ?>
     <td class="n"></td>
   </tr>
   <?php endif; ?>
 </table>
-</article>
+</div>
 <?php endif; ?>
-
-
-<div class="stapel">
-<?php if ($beforeDownload): ?>
-<article class="kachel">
-<h3>Seite vor dem Download</h3>
-<p class="sub">Die zuletzt geöffnete Seite, als der Download begann — welcher
-Knopf benutzt wird.</p>
-<?php foreach ([array_slice($beforeDownload, 0, 10, true), array_slice($beforeDownload, 10, TOP - 10, true)] as $part => $entries): ?>
-<?php if ($entries === []) { continue; } ?>
-<?php if ($part === 1): ?><details><summary><?= plural(count($entries), 'weitere Seite', 'weitere Seiten') ?></summary><?php endif; ?>
-<table>
-  <?php if ($part === 0): ?><tr><th>Pfad</th><th class="n">Downloads</th><th class="n">Anteil</th></tr><?php endif; ?>
-  <?php foreach ($entries as $path => $count): ?>
-    <tr><td><?php if ((string) $path === ''): ?><span class="leer">ohne Seitenaufruf</span><?php else: ?><?= e($path) ?><?php endif; ?></td><td class="n"><?= n($count) ?></td><td class="n"><?= n(percent($count, $monthSum['d']), 0) ?> %</td></tr>
-  <?php endforeach; ?>
-</table>
-<?php if ($part === 1): ?></details><?php endif; ?>
-<?php endforeach; ?>
-</article>
-<?php endif; ?>
-
-<article class="kachel">
-<h3>Dateien</h3>
-<?php if (!$files): ?>
-  <p class="leer">Der Ordner ist leer, und geladen wurde auch nichts.</p>
-<?php else: ?>
-<p class="sub"><?= plural(count($present), 'Datei', 'Dateien') ?> im Download-Ordner; geladen im Monat: <?= n($monthSum['d']) ?>.</p>
+<?php if ($files): ?>
 <details>
-<summary>Alle Dateien mit Größe und Downloads</summary>
+<summary><?= plural(count($present), 'Datei', 'Dateien') ?> im Download-Ordner — Größe und Downloads je Datei</summary>
+<div class="tabelle">
 <table>
   <tr><th>Datei</th><th class="n">Größe</th><th class="n">Downloads</th></tr>
   <?php foreach ($files as $file): ?>
@@ -2631,24 +2913,39 @@ Knopf benutzt wird.</p>
     </tr>
   <?php endforeach; ?>
 </table>
+</div>
 </details>
+<?php else: ?>
+  <p class="leer">Der Download-Ordner ist leer, und geladen wurde auch nichts.</p>
 <?php endif; ?>
 </article>
-</div>
 
+<?php if ($beforeDownload): ?>
+<article class="kachel">
+<h3>Seite vor dem Download</h3>
+<p class="sub">Die zuletzt geöffnete Seite, als der Download begann — welcher
+Knopf benutzt wird.</p>
+<?php
+$beforeRows = [];
+foreach (array_slice($beforeDownload, 0, TOP, true) as $path => $count) {
+    $beforeRows[] = [
+        (string) $path === '' ? '<span class="leer">ohne Seitenaufruf</span>' : e($path),
+        n($count), pct(percent($count, $monthSum['d']), 0),
+    ];
+}
+?>
+<?= ranking([['Pfad', 'text'], ['Downloads', 'n', 5.5], ['Anteil', 'n', 4]], $beforeRows, 'weitere Seite', 'weitere Seiten') ?>
+</article>
+<?php endif; ?>
 </div>
+</section>
 
 <?php endif; ?>
 
+<section aria-labelledby="nutzung">
 <h2 id="nutzung">Versionen <span class="sub">Update-Prüfungen aller gespeicherten Tage<?php if ($timeline['from'] !== null): ?>,
 <?= e(short_day($timeline['from'])) ?>–<?= e(short_day($timeline['to'])) ?><?php endif; ?> — unabhängig vom gewählten Monat<?php if (!$allComplete): ?>;
 <b>eine Monatsdatei ist unvollständig gelesen, die Werte sind Untergrenzen</b><?php endif; ?></span></h2>
-<p class="hinweis">Die Anwendung nennt bei jedem Start ihre Version, wenn die
-Update-Prüfung eingeschaltet ist. Gezählt werden Abrufe, auch wiederholte: Drei
-Prüfungen derselben Anwendung stehen dreimal in der Zahl. Es werden keine
-Besucherkennzeichen für diese Auswertung gebildet; wie viele Rechner oder
-Personen dahinterstehen, lässt sich daraus nicht bestimmen. Die Anteile zeigen,
-wie schnell eine neue Version die alte ablöst, nicht wie viele sie benutzen.</p>
 
 <?php if (!$versions): ?>
   <p class="leer">Noch keine Update-Prüfung gezählt. Entweder läuft die
@@ -2656,49 +2953,16 @@ wie schnell eine neue Version die alte ablöst, nicht wie viele sie benutzen.</p
   niemand die Anwendung gestartet.</p>
 <?php else: ?>
 <div class="zahlen">
-  <div class="zahl"><b><?= n($updateCount) ?></b><span>Update-Prüfungen im Zeitraum</span></div>
-  <div class="zahl"><b><?= n($updatesPerDay, 1) ?></b><span>je Kalendertag</span></div>
-  <div class="zahl"><b><?= ($releaseLife['last_7_days_share_percent'] ?? null) === null ? '—' : n($releaseLife['last_7_days_share_percent'], 1) . ' %' ?></b><span>der Prüfungen der letzten 7 Tage aus der aktuellen Version<?= $release !== '' ? ' ' . e($release) : '' ?></span></div>
-  <div class="zahl"><b><?= n(count($versions)) ?></b><span>Versionen gesehen</span></div>
+  <div class="zahl"><h3>Update-Prüfungen</h3><p class="wert"><?= n($updateCount) ?></p><p class="notiz">im ganzen Zeitraum, Abrufe und keine Rechner</p></div>
+  <div class="zahl"><h3>Je Kalendertag</h3><p class="wert"><?= n($updatesPerDay, 1) ?></p><p class="notiz">Update-Prüfungen im Mittel</p></div>
+  <div class="zahl"><h3>Versionen gesehen</h3><p class="wert"><?= n(count($versions)) ?></p></div>
 </div>
 
-<div class="kacheln">
-
-<article class="kachel ganz">
-<h3 id="versionen">Je Version</h3>
-<p class="sub">Veröffentlicht nennt den belegten Release-Tag, zuerst geprüft den ersten
-gespeicherten Aufruf ab diesem Tag. Prüfungen vor belegten Release-Tagen und künftig
-als Test gekennzeichnete Aufrufe zählen nicht mit. „Mehrheit ab“ ist der erste Tag mit
-mehr als der Hälfte aller Prüfungen; „erste Woche“ ihr Anteil in den sieben Tagen ab
-Veröffentlichung. Fehlt der Release-Tag oder reichen die Daten nicht bis dorthin,
-bleiben beide Kennzahlen leer. Frühere Tests ab dem Release-Tag sind nicht erkennbar.</p>
-<?php $lifePeak = max(1, ...array_column($timeline['versions'], 'checks')); ?>
-<table class="ohne-umbruch">
-  <tr><th>Version</th><th>veröffentlicht</th><th>zuerst geprüft</th><th>zuletzt</th><th class="n">Tage</th><th class="n">Prüfungen</th><th class="n">Anteil</th><th style="width:9%"></th><th class="n">letzte 7 Tage</th><th class="n">erste Woche</th><th>Mehrheit ab</th><th>stärkster Tag</th></tr>
-  <?php foreach ($timeline['versions'] as $life): ?>
-  <tr>
-    <td><span class="farbe <?= e($slotOf[$life['version']] ?? 'vx') ?>"></span><?= e($life['version']) ?><?php if ($life['current']): ?><span class="marke">aktuell</span><?php endif; ?></td>
-    <td><?= $life['published_on'] === null ? '<span class="leer">nicht belegt</span>' : e(day_label($life['published_on'])) ?></td>
-    <td><?= $life['since_data_start'] ? '<span class="leer">seit Datenbeginn</span>' : e(day_label($life['first_seen'])) ?></td>
-    <td><?= $life['last_seen'] === $today ? 'heute' : e(day_label($life['last_seen'])) ?></td>
-    <td class="n"><?= n($life['active_days']) ?></td>
-    <td class="n"><?= n($life['checks']) ?></td>
-    <td class="n"><?= n($life['share_percent'], 1) ?> %</td>
-    <td><?= bar($life['checks'], $lifePeak) ?></td>
-    <td class="n"><?= n($life['last_7_days']) ?><?php if ($life['last_7_days_share_percent'] !== null): ?> · <?= n($life['last_7_days_share_percent'], 0) ?> %<?php endif; ?></td>
-    <td class="n"><?= $life['first_week_share_percent'] === null ? '—' : n($life['first_week_share_percent'], 0) . ' %' ?></td>
-    <td><?php if ($life['majority_from'] !== null): ?><?= e(day_label($life['majority_from'])) ?> <span class="leer">nach <?= e(plural((int) $life['days_to_majority'], 'Tag', 'Tagen')) ?></span><?php elseif (!$life['release_covered']): ?>—<?php else: ?><span class="leer">noch nicht</span><?php endif; ?></td>
-    <td><?= e(day_label($life['peak_day'])) ?> <span class="leer">(<?= n($life['peak']) ?>)</span></td>
-  </tr>
-  <?php endforeach; ?>
-</table>
-</article>
-
-<article class="kachel ganz">
+<article class="kachel">
 <h3>Anteile Tag für Tag</h3>
 <p class="sub">Jede Säule ist ein Tag und zusammen hundert Prozent seiner Prüfungen;
 die neueste Version liegt unten. Den genauen Wert zeigt der Tooltip, alle Zahlen
-stehen in der Tabelle darunter.</p>
+stehen in den Tabellen darunter.</p>
 <ul class="legende">
   <?php foreach ($versionSeries as $item): ?>
   <li><span class="farbe <?= e($item['slot']) ?>"></span><?= e($item['name']) ?></li>
@@ -2712,12 +2976,68 @@ stehen in der Tabelle darunter.</p>
 ], $timeline['days']), 'Update-Prüfungen je Tag') ?>
 </article>
 
-<article class="kachel ganz">
+<article class="kachel">
+<h3 id="versionen">Je Version</h3>
+<p class="sub">Wann eine Version erschien, wie schnell sie die Mehrheit der Prüfungen
+übernahm und wann sie sich zuletzt meldete. Die farbigen Versionen stehen offen, die
+grauen darunter.</p>
+<?php
+$lifePeak = max(1, ...array_column($timeline['versions'], 'checks'));
+$lifeRows = [];
+foreach ($timeline['versions'] as $life) {
+    $published = $life['published_on'] === null ? '<span class="leer">nicht belegt</span>' : e(day_label($life['published_on']));
+    // Veröffentlichung und erste Prüfung stehen in einer Zelle: Meist fallen
+    // sie auf denselben Tag, und dann genügt einer. Weichen sie ab, steht die
+    // erste Prüfung darunter — der Release-Tag ist nie die erste Prüfung.
+    if ($life['since_data_start']) {
+        $published .= '<small>Prüfungen seit Datenbeginn</small>';
+    } elseif ($life['first_seen'] !== $life['published_on']) {
+        $published .= '<small>erste Prüfung ' . e(day_label($life['first_seen'])) . '</small>';
+    }
+    if ($life['majority_from'] !== null) {
+        $majority = e(day_label($life['majority_from'])) . ' <span class="leer">nach '
+            . e(plural((int) $life['days_to_majority'], 'Tag', 'Tagen')) . '</span>';
+    } else {
+        $majority = $life['release_covered'] ? '<span class="leer">noch nicht</span>' : '—';
+    }
+    $lifeRows[] = [
+        '<span class="farbe ' . e($slotOf[$life['version']] ?? 'vx') . '"></span>' . e($life['version'])
+            . ($life['current'] ? '<span class="marke">aktuell</span>' : ''),
+        $published,
+        $majority,
+        pct($life['first_week_share_percent'], 0),
+        n($life['checks']),
+        pct($life['share_percent']),
+        bar($life['checks'], $lifePeak),
+        e(day_label($life['peak_day'])) . ' <span class="leer">(' . n($life['peak']) . ')</span>',
+        ($life['last_seen'] === $today ? 'heute' : e(day_label($life['last_seen'])))
+            . '<small>an ' . e(plural($life['active_days'], 'Tag', 'Tagen')) . '</small>',
+    ];
+}
+?>
+<?= ranking([['Version', 'text', 9], ['veröffentlicht', 'text', 10], ['Mehrheit ab', 'text', 10.5],
+    ['erste Woche', 'n', 5.5], ['Prüfungen', 'n', 5.5], ['Anteil', 'n', 4.5], ['', 'balken'],
+    ['stärkster Tag', 'text', 7.5], ['zuletzt', 'text', 6.5]], $lifeRows, 'ältere Version', 'ältere Versionen', 7) ?>
+<details>
+<summary>Was die Spalten bedeuten</summary>
+<p class="sub">Veröffentlicht nennt den belegten Release-Tag; liegt die erste gespeicherte
+Prüfung ab diesem Tag später, steht sie darunter. Prüfungen vor belegten Release-Tagen
+und als Test gekennzeichnete Aufrufe zählen nicht mit. „Mehrheit ab“ ist der erste Tag
+mit mehr als der Hälfte aller Prüfungen, „erste Woche“ der Anteil in den sieben Tagen ab
+Veröffentlichung. Fehlt der Release-Tag oder reichen die Daten nicht bis dorthin, bleiben
+beide leer. Frühere Tests ab dem Release-Tag sind nicht erkennbar. „Stärkster Tag“ ist
+der Tag mit den meisten Prüfungen, in Klammern ihre Zahl; unter „zuletzt“ steht, an wie
+vielen Tagen sich die Version gemeldet hat.</p>
+</details>
+</article>
+
+<article class="kachel">
 <h3>Versionen Tag für Tag</h3>
 <p class="sub">Jede Version in ihrer Spalte, der neueste Tag oben. „neu“ markiert den
 belegten Veröffentlichungstag.</p>
-<details open>
-<summary><?= plural(count($timeline['days']), 'Tag', 'Tage') ?>, <?= plural(count($timeline['columns']), 'Version', 'Versionen') ?></summary>
+<details>
+<summary><?= plural(count($timeline['days']), 'Tag', 'Tage') ?>, <?= plural(count($timeline['columns']), 'Version', 'Versionen') ?> als Tabelle</summary>
+<div class="tabelle">
 <table>
   <tr><th>Tag</th><?php foreach ($timeline['columns'] as $column): ?><th class="n"><span class="farbe <?= e($slotOf[$column] ?? 'vx') ?>"></span><?= e($column) ?></th><?php endforeach; ?><th class="n">Summe</th><?php if ($release !== '' && in_array($release, $timeline['columns'], true)): ?><th class="n">Anteil <?= e($release) ?></th><?php endif; ?></tr>
   <?php foreach (array_reverse($timeline['days']) as $line): ?>
@@ -2729,12 +3049,13 @@ belegten Veröffentlichungstag.</p>
     </tr>
   <?php endforeach; ?>
 </table>
+</div>
 </details>
 </article>
-
-</div>
 <?php endif; ?>
+</section>
 
+<section aria-labelledby="methode">
 <h2 id="methode">Zur Methode</h2>
 <p class="hinweis">Die Besucher kommen ohne Cookie und ohne gespeicherte
 IP-Adresse zustande: Ein Tageskennzeichen aus IP-Adresse und Browserkennung
@@ -2742,14 +3063,22 @@ unter einem Tageswert, der um Mitternacht wechselt. Besuche, Einstieg,
 Ausstieg, Dauer und Konversion gelten deshalb je Tag und sind über den Tag
 hinaus nicht zusammenführbar — die Monatssumme der Besuche ist eine Summe
 von Tageswerten. Wer <em>Do Not Track</em> oder <em>Global Privacy Control</em>
-sendet, wird nicht gezählt, auch nicht bei Downloads. Update-Prüfungen tragen
-kein Kennzeichen. Es bleiben der laufende und der vorige Monat; darum kann der
-Vergleich der letzten 30 Tage mit den 30 davor fehlen, und der Block
-<em>Versionen</em> reicht höchstens so weit zurück. Die Sätze unter
-<em>Auf einen Blick</em> sind Regeln über die Zahlen dieser Seite; wo eine Zahl
-zu klein ist, um etwas zu sagen, fehlt der Satz. (Ein Cookie gibt es
-hier doch: dieses Fenster. Es merkt sich die Anmeldung, gilt nur unterhalb von
-<code>/api/</code> und geht keinen Besucher etwas an.)</p>
+sendet, wird nicht gezählt, auch nicht bei Downloads. Es bleiben der laufende
+und der vorige Monat; darum kann der Vergleich der letzten 30 Tage mit den 30
+davor fehlen, und der Block <em>Versionen</em> reicht höchstens so weit zurück.
+Die Sätze unter <em>Auf einen Blick</em> sind Regeln über die Zahlen dieser
+Seite; wo eine Zahl zu klein ist, um etwas zu sagen, fehlt der Satz. (Ein
+Cookie gibt es hier doch: dieses Fenster. Es merkt sich die Anmeldung, gilt
+nur unterhalb von <code>/api/</code> und geht keinen Besucher etwas an.)</p>
+<p class="hinweis">Die Anwendung nennt bei jedem Start ihre Version, wenn die
+Update-Prüfung eingeschaltet ist. Gezählt werden Abrufe, auch wiederholte: Drei
+Prüfungen derselben Anwendung stehen dreimal in der Zahl. Update-Prüfungen tragen
+kein Kennzeichen, und es werden keine Besucherkennzeichen für diese Auswertung
+gebildet; wie viele Rechner oder Personen dahinterstehen, lässt sich daraus nicht
+bestimmen. Die Anteile zeigen, wie schnell eine neue Version die alte ablöst, nicht
+wie viele sie benutzen.</p>
+</section>
 
+</main>
 </body>
 </html>
