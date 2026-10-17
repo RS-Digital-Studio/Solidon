@@ -401,7 +401,7 @@ jobs:
     # vorige Tag, ohne Tag jede Datei.
     if: inputs.tests_only != true && (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions:
       contents: read
       actions: read

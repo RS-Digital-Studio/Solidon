@@ -18,7 +18,8 @@ from pathlib import Path
 import pytest
 
 from tests.selection_trees import names, small_tree, write
-from tools.affected_tests import ImportGraph, affected, module_name
+from tools import data_reads
+from tools.affected_tests import ImportGraph, affected, module_name, selection
 
 
 @pytest.fixture
@@ -251,6 +252,36 @@ def test_the_root_conftest_selects_every_test(tree: Path) -> None:
 
     assert files == _all_tests(graph)
     assert reasons[tree / "tests" / "test_unrelated.py"] == "conftest.py betrifft jeden Test"
+
+
+def test_a_file_for_every_test_skips_the_analysis_that_cannot_add_anything(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ist eine Datei aus ``_EVERYTHING`` geändert, steht jede Testdatei ohne Einschränkung auf
+    lesende Einheiten in der Auswahl; keine weitere Datei des Diffs kann daran etwas ändern. Die
+    Auswahl rechnete sie trotzdem durch — die Lesestellenanalyse je Datendatei kostet rund 40 s,
+    und der main-Lauf über den welle5-Diff (1 922 Dateien samt ``pyproject.toml``) brach nach
+    einer Stunde ab, ohne eine Fensterauswahl zu nennen."""
+    write(tree, "tests/data/plate.stl", "solid x\nendsolid x\n")
+    write(tree, "app/changed.py", "VALUE = 2\n")
+    graph = ImportGraph(tree)
+
+    def no_analysis(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("die Lesestellenanalyse lief, obwohl jeder Test schon gewählt ist")
+
+    monkeypatch.setattr(data_reads, "DataReads", no_analysis)
+    found = selection(
+        [
+            tree / "app" / "changed.py",
+            tree / "tests" / "data" / "plate.stl",
+            tree / "pyproject.toml",
+        ],
+        graph,
+    )
+
+    assert set(found.reasons) == _all_tests(graph)
+    assert found.units == {}, "gewählt ist jede Datei ganz, nicht nur ihre lesenden Einheiten"
+    assert set(found.reasons.values()) == {"pyproject.toml betrifft jeden Test"}
 
 
 def test_what_a_conftest_runs_for_every_test_selects_every_test(tree: Path) -> None:
