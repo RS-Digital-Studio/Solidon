@@ -2068,7 +2068,7 @@ Auskunft.
 - Ursache: Der Prüfstand hatte kein Tor zwischen „vor dem Übernehmen“ und dem Klick.
 - Vorschlag: `tools/function_prediction.PredictionGate`: vor dem Klick Bild und `ready.json`, die Vorhersage des Prüfers binden und versiegeln, `prediction.bound` ins Protokoll; `report` prüft die Bindung.
 - Wirkung beim Kunden: Kein Produktfehler; ohne Tor blieb jedes V4 bis zur Nachurteilsrunde abgewiesen.
-- Stand: behoben `d73df33ce`, `b3c72a8db`, `d41312515`, `71856a491`; ein Fall mit dem Variantensatz `vorhersage` hält vor dem Handlungsklick an, bindet und versiegelt die Vorhersage, `report` rechnet Siegel und Vorhersage selbst nach; `test_function_prediction_seal.py` am Stand davor rot (5 von 6 Verfälschungen angenommen), offscreen 51 Tore gebunden; nativer Nachweis mit Schreiber im Schlusslauf (Plan Punkt 33, L5).
+- Stand: behoben `d73df33ce`, `b3c72a8db`, `d41312515`, `71856a491`; ein Fall mit dem Variantensatz `vorhersage` hält vor dem Handlungsklick an, bindet und versiegelt die Vorhersage, `report` rechnet Siegel und Vorhersage selbst nach; `test_function_prediction_seal.py` am Stand davor rot (5 von 6 Verfälschungen angenommen), offscreen 51 Tore gebunden; nativ belegt (Schlusslauf `d9f7a81f9` L5: 15 Fälle, 63 Tore mit Schreiber, alle gebunden, keine Vorhersage abgewiesen, keins abgelaufen; Siegel `seal.json 0f0ae7ff04535f0ef49d01b78cede7741c6c86e4c5f22a31b145ce6b6aed43bc`).
 
 ### FD-169 E4 ist an Handlungen am ganzen Körper nicht gemessen
 
@@ -2807,6 +2807,18 @@ eingefroren“). Ihr Registerpunkt ist RM-812.
 - Ursache: offen; vermutlich erreicht das Hinfahren vor `showText` das modale Fenster nicht wie das Hauptfenster.
 - Vorschlag: Das Kurzhilfebild auch in modalen Dialogen aufnehmen; nativer Fall mit `recipe_dialog`.
 - Wirkung beim Kunden: Kein Produktfehler; an diesen zwei Dialogen fehlt das Bild des Grunds.
+- Stand: offen RM-812
+
+### FD-240 Das Vorher-Bild am Vorhersagetor zeigt manchmal eine noch rechnende Vorschau
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Vorhersagetor des Prüfstands (`tools/function_prediction.py`)
+- Prüfpunkt: V4
+- Beleg: Schlusslauf L5 an `d9f7a81f9` (`F:\tmp-suche\schlusslauf-d9f7a81f\L5-v4`): Bei 6 von 63 Toren beschreibt der Schreiber im Vorher-Bild „Vorschau wird gerechnet“ — 005 `resize_hole`, 028 `finding.action:adopt_printer`, `choose_another_file`, `reactivate_step`, `suppress_step`, 034 `keep_saved_parts`.
+- Ursache: offen; das Tor nimmt das Vorher-Bild vermutlich auf, bevor die feine Vorschau steht.
+- Vorschlag: Vor dem Vorher-Bild auf Ruhe der Vorschau warten wie vor dem Klick; Test mit verzögerter Vorschau.
+- Wirkung beim Kunden: Kein Produktfehler; die Vorhersage stützt sich an diesen Toren auf eine Vorschau, die noch nicht fertig ist.
 - Stand: offen RM-812
 
 ## Regressionen aus Fixen nach dem Einfrieren (ab FD-212)
