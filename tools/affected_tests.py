@@ -1148,6 +1148,24 @@ class Selection:
 def selection(changed: Iterable[Path], graph: ImportGraph | None = None) -> Selection:
     """Wie :func:`affected`, mit den lesenden Einheiten (:class:`Selection`)."""
     graph = graph or ImportGraph()
+    changed = list(changed)
+    for path in changed:
+        relative = (
+            path.relative_to(graph.root).as_posix() if path.is_absolute() else path.as_posix()
+        )
+        if relative in _EVERYTHING:
+            # Jede Testdatei steht ganz in der Auswahl, keine nur mit ihren lesenden Einheiten —
+            # was die übrigen Dateien des Diffs noch fänden, fügt weder Datei noch Einheit hinzu.
+            # Durchgerechnet kostete es je Datendatei rund 40 s: Der main-Lauf über einen Diff
+            # von 1 922 Dateien brach nach einer Stunde ohne Fensterauswahl ab.
+            return Selection(
+                {
+                    test_path: f"{relative} betrifft jeden Test"
+                    for name, test_path in graph.modules.items()
+                    if name.startswith("tests.") and test_path.name.startswith("test_")
+                },
+                {},
+            )
     reasons: dict[Path, str] = {}
     units: dict[Path, frozenset[str]] = {}
     changed_modules: set[str] = set()
@@ -1165,11 +1183,6 @@ def selection(changed: Iterable[Path], graph: ImportGraph | None = None) -> Sele
         relative = (
             path.relative_to(graph.root).as_posix() if path.is_absolute() else path.as_posix()
         )
-        if relative in _EVERYTHING:
-            for name, test_path in graph.modules.items():
-                if name.startswith("tests.") and test_path.name.startswith("test_"):
-                    reasons.setdefault(test_path, f"{relative} betrifft jeden Test")
-            continue
         paths.append(PurePosixPath(relative))
         if path.suffix == ".py":
             name = module_name(graph.root / relative, graph.root)
