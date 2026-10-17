@@ -27403,8 +27403,18 @@ class MainWindow(QMainWindow):
         zeigt es alte Pixel. Verborgen ist es kein Fenster, und der Schleier
         gewinnt. Der Wechsel zurück läuft über ``ended`` — denselben Weg, den
         auch der Seitenwechsel des ``middle_stack`` täglich geht.
+
+        **Der Fokus kommt mit der Ansicht zurück.** Verbirgt Qt das Widget mit
+        dem Fokus, reicht es ihn an das nächste Glied der Tabulatorkette weiter
+        — den Griff der rechten Karte, der dann nach jedem Laden den
+        Fokusrahmen in der Akzentfarbe trug wie eine zweite Markierung. Wohin
+        Qt ihn reichte, merkt sich ``_veil_focus`` neben dem früheren Halter.
         """
+        before = self.focusWidget()
+        inside = before is not None and self.middle_stack.isAncestorOf(before)
         self.middle_stack.setVisible(False)
+        if inside and not self.middle_stack.isVisible():
+            self._veil_focus = (weakref.ref(before), self.focusWidget())
 
     def _on_veil_ended(self) -> None:
         """Der Schleier ist weg — die Ansicht kommt zurück.
@@ -27412,8 +27422,22 @@ class MainWindow(QMainWindow):
         Erst jetzt wird das native Fenster erzeugt und gerendert; die Szene
         steht zu diesem Zeitpunkt bereits, das erste Bild ist also das
         fertige Modell und nicht Schwarz.
+
+        Den Fokus bekommt zurück, wer ihn vor dem Schleier hatte — aber nur,
+        solange er noch dort steht, wohin Qt ihn beim Verbergen reichte: Wer
+        während des Ladens selbst woanders hinklickte, behält seine Wahl.
         """
         self.middle_stack.setVisible(True)
+        held, handed = self.__dict__.pop("_veil_focus", (None, None))
+        owner = held() if held is not None else None
+        if (
+            owner is not None
+            and isValid(owner)
+            and self.focusWidget() is handed
+            and owner.isVisibleTo(self)
+            and owner.isEnabled()
+        ):
+            owner.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _on_ask(self, request: AskRequest) -> None:
         """Der Arbeiter wartet, solange dieser Dialog offen ist (§21.3).
