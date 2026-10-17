@@ -94,8 +94,15 @@ def test_the_header_after_a_font_change_matches_a_fresh_window(
         try:
             wanted = _header(fresh)
             wanted_style = fresh.header.filament_button.toolButtonStyle()
-            assert all(shown == full for shown, full, _least in wanted.values()), (
+            # Bei 1366 kürzt der Mac-Stil mit breiteren Knöpfen schon frisch den Titel
+            # (Fensterauswahl 39035816730); verglichen werden dort gezeigter Text und
+            # Mindestbreite, die nach dem Wechsel dieselben sein müssen.
+            assert width < 1920 or all(shown == full for shown, full, _least in wanted.values()), (
                 "Voraussetzung: frisch bei 14 pt steht alles ganz",
+                wanted,
+            )
+            assert any(shown == full for shown, full, _least in wanted.values()), (
+                "Voraussetzung: frisch steht wenigstens eine Angabe ganz",
                 wanted,
             )
         finally:

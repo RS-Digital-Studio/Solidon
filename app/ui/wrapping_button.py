@@ -39,10 +39,17 @@ class WrappingButton(QPushButton):
         self.setSizePolicy(policy)
 
     def _chrome(self) -> QSize:
-        """Was Rahmen und Innenabstand um die einzeilige Beschriftung legen."""
+        """Was Rahmen und Innenabstand um die einzeilige Beschriftung legen.
+
+        Die Zeilenhöhe kommt aus demselben Maß wie :meth:`_text_height`: Unter macOS
+        misst ``boundingRect`` mit Umbruch eine Zeile einen Punkt höher als ``size``,
+        und eine einzeilige Beschriftung meldete in ihrer eigenen Breite 27 statt 26
+        Punkte (Fensterauswahl 39035816730).
+        """
         line = self.fontMetrics().size(Qt.TextFlag.TextSingleLine, self.text())
         whole = super().sizeHint()
-        return QSize(max(0, whole.width() - line.width()), max(0, whole.height() - line.height()))
+        line_height = self._text_height(1_000_000) if self.text() else line.height()
+        return QSize(max(0, whole.width() - line.width()), max(0, whole.height() - line_height))
 
     def _text_height(self, width: int) -> int:
         """Die Höhe der Beschriftung, umbrochen auf ``width`` Bildpunkte."""

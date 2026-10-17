@@ -48,6 +48,7 @@ Nutzen da und sonst nichts.
 - Ein möglicher Absturz beim Wechseln von Merkmalen oder Projekten und beim Öffnen von Dialogen ist behoben.
 - Der Hinweis bei „Auf das Bett setzen“ passt jetzt auch zu Körpern, die unter dem Bett liegen.
 - Aufzählungen von Merkmalshandlungen verwenden durchgehend die gewählte Sprache.
+- Wächst ein Dialog nach einem Schriftwechsel, rückt er hinauf, wenn darüber Platz ist, statt seinen Inhalt rollen zu lassen.
 - Am Mac darf Solidon für die 3D-Maus jetzt den Treiber von 3Dconnexion (3DxWare) laden. Von Version 0.4.1 bis 0.6.0 ließ macOS das nicht zu.
 - Am Mac installiert das Paket Solidon jetzt immer in *Programme*. Lag Solidon bisher nicht dort, aktualisierte das Paket eine Kopie an einem anderen Ort.
 - Nach dem Mac-Update Solidon aus *Programme* starten. Alte App-Kopien außerhalb dieses Ordners löschen und den Dock-Eintrag bei Bedarf neu anlegen.

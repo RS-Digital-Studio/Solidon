@@ -23,6 +23,7 @@ it into `website/version.json`.
 - Fixed a crash that could occur when switching features or projects, or when opening a dialog.
 - The note for “Place on the bed” now also applies to bodies below the bed.
 - Lists of feature actions now stay entirely in the selected language.
+- When a dialog grows after a font change, it moves up if there is room above instead of scrolling its content.
 - On the Mac, Solidon may now load the 3Dconnexion driver (3DxWare) for the 3D mouse. From version 0.4.1 to 0.6.0, macOS did not allow this.
 - On the Mac, the installer now always puts Solidon in *Applications*. If Solidon was not there, the installer used to update a copy somewhere else.
 - After updating on the Mac, start Solidon from *Applications*. Delete old app copies outside this folder and replace the Dock shortcut if needed.

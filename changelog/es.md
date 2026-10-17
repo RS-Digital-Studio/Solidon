@@ -24,6 +24,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Se ha corregido un posible cierre inesperado al cambiar de característica o proyecto, o al abrir un cuadro de diálogo.
 - La explicación de «Colocar sobre la placa» ahora también sirve para cuerpos situados debajo de la placa.
 - Las listas de acciones sobre características usan íntegramente el idioma elegido.
+- Si un diálogo crece tras un cambio de fuente, sube cuando hay espacio encima en lugar de desplazar su contenido.
 - En el Mac, Solidon ya puede cargar el controlador de 3Dconnexion (3DxWare) para el ratón 3D. Desde la versión 0.4.1 hasta la 0.6.0, macOS no lo permitía.
 - En el Mac, el paquete de instalación coloca ahora Solidon siempre en *Aplicaciones*. Si Solidon no estaba allí, antes el paquete actualizaba una copia en otro lugar.
 - Tras actualizar en el Mac, iniciar Solidon desde *Aplicaciones*. Eliminar las copias antiguas de la app fuera de esa carpeta y volver a añadirla al Dock si hace falta.

@@ -14,7 +14,14 @@ import time
 from collections.abc import Callable
 
 import pytest
-from PySide6.QtWidgets import QApplication, QDialog, QToolButton
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QHBoxLayout,
+    QLayout,
+    QToolButton,
+    QWidget,
+)
 
 from app.ui.style import NORMAL, DialogScrollArea, apply_style
 from app.ui.theme import apply_theme
@@ -201,7 +208,13 @@ def test_the_dialog_fits_its_content_before_and_after_each_flap(
 
 
 def _spare_notes(dialog: QDialog) -> list[str]:
-    """Umbrochene Sätze, die höher stehen, als ihr Text in ihrer Breite braucht."""
+    """Umbrochene Sätze, die höher stehen, als ihr Text in ihrer Breite braucht.
+
+    Steht der Satz in einer Reihe neben einem Knopf, darf er so hoch sein wie der höchste
+    Nachbar: Die Reihe hat dessen Höhe, und der Satz steht mittig daneben — das ist keine
+    leere Zeile. Auf den Läufern ohne Ollama wurde die Dienstzeile von *Chat einrichten*
+    nach 14 → 9 pt einzeilig und stand 26 Punkte hoch neben dem Knopf (CI-Lauf 39035816730).
+    """
     from app.ui.style import WrappedNote
 
     found = []
@@ -214,9 +227,29 @@ def _spare_notes(dialog: QDialog) -> list[str]:
         needed = max(note.heightForWidth(note.width()), 0)
         note.setMinimumHeight(least)
         note.setMaximumHeight(most)
-        if note.height() - needed > SLACK:
+        if note.height() - max(needed, _tallest_neighbour(note)) > SLACK:
             found.append(f"{note.text()[:30]!r} {note.height()} hoch für {needed}")
     return found
+
+
+def _tallest_neighbour(note: QWidget) -> int:
+    """Die Höhe des höchsten sichtbaren Nachbarn in der waagrechten Reihe des Satzes, sonst 0."""
+    from app.ui.layout_lifetime import layout_parts
+
+    parent = note.parentWidget()
+    top = parent.layout() if parent is not None else None
+    pending: list[QLayout] = [top] if top is not None else []
+    while pending:
+        layout = pending.pop()
+        parts = layout_parts(layout)
+        widgets = [widget for widget, _inner in parts if widget is not None]
+        pending += [inner for _widget, inner in parts if inner is not None]
+        if note in widgets and isinstance(layout, QHBoxLayout):
+            return max(
+                (other.height() for other in widgets if other is not note and other.isVisible()),
+                default=0,
+            )
+    return 0
 
 
 @pytest.mark.parametrize("make", MAKERS, ids=NAMES)

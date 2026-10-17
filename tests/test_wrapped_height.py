@@ -201,6 +201,49 @@ def test_a_new_font_alone_measures_the_sentence_again(qt_app: QApplication) -> N
             host.deleteLater()
 
 
+def test_a_note_measures_again_after_a_new_font_alone(qt_app: QApplication) -> None:
+    """Breite und Text bleiben, nur die Schrift wechselt — auch ``WrappedNote`` misst neu.
+
+    Er folgt Text und Breite selbst (``claim_height``), die Schrift über den Zuhörer aus
+    ``style_follow``, den ``apply_style`` anmeldet — darum in der Betriebslage. Ohne ihn
+    blieben nach 9 → 18 → 9 Punkt 168 Punkte gepinnt, wo der Satz 42 braucht.
+    """
+    from app.ui.style import WrappedNote, apply_style
+    from app.ui.theme import apply_theme
+
+    apply_theme(qt_app, "light")
+    apply_style(qt_app, "light")
+    with bundled_font(qt_app, 9):
+        host = QWidget()
+        try:
+            column = QVBoxLayout(host)
+            note = WrappedNote(host)
+            note.setText(" ".join(["Ein langer Satz, der umbricht."] * 4))
+            column.addWidget(note)
+            column.addStretch(1)
+            host.resize(300, 600)
+            host.show()
+            _settle(qt_app)
+            small = note.minimumHeight()
+            assert small == _needed(note) > 0
+            width = note.width()
+
+            for points, grows in ((18, True), (9, False)):
+                font = QFont(note.font())
+                font.setPointSize(points)
+                note.setFont(font)
+                _settle(qt_app)
+                assert note.width() == width, "Voraussetzung: nur die Schrift wechselt"
+                assert note.minimumHeight() == _needed(note), (
+                    f"{points} Punkt: {note.minimumHeight()} gepinnt, der Satz braucht "
+                    f"{_needed(note)}"
+                )
+                assert (note.minimumHeight() > small) is grows
+        finally:
+            host.hide()
+            host.deleteLater()
+
+
 def test_a_note_still_says_that_it_grew(qt_app: QApplication) -> None:
     """``WrappedNote`` folgt sich selbst und meldet ``grown`` (D4 zu FD-133).
 
