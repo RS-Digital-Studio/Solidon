@@ -3548,6 +3548,42 @@ Die folgenden Funde (FD-241 bis FD-300) kommen aus den Nachurteilen am Schlussla
 - Wirkung beim Kunden: Wer die Angaben nicht sieht, sucht nach einem Fehler, wo keiner ist.
 - Stand: offen RM-812
 
+### FD-301 Felder der Bewegen- und der Schnittleiste tragen keinen Satz
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: `tool:transform`, `tool:section`, `tool:measure`
+- Prüfpunkt: V3
+- Beleg: `output/konsolidierung-2026-10-12/fix-nachurteil-claude.md`, neuer Punkt N-1: In den fr/it-Protokollen der Fälle 055 und 056 (L4 an `d9f7a81f9`, fremde Lage, FD-246) fehlen an „Faktor“, „Schnittachse“, „Messart“ und „Scheibe“ Kurzhilfe und Beschreibung; „Rasterfang“ und „Winkelfang“ haben eine Kurzhilfe, aber keine Beschreibung. Zwilling von FD-78, dessen Fix Analyse- und Teilenleiste umfasste.
+- Ursache: Der Wirkungssatz ist an diese Leistenfelder nicht gebunden.
+- Vorschlag: Je Feld der Wirkungssatz als Kurzhilfe und `accessibleDescription` wie bei FD-78; Wächter über alle Leistenfelder (`test_bar_field_sentences.py`).
+- Wirkung beim Kunden: Wer ein Feld der Leiste nicht kennt, findet keine Erklärung, und ein Bildschirmleser nennt nur den Namen.
+- Stand: offen RM-812
+
+### FD-302 Der Kriterientext von Prüfpunkt 8 nennt weniger Teile, als die Zuordnung der Funde rechnet
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Nachurteilsliste und Prüfpunkte des Prüfstands (`tools/function_checks.py`, `tools/function_verdict_rules.py`)
+- Prüfpunkt: 19
+- Beleg: Nachurteil Runde C2a: Die Spalte nannte für Prüfpunkt 8 „umfasst V1, V2, V3, V6“ (`CHECKPOINTS[8].parts`, was Stufe A misst), `COVERS[8]` und Konzept §4 ordnen 8 aber V1 bis V6 zu; Prüfer 2 urteilte deshalb an `Bearbeiten/Parameter anlegen …` 8 und `resize_hole` 8 *gut nach Fix* trotz offener Funde an V5 (FD-281, FD-271), `report` wies beide ab.
+- Ursache: Der Text der Liste kommt aus den gemessenen Teilen, die Zuordnung aus `COVERS`.
+- Vorschlag: Den Kriterientext aus `COVERS` bilden oder beide Angaben nennen („misst V1, V2, V3, V6; Funde an V1 bis V6 gehören zur Zelle“).
+- Wirkung beim Kunden: Kein Produktfehler; zwei Urteile mussten neu.
+- Stand: offen RM-812
+
+### FD-303 Drei Wirkungen von *Linie teilen* aus der Parametertabelle haben keinen Test
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `split_line`
+- Prüfpunkt: 11
+- Beleg: Nachurteil Runde C2a, beide Prüfer (Prüfer 1a, Prüfer 2 C2a-2) am Laufkopf `d9f7a81f9`: Kein Test prüft, dass eine nachträglich geänderte *Lage* den Schnitt verschiebt, ohne ihn zu drehen, dass ein Schwalbenschwanz auch gegen Auseinanderziehen hält, und dass ein einzelner Sechskant gegen Verdrehen hält; die Benennung „1 von 3“ über *Stücke des Laufs* ist ebenfalls ohne Test (Prüfer 1a).
+- Ursache: Die Versprechen der Parametertabelle haben keinen Wächter.
+- Vorschlag: Je Wirkung ein Geometrietest gegen den Korpus (Lageänderung, Formschluss gegen Zug und Drehung, Benennung).
+- Wirkung beim Kunden: Stimmen die Sätze heute, kann ein späterer Umbau sie unbemerkt brechen.
+- Stand: offen RM-812
+
 ## Regressionen aus Fixen nach dem Einfrieren (ab FD-212)
 
 Was ein Fix des eingefrorenen Umfangs kaputt macht, ist kein neuer Fund für
