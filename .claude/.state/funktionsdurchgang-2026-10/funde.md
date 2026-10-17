@@ -269,7 +269,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `app/ui/panels.py` (`_size_columns`, Spalte auf `MEASURE_SHARE` gedeckelt).
 - Vorschlag: Spalte nach dem Inhalt der sichtbaren Zeilen statt nach festem Anteil.
 - Wirkung beim Kunden: Ein eingelesenes Modell mit krummen Maßen zeigt das Maß abgeschnitten.
-- Stand: behoben `6209cb930`, `9b6232ff7`, `51a9d0c75`; `test_object_tree_columns.py` am Stand davor rot, danach nimmt die Maßspalte, was die Namen übrig lassen, und die linke Karte wird bis `LEFT_MAX` breiter; Wächter `test_left_card_width_window.py` (`26f33fc8e`) gegen die Mutation rot; Maßspalte nativ in sechs Sprachen ganz (Schlusslauf `d9f7a81f9` L4 052–057); die Lage „253,44“ trat im Lauf nicht ein.
+- Stand: behoben `6209cb930`, `9b6232ff7`, `51a9d0c75`; `test_object_tree_columns.py` am Stand davor rot, danach nimmt die Maßspalte, was die Namen übrig lassen, und die linke Karte wird bis `LEFT_MAX` breiter; Wächter `test_left_card_width_window.py` (`26f33fc8e`) gegen die Mutation rot; Maßspalte nativ in sechs Sprachen ganz (Schlusslauf `d9f7a81f9` L4 052–057); die Nachurteile am Schlusslauf (`d9f7a81f9` L4 054–057) zeigten in es, it, pt und fr noch gekürzte Maße; Rest behoben `b9993ff5d` (Nachzüge `59a374c15`, `d07f5d3ec`): das Maß bekommt seine Breite zuerst, Merkmalsnamen zählen für die Kartenbreite ganz, ein gekürzter Name steht ganz in der Kurzhilfe, Test am Stand davor 4 rot; nativ belegt (Nativer Endblock `2ba3ee78c` L4-fx 054–056: Maße ganz, gekürzt nur Namen, auch `tool:analysis`).
 
 ### FD-21 Jede Fehlermeldung ist ein rohes Systemfenster
 
@@ -1097,7 +1097,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; Feldablehnung, Hinweis der Maßgruppe und Statuszeile setzen je denselben Satz. Verwandt mit FD-32 (Sperrgrund zweimal), andere Stelle.
 - Vorschlag: Der Satz steht am Feld; Maßgruppe und Statusleiste wiederholen ihn nicht.
 - Wirkung beim Kunden: Derselbe Satz dreimal lenkt vom Feld ab, das er ändern muss.
-- Stand: behoben `47b58a2da` (Karte), `08dea68c3` (Statusleiste); `test_measure_card_note.py` und `test_measure_refusal_status.py` je am Stand davor rot (Satz im Hinweis und in der Statusleiste, obwohl er unter dem Feld steht), danach grün; nativ belegt (Schlusslauf `d0173380f` L1, sechs Sprachen; `d9f7a81f9` L4 001 Fehlfall).
+- Stand: behoben `47b58a2da` (Karte), `08dea68c3` (Statusleiste); `test_measure_card_note.py` und `test_measure_refusal_status.py` je am Stand davor rot (Satz im Hinweis und in der Statusleiste, obwohl er unter dem Feld steht), danach grün; nativ belegt (Schlusslauf `d0173380f` L1, sechs Sprachen; die Nachurteile am Schlusslauf (`d9f7a81f9` L4 001) zeigten die Ablehnung noch in der Statusleiste; Rest behoben `77b083740`: der graue *Übernehmen* der Maßkarte trug sie als `statusTip` (RM-509), entfernt samt Zwillingen, der Wächter prüft das Attribut, Test auf dem Weg des Prüfstands offscreen rot → grün; nativ belegt (Nativer Endblock `2ba3ee78c` L4-fx 001 `04-fehlfall`: Statusleiste ohne Ablehnung, keine `meldung`; 046–051 Kurzhilfe ganz).
 
 ### FD-89 „seit dem letzten Schritt“ meldet auch eine geänderte Rechengrundlage
 
@@ -1121,7 +1121,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; Statusmeldung und Zahlenzeile teilen sich die Statusleiste, und die Breite der Zahlenzeile folgt ihrem Text nicht verlässlich.
 - Vorschlag: Mindestbreite aus beiden Texten der Zeile; gekürzt wird zuerst die Statusmeldung.
 - Wirkung beim Kunden: Material und Dauer sind nur zum Teil lesbar.
-- Stand: behoben `916990010`; `test_status_line_room.py` am Stand davor rot (Differenz 239 von 372 px), danach grün; nativ belegt (Schlusslauf `d9f7a81f9` L4 007, 008; `d0173380f` L1).
+- Stand: behoben `916990010`; `test_status_line_room.py` am Stand davor rot (Differenz 239 von 372 px), danach grün; nativ belegt (Schlusslauf `d9f7a81f9` L4 007, 008; die Nachurteile am Schlusslauf (`d9f7a81f9` L4 001, 002) zeigten die Druckfakten nach dem Öffnen gekürzt („3,5 ç“); Rest behoben `d753d1053`: `status_line.settle_in_bar` legt ein Feld mit gewachsenem Text sofort aus, Zwillinge Befundzähler, Testzeitraum und Filamentbuchung, Tests offscreen rot → grün; nativ belegt (Nativer Endblock `2ba3ee78c` L4-fx 001 „14 g · 23 min“, 002 „3,5 g · 6 min“).
 
 ### FD-91 Die Kopfzeile kürzt den Druckernamen trotz freier Fläche
 
@@ -1349,7 +1349,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; die Zeilen des Berichts werden am rechten Rand elidiert.
 - Vorschlag: Maß und Einheit gehören sichtbar zur Zeile; umbrechen oder den Titel vor dem Maß kürzen.
 - Wirkung beim Kunden: Die Zahl, um die es geht, fehlt.
-- Stand: behoben `e0b6de3b8`; `test_report_rows.py` am Stand davor rot, danach grün; nativ belegt (Schlusslauf `d9f7a81f9` L4 012 bei 125 %, 011, D8 PT und FR).
+- Stand: behoben `e0b6de3b8`; `test_report_rows.py` am Stand davor rot, danach grün; die Nachurteile am Schlusslauf (`d9f7a81f9` L4 056, 057) zeigten Befundzeilen in it und pt noch gekürzt; Rest behoben `318e7f5d3` (Nachzug `b6ed65bfe`): Zeilenhöhe und Messung legen den Text in die Fläche, in die Qt zeichnet (`drawn_text_room`), Zwillinge Chat und Skizzenbedingungen, Test am Stand davor rot; nativ belegt (Nativer Endblock `2ba3ee78c` L4-fx 057 pt, 056 it `tool:analysis`, kein Berichtsbild von 056/057 mit gekürzter Zeile).
 
 ### FD-110 Die Textmessung erkennt elidierte Berichtszeilen nicht
 
@@ -1361,7 +1361,7 @@ Mittlere und systemische leichte Funde trägt D0 (RM-737), leichte einer Zeile i
 - Ursache: offen; die Messung prüft Zeilen in Listen und Bäumen nicht gegen ihre gezeichnete Breite.
 - Vorschlag: Elision in Listen und Bäumen messen (Text gegen Spaltenbreite der Ansicht), mit kurzer Zeile als Gegenfall.
 - Wirkung beim Kunden: P9 meldet vollständige Texte, wo der Kunde „…“ liest.
-- Stand: behoben `f81515384`; `test_function_capture_reach.py::test_a_wrapped_row_too_low_for_its_lines_is_cut` am Stand davor rot, danach `axis = hoehe`, `cut = true`.
+- Stand: behoben `f81515384`; `test_function_capture_reach.py::test_a_wrapped_row_too_low_for_its_lines_is_cut` am Stand davor rot, danach `axis = hoehe`, `cut = true`; die Nachurteile am Schlusslauf (`d9f7a81f9` L4 057) zeigten eine gekürzte Zeile mit `cut: false`; Rest behoben `318e7f5d3`: die Messung legt den Text in die gezeichnete Fläche wie der Delegat; nativ belegt (Nativer Endblock `2ba3ee78c` L4-fx: 500 Berichtszeilen ohne `cut`, deckungsgleich mit den Bildern; die Lage „Qt kürzt“ trat nativ nicht ein, Beleg bleibt der Test); ein knapp zu breites Einzelwort misst noch `cut=False` (FD-304).
 
 ### FD-111 Nach der Befundauswahl ist die Stelle nicht zu sehen
 
