@@ -25,7 +25,11 @@ Die Prüfung beim Start ist an — seit dem 23.08.2026, und die
 Datenschutzerklärung auf der Website sagt es so. Sie bleibt eine Anfrage, die
 den Rechner verlässt, und damit eine Entscheidung: abschaltbar in den
 Einstellungen, und ältere Einstellungsdateien werden beim ersten Lesen einmal
-angehoben (``update_default_lifted`` in ``app/ui/settings.py``).
+angehoben (``update_default_lifted`` in ``app/ui/settings.py``). Auf einem Mac
+mit Intel-Prozessor geht keine Anfrage hinaus: 0.6.1 ist dort die letzte
+Version (:func:`newer_versions_run_here`). Nennt die Versionsdatei für ein Paket
+ein Mindestsystem, das hier fehlt, bietet das Fenster kein Laden an
+(:meth:`Release.needs_newer_system`).
 """
 
 from __future__ import annotations
@@ -35,6 +39,7 @@ import importlib
 import json
 import os
 import platform
+import re
 import shlex
 import stat
 import subprocess
@@ -54,6 +59,7 @@ from app import branding
 from app.branding import APP_ID
 from app.core import discover, install
 from app.core.activation import ed25519
+from app.core.backends import machine
 from app.core.backends.llm import Transport
 from app.core.changes import Group
 from app.core.errors import (
@@ -296,6 +302,21 @@ PLATFORM_MACOS_ARM: Final = "macos-arm64"
 PLATFORM_MACOS_INTEL: Final = "macos-x86_64"
 PLATFORM_LINUX: Final = "linux"
 
+#: Wie das System eines Pakets heißt, wenn die Versionsdatei zur Grenze keinen Namen nennt.
+_SYSTEM_NAMES: Final = {
+    PLATFORM_WINDOWS: "Windows",
+    PLATFORM_MACOS_ARM: "macOS",
+    PLATFORM_MACOS_INTEL: "macOS",
+    PLATFORM_LINUX: "Linux",
+}
+
+#: Eine Systemversion aus der Versionsdatei oder vom System: nur ASCII-Ziffern und Punkte.
+#: ``str.isdigit`` nähme auch „²“ und arabische Ziffern, an denen ``int`` scheitert.
+_VERSION_NUMBER: Final = re.compile(r"[0-9]{1,9}(?:\.[0-9]{1,9}){0,3}")
+
+#: Der Name eines Mindestsystems, wie er in der Statuszeile steht („Windows 10 22H2“).
+_SYSTEM_NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9 .]{0,39}")
+
 #: Wie diese Installation eingespielt worden ist — und damit, **wie** ein
 #: Update sie ersetzt.
 #:
@@ -387,6 +408,14 @@ class Package:
     release_key: str = ""
     signed_release: bytes = b""
     release_signature: bytes = b""
+    minimum_system: str = ""
+    """Ab welcher Systemversion das Paket startet („15.0“ für macOS, „10.0.19045“ für
+    Windows), leer ohne Grenze — die Versionsdatei sagt es, damit eine ältere Fassung kein
+    Update anbietet, dessen Installer auf diesem Rechner ablehnt."""
+    minimum_system_name: str = ""
+    """Dieselbe Grenze, wie der Kunde sie kennt („Windows 10 22H2“): Eine Build-Nummer sagt
+    ihm nichts. Leer, wenn die Versionsdatei keinen nennt; dann nennt
+    :meth:`Release.needs_newer_system` System und Nummer."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -521,16 +550,51 @@ class Release:
             return None
         return self.packages.get(key or platform_key())
 
+    def needs_newer_system(self, key: str = "", system: tuple[int, ...] | None = None) -> str:
+        """Das System, das das Paket dieses Rechners verlangt und das hier fehlt, als Name für
+        den Kunden („Windows 10 22H2“), sonst leer (:attr:`Package.minimum_system`).
+
+        ``system`` wie :func:`system_version`, ``None`` für diesen Rechner. Ein Update,
+        dessen Installer ablehnt, bietet das Fenster nicht an — es lüde rund 200 MB umsonst.
+        Gefragt wird das Paket der Plattform, nicht :meth:`startable`: Auch wer nur den
+        Hinweis auf die Download-Seite bekommt, bekäme dort eines, das nicht startet. Ohne
+        Paket, ohne Grenze oder ohne lesbare Systemversion ist nichts zu wenig.
+        """
+        chosen = key or platform_key()
+        package = self.package(chosen)
+        if package is None:
+            return ""
+        wanted = _as_version_parts(package.minimum_system)
+        found = system_version() if system is None else system
+        if not (wanted and found and _older(found, wanted)):
+            return ""
+        if package.minimum_system_name:
+            return package.minimum_system_name
+        return f"{_SYSTEM_NAMES.get(chosen, '')} {package.minimum_system}".strip()
+
 
 def platform_key() -> str:
     """Wie das Paket dieses Rechners in der Versionsdatei heißt."""
     if sys.platform == "win32":
         return PLATFORM_WINDOWS
     if sys.platform == "darwin":
-        # ``platform.machine()`` und nicht ``sys.maxsize``: Auf einem Mac sind
-        # beide Versionen 64-bittig, unterschieden werden sie am Befehlssatz.
-        return PLATFORM_MACOS_ARM if platform.machine() == "arm64" else PLATFORM_MACOS_INTEL
+        # Am Chip, nicht am Befehlssatz des Prozesses: Unter Rosetta sagt
+        # ``platform.machine()`` „x86_64“, und ein Mac mit Apple-Chip, der das
+        # Intel-Paket trägt, bekäme nie das Paket, das für ihn gebaut ist.
+        return PLATFORM_MACOS_ARM if machine.is_apple_silicon() else PLATFORM_MACOS_INTEL
     return PLATFORM_LINUX
+
+
+def newer_versions_run_here(key: str = "") -> bool:
+    """Ob es für diesen Rechner neuere Versionen gibt als 0.6.1.
+
+    Auf einem Mac mit Intel-Prozessor nicht: 0.6.1 ist dort die letzte Version und läuft als
+    Demo bis zum 30.11.2026; die Kaufversion gibt es auf dem Mac nur für Apple Silicon
+    (Entscheidungen Robert, 17.10.2026). Dort fragt die Anwendung nicht nach einer neuen
+    Version, und Demo-Ende und Verkaufshinweis sagen, wie es steht. ``key`` wie bei
+    :meth:`Release.package`, leer für diesen Rechner.
+    """
+    return (key or platform_key()) != PLATFORM_MACOS_INTEL
 
 
 def install_kind(system: str = "") -> str:
@@ -899,6 +963,8 @@ def _packages(
         if not size:
             _log.info("update package %s ignored: no usable size", key)
             continue
+        minimum = _field(value.get("minimum_system"))
+        minimum_name = _field(value.get("minimum_system_name"))
         found[str(key)[:MAX_FIELD_LENGTH]] = Package(
             file=_field(value.get("file")),
             url=checked_address,
@@ -907,8 +973,42 @@ def _packages(
             release_key=str(key)[:MAX_FIELD_LENGTH],
             signed_release=signed_release,
             release_signature=release_signature,
+            minimum_system=minimum if _as_version_parts(minimum) else "",
+            minimum_system_name=minimum_name if _SYSTEM_NAME.fullmatch(minimum_name) else "",
         )
     return found
+
+
+def _as_version_parts(text: str) -> tuple[int, ...]:
+    """„10.0.19045“ als ``(10, 0, 19045)``; leer, wenn es keine Versionsnummer ist."""
+    stripped = text.strip()
+    if not _VERSION_NUMBER.fullmatch(stripped):
+        return ()
+    return tuple(int(part) for part in stripped.split("."))
+
+
+def _older(found: tuple[int, ...], wanted: tuple[int, ...]) -> bool:
+    """Ob ``found`` vor ``wanted`` liegt, die kürzere Folge mit Nullen aufgefüllt.
+
+    Ohne Auffüllen läge „15“ vor „15.0“: Ein Tupel, das Anfang eines anderen ist, gilt in
+    Python als kleiner, und macOS 15 bekäme gesagt, es brauche macOS 15.
+    """
+    width = max(len(found), len(wanted))
+    return found + (0,) * (width - len(found)) < wanted + (0,) * (width - len(wanted))
+
+
+def system_version(system: str = "") -> tuple[int, ...]:
+    """Die Version des laufenden Systems als Zahlenfolge, leer, wo keine Grenze gilt (Linux).
+
+    macOS über ``platform.mac_ver()`` („14.6.1“), Windows über ``platform.version()``
+    („10.0.19045“, mit Build). ``system`` wie ``sys.platform``, leer für diesen Rechner.
+    """
+    chosen = system or sys.platform
+    if chosen == "darwin":
+        return _as_version_parts(platform.mac_ver()[0])
+    if chosen == "win32":
+        return _as_version_parts(platform.version())
+    return ()
 
 
 def _as_size(value: object) -> int:

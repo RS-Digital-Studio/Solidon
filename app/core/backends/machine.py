@@ -113,7 +113,7 @@ def _memory_bytes() -> int | None:
         return None
 
 
-def _is_apple_silicon() -> bool:
+def is_apple_silicon() -> bool:
     """Ein Mac mit Apple-Chip — auch unter Rosetta, wo Python ``x86_64`` sagt."""
     if sys.platform != "darwin":
         return False
@@ -219,6 +219,6 @@ def detect() -> Machine:
     """Prozessorart und Arbeitsspeicher, einmal je Prozess — ohne Prozess, also
     überall erlaubt. Die Karte erhebt :func:`probe_card`."""
     memory = _memory_bytes()
-    found = Machine(apple_silicon=_is_apple_silicon(), memory_gb=memory / 2**30 if memory else None)
+    found = Machine(apple_silicon=is_apple_silicon(), memory_gb=memory / 2**30 if memory else None)
     _log.info("machine: apple_silicon=%s memory_gb=%s", found.apple_silicon, found.memory_gb)
     return found

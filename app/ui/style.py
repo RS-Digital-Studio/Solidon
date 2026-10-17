@@ -726,9 +726,13 @@ class ContentHeight:
         """Ob der Dialog oben stehen bleibt, statt hinaufzurücken.
 
         Ausdrückliches Klappen hält die Überschrift unter dem Zeiger; danach
-        rückt auch nachgereichter Inhalt den Dialog nicht mehr hinauf.
+        rückt auch nachgereichter Inhalt den Dialog nicht mehr hinauf. Ein
+        Schriftwechsel hält nichts unter dem Zeiger: Er rückt hinauf, so weit
+        der Inhalt es braucht — am Anker blieb *Tasche ausschneiden* unter Fusion
+        und unter macOS nach 11 → 18 pt bei der Höhe bis zum unteren Rand und
+        rollte, obwohl darüber Platz war (CI-Lauf 39035816730).
         """
-        return intent in ("explicit", "font") or (intent == "passive" and self._anchored)
+        return intent == "explicit" or (intent == "passive" and self._anchored)
 
     def fit(
         self,
@@ -744,8 +748,9 @@ class ContentHeight:
 
         ``initial`` passt die Anfangsgröße an; ``explicit`` hält Breite und
         Anker; ``font`` misst nach einem Schriftwechsel wie ``explicit``,
-        darf also auch Höhe zurückgeben, ohne den Anker für spätere passive
-        Messungen festzuhalten, und lässt eine Größe des Kunden stehen
+        darf also auch Höhe zurückgeben, rückt aber wie ``passive`` hinauf,
+        soweit der Inhalt es braucht, hält keinen Anker für spätere passive
+        Messungen fest und lässt eine Größe des Kunden stehen
         (FD-195); ``passive`` — nachgereichter Inhalt, Status, Suche — hält die
         Breite und wächst höchstens auf die Bildschirmhöhe; fehlt unter dem
         Dialog Platz, rückt er nur so weit hinauf wie nötig, nach einem
@@ -789,6 +794,8 @@ class ContentHeight:
         provisional = bar == Qt.ScrollBarPolicy.ScrollBarAsNeeded and intent != "passive"
         if provisional:
             scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Wo der Dialog stand, bevor ein Schriftwechsel ihn hinaufrücken ließ (unten).
+        top_before = dialog.frameGeometry().top() if intent == "font" else None
         # **Ein zweites Mal, wenn das Legen den Wunsch verschiebt** (FD-198): Ein
         # Satz, der seine Höhe in der neuen Breite selbst neu pinnt, braucht
         # danach eine Zeile weniger; passiv gäbe der Dialog sie nie zurück. Er
@@ -850,6 +857,17 @@ class ContentHeight:
             if intent == "passive" or natural_size is not None:
                 break
         scroll.setVerticalScrollBarPolicy(bar)
+        # **Hinauf nur, so weit die endgültige Höhe es verlangt** (Nachprüfung L-2): Der
+        # erste Durchgang kann mehr Höhe setzen, als der zweite behält, und
+        # ``fit_dialog_to_screen`` schiebt nur hinauf. Am unteren Rand blieben nach
+        # 11 → 18 pt unter *Tasche ausschneiden* 44 Punkte frei.
+        screen = dialog.screen()
+        if top_before is not None and screen is not None:
+            room = screen.availableGeometry().adjusted(NORMAL, NORMAL, -NORMAL, -NORMAL)
+            frame = dialog.frameGeometry()
+            lowest = min(top_before, room.bottom() - frame.height() + 1)
+            if lowest > frame.top():
+                dialog.move(frame.left(), lowest)
 
 
 def select_data(box: QComboBox, identifier: str) -> None:

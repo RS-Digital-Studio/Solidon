@@ -18,6 +18,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
+from types import SimpleNamespace
 from typing import Any
 from unittest import mock
 
@@ -729,23 +730,25 @@ def test_packages_that_are_not_a_mapping_are_no_packages() -> None:
 
 
 def test_the_platform_decides_which_package_is_meant(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Auf einem Mac unterscheidet der Befehlssatz, sonst das System.
+    """Auf einem Mac unterscheidet der Chip, sonst das System.
 
     Ein für arm64 gebautes Programm startet auf einem Intel-Mac nicht — hier
     ist die Architektur keine Feinheit, sondern der Unterschied zwischen
-    „läuft" und „lässt sich nicht öffnen".
+    „läuft" und „lässt sich nicht öffnen". Verstellt wird ``updates.sys``
+    allein, nicht ``sys.platform`` des Prozesses (RM-531); Rosetta prüft
+    ``test_updates_platforms.py``.
     """
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    monkeypatch.setattr(updates, "sys", SimpleNamespace(platform="win32"))
     assert updates.platform_key() == updates.PLATFORM_WINDOWS
 
-    monkeypatch.setattr(updates.sys, "platform", "linux")
+    monkeypatch.setattr(updates, "sys", SimpleNamespace(platform="linux"))
     assert updates.platform_key() == updates.PLATFORM_LINUX
 
-    monkeypatch.setattr(updates.sys, "platform", "darwin")
-    monkeypatch.setattr(updates.platform, "machine", lambda: "arm64")
+    monkeypatch.setattr(updates, "sys", SimpleNamespace(platform="darwin"))
+    monkeypatch.setattr(updates.machine, "is_apple_silicon", lambda: True)
     assert updates.platform_key() == updates.PLATFORM_MACOS_ARM
 
-    monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(updates.machine, "is_apple_silicon", lambda: False)
     assert updates.platform_key() == updates.PLATFORM_MACOS_INTEL
 
 

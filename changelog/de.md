@@ -42,9 +42,13 @@ Nutzen da und sonst nichts.
 
 ## 0.6.1
 
+- Version 0.6.1 ist die letzte für Macs mit Intel-Prozessor und läuft dort als Demo bis zum 30. November 2026. Die Verkaufsversion gibt es auf dem Mac nur für Apple Silicon.
+- Ab 0.6.2 braucht Solidon macOS 15 auf dem Mac und Windows 10 22H2 oder 11 unter Windows. Ein Update, das auf einem älteren System nicht startet, bietet Solidon nicht an.
+
 ### Bedienung und System
 
 - Maßkarten sind verschiebbar und wachsen mit offenen Feldern. Klarere Handlungstitel und Bettmaße, ruhigere Leisten und Griffe sowie ein deutlicheres helles Raster erleichtern den Blick aufs Modell.
+- Wächst ein Dialog nach einem Schriftwechsel, rückt er hinauf, wenn darüber Platz ist, statt seinen Inhalt rollen zu lassen.
 - Ein möglicher Absturz beim Wechseln von Merkmalen oder Projekten und beim Öffnen von Dialogen ist behoben.
 - Der Hinweis bei „Auf das Bett setzen“ passt jetzt auch zu Körpern, die unter dem Bett liegen.
 - Aufzählungen von Merkmalshandlungen verwenden durchgehend die gewählte Sprache.

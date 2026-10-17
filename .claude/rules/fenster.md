@@ -379,8 +379,8 @@ Ausdrückliches Klappen darf die automatische Höhe am festen Fensteranker
 anpassen, bis zum Bildschirmrand, der Rest rollt. Passives (Prüfung, Status,
 Suche, Reiter, bedingte Zeilen) wächst nach der Anfangsmessung um verdeckten
 Inhalt bis zur Bildschirmhöhe, nach Klappen ab dem Anker, und schrumpft nie
-(RM-487). `contentSizeChanged` führt auch Listen- und Schriftwechsel diesem
-passiven Größenweg zu. Kurzer Anfangsbedarf ist kein dauerhaftes
+(RM-487). `contentSizeChanged` führt Listenwechsel dem passiven Weg zu,
+Schriftwechsel dem Weg `font`. Kurzer Anfangsbedarf ist kein dauerhaftes
 Viewport-Minimum: Der innere Rollbereich gibt Platz an die Knopfleiste ab.
 Beim Öffnen, Monitorwechsel, geänderter nutzbarer Fläche oder logischer DPI
 sichern `DialogScrollArea` und `fit_dialog_to_screen` die Erreichbarkeit.

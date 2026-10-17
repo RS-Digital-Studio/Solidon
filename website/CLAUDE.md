@@ -159,9 +159,11 @@ prüft zuerst, ob ein bestehender die Frage schon beantwortet.
 - **Unterstützen**: oben „Der Weg bis 1.0“ in zwei Spalten, Geschafft und
   Geplant; darunter Person und Kosten neben dem Handlungsfeld mit beiden
   Wegen; ganz unten der Stand der Kampagne, der erst auf Klick lädt. Seit
-  0.6.0 nennt Geplant nur noch Fehlerbehebungen, Tempo und Stabilität und
-  sagt, dass vor 1.0 keine großen neuen Funktionen kommen (Entscheidung
-  Robert) — mit dem Satz „Geplant heißt nicht zugesagt“.
+  0.6.0 nennt Geplant nur noch Fehlerbehebungen (gemeldete und eigene Funde),
+  Tempo und Stabilität, Ergänzungen, die Lücken schließen, und die
+  Systemvoraussetzungen der nächsten Version, und sagt, dass vor 1.0 keine
+  großen neuen Bereiche kommen (Entscheidung Robert) — mit dem Satz „Geplant
+  heißt nicht zugesagt“.
 - **Der Verkaufsstart am 1. Dezember ist voraussichtlich, das Demo-Ende am
   30. November fest** (Entscheidung Robert): Jede Nennung des Verkaufsstarts
   trägt „voraussichtlich“, auch der Kaufsatz am Aufmacher; „Die Demo lässt

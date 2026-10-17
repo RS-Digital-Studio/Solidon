@@ -17,9 +17,13 @@ it into `website/version.json`.
 
 ## 0.6.1
 
+- Version 0.6.1 is the last one for Macs with an Intel processor and runs there as a demo until 30 November 2026. The sales version for Mac is available for Apple Silicon only.
+- From 0.6.2 on, Solidon needs macOS 15 on the Mac and Windows 10 22H2 or 11 on Windows. Solidon does not offer an update that would not start on an older system.
+
 ### Operation and system
 
 - Measurement cards can be moved and grow with open fields. Clearer action titles and bed dimensions, quieter toolbars and handles, and a clearer light-theme grid help keep the model in view.
+- When a dialog grows after a font change, it moves up if there is room above instead of scrolling its content.
 - Fixed a crash that could occur when switching features or projects, or when opening a dialog.
 - The note for “Place on the bed” now also applies to bodies below the bed.
 - Lists of feature actions now stay entirely in the selected language.

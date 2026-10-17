@@ -1439,8 +1439,8 @@ def test_the_signature_hints_name_only_the_first_signed_version(page: str) -> No
         ("it/index.html", "Dalla versione 0.4.1", "La versione 0.4.1", None, "ohne „ab“"),
         (
             "index.html",
-            "deines Macs. Ab Version 0.4.1 sind die",
-            "deines Macs. Version 0.4.1 ist notarisiert, die",
+            "November 2026. Ab Version 0.4.1 sind die",
+            "November 2026. Version 0.4.1 ist notarisiert, die",
             None,
             "FAQ Mac: 0.4.1 steht ohne",
         ),

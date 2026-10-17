@@ -45,6 +45,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
+| [RM-819 — Bausteine für Zahnräder und Gridfinity](#rm-819) | Geometrie, Erkennung und Druckvorbereitung | Phase 3: Zahnradpaar und Gridfinity nach der Checkliste „neuer Baustein“ |
+| [RM-820 — Beim automatischen Teilen Nummern einprägen und einen Montageplan ausgeben](#rm-820) | Geometrie, Erkennung und Druckvorbereitung | Phase 3: Nummern an beiden Schnittseiten, Montageplan als PDF |
+| [RM-821 — Erkennung und Nachbau an echten Downloads messen und die Quote zeigen](#rm-821) | Geometrie, Erkennung und Druckvorbereitung | Phase 3 nach D1: Messwerkzeug über einen lokalen Korpus echter Downloads |
 | [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Bausteine, Abläufe, funktionale Gruppen, Projektmaße und das Abnahmewerkzeug gebaut (04.10.); offen: der echte Lauf der Einzeldateiabnahme über 187 Fälle am Fenster, die Fensterabnahmen der neuen Abläufe und Gruppen, Leistungsreihe |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Hänger durch die Speicherbereinigung im Arbeiter behoben (nur noch im Hauptfaden, 05.10.); der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen sind der Ereignistyp dahinter, die Gegenprobe auf Linux und Mac und die Vergleichsreihe |
@@ -66,6 +69,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-804 — Das Flatpak erreicht die 3D-Maus nicht](#rm-804) | Plattformen, Pakete und Grafik | Gerätefreigabe gebaut (Plattformwelle 12.10.); offen die Maus am Gerät (RM-070) |
 | [RM-810 — Unter Linux liest die 3D-Maus über libusb statt hidraw](#rm-810) | Plattformen, Pakete und Grafik | Linux nimmt das Modul `hidraw` aus demselben Rad (Plattformwelle 12.10.); offen die Maus am Gerät mit der udev-Regel des Handbuchs (RM-070) |
 | [RM-811 — Die Bibliotheken in den Rädern sind nicht je Datei lizenzbelegt](#rm-811) | Plattformen, Pakete und Grafik | Freigabe Robert für `LGPL-3.0-or-later` und die Quellenangebote aller LGPL-Laufzeitfamilien; numpys Ausdruck um GCC-Laufzeit und libquadmath, scipys um libquadmath ergänzen; für libquadmath fehlen Volltext und Quellenangebot; die `.libs/` von Pillow, numpy, scipy und OCP je Datei belegen |
+| [RM-814 — Ab 0.6.2 gibt es Solidon auf dem Mac nur für Apple Silicon](#rm-814) | Plattformen, Pakete und Grafik | nach dem Release 0.6.1 die Intel-Jobs auf einem Zweig ausbauen, Wächter mitziehen; das Intel-Paket 0.6.1 bis 30.11. im Kasten, danach vom Server |
+| [RM-815 — Systemvoraussetzungen ab 0.6.2: macOS 15 und Windows 10 22H2](#rm-815) | Plattformen, Pakete und Grafik | Handstart des neuen Paketjobs auf `macos-15` auf einem Wegwerfzweig |
+| [RM-825 — Ein verdecktes Fenster auf dem Mac bricht das Bild der Ansicht ab](#rm-825) | Plattformen, Pakete und Grafik | in 0.6.2: Zeichnen und `screenshot()` am Mac mit verdecktem Fenster nachstellen, `DrawCancelled` abfangen |
 | [RM-805 — Der Intel-Mac startet in der CI nur ohne Bildschirm](#rm-805) | Plattformen, Pakete und Grafik | Start mit Fenster in der Releaseakte zur Erprobung (Plattformwelle 12.10.); nach zwei grünen Läufen scharf schalten |
 | [RM-807 — Das AppImage aktualisiert sich nicht selbst](#rm-807) | Plattformen, Pakete und Grafik | Selbstersatz bauen, wie bei Windows, Mac und Flatpak |
 | [RM-809 — Qt stürzt unter macOS 26 ab, wenn ein Werkzeug die Bedienhilfen liest](#rm-809) | Plattformen, Pakete und Grafik | Die Qt-Fassung mit der Korrektur von QTBUG-149612 übernehmen, sobald sie erscheint |
@@ -197,6 +203,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4 |
 | [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; Phase 4 |
 | [RM-790 — Ein nativer Abbruch nach Rückgängig bei gezeigter Maßgruppe, einmal gesehen](#rm-790) | Bedienung und Darstellung | 150 Zyklen unter Last ohne Wiederholung; beim nächsten Auftreten Stapel sichern und zuordnen |
+| [RM-818 — Solidon ist auf einem Laptop mit 125 % Skalierung voll bedienbar](#rm-818) | Bedienung und Darstellung | 0.6.2: jedes Fenster bei 1536 × 864 logisch aufnehmen, Funde eintragen und beheben |
 | [RM-812 — Funde des Funktionsdurchgangs für 0.6.2](#rm-812) | Bedienung und Darstellung | für 0.6.2: FD-204 bis FD-211, FD-218 bis FD-226, FD-228 bis FD-230, FD-233, FD-234 und FD-236 bis FD-325 der Funddatei beheben (Umfang eingefroren, Robert 16.10.; Ziel 0.6.2, Robert 17.10.) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
@@ -218,6 +225,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot](#rm-779) | Tests und Entwicklungswerkzeuge | Den Vorgänger finden, der Zustand hinterlässt, und ihn aufräumen |
 | [RM-719 — Ein Fenstertest wackelt mit vier Arbeitern](#rm-719) | Tests und Entwicklungswerkzeuge | Ursache des Wettlaufs finden |
 | [RM-813 — Codestruktur Schritt 1 und die offenen Punkte aus Schritt 0](#rm-813) | Tests und Entwicklungswerkzeuge | CS-28, CS-29 und CS-41 bis CS-46 in 0.6.2 (Robert 17.10.); danach Phase 3: Schritt 1 (`geom/prepare_ops.py`) und die Handfixe aus Paket M an ihrem Schritt |
+| [RM-816 — Die Fensterauswahl wird nach Laufzeit verteilt](#rm-816) | Tests und Entwicklungswerkzeuge | nach RM-814: Auswahlen nach der Laufzeittabelle auf die Teile legen |
+| [RM-823 — Der Längenwächter sieht Ansagen der Form `announce(tr(…).format(…))` nicht](#rm-823) | Tests und Entwicklungswerkzeuge | in 0.6.2: Aufrufort erkennen, zwei lange Ansagen kürzen |
+| [RM-824 — Die Suite fragt beim Chat das Ollama des Rechners](#rm-824) | Tests und Entwicklungswerkzeuge | in 0.6.2: Pfad und Dienst in `conftest.py` je Fall festlegen, beide Lagen der Chatfälle fahren |
+| [RM-826 — Git Bash endet auf dem Windows-Läufer einmal mit 0x80000004](#rm-826) | Tests und Entwicklungswerkzeuge | Rate über die nächsten main-Läufe zählen; tritt es wieder auf, den Schritt der Attrappe eingrenzen |
+| [RM-817 — Die Auswahl zum Push rechnet je geänderter Datendatei rund 40 Sekunden](#rm-817) | Tests und Entwicklungswerkzeuge | Lesestellenanalyse für viele Dateien einmal rechnen, Wächter gegen die Antwort je Datei |
 | [RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat](#rm-786) | Tests und Entwicklungswerkzeuge | Am Tag die Suite auslassen, wenn der main-Lauf zum Tag-Commit grün ist; Vertrag und Wächter nachziehen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -227,6 +239,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-035 — EULA wirksam in den Bestellvorgang einbeziehen](#rm-035) | Veröffentlichung, Betrieb und Vertrieb | Produktgrenzen und EULA im vollständigen Bestellweg rechtlich prüfen |
 | [RM-036 — Vertrag und Freistellungen des Zahlungsdienstleisters prüfen](#rm-036) | Veröffentlichung, Betrieb und Vertrieb | Konkreten Anbietervertrag und Haftungsübernahme entscheiden |
 | [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Kandidat bis 25.11.; Demo ab 0.6.0 bis 30.11. (bis 0.5.3: 30.10.); Start 01.12.2026 um 10:00 Uhr deutscher Zeit — gebaut in 0.5.0: Abschied mit Pause und Start, ‚heute letzter Tag‘, Hinweis ab 24.10. (`29dcefa4`); offen täglicher Ablaufwächter und Bestell-Webhook |
+| [RM-822 — Die hochwertigste Website: übersichtlich und so, dass man Solidon laden will](#rm-822) | Veröffentlichung, Betrieb und Vertrieb | Umbau parallel zum Release im eigenen Arbeitsbaum nach der Durchsicht Wettbewerb |
 | [RM-806 — Ohne Secret Service lässt sich Solidon unter Linux nicht freischalten](#rm-806) | Veröffentlichung, Betrieb und Vertrieb | Vor dem 01.12.: messen, auf welchen Desktops er fehlt, die Meldung mit Handlungsvorschlag versehen und die Freischaltung gegen einen echten Secret Service prüfen |
 | [RM-808 — Mit Lizenz hält eine Schlüsselbundabfrage den Start vor dem Fenster an](#rm-808) | Veröffentlichung, Betrieb und Vertrieb | Vor dem 01.12. am Runner nachstellen und den Weg festlegen, der den Start nicht anhält |
 | [RM-091 — CRA-Meldebereitschaft herstellen, die Frist ist abgelaufen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Meldeweg entschieden (Robert, 23.09.2026: über die Support-Adresse, Antwortfrist zwei Arbeitstage, keine Belohnung, kein PGP; `SECURITY.md`, `SECURITY-INCIDENT.md` und `security.html` sind konform); offen EU-Login, Vertretung, CSIRT-Zuordnung, Alarmierung und Probelauf — Roberts Konten |
@@ -1256,6 +1269,81 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   ausschließt. [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-15.
   **Abnahme:** je Weg ein Test ohne Pin; wo einer ohne `release` abbaut, ruft der Weg `release`,
   an der Wurzel statt über einen Pin.
+
+<a id="rm-814"></a>
+
+- [ ] **RM-814 — Ab 0.6.2 gibt es Solidon auf dem Mac nur für Apple Silicon.**
+  Entscheidungen Robert (17.10.2026): 0.6.1 ist die letzte Version für Intel-Macs, und dort
+  **endet Solidon mit der Demo am 30.11.2026** — die Kaufversion gibt es auf dem Mac nur für
+  Apple Silicon, das Lizenzpaar bleibt. 0.6.1 fragt auf dem Intel-Mac nicht nach einer neuen
+  Version (`updates.newer_versions_run_here`); Verkaufshinweis der letzten Demowoche und Abschied
+  der Demo sagen dort, dass die Kaufversion Apple Silicon verlangt und 1.0 die Projekte unter
+  Windows, Linux und auf Apple Silicon öffnet; Changelog-Vorspann, Hinweistext, README und
+  Website kündigen es an. Absagen mit *Nach einer neuen Version sehen* (Projektdatei aus neuerer
+  Version, Baustein, Modell, Lizenzschlüssel) bleiben auch auf Intel: Der Klick sagt dort den
+  Grund (Review L6, bewusst). Für 0.6.2 entfallen in der CI `macos-26-intel` in
+  Kernmatrix, Fensterverträgen, Fenster- und Slicerauswahl, Paket, Signierung, Installer und
+  Releaseakte (`sign_release.verify_ci_run` ohne `window-contracts-intel`), im Paket
+  `tools/fix_unwind_info.py` samt Workflowschritten, Abschnitt der Lizenzbeilage und `pedigree`
+  der Stückliste (RM-768). Zu prüfen, ob `allow-unsigned-executable-memory` auf Apple Silicon
+  nötig bleibt: Die Berechtigung kam für Intel-Macs mit macOS 26 (RM-104). **Das Intel-Paket
+  0.6.1 bleibt bis zum 30.11.2026 im Download-Kasten** (mit dem Vermerk „Demo bis
+  30.11.“, auch neben 0.6.2) und geht danach vom Download und vom Server, weil es ohne
+  Kaufversion nicht mehr startet — die frühere Vorgabe, es dauerhaft stehen zu lassen, ist mit
+  der Entscheidung „Intel endet mit der Demo“ überholt. Wer auf einem Intel-Mac noch 0.6.0
+  oder älter hat, bekommt den Hinweis auf 0.6.2: Dessen Hinweistext sagt in allen sechs
+  Sprachen, dass Intel-Macs bei 0.6.1 bleiben und die Demo am 30.11. endet. RM-104
+  (Intel-Teil), RM-768, RM-770, RM-802 und RM-805 gehen mit Grund ins Archiv; Konzept CI-03 bis
+  CI-05 und `auslieferung.md` ziehen nach. Im Planspiel sinkt ein main-Lauf ohne Intel von 86
+  auf 45 Minuten.
+  **Nächster Schritt:** nach dem Release 0.6.1 die Intel-Jobs auf einem Zweig ausbauen, die
+  Wächter in `test_packaging.py` mitziehen.
+  **Abnahme:** main-Lauf ohne Intel-Jobs, Median aus fünf vollen Läufen höchstens 50 Minuten;
+  Tag-Lauf 0.6.2 mit vier ausgelieferten Paketen grün; bis zum 30.11. steht das Intel-Paket
+  0.6.1 mit Vermerk im Kasten, ab dem 01.12. ist es vom Download und vom Server, und alle sechs
+  Startseiten sagen nichts mehr von einem Intel-Paket: Zeile *Intel-Macs* der
+  Systemvoraussetzungen, FAQ *Wie lange gibt es Solidon3D für Intel-Macs?* und der Satz zum
+  Intel-Paket in *Läuft das auf einem Mac?* samt FAQPage-Auszeichnung (`make_seo.py`).
+
+<a id="rm-815"></a>
+
+- [ ] **RM-815 — Systemvoraussetzungen ab 0.6.2: macOS 15 und Windows 10 22H2.**
+  Entscheidung Robert (17.10.2026): Ab 0.6.2 gelten die Systeme, die ihr Hersteller am
+  1. Januar 2027 noch pflegt — macOS 15 oder neuer auf Apple Silicon, Windows 10 22H2 und
+  Windows 11, Linux unverändert. Die Website kündigt es unter „Geplant“ an. Mac:
+  `MACOS_MINIMUM` auf 15.0 samt Plist, Installer, Seiten und Changelog; Paketjob auf `macos-15`
+  (Start auf der Untergrenze), Signieren und Releaseakte auf `macos-latest`; ein Werkzeug prüft
+  `minos` jeder Mach-O; ein Job auf `macos-15` fährt Fensterverträge, Rendererfälle und die
+  Kerndateien, die `darwin` nennen. Windows: Mindestversion im Installer (Build 19045), Seiten
+  und Changelog. **Versionsdatei:** `make_download.py` schreibt je Paket `minimum_system`
+  („15.0“ an beiden Mac-Paketen, „10.0.19045“ am Windows-Setup) und `minimum_system_name`
+  („macOS 15“, „Windows 10 22H2“) — 0.6.1 liest beide (`Package.minimum_system`,
+  `minimum_system_name`, `Release.needs_newer_system`) und bietet einem älteren System kein
+  Update an, dessen Installer ablehnt, sondern nennt das System beim Namen; ohne Namen stehen
+  System und Nummer da (Review M1, gebaut am 17.10.2026). Vor der Entscheidung nachsehen (Review L9): Windows 10 LTSC 2019 (17763) und
+  LTSC 2021 (19044) werden über den 1. Januar 2027 hinaus gepflegt, lägen aber unter Build
+  19045; ob sie dazugehören, entscheidet Robert.
+  **Nächster Schritt:** Handstart des neuen Paketjobs auf einem Wegwerfzweig.
+  **Abnahme:** Tag-Lauf 0.6.2 mit grünem Start auf `macos-15`; Wächter halten Label,
+  `MACOS_MINIMUM`, die Mindestversion des Installers und `minimum_system` der Versionsdatei
+  zusammen; Systemvoraussetzungen in allen sechs Sprachen. Kündigt GitHub das Ende von
+  `macos-15` an, die Untergrenze auf 26 heben oder nur statisch prüfen.
+
+<a id="rm-825"></a>
+
+- [ ] **RM-825 — Ein verdecktes Fenster auf dem Mac bricht das Bild der Ansicht ab.**
+  Auf dem macOS-Läufer riss `test_render_factory.py::test_native_qt_canvas_draws_and_releases_its_renderer`
+  im Kindprozess mit `wgpu DrawCancelled: Occluded` aus `_create_texture_screen`
+  (Fensterauswahl zu CI-Lauf 39035816730, Job 117406192200, 17.10.2026): wgpu gibt für eine verdeckte Fläche
+  keine Textur her. `gfx_renderer.screenshot()` und das Zeichnen fangen das nirgends ab;
+  dieselben Wege nehmen die Bilder für den Agenten (`snapshots.py`), der Starttest
+  (`start_check.py`) und die Ansicht. Ob ein Kunde mit verdecktem oder minimiertem Fenster
+  einen Fehlerbericht statt eines ausgelassenen Bilds bekommt, ist nicht nachgestellt.
+  **Nächster Schritt:** am Mac-Läufer ein verdecktes Fenster zeichnen und `screenshot()` rufen;
+  `DrawCancelled` beim Zeichnen als ausgelassenes Bild behandeln, beim Bildschirmfoto über den
+  Rückweg ohne Fläche.
+  **Abnahme:** Zeichnen und Bildschirmfoto bei verdecktem Fenster ohne Ausnahme, mit Test am
+  Mac-Läufer; der Fall in `test_render_factory.py` ist dort zweimal hintereinander grün.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
@@ -4363,6 +4451,39 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Slicerlauf im Entwurfsprofil; hängt der Ring frei, bekommt er Stütze, ohne dass
   Eiffelturm, Bögen und Arkade ihre Entwarnung verlieren.
 
+<a id="rm-819"></a>
+
+- [ ] **RM-819 — Bausteine für Zahnräder und Gridfinity.**
+  Die meistgebotenen Generatoren im Feld (OwlCAD, SlantTools, layerling, SolidCraft, MakerWorld;
+  [Durchsicht Wettbewerb](konzepte/durchsicht-wettbewerb-2026-10.md), B2 Nr. 4) fehlen unter den
+  50 Bausteinen. Zahnrad mit Evolventenflanke nach Modul, Zähnezahl und Eingriffswinkel, als Paar
+  mit Achsabstand und Spiel aus dem Materialprofil; Gridfinity-Grundplatte und -Kasten im
+  42-mm-Raster mit 7-mm-Höheneinheit, Maße aus der Normteiltabelle. In Phase 3.
+  **Abnahme:** Checkliste „neuer Baustein“ aus `AGENTS.md` samt Bereichsnachweis; ein Paar
+  Zahnräder kämmt im Druck ohne Klemmen, ein Gridfinity-Kasten sitzt in einer fremden
+  Grundplatte; Handbuch, Katalogbild und Website in sechs Sprachen.
+
+<a id="rm-820"></a>
+
+- [ ] **RM-820 — Beim automatischen Teilen Nummern einprägen und einen Montageplan ausgeben.**
+  ModelSplitter (07.10.2026) und Bambu Studio 2.8 (19.08.2026) nummerieren die Teile und
+  geben eine Montageanleitung aus; Solidon nennt die Teile nur im Dateinamen
+  ([Durchsicht Wettbewerb](konzepte/durchsicht-wettbewerb-2026-10.md), B2 Nr. 5). In Phase 3.
+  **Abnahme:** jede Schnittfläche trägt auf beiden Seiten dieselbe vertiefte Nummer, abschaltbar,
+  ohne die Passung der Stifte zu berühren; ein Montageplan (Explosionsbild und Reihenfolge) als
+  PDF neben den Druckdateien, in sechs Sprachen; Geometrietest gegen den Korpus.
+
+<a id="rm-821"></a>
+
+- [ ] **RM-821 — Erkennung und Nachbau an echten Downloads messen und die Quote zeigen.**
+  „STL wieder bearbeitbar“ ist das Thema der Konkurrenz (ShapeAnywhere, stl2step, Backflip;
+  [Durchsicht Wettbewerb](konzepte/durchsicht-wettbewerb-2026-10.md), B1 und B3). Eine gemessene
+  Quote an Modellen aus MakerWorld und Printables schlägt deren Versprechen: wie viele Bohrungen
+  erkannt und änderbar sind, wie oft *Modell nachbauen* gelingt. Der Korpus bleibt lokal (Rechte
+  der Urheber). In Phase 3, nach D1.
+  **Abnahme:** Messwerkzeug über den lokalen Korpus mit festgehaltenem Stand, Quote je Release neu
+  gemessen; Fehlschläge als Funde; die Zahl steht mit Messdatum auf der Website.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -6083,6 +6204,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** je Fund ein Test, der am Stand davor rot war, und der Stand „behoben `<commit>`“
   in der Funddatei; Kundenwirkung im Changelog der nächsten Version in sechs Sprachen.
 
+<a id="rm-818"></a>
+
+- [ ] **RM-818 — Solidon ist auf einem Laptop mit 125 % Skalierung voll bedienbar.**
+  Die Systemvoraussetzungen verlangen 1920 × 1080 bei 100 % und sagen selbst, dass viele
+  Laptops dafür umgestellt werden müssen; ab Werk stehen sie oft auf 125 % (1536 × 864 logische
+  Pixel). Constructor AI nennt 1280 × 720. Die größte Käufergruppe scheitert so vor dem ersten
+  Klick ([Durchsicht Wettbewerb](konzepte/durchsicht-wettbewerb-2026-10.md), B2 Nr. 3 und D14;
+  Auftrag Robert 17.10.: jede Lücke beheben). In 0.6.2.
+  **Nächster Schritt:** jedes Fenster, jeden Dialog, jede Karte und jede Leiste bei 1536 × 864
+  logisch aufnehmen und abgeschnittene oder unerreichbare Bedienelemente als Funde eintragen.
+  **Abnahme:** bei 1536 × 864 logisch bleibt jedes Bedienelement erreichbar und nichts ist
+  abgeschnitten, gehalten von Fenstertests in dieser Größe; die Systemvoraussetzungen nennen
+  die neue Untergrenze in sechs Sprachen.
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -6727,6 +6862,71 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Schritt 1 nach Konzept 4.5 abgenommen; jeder genannte Punkt hat beim Schnitt
   seiner Datei einen Commit oder eine Entscheidung in der Funddatei.
 
+<a id="rm-816"></a>
+
+- [ ] **RM-816 — Die Fensterauswahl wird nach Laufzeit verteilt.**
+  `fenster-auswahl.yml` verteilt die Auswahlen reihum (`parts[shard::shards]`); die drei
+  Windows-Teile liefen zuletzt 48, 34 und 35 Minuten, ein anderes Mal 46, 18 und 22. Ohne Intel
+  (RM-814) bestimmt diese Verteilung den main-Lauf. Nach der Laufzeittabelle verteilt (wie
+  `tools/ci_shards.py`) sinkt er im Planspiel von 45 auf 37 Minuten; dazu je Plattform die
+  Verträge in einen Kernteil und die Slicer in einen Auswahlteil, am Tag die Mac-Signierung nur
+  am Mac-Paket. CI-01 bleibt: jeder Fall genau einmal je Plattform.
+  **Abnahme:** Median aus fünf vollen main-Läufen höchstens 40 Minuten, der längste Teil der
+  Fensterauswahl höchstens 20 % über dem Mittel seiner Plattform (CI-08).
+
+<a id="rm-817"></a>
+
+- [ ] **RM-817 — Die Auswahl zum Push rechnet je geänderter Datendatei rund 40 Sekunden.**
+  Der main-Lauf zu welle5 (Lauf 39026677958) brach ab, weil `tools/ci_selection.py` über 1 922
+  Dateien länger als die Frist des Jobs lief. Behoben für jeden Diff mit einer Datei, die jeden
+  Test wählt (`pyproject.toml`, `conftest.py`): Die Auswahl hält dort sofort, 1,5 statt über
+  60 Minuten. Ohne eine solche Datei baut `affected_tests._note_data_units` die
+  Lesestellenanalyse (`data_reads.DataReads`) je Datendatei neu, gemessen 14 s Aufbau und 26 s
+  Lesen je Datei; ein Erzeugerlauf über Handbuchbilder und -seiten (über 1 000 Dateien) bräuchte
+  Stunden. Die Analyse für viele Dateien einmal rechnen, gemeinsam je Ordner oder für alle
+  zusammen, mit derselben Antwort wie je Datei.
+  **Abnahme:** dieselbe Auswahl über `fd7952a92..91fb8486d` ohne die zwei Gesamtdateien unter
+  10 Minuten; ein Wächter vergleicht die gebündelte Antwort mit der je Datei an der Attrappe.
+
+<a id="rm-823"></a>
+
+- [ ] **RM-823 — Der Längenwächter sieht Ansagen der Form `announce(tr(…).format(…))` nicht.**
+  `tests/test_text_length.py` (`_kind_at`) ordnet einen Text nach seinem Aufrufort; ein
+  `tr(…).format(…)` als Argument von `announce` erkennt er nicht als Ansage. So stehen 19 Ansagen
+  ohne Grenze, zwei davon über 20 Wörtern (`main_window.py` um Zeile 11408 mit 26 und um Zeile
+  17550 mit 21 Wörtern; Stand 17.10.2026). Gefunden im Review der Intel-Ansage (N1).
+  **Abnahme:** der Wächter ordnet auch diese Form als Ansage ein, mit Gegenprobe; die zwei langen
+  Ansagen sind in allen Sprachen gekürzt.
+
+<a id="rm-824"></a>
+
+- [ ] **RM-824 — Die Suite fragt beim Chat das Ollama des Rechners.**
+  *Chat einrichten* erhebt den Dienst über `tools.state_of` (`ExternalTool.path` und
+  `running`), und `tests/conftest.py` legt beides nicht fest: Auf einem Rechner mit Ollama
+  zeigt der Dialog eine andere Dienstzeile als auf den Läufern ohne. So war der Höhenfall
+  `test_content_height_dialogs.py` nach 14 → 9 pt in der Fensterauswahl rot und lokal nicht
+  nachzustellen, bis `tools.state_of` von Hand gepatcht war (CI-Lauf 39035816730, 17.10.2026).
+  Das bricht die Zusage „kein gefundenes Fremdprogramm“ aus `.claude/rules/tests.md`, und
+  `running` fragt einen Port des Rechners.
+  **Nächster Schritt:** in `conftest.py` Pfad und Dienst je Fall auf „fehlt“ stellen, wie
+  `discover.find_program`; die Chatfälle in `test_content_height_dialogs.py` und
+  `test_chat_ui.py` in beiden Lagen fahren.
+  **Abnahme:** dieselben Ergebnisse mit und ohne installiertes und laufendes Ollama, mit
+  Gegenprobe; kein Fall öffnet den Port des Rechners.
+
+<a id="rm-826"></a>
+
+- [ ] **RM-826 — Git Bash endet auf dem Windows-Läufer einmal mit 0x80000004.**
+  Im main-Lauf 39035816730 (Suite windows-latest Teil 1, Job 117405245304, 17.10.2026) brach
+  `test_packaging.py::test_the_selection_starts_at_the_last_checked_main_run` ab: Die
+  nachgestellte Auswahl in `bash.exe` schrieb noch „Keine geprüfte Basis: jede Datei“ und endete
+  dann mit 2147483652 (0x80000004) statt 0. Derselbe Fall war in den drei main-Läufen davor und
+  lokal im Tor grün; der Auslöser ist nicht belegt, die Meldung ist ein Zeitpunkt
+  (`.claude/rules/tests.md`, „Eine Fremdmeldung ist ein Zeitpunkt, keine Ursache“).
+  **Nächster Schritt:** die Rate über die nächsten main-Läufe zählen; tritt es wieder auf, in
+  der Attrappe (`_run_selection_step`) den letzten Schritt vor dem Ende mitschreiben lassen.
+  **Abnahme:** zehn main-Läufe ohne den Abbruch, oder Ursache belegt und behoben.
+
 <a id="rm-786"></a>
 
 - [ ] **RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat.**
@@ -7085,6 +7285,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Nächster Schritt:** beim Release `tools/make_manual.py`, danach `tools/stamp_assets.py`
   (Weg in `/erzeugen`).
   **Abnahme:** `pytest -m rendered tests/test_wording.py` grün am Releasestand.
+
+<a id="rm-822"></a>
+
+- [ ] **RM-822 — Die hochwertigste Website: übersichtlich und so, dass man Solidon laden will.**
+  Auftrag Robert (17.10.2026): „wir wollen die hochwertigste webseite haben von allen“, mehr
+  Konkurrenz auf 3Druck.com. Befunde D1 bis D15 und Empfehlungen E2 bis E10 der
+  [Durchsicht Wettbewerb](konzepte/durchsicht-wettbewerb-2026-10.md); E1 entfällt (Entscheidung
+  Robert: ab 01.12. kein kostenloser Einstieg — bis 30.11. trägt die Demo, danach die Belege).
+  Ein Knopf, der für das erkannte System direkt lädt, und ein Ziel für jeden Download-Knopf; ein
+  Band mit fremden Belegen (die zwei Berichte auf 3Druck.com als Text, Downloadzahl, Stimmen nur
+  mit Einwilligung); Fotos echter Drucke (Robert druckt); der Film im Aufmacher als Ausschnitt
+  ohne Playerleiste; die Alleinstellung (Passung aus dem eigenen Filament, Druckrat für jeden
+  Slicer) statt „ohne CAD-Vorkenntnisse“; „STL wieder bearbeitbar“ als Abschnitt und eigene
+  Seite; Vergleichsseiten erst nach `/legal-review`; Druckkosten je Teil zeigen; die Startseite
+  auf ein Drittel kürzen, *Unterstützen* auf eine eigene Seite; Kennzahlen mit Kundennutzen.
+  Läuft parallel zum Release 0.6.1 im eigenen Arbeitsbaum.
+  **Abnahme:** Startseite unter 12 000 px Höhe bei 390 px Breite, bei gleicher Ladezeit oder
+  besser; vom Aufmacher ein Klick bis zum Paket des erkannten Systems; jede Aussage belegt;
+  sechs Sprachen mit gleicher Struktur; `/website-review` und `test_website` grün.
 
 ## Kundenrückmeldungen
 

@@ -601,3 +601,156 @@ def test_of_two_texts_saying_the_same_the_longer_stays_without_markup() -> None:
 
     assert "Ja" in text, "the fuller note was dropped"
     assert "<strong>" not in text, "the shorter lead must not stand as well"
+
+
+def _window_for_updates(said: list[str], called: list[str]) -> object:
+    """Ein Fenster für die Wege der Versionsfrage, ohne gebautes Fenster."""
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        _asked_for_update=False,
+        announce=said.append,
+        _check_for_updates=lambda: called.append("check"),
+        _show_update=lambda release: called.append(f"show {release.version}"),
+    )
+
+
+def test_on_an_intel_mac_a_click_says_why_and_asks_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """0.6.1 ist auf dem Intel-Mac die letzte Version (``updates.newer_versions_run_here``):
+    *Nach einer neuen Version sehen* fragt nicht und sagt gleich den Grund — ohne vorher
+    „Es wird nach einer neuen Version gesehen …“ (Review L2)."""
+    from app.branding import APP_VERSION
+    from app.ui import main_window
+
+    monkeypatch.setattr(updates, "platform_key", lambda: updates.PLATFORM_MACOS_INTEL)
+    said: list[str] = []
+    called: list[str] = []
+
+    main_window.MainWindow.action_check_updates(_window_for_updates(said, called))
+
+    assert said == [
+        f"Version {APP_VERSION} ist die letzte für Macs mit Intel-Prozessor. "
+        "Neuere Versionen gibt es auf dem Mac nur für Apple Silicon."
+    ]
+    assert called == [], "keine Frage nach draußen"
+
+
+def test_on_an_intel_mac_the_start_asks_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Auch beim Start geht auf dem Intel-Mac keine Frage hinaus, und es steht nichts da."""
+    from app.ui import main_window
+
+    def no_question() -> None:
+        raise AssertionError("the version file was asked for")
+
+    monkeypatch.setattr(main_window, "_UpdateWorker", no_question)
+    monkeypatch.setattr(updates, "platform_key", lambda: updates.PLATFORM_MACOS_INTEL)
+    said: list[str] = []
+
+    main_window.MainWindow._check_for_updates(_window_for_updates(said, []))
+
+    assert said == []
+
+
+@pytest.mark.parametrize(
+    ("key", "found", "minimum", "name", "said_name"),
+    [
+        (updates.PLATFORM_MACOS_ARM, (14, 6, 1), "15.0", "macOS 15", "macOS 15"),
+        (
+            updates.PLATFORM_WINDOWS,
+            (10, 0, 17763),
+            "10.0.19045",
+            "Windows 10 22H2",
+            "Windows 10 22H2",
+        ),
+        (updates.PLATFORM_WINDOWS, (10, 0, 17763), "10.0.19045", "", "Windows 10.0.19045"),
+    ],
+)
+def test_a_version_this_system_cannot_install_is_named_not_offered(
+    monkeypatch: pytest.MonkeyPatch,
+    key: str,
+    found: tuple[int, ...],
+    minimum: str,
+    name: str,
+    said_name: str,
+) -> None:
+    """Nennt die Versionsdatei ein Mindestsystem, das hier fehlt, bietet das Fenster kein
+    Laden an — der Installer lehnte ab (Review M1) —, sagt aber auch beim Start, was fehlt:
+    mit dem Namen aus der Versionsdatei, keiner Build-Nummer; nur ohne ihn System und Zahl."""
+    from app.ui import main_window
+
+    monkeypatch.setattr(updates, "platform_key", lambda: key)
+    monkeypatch.setattr(updates, "system_version", lambda system="": found)
+    package = updates.Package(
+        file="x", url="https://solidon3d.de/x", minimum_system=minimum, minimum_system_name=name
+    )
+    said: list[str] = []
+    called: list[str] = []
+
+    main_window.MainWindow._update_answered(
+        _window_for_updates(said, called),
+        updates.Release(version="99.0.0", packages={key: package}),
+    )
+
+    assert said == [
+        f"Version 99.0.0 braucht {said_name} oder neuer. Nach einem Systemupdate "
+        "lässt sie sich installieren."
+    ]
+    assert called == [], "kein Fenster zum Laden"
+
+
+def test_a_system_that_reaches_the_minimum_gets_the_offer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Gegenprobe: Erreicht das System die Grenze, kommt das Fenster wie immer."""
+    from app.ui import main_window
+
+    monkeypatch.setattr(updates, "platform_key", lambda: updates.PLATFORM_MACOS_ARM)
+    monkeypatch.setattr(updates, "system_version", lambda system="": (15, 0))
+    package = updates.Package(file="x", url="https://solidon3d.de/x", minimum_system="15.0")
+    said: list[str] = []
+    called: list[str] = []
+
+    main_window.MainWindow._update_answered(
+        _window_for_updates(said, called),
+        updates.Release(version="99.0.0", packages={updates.PLATFORM_MACOS_ARM: package}),
+    )
+
+    assert called == ["show 99.0.0"]
+    assert said == ["Neue Version verfügbar: 99.0.0"]
+
+
+@pytest.mark.parametrize(
+    ("key", "asks"), [(updates.PLATFORM_MACOS_INTEL, False), (updates.PLATFORM_WINDOWS, True)]
+)
+def test_the_menu_entry_promises_a_question_only_where_one_goes_out(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, key: str, asks: bool
+) -> None:
+    """Auf dem Intel-Mac geht keine Anfrage hinaus; der Menüeintrag sagt dort in Kurzhilfe und
+    Statuszeile denselben Grund wie der Klick, statt „Fragt einmal bei solidon3d.de nach“
+    (Nachprüfung L-7). Gebaut wird das echte Fenster, gelesen der Eintrag im Menü."""
+    from PySide6.QtGui import QAction
+
+    from app.branding import APP_VERSION
+    from app.core import guides
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    monkeypatch.setattr(updates, "platform_key", lambda: key)
+    window = MainWindow(Session(), UiSettings())
+    try:
+        name = guides.menubar_name_of("Nach einer neuen Version sehen")
+        entries = [action for action in window.findChildren(QAction) if action.objectName() == name]
+        assert len(entries) == 1, name
+        hint = entries[0].statusTip()
+        assert ("solidon3d.de" in hint) is asks, hint
+        assert (
+            hint == f"Version {APP_VERSION} ist die letzte für Macs mit Intel-Prozessor. Neuere "
+            "Versionen gibt es auf dem Mac nur für Apple Silicon."
+        ) is not asks, hint
+    finally:
+        assert window.session.wait_for_idle(60_000)
+        window.wait_for_workers()
+        window.close()
+        window.deleteLater()
+        qt_app.processEvents()

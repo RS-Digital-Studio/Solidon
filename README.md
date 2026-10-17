@@ -45,7 +45,9 @@ es in ihrem Abschnitt „Preis und Lizenz".
 
 Die Pakete stehen auf der [Downloadseite](https://solidon3d.de/#download):
 für Windows eine Setup-Datei, für Linux ein AppImage und ein Flatpak, für den
-Mac je ein Paket für Apple Silicon und für Intel. Welche Version gerade
+Mac je ein Paket für Apple Silicon und für Intel. Auf Intel-Macs ist 0.6.1 die
+letzte Version und läuft als Demo bis zum 30. November 2026; die
+Verkaufsversion gibt es auf dem Mac nur für Apple Silicon. Welche Version gerade
 veröffentlicht ist, steht dort; was jede Version gebracht hat, in
 [changelog/de.md](changelog/de.md). Dieses Repository trägt dazu den
 Entwicklungsstand danach.

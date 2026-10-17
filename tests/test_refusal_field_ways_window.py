@@ -26,6 +26,7 @@ from app.ui.refusal_details import QUIET_WITHOUT_FIELD, field_ways, silent_ways
 from app.ui.style import apply_style
 from app.ui.theme import apply_theme
 from app.ui.wrapping_button import WrappingButton
+from tests.bundled_fonts import bundled_font
 from tests.plane_refusals import sketch_plane_refusal
 
 #: Ein Feldname, den kein Dialog führt.
@@ -156,35 +157,45 @@ def test_a_long_way_wraps_instead_of_widening_the_dialog(german: QApplication) -
     Der Ablauf des Funds: bei 11 Punkt geöffnet und gezogen, die Absage kommt,
     dann 18 Punkt. Der Weg führt hier ins Namensfeld, damit der Dialog ihn
     anbietet; die Beschriftung ist die lange aus dem Fund.
+
+    Gemessen mit der Prüfschrift, und ab 18 Punkt so weit größer, bis der Knopf in einer
+    Zeile nicht mehr passt: Mit DejaVu Sans passte er bei 18 Punkt noch (Linux-Läufer,
+    Fensterauswahl 39035816730), und die Voraussetzung hing an der Schrift der Plattform.
     """
-    font = QFont(german.font())
-    font.setPointSize(11)
-    german.setFont(font)
-    apply_style(german, "light")
-    dialog = OperationDialog(REGISTRY.get("rename_object"), {"body": "Körper"})
-    try:
-        dialog.show()
-        _settle(german)
-        dialog.resize(dialog.width(), dialog.height() + 20)
-        _settle(german)
-        chosen = dialog.width()
-        dialog.show_refusal(ValidationError("name", "Absage", suggestions=[PICK_PLANE]))
-        _settle(german)
-        font.setPointSize(18)
+    with bundled_font(german, 11) as font:
+        apply_style(german, "light")
+        dialog = OperationDialog(REGISTRY.get("rename_object"), {"body": "Körper"})
+        try:
+            _wrap_the_long_way(german, font, dialog)
+        finally:
+            dialog.close()
+            dialog.deleteLater()
+
+
+def _wrap_the_long_way(german: QApplication, font: QFont, dialog: OperationDialog) -> None:
+    """Der Ablauf von :func:`test_a_long_way_wraps_instead_of_widening_the_dialog`."""
+    dialog.show()
+    _settle(german)
+    dialog.resize(dialog.width(), dialog.height() + 20)
+    _settle(german)
+    chosen = dialog.width()
+    dialog.show_refusal(ValidationError("name", "Absage", suggestions=[PICK_PLANE]))
+    _settle(german)
+    for points in range(18, 41, 2):
+        font.setPointSize(points)
         german.setFont(font)
         apply_style(german, "light")
         _settle(german)
         (offered,) = _way_buttons(dialog)
         one_line = offered.sizeHint().width()
-        assert chosen < one_line, "Voraussetzung: einzeilig passt der Knopf nicht"
-        assert dialog.width() == chosen, "die Absage verbreitert den Dialog nicht"
-        assert offered.width() < one_line, "die Beschriftung bricht um"
-        assert offered.height() >= offered.heightForWidth(offered.width()), "jede Zeile steht da"
-        assert offered.height() > offered.sizeHint().height()
-        assert dialog._scroll.horizontalScrollBar().maximum() == 0
-    finally:
-        dialog.close()
-        dialog.deleteLater()
+        if chosen < one_line:
+            break
+    assert chosen < one_line, "Voraussetzung: einzeilig passt der Knopf nicht"
+    assert dialog.width() == chosen, "die Absage verbreitert den Dialog nicht"
+    assert offered.width() < one_line, "die Beschriftung bricht um"
+    assert offered.height() >= offered.heightForWidth(offered.width()), "jede Zeile steht da"
+    assert offered.height() > offered.sizeHint().height()
+    assert dialog._scroll.horizontalScrollBar().maximum() == 0
 
 
 def test_the_button_is_as_narrow_as_its_longest_word(german: QApplication) -> None:

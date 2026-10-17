@@ -18,9 +18,13 @@ dans `website/version.json`.
 
 ## 0.6.1
 
+- La version 0.6.1 est la dernière pour les Mac à processeur Intel et y fonctionne comme démo jusqu'au 30 novembre 2026. La version commerciale pour Mac n'existe que pour Apple Silicon.
+- À partir de la 0.6.2, Solidon nécessite macOS 15 sur Mac et Windows 10 22H2 ou 11 sous Windows. Solidon ne propose pas de mise à jour qui ne démarrerait pas sur un système plus ancien.
+
 ### Utilisation et système
 
 - Les cartes de mesures se déplacent et suivent les champs ouverts. Titres et cotes du plateau plus nets, barres et poignées plus sobres et grille visible en thème clair facilitent la vue du modèle.
+- Lorsqu'une boîte de dialogue s'agrandit après un changement de police, elle remonte s'il y a de la place au-dessus au lieu de faire défiler son contenu.
 - Correction d’un plantage possible lors du changement de caractéristique ou de projet, ou à l’ouverture d’une boîte de dialogue.
 - L'explication de «Poser sur le plateau» convient aussi aux corps situés sous le plateau.
 - Les listes d'actions sur les caractéristiques utilisent entièrement la langue choisie.

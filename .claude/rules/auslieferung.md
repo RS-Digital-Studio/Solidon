@@ -31,7 +31,7 @@ Grenzen.
   je Seite 100): Artefakte im Installerlauf, Jobs bei der Freigabe eines rot
   beendeten Hauptbaus. Geht die Zahl nicht auf oder ändert sie sich zwischen
   den Seiten, hält der Lauf fail-closed an.
-- Alle CI-Jobs haben einheitlich zwei Stunden, einschließlich Paketbau,
+- Alle CI-Jobs haben einheitlich zwei Stunden (`tests/test_packaging_timeouts.py`), einschließlich Paketbau,
   Signierfolge, Releaseaktenprüfung und Diagnose; ausdrücklich begrenzte
   Prüfschritte nutzen dieselbe Frist und verlängern die Jobfrist nicht. Die
   vollständige Windows-Fenstergruppe protokolliert die Testnamen, bei einem

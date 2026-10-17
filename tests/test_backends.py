@@ -2046,7 +2046,7 @@ def _answering_card(monkeypatch: pytest.MonkeyPatch, asked: list[list[str]]) -> 
         return subprocess.CompletedProcess([], 0, b"NVIDIA GeForce RTX 4080, 16376\r\n", b"")
 
     monkeypatch.setattr(machine, "run_limited", answer)
-    monkeypatch.setattr(machine, "_is_apple_silicon", lambda: False)
+    monkeypatch.setattr(machine, "is_apple_silicon", lambda: False)
     machine.detect.cache_clear()
 
 

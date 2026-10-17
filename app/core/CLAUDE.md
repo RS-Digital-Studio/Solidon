@@ -158,7 +158,9 @@ erzeugte Teilmenge) · `examples.py` · `tour.py` (Beispielprojekte und Touren).
 
 **Kundenkontakt — der Weg hinaus** — `updates.py` (fragen, holen, prüfen,
 einspielen; die Prüfung läuft auch beim Start, Laden und Einspielen nur auf
-Klick; **wie**, entscheidet `install_kind()`, nicht die Plattform).
+Klick; **wie**, entscheidet `install_kind()`, nicht die Plattform; auf dem
+Intel-Mac fragt nichts, `newer_versions_run_here`; ein Paket mit fehlendem
+Mindestsystem wird nicht angeboten, `Release.needs_newer_system`).
 Versionsabfrage und Paketholen teilen den Absender: Quellen und Paketproben
 mit `SOLIDON_UPDATE_TEST=1` senden `Solidon-Test/<version>` und werden von
 `website/api/count.php` nicht gezählt; gewöhnliche Installationen senden

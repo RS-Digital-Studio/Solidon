@@ -63,7 +63,7 @@ from app.branding import (
     WEBSITE_URL,
     website_page_url,
 )
-from app.core import activation, guides, licence_service, tools
+from app.core import activation, guides, licence_service, tools, updates
 from app.core.activation import certificate as activation_certificate
 from app.core.activation import store as activation_store
 from app.core.backends import keys, llm, machine, needs
@@ -1967,7 +1967,7 @@ class ActivationDialog(QDialog):
                 + tr(
                     "Für die Demo gibt es keinen Schlüssel: sie läuft vollständig und "
                     "ohne Eingabe. Danach lässt sie sich nicht mehr starten — die "
-                    "Vollversion und ihr Schlüssel kommen über die Website."
+                    "Verkaufsversion und ihr Schlüssel kommen über die Website."
                 ),
             )
         elif state.in_trial:
@@ -2570,7 +2570,23 @@ def expired_demo_text(state: activation.Activation, now: datetime | None = None)
     Uhr des Kunden wählt nur, welcher der beiden wahren Sätze dasteht.
     """
     moment = now or datetime.now(UTC)
-    if moment < PLANNED_SALE_START:
+    if not updates.newer_versions_run_here():
+        # Auf einem Intel-Mac gibt es keine 1.0 (``updates.newer_versions_run_here``): kein
+        # Datum, keine „aktuelle Version“, sondern wo die Projekte weiterleben.
+        lines = (
+            tr("Diese Demo war bis einschließlich {date} nutzbar.").format(
+                date=deadline_date(state)
+            ),
+            tr(
+                "Die Verkaufsversion von {app} gibt es auf dem Mac nur für Apple Silicon, nicht "
+                "für Macs mit Intel-Prozessor."
+            ).format(app=APP_NAME),
+            tr(
+                "Ihre gespeicherten Projekte bleiben erhalten. {app} 1.0 öffnet sie unter "
+                "Windows, Linux und auf einem Mac mit Apple Silicon."
+            ).format(app=APP_NAME),
+        )
+    elif moment < PLANNED_SALE_START:
         lines = (
             tr("Diese Demo war bis einschließlich {date} nutzbar.").format(
                 date=deadline_date(state)

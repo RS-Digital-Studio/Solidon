@@ -27,6 +27,7 @@ from app.ui.overlay import LEFT_MAX, LEFT_WIDTH
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from tests.bundled_fonts import bundled_font
+from tests.ui_helpers import wait_until
 
 
 @pytest.fixture
@@ -60,6 +61,10 @@ def test_a_crooked_measure_widens_the_left_card(qt_app: QApplication, window: Ma
 
     zone = window.overlay.side_zone("left")
     assert zone is not None
+    # Gesetzt wird über einen Nullzeitgeber (``OverlayHost._place_later``); zwanzig
+    # Ereignisrunden ohne Uhr reichten auf dem Linux-Läufer nicht (Fensterauswahl
+    # 39035816730).
+    wait_until(qt_app, lambda: zone.width() > LEFT_WIDTH)
     assert zone.width() > LEFT_WIDTH, f"die Karte bleibt bei {zone.width()} Punkten"
     header = tree.tree.header()
     needed = tree.tree.sizeHintForColumn(1)

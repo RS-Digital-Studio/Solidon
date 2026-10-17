@@ -62,6 +62,60 @@ def test_the_height_goes_back_with_the_font(
     apply_style(qt_app, "light")
 
 
+def test_at_the_bottom_edge_the_dialog_rises_only_as_far_as_it_grew(
+    qt_app: QApplication, request: pytest.FixtureRequest
+) -> None:
+    """Am unteren Rand rückt ein Dialog nach einem Schriftwechsel nur so weit hinauf, wie er
+    gewachsen ist (Nachprüfung L-2): Die Unterkante bleibt am Rand, und nichts rollt, wo
+    darüber Platz ist. Der erste Durchgang von ``fit`` setzte mehr Höhe, als der zweite
+    behielt, und den Dialog dafür höher — unter *Tasche ausschneiden* blieben 44 Punkte frei.
+    Am Anker gehalten, wie vorher, rollte er stattdessen (Fensterauswahl 39035816730).
+
+    Mit der Ersatzschrift ohne Bildschirm, nicht der Prüfschrift: Die Zusage ist eine Lage,
+    keine Schriftmetrik, und nur dort verlangt der erste Durchgang mehr (506 statt 466).
+    """
+    from PySide6.QtGui import QFont
+
+    from app.core.errors import ValidationError
+    from app.ui.style import NORMAL
+
+    load_operations()
+    original = QFont(qt_app.font())
+    font = QFont(original)
+    font.setPointSize(11)
+    qt_app.setFont(font)
+    try:
+        apply_theme(qt_app, "light")
+        apply_style(qt_app, "light")
+        dialog = OperationDialog(REGISTRY.get("sketch_pocket"), {"body": "Körper"})
+        close_after(request, dialog)
+        dialog.show()
+        _rounds(qt_app)
+        screen = dialog.screen()
+        assert screen is not None
+        room = screen.availableGeometry().adjusted(NORMAL, NORMAL, -NORMAL, -NORMAL)
+        frame = dialog.frameGeometry()
+        dialog.move(frame.left(), room.bottom() - frame.height() + 1)
+        _rounds(qt_app)
+        dialog.show_refusal(ValidationError("plane", "Absage"))
+        _rounds(qt_app)
+        top = dialog.frameGeometry().top()
+        assert dialog.frameGeometry().bottom() == room.bottom(), "Voraussetzung: am Rand"
+
+        font.setPointSize(18)
+        qt_app.setFont(font)
+        _rounds(qt_app, 80)
+
+        frame = dialog.frameGeometry()
+        assert frame.top() < top, "Voraussetzung: gewachsen und hinaufgerückt"
+        assert frame.height() <= room.height(), "Voraussetzung: passt auf den Bildschirm"
+        assert frame.bottom() == room.bottom(), (frame.top(), frame.bottom(), room.bottom())
+        assert dialog._scroll.verticalScrollBar().maximum() == 0, "rollt, obwohl Platz war"
+    finally:
+        qt_app.setFont(original)
+        apply_style(qt_app, "light")
+
+
 def test_a_height_the_customer_chose_stays(
     qt_app: QApplication, request: pytest.FixtureRequest
 ) -> None:

@@ -40,7 +40,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import discover, guides, tools
+from app.core import discover, guides, tools, updates
 from app.core.errors import CANCEL, RETRY, FileWriteError
 from app.core.knowledge import profiles
 from app.core.knowledge.standards import THREAD_FAMILIES
@@ -184,6 +184,8 @@ def searchable_options(settings: ui_settings.UiSettings) -> dict[str, str]:
     dort steht die 3D-Maus davor.
     """
     titles = option_titles()
+    if not updates.newer_versions_run_here():
+        titles.pop("updates")
     if not settings.spacemouse_seen:
         for key in SPACEMOUSE_OPTIONS:
             titles.pop(key)
@@ -664,6 +666,8 @@ class SettingsDialog(QDialog):
         form.addRow(titles["unit"], self.unit)
         form.addRow(titles["theme"], self.theme)
         form.addRow("", self.updates)
+        # Wo diese Version die letzte ist, fragt nichts nach — der Haken hätte keine Wirkung.
+        form.setRowVisible(self.updates, updates.newer_versions_run_here())
         # **Der Slicer gilt der Anwendung, nicht dem nächsten Projekt**: Er
         # rechnet jede Druckdatei, auch die des offenen Projekts. Er steht
         # zuletzt in dieser Gruppe und damit unmittelbar vor den Druckern, die
