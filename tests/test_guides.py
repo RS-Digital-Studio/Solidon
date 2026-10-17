@@ -924,6 +924,30 @@ def test_the_arrow_of_a_step_number_leaves_the_label_of_its_field_readable() -> 
     assert point.x() > frame.right(), point
 
 
+def test_a_long_arrow_from_the_margin_does_not_jump_over_a_narrow_heading() -> None:
+    """Der lange Pfeil aus dem Bildrand wird dicht geprüft, nicht an sechzehn Stellen.
+
+    Nachgestellt nach *Deckel erzeugen* (17.10.2026): Keine Stelle am Ziel ist
+    frei, und der Pfeil vom nahen rechten Rand liefe über eine schmale
+    Überschrift. Mit sechzehn Prüfpunkten sprang er über sie hinweg.
+    """
+    from PySide6.QtCore import QRectF
+
+    from tools.make_guides import BORDER, _badge_centre
+
+    bounds = QRectF(0, 0, 600 + 2 * BORDER, 400 + 2 * BORDER)
+    frame = QRectF(BORDER + 300, BORDER + 180, 80, 28)
+    above = QRectF(BORDER, BORDER, 600, 170)
+    below = QRectF(BORDER, BORDER + 220, 600, 180)
+    # Über und unter der Pfeilzeile, nah genug, um jede Stelle am Ziel zu sperren.
+    left = QRectF(200, 222, 120, 10)
+    right = QRectF(480, 252, 100, 10)
+    heading = QRectF(600, 232, 8, 20)
+    protected = [above, below, left, right, heading]
+    point = _badge_centre(frame, [], bounds, [], away=True, protected=protected)
+    assert point.x() < frame.left(), point
+
+
 def test_capture_protects_visible_dialog_text_and_item_views(qt_app):
     """Die Aufnahme übernimmt auch Text aus einem offenen Auswahldialog."""
     from PySide6.QtWidgets import QDialog, QLabel, QListWidget, QVBoxLayout, QWidget
