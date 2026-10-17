@@ -889,6 +889,7 @@ def main() -> int:
     # umstellt, reißt jeden Testlauf mit, der es nur lesen will.
     os.environ.pop("QT_QPA_PLATFORM", None)
 
+    from app.ui import cursors
     from app.ui.app import install_qt_translations
     from app.ui.theme import apply_theme
 
@@ -904,6 +905,9 @@ def main() -> int:
     # etwas anderes zeigt als die Anwendung, ist an der Stelle falsch, an der
     # man ihm am ehesten glaubt.
     apply_theme(app, "dark")
+    # Und der Mauszeiger: ``apply_theme`` erreicht nur Fenster, die es schon
+    # gibt; ohne den Wächter trugen Panels und Leisten den Systempfeil (wie ``app.py``).
+    cursors.install(app)
     qt_translator = None
     for language in chosen_languages(languages):
         install_catalog(language, read_catalog(language))

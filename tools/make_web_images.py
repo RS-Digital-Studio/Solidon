@@ -62,7 +62,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 from PySide6.QtCore import QEventLoop, QPoint, QRect, QTimer
-from PySide6.QtGui import QImage
+from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication
 
 from app import i18n
@@ -369,6 +369,37 @@ def grab(window: Any, rect: QRect | None = None) -> QImage:
             "Zeichenfaktor. Aufgenommen wird in nativen Bildpunkten (Faktor 1)."
         )
     return shot
+
+
+def shows_the_window(image: QImage, window: Any) -> bool:
+    """Ob die Menüzeile im Bild die ist, die Qt für dieses Fenster zeichnet.
+
+    Verglichen wird an einem Raster von 20 mal 20 Punkten. Kantenglättung und ein Farbstich
+    zählen nicht; liegt aber ein anderes Fenster darüber, weicht mehr als ein
+    Fünftel der Punkte deutlich ab. Die Bildanleitungen (``make_guides``) prüfen
+    damit jedes Bild nach dem Greifen.
+    """
+    bar = window.menuBar()
+    if bar is None or not bar.isVisible():
+        return True
+    drawn = bar.grab().toImage().convertToFormat(QImage.Format.Format_RGB32)
+    corner = bar.mapTo(window, QPoint(0, 0))
+    shown = image.copy(QRect(corner, drawn.size())).convertToFormat(QImage.Format.Format_RGB32)
+    if shown.size() != drawn.size() or drawn.width() < 20 or drawn.height() < 4:
+        return True
+    wrong = 0
+    for column in range(20):
+        for row in range(20):
+            x = (drawn.width() - 1) * column // 19
+            y = (drawn.height() - 1) * row // 19
+            expected, found = QColor(drawn.pixel(x, y)), QColor(shown.pixel(x, y))
+            apart = (
+                abs(expected.red() - found.red())
+                + abs(expected.green() - found.green())
+                + abs(expected.blue() - found.blue())
+            )
+            wrong += apart > 90
+    return wrong <= 80
 
 
 def dialog_bounds(window: Any, dialog_frame: QRect) -> QRect:
@@ -707,6 +738,7 @@ def _screens_child(language: str) -> int:
     from app.core import discover
     from app.core import tools as external_tools
     from app.core.registry import REGISTRY
+    from app.ui import cursors
     from app.ui.app import install_qt_translations
     from app.ui.catalog import PartCatalog
     from app.ui.main_window import MainWindow
@@ -721,6 +753,7 @@ def _screens_child(language: str) -> int:
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     apply_theme(app, "dark")
+    cursors.install(app)  # Zeiger auch für später entstehende Fenster, wie ``app.py``
     install_catalog(language, read_catalog(language))
     i18n.set_language(language)
     install_qt_translations(app, language)

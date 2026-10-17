@@ -593,8 +593,13 @@ GUIDES: Final[tuple[Guide, ...]] = (
         ),
         steps=(
             step(_("Klicken Sie auf dem Startbildschirm auf *Neues Projekt*."), "start.new"),
+            # **Rechts in der Karte, nicht im Menü:** Ohne Auswahl stehen die
+            # Erzeuger seit RM-735 unter *Auswahl*, und das Ziel zeigt zuerst
+            # auf ihren Knopf (``guide_targets.area_for``). Mit dem Menüweg im
+            # Satz rahmte das Bild den Knopf rechts, während links das Menü
+            # offen stand, und kein Zuschnitt fasste beides (Probe 16.10.2026).
             step(
-                _("Öffnen Sie oben *Erzeugen → Grundformen → Quader anlegen*."),
+                _("Rechts unter *Auswahl*: Klicken Sie auf *Quader anlegen*."),
                 "operation:create_brep_box",
             ),
             step(
