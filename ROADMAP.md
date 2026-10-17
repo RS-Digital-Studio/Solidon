@@ -183,7 +183,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-734 — Wer „boolesch“ tippt, findet die Booleschen Operationen nicht](#rm-734) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-735 — Zwei Suchen: Befehlspalette und Suchfeld der Karte](#rm-735) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-736 — Funktionsdurchgang: jede Funktion einmal über die Oberfläche benutzt, geprüft und abgehakt](#rm-736) | Bedienung und Darstellung | Konzept abgelegt; D0 (RM-737) zuerst, dann die Kundenpakete D1, D9, D8, D3, D4 (Phase 3), die übrigen in Phase 4 |
-| [RM-737 — Funktionsdurchgang D0: Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter](#rm-737) | Bedienung und Darstellung | D0 steht auf main; die offenen Funde der Funddatei über `welle5` beheben, Schlusslauf am echten Fenster, Nachurteilsrunde (≥ 90 % je Prüfpunkt gepoolt), dann abhaken — vor 0.6.1 |
+| [RM-737 — Funktionsdurchgang D0: Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter](#rm-737) | Bedienung und Darstellung | mit 0.6.1 abgehakt: Funde behoben, Schlusslauf am echten Fenster, jede Zeile von D4, D8, D10 geurteilt, ≥ 90 % je Prüfpunkt; offen nur der Rest von FD-34 (0.6.2) |
 | [RM-738 — Funktionsdurchgang D1: Datei und Projekt](#rm-738) | Bedienung und Darstellung | wartet auf D0; danach neue Schätzung an Robert |
 | [RM-739 — Funktionsdurchgang D2: Erzeugen](#rm-739) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-740 — Funktionsdurchgang D3: Verbinden und Abziehen, Transformation, Formgebung](#rm-740) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8 |
@@ -217,8 +217,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft](#rm-755) | Tests und Entwicklungswerkzeuge | Gefunden in SK: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` einzeln 1 von 2 rot; Ursache klären wie bei der Formsitzung (Zeitgeber beim Zustellen) |
 | [RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot](#rm-779) | Tests und Entwicklungswerkzeuge | Den Vorgänger finden, der Zustand hinterlässt, und ihn aufräumen |
 | [RM-719 — Ein Fenstertest wackelt mit vier Arbeitern](#rm-719) | Tests und Entwicklungswerkzeuge | Ursache des Wettlaufs finden |
-| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | Alle Pakete samt K in `welle5`, W1 bis W6 scharf; Bereichsnachweis bestanden (`14eab43a3`); offen das Tor, dann main — vor 0.6.1 |
-| [RM-813 — Codestruktur Schritt 1 und die offenen Punkte aus Schritt 0](#rm-813) | Tests und Entwicklungswerkzeuge | Phase 3 nach 0.6.1: Schritt 1 (`geom/prepare_ops.py`); CS-28, CS-29, CS-41 bis CS-44 und die Handfixe aus Paket M an ihrem Schritt |
+| [RM-813 — Codestruktur Schritt 1 und die offenen Punkte aus Schritt 0](#rm-813) | Tests und Entwicklungswerkzeuge | CS-28, CS-29 und CS-41 bis CS-46 in 0.6.2 (Robert 17.10.); danach Phase 3: Schritt 1 (`geom/prepare_ops.py`) und die Handfixe aus Paket M an ihrem Schritt |
 | [RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat](#rm-786) | Tests und Entwicklungswerkzeuge | Am Tag die Suite auslassen, wenn der main-Lauf zum Tag-Commit grün ist; Vertrag und Wächter nachziehen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -5835,9 +5834,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   stehen auf main. Der finale Lauf am echten Fenster (48 Fälle auf `2ec37b23b`) ist von zwei
   Prüfern geurteilt; Urteile und erzeugte Abhaklisten D4, D8, D10 sind versioniert, die Funde
   mit Stand und Nachweis in `.claude/.state/funktionsdurchgang-2026-10/funde.md`.
-  **Nächster Schritt:** die offenen Funde über `welle5` beheben (Phase 2, auch die leichten),
-  Schlusslauf der betroffenen Zeilen am echten Fenster über `tools/native_runs.py`, Nachurteilsrunde
-  mit zwei Prüfern nach den geschärften Kriterien, dann abhaken; alles vor 0.6.1.
+  Mit 0.6.1 (17.10.2026): Die Funde der Phase 2 sind über `welle5` behoben, der Schlusslauf
+  am echten Fenster (L4 und L5 an `d9f7a81f9`, versiegelt) ist der Laufordner der Urteile, und
+  die Nachurteile in fünf Runden geben jeder Zeile von D4, D8 und D10 ihr Urteil mit mindestens
+  90 % Übereinstimmung je Prüfpunkt (`report` ohne Abweisung, Abhaklisten neu).
+  **Nächster Schritt:** der Rest von FD-34 und die Funde aus RM-812 in 0.6.2.
   **Abnahme:** Wächter grün über dem Bestand; je Prüfpunkt eine Gegenprobe ohne Fenster, die
   rot wird; je eine Zeile der drei Arten der Funktionsliste (Operation, Fensterbefehl,
   Bedienfläche) am echten Fenster über Stufe A gefahren; Listen zu V1 und I3, Vergleichsbilder
@@ -6678,7 +6679,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 <a id="rm-722"></a>
 
-- [ ] **RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert.**
+- [x] **RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert.**
   Erster Schritt des Programms aus dem [Konzept
   Codestruktur](konzepte/konzept-codestruktur-2026-10.md) (4.1); das Programm beginnt nach der
   Veröffentlichung von 0.6.0 (Entscheidung Robert, 11.10.2026, Konzept 7), Schritt 0 direkt nach
@@ -6698,7 +6699,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Stand (welle5 `ec28714cf`):** Paket K hat CS-11 und CS-26 als erzeugten Schnitt behoben
   ([RM-728](ROADMAP-ARCHIV.md#rm-728)), W2 c) ist scharf, damit alle sechs Wächter; Review I
   über die Merge-Auflösungen urteilt „integrierbar“, seine Funde zu K sind nachgezogen.
-  **Nächster Schritt:** Bereichsnachweis und Tor auf `welle5`, mit D0 nach main.
+  **Stand (17.10.2026):** Bereichsnachweis bestanden (`14eab43a3`), Releasetor grün, mit D0 und
+  0.6.1 auf main. Abgeschlossen; Schritt 1 und die offenen CS-Funde stehen in RM-813.
   **Abnahme:** alle sechs Wächter grün über dem Bestand, je Wächter eine Gegenprobe rot; das
   Werkzeug verschiebt an der Attrappe mit Beweis; Review. Erst danach Schritt 1
   ([RM-813](#rm-813)).
