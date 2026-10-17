@@ -197,7 +197,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4 |
 | [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; Phase 4 |
 | [RM-790 — Ein nativer Abbruch nach Rückgängig bei gezeigter Maßgruppe, einmal gesehen](#rm-790) | Bedienung und Darstellung | 150 Zyklen unter Last ohne Wiederholung; beim nächsten Auftreten Stapel sichern und zuordnen |
-| [RM-812 — Funde des Funktionsdurchgangs nach 0.6.1](#rm-812) | Bedienung und Darstellung | nach dem Release von 0.6.1: FD-204 bis FD-211, FD-218 bis FD-226, FD-228 bis FD-230, FD-233, FD-234 und FD-236 der Funddatei beheben (Umfang eingefroren, Robert 16.10.) |
+| [RM-812 — Funde des Funktionsdurchgangs nach 0.6.1](#rm-812) | Bedienung und Darstellung | nach dem Release von 0.6.1: FD-204 bis FD-211, FD-218 bis FD-226, FD-228 bis FD-230, FD-233, FD-234 und FD-236 bis FD-239 der Funddatei beheben (Umfang eingefroren, Robert 16.10.) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -5956,15 +5956,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   erst nach dem Release von 0.6.1 behoben werden. Beleg, Ursache und Vorschlag stehen je Fund in
   der Funddatei `.claude/.state/funktionsdurchgang-2026-10/funde.md`, Abschnitt „Funde nach dem
   Einfrieren“. Mittel sind FD-233 (ein Druck ohne vorheriges Überfahren fasst den Körper statt
-  des Griffs) und FD-234 (die Sprachfälle der Pakete D1, D2, D7, D9, D11 und D12 erreichen am
-  echten Fenster 44 Flächen nicht; vor den Phase-3-Paketen beheben), alle übrigen leicht:
+  des Griffs), FD-234 (die Sprachfälle erreichen am echten Fenster nicht jede Fläche, 44 in D1,
+  D2, D7, D9, D11 und D12 und `orient_for_print` in D8; vor den Phase-3-Paketen beheben) und
+  FD-237 (*Spule anlegen* in *Neues Filament* ist grau, ohne zu sagen warum), alle übrigen leicht:
   FD-204 (Cura-Profile fehlen im Herstellerscan der Druckfeldgrenzen),
   FD-205 (ein geladenes Merkzeichen weitet die Eingabespanne des Felds),
   FD-206 (ein Hinweis beim Öffnen geht verloren, wenn die erste Auswertung abbricht),
   FD-207 (die Kommandozeile zeigt die Hinweise eines geöffneten Projekts nicht),
   FD-208 (der Rückzug wird nicht gegen den Extruder geprüft),
   FD-209 (die Kurzhilfe der Waisen-Sammelzeile nennt die Mitglieder zweimal),
-  FD-210 (*Filament anlegen* öffnet bei 16 pt mit Leerraum über den Knöpfen),
+  FD-210 (*Filament anlegen* öffnet mit Leerraum über den Knöpfen, bei 9 und 16 pt),
   FD-211 (das Schlüsselfeld in *Solidon freischalten* folgt keiner kleineren Schrift),
   FD-218 (Volumen und Mengen stehen in Befunden ohne Einheit),
   FD-219 (die Skizzenabsage nennt das Maß ohne Einheit),
@@ -5978,7 +5979,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   FD-228 (das Merkmalfenster sperrt „Gewinde ändern“ mit einer falschen Begründung),
   FD-229 (der Bausteinbau in einer Operation rechnet immer fein und ohne Abbruch),
   FD-230 (ein Speicherfehler der örtlichen Nachmessung endet als interner Fehler),
-  FD-236 (nach *Auf das Bett setzen* ragt der Körper oben aus dem Bild).
+  FD-236 (nach *Auf das Bett setzen* ragt der Körper oben aus dem Bild),
+  FD-238 (Flächen im Objektbaum stehen ohne Dreiergruppen),
+  FD-239 (der Prüfstand zeigt die Kurzhilfe am grauen Hauptknopf in zwei modalen Dialogen nicht).
   **Abnahme:** je Fund ein Test, der am Stand davor rot war, und der Stand „behoben `<commit>`“
   in der Funddatei; Kundenwirkung im Changelog der nächsten Version in sechs Sprachen.
 
