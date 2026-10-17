@@ -46,6 +46,7 @@ from app.ui.settings import UiSettings
 from app.ui.theme import THEMES, apply_theme
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+EXAMPLES = Path(__file__).resolve().parents[1] / "app" / "examples"
 
 #: Ab welchem Flächenanteil ein Element als „trägt Akzentfläche" gilt. Ein
 #: Rahmen von einem Punkt ist ein Akzent**strich** und keine Fläche; erst wer
@@ -386,6 +387,80 @@ def test_the_focus_starts_in_the_view(qt_app: QApplication) -> None:
         assert focused is window.viewport, (
             f"der Fokus steht bei {type(focused).__name__}"
             f"({focused.objectName() if focused is not None else ''}), nicht in der Ansicht"
+        )
+    finally:
+        next(windows, None)
+
+
+@pytest.mark.parametrize("way", ["new", "open"])
+def test_leaving_the_start_screen_puts_the_focus_in_the_view(
+    qt_app: QApplication, way: str
+) -> None:
+    """Nach *Neues Projekt* und nach dem Öffnen steht der Fokus in der Ansicht.
+
+    Der Ladeschleier verbirgt die Ansicht, solange er steht, und Qt reichte
+    ihren Fokus dabei an das nächste Glied der Tabulatorkette weiter: den
+    Griff der rechten Karte (``CardGrip``). Der behielt ihn nach dem Laden
+    und trug den Fokusrahmen in der Akzentfarbe wie eine zweite Markierung,
+    bis ein Klick ihn nahm — in den Bildern der Anleitungen von 0.6.1.
+    """
+    from app.ui.overlay import CardGrip
+
+    window = MainWindow(Session(), UiSettings())
+    window.show()
+    window.resize(1200, 900)
+    try:
+        qt_app.processEvents()
+        assert window.stack.currentWidget() is window.start_screen
+        # Wie nach einem Klick: Der Knopf des Startbildschirms hat den Fokus.
+        button = window.start_screen.new_button
+        button.setFocus(Qt.FocusReason.MouseFocusReason)
+        qt_app.processEvents()
+        if way == "new":
+            assert window.start_empty()
+        else:
+            window.open_path(EXAMPLES / "dose-mit-deckel.p3d")
+            assert window.session.wait_for_idle(60_000)
+        qt_app.processEvents()
+        focused = window.focusWidget()
+        assert not isinstance(focused, CardGrip), (
+            f"der Fokus steht am Griff {focused.key!r}, der einen Rahmen in der Akzentfarbe malt"
+        )
+        assert focused is window.viewport, (
+            f"der Fokus steht bei {type(focused).__name__}"
+            f"({focused.objectName() if focused is not None else ''}), nicht in der Ansicht"
+        )
+    finally:
+        window.close()
+        window.deleteLater()
+        qt_app.processEvents()
+
+
+def test_a_focus_chosen_during_the_veil_stays_where_it_was_put(qt_app: QApplication) -> None:
+    """Wer während des Ladens selbst woanders hinklickt, behält seine Wahl.
+
+    Der Schleier gibt den Fokus nur zurück, solange er noch dort steht, wohin
+    Qt ihn beim Verbergen der Ansicht reichte — sonst nähme das Ende des
+    Ladens dem Kunden das Feld, in dem er gerade tippt.
+    """
+    from tests.ui_helpers import shown_window, with_a_body
+
+    windows = shown_window(qt_app)
+    window = next(windows)
+    try:
+        # Mit einem Körper steht der Objektbaum offen und kann den Fokus nehmen.
+        with_a_body(window)
+        qt_app.processEvents()
+        window.viewport.setFocus(Qt.FocusReason.OtherFocusReason)
+        qt_app.processEvents()
+        assert window.focusWidget() is window.viewport
+        window._on_veil_appeared()
+        chosen = window.object_tree.tree
+        chosen.setFocus(Qt.FocusReason.MouseFocusReason)
+        window._on_veil_ended()
+        qt_app.processEvents()
+        assert window.focusWidget() is chosen, (
+            f"das Ende des Schleiers nahm den Fokus nach {type(window.focusWidget()).__name__}"
         )
     finally:
         next(windows, None)
