@@ -2490,12 +2490,12 @@ Auskunft.
 - Wirkung beim Kunden: Der Dialog zeigte einen anderen Wert als den, der gedruckt wird.
 - Stand: behoben `b736da48f`, `8b7a1b3aa`; `test_vendor_field_values.py` am Stand davor rot, danach steht jedes Herstellerextrem aus 46 225 Profilen ungekürzt im Feld, sechs Merkzeichen sind benannt; die Düse geht bis 10 mm in Druckdialog und Ersteinrichtung.
 
-## Funde nach dem Einfrieren (ab FD-204, nach 0.6.1, RM-812)
+## Funde nach dem Einfrieren (ab FD-204, für 0.6.2, RM-812)
 
 Robert, 16.10.2026, 15:50: Fertig gemacht wird, was bis FD-203 beauftragt ist;
-neue Funde werden eingetragen und nach dem Release von 0.6.1 abgearbeitet
+neue Funde werden eingetragen
 (`output/konsolidierung-2026-10-12/AUFTRAG-1016-claude.md`, „Umfang
-eingefroren“). Ihr Registerpunkt ist RM-812.
+eingefroren“) und in 0.6.2 behoben (Robert, 17.10.2026). Ihr Registerpunkt ist RM-812.
 
 ### FD-204 Cura-Profile fehlen im Herstellerscan der Druckfeldgrenzen
 
@@ -2819,6 +2819,671 @@ eingefroren“). Ihr Registerpunkt ist RM-812.
 - Ursache: offen; das Tor nimmt das Vorher-Bild vermutlich auf, bevor die feine Vorschau steht.
 - Vorschlag: Vor dem Vorher-Bild auf Ruhe der Vorschau warten wie vor dem Klick; Test mit verzögerter Vorschau.
 - Wirkung beim Kunden: Kein Produktfehler; die Vorhersage stützt sich an diesen Toren auf eine Vorschau, die noch nicht fertig ist.
+- Stand: offen RM-812
+
+Die folgenden Funde (FD-241 bis FD-295) kommen aus den Nachurteilen am Schlusslauf
+(`output/konsolidierung-2026-10-12/nachurteil-pruefer1a-claude.md`, `nachurteil-pruefer1b-claude.md`,
+`nachurteil-pruefer2-claude.md`); Lauf L4 ist `F:\tmp-suche\schlusslauf-d9f7a81f\L4-d0`, Lauf L5
+`F:\tmp-suche\schlusslauf-d9f7a81f\L5-v4`, beide an `d9f7a81f9`. SHA256 der Bilder gekürzt auf zwölf Stellen.
+
+### FD-241 Nach einer Auswahl bleibt die rechte Karte auf dem Reiter *Prüfbericht*
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `command:edit.auto_split`, `rename_object`, `label_text`, `paint_slot`
+- Prüfpunkt: Z3
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-rename_object-03af2449.png` (SHA256 `c9668daa9d8f`) und `cases/052/flaeche-de-command_edit.auto_split-6f848760.png` (`b31838e51c0d`), Fall 034 `cases/034/flaeche-de-label_text-cf59aeca.png` (`41d8108aa3d4`) und `cases/034/flaeche-de-paint_slot-9865a109.png` (`227d3a68b7c2`): Nach der Wahl des Körpers oder der Oberseite zählt Stufe A einen Wegklick `why: reiter` auf *Auswahl*, weil die Karte auf *Prüfbericht* stehen bleibt (`034/surfaces/label_text-cf59aeca.json#steps`, `paint_slot-9865a109.json#steps`); bei `inlay_text` aus demselben Ausgangszustand nicht. Prüfer 1a Punkt 1, Prüfer 1b Punkt 5.
+- Ursache: offen; fest steht, dass der Reiter nach einer Auswahl je nach Handlung wechselt oder nicht.
+- Vorschlag: Bei einer neuen Auswahl im Bild oder im Objektbaum die Seite *Auswahl* nach vorn holen, außer der Kunde hat den Bericht gerade selbst gewählt; Test mit der Wahl einer Fläche bei offenem Bericht.
+- Wirkung beim Kunden: Wer einen Körper oder eine Fläche anklickt, sieht weiter den Bericht und muss die Handlungen erst über den Reiter holen.
+- Stand: offen RM-812
+
+### FD-242 Die Seite *Auswahl* rollt bei gewähltem Körper schon bei 2560 × 1369
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `command:edit.auto_split`, `split_bodies`, `split_line`, `assign_slot`
+- Prüfpunkt: Z3, Z6, 19
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-command_edit.auto_split-6f848760.png` (`b31838e51c0d`): senkrechte Rollleiste rechts an der Karte, *Automatisch teilen …* erst nach Rollen ganz unten unter *Vorbereiten*; `cases/052/flaeche-de-split_bodies-e45b38ac.png` (`0a7644e14661`) und `cases/052/flaeche-de-split_line-53a3b02d.png` (`34e8aee5304b`): die Karte ans Ende gerollt, die Handlung als letzte unter *Vorbereiten*; Fall 034 `cases/034/flaeche-de-filament.picker-0afd58ad.png` (`798d03aec872`): Rollleiste vorn, die Liste läuft unter *Transformation* weiter (`034/surfaces/assign_slot-bd965763.json#scrollbars`, vertical true). Stufe A: Z6 „Rollleiste vorn in `_SelectionPage` bei 2560 × 1369“ in sechs Sprachen, Z3 Wegklicks `rollen`. Schwere: Prüfer 1a mittel (Umweg), Prüfer 1b leicht (Gestaltung); mittel, weil die Handlungen nur nach Rollen erreichbar sind. Prüfer 1a Punkt 1, Prüfer 1b Punkt 6.
+- Ursache: offen; bei gewähltem Körper trägt die Seite mehr Gruppen, als die Karte bei 2560 × 1369 fasst, und *Vorbereiten* steht unten.
+- Vorschlag: Bei gewähltem Körper selten gebrauchte Gruppen zugeklappt beginnen oder die Handlungen der Druckvorbereitung nach oben holen; Test, dass *Vorbereiten* bei gewähltem Körper ohne Rollen erreichbar ist.
+- Wirkung beim Kunden: Teilen, Aufteilen und Filament zuweisen liegen bei gewähltem Körper unter dem Kartenrand; der Kunde muss wissen, dass er rollen muss.
+- Stand: offen RM-812
+
+### FD-243 Über dem ersten Feld der Seite *Auswahl* stehen bei gewähltem Körper 34 bis 36 Wörter
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `command:edit.auto_split`, `delete_object`, `filament.picker`, `filament.section`
+- Prüfpunkt: E5
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-delete_object-df54ecae.png` (`cff8c3864085`), Fall 034 `cases/034/flaeche-de-filament.section-c33fb9a9.png` (`44f530bdd1e4`): Stufe A E5 34 Wörter (de) über dem ersten Feld an `command:edit.auto_split` und `delete_object`, übersetzt 37–42, an `filament.picker` und `filament.section` 36, übersetzt 37–43, erlaubt 25 und 35. Über dem Feld stehen „Kein Merkmal gewählt. Klicken Sie eine Fläche, eine Kante oder eine Bohrung an — im Objektbaum oder im Bild.“, der Name, vier Hauptaktionen und der Satz der Zuweisung. Prüfer 1a Punkt 2, Prüfer 1b Punkt 7.
+- Ursache: Der Hinweis zur Merkmalswahl steht auch bei gewähltem Körper vorn.
+- Vorschlag: Den Hinweis bei gewähltem Körper kürzen oder unter das Suchfeld beziehungsweise unter die Klappe setzen; Wörter je Sprache mit dem Zähler von E5 prüfen.
+- Wirkung beim Kunden: Bevor er Handlung oder Feld erreicht, liest der Kunde einen Satz, der ihm an dieser Stelle nichts sagt.
+- Stand: offen RM-812
+
+### FD-244 Im Druckeinstellungsdialog stehen *Platte*, *Qualität* und ein unbeschriftetes Feld ohne eigenen Satz
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `finding.action:choose_printer`, `finding.action:open_print_settings`
+- Prüfpunkt: 8, V3
+- Beleg: L4, Fall 052 `cases/052/flaeche-geoeffnet-de-finding.action_choose_printer-2c1a8d33-dialog.png` (`c31ce8336687`) und `cases/052/flaeche-geoeffnet-de-finding.action_open_print_settings-970cbb07-dialog.png` (`7e057585d2b3`): Stufe A V3 84 von 87 Feldern mit eigenem Satz; ohne Kurzhilfe und zugängliche Beschreibung sind *Platte*, *Qualität* und ein Feld ohne Beschriftung, in sechs Sprachen. Prüfer 1a Punkt 3. Zwilling von FD-78, der die nachgelagerten Druckdialoge ausdrücklich nicht abdeckte.
+- Ursache: offen; dieselbe Bauart wie FD-78, im Druckeinstellungsdialog.
+- Vorschlag: Je Feld der Wirkungssatz als Kurzhilfe und `accessibleDescription` wie bei *Düse Ø*, das Feld ohne Beschriftung bekommt einen Namen; Wächter über alle Felder des Dialogs.
+- Wirkung beim Kunden: Was *Platte* und *Qualität* bewirken, liest der Kunde weder beim Überfahren noch mit einem Bildschirmleser.
+- Stand: offen RM-812
+
+### FD-245 Im Generierungsdialog hat *Startwert* keinen eigenen Satz
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `finding.action:generate_again`
+- Prüfpunkt: 8, V3
+- Beleg: L4, Fall 052 `cases/052/flaeche-geoeffnet-de-finding.action_generate_again-c04c15ad-dialog.png` (`ac778b2c4a94`): Stufe A V3 1 von 2 Feldern; *Startwert* ohne Beschreibung, die Gruppe „Startwert und Modell“ ohne Satz, in sechs Sprachen. Prüfer 1a Punkt 4. Zwilling von FD-78 (dort *Beschreibung* im Generator).
+- Ursache: offen; FD-78 band den Satz nur an *Beschreibung*.
+- Vorschlag: Ein Satz an *Startwert*, was er bewirkt (gleiche Zahl, gleiches Ergebnis), als Kurzhilfe und Beschreibung; Test über alle Felder des Generators.
+- Wirkung beim Kunden: Wer *Neu erzeugen* öffnet, weiß nicht, wozu der Startwert dasteht und ob er ihn ändern soll.
+- Stand: offen RM-812
+
+### FD-246 Die Sprachflächen fr und it der Analyseleiste zeigen eine fremde Lage
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `tool:analysis`
+- Prüfpunkt: 8, 9, V1, V3
+- Beleg: L4, Fälle 055 und 056 `cases/055/flaeche-fr-tool_analysis-1fea5198.png` (`bc33bf79b0a0`), `cases/056/flaeche-it-tool_analysis-1fea5198.png` (`91da6319b213`): statt der Analyseleiste der in vier Stücke geteilte Quader („2–4 Diviser et goupiller“, „Dividi e metti le spine“), die Explosionsleiste offen, der Bericht mit Warnung; `055/056/surfaces/tool_analysis-1fea5198.json#texts,fields` führen 10 Texte und 21 Felder der fremden Leisten, de, en, es und pt nur die Analyseleiste. V1, V3 sowie Prüfpunkt 8 und 9 sind in fr und it an der falschen Fläche gemessen. Prüfer 1a Punkt 6, Prüfer 2 NP-19. Zwilling von FD-40 und FD-132.
+- Ursache: offen; der Zustand einer früheren Fläche desselben Falls blieb stehen, obwohl jede Sprachfläche seit FD-132 im Ausgangszustand eines frischen Starts beginnen soll.
+- Vorschlag: Vor jeder Sprachfläche Startszene und offenes Werkzeug zurücksetzen und am Protokoll prüfen, dass die aufgenommene Fläche ihr Ziel trägt; eine Fläche ohne Zielelement endet rot.
+- Wirkung beim Kunden: Kein Produktfehler; die Sprachprüfung der Analyseleiste fehlt in zwei Sprachen, und fremde Texte zählen dort als ihre.
+- Stand: offen RM-812
+
+### FD-247 Analyseleiste und Werkzeugleiste halten Qts Abstand 6
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `tool:analysis`, `tool:layers`
+- Prüfpunkt: G2
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-tool_analysis-1fea5198.png` (`1c6f1d581dec`) und `cases/052/flaeche-de-tool_layers-04ae8d9d.png` (`511f8d57b33a`): Stufe A G2 meldet Abstand 6 in `AnalysisBar` und `ToolStrip`. Prüfer 1a Punkt 10. Zwilling von FD-15, FD-23 und FD-103.
+- Ursache: am Befund naheliegend: Die Layouts beider Leisten setzen keinen Abstand und behalten Qts Vorgabe 6.
+- Vorschlag: Den Abstand aus dem Raster setzen; der G2-Wächter in `test_style.py` liest auch die Leisten unter der Ansicht.
+- Wirkung beim Kunden: Die Leisten unter der Ansicht wirken minimal unruhiger als Karten und Dialoge.
+- Stand: offen RM-812
+
+### FD-248 „An den Slicer übergeben …“ steht im leeren Prüfbericht halbfett in 9 pt außerhalb der Stufen
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `report`
+- Prüfpunkt: G4
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-report-845e9183.png` (`625591c99d71`): Stufe A G4 in sechs Sprachen; im Bild steht der Knopf halbfett neben dem gewöhnlichen *Exportieren …*. Prüfer 1a Punkt 11.
+- Ursache: offen; ob der Knopf als Hauptaktion halbfett sein darf (FD-65) und nur die Größe aus den Stufen fällt, ist nicht belegt.
+- Vorschlag: Die Schrift des Knopfs aus den Stufen (`LEVELS`), halbfett nur als erkannte Primärrolle; Messung am leeren Bericht.
+- Wirkung beim Kunden: Im leeren Bericht steht ein Knopf in einer Schrift, die sonst nirgends vorkommt.
+- Stand: offen RM-812
+
+### FD-249 Der Fehlfall von *Auf das Bett setzen* öffnet *Kanten verfeinern*, statt eine Rechnung anzustoßen
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `finding.action:place_on_bed`
+- Prüfpunkt: 7
+- Beleg: L4, Fall 002 `cases/002/02-flaeche.png` (`674ee48c3829`), kein `04-fehlfall.png`: Der Fehlfall soll den Knopf während einer Rechnung über 2 s grau mit Sperrgrund zeigen; der Doppelklick auf den Verlaufsschritt *Kanten verfeinern* öffnete dessen Dialog, der die Klappe des Befunds verdeckt, ein Sperrgrund wurde nicht aufgenommen (Stufe A „nicht gelaufen“). Prüfer 1a Punkt 12 (Nebenbefund) und Urteil zu Prüfpunkt 7, Prüfer 2 Urteile zu Prüfpunkt 2 und 7. Schwere: kein Prüfer bewertet ihn eigens; leicht, weil er eine Zelle ungemessen lässt.
+- Ursache: Der Fehlfall stößt die lange Rechnung über einen Doppelklick im Verlauf an, und der Doppelklick öffnet den Schritt (Bauplan §2.1).
+- Vorschlag: Die lange Rechnung im Fehlfall ohne offenen Dialog herstellen und am Bild prüfen, dass der graue Knopf mit Sperrgrund zu sehen ist.
+- Wirkung beim Kunden: Kein Produktfehler; der Sperrgrund an *Auf das Bett setzen* während einer Rechnung (FD-30, FD-149) ist am Lauf nicht belegt.
+- Stand: offen RM-812
+
+### FD-250 Die erste Rückmeldung von *Auf das Bett setzen* kommt nach 0,35 s
+
+- Art: Leistung
+- Schwere: leicht
+- Funktion: `finding.action:place_on_bed`
+- Prüfpunkt: 6
+- Beleg: L4, Fall 002 `cases/002/03-uebernommen.png` (`9f3a2fa36a97`), `002/function.json#timing`: Zeiger oder Statuszeile nach 0,35 s (fällig ab 0,2 s), größte Lücke im Hauptfaden 94 ms, gesamt 0,40 s; unter der Last des Schlusslaufs gemessen. Prüfer 1a Punkt 13; Prüfer 2 hält dieselbe Zelle als Verdacht offen.
+- Ursache: offen; nicht im Wechsel bestätigt.
+- Vorschlag: Mit `window_bench.py` im Wechsel alt/neu nachmessen; bestätigt es sich, die Statuszeile vor der Auswertung setzen.
+- Wirkung beim Kunden: Nach dem Klick sieht der Kunde eine Drittelsekunde lang nichts.
+- Stand: offen RM-812
+
+### FD-251 Der Schlusslauf liefert Zoll- und Dunkelbilder nicht für jede Zeile, die Prüfpunkt 9 verlangt
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `command:edit.auto_split`, `create_seal`, `finding.action:calibrate_material`, `finding.action:mesh_and_retry`, `finding.action:open_print_settings`, `hollow_object`, `report`, `report.action`, `split_line`, `tool:analysis`, `tool:layers`, `Bearbeiten/Material kalibrieren …`, `filament.picker`, `paint_slot`, `countersink_hole`
+- Prüfpunkt: 9
+- Beleg: L4: Zollbilder gibt es nur für die Funktionsfälle 004 (`resize_hole`), 005 (`place_on_bed`) und 006 (*Parameter anlegen*), dunkle Bilder in D8 nur Fall 020 (Karte), kein dunkles Dialog- und Leistenbild in D8; die Sprachflächenzeilen mit Längen haben kein Zollbild. Prüfpunkt 9 bleibt deshalb an den fünfzehn genannten Zeilen offen (Urteile aller drei Prüfer); FD-176 ist nativ nur in L2 an `c5666931d` belegt (Fall 026), nicht in L4. Schwere: Prüfer 1a und 1b leicht, Prüfer 2 mittel; mittel, weil der Mangel Prüfpunkt 9 an fünfzehn Zeilen in D4, D8 und D10 offen hält. Prüfer 1a Punkt 14, Prüfer 1b Punkt 8, Prüfer 2 NP-3.
+- Ursache: Die Varianten Zoll und dunkel laufen nur an wenigen Funktionsfällen, nicht an den Sprachflächen.
+- Vorschlag: Je Zeile mit Längen eine Zollvariante, je Dialogart (Dialog, Leiste, Karte) und Paket ein dunkles Bild; Wächter in der Fallplanung, dass jede Zeile mit Längen ein Zollbild bekommt.
+- Wirkung beim Kunden: Kein Produktfehler belegt; ob Längen in Zoll und Texte im dunklen Thema an diesen Zeilen stimmen, ist am Lauf nicht gezeigt.
+- Stand: offen RM-812
+
+### FD-252 Das Nachher-Bild am Vorhersagetor entsteht vor dem Ende der Rechnung
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:decimate_and_retry`, `finding.action:release_protection`, `finding.action:split_model`, `finding.action:use_reachable`, `finding.action:recognize_fully`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028: `cases/028/v4-nachher-de-finding.action_decimate_and_retry-b26f29a8.png` (`4fe0da57091b`, „Wird neu berechnet …“, „Kanten verfeinern · 67 %“), `cases/028/v4-nachher-de-finding.action_release_protection-34d13d85.png` (`d91b4b75290c`, „Ausrichtung suchen · 16 %“), `cases/028/v4-nachher-de-finding.action_split_model-d08d0a7a.png` (`f8e246f4724e`, „16 %“), `cases/028/v4-nachher-de-finding.action_use_reachable-2bfea7f0.png` (`0397123d3791`, „Kanten verfeinern · 50 %“), `cases/028/v4-nachher-de-finding.action_recognize_fully-eaf62b33-dialog.png` (`aa6bcf1c06ba`, „Merkmale erkennen · 0 %“); V4 ist dort nicht urteilbar. Prüfer 1a Punkt B1, Prüfer 2 NP-28. Zwilling von FD-240 (Vorher-Bild).
+- Ursache: offen; naheliegend wartet das Tor nach dem Klick eine feste Frist (im Protokoll „keine Wirkung binnen 2 s“), nicht bis die Auswertung ruht.
+- Vorschlag: Nach dem Klick bis zum Leerlauf der Auswertung warten (wie `wait_for_idle`), mit Obergrenze; Test mit verzögerter Auswertung.
+- Wirkung beim Kunden: Kein Produktfehler belegt; an fünf Toren ist die Wirkung der Handlung nicht im Bild.
+- Stand: offen RM-812
+
+### FD-253 Das Vorhersagetor nennt den Knopf nicht, den es klickt
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:change_step`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_change_step-b0dccb5d-dialog.png` (`b53be4ec509f`): geklickt wurde „Andere Kanten wählen“ (`028/surfaces/finding.action_change_step-b0dccb5d.json#steps`), die gebundene Vorhersage beschreibt „Eingabe korrigieren“; beide Knöpfe stehen am selben Befund untereinander, `028/v4/finding.action_change_step-b0dccb5d/ready.json` trägt keinen Knopftext. Schwere: Prüfer 1a leicht, Prüfer 2 mittel; mittel, weil jede Zeile mit zwei Knöpfen am selben Befund so für den Nachbarknopf vorhergesagt werden kann. Prüfer 1a Punkt B2, Prüfer 2 NP-26.
+- Ursache: `ready.json` nennt das Ziel nur als Kennung (`finding.action:change_step`), nicht mit sichtbarem Text und Rechteck des Knopfs.
+- Vorschlag: `ready.json` trägt Text und Rechteck des Zielknopfs, das Vorher-Bild markiert ihn; Test mit zwei Knöpfen an einem Befund.
+- Wirkung beim Kunden: Kein Produktfehler; V4 beurteilt an dieser Zeile eine Vorhersage für den Nachbarknopf.
+- Stand: offen RM-812
+
+### FD-254 *Andere Objekte wählen* öffnet weder den Schritt noch eine Wahl
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:change_selection`
+- Prüfpunkt: V4, V5
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_change_selection-9fd7dccb.png` (`ca951a53fb35`, selbst angesehen): Nach dem Klick am Befund „Dieses Objekt trägt keine Farbinformation.“ steht im Verlauf unter „2 Textur in Filamente umrechnen“ eine Zeile „Textur in Filamente umrechnen“ ohne Nummer, der Dateiname „ohne_farbe.netz“ trägt „*“; Warnung, Auswahl und Quader bleiben, weder Schritt noch Objektwahl öffnen sich, und kein Satz sagt, was zu wählen ist. Prüfer 1a Punkt B3, Prüfer 2 NP-25.
+- Ursache: offen; naheliegend nach FD-165: Der Handler gibt dem Schritt die im Baum markierten Körper, hier denselben Quader, und das ergibt einen Verlaufseintrag ohne Wirkung.
+- Vorschlag: Die Handlung öffnet die Objektwahl des Schritts oder sagt, welche Objekte zu wählen sind, und legt ohne neue Wahl keinen Eintrag an; Test an der Szene des Falls mit der Wirkung im Verlauf.
+- Wirkung beim Kunden: Der Kunde folgt dem angebotenen Weg und sieht nichts geschehen, bekommt aber einen Verlaufseintrag und ein ungespeichertes Projekt.
+- Stand: offen RM-812
+
+### FD-255 *Eingabe korrigieren* setzt den Fokus ins Feld, markiert den Wert aber nicht
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `finding.action:correct_input`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_correct_input-9a5b98d1-dialog.png` (`c2cdc321cf4b`): Fokus im Radiusfeld, die Schreibmarke steht vor „40,00 mm“, der Wert ist nicht markiert. Prüfer 1a Punkt B4.
+- Ursache: offen; der Sprung ins Feld aus FD-95 setzt den Fokus, markiert aber nicht.
+- Vorschlag: Beim Sprung ins Feld den Wert markieren wie beim ersten Fokus von *Objekt umbenennen* (FD-114); Test am markierten Text.
+- Wirkung beim Kunden: Wer den Wert ersetzen will, tippt ihn vor die alte Zahl.
+- Stand: offen RM-812
+
+### FD-256 Befundhandlungen, die erst einen Dialog öffnen, kündigen eine Sofortwirkung an
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `finding.action:give_thickness`, `finding.action:resize_the_widening`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_give_thickness-0921d5a7-dialog.png` (`9b2e4e368f8b`): Satz „Macht aus der Fläche eine Wand …“, der Klick öffnet *Offene Fläche schließen*; `cases/028/v4-nachher-de-finding.action_resize_the_widening-4632a298-dialog.png` (`be21db2519b6`): „Ändert die Senkung im selben Verhältnis …“, der Klick öffnet den Merkmalsdialog mit 11,30 mm; beide gebundenen Vorhersagen erwarteten die Sofortwirkung. Keine dieser Handlungen trägt „…“, ebenso *Dreiecke verringern*, *Material kalibrieren*, *Als 3MF speichern* und *Anderes Druckerprofil wählen*, während das Menü „…“ schreibt. Prüfer 1a Punkt B5, Prüfer 2 NP-29. Der andere Name im Dialog ist FD-112, dort über den ersten Satz behoben.
+- Ursache: offen; Knopftext und Wirkungssatz der Befundhandlungen sagen nicht, dass ein Dialog folgt.
+- Vorschlag: „…“ an jede Befundhandlung, die erst einen Dialog öffnet, wie im Menü, und der Wirkungssatz nennt den Dialog; Wächter über die Befundhandlungen (`panels.FINDING_ACTIONS`).
+- Wirkung beim Kunden: Der Kunde erwartet die Lösung mit dem Klick und steht vor einem Dialog.
+- Stand: offen RM-812
+
+### FD-257 *Zusätzliche Programme …* führt OpenCASCADE nicht, das der Befund verlangt
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:install`
+- Prüfpunkt: V4, V5
+- Beleg: L5, Fall 040 `cases/040/v4-nachher-de-finding.action_install-e8be80b0-dialog.png` (`e66aaf34c460`): Der Befund sagt „Fasen, Verrundungen und STEP brauchen das Zusatzpaket OpenCASCADE …“, das Fenster („Keines davon ist Pflicht …“) listet nur Slicer, Ollama und ComfyUI. Prüfer 1a Punkt B6, Prüfer 2 NP-30.
+- Ursache: offen; das Fenster der zusätzlichen Programme führt den exakten Kern nicht.
+- Vorschlag: OpenCASCADE im Fenster mit Zustand und Weg zur Einrichtung führen oder die Handlung auf den Weg stellen, der den Kern einrichtet; Test, dass die Handlung des Befunds dorthin führt.
+- Wirkung beim Kunden: Der Kunde folgt der Handlung und findet das verlangte Paket nicht; Fase, Verrundung und STEP bleiben gesperrt.
+- Stand: offen RM-812
+
+### FD-258 *Flächenbearbeitung beenden und erneut versuchen* rundet die Innenkante nicht und hinterlässt einen Splitter
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:mesh_and_retry`
+- Prüfpunkt: V4, V5
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_mesh_and_retry-889d8f0d.png` (`aa14da702c36`): eingefügt ist „4 Flächenbearbeitung beenden“ vor „5 Verrunden“, die Innenkante an der Stufe bleibt unverrundet mit Zacke, der Bericht sagt weiter „Einige Kanten dieser Auswahl sind nicht verrundet …“ und neu „Die dünnste Stelle ist schmaler als eine Bahn … Breite: 0,03 mm“. Prüfer 1a Punkt B7, Prüfer 2 NP-31.
+- Ursache: offen; ob die Netzrundung an der Innenkante den Splitter erzeugt, ist nicht eingegrenzt.
+- Vorschlag: Den Fall als Geometrietest fahren und eingrenzen; der Befund bietet die Handlung nur an, wenn sie die Kante rundet.
+- Wirkung beim Kunden: Die angebotene Lösung löst den Befund nicht und legt eine neue dünne Stelle an; der Bericht warnt davor.
+- Stand: offen RM-812
+
+### FD-259 *In Flächen und Kanten umwandeln* endet hinter einem Halt in einer Absage mit derselben Handlung
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:mesh_to_exact`
+- Prüfpunkt: 7, V4, V5
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_mesh_to_exact-ef335aaf-dialog.png` (`ff980fa562f3`): Statt die Umwandlung vor „2 Aushöhlen“ einzufügen, öffnet der Klick „Die Kette hält an — ein neuer Schritt dahinter würde nicht gerechnet. Angehalten ist Schritt 2 (Aushöhlen) …“, und die Meldung bietet wieder „In Flächen und Kanten umwandeln“ an; Verlauf und Fehler bleiben. Prüfer 1a Punkt B8, Prüfer 2 NP-32. Rest zu FD-104, dessen drei Fixe im Laufkopf liegen.
+- Ursache: offen; die Wege des haltenden Befunds aus FD-104 greifen an dieser Handlung nicht, sie wird angeboten, und erst der Haltweg der Sitzung sagt ab.
+- Vorschlag: Die Handlung vor dem Halt einfügen wie *Reparieren und erneut versuchen*, sonst grau mit dem Halt als Grund; eine Absage bietet nie die Handlung an, die sie gerade abgelehnt hat; Test an der Szene des Falls.
+- Wirkung beim Kunden: Der Kunde klickt die Lösung, bekommt eine Absage und darin denselben Knopf.
+- Stand: offen RM-812
+
+### FD-260 *Alle Merkmale erkennen* fragt nach dem Laden eines Modells, das schon geladen ist
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `finding.action:recognize_fully`
+- Prüfpunkt: V4, E6
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_recognize_fully-eaf62b33-dialog.png` (`aa6bcf1c06ba`): Die Erkennung läuft schon („Merkmale erkennen · 0 %“), zugleich steht die Frage „„dichte_platte“ hat 1,5 Millionen Dreiecke …“ mit *Sofort laden*, *Mit Merkmalserkennung laden* und *Abbrechen* und dem Verweis auf denselben Knopf. Schwere: Prüfer 1a leicht, Prüfer 2 mittel; mittel, weil die Frage außerhalb der Ausnahme von Regel 19 steht, die nur beim Import gilt. Prüfer 1a Punkt B9, Prüfer 2 NP-33.
+- Ursache: offen; die Handlung nimmt offenbar den Weg der Importfrage (§21.1).
+- Vorschlag: Am geladenen Modell ohne Frage erkennen, weil der Kunde die Vollerkennung gerade gewählt hat; Test, dass die Handlung keine Ladefrage öffnet.
+- Wirkung beim Kunden: Der Kunde liest eine Frage zum Laden, die nicht zu seinem Klick passt, während die Erkennung schon läuft.
+- Stand: offen RM-812
+
+### FD-261 *Verlauf zeigen* markiert den Schritt nicht, um den es geht
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `finding.action:show_history`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_show_history-2450017e.png` (`eb0fa89e368c`): nur ein Fokusrahmen um den Verlauf, der erzeugende Schritt „2 Bohrung setzen“ ist weder markiert noch geöffnet. Prüfer 1a Punkt B10, Prüfer 2 NP-36.
+- Ursache: offen.
+- Vorschlag: Den Schritt wählen, der die Stelle erzeugt hat, und in den Blick rollen; Test über die gewählte Verlaufszeile.
+- Wirkung beim Kunden: Der Kunde sucht im Verlauf selbst, welcher Schritt gemeint ist.
+- Stand: offen RM-812
+
+### FD-262 *Stellen zeigen* nimmt die Markierung weg, statt die Stellen zu zeigen
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:show_locations`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_show_locations-4834ad7f.png` (`a6e5ca5fed5e`): Kreis und Satz „Das Modell ist nicht geschlossen.“ an der offenen Ecke verschwinden, nichts wird hervorgehoben, die Kamera bleibt. Schwere: Prüfer 1a leicht, Prüfer 2 mittel; mittel, weil die Handlung das Gegenteil ihres Namens tut. Prüfer 1a Punkt B11, Prüfer 2 NP-38.
+- Ursache: offen.
+- Vorschlag: Alle offenen Ränder markieren und die Ansicht auf ihre Hülle fahren; Test, dass die Markierung danach da ist.
+- Wirkung beim Kunden: Wer die Stellen sehen will, verliert die eine, die er schon sah.
+- Stand: offen RM-812
+
+### FD-263 *Stützbedarf zeigen* lässt die überhängende Unterseite außer Sicht
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `finding.action:show_support_need`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_show_support_need-0e6754f5.png` (`ee04797f59d4`): Die Karte *Stützbedarf* geht an (Legende 0,00 bis 8,00 mm), die Kamera bleibt oben, alle sichtbaren Flächen zeigen 0,00 mm, der Kreis zur Stelle verschwindet. Prüfer 1a Punkt B12, Prüfer 2 NP-39.
+- Ursache: offen.
+- Vorschlag: Mit der Karte die Ansicht auf die betroffene Unterseite drehen; Test, dass die Stelle danach im Bild liegt.
+- Wirkung beim Kunden: Der Kunde sieht eine Karte ohne Stützbedarf, obwohl der Befund ihn meldet.
+- Stand: offen RM-812
+
+### FD-264 Der Objektbaum wächst mit neuen Zeilen nicht mit
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `split_line`, `hollow_object`
+- Prüfpunkt: 9
+- Beleg: L5, Fall 006 `cases/006/v4-nachher.png` (`0d3548bc193d`): Nach *An gezeichneter Linie teilen* zeigt der Baum nur „Quader A · Stifte 40 × 30 × 15,4 mm“, „Quader B · Löcher“ fehlt ohne Rollleiste, obwohl die Ansicht beide Hälften zeigt; Fall 003 `cases/003/v4-nachher.png` (`05c7c9d75b91`): nach *Aushöhlen* ist die Zeile „Kammer 26,00 × 26,00 × 18,00 mm“ unten halb abgeschnitten. An `split_line` hält der Fund auch V4 offen (beide Prüfer); an `hollow_object` trifft die Vorhersage, V4 ist dort gut. Schwere: Prüfer 1a und Prüfer 2 (NP-40) mittel, NP-41 leicht; mittel, weil ein Körper im Baum fehlt. Prüfer 1a Punkt B13, Prüfer 2 NP-40 und NP-41.
+- Ursache: offen; ob die Höhe des Baums nach neuen Zeilen nicht nachgeführt wird oder die zweite Hälfte verspätet erscheint, ist nicht eingegrenzt; Zwilling von FD-25 (Mindesthöhe aus den vorhandenen Zeilen).
+- Vorschlag: Die Höhe des Baums nach jeder Änderung der Zeilen bis zur Grenze der Karte nachführen, darüber eine Rollleiste; Test am Baum nach *An gezeichneter Linie teilen* und *Aushöhlen*.
+- Wirkung beim Kunden: Nach dem Teilen fehlt eine Hälfte im Objektbaum; der Kunde kann sie dort weder wählen noch umbenennen und sieht nicht, dass es mehr Zeilen gibt.
+- Stand: offen RM-812
+
+### FD-265 Stufe A übersieht den Knopf unter der Namensabsage von *Parameter anlegen*
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `Bearbeiten/Parameter anlegen …`
+- Prüfpunkt: 2, 7, E7, V5
+- Beleg: L4, Fall 003 `cases/003/04-fehlfall-dialog.png` (`fd8f753cef51`): Unter „Der Name muss sich in einem Ausdruck als @name schreiben lassen …“ steht der Knopf „„breite_aussen“ verwenden“ (Fix von FD-155), `003/function.json#messages[0]` führt `actions: []`; P2, P7, E7 und V5 der Zeile stehen deshalb als Fund. Prüfer 1b Punkt 1, Prüfer 2 NP-4.
+- Ursache: Die Messung liest Knöpfe unter einer Feldabsage nicht als Handlung der Meldung.
+- Vorschlag: Knöpfe unter einer Feldabsage als Handlung der Meldung lesen und im Fehlfall klicken; Gegenfall eine Absage ohne Knopf.
+- Wirkung beim Kunden: Kein Produktfehler; vier Zellen bleiben offen, und die Wirkung des Knopfs ist am Lauf nicht belegt.
+- Stand: offen RM-812
+
+### FD-266 *Anlegen* in *Parameter anlegen* hebt sich beim Überfahren nicht ab
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `Bearbeiten/Parameter anlegen …`
+- Prüfpunkt: G5
+- Beleg: L4, Fall 003 `cases/003/02-flaeche-dialog.png` (`c39599b22eb0`), `003/function.json#state_images`: Ruhe und Überfahren beide `1c998130f6ff3436`. Prüfer 1b Punkt 2.
+- Ursache: offen.
+- Vorschlag: Den Hauptknopf beim Überfahren abheben wie in den Operationsdialogen; Bildvergleich Ruhe gegen Überfahren als Test.
+- Wirkung beim Kunden: Der Knopf antwortet nicht auf die Maus und wirkt wie gesperrt.
+- Stand: offen RM-812
+
+### FD-267 Mindestwand und Überhangwinkel in *Material kalibrieren* erklären sich mit dem Satz ihres Hakens
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`
+- Prüfpunkt: 8, V3
+- Beleg: L4, Fall 034 `cases/034/flaeche-de-Bearbeiten_Material_kalibrieren-139aa900-dialog.png` (`206add009634`), `034…039/surfaces/Bearbeiten_Material_kalibrieren-139aa900.json#fields`: Zahlenfeld und Haken beider Werte tragen „Nur aktivieren, wenn Sie die Probe gedruckt und geprüft haben. Der Überhangwinkel wird von der Senkrechten aus gemessen. …“; was die Mindestwand ist, sagt kein Satz, in sechs Sprachen. Prüfer 1b Punkt 3, Prüfer 2 NP-2.
+- Ursache: offen; die Zahlenfelder der Rückseite übernehmen den Satz des Hakens, der ihren Wert übernimmt.
+- Vorschlag: Je Zahlenfeld ein eigener Satz, der Satz zum Aktivieren nur am Haken; Test, dass kein Feld den Satz seines Hakens trägt.
+- Wirkung beim Kunden: Der Kunde liest am Feld *Mindestwand* einen Satz über den Überhangwinkel.
+- Stand: offen RM-812
+
+### FD-268 *Filament und Druck* beginnt nach einer Auswahl zugeklappt
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `assign_slot`, `clear_filament`, `filament.picker`, `paint_slot`
+- Prüfpunkt: Z3
+- Beleg: L4, Fall 034 `cases/034/flaeche-de-filament.picker-0afd58ad.png` (`798d03aec872`), `034/surfaces/{assign_slot-bd965763,clear_filament-a6b075a9,filament.picker-0afd58ad,paint_slot-9865a109}.json#steps`: je ein Schritt `why: klappe` zwischen Auswahl und Filamentfeld; Stufe A Z3 Fund. Prüfer 1b Punkt 4. Rest zu FD-19: Die Klappe steht seit dessen Fix direkt unter den Hauptaktionen, beginnt aber zu.
+- Ursache: offen; die Klappe beginnt auch nach dem Fix von FD-19 geschlossen.
+- Vorschlag: Bei gewähltem Körper oder gewählter Fläche offen zeigen, solange kein Filament zugewiesen ist, oder das Filamentfeld in den Kopf der Klappe holen; Test mit Z3 an den vier Zeilen.
+- Wirkung beim Kunden: Für eine Farbzuweisung braucht der Kunde nach jeder Auswahl einen Klick mehr.
+- Stand: offen RM-812
+
+### FD-269 Die Liste in *Als Muster zusammenfassen* heißt „Zellen“, übersetzt klein
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `group_pattern`
+- Prüfpunkt: V1
+- Beleg: L4, Fall 046 `cases/046/flaeche-de-group_pattern-5f312f3f-dialog.png` (`49a196faf688`), `047…051/surfaces/group_pattern-5f312f3f.json#texts`: „cells“, „celdas“, „cellules“, „celle“, „células“ klein wie ein roher Schlüssel; das Wort hat am Ort keinen Satz (FD-95 selbst ist behoben). Prüfer 1b Punkt 9. Zwilling von FD-98.
+- Ursache: Der Feldtitel „Zellen“ (`app/core/perceive/ops.py:180`) teilt den Katalogschlüssel mit dem Wertenamen `cells` in `app/ui/labels.py`, und die Kataloge übersetzen ihn klein.
+- Vorschlag: Die Beschriftung „Merkmale“ wie in *Merkmal vervielfachen*, oder ein eigener Schlüssel mit Kontext für den Feldtitel, groß in allen Katalogen.
+- Wirkung beim Kunden: Ein Feldtitel in Kleinschrift mit einem Wort, das der Kunde an dieser Stelle nicht kennt.
+- Stand: offen RM-812
+
+### FD-270 Die Kurzhilfe in *Bohrung verschließen* zeigt Markdown-Sterne
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `plug_hole`
+- Prüfpunkt: 8
+- Beleg: L4, Fall 046 `cases/046/flaeche-de-plug_hole-5b6be594-dialog.png` (`f053b3c7d60e`), `046/surfaces/plug_hole-5b6be594.json#fields` am Haken *Druckabweichung ausgleichen*: „Füllt so weit, wie *Bohrung setzen* mit derselben Einstellung schneidet — …“ mit Sternen. Prüfer 1b Punkt 10.
+- Ursache: Der Satz in `app/core/geom/prepare_ops.py:19996` setzt den Operationstitel in Sterne, und die Kurzhilfe zeigt sie roh.
+- Vorschlag: Anführungszeichen statt Sternen in diesem und gleich gebauten Feldsätzen, die Kataloge nachziehen; Wächter, dass kein Feldsatz `*` trägt.
+- Wirkung beim Kunden: Der Kunde liest Sternchen im Text.
+- Stand: offen RM-812
+
+### FD-271 Graue Knöpfe an der Maßgruppe von *Bohrung ändern* nennen keinen Sperrgrund mit Ausweg
+
+- Art: Verständlichkeit
+- Schwere: mittel
+- Funktion: `resize_hole`
+- Prüfpunkt: 2, 7, E7, V5
+- Beleg: L4, Fall 001 `cases/001/02-flaeche.png` (`79da8c3a08a2`) und `cases/001/04-fehlfall.png` (`77fc234c7bd3`), `001/function.json#messages`: *Merkmal entfernen* ist grau, solange die Maßgruppe offen ist, und nennt als Grund die Beschreibung „Entfernt ein erkanntes Merkmal: …“; im Fehlfall (0,10 mm) ist *Übernehmen* grau mit „Bohrung ändern“ als Grund. Stufe A Fund an P2, P7, E7 und V5, obwohl FD-31, FD-36, FD-99 und FD-227 behoben sind. Prüfer 1b Punkt 12, Prüfer 2 NP-11; die Statuszeile, die die Absage wiederholt, ist FD-88.
+- Ursache: offen; Zwilling von FD-27 (graue Befundhandlung mit Nebenwirkung statt Sperrgrund) an Merkmalfenster und Maßgruppe.
+- Vorschlag: Sperrgründe mit Ausweg aus der Lage ableiten („Erst „Abbrechen“, dann entfernen“, „Erst einen Durchmesser ab 0,20 mm eingeben“); Test an beiden grauen Knöpfen.
+- Wirkung beim Kunden: Der Kunde sieht zwei graue Knöpfe und erfährt nicht, wie er sie freibekommt.
+- Stand: offen RM-812
+
+### FD-272 Die Rückmeldung von *Bohrung ändern* kommt am Schlusslauf zu spät
+
+- Art: Leistung
+- Schwere: mittel
+- Funktion: `resize_hole`
+- Prüfpunkt: 6
+- Beleg: L4, Fall 001 `cases/001/03-uebernommen.png` (`f8b4a09d6d54`), `001/function.json#timing`: größte Lücke im Hauptfaden 154 ms (erlaubt 100), Zeiger oder Statuszeile nach 0,50 s (fällig ab 0,2 s), obwohl FD-33 und FD-216 behoben sind; unter Last gemessen, Verdacht. Prüfer 1b Punkt 13, Prüfer 2 NP-10.
+- Ursache: offen; nicht im Wechsel bestätigt.
+- Vorschlag: Mit `window_bench.py` im Wechsel alt/neu nachmessen; bestätigt sich die Lücke, die teure Stelle im Übernehmen der Maßgruppe suchen.
+- Wirkung beim Kunden: Nach *Übernehmen* steht das Fenster eine halbe Sekunde ohne Antwort.
+- Stand: offen RM-812
+
+### FD-273 G3 misst Haken und Klappe der Maßgruppe gegen die Feldspalte
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: G3
+- Beleg: L4, Fall 001 `cases/001/02-flaeche.png` (`79da8c3a08a2`), `001/function.json#layout` mit `field_edges [0, 0, 104, 104, 0]`: Durchmesser und Tiefe stehen auf einer Kante, die Kante 0 gehört zur Klappe *Weitere Werte* und zum Haken „Auf alle 4 …“; Stufe A meldet „Felder in MeasureCard nicht bündig“. Prüfer 1b Punkt 14 (Gestaltung oder Kriterium), Prüfer 2 NP-12 (Prüfstand).
+- Ursache: offen; zu entscheiden, ob der Haken in die Feldspalte gehört oder G3 nur beschriftete Felder eines Formulars vergleicht.
+- Vorschlag: G3 vergleicht nur Felder mit Beschriftung, ganze Zeilen wie Haken und Klappe zählen nicht; gehört der Haken in die Spalte, ihn dorthin setzen.
+- Wirkung beim Kunden: Kein Produktfehler belegt; ein G3-Fund steht an einer Fläche, die im Bild bündig ist.
+- Stand: offen RM-812
+
+### FD-274 Bohrung und Fläche tragen beim Überfahren keine Beschriftung
+
+- Art: Gestaltung
+- Schwere: mittel
+- Funktion: `resize_hole`
+- Prüfpunkt: I1
+- Beleg: L4, Fall 001 `cases/001/02-flaeche.png` (`79da8c3a08a2`), `001/function.json#hover_labels`: `hole` und `face` mit leerem Text; Stufe A I1 Fund. Prüfer 1b Punkt 15: mittel als Bauplanzusage (§18.5), falls bestätigt.
+- Ursache: offen; ob der Name beim Überfahren fehlt oder der Prüfstand ihn nicht liest, ist nicht nachgestellt.
+- Vorschlag: Am echten Fenster nachstellen; fehlt die Beschriftung, Name und Maß beim Überfahren wie „Oberseite · 400 mm²“ an *Auf das Bett setzen* auch an Bohrung und Fläche, sonst die Lesung des Prüfstands beheben.
+- Wirkung beim Kunden: Der Kunde erfährt beim Überfahren nicht, was er gleich anklickt.
+- Stand: offen RM-812
+
+### FD-275 Z1 findet an *Bohrung ändern* keinen Griff, obwohl Griffe im Bild stehen
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: Z1
+- Beleg: L4, Fall 022 `cases/022/flaeche-bewegung.png` (`15321aedd914`) und Fall 001 `cases/001/02-flaeche.png` (`79da8c3a08a2`): Knöpfe am Ring, Durchmessergriffe, Lagepfeile und die L-Griffe der Kantenmaße; `001/function.json#unmeasured` sagt „kein Griff an dieser Zeile“. Prüfer 1b Punkt 16, Prüfer 2 NP-13. Gegenstück zu FD-283.
+- Ursache: Die Zeile nennt kein `handle:`-Ziel.
+- Vorschlag: Den Durchmessergriff als `handle:`-Ziel der Zeile ziehen und den Bildverzug messen.
+- Wirkung beim Kunden: Kein Produktfehler; Z1 bleibt an der Zeile mit den meisten Griffen ungemessen.
+- Stand: offen RM-812
+
+### FD-276 An *Senken* nimmt die Sprachfläche kein Vorschauband auf
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `countersink_hole`
+- Prüfpunkt: I2
+- Beleg: L4, Fall 046 `cases/046/flaeche-de-countersink_hole-4a325b8d.png` (`49aa609ee908`), `046/surfaces/countersink_hole-4a325b8d.json` ohne `preview`; I2 bleibt offen. Prüfer 1b Punkt 17.
+- Ursache: offen; der Sprachfall nimmt den Bandtext nicht an jeder Operation mit Vorschau auf.
+- Vorschlag: Den Bandtext an Sprachflächen jeder Operation mit Vorschau aufnehmen; Wächter, dass eine Fläche mit Vorschau `preview` trägt.
+- Wirkung beim Kunden: Kein Produktfehler; die Druckfolge im Band ist an *Senken* nicht belegt.
+- Stand: offen RM-812
+
+### FD-277 *Material kalibrieren* lässt kein Material wählen und sagt nicht, wie man ein anderes kalibriert
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 009 `cases/009/v4-nachher-dialog.png` (`206add009634`): Der Dialog kalibriert fest das Material des Projekts („PETG — noch nicht kalibriert“), ohne Wahl und ohne Satz zum Weg; beide gebundenen Vorhersagen erwarteten eine Wahl. Prüfer 1b Punkt 18, Prüfer 2 NP-23.
+- Ursache: offen; der Dialog nimmt das Material des Projekts.
+- Vorschlag: Das Material im Kopf als Wähler oder ein Satz mit dem Weg zu einem anderen Material; Test, dass der Dialog ein zweites Material kalibrieren lässt oder den Weg nennt.
+- Wirkung beim Kunden: Wer ein zweites Filament kalibrieren will, findet den Weg nicht.
+- Stand: offen RM-812
+
+### FD-278 Die Maßgruppe von *Bohrung ändern* bleibt nach *Übernehmen* offen
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: V4
+- Beleg: L5, Fall 005 `cases/005/v4-nachher.png` (`c6fdfef27112`): Nach dem Klick stehen weiter „Bohrung ändern“ und 8,00 mm, nur *Übernehmen* ist grau; die Geometrie trifft (Ø8, Schritt 2). Beide gebundenen Vorhersagen erwarteten, dass die Gruppe schließt. Prüfer 1b Punkt 19, Prüfer 2 NP-24.
+- Ursache: offen; zu entscheiden, ob die Gruppe nach dem Übernehmen für weitere Änderungen offen bleiben soll.
+- Vorschlag: Nach erfolgreichem Übernehmen schließen oder in der Gruppe sichtbar „übernommen“ sagen; Test am Zustand danach.
+- Wirkung beim Kunden: Der Kunde sieht nach dem Übernehmen dieselbe Gruppe und weiß nicht, ob seine Änderung angekommen ist.
+- Stand: offen RM-812
+
+### FD-279 Nach dem Senken zeigen *Merkmal drehen* und *Merkmal verdoppeln* andere Ausgangswerte
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `rotate_feature`, `duplicate_feature`
+- Prüfpunkt: 4
+- Beleg: L5, Fall 001: `cases/001/v4-vorher.png` (`49aa609ee908`) zeigt „Merkmal drehen x · 90,00 °“, `cases/001/v4-nachher.png` (`1ebca94ae648`) an „Bohrung 1 mit Senkung“ „x · 44,00 °“ und „Merkmal verdoppeln X 15,00 mm“ statt 7,80 mm. Prüfer 1b Punkt 20 (zu prüfen).
+- Ursache: offen; ob die Erkennung die Achse der gesenkten Bohrung anders liest oder die Vorgaben aus der Senkung rechnen, ist nicht geprüft.
+- Vorschlag: Die Vorgabewerte der Merkmalzeilen an einer gesenkten Bohrung nachrechnen und mit einem Test gegen die Achse aus dem Kern festhalten.
+- Wirkung beim Kunden: Der Kunde liest an derselben Bohrung nach dem Senken einen Winkel und einen Abstand, die nicht zu ihr passen.
+- Stand: offen RM-812
+
+### FD-280 Im französischen Leersatz des Objektbaums steht « allein am Zeilenende
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`
+- Prüfpunkt: 9
+- Beleg: L4, Fall 037 `cases/037/flaeche-fr-Bearbeiten_Material_kalibrieren-139aa900.png` (`310317de5ffe`): Im Leersatz des Objektbaums steht das öffnende « am Zeilenende, „Insérer un modèle »“ beginnt die nächste Zeile; so an jeder französischen Fläche mit leerem Baum. Prüfer 2 NP-1.
+- Ursache: Der fr-Katalog setzt innerhalb der Guillemets gewöhnliche Leerzeichen.
+- Vorschlag: Geschützte Leerzeichen (U+00A0 beziehungsweise U+202F) innerhalb der Guillemets im ganzen fr-Katalog; Wächter über den Katalog.
+- Wirkung beim Kunden: Französische Kunden lesen ein verwaistes Anführungszeichen.
+- Stand: offen RM-812
+
+### FD-281 Die Namensabsage nennt „Buchstaben“, lehnt aber Umlaute ab
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `Bearbeiten/Parameter anlegen …`
+- Prüfpunkt: V5
+- Beleg: `app/ui/parameter_dialog.py:500` „… — Buchstaben, Ziffern und Unterstriche.“; die Sonde von Prüfer 2 (`F:\tmp-suche\nachurteil-pruefer2-claude\skripte\name_sonde.py`) am Laufkopf: „breite_außen“ und „höhe“ abgelehnt, der Vorschlag macht daraus „breite_aussen“. Prüfer 2 NP-5.
+- Ursache: Der Ausdrucksprüfer nimmt nur lateinische Buchstaben ohne Umlaute, der Satz sagt „Buchstaben“.
+- Vorschlag: „… lateinische Buchstaben ohne Umlaute, Ziffern und Unterstriche“ in allen Sprachen, oder Umlaute in Namen zulassen.
+- Wirkung beim Kunden: Wer „höhe“ tippt, liest „Buchstaben“ und versteht die Absage nicht.
+- Stand: offen RM-812
+
+### FD-282 Bei 125 % ist der Filamentpunkt im Objektbaum eckig abgeschnitten
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `Bearbeiten/Parameter anlegen …`, `resize_hole`, `finding.action:place_on_bed`
+- Prüfpunkt: Z6
+- Beleg: L4, Fall 016 `cases/016/flaeche-skalierung.png` (`fe15d2f99301`): Der Punkt am Ende der Objektzeile ist eckig, bei 100 % (Fall 015) rund; ebenso Fall 008 (`cases/008/flaeche-skalierung.png`, `550d90ad92c5`, alle Punkte des Baums) und Fall 012 (`cases/012/flaeche-skalierung.png`, `ca14e32ec30a`). Prüfer 2 NP-6.
+- Ursache: offen; vermutlich wird der Punkt bei Teilskalierung vom Zellrechteck beschnitten.
+- Vorschlag: Den Punkt in geräteunabhängigen Pixeln zeichnen und gegen das Zellrechteck bei 125 % und 150 % prüfen.
+- Wirkung beim Kunden: Bei 125 % Skalierung wirken die Farbpunkte im Baum kaputt.
+- Stand: offen RM-812
+
+### FD-283 Z1 hat keinen Grund für *entfällt* an Zeilen ohne Griff
+
+- Art: Aufräumen
+- Schwere: leicht
+- Funktion: keine Zeile: Kriterium Z1 und die geschlossene Liste der Gründe für entfällt
+- Prüfpunkt: Z1
+- Beleg: An Zeilen ohne Griff vermerkt Stufe A „kein Griff an dieser Zeile“ (etwa L4 `cases/002/function.json#unmeasured`); die Liste der Gründe für *entfällt* kennt dafür keinen Eintrag, beide Prüfer halten Z1 dort ohne Messung offen (Prüfer 1a in seiner Lesart, Prüfer 2 NP-7). Gegenstück zu FD-275.
+- Ursache: Die geschlossene Liste kennt keinen Grund „ohne Griff“.
+- Vorschlag: Einen Grund `ohne_griff` in die Liste aufnehmen oder Z1 nur an Zeilen mit Griff in die Spalte nehmen.
+- Wirkung beim Kunden: Kein Produktfehler; Z1-Zellen ohne Zug bleiben offen, obwohl es nichts zu messen gibt.
+- Stand: offen RM-812
+
+### FD-284 *Vor Trennnähten schützen* heißt in fr und es wie die Dichtung
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `paint_slot`
+- Prüfpunkt: 9
+- Beleg: L4, Fälle 037 und 036 `cases/037/flaeche-fr-paint_slot-9865a109.png` (`792014b38950`), `cases/036/flaeche-es-paint_slot-9865a109.png` (`eec47eea1f98`): In der rechten Karte bei gewählter Fläche steht „Protéger des joints“ beziehungsweise „Proteger de las juntas“, dieselbe Karte nennt die Dichtung „Rainure avec joint“ beziehungsweise „Ranura de sellado con junta“. Prüfer 2 NP-8; V1 hielt er nicht offen, weil keine der drei Trefferarten passt.
+- Ursache: `app/i18n/locales/fr.json` und `es.json` übersetzen „Vor Trennnähten schützen“ mit dem Wort der Dichtung.
+- Vorschlag: fr etwa „Protéger des lignes de coupe“, es „Proteger de los cortes“; die übrigen Kataloge auf dieselbe Verwechslung prüfen.
+- Wirkung beim Kunden: Französische und spanische Kunden lesen „vor Dichtungen schützen“.
+- Stand: offen RM-812
+
+### FD-285 Am exakten Körper färbt eine gewählte Bohrung den ganzen Körper
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `countersink_hole`
+- Prüfpunkt: 19
+- Beleg: L4, Fall 046 `cases/046/flaeche-de-countersink_hole-4a325b8d.png` (`49aa609ee908`), gleich in 047–051: Szene `merkmal.hole.exakt`, Bohrung 1 gewählt (Baum und rechte Karte zeigen nur die Bohrung), die Ansicht färbt den ganzen Quader orange, die Bohrungswand ist nicht abgehoben; am Netzkörper (Fall 001) ist nur die Bohrung hervorgehoben. Prüfer 2 NP-9.
+- Ursache: offen.
+- Vorschlag: Am exakten Körper nur die Flächen des gewählten Merkmals hervorheben wie am Netz; Test mit Bild hell und dunkel.
+- Wirkung beim Kunden: Der Kunde sieht nicht, welche Bohrung er gewählt hat.
+- Stand: offen RM-812
+
+### FD-286 Das Handbuch sagt, Strg+Z nehme einen Schnitt der automatischen Teilung zurück
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `command:edit.auto_split`
+- Prüfpunkt: 11
+- Beleg: Handbuch am Laufkopf `d9f7a81f9` (`app/core/manual.py:1396`, ebenso `README.md:363`): „Jeder Schnitt ist eine eigene Operation … Strg+Z nimmt einen Schnitt zurück, nicht die ganze Teilung“; dagegen `tests/test_autosplit.py::test_one_undo_restores_a_complete_multi_cut_auto_split`: Eine mehrschnittige automatische Teilung ist eine Transaktion, ein Strg+Z nimmt sie ganz zurück. Prüfer 2 NP-14.
+- Ursache: Der Satz gilt dem Werkzeug *Teilen*, steht aber ohne Einschränkung neben *Automatisch teilen*.
+- Vorschlag: Den Satz auf das Werkzeug beschränken und für *Automatisch teilen* sagen, dass ein Strg+Z die ganze Teilung zurücknimmt, in sechs Sprachen und in der README.
+- Wirkung beim Kunden: Der Kunde erwartet nach Strg+Z einen Schnitt weniger und verliert die ganze Teilung.
+- Stand: offen RM-812
+
+### FD-287 Das Material der Dichtung steht im Dialog schon auf dem Projektmaterial
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `create_seal`
+- Prüfpunkt: 4
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-create_seal-a2b33d5a-dialog.png` (`4c2636931fbd`, selbst angesehen): *Material des Trägers* und *Material der Dichtung* stehen beide auf „PETG“, in allen Sprachen. Im Kern sind beide Rollen Pflicht ohne Vorgabe (`app/core/geom/seal_ops.py`, `body_material` und `gasket_material` mit `default=""`, `required=True`), und `MaterialField` zeigt für eine Pflichtrolle „Materialprofil wählen …“ (`app/ui/op_dialog.py`: „Eine ausdrücklich verlangte Materialrolle darf kein Projektprofil versprechen“); `MainWindow` füllt aber jede leere Materialrolle mit dem Projektmaterial (`app/ui/main_window.py:22262`, „Leere Materialrollen übernehmen die Projektvorgabe“), sodass `_missing_material` nie greift. Prüfer 2 NP-15 (mittel, zu prüfen), am Code bestätigt.
+- Ursache: belegt: Die Vorbelegung in `main_window.py:22262–22266` gilt auch für Pflichtrollen ohne Vorgabe (Regel 21).
+- Vorschlag: Pflichtrollen nicht vorbelegen, der Hauptknopf nennt sie über `_missing_material`; oder ein elastisches Material aus dem Lager als gekennzeichneter Vorschlag. Die Zwillinge mit Pflichtrollen (`create_profile_clamp_set`, `replace_profile_liners`: Material der Schalen und der Einlagen) im selben Zug; Test, dass eine Pflichtrolle leer öffnet.
+- Wirkung beim Kunden: Wer *Dichtnut mit Dichtung* mit den Vorgaben übernimmt, bekommt eine Dichtung aus starrem PETG, die nicht dichtet; die Wahl, die der Kern ausdrücklich verlangt, hat das Fenster ohne Frage vorweggenommen. Der Wert steht sichtbar vorn im Dialog.
+- Stand: offen RM-812
+
+### FD-288 In *Aushöhlen* steht „Keine“ im falschen Geschlecht, und die Liste heißt zugänglich so
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `hollow_object`
+- Prüfpunkt: 9, 10
+- Beleg: L4, Fälle 054–057, etwa `cases/055/flaeche-fr-hollow_object-c4555753-dialog.png` (`a0bfc63bbe85`): „Ninguno“, „Aucun“, „Nessuno“, „Nenhum“ neben „Aberturas“, „Ouvertures“, „Aperture“, „Aberturas“ (weiblich: „Ninguna“, „Aucune“, „Nessuna“, „Nenhuma“), ebenso im Hinweis darunter; `052/surfaces/hollow_object-c4555753.json#fields`: Die Liste trägt den zugänglichen Namen „Keine“ statt „Öffnungen“. Prüfer 2 NP-18.
+- Ursache: Die Kataloge übersetzen „Keine“ ohne Bezug auf „Öffnungen“; woher der zugängliche Name kommt, ist offen.
+- Vorschlag: „Keine“ mit Kontext übersetzen (es, fr, it und pt weiblich) und den zugänglichen Namen der Liste auf den Feldtitel setzen; Wächter wie in FD-94.
+- Wirkung beim Kunden: In vier Sprachen liest der Kunde einen Grammatikfehler, und ein Bildschirmleser nennt das Feld „Keine“.
+- Stand: offen RM-812
+
+### FD-289 Die Startszenen von Analyse, Schichten und Prüfbericht zeigen nicht, was Handbuch und Website versprechen
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `tool:analysis`, `tool:layers`, `report`
+- Prüfpunkt: 11
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-tool_analysis-1fea5198.png` (`1c6f1d581dec`), `cases/052/flaeche-de-tool_layers-04ae8d9d.png` (`511f8d57b33a`), `cases/052/flaeche-de-report-845e9183.png` (`625591c99d71`): Der Quader der Startszene zeigt keine Analysekarte mit Legende (Wähler „Keine Karte“), weder Insel noch Überhang, und der Bericht hat keinen Befund („Bereit zur Übergabe“). Die Versprechen (acht Karten mit Legende und Herkunft; Zahl der Inseln, Überhangfläche, Legende; „Sortiert nach Fehler, Warnung und Hinweis — und Befunde mit einer Ortsangabe zeigen die betroffene Stelle im Modell“) sind an keinem Bild prüfbar. Prüfer 2 NP-20 und NP-21.
+- Ursache: Die Startszene der drei Zeilen hat weder Überhang noch Insel noch Befund.
+- Vorschlag: Eine Szene mit Überhang, Insel und Befunden aller drei Schweren für die drei Zeilen, eine Karte geöffnet; Wächter, dass eine Zeile mit Versprechen eine Szene hat, die es zeigt.
+- Wirkung beim Kunden: Kein Produktfehler belegt; Prüfpunkt 11 bleibt an drei Ansichten ungeprüft.
+- Stand: offen RM-812
+
+### FD-290 Die Schichtanzeige nennt an Schicht 1 keine Zahl der Inseln
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `tool:layers`
+- Prüfpunkt: 11
+- Beleg: L4, Fall 052 `cases/052/flaeche-de-tool_layers-04ae8d9d.png` (`511f8d57b33a`): „Schicht 1/100 · z 0,10 mm · 1200 mm²“ ohne Zahl der Inseln, auch nicht „0“; das Handbuch sagt, die Zahl stehe daneben. Prüfer 2 NP-20 (Zusatz).
+- Ursache: offen; ob die Zahl erst ab einer Insel erscheint oder fehlt, ist nicht geprüft.
+- Vorschlag: Die Zahl der Inseln immer zeigen („0 Inseln“) oder das Handbuch auf „sobald es Inseln gibt“ stellen, in sechs Sprachen.
+- Wirkung beim Kunden: Der Kunde sucht die Zahl, die das Handbuch verspricht.
+- Stand: offen RM-812
+
+### FD-291 Wie Z3 an Ansichtswerkzeugen urteilt, ist nicht festgelegt
+
+- Art: Aufräumen
+- Schwere: leicht
+- Funktion: keine Zeile: Kriterium Z3 an den Ansichtswerkzeugen Analyse und Schichten
+- Prüfpunkt: Z3
+- Beleg: Die Ansichtswerkzeuge haben eine Route über die Baumzeile (Bedingung `koerper:1`), deshalb gilt Z3; ihre Handlung steht aber in der Werkzeugzeile unter der Ansicht, nicht im Reiter *Auswahl*. Beide Prüfer urteilten *gut* (0 Wegklicks, fester Ort), ohne Regel dafür (Prüfer 1a in seiner Lesart, Prüfer 2 NP-22).
+- Ursache: Konzept und Kriterientext nennen den Fall nicht.
+- Vorschlag: Die Auslegung von Z3 für Ansichtswerkzeuge im Konzept festlegen (der feste Ort der Werkzeugzeile zählt als am Objekt) oder die Route ohne Körperwahl führen.
+- Wirkung beim Kunden: Kein Produktfehler; zwei Prüfer könnten dieselbe Zelle verschieden urteilen.
+- Stand: offen RM-812
+
+### FD-292 Bericht und Druckdialog nennen für dieselbe Platte verschiedene Überstände
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `finding.action:choose_printer`
+- Prüfpunkt: 8
+- Beleg: L5, Fall 028 `cases/028/v4-vorher-de-finding.action_choose_printer-2c1a8d33.png` (`3fd178fbe957`): Bericht „Überstand: 72,00 mm“; `cases/028/v4-nachher-de-finding.action_choose_printer-2c1a8d33-dialog.png` (`c31ce8336687`): Druckdialog „144,00 mm zu groß für diesen Drucker“. Prüfer 2 NP-27.
+- Ursache: offen; naheliegend je Seite gegen gesamt gerechnet.
+- Vorschlag: Eine Größe in beiden Texten und sagen, welche gemeint ist (je Seite oder gesamt).
+- Wirkung beim Kunden: Der Kunde liest für dieselbe Platte zwei Zahlen und weiß nicht, um wie viel sie zu groß ist.
+- Stand: offen RM-812
+
+### FD-293 *Sperren aufheben und erneut teilen* hebt die Sperren auf, eine Teilung ist nicht zu sehen
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:release_protection`
+- Prüfpunkt: 4, V4
+- Beleg: L5, Fall 028 `cases/028/v4-nachher-de-finding.action_release_protection-34d13d85.png` (`d91b4b75290c`): „4 Sperren aufgehoben.“, die Leiste 600 × 30 × 20 mm ist weiter ein Stück, beide Warnungen bleiben, der Verlauf hat einen Schritt, die Statusleiste rechnet „Ausrichtung suchen · 16 %“. Ob die Handlung danach teilt, zeigt das Bild nicht (FD-252). Prüfer 2 NP-34 (mittel, zu prüfen); Prüfer 1a führt dieselbe Zelle unter Punkt B1.
+- Ursache: offen; entweder teilt die Handlung nicht, wie ihr Name sagt, oder das Bild kam vor dem Ende der Rechnung.
+- Vorschlag: Nach FD-252 am Tor bis zum Ende warten; teilt sie nicht, die Handlung das Teilen anstoßen lassen oder umbenennen; Test mit der Wirkung.
+- Wirkung beim Kunden: Teilt sie nicht, bekommt der Kunde aufgehobene Sperren statt der versprochenen Teilung.
+- Stand: offen RM-812
+
+### FD-294 Graue Befundhandlungen hinter einem Halt zeigen ihre Beschreibung statt eines Sperrgrunds
+
+- Art: Verständlichkeit
+- Schwere: mittel
+- Funktion: `finding.action:orient_for_print`, `finding.action:remesh_and_retry`
+- Prüfpunkt: V5
+- Beleg: L5, Fall 028 `cases/028/v4-vorher-de-finding.action_orient_for_print-a1ca663b.png` (`9214394d9d1f`): *Druckoptimal ausrichten* grau mit „Dreht den Körper …“ darunter; `cases/028/v4-vorher-de-finding.action_remesh_and_retry-c1243162.png` (`12214fab0737`): *Kanten verfeinern und erneut versuchen* grau mit „Teilt die Dreiecke feiner …“, beide während die Kette an einem anderen Schritt hält. Prüfer 2 NP-35. Zwilling von FD-27, Rest zu FD-104 („grau mit Grund“).
+- Ursache: offen; unter dem grauen Knopf bleibt der Wirkungssatz stehen.
+- Vorschlag: Unter einem grauen Knopf der Sperrgrund mit Ausweg („Erst Schritt N beheben“ mit Verweis auf den haltenden Schritt); Test im Halt.
+- Wirkung beim Kunden: Der Kunde liest, was der Knopf täte, nicht warum er grau ist und was er tun kann.
+- Stand: offen RM-812
+
+### FD-295 *Stelle zeigen* wiederholt nur, was der Klick auf den Befund schon tat
+
+- Art: Einfachheit
+- Schwere: leicht
+- Funktion: `finding.action:show_location`
+- Prüfpunkt: 2
+- Beleg: L5, Fall 028 `cases/028/v4-vorher-de-finding.action_show_location-527c02ef.png` (`dbc6570d5085`) und `cases/028/v4-nachher-de-finding.action_show_location-527c02ef.png` (`06993e251eea`): Schon nach dem Klick auf den Befund stehen Kamera, Umrandung, Kreis und Satz an der Stelle; der Knopf ändert am Bild nichts. Prüfer 2 NP-37.
+- Ursache: offen; der Befundklick fährt seit FD-111 selbst hin.
+- Vorschlag: Den Knopf weglassen, wenn der Befundklick schon hinfährt, oder ihm eine eigene Wirkung geben (näher heranfahren).
+- Wirkung beim Kunden: Ein Knopf, der nichts sichtbar tut, lässt den Kunden zweifeln, ob er gewirkt hat.
 - Stand: offen RM-812
 
 ## Regressionen aus Fixen nach dem Einfrieren (ab FD-212)

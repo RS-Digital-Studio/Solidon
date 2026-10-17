@@ -197,7 +197,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4 |
 | [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; Phase 4 |
 | [RM-790 — Ein nativer Abbruch nach Rückgängig bei gezeigter Maßgruppe, einmal gesehen](#rm-790) | Bedienung und Darstellung | 150 Zyklen unter Last ohne Wiederholung; beim nächsten Auftreten Stapel sichern und zuordnen |
-| [RM-812 — Funde des Funktionsdurchgangs nach 0.6.1](#rm-812) | Bedienung und Darstellung | nach dem Release von 0.6.1: FD-204 bis FD-211, FD-218 bis FD-226, FD-228 bis FD-230, FD-233, FD-234 und FD-236 bis FD-240 der Funddatei beheben (Umfang eingefroren, Robert 16.10.) |
+| [RM-812 — Funde des Funktionsdurchgangs für 0.6.2](#rm-812) | Bedienung und Darstellung | für 0.6.2: FD-204 bis FD-211, FD-218 bis FD-226, FD-228 bis FD-230, FD-233, FD-234 und FD-236 bis FD-295 der Funddatei beheben (Umfang eingefroren, Robert 16.10.; Ziel 0.6.2, Robert 17.10.) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -5951,14 +5951,38 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 <a id="rm-812"></a>
 
-- [ ] **RM-812 — Funde des Funktionsdurchgangs nach 0.6.1.**
-  Funde, die nach dem Einfrieren des Umfangs (Robert, 16.10.2026, 15:50) eingetragen wurden und
-  erst nach dem Release von 0.6.1 behoben werden. Beleg, Ursache und Vorschlag stehen je Fund in
+- [ ] **RM-812 — Funde des Funktionsdurchgangs für 0.6.2.**
+  Funde, die nach dem Einfrieren des Umfangs (Robert, 16.10.2026, 15:50) eingetragen wurden; sie
+  werden in 0.6.2 behoben (Robert, 17.10.2026). Beleg, Ursache und Vorschlag stehen je Fund in
   der Funddatei `.claude/.state/funktionsdurchgang-2026-10/funde.md`, Abschnitt „Funde nach dem
   Einfrieren“. Mittel sind FD-233 (ein Druck ohne vorheriges Überfahren fasst den Körper statt
   des Griffs), FD-234 (die Sprachfälle erreichen am echten Fenster nicht jede Fläche, 44 in D1,
-  D2, D7, D9, D11 und D12 und `orient_for_print` in D8; vor den Phase-3-Paketen beheben) und
-  FD-237 (*Spule anlegen* in *Neues Filament* ist grau, ohne zu sagen warum), alle übrigen leicht:
+  D2, D7, D9, D11 und D12 und `orient_for_print` in D8; vor den Phase-3-Paketen beheben),
+  FD-237 (*Spule anlegen* in *Neues Filament* ist grau, ohne zu sagen warum),
+  FD-241 (nach einer Auswahl bleibt die rechte Karte auf *Prüfbericht*),
+  FD-242 (die Seite *Auswahl* rollt bei gewähltem Körper schon bei 2560 × 1369),
+  FD-246 (die Sprachflächen fr und it der Analyseleiste zeigen eine fremde Lage),
+  FD-251 (der Schlusslauf liefert Zoll- und Dunkelbilder nicht für jede Zeile mit Prüfpunkt 9),
+  FD-252 (das Nachher-Bild am Vorhersagetor entsteht vor dem Ende der Rechnung),
+  FD-253 (das Vorhersagetor nennt den Knopf nicht, den es klickt),
+  FD-254 (*Andere Objekte wählen* öffnet weder den Schritt noch eine Wahl),
+  FD-257 (*Zusätzliche Programme …* führt OpenCASCADE nicht),
+  FD-258 (*Flächenbearbeitung beenden und erneut versuchen* rundet nicht und hinterlässt einen
+  Splitter),
+  FD-259 (*In Flächen und Kanten umwandeln* endet hinter einem Halt in einer Absage mit sich
+  selbst),
+  FD-260 (*Alle Merkmale erkennen* fragt nach dem Laden eines geladenen Modells),
+  FD-262 (*Stellen zeigen* nimmt die Markierung weg),
+  FD-264 (der Objektbaum wächst mit neuen Zeilen nicht mit),
+  FD-265 (Stufe A übersieht den Knopf unter der Namensabsage von *Parameter anlegen*),
+  FD-268 (*Filament und Druck* beginnt nach einer Auswahl zugeklappt),
+  FD-271 (graue Knöpfe an der Maßgruppe nennen keinen Sperrgrund mit Ausweg),
+  FD-272 (die Rückmeldung von *Bohrung ändern* kommt am Schlusslauf zu spät),
+  FD-274 (Bohrung und Fläche tragen beim Überfahren keine Beschriftung),
+  FD-287 (das Material der Dichtung steht schon auf dem Projektmaterial, Regel 21),
+  FD-293 (*Sperren aufheben und erneut teilen* zeigt keine Teilung) und
+  FD-294 (graue Befundhandlungen hinter einem Halt zeigen ihre Beschreibung statt eines
+  Sperrgrunds), alle übrigen leicht:
   FD-204 (Cura-Profile fehlen im Herstellerscan der Druckfeldgrenzen),
   FD-205 (ein geladenes Merkzeichen weitet die Eingabespanne des Felds),
   FD-206 (ein Hinweis beim Öffnen geht verloren, wenn die erste Auswertung abbricht),
@@ -5982,7 +6006,41 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   FD-236 (nach *Auf das Bett setzen* ragt der Körper oben aus dem Bild),
   FD-238 (Flächen im Objektbaum stehen ohne Dreiergruppen),
   FD-239 (der Prüfstand zeigt die Kurzhilfe am grauen Hauptknopf in zwei modalen Dialogen nicht),
-  FD-240 (das Vorher-Bild am Vorhersagetor zeigt manchmal eine noch rechnende Vorschau).
+  FD-240 (das Vorher-Bild am Vorhersagetor zeigt manchmal eine noch rechnende Vorschau),
+  FD-243 (über dem ersten Feld der Seite *Auswahl* stehen 34 bis 36 Wörter),
+  FD-244 (*Platte*, *Qualität* und ein unbeschriftetes Feld im Druckeinstellungsdialog ohne Satz),
+  FD-245 (*Startwert* im Generierungsdialog ohne Satz),
+  FD-247 (Analyse- und Werkzeugleiste halten Qts Abstand 6),
+  FD-248 („An den Slicer übergeben …“ im leeren Bericht außerhalb der Schriftstufen),
+  FD-249 (der Fehlfall von *Auf das Bett setzen* öffnet *Kanten verfeinern*),
+  FD-250 (die erste Rückmeldung von *Auf das Bett setzen* kommt nach 0,35 s),
+  FD-255 (*Eingabe korrigieren* markiert den Wert nicht),
+  FD-256 (Befundhandlungen, die einen Dialog öffnen, kündigen eine Sofortwirkung an),
+  FD-261 (*Verlauf zeigen* markiert den Schritt nicht),
+  FD-263 (*Stützbedarf zeigen* lässt die Unterseite außer Sicht),
+  FD-266 (*Anlegen* in *Parameter anlegen* ohne Überfahrzustand),
+  FD-267 (Mindestwand und Überhangwinkel tragen den Satz ihres Hakens),
+  FD-269 (die Liste in *Als Muster zusammenfassen* heißt „Zellen“, übersetzt klein),
+  FD-270 (Markdown-Sterne in der Kurzhilfe von *Bohrung verschließen*),
+  FD-273 (G3 misst Haken und Klappe der Maßgruppe gegen die Feldspalte),
+  FD-275 (Z1 findet an *Bohrung ändern* keinen Griff),
+  FD-276 (an *Senken* nimmt die Sprachfläche kein Vorschauband auf),
+  FD-277 (*Material kalibrieren* lässt kein Material wählen),
+  FD-278 (die Maßgruppe bleibt nach *Übernehmen* offen),
+  FD-279 (nach dem Senken andere Ausgangswerte in *Merkmal drehen* und *Merkmal verdoppeln*),
+  FD-280 (« allein am Zeilenende im französischen Leersatz des Objektbaums),
+  FD-281 (die Namensabsage nennt „Buchstaben“, lehnt aber Umlaute ab),
+  FD-282 (bei 125 % ist der Filamentpunkt im Objektbaum eckig),
+  FD-283 (Z1 hat keinen Grund für *entfällt* an Zeilen ohne Griff),
+  FD-284 (*Vor Trennnähten schützen* heißt in fr und es wie die Dichtung),
+  FD-285 (am exakten Körper färbt eine gewählte Bohrung den ganzen Körper),
+  FD-286 (das Handbuch sagt, Strg+Z nehme einen Schnitt der automatischen Teilung zurück),
+  FD-288 („Keine“ in *Aushöhlen* im falschen Geschlecht und als zugänglicher Name),
+  FD-289 (die Startszenen von Analyse, Schichten und Bericht zeigen die Versprechen nicht),
+  FD-290 (die Schichtanzeige nennt keine Zahl der Inseln),
+  FD-291 (wie Z3 an Ansichtswerkzeugen urteilt, ist nicht festgelegt),
+  FD-292 (Bericht und Druckdialog nennen verschiedene Überstände),
+  FD-295 (*Stelle zeigen* wiederholt nur den Klick auf den Befund).
   **Abnahme:** je Fund ein Test, der am Stand davor rot war, und der Stand „behoben `<commit>`“
   in der Funddatei; Kundenwirkung im Changelog der nächsten Version in sechs Sprachen.
 
