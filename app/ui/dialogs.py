@@ -1282,11 +1282,11 @@ class KeyDialog(QDialog):
         self.model_field.setEnabled(True)
         self.service_button.setEnabled(True)
         self.probe_button.setEnabled(True)
-        for kanal in (
+        for channel in (
             self.probe_button.setToolTip,
             self.probe_button.setAccessibleDescription,
         ):
-            kanal("")
+            channel("")
         set_role(self.probe_result, "warning", f"{UNEXPECTED_CRASH!s} {detail}")
 
     def _worker_finished(self) -> None:

@@ -1046,7 +1046,7 @@ def test_a_folder_never_reaches_the_settings(qt_app: QApplication, monkeypatch) 
 def test_an_available_install_button_discards_its_previous_block_reason(
     qt_app: QApplication, present: bool
 ) -> None:
-    """Ein neuer Status entfernt die alte Absage aus allen drei Hilfekanälen."""
+    """Ein neuer Status entfernt die alte Absage aus Tooltip und Beschreibung."""
     from app.ui.install_dialog import _Row
 
     requirement = by_id("keyring")

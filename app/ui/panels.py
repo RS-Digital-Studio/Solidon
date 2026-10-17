@@ -8557,7 +8557,6 @@ def configure_feature_field(editor: QWidget, field: Any) -> None:
         for target in (editor, getattr(editor, "spin", None)):
             if isinstance(target, QWidget):
                 target.setToolTip("")
-                target.setStatusTip("")
                 target.setAccessibleDescription("")
         if kind == "bool" and isinstance(editor, QCheckBox):
             editor.setChecked(bool(field.value))

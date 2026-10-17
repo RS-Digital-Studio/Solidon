@@ -342,11 +342,11 @@ def test_the_button_guard_finds_each_missing_channel(qt_app: QApplication, missi
 
 @pytest.mark.parametrize("name", sorted(BUILDERS))
 def test_no_locked_button_stays_silent(name: str, session: Session, qt_app: QApplication) -> None:
-    """Jeder gesperrte, sichtbare Knopf nennt seinen Grund — an allen drei Kanälen.
+    """Jeder gesperrte, sichtbare Knopf nennt seinen Grund — an beiden Kanälen.
 
-    Tooltip für die Maus, Statuszeile für den Blick nach unten, zugängliche
-    Beschreibung für den Bildschirmleser: Ein Grund, den nur die Maus findet,
-    ist für einen Bildschirmleser keiner (Regel 18).
+    Tooltip für die Maus, zugängliche Beschreibung für den Bildschirmleser;
+    die Statuszeile gehört seit RM-509 den Menüaktionen. Ein Grund, den nur
+    die Maus findet, ist für einen Bildschirmleser keiner (Regel 18).
 
     **Gezeigt, nicht nur gebaut.** Vor dem ``show()`` steht ein Dialog auf
     halbem Weg — Suchläufe sind nicht angelaufen, Zustände nicht gesetzt, und
@@ -364,7 +364,7 @@ def test_no_locked_button_stays_silent(name: str, session: Session, qt_app: QApp
         dialog.close()
 
 
-def test_a_row_that_cannot_install_says_why_on_all_three_channels(qt_app: QApplication) -> None:
+def test_a_row_that_cannot_install_says_why_on_both_channels(qt_app: QApplication) -> None:
     """Und der Fall wird hergestellt, nicht der Plattform überlassen.
 
     Auf dieser Maschine ist der Installieren-Knopf für jedes dieser Werkzeuge
@@ -394,11 +394,11 @@ def test_a_row_that_cannot_install_says_why_on_all_three_channels(qt_app: QAppli
         assert not row.action.isEnabled(), "ohne Weg ist der Knopf gesperrt"
         channels = {
             "Tooltip": row.action.toolTip(),
-            "Statuszeile": row.action.statusTip(),
             "Bildschirmleser": row.action.accessibleDescription(),
         }
         stumm = [name for name, text in channels.items() if not text.strip()]
         assert not stumm, f"gesperrt und stumm auf: {', '.join(stumm)}"
+        assert row.action.statusTip() == "", "ein Knopf trägt keinen Statustipp (RM-509)"
     finally:
         row.deleteLater()
 

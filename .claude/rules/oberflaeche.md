@@ -351,7 +351,7 @@ Padding bleiben; Unterleisten, Eingaben, Hauptknöpfe und die vorhandenen
 Zustandsregeln ändern sich dadurch nicht. Wächter: `test_toolbar_rest_style.py`.
 
 **Umbrechende Listen** nehmen `report_rows.WrappedRowDelegate` und
-`ResizeMode.Adjust`, sonst misst Qt ohne Innenrand und kürzt auf „…“.
+`ResizeMode.Adjust`, sonst misst Qt ohne Auswahlkante und kürzt gewählt.
 
 ## Eine Auswahl fällt nie still auf etwas Größeres
 

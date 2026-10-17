@@ -7,13 +7,12 @@ gab ihr eine Zeile Höhe und kürzte sie: „Überstand: 10,00 …“, die Zahl,
 die es ging, ohne Einheit. Gemessen wird deshalb um eine Zeichenbreite
 schmaler, als gezeichnet wird.
 
-**Und in der Fläche, in die gezeichnet wird.** Unter dem Stylesheet misst Qt
-eine Zelle mit ihrer ganzen Breite, zeichnet den Text aber erst nach dem
-Innenrand der Zeile und — gewählt — nach ihrer Akzentkante: acht und drei
-Punkte schmaler, mehr als die Reserve. Im Schlusslauf L4 endeten so Zeilen auf
-„… mais a …“ und „— Parallelepipedo · …“. Die Höhe folgt jetzt dem Text, wie er
-in ``SE_ItemViewItemText`` umbricht, gewählt gerechnet: Die Auswahl legt die
-Zeilen nicht neu.
+**Und in der Fläche, in die gezeichnet wird.** Qt misst eine Zeile ohne ihre
+Auswahlkante; gewählt zeichnet der Bericht den Text drei Punkte schmaler, und
+Qts Delegat kürzt bei sieben bis zehn von hundert Breiten, ohne Kante nie.
+Im Schlusslauf L4 endeten so Zeilen auf „… mais a …“ und „— Parallelepipedo
+· …“. Die Höhe folgt jetzt dem Text, wie er in ``SE_ItemViewItemText``
+umbricht, gewählt gerechnet: Die Auswahl legt die Zeilen nicht neu.
 """
 
 from __future__ import annotations

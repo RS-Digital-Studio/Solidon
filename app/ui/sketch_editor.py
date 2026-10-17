@@ -7040,9 +7040,9 @@ class SketchPanel(QWidget):
         # Linie 1 Ende, Linie 2 Anfang" ist länger als die 254 Pixel der Spalte,
         # und ein abgeschnittener Eintrag wäre schlechter als die Zahlen vorher.
         self.constraint_list.setWordWrap(True)
-        # Gemessen, wie gezeichnet wird, und bei jeder Breite neu: Unter dem
-        # Stylesheet maß Qt die Zeile ohne ihren Innenrand und kürzte die
-        # letzte Zeile auf „…“ — derselbe Fehler wie im Prüfbericht (FD-109).
+        # Gemessen, wie gezeichnet wird, und bei jeder Breite neu: Qt misst
+        # ohne die Auswahlkante und ohne Runden bei 125 % und kürzte so im
+        # Prüfbericht die letzte Zeile auf „…“ (FD-109).
         self.constraint_list.setResizeMode(QListView.ResizeMode.Adjust)
         self.constraint_list.setItemDelegate(WrappedRowDelegate(self.constraint_list))
         # Überfahren lässt die betroffene Geometrie aufleuchten (E19). Ohne das
