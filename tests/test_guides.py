@@ -904,12 +904,19 @@ def test_step_number_never_covers_text_even_in_a_full_dialog(away):
         taken.append(point)
 
 
-def test_the_arrow_of_a_step_number_leaves_the_label_of_its_field_readable() -> None:
+@pytest.mark.parametrize(
+    ("label_top", "label_height"), [(184, 20), (197, 10)], ids=["darauf", "knapp-darunter"]
+)
+def test_the_arrow_of_a_step_number_leaves_the_label_of_its_field_readable(
+    label_top: int, label_height: int
+) -> None:
     """Läuft der Pfeil der einzigen freien Stelle über eine Beschriftung, steht die Nummer im Rand.
 
     Nachgestellt nach *Verrunden* (Probe 17.10.2026): Rechts endet der
     Ausschnitt am Feld, oben und unten steht Text, links bleibt eine freie
     Stelle — und ihr Pfeil deckte das Wort *Radius* zu, das der Schritt nennt.
+    Ein Pfeil ist acht Punkte breit: Drei Punkte über der Oberkante streift er
+    sie noch (*Objekt* beim Deckel).
     """
     from PySide6.QtCore import QRectF
 
@@ -917,7 +924,7 @@ def test_the_arrow_of_a_step_number_leaves_the_label_of_its_field_readable() -> 
 
     bounds = QRectF(0, 0, 600 + 2 * BORDER, 400 + 2 * BORDER)
     frame = QRectF(BORDER + 500, BORDER + 180, 80, 28)
-    label = QRectF(BORDER + 430, BORDER + 184, 60, 20)
+    label = QRectF(BORDER + 430, BORDER + label_top, 60, label_height)
     above = QRectF(BORDER, BORDER, 600, 170)
     below = QRectF(BORDER, BORDER + 220, 600, 180)
     point = _badge_centre(frame, [], bounds, [], away=True, protected=[label, above, below])

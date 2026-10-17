@@ -488,11 +488,12 @@ def _badge_centre(
     foreign = [area for area in protected or () if not area.intersects(inner)]
 
     def crosses(centre: QPointF) -> bool:
-        # Alle vier Punkte: Ein langer Pfeil aus dem Bildrand sprang sonst über
-        # eine schmale Überschrift hinweg (*Objekt* beim Deckel, 17.10.2026).
+        # Alle vier Punkte, und mit der halben Pfeilbreite um jeden Text: Ein
+        # langer Pfeil aus dem Bildrand sprang sonst über eine schmale
+        # Überschrift oder streifte ihre Oberkante (*Objekt* beim Deckel).
         tip = tip_of(centre)
-        box = QRectF(centre, tip).normalized().adjusted(-1, -1, 1, 1)
-        near = [area for area in foreign if area.intersects(box)]
+        box = QRectF(centre, tip).normalized().adjusted(-6, -6, 6, 6)
+        near = [area.adjusted(-5, -5, 5, 5) for area in foreign if area.intersects(box)]
         count = max(16, int(math.hypot(tip.x() - centre.x(), tip.y() - centre.y()) / 4))
         path = [centre + (tip - centre) * (share / count) for share in range(2, count)]
         return away and any(area.contains(point) for point in path for area in near)
