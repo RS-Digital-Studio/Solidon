@@ -239,6 +239,49 @@ def test_the_held_drag_is_pictured_before_the_release(qt_app: Any) -> None:
     assert plain_events == [] and plain.data["unmeasured"] == {}
 
 
+def test_a_drag_approaches_its_grip_before_it_presses(qt_app: Any) -> None:
+    """Schlusslauf 2: Die Ansicht schärft den Griff erst beim Überfahren.
+
+    Der Zug drückte ohne Hinfahren; am echten Fenster fasste er den Körper statt
+    des Langlochknopfs, und das Bild im Zug zeigte den verschobenen Körper.
+    Attrappe: Der Griff wird 50 ms nach einer Bewegung ohne Taste scharf; ein
+    Druck vorher fasst den Körper.
+    """
+    from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
+
+    class View(QObject):
+        slotDragged = Signal(float)  # noqa: N815 - Name der Ansicht
+
+    flow, _events = _drag_flow(qt_app, "basis", {"drag": "handle:slot.end"})
+    view = View()
+    flow.window = SimpleNamespace(viewport=view)
+    state = {"sharp": False, "grabbed": ""}
+
+    class Grip(QObject):
+        def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qts Name
+            kind = event.type()
+            held = kind == QEvent.Type.MouseMove and bool(
+                event.buttons() & Qt.MouseButton.LeftButton
+            )
+            if kind == QEvent.Type.MouseMove and not held:
+                QTimer.singleShot(50, lambda: state.update(sharp=True))
+            elif kind == QEvent.Type.MouseButtonPress:
+                state["grabbed"] = "griff" if state["sharp"] else "körper"
+            elif kind == QEvent.Type.MouseMove and state["grabbed"] == "griff":
+                view.slotDragged.emit(1.0)
+            return False
+
+    grip = flow._keep[0]
+    grip.setMouseTracking(True)  # wie die Ansicht: sie hört auch Bewegungen ohne Taste
+    hover = Grip(grip)
+    grip.installEventFilter(hover)
+    try:
+        flow.phase_drag()
+    finally:
+        grip.close()
+    assert state["grabbed"] == "griff", state
+
+
 def test_the_held_picture_does_not_fall_into_the_frame_time_of_the_drag(qt_app: Any) -> None:
     """RC2-2: Z1 misst je Bewegung die Zeit bis zum nächsten Bild — nicht die Aufnahme.
 
@@ -528,6 +571,56 @@ def test_a_tooltip_that_fades_in_is_pictured_after_its_animation(
     finally:
         button.close()
     assert shown and (tmp_path / "grund.png").is_file()
+
+
+def _tips() -> list[Any]:
+    from PySide6.QtWidgets import QApplication
+
+    return [w for w in QApplication.topLevelWidgets() if w.inherits("QTipLabel")]
+
+
+def test_the_pointer_goes_over_the_grey_button_before_its_tooltip(
+    qt_app: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Schlusslauf 2: Qt blendet eine Kurzhilfe mit Widget aus, steht der Zeiger außerhalb.
+
+    Am echten Fenster stand er noch am letzten Klickort, und der graue
+    *Übernehmen* oben in der Karte hieß „Kurzhilfe gesetzt, aber nicht gezeigt“.
+    Attrappe: Die Kurzhilfe geht sofort wieder aus, solange der Zeiger den Knopf
+    nicht betreten hat.
+    """
+    from PySide6.QtCore import QEvent, QObject, QTimer
+    from PySide6.QtWidgets import QToolTip
+
+    from tools import function_tooltips
+
+    button = _grey(qt_app)
+    inside = {"value": False}
+
+    class Pointer(QObject):
+        def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qts Name
+            if event.type() == QEvent.Type.Enter:
+                inside["value"] = True
+            elif event.type() == QEvent.Type.Leave:
+                inside["value"] = False
+            return False
+
+    pointer = Pointer(button)
+    button.installEventFilter(pointer)
+    real = QToolTip.showText
+
+    def strict(point: Any, text: str, widget: Any = None, *rest: Any) -> None:
+        real(point, text, widget)
+        if not inside["value"]:
+            # Sofort aus, wie Qt, sobald es den Zeiger außerhalb sieht.
+            QTimer.singleShot(0, lambda: [tip.hide() for tip in _tips()])
+
+    monkeypatch.setattr(QToolTip, "showText", strict)
+    try:
+        assert function_tooltips.reason_picture(button, tmp_path / "grund.png")
+    finally:
+        button.close()
+    assert inside["value"] and (tmp_path / "grund.png").is_file()
 
 
 def test_grey_without_a_tooltip_is_named_in_the_protocol(qt_app: Any, tmp_path: Path) -> None:

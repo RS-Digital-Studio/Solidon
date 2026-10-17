@@ -52,6 +52,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from tools.function_gestures import approach
 from tools.native_runs import CARD_ROWS
 
 #: Die linke Maustaste als Zahl, wie ``QApplication.mouseButtons().value`` sie liefert.
@@ -558,6 +559,8 @@ class CardRoute:
         last = QPoint(point)
         evidence["move_targets"] = []
         try:
+            # Hinfahren und verweilen wie die Hand, dann drücken (Schlusslauf).
+            approach(application, handle, handle.mapFromGlobal(point))
             QTest.mousePress(
                 handle,
                 Qt.MouseButton.LeftButton,

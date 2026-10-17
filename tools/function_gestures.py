@@ -44,6 +44,28 @@ HELD_PICTURE: Final = "05-zug-gehalten"
 #: das selbst ein Fund an Z1.
 HELD_FRAME_WAIT_S: Final = 0.5
 
+#: Wie lange die Hand über dem Griff steht, bevor ein Zug drückt (Sekunden). Die
+#: Ansicht schärft einen Griff erst beim Überfahren; ohne Hinfahren fasste der
+#: Druck den Körper statt des Langlochknopfs (Schlusslauf, FD-73).
+APPROACH_S: Final = 0.3
+
+
+def approach(application: Any, widget: Any, local: Any) -> None:
+    """Hinfahren und verweilen wie die Hand, bevor ein Zug drückt (:data:`APPROACH_S`)."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
+
+    # Die Hand kommt von der Seite: Stünde der Zeiger schon hier, gäbe es keine
+    # Bewegung und kein Überfahren.
+    QTest.mouseMove(widget, local + QPoint(2, 2))
+    application.processEvents()
+    QTest.mouseMove(widget, local)
+    until = time.perf_counter() + APPROACH_S
+    while time.perf_counter() < until:
+        application.processEvents()
+        time.sleep(0.005)
+
+
 #: Die Meldungen der Ansicht während eines Zugs am Griff: Geist, Zahl am Zeiger,
 #: verschobener Körper. Kommt keine, hat der Zug den Griff nicht gefasst.
 DRAG_SIGNALS: Final[tuple[str, ...]] = (
@@ -224,6 +246,7 @@ class GesturePhases:
             if hit is None or not self.ports.covers(click, hit):
                 raise BenchFinding(COVERED, target, "der Griff liegt unter etwas anderem")
             local = hit.mapFromGlobal(point)
+            approach(self.application, hit, local)
             QTest.mousePress(hit, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, local)
             for number in range(1, DRAG_MOVES + 1):
                 moves.append(time.perf_counter())
