@@ -2080,7 +2080,7 @@ def test_the_graphics_card_is_never_asked_in_the_main_thread(
     monkeypatch.setattr(keys, "_keyring", lambda: None)
     monkeypatch.setattr(machine, "this_machine", _REAL_THIS_MACHINE)
     monkeypatch.setattr(machine, "_nvidia_card", card)
-    monkeypatch.setattr(machine, "_is_apple_silicon", lambda: False)
+    monkeypatch.setattr(machine, "is_apple_silicon", lambda: False)
     machine.detect.cache_clear()
     try:
         window._ollama_size_answered(None)

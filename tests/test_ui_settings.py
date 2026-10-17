@@ -697,6 +697,44 @@ def test_the_search_offers_every_visible_setting_under_its_row_name() -> None:
     assert "3D-Maus" in seen["spacemouse_invert"], "„Richtung umkehren“ allein sagt nicht, wessen"
 
 
+def test_an_intel_mac_offers_no_update_check_in_the_settings(monkeypatch) -> None:
+    """0.6.1 ist auf dem Intel-Mac die letzte Version: Dort fragt nichts nach, der Haken hätte
+    keine Wirkung und steht weder im Formular noch in der Suche — auf Apple Silicon schon."""
+    from app.core import updates
+    from app.ui.settings import UiSettings
+    from app.ui.settings_dialog import searchable_options
+
+    monkeypatch.setattr(updates, "platform_key", lambda: updates.PLATFORM_MACOS_ARM)
+    assert "updates" in searchable_options(UiSettings())
+    monkeypatch.setattr(updates, "platform_key", lambda: updates.PLATFORM_MACOS_INTEL)
+    assert "updates" not in searchable_options(UiSettings())
+
+
+@pytest.mark.parametrize(
+    ("key", "shown"), [("macos-x86_64", False), ("macos-arm64", True), ("windows", True)]
+)
+def test_the_update_row_stands_only_where_a_question_goes_out(
+    qt_app, monkeypatch, key, shown
+) -> None:
+    """Die Zeile des Hakens folgt ``updates.newer_versions_run_here``, ihr Wert bleibt."""
+    from app.core import updates
+    from app.ui import settings_dialog as module
+    from app.ui.settings import UiSettings
+
+    monkeypatch.setattr(updates, "platform_key", lambda: key)
+    monkeypatch.setattr(module.discover, "remembered_path", lambda _key: "")
+    monkeypatch.setattr(module._SlicerWorker, "work", lambda worker: worker.done.emit(()))
+    settings = UiSettings(check_for_updates=True)
+    dialog = module.SettingsDialog(settings)
+    try:
+        dialog.show()
+        assert dialog.updates.isVisibleTo(dialog) is shown
+        assert dialog.apply_to(settings).check_for_updates is True, "die Wahl bleibt gespeichert"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def test_the_thread_series_are_chosen_in_the_settings_and_filter_the_size_lists(
     qt_app, monkeypatch
 ) -> None:

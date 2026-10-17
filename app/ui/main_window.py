@@ -5766,10 +5766,17 @@ class MainWindow(QMainWindow):
             _("Nach einer neuen Version sehen"),
             None,
             self.action_check_updates,
+            # Wo diese Version die letzte ist, fragt der Klick nicht und sagt den Grund
+            # (:meth:`action_check_updates`); die Kurzhilfe verspricht keine Anfrage.
             tr(
                 "Fragt einmal bei solidon3d.de nach. Geladen und installiert wird "
                 "erst auf Ihre Bestätigung."
-            ),
+            )
+            if updates.newer_versions_run_here()
+            else tr(
+                "Version {version} ist die letzte für Macs mit Intel-Prozessor. "
+                "Neuere Versionen gibt es auf dem Mac nur für Apple Silicon."
+            ).format(version=branding.APP_VERSION),
         )
         # Daneben und nicht woanders: Wer wissen will, ob es etwas Neues gibt,
         # will oft auch wissen, was das Letzte gebracht hat. Der Verlauf liegt
@@ -29177,7 +29184,12 @@ class MainWindow(QMainWindow):
         Bauplans ist eine andere und eine genauere: **Die Grenze liegt beim
         Auslöser, nicht beim Vorgang.** Es lädt nichts von allein, ersetzt sich
         nichts im Hintergrund und startet nichts ohne Klick.
+
+        Wo diese Version die letzte ist (``updates.newer_versions_run_here``), geht keine
+        Frage hinaus; den Grund sagt ein Klick (:meth:`action_check_updates`).
         """
+        if not updates.newer_versions_run_here():
+            return
         worker = _UpdateWorker()
         worker.done.connect(self._update_answered)
         # Ohne Empfänger blieb ``_asked_for_update`` stehen, und „Nach einer
@@ -29209,6 +29221,19 @@ class MainWindow(QMainWindow):
     def _update_answered(self, release: Any) -> None:
         if release is not None and release.newer_than():
             self._asked_for_update = False
+            system = release.needs_newer_system()
+            if system:
+                # Kein Fenster mit Laden und Einspielen, dessen Installer hier ablehnt —
+                # aber die Auskunft, auch beim Start: Wer sie nicht bekommt, erfährt erst
+                # am Ende der Demo, dass es ohne Systemupdate nicht weitergeht. Den Namen
+                # („Windows 10 22H2“) nennt der Kern, keine Build-Nummer.
+                self.announce(
+                    tr(
+                        "Version {version} braucht {system} oder neuer. Nach einem "
+                        "Systemupdate lässt sie sich installieren."
+                    ).format(version=release.version, system=system)
+                )
+                return
             self.announce(tr("Neue Version verfügbar: {version}").format(version=release.version))
             self._show_update(release)
             return
@@ -29341,7 +29366,18 @@ class MainWindow(QMainWindow):
         Die Abfrage beim Start ist Vorgabe und abschaltbar (``app.core.updates``);
         wer sie abgeschaltet hat, hat nur diesen Weg. Für eine Demo mit Enddatum
         ist das der Unterschied zwischen „endet am 30.10." und „ist einfach weg".
+
+        Wo diese Version die letzte ist (``updates.newer_versions_run_here``), sagt der
+        Klick gleich den Grund, ohne vorher „wird nach einer neuen Version gesehen“.
         """
+        if not updates.newer_versions_run_here():
+            self.announce(
+                tr(
+                    "Version {version} ist die letzte für Macs mit Intel-Prozessor. "
+                    "Neuere Versionen gibt es auf dem Mac nur für Apple Silicon."
+                ).format(version=branding.APP_VERSION)
+            )
+            return
         self._asked_for_update = True
         self.announce(tr("Es wird nach einer neuen Version gesehen …"))
         self._check_for_updates()

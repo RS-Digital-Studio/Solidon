@@ -17,13 +17,16 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ## 0.6.1
 
+- A versão 0.6.1 é a última para Macs com processador Intel e funciona lá como demo até 30 de novembro de 2026. A versão comercial para Mac só está disponível para Apple Silicon.
+- A partir da 0.6.2, o Solidon precisa do macOS 15 no Mac e do Windows 10 22H2 ou 11 no Windows. O Solidon não oferece uma atualização que não arrancaria num sistema mais antigo.
+
 ### Utilização e sistema
 
 - Os painéis de medidas movem-se e crescem com campos abertos. Títulos e cotas da mesa mais claros, barras e manípulos mais discretos e grelha mais visível no tema claro facilitam a vista do modelo.
+- Quando uma caixa de diálogo cresce após uma mudança de tipo de letra, sobe se houver espaço acima em vez de deslocar o conteúdo.
 - Corrigido um possível encerramento inesperado ao mudar de característica ou de projeto, ou ao abrir uma caixa de diálogo.
 - A explicação de «Pousar na mesa» também se aplica a corpos que se encontram abaixo da mesa.
 - As listas de ações sobre características usam inteiramente o idioma escolhido.
-- Quando uma caixa de diálogo cresce após uma mudança de tipo de letra, sobe se houver espaço acima em vez de deslocar o conteúdo.
 - No Mac, o Solidon pode agora carregar o controlador da 3Dconnexion (3DxWare) para o rato 3D. Da versão 0.4.1 à 0.6.0, o macOS não o permitia.
 - No Mac, o pacote de instalação coloca agora o Solidon sempre em *Aplicações*. Se o Solidon não estava lá, até agora o pacote atualizava uma cópia noutro lugar.
 - Após atualizar no Mac, abrir o Solidon a partir de *Aplicações*. Apagar as cópias antigas da app fora desta pasta e voltar a adicioná-la ao Dock, se necessário.

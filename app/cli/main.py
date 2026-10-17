@@ -1038,13 +1038,30 @@ def _demo_is_over() -> bool:
     state = activation.state()
     if not state.over:
         return False
+    # Erst hier: ``updates`` zieht Netz und Unterschriftsprüfung nach, und jeder Befehl
+    # fragt diese Funktion — gebraucht wird es nur, wenn die Demo abgelaufen ist.
+    from app.core import updates
+
     last_day = state.deadline.strftime("%d.%m.%Y") if state.deadline else ""
     # Dieselben Sätze wie im Fenster (``dialogs.expired_demo_text``) und
     # dieselbe Wahl: vor dem geplanten Verkaufsstart das Datum, danach der
     # Verweis auf die Website — die Verfügbarkeit behauptet keiner von beiden
     # (RM-061). Hier stand „Die aktuelle Version gibt es auf …", und am
-    # 31.10. gibt es dort keine.
-    if datetime.now(UTC) < PLANNED_SALE_START:
+    # 31.10. gibt es dort keine. Auf einem Intel-Mac kommt keine 1.0
+    # (``updates.newer_versions_run_here``), dort sagen beide, wo die Projekte weiterleben.
+    if not updates.newer_versions_run_here():
+        lines = (
+            tr("Diese Demo war bis einschließlich {date} nutzbar.").format(date=last_day),
+            tr(
+                "Die Verkaufsversion von {app} gibt es auf dem Mac nur für Apple Silicon, nicht "
+                "für Macs mit Intel-Prozessor."
+            ).format(app=APP_NAME),
+            tr(
+                "Ihre gespeicherten Projekte bleiben erhalten. {app} 1.0 öffnet sie unter "
+                "Windows, Linux und auf einem Mac mit Apple Silicon."
+            ).format(app=APP_NAME),
+        )
+    elif datetime.now(UTC) < PLANNED_SALE_START:
         lines = (
             tr("Diese Demo war bis einschließlich {date} nutzbar.").format(date=last_day),
             tr(

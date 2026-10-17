@@ -17,13 +17,16 @@ scrive in `website/version.json`.
 
 ## 0.6.1
 
+- La versione 0.6.1 è l'ultima per i Mac con processore Intel e lì funziona come demo fino al 30 novembre 2026. La versione commerciale per Mac è disponibile solo per Apple Silicon.
+- Dalla 0.6.2 Solidon richiede macOS 15 su Mac e Windows 10 22H2 o 11 su Windows. Solidon non propone un aggiornamento che su un sistema più vecchio non partirebbe.
+
 ### Uso e sistema
 
 - Le schede delle misure si spostano e crescono con i campi aperti. Titoli e quote del piano più chiari, barre e maniglie più sobrie e griglia più visibile nel tema chiaro aiutano a vedere il modello.
+- Se una finestra di dialogo cresce dopo un cambio di carattere, sale quando sopra c'è spazio invece di far scorrere il contenuto.
 - Risolto un possibile arresto anomalo passando da una caratteristica o da un progetto all’altro, o aprendo una finestra di dialogo.
 - La spiegazione di «Appoggia sul piano» ora vale anche per i corpi che si trovano sotto il piano.
 - Gli elenchi delle azioni sulle caratteristiche usano interamente la lingua scelta.
-- Se una finestra di dialogo cresce dopo un cambio di carattere, sale quando sopra c'è spazio invece di far scorrere il contenuto.
 - Su Mac, Solidon ora può caricare il driver di 3Dconnexion (3DxWare) per il mouse 3D. Dalla versione 0.4.1 alla 0.6.0 macOS non lo consentiva.
 - Su Mac, il pacchetto di installazione mette ora Solidon sempre in *Applicazioni*. Se Solidon non era lì, finora il pacchetto aggiornava una copia in un altro posto.
 - Dopo l'aggiornamento su Mac, avvia Solidon da *Applicazioni*. Elimina le vecchie copie dell'app fuori da questa cartella e ricrea il collegamento nel Dock se necessario.

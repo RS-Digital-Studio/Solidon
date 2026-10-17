@@ -3386,7 +3386,17 @@ def sale_notice(state: Activation) -> str:
     if not state.in_demo or not 0 < state.days_left <= SALE_NOTICE_DAYS:
         return ""
     from app.branding import APP_NAME, PLANNED_SALE_START
+    from app.core import updates
 
+    if not updates.newer_versions_run_here():
+        # Auf einem Intel-Mac kommt keine 1.0 (``updates.newer_versions_run_here``): Der
+        # Hinweis sagt das Ende und warum, statt einen Start anzukündigen, der hier nicht gilt.
+        return str(
+            tr(
+                "Die Demo endet am {date}, Ihre Projekte bleiben erhalten. Die Verkaufsversion "
+                "gibt es auf dem Mac nur für Apple Silicon."
+            )
+        ).format(date=deadline_date(state))
     return str(
         tr(
             "Die Demo endet am {date}. {app} 1.0 erscheint voraussichtlich am {start} "

@@ -41,6 +41,16 @@ alle eingetragenen Funde aus RM-812 und die offenen Codestruktur-Funde aus
 RM-813 (CS-28, CS-29, CS-41 bis CS-46) behoben und als 0.6.2 ausgeliefert;
 Codestruktur Schritt 1 und die Kundenpakete folgen danach in Phase 3.
 
+**Wettbewerb: hochwertigste Website, beste App bis 1.0** (Robert, 17.10.2026: „wir
+wollen die hochwertigste webseite haben von allen und bis 1.0 auch die beste app“,
+„die lücken in der app dann in den phasen abarbeiten“, „sollten ja schon alle
+beheben“). Grundlage `konzepte/durchsicht-wettbewerb-2026-10.md`. Ab 01.12. kein
+kostenloser Einstieg, gehostete KI erst nach 1.0 (Entscheidungen Robert). Website
+RM-822 parallel zum Release; App: RM-818 (Laptop mit 125 %) in 0.6.2, RM-819
+(Zahnrad, Gridfinity), RM-820 (Nummern und Montageplan beim Teilen) und RM-821
+(Erkennungsquote an echten Downloads, nach D1) in Phase 3. Ein weiterer Fund aus
+dem Wettbewerb wird ebenso behoben, nicht nur eingetragen.
+
 **Die vier Phasen laufen ohne Datum in ihrer festen Reihenfolge, jede sauber bis zu
 Ende** (Robert, 12.10.2026): Keine Phase wartet auf einen Termin, kein Schritt
 wird für einen Termin gekürzt. Der Verkaufsstart in RM-061 ist ein

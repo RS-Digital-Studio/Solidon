@@ -144,7 +144,15 @@
       "name": "Läuft das auf einem Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ja, für Apple Silicon und für Intel als getrennte Versionen — ein Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht. Wähle das Paket für die Prozessorart deines Macs. Ab Version 0.4.1 sind die Pakete bei Apple notarisiert und öffnen per Doppelklick. Eine ältere Version meldet, macOS könne die Datei nicht auf Schadsoftware prüfen, und bietet als ersten Knopf „In den Papierkorb“ an: Dort „Fertig“ wählen und das Paket in den Systemeinstellungen unter „Datenschutz & Sicherheit“ mit „Trotzdem öffnen“ freigeben."
+        "text": "Ja, für Apple Silicon und für Intel als getrennte Versionen — ein Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht. Wähle das Paket für die Prozessorart deines Macs. Das Intel-Paket gibt es bis zum 30. November 2026. Ab Version 0.4.1 sind die Pakete bei Apple notarisiert und öffnen per Doppelklick. Eine ältere Version meldet, macOS könne die Datei nicht auf Schadsoftware prüfen, und bietet als ersten Knopf „In den Papierkorb“ an: Dort „Fertig“ wählen und das Paket in den Systemeinstellungen unter „Datenschutz & Sicherheit“ mit „Trotzdem öffnen“ freigeben."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Wie lange gibt es Solidon3D für Intel-Macs?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Bis zum 30. November 2026: Version 0.6.1 ist die letzte für Macs mit Intel-Prozessor und läuft dort als Demo bis zu diesem Tag. Die Verkaufsversion gibt es auf dem Mac nur für Apple Silicon. Deine Projekte öffnet Solidon3D 1.0 unter Windows, Linux und auf einem Mac mit Apple Silicon."
       }
     },
     {
@@ -829,14 +837,16 @@
             <ol class="milestone-list">
               <li class="next"><time>Oktober und November 2026</time><span><b>Updates bis 1.0</b>
                 <ul class="milestone-plan">
-                  <li><b>Fehlerbehebungen:</b> vor allem, was ihr in der Demo meldet.</li>
+                  <li><b>Fehlerbehebungen:</b> vor allem, was ihr in der Demo meldet, dazu die letzten Funde aus meiner eigenen Prüfung jeder Funktion.</li>
                   <li><b>Tempo und Stabilität:</b> große Modelle schneller, gleiche Ergebnisse auf Windows, macOS und Linux.</li>
+                  <li><b>Ergänzungen:</b> Bausteine für Zahnräder und Gridfinity, nummerierte Teile mit Montageplan beim automatischen Teilen.</li>
+                  <li><b>Ab Version 0.6.2:</b> Mac nur noch mit Apple Silicon und macOS 15 oder neuer, Windows ab Windows 10 22H2.</li>
                 </ul></span></li>
               <li class="next"><time datetime="2026-12-01T10:00:00+01:00">01.12.2026</time><span>Version 1.0, voraussichtlich</span></li>
             </ol>
-            <p class="milestone-note">Große neue Funktionen kommen vor 1.0
-            nicht mehr dazu. Geplant heißt nicht zugesagt: Jede Version
-            erscheint erst, wenn sie geprüft ist.</p>
+            <p class="milestone-note">Vor 1.0 kommen keine großen neuen Bereiche
+            mehr dazu, nur Ergänzungen, die Lücken schließen. Geplant heißt nicht
+            zugesagt: Jede Version erscheint erst, wenn sie geprüft ist.</p>
           </div>
         </div>
       </div>
@@ -938,6 +948,9 @@
         Smart App Control startet nur signierte oder von Microsoft als sicher
         eingestufte Anwendungen. Windows-Anwendung und Setup-Datei sind ab
         Version 0.5.0 digital signiert.</td></tr>
+        <tr><td>Intel-Macs</td><td>Version 0.6.1 ist die letzte für Macs mit
+        Intel-Prozessor und läuft dort als Demo bis zum 30. November 2026. Die
+        Verkaufsversion gibt es auf dem Mac nur für Apple Silicon.</td></tr>
         <tr><td>Speicherplatz</td><td>rund 750 MB installiert, Download je
         nach System zwischen 170 und 254 MB</td></tr>
         <tr><td>Grundbetrieb</td><td>8 GB Arbeitsspeicher, ein Prozessor mit
@@ -1070,12 +1083,20 @@
           <summary>Läuft das auf einem Mac?</summary>
           <p>Ja, für Apple Silicon und für Intel als getrennte Versionen — ein
           Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht.
-          Wähle das Paket für die Prozessorart deines Macs. Ab Version 0.4.1 sind die
+          Wähle das Paket für die Prozessorart deines Macs. Das Intel-Paket gibt es bis zum 30. November 2026. Ab Version 0.4.1 sind die
           Pakete bei Apple notarisiert und öffnen per Doppelklick. Eine ältere
           Version meldet, macOS könne die Datei nicht auf Schadsoftware prüfen,
           und bietet als ersten Knopf „In den Papierkorb“ an: Dort „Fertig“
           wählen und das Paket in den Systemeinstellungen unter „Datenschutz
           &amp; Sicherheit“ mit „Trotzdem öffnen“ freigeben.</p>
+        </details>
+        <details>
+          <summary>Wie lange gibt es Solidon3D für Intel-Macs?</summary>
+          <p>Bis zum 30. November 2026: Version 0.6.1 ist die letzte für Macs mit
+          Intel-Prozessor und läuft dort als Demo bis zu diesem Tag. Die
+          Verkaufsversion gibt es auf dem Mac nur für Apple Silicon. Deine Projekte
+          öffnet Solidon3D 1.0 unter Windows, Linux und auf einem Mac mit Apple
+          Silicon.</p>
         </details>
         <details>
           <summary>Wie installiere ich das Flatpak unter Linux?</summary>
