@@ -8,7 +8,8 @@
  *                    Karten — Downloads, Besuche, Update-Prüfungen,
  *                    Seitenaufrufe — mit Veränderung, Wert davor, heute und
  *                    30 Tagen; die Versionen derselben Woche als ein Balken;
- *                    dann als Sätze, was nicht schon als Zahl darüber steht
+ *                    dann als Sätze, was nicht schon als Zahl darüber steht —
+ *                    aus dem gewählten Monat, wo ein Satz nichts anderes sagt
  *   Reichweite   Besuche, Aufrufe, Herkunft, Sprache, Seiten mit Einstieg,
  *                Ausstieg und Ausstiegsquote, Sprachwechsel, Tiefe und
  *                Dauer, Wochentag und Uhrzeit
@@ -90,6 +91,13 @@ const DISPLAY_ZONE = DAY_ZONE;
 
 /** Wie viele Zeilen die Ranglisten zeigen. */
 const TOP = 25;
+
+/** Ab wann eine Veränderung zum gleich langen Zeitraum davor deutlich ist:
+ *  um mindestens so viele Prozent, und nur, wenn der Zeitraum davor je
+ *  Kennzahl so viele Ereignisse hatte — aus drei Besuchen wird kein Trend.
+ *  Trendsätze und Kennzahlkarten lesen beide über `trend_tone()` hier. */
+const TREND_PERCENT = 10;
+const TREND_FLOOR = ['d' => 3, 'visits' => 5, 'u' => 5, 'p' => 5];
 
 /** Wie das Cookie heißt, das die Anmeldung merkt. */
 const COOKIE = 'solidon_stats';
@@ -1629,8 +1637,10 @@ $monthDays = $monthStart instanceof DateTimeImmutable && $month <= $current
 //
 // Der Ort sagt, wo die Seite den Satz zeigt: `liste` unter „Was auffällt“,
 // `versionen` in der Versionskarte oben, `jetzt` gar nicht als Satz — die
-// Kennzahlkarten darüber tragen dieselben Zahlen. Warnungen stehen immer vorn.
-// Die JSON-Ausgabe führt jeden Befund, ohne Ort.
+// Kennzahlkarten darüber tragen dieselben Zahlen und die Einstufung als ▲/▼.
+// Warnungen stehen immer vorn. Die JSON-Ausgabe führt jeden Befund, ohne Ort.
+// Die Sätze unter „Was auffällt“ rechnen über den gewählten Monat; wer einen
+// anderen Zeitraum meint, nennt ihn im Satz („der letzten 7 Tage“).
 $findings = [];
 $findingPlaces = [];
 $say = static function (string $tone, string $text, string $place = 'liste') use (&$findings, &$findingPlaces): void {
@@ -1679,17 +1689,34 @@ if ($release !== '') {
     }
 }
 
+/**
+ * Wie deutlich eine Veränderung zum Zeitraum davor ist: `plus` oder `minus`
+ * ab `TREND_PERCENT` in die eine oder andere Richtung, `''` darunter — und
+ * `null`, wenn der Zeitraum davor weniger als `TREND_FLOOR` Ereignisse dieser
+ * Kennzahl hatte und die Veränderung nichts sagt. Die eine Regel für die
+ * Trendsätze und die Veränderungen in den Kennzahlkarten.
+ */
+function trend_tone(int $was, int $is, string $key): ?string
+{
+    if ($was <= 0 || $was < (TREND_FLOOR[$key] ?? PHP_INT_MAX)) {
+        return null;
+    }
+    $percent = ($is - $was) / $was * 100;
+    return $percent >= TREND_PERCENT ? 'plus' : ($percent <= -TREND_PERCENT ? 'minus' : '');
+}
+
 // Trends: nur mit vollständigem Vergleichszeitraum und genug Masse davor.
 $week = $windows[0];
 if ($week['before'] !== null) {
-    foreach (['visits' => ['Besuche', 5], 'd' => ['Downloads', 3]] as $key => [$label, $floor]) {
+    foreach (['visits' => 'Besuche', 'd' => 'Downloads'] as $key => $label) {
         $was = (int) $week['before'][$key];
         $is = (int) $week['now'][$key];
-        if ($was < $floor) {
+        $tone = trend_tone($was, $is, $key);
+        if ($tone === null) {
             continue;
         }
         $delta = ($is - $was) / $was * 100;
-        $tone = $delta >= 10 ? 'plus' : ($delta <= -10 ? 'minus' : 'info');
+        $tone = $tone === '' ? 'info' : $tone;
         $comparison = abs($delta) < 0.5
             ? 'genauso viele wie'
             : n(abs($delta)) . ' % ' . ($delta > 0 ? 'mehr' : 'weniger') . ' als';
@@ -1990,10 +2017,15 @@ function duration_text(?int $seconds): string
  * Vergleichszeitraum ein Strich mit dem Grund im Tooltip — die Daten reichen
  * nach der Löschfrist von zwei Monaten nicht immer sechzig Tage zurück, und
  * eine Veränderung gegen einen halb vorhandenen Zeitraum wäre eine Zahl, die
- * lügt. Vorzeichen als Text; Farbe kommt nur dazu, wo auch ein Trendsatz
- * stünde — ab zehn Prozent und mit `$floor` Ereignissen im Zeitraum davor.
+ * lügt. Die Richtung trägt das Vorzeichen als Text.
+ *
+ * Eine deutliche Veränderung nach `trend_tone()` — dieselbe Regel wie die
+ * Trendsätze, für jede der vier Kennzahlen und beide Zeiträume — bekommt
+ * zusätzlich ▲ oder ▼ mit Namen für Vorleser, die Regel als Tooltip und eine
+ * Farbe. Die Farbe steht nie allein (Regel 18); was die Zeichen bedeuten,
+ * sagt die Fußnote unter den Karten.
  */
-function change(?array $before, array $now, string $key, int $floor = 5): string
+function change(?array $before, array $now, string $key): string
 {
     if ($before === null) {
         return '<span class="delta leer" title="Kein Vergleich: Die Daten reichen nicht bis zum Zeitraum davor zurück.">—</span>';
@@ -2005,8 +2037,33 @@ function change(?array $before, array $now, string $key, int $floor = 5): string
     }
     $percent = ($is - $was) / $was * 100;
     $sign = $percent > 0.5 ? '+' : ($percent < -0.5 ? '−' : '±');
-    $tone = $was >= $floor && abs($percent) >= 10 ? ($percent > 0 ? ' plus' : ' minus') : '';
-    return '<span class="delta' . $tone . '">' . $sign . n(abs($percent)) . ' %</span>';
+    $text = $sign . n(abs($percent)) . ' %';
+    $tone = trend_tone($was, $is, $key);
+    if ($tone === null || $tone === '') {
+        return '<span class="delta">' . $text . '</span>';
+    }
+    [$mark, $word] = $tone === 'plus' ? ['▲', 'deutlich mehr'] : ['▼', 'deutlich weniger'];
+    $rule = ucfirst($word) . ' als im Zeitraum davor: ab ' . TREND_PERCENT . ' % Veränderung bei mindestens '
+        . n(TREND_FLOOR[$key]) . ' davor';
+    return '<span class="delta ' . $tone . '" title="' . e($rule) . '"><span class="zeichen" role="img" aria-label="'
+        . e($word) . '">' . $mark . '</span>' . $text . '</span>';
+}
+
+/**
+ * Was ▲ und ▼ an den Kennzahlkarten bedeuten — aus derselben Regel gebaut,
+ * damit die Fußnote nie eine andere Schwelle nennt als die Zeichen.
+ *
+ * @param array<string, string> $labels Kennzahl => Name auf der Karte
+ */
+function trend_legend(array $labels): string
+{
+    $floors = [];
+    foreach ($labels as $key => $label) {
+        $floors[] = $label . ' ' . n(TREND_FLOOR[$key]);
+    }
+    return '▲ und ▼ markieren eine deutliche Veränderung: mindestens ' . TREND_PERCENT
+        . ' %, wenn der Zeitraum davor genug Masse hat (' . implode(', ', $floors)
+        . '). Ohne Zeichen ist sie kleiner, oder davor war zu wenig für eine Aussage.';
 }
 
 /**
@@ -2141,35 +2198,34 @@ foreach ($findings as $index => $finding) {
 }
 
 // Die vier Kennzahlen oben, in der Reihenfolge der Fragen: Wird geladen, kommt
-// jemand, läuft die Anwendung — und erst dann, wie viel gelesen wird. Die Zahl
-// daneben ist die Masse, ab der eine Veränderung Farbe bekommt, dieselbe wie
-// bei den Trendsätzen.
+// jemand, läuft die Anwendung — und erst dann, wie viel gelesen wird. Ab wann
+// eine Veränderung deutlich ist, sagt `trend_tone()`.
 $metrics = [
-    'd' => ['Downloads', 3],
-    'visits' => ['Besuche', 5],
-    'u' => ['Update-Prüfungen', 5],
-    'p' => ['Seitenaufrufe', 5],
+    'd' => 'Downloads',
+    'visits' => 'Besuche',
+    'u' => 'Update-Prüfungen',
+    'p' => 'Seitenaufrufe',
 ];
 
 // Die Versionen der letzten sieben Tage: einzeln die aktuelle und jede ab drei
 // Prozent, der Rest als eine Gruppe — eine einzelne übrige Version steht
-// trotzdem für sich, eine Gruppe aus einer wäre nur ein Umweg.
-$weekShown = [];
-$weekRest = [];
-foreach ($timeline['versions'] as $life) {
-    if ($life['last_7_days'] === 0) {
-        continue;
-    }
-    if ($life['current'] || ($life['last_7_days_share_percent'] ?? 0.0) >= 3.0) {
-        $weekShown[] = $life;
-    } else {
-        $weekRest[] = $life;
-    }
-}
-if (count($weekRest) === 1) {
-    $weekShown[] = $weekRest[0];
+// trotzdem für sich, eine Gruppe aus einer wäre nur ein Umweg. Erst steht
+// fest, ob es eine Gruppe gibt, dann wird die Liste in ihrer Reihenfolge
+// geteilt: So bleibt auch eine einzelne kleine Version an ihrem Platz, die
+// neueste links.
+$weekLives = array_values(array_filter(
+    $timeline['versions'],
+    static fn (array $life): bool => $life['last_7_days'] > 0
+));
+$isRest = static fn (array $life): bool => !$life['current']
+    && ($life['last_7_days_share_percent'] ?? 0.0) < 3.0;
+$weekRest = array_values(array_filter($weekLives, $isRest));
+if (count($weekRest) < 2) {
     $weekRest = [];
 }
+$weekShown = $weekRest === []
+    ? $weekLives
+    : array_values(array_filter($weekLives, static fn (array $life): bool => !$isRest($life)));
 $weekRestChecks = array_sum(array_column($weekRest, 'last_7_days'));
 
 /** Ein Anteil mit Einheit — oder ein Strich, wenn die Grundmenge fehlt. */
@@ -2238,8 +2294,9 @@ function ranking(array $columns, array $rows, string $one, string $many, int $op
 
 /**
  * Die Anteile der Versionen an den Prüfungen der letzten sieben Tage als ein
- * Balken, die neueste links. Die Farben stehen nie allein: Die Legende darunter
- * nennt jede Version mit Zahl und Anteil, der Tooltip dasselbe.
+ * Balken: die einzeln gezeigten von links nach rechts von neu nach alt, die
+ * Gruppe der übrigen zuletzt. Die Farben stehen nie allein: Die Legende
+ * darunter nennt jede Version mit Zahl und Anteil, der Tooltip dasselbe.
  */
 function week_bar(array $shown, array $rest, int $restChecks, int $total, array $slotOf): string
 {
@@ -2349,6 +2406,9 @@ function week_bar(array $shown, array $rest, int $restChecks, int $total, array 
   .delta.plus { color: var(--good-ink); }
   .delta.minus { color: var(--bad-ink); }
   .delta.leer { font-weight: normal; font-style: normal; }
+  /* ▲ und ▼: die zweite Kodierung der Einstufung neben der Farbe. */
+  .delta .zeichen { font-size: .8em; margin-right: .2em; }
+  h3.zwischen + p.zeitraum { margin-top: -.35rem; }
 
   /* Karten: Jede Zeile ist ein eigener Flex-Container. Eine Karte füllt ihre
      Zeile, alle Karten einer Zeile sind gleich hoch, und wird es zu eng, steht
@@ -2456,8 +2516,10 @@ Monat <?= e($month) ?> · dieselben Zahlen <a href="?m=<?= e($month) ?>&amp;form
 <main>
 
 <section aria-labelledby="befunde">
-<h2 id="befunde">Auf einen Blick <span class="sub">die letzten 7 Tage bis heute gegen die 7 davor — unabhängig vom gewählten Monat<?php if (!$recentComplete): ?>;
-<b>eine Monatsdatei ist unvollständig gelesen, die Werte sind Untergrenzen</b><?php endif; ?></span></h2>
+<?php /* Jeder Teil nennt seinen Zeitraum selbst: Die Karten und die Versionen
+         rechnen rollend bis heute, die Sätze unter „Was auffällt“ aus dem
+         gewählten Monat. Eine Zeile über allem stimmte für einen Teil nicht. */ ?>
+<h2 id="befunde">Auf einen Blick</h2>
 
 <?php if ($warnings || !$month_complete): ?>
 <section class="warnungen" aria-label="Warnungen">
@@ -2478,23 +2540,25 @@ Monat <?= e($month) ?> · dieselben Zahlen <a href="?m=<?= e($month) ?>&amp;form
   <p class="leer" id="jetzt">Noch nichts gezählt.</p>
 <?php else: ?>
 <?php [$week, $month30] = $windows; ?>
+<p class="sub zeitraum">Die letzten 7 Tage bis heute gegen die 7 davor, dazu heute und 30 Tage — rollend über
+die Monatsgrenze, unabhängig vom gewählten Monat<?php if (!$recentComplete): ?>;
+<b>eine Monatsdatei ist unvollständig gelesen, die Werte sind Untergrenzen</b><?php endif; ?>.</p>
 <div class="zahlen" id="jetzt">
-  <?php foreach ($metrics as $key => [$label, $floor]): ?>
+  <?php foreach ($metrics as $key => $label): ?>
   <div class="zahl">
     <h3><?= e($label) ?></h3>
-    <p class="wert"><?= n($week['now'][$key]) ?><?= change($week['before'], $week['now'], $key, $floor) ?></p>
+    <p class="wert"><?= n($week['now'][$key]) ?><?= change($week['before'], $week['now'], $key) ?></p>
     <p class="notiz">letzte 7 Tage, <?= e(short_day($week['from'])) ?>–<?= e(short_day($week['to'])) ?><?php if ($week['before'] !== null): ?> · davor <?= n($week['before'][$key]) ?><?php endif; ?></p>
     <dl>
       <dt>Heute</dt><dd><?= n($todayCounts[$key]) ?></dd>
-      <dt>30 Tage</dt><dd><?= n($month30['now'][$key]) ?><?= change($month30['before'], $month30['now'], $key, $floor) ?></dd>
+      <dt>30 Tage</dt><dd><?= n($month30['now'][$key]) ?><?= change($month30['before'], $month30['now'], $key) ?></dd>
     </dl>
   </div>
   <?php endforeach; ?>
 </div>
-<?php if ($week['before'] === null || $month30['before'] === null): ?>
-<p class="fussnote">„—“ statt einer Veränderung: Die Daten reichen nicht bis zum gleich langen Zeitraum davor
-zurück, denn es bleiben nur der laufende und der vorige Monat.</p>
-<?php endif; ?>
+<p class="fussnote"><?= e(trend_legend($metrics)) ?> <?php if ($week['before'] === null || $month30['before'] === null): ?>
+„—“ statt einer Veränderung: Die Daten reichen nicht bis zum gleich langen Zeitraum davor zurück, denn es
+bleiben nur der laufende und der vorige Monat.<?php endif; ?></p>
 <?php endif; ?>
 
 <?php if ($versions): ?>
@@ -2522,9 +2586,13 @@ zurück, denn es bleiben nur der laufende und der vorige Monat.</p>
   <?php endif; ?>
 </ul>
 <?php if ($weekRest): ?>
+<?php /* Jede übrige Version mit Zahl und Anteil, wie die einzeln gezeigten.
+         Der Anteil mit einer Stelle: Alle liegen unter drei Prozent, und
+         „0 %“ neben einer Prüfung läse sich wie keine. */ ?>
 <details><summary>Die übrigen Versionen einzeln</summary>
 <p class="sub"><?= e(implode(' · ', array_map(static fn (array $life): string => $life['version'] . ': '
-    . plural($life['last_7_days'], 'Prüfung', 'Prüfungen'), $weekRest))) ?></p>
+    . plural($life['last_7_days'], 'Prüfung', 'Prüfungen') . ', ' . pct($life['last_7_days_share_percent'], 1),
+    $weekRest))) ?></p>
 </details>
 <?php endif; ?>
 <?php endif; ?>
@@ -2533,6 +2601,7 @@ zurück, denn es bleiben nur der laufende und der vorige Monat.</p>
 
 <?php if ($listed): ?>
 <h3 class="zwischen">Was auffällt</h3>
+<p class="sub zeitraum">Im Monat <?= e($month) ?>, wo ein Satz keinen anderen Zeitraum nennt.</p>
 <ul class="befunde">
   <?php foreach ($listed as $finding): ?>
   <li class="befund <?= e($finding['tone']) ?>"><?php if ($toneLabels[$finding['tone']] !== ''): ?><span class="ton"><?= e($toneLabels[$finding['tone']]) ?></span><?php endif; ?><?= e($finding['text']) ?></li>
@@ -2940,13 +3009,15 @@ foreach ($timeline['versions'] as $life) {
         n($life['checks']),
         pct($life['share_percent']),
         bar($life['checks'], $lifePeak),
-        $life['last_seen'] === $today ? 'heute' : e(day_label($life['last_seen'])),
+        e(day_label($life['peak_day'])) . ' <span class="leer">(' . n($life['peak']) . ')</span>',
+        ($life['last_seen'] === $today ? 'heute' : e(day_label($life['last_seen'])))
+            . '<small>an ' . e(plural($life['active_days'], 'Tag', 'Tagen')) . '</small>',
     ];
 }
 ?>
 <?= ranking([['Version', 'text', 9], ['veröffentlicht', 'text', 10], ['Mehrheit ab', 'text', 10.5],
     ['erste Woche', 'n', 5.5], ['Prüfungen', 'n', 5.5], ['Anteil', 'n', 4.5], ['', 'balken'],
-    ['zuletzt', 'text', 6]], $lifeRows, 'ältere Version', 'ältere Versionen', 7) ?>
+    ['stärkster Tag', 'text', 7.5], ['zuletzt', 'text', 6.5]], $lifeRows, 'ältere Version', 'ältere Versionen', 7) ?>
 <details>
 <summary>Was die Spalten bedeuten</summary>
 <p class="sub">Veröffentlicht nennt den belegten Release-Tag; liegt die erste gespeicherte
@@ -2954,7 +3025,9 @@ Prüfung ab diesem Tag später, steht sie darunter. Prüfungen vor belegten Rele
 und als Test gekennzeichnete Aufrufe zählen nicht mit. „Mehrheit ab“ ist der erste Tag
 mit mehr als der Hälfte aller Prüfungen, „erste Woche“ der Anteil in den sieben Tagen ab
 Veröffentlichung. Fehlt der Release-Tag oder reichen die Daten nicht bis dorthin, bleiben
-beide leer. Frühere Tests ab dem Release-Tag sind nicht erkennbar.</p>
+beide leer. Frühere Tests ab dem Release-Tag sind nicht erkennbar. „Stärkster Tag“ ist
+der Tag mit den meisten Prüfungen, in Klammern ihre Zahl; unter „zuletzt“ steht, an wie
+vielen Tagen sich die Version gemeldet hat.</p>
 </details>
 </article>
 

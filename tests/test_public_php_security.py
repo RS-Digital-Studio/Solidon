@@ -2196,8 +2196,9 @@ def _stats_sample(anchor: datetime) -> list[dict]:
 
 
 def test_stats_rolling_windows_compare_with_the_period_before(tmp_path: Path) -> None:
-    """Der Block „Jetzt" rechnet rollend bis heute über die Monatsgrenze hinweg
-    und vergleicht nur, wo die Daten den Zeitraum davor ganz abdecken."""
+    """Die Karten unter „Auf einen Blick" rechnen rollend bis heute über die
+    Monatsgrenze hinweg und vergleichen nur, wo die Daten den Zeitraum davor ganz
+    abdecken."""
     today = _display_today()
     day = timedelta(days=1)
     minute = timedelta(minutes=1)

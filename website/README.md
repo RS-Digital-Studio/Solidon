@@ -263,22 +263,28 @@ Abnahme gehört eine vom echten Zähler geschriebene Zeile jeder Art und ein
 anschließender erfolgreicher Wartungslauf. Ein lokaler Test belegt dabei
 weder das produktive Deployment noch die Ausführung des Plesk-Tasks.
 
-`api/stats.php` wertet diese Zeilen aus. Oben steht **Auf einen Blick**,
-rollend bis heute und unabhängig vom gewählten Monat. Zuerst die Warnungen —
-ein Zähler, der seit 48 Stunden keine Zeile geschrieben hat, und eine Version
-aus `version.json`, der im Download-Ordner ein Paket je Zielsystem fehlt.
-Dann die letzten 7 Tage als vier gleich gebaute Karten: Downloads, Besuche,
-Update-Prüfungen und Seitenaufrufe, je mit der Veränderung zum gleich langen
-Zeitraum davor, dem Wert davor, heute und 30 Tagen — über die Monatsgrenze
-hinweg, und ohne Vergleich, wo die Löschfrist die Daten nicht so weit
-zurückreichen lässt. Darunter die Versionen derselben Woche als ein Balken
-mit Zahl und Anteil je Version, zuletzt Befunde als Sätze: jeder eine feste
-Regel über Zahlen, die weiter unten ohnehin stehen, und stumm, wo die Masse
-für eine Aussage fehlt. Der Trend der Woche steht nur als Zahl in den Karten,
-die Sätze zu den Versionen stehen in der Versionskarte; so steht jeder Befund
-einmal auf der Seite, die JSON-Ausgabe führt alle. Danach drei Blöcke, die
-dem Weg eines Kunden folgen: **Reichweite** (Tag für Tag als Säulen mit
-aufklappbarer Tabelle,
+`api/stats.php` wertet diese Zeilen aus. Oben steht **Auf einen Blick**, und
+jeder seiner Teile nennt seinen Zeitraum selbst. Zuerst die Warnungen — ein
+Zähler, der seit 48 Stunden keine Zeile geschrieben hat, und eine Version aus
+`version.json`, der im Download-Ordner ein Paket je Zielsystem fehlt. Dann
+die letzten 7 Tage als vier gleich gebaute Karten, rollend bis heute und
+unabhängig vom gewählten Monat: Downloads, Besuche, Update-Prüfungen und
+Seitenaufrufe, je mit der Veränderung zum gleich langen Zeitraum davor, dem
+Wert davor, heute und 30 Tagen — über die Monatsgrenze hinweg, und ohne
+Vergleich, wo die Löschfrist die Daten nicht so weit zurückreichen lässt. Eine
+deutliche Veränderung (ab 10 % bei genug Masse davor, dieselbe Regel wie die
+Trendsätze) trägt ▲ oder ▼ neben der Farbe, die Fußnote sagt, was die Zeichen
+bedeuten. Darunter die Versionen derselben Woche als ein Balken mit Zahl und
+Anteil je Version, die neueste links; Versionen unter 3 % stehen als Gruppe
+„übrige“ rechts, aufgeklappt jede mit Zahl und Anteil, und eine einzelne
+kleine Version steht für sich an ihrem Platz. Zuletzt unter „Was auffällt“
+Befunde als Sätze über den gewählten Monat, wo ein Satz keinen anderen
+Zeitraum nennt: jeder eine feste Regel über Zahlen, die weiter unten ohnehin
+stehen, und stumm, wo die Masse für eine Aussage fehlt. Der Trend der Woche
+steht nur als Zahl in den Karten, die Sätze zu den Versionen stehen in der
+Versionskarte; so steht jeder Befund einmal auf der Seite, die JSON-Ausgabe
+führt alle. Danach drei Blöcke, die dem Weg eines Kunden folgen:
+**Reichweite** (Tag für Tag als Säulen mit aufklappbarer Tabelle,
 Monate im Vergleich, Herkunft und Sprache je Besuch mit Anteil und
 Konversion, Seiten mit Einstieg, Ausstieg und Ausstiegsquote samt den
 ungelesenen Seiten aus `sitemap.xml`, Wechsel von der deutschen Startseite in
@@ -289,12 +295,12 @@ dem Download) und **Versionen** (Update-Prüfungen aller gespeicherten Tage,
 unabhängig vom gewählten Monat: die Anteile Tag für Tag als gestapelte
 Säulen; je Version Veröffentlichung, darunter die erste Prüfung, wo sie
 abweicht, der erste Tag mit Mehrheit, der Anteil in der ersten Woche,
-Prüfungen und Anteil gesamt und die letzte Prüfung; aufgeklappt Versionen Tag
-für Tag mit einer Spalte je Version und der Marke „neu" am
-Veröffentlichungstag). Jede Karte trägt einen Gedanken, Karten einer Zeile
-sind gleich hoch, lange Ranglisten zeigen ihre ersten Zeilen und klappen den
-Rest auf. Die Release-Tage stammen aus `release-dates.json`, nicht aus der
-ersten Update-Prüfung. Mehrheit und
+Prüfungen und Anteil gesamt, der stärkste Tag und die letzte Prüfung samt der
+Zahl der Tage mit Prüfung; aufgeklappt Versionen Tag für Tag mit einer
+Spalte je Version und der Marke „neu" am Veröffentlichungstag). Jede Karte
+trägt einen Gedanken, Karten einer Zeile sind gleich hoch, lange Ranglisten
+zeigen ihre ersten Zeilen und klappen den Rest auf. Die Release-Tage stammen
+aus `release-dates.json`, nicht aus der ersten Update-Prüfung. Mehrheit und
 erste Woche beginnen am belegten Release-Tag; fehlt er oder reicht die
 Datenabdeckung nicht bis dorthin, bleiben diese Kennzahlen leer.
 Update-Prüfungen vor diesem Tag werden in allen Ansichten ausgeblendet;
