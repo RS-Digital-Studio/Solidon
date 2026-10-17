@@ -904,6 +904,26 @@ def test_step_number_never_covers_text_even_in_a_full_dialog(away):
         taken.append(point)
 
 
+def test_the_arrow_of_a_step_number_leaves_the_label_of_its_field_readable() -> None:
+    """Läuft der Pfeil der einzigen freien Stelle über eine Beschriftung, steht die Nummer im Rand.
+
+    Nachgestellt nach *Verrunden* (Probe 17.10.2026): Rechts endet der
+    Ausschnitt am Feld, oben und unten steht Text, links bleibt eine freie
+    Stelle — und ihr Pfeil deckte das Wort *Radius* zu, das der Schritt nennt.
+    """
+    from PySide6.QtCore import QRectF
+
+    from tools.make_guides import BORDER, _badge_centre
+
+    bounds = QRectF(0, 0, 600 + 2 * BORDER, 400 + 2 * BORDER)
+    frame = QRectF(BORDER + 500, BORDER + 180, 80, 28)
+    label = QRectF(BORDER + 430, BORDER + 184, 60, 20)
+    above = QRectF(BORDER, BORDER, 600, 170)
+    below = QRectF(BORDER, BORDER + 220, 600, 180)
+    point = _badge_centre(frame, [], bounds, [], away=True, protected=[label, above, below])
+    assert point.x() > frame.right(), point
+
+
 def test_capture_protects_visible_dialog_text_and_item_views(qt_app):
     """Die Aufnahme übernimmt auch Text aus einem offenen Auswahldialog."""
     from PySide6.QtWidgets import QDialog, QLabel, QListWidget, QVBoxLayout, QWidget

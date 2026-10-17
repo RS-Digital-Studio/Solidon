@@ -124,7 +124,9 @@ Ausgänge in den Docstrings, die Geschwister in `karte-tools.md`.
   übernimmt sichtbare Textträger und Listen aus Hauptfenster, Menüs und
   Dialogen. Ihre Rechtecke sperren die Nummernplatzierung. Findet sich im
   Bild kein freier Platz, steht die Nummer mit Verbindung im zusätzlichen
-  Bildrand; Bildunruhe allein ist kein Nachweis für freien Textplatz.
+  Bildrand; Bildunruhe allein ist kein Nachweis für freien Textplatz. Auch
+  ihr Pfeil läuft nicht über fremden Text, solange eine Stelle ohne das
+  bleibt, notfalls im Rand.
 - **Filmaufnahmen halten Rohaufnahme, Bildschirm, Handlung und Ergebnis
   getrennt** (`capture.json`, `screen-evidence.json`, `interaction.json`); die
   einzelnen Fallen stehen in `karte-tools.md`, „Fallen“.

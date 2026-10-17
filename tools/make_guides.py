@@ -339,36 +339,6 @@ def annotate(
     return canvas
 
 
-def _shows_the_window(image: QImage, window: Any) -> bool:
-    """Ob die Menüzeile im Bild die ist, die Qt für dieses Fenster zeichnet.
-
-    Verglichen wird an einem Raster von 20 mal 20 Punkten. Kantenglättung und ein Farbstich
-    zählen nicht; liegt aber ein anderes Fenster darüber, weicht mehr als ein
-    Fünftel der Punkte deutlich ab.
-    """
-    bar = window.menuBar()
-    if bar is None or not bar.isVisible():
-        return True
-    drawn = bar.grab().toImage().convertToFormat(QImage.Format.Format_RGB32)
-    corner = bar.mapTo(window, QPoint(0, 0))
-    shown = image.copy(QRect(corner, drawn.size())).convertToFormat(QImage.Format.Format_RGB32)
-    if shown.size() != drawn.size() or drawn.width() < 20 or drawn.height() < 4:
-        return True
-    wrong = 0
-    for column in range(20):
-        for row in range(20):
-            x = (drawn.width() - 1) * column // 19
-            y = (drawn.height() - 1) * row // 19
-            expected, found = QColor(drawn.pixel(x, y)), QColor(shown.pixel(x, y))
-            apart = (
-                abs(expected.red() - found.red())
-                + abs(expected.green() - found.green())
-                + abs(expected.blue() - found.blue())
-            )
-            wrong += apart > 90
-    return wrong <= 80
-
-
 def _small(spot: Spot) -> bool:
     return spot.point or min(spot.rect.width(), spot.rect.height()) < SMALL
 
@@ -449,6 +419,10 @@ def _badge_centre(
     gleicher Ruhe gilt die Reihenfolge unten. Eine abgesetzte Nummer hat dafür
     acht Richtungen in zwei Abständen: Mit den vier Ecken allein lag in einem
     dichten Dialog jede Stelle auf Text.
+
+    **Ihr Pfeil läuft nicht über fremden Text**, solange eine Stelle ohne das
+    bleibt, auch im Bildrand. Die Unruhe allein wog zu wenig: Am Verrunden
+    deckte der Pfeil das Wort *Radius* zu, das der Schritt nennt (17.10.2026).
     """
     reach = BADGE + 3
     middle = frame.center()
@@ -491,13 +465,16 @@ def _badge_centre(
             )
         )
 
+    def tip_of(centre: QPointF) -> QPointF:
+        return QPointF(
+            min(max(centre.x(), frame.left()), frame.right()),
+            min(max(centre.y(), frame.top()), frame.bottom()),
+        )
+
     def unrest(centre: QPointF) -> float:
         score = _busyness(picture, centre, reach)
         if away:
-            tip = QPointF(
-                min(max(centre.x(), frame.left()), frame.right()),
-                min(max(centre.y(), frame.top()), frame.bottom()),
-            )
+            tip = tip_of(centre)
             # Die unruhigste Stelle des Wegs zählt: Eine einzige Textzeile,
             # die der Pfeil kreuzt, stört, auch wenn der Rest leer ist. Kurz
             # vor der Spitze wird nicht gemessen, dort beginnt das Ziel selbst.
@@ -505,12 +482,23 @@ def _badge_centre(
             score += max(_busyness(picture, point, 5.0) for point in path)
         return score
 
+    # Fremd ist Text, der den eigenen Bereich nicht berührt: Eine Liste, in der
+    # die Kachel steht, trägt den Pfeil, die Beschriftung daneben nicht.
+    inner = frame.adjusted(PADDING, PADDING, -PADDING, -PADDING)
+    foreign = [area for area in protected or () if not area.intersects(inner)]
+
+    def crosses(centre: QPointF) -> bool:
+        tip = tip_of(centre)
+        path = [centre + (tip - centre) * (share / 16) for share in range(2, 16)]
+        return away and any(area.contains(point) for point in path for area in foreign)
+
     usable = [rank for rank, centre in enumerate(candidates) if free(centre)]
-    if not usable:
+    clear = [rank for rank in usable if not crosses(candidates[rank])]
+    if not clear:
         # Ein dichter Dialog kann ringsum nur Text tragen. Im zusätzlichen
         # Bildrand bleibt ein sicherer Platz; eine Nummer verdeckt nie Text.
         margin = BADGE + 3
-        candidates = [
+        rim = [
             point
             for distance in range(margin, int(bounds.width()) - margin, 2 * margin + 4)
             for point in (QPointF(distance, margin), QPointF(distance, bounds.bottom() - margin))
@@ -519,15 +507,18 @@ def _badge_centre(
             for distance in range(margin, int(bounds.height()) - margin, 2 * margin + 4)
             for point in (QPointF(margin, distance), QPointF(bounds.right() - margin, distance))
         ]
-        usable = [rank for rank, centre in enumerate(candidates) if free(centre)]
+        spots = [point for point in rim if free(point) and not crosses(point)]
+        if not spots and not usable:
+            spots = [point for point in rim if free(point)]
+        if spots:
+            return min(
+                spots,
+                key=lambda point: (point.x() - middle.x()) ** 2 + (point.y() - middle.y()) ** 2,
+            )
         if not usable:
             raise ValueError("Kein freier Platz für die Schrittnummer; Bildausschnitt vergrößern.")
-        return min(
-            (candidates[rank] for rank in usable),
-            key=lambda point: (point.x() - middle.x()) ** 2 + (point.y() - middle.y()) ** 2,
-        )
     chosen = candidates[
-        min(usable, key=lambda rank: unrest(candidates[rank]) + CALM_ORDER * rank) if usable else 0
+        min(clear or usable, key=lambda rank: unrest(candidates[rank]) + CALM_ORDER * rank)
     ]
     x = min(max(chosen.x(), bounds.left() + reach), bounds.right() - reach)
     y = min(max(chosen.y(), bounds.top() + reach), bounds.bottom() - reach)
@@ -776,7 +767,7 @@ class GuideRun:
             self.settle(2)
             image = grab(self.window)
             other = shots.foreign_window_over(self.window)
-            if not other and _shows_the_window(image, self.window):
+            if not other and web.shows_the_window(image, self.window):
                 return image
             print(
                 f"  … über Schritt {number} lag beim Abgreifen etwas anderes "
