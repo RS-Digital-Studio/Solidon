@@ -26,6 +26,9 @@ from tools.function_machine import Step, StepMachine
 
 #: Die Klasse, als die Qt eine Kurzhilfe zeigt (``QToolTip``).
 TIP_CLASS: Final = "QTipLabel"
+#: Wie lange höchstens auf die Kurzhilfe gewartet wird (Sekunden): Unter Windows
+#: blendet Qt sie mit ``UI_AnimateTooltip`` ein, sichtbar erst nach der Animation.
+TIP_WAIT_S: Final = 1.0
 #: Grund in ``unmeasured``: grau, aber ohne Kurzhilfe — beim Überfahren zeigt Qt nichts.
 NO_VISIBLE_REASON: Final = "kein sichtbarer Sperrgrund: grau ohne Kurzhilfe"
 #: Das Bild der Kurzhilfe am grauen *Übernehmen*, bevor der Kunde etwas ändert (FD-99).
@@ -60,14 +63,20 @@ def reason_picture(widget: Any, path: Path) -> bool:
     einen Grund, den der Kunde nicht sieht (RC-7). Ohne Kurzhilfe, an einem
     offenen Element oder wenn Qt keine Kurzhilfe zeigt: kein Bild, ``False``.
     """
+    import time
+
     from PySide6.QtWidgets import QApplication, QToolTip
 
     text = str(widget.toolTip() or "")
     if widget.isEnabled() or not text.strip() or not widget.isVisible():
         return False
     QToolTip.showText(widget.mapToGlobal(widget.rect().center()), text, widget)
+    # Bis sie steht, höchstens :data:`TIP_WAIT_S` — ein Durchlauf sah nativ nie eine.
+    until = time.perf_counter() + TIP_WAIT_S
     QApplication.processEvents()
-    tip = _shown_tip()
+    while (tip := _shown_tip()) is None and time.perf_counter() < until:
+        time.sleep(0.01)
+        QApplication.processEvents()
     try:
         return bool(tip is not None and tip.grab().save(str(path)))
     finally:
