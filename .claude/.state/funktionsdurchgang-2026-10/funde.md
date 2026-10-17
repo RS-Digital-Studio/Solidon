@@ -2778,7 +2778,7 @@ eingefroren“).
 - Ursache: FD-196 begrenzt Kurzhilfe und Vorlesetext einer Sammelzeile auf fünfzehn Mitglieder (`NAMED_MEMBERS`) mit „… (+N)“; die Einzelheiten, die man im Prüfbericht aufklappt, übernahmen genau diesen Text (`app/ui/panels.py`, `finding_details.setPlainText(item.toolTip()…)`).
 - Vorschlag: Die Zeile trägt die vollständigen Einzelheiten aus der Liste aller Mitglieder getrennt von der Kurzhilfe, und das aufgeklappte Feld liest dort; Kurzhilfe und Vorlesetext bleiben bei fünfzehn.
 - Wirkung beim Kunden: Nach einem Stapelimport von 17 Körpern standen in den aufgeklappten Einzelheiten nur fünfzehn und „… (+2)“; Körper 16 und 17 waren im Prüfbericht nicht mehr zu finden. 0.6.0 nannte dort jeden Körper.
-- Stand: offen RM-737; Fix `4617bd1ec` auf `fix/w5-stapel`, gemergt nach Bereichsnachweis. Mit dem Fix nennen die aufgeklappten Einzelheiten einer Sammelzeile wieder jedes Mitglied (`_DETAILS_ROLE`), Kurzhilfe und Vorlesetext bleiben bei fünfzehn; der Testfall aus dem Beleg ist danach grün, Nachbarn 1191 grün.
+- Stand: behoben `4617bd1ec`: Mit dem Fix nennen die aufgeklappten Einzelheiten einer Sammelzeile wieder jedes Mitglied (`_DETAILS_ROLE`), Kurzhilfe und Vorlesetext bleiben bei fünfzehn; der Testfall aus dem Beleg ist danach grün, Nachbarn 1191 grün.
 
 ## Nachgetragene Funde aus CI-Fix und Prüfstand (ab FD-213)
 
