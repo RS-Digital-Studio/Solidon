@@ -8,13 +8,40 @@ der kürzen darf — sie steht mit dem ganzen Satz in Kurzhilfe und für den
 Bildschirmleser, und die nächste ersetzt sie ohnehin.
 
 ``text()`` bleibt der ganze Satz; gekürzt wird nur beim Zeichnen.
+
+Ein Feld, dessen Text wächst, nimmt seine Breite sofort (:func:`settle_in_bar`).
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPainter, QPaintEvent, QResizeEvent
-from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
+from PySide6.QtWidgets import QLabel, QSizePolicy, QStatusBar, QWidget
+
+
+def settle_in_bar(field: QWidget) -> None:
+    """Ein Feld der Statusleiste steht nach neuem Text gleich in seiner Breite (FD-90).
+
+    Qt legt einen geänderten Text erst mit nachgereichten ``LayoutRequest``-
+    Ereignissen aus — beim Feld mit eigenem Layout zweimal, erst im Feld,
+    dann in der Leiste. Kam eines davon nicht an, blieb das Feld in der
+    alten Breite stehen, über Sekunden und viele Ereignisrunden: Am echten
+    Fenster zeigte die Zahlenzeile nach dem Öffnen „3,5 ç“ statt
+    „3,5 g · 6 min“. Hier werden beide Layouts gleich gelegt; was danach
+    gezeichnet wird, passt zum Text.
+    """
+    own = field.layout()
+    if own is not None:
+        own.invalidate()
+        own.activate()
+    field.updateGeometry()
+    # Nur in der Leiste: Vor ``addPermanentWidget`` hängt das Feld noch am
+    # Hauptfenster, und dessen Layout legt man nicht nebenbei neu.
+    bar = field.parentWidget()
+    layout = bar.layout() if isinstance(bar, QStatusBar) else None
+    if layout is not None:
+        layout.invalidate()
+        layout.activate()
 
 
 class StatusLine(QLabel):

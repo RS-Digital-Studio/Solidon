@@ -462,7 +462,7 @@ from app.ui.sketch_focus import focus_the_sketch
 from app.ui.spacemouse import SpaceMouseController
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_paths, accepted_url, dropped_file
-from app.ui.status_line import StatusLine
+from app.ui.status_line import StatusLine, settle_in_bar
 from app.ui.style import (
     NORMAL,
     TIGHT,
@@ -7501,6 +7501,7 @@ class MainWindow(QMainWindow):
             message = licence_lock_line(state)
         self.trial_line.setText(message)
         self.trial_line.setVisible(bool(message))
+        settle_in_bar(self.trial_line)
         # Der Satz nennt den Menüweg weiterhin — er steht auch im Handbuch und
         # in fünf Katalogen so. Was dazukommt, ist die Zusage, dass der Klick
         # dorthin führt: an drei Stellen, weil drei verschiedene Leute sie
@@ -29502,6 +29503,7 @@ class MainWindow(QMainWindow):
         # Das Zeichen steht neben der Zahl, nicht statt ihrer: dieselbe zweite
         # Kodierung wie am Reiter (Regel 18).
         self.alert_button.setText(f"{SEVERITY_MARKER['warning']} {count}")
+        settle_in_bar(self.alert_button)
         hint = (
             tr("Ein offener Befund — anklicken öffnet den Prüfbericht.")
             if count == 1

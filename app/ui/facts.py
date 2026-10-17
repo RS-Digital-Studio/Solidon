@@ -28,6 +28,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QWidget
 from app.core.slice.estimate import Estimate
 from app.i18n import tr
 from app.ui.labels import localised
+from app.ui.status_line import settle_in_bar
 from app.ui.style import NORMAL, TIGHT, set_level
 
 
@@ -209,6 +210,8 @@ class PrintFacts(QToolButton):
             )
         self.setToolTip(said)
         self.setAccessibleDescription(said)
+        # Beide Zeilen stehen, wie sie jetzt lauten — nicht in der Breite davor.
+        settle_in_bar(self)
 
     def state(self) -> tuple[str, str]:
         """Was dasteht — die Tests lesen das."""

@@ -2050,9 +2050,11 @@ class PlacementFlow(QObject):
             # grau ohne Grund. Satz und erstes offenes Feld kommen aus der
             # Regel aller Flächen mit *Übernehmen* (``first_change``).
             said = first_change_sentence(self._measure_targets, group)
+        # Kurzhilfe und Beschreibung, **kein Statustipp** (RM-509): Mit ihm sagte
+        # die Statuszeile eine Ablehnung, sobald jemand auf den grauen Knopf
+        # zeigte — obwohl sie schon unter ihrem Feld steht (FD-88).
         for setter in (
             self._measure_accept.setToolTip,
-            self._measure_accept.setStatusTip,
             self._measure_accept.setAccessibleDescription,
         ):
             setter(said)
@@ -2910,7 +2912,6 @@ class PlacementFlow(QObject):
         self._measure_accept.setEnabled(True)
         for setter in (
             self._measure_accept.setToolTip,
-            self._measure_accept.setStatusTip,
             self._measure_accept.setAccessibleDescription,
         ):
             setter("")

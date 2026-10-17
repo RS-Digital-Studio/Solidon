@@ -39,7 +39,8 @@ def test_the_sentence_names_the_first_open_field_of_the_card(selected_hole, qt_a
     assert not flow.dialog.begun and not apply.isEnabled()
     said = first_change_sentence(group.findChildren(QAbstractSpinBox), group)
     assert said and apply.toolTip() == said
-    assert apply.accessibleDescription() == said and apply.statusTip() == said
+    assert apply.accessibleDescription() == said
+    assert not apply.statusTip(), "Statustipps nur an Menüaktionen (RM-509, FD-88)"
     assert _says_a_way_out(apply), "der Prüfstand zählt das Feld als Ausweg"
 
 

@@ -127,6 +127,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `sculpt_bar.py` | Leiste der Formsitzung (§25): vier Werkzeugknöpfe, Stufe 1–10, *Spiegeln*; `GestureAnalysis` teilt Karte und Befund mit dem Skelett |
 | `pose_bar.py` | Leiste des Skeletts (§25): Zustand, Hinweis, *Fertig*; danach bleiben Karte, Befund und Schließen |
 | `facts.py` | was das Teil kostet, während man daran baut (§22, §29) |
+| `status_line.py` | Statusleiste: `StatusLine` kürzt die Meldung statt ihrer Nachbarn, `settle_in_bar` legt ein Feld mit gewachsenem Text sofort in seine Breite |
 
 ### Dialoge
 

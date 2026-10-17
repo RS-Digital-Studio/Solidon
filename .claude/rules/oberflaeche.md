@@ -77,7 +77,11 @@ auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
 Ist eine Zeile gesperrt, tragen beide Hälften den *Grund* statt des Satzes. Dazu `accessibleDescription`
 (Regel 18); ein eigener Tooltip bleibt, der Satz kommt dahinter. **Einen
 `statusTip` tragen nur Menüaktionen** (Entscheidung Robert, RM-509): An Feldern
-und Knöpfen wiederholte er den Tooltip.
+und Knöpfen wiederholte er den Tooltip, am grauen *Übernehmen* sogar die
+Ablehnung unter dem Feld (FD-88). Ein Feld der Statusleiste, dessen Text nach
+dem Aufbau wächst, ruft danach `status_line.settle_in_bar` — sonst hängt seine
+Breite an nachgereichten Layoutanfragen und blieb am echten Fenster so schmal
+wie leer (FD-90).
 
 **Auswahlwerte tragen je einen Satz** aus `_CHOICE_NOTES` — was der Wert
 bewirkt und kostet. `explain_choices(box)` hängt ihn als ToolTipRole **und**
