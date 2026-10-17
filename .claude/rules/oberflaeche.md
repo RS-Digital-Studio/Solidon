@@ -77,11 +77,9 @@ auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
 Ist eine Zeile gesperrt, tragen beide Hälften den *Grund* statt des Satzes. Dazu `accessibleDescription`
 (Regel 18); ein eigener Tooltip bleibt, der Satz kommt dahinter. **Einen
 `statusTip` tragen nur Menüaktionen** (Entscheidung Robert, RM-509): An Feldern
-und Knöpfen wiederholte er den Tooltip, am grauen *Übernehmen* sogar die
-Ablehnung unter dem Feld (FD-88). Ein Feld der Statusleiste, dessen Text nach
-dem Aufbau wächst, ruft danach `status_line.settle_in_bar` — sonst hängt seine
-Breite an nachgereichten Layoutanfragen und blieb am echten Fenster so schmal
-wie leer (FD-90).
+und Knöpfen wiederholte er den Tooltip, am grauen *Übernehmen* die Ablehnung
+(FD-88). Wächst der Text eines Statusleistenfelds, folgt
+`status_line.settle_in_bar`, sonst bleibt es so schmal wie leer (FD-90).
 
 **Auswahlwerte tragen je einen Satz** aus `_CHOICE_NOTES` — was der Wert
 bewirkt und kostet. `explain_choices(box)` hängt ihn als ToolTipRole **und**
@@ -352,11 +350,8 @@ transparenten Hintergrund und Rahmenfarbe (`style.stylesheet`). Breite und
 Padding bleiben; Unterleisten, Eingaben, Hauptknöpfe und die vorhandenen
 Zustandsregeln ändern sich dadurch nicht. Wächter: `test_toolbar_rest_style.py`.
 
-## Umbrechende Listen messen, wie sie zeichnen
-
-Eine `QListWidget` mit Umbruch nimmt `report_rows.WrappedRowDelegate` und
-`ResizeMode.Adjust`: Qt misst unter dem Stylesheet ohne Innenrand und kürzt
-sonst auf „…“.
+**Umbrechende Listen** nehmen `report_rows.WrappedRowDelegate` und
+`ResizeMode.Adjust`, sonst misst Qt ohne Innenrand und kürzt auf „…“.
 
 ## Eine Auswahl fällt nie still auf etwas Größeres
 

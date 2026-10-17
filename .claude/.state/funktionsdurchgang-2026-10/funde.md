@@ -2821,7 +2821,9 @@ eingefroren“) und in 0.6.2 behoben (Robert, 17.10.2026). Ihr Registerpunkt ist
 - Wirkung beim Kunden: Kein Produktfehler; die Vorhersage stützt sich an diesen Toren auf eine Vorschau, die noch nicht fertig ist.
 - Stand: offen RM-812
 
-Die folgenden Funde (FD-241 bis FD-295) kommen aus den Nachurteilen am Schlusslauf
+## Nachurteile am Schlusslauf (FD-241 bis FD-300, für 0.6.2, RM-812)
+
+Die folgenden Funde (FD-241 bis FD-300) kommen aus den Nachurteilen am Schlusslauf
 (`output/konsolidierung-2026-10-12/nachurteil-pruefer1a-claude.md`, `nachurteil-pruefer1b-claude.md`,
 `nachurteil-pruefer2-claude.md`); Lauf L4 ist `F:\tmp-suche\schlusslauf-d9f7a81f\L4-d0`, Lauf L5
 `F:\tmp-suche\schlusslauf-d9f7a81f\L5-v4`, beide an `d9f7a81f9`. SHA256 der Bilder gekürzt auf zwölf Stellen.
