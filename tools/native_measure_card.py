@@ -558,6 +558,11 @@ class CardRoute:
         last = QPoint(point)
         evidence["move_targets"] = []
         try:
+            # Hinfahren und verweilen wie die Hand, dann drücken (Schlusslauf). Erst
+            # hier geladen: Das Kind prüft sein Siegel vor jedem Prüfstandsmodul.
+            from tools.function_gestures import approach
+
+            approach(application, handle, handle.mapFromGlobal(point))
             QTest.mousePress(
                 handle,
                 Qt.MouseButton.LeftButton,

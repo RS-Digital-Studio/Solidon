@@ -65,12 +65,22 @@ def reason_picture(widget: Any, path: Path) -> bool:
     """
     import time
 
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QToolTip
 
     text = str(widget.toolTip() or "")
     if widget.isEnabled() or not text.strip() or not widget.isVisible():
         return False
-    QToolTip.showText(widget.mapToGlobal(widget.rect().center()), text, widget)
+    # Erst der Zeiger über den Knopf, wie die Hand: Qt blendet eine Kurzhilfe mit
+    # Widget aus, sobald der Zeiger außerhalb steht — am echten Fenster stand er
+    # noch am letzten Klickort (Schlusslauf, clear_filament bei 125 %).
+    centre = widget.rect().center()
+    QTest.mouseMove(widget, centre + QPoint(1, 1))  # von der Seite, sonst keine Bewegung
+    QTest.mouseMove(widget, centre)
+    for _round in range(5):
+        QApplication.processEvents()
+    QToolTip.showText(widget.mapToGlobal(centre), text, widget)
     # Bis sie steht, höchstens :data:`TIP_WAIT_S` — ein Durchlauf sah nativ nie eine.
     until = time.perf_counter() + TIP_WAIT_S
     QApplication.processEvents()
