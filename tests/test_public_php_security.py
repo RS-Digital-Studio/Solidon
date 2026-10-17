@@ -2079,10 +2079,10 @@ def test_update_counting_keeps_no_visitor_identifier_or_referrer(tmp_path: Path)
         assert '<th class="n">Prüfungen</th>' in updates
         assert "Installationen" not in updates
         assert "Installationen (Tag mal Kennzeichen)" not in page
-        # Die Zeile: Name, Veröffentlichung, erste und letzte Prüfung, Tage, dann
-        # die Prüfungen — zwei Abrufe bleiben zwei, keine Rechnerzahl.
+        # Die Zeile: Name, Veröffentlichung, Mehrheit, erste Woche, dann die
+        # Prüfungen — zwei Abrufe bleiben zwei, keine Rechnerzahl.
         assert re.search(
-            r"0\.4\.0<span class=\"marke\">aktuell</span></td>(?:\s*<td[^>]*>.*?</td>){4}"
+            r"0\.4\.0<span class=\"marke\">aktuell</span></td>(?:\s*<td[^>]*>.*?</td>){3}"
             r"\s*<td class=\"n\">2</td>",
             updates,
         )
@@ -2250,7 +2250,8 @@ def test_stats_rolling_windows_compare_with_the_period_before(tmp_path: Path) ->
     # Dreißig Tage ohne Vergleich: Die Daten reichen nicht sechzig Tage zurück,
     # und eine Veränderung gegen einen halb vorhandenen Zeitraum wäre gelogen.
     assert (month["days"], month["before"]) == (30, None)
-    now_block = page.split('<h2 id="jetzt">')[1].split('<h2 id="reichweite">')[0]
+    # Die Karten der Woche tragen den Anker „jetzt“ unter „Auf einen Blick“.
+    now_block = page.split('id="jetzt"')[1].split('<h2 id="reichweite">')[0]
     assert "+17 %" in now_block and "±0 %" in now_block  # 6 → 7 Aufrufe, 6 → 6 Besuche
     assert "vorher 0" not in now_block
     assert now_block.count("Kein Vergleich") == 4, "je Spalte ein Strich mit Grund"
@@ -2523,7 +2524,17 @@ def test_stats_uses_release_dates_and_excludes_only_proven_prerelease_checks(
     assert per_day[release_day]["new"] == ["0.5.1"]
     assert per_day[release_day]["cells"]["0.5.1"] == 0
     assert per_day[(published - day).strftime("%Y-%m-%d")]["total"] == 0
-    assert "<th>veröffentlicht</th>" in page and "<th>zuerst geprüft</th>" in page
+    # Veröffentlichung und erste Prüfung teilen sich eine Zelle; weichen sie ab,
+    # steht die erste Prüfung darunter.
+    weekday = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+    first_check = published + 2 * day
+    release_cell = (
+        f"<td>{weekday[published.weekday()]} {published:%d.%m.}<small>erste Prüfung "
+        f"{weekday[first_check.weekday()]} {first_check:%d.%m.}</small></td>"
+    )
+    lifecycle = page.split('<h3 id="versionen">Je Version</h3>')[1].split("</table>")[0]
+    assert "<th>veröffentlicht</th>" in lifecycle
+    assert '0.5.1<span class="marke">aktuell</span></td>' + release_cell in lifecycle
     assert re.search(r"veröffentlicht am \w{2} " + re.escape(published.strftime("%d.%m.")), page)
     release_row = page.split('<span class="marke">neu: 0.5.1</span>')[1].split("</tr>")[0]
     assert '<td class="n">0 %</td>' in release_row, "auch vor der ersten Prüfung: 0 % ab Release"
@@ -2570,7 +2581,8 @@ def test_stats_findings_warn_about_a_silent_counter_and_a_missing_package(
         "macOS (Intel)." in warnings
     ), "das Linux-Paket der alten Version zählt nicht für die neue"
     assert any("noch keine Update-Prüfung" in finding["text"] for finding in findings)
-    block = page.split('<h2 id="befunde">')[1].split('<h2 id="jetzt">')[0]
+    # Vor den Karten der Woche, also vor jeder Zahl der Seite.
+    block = page.split('<h2 id="befunde">')[1].split('id="jetzt"')[0]
     assert block.count('<span class="ton">Achtung</span>') == len(warnings)
 
 
