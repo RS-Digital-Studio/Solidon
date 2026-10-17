@@ -2737,6 +2737,42 @@ eingefroren“). Ihr Registerpunkt ist RM-812.
 - Wirkung beim Kunden: Ob ein Ausschnitt realistisch am Speicher scheitert, ist offen; tut er es, sieht der Kunde einen internen Fehler statt einer Absage mit Handlung (Regel 17).
 - Stand: offen RM-812
 
+### FD-233 Ein Druck ohne vorheriges Überfahren fasst den Körper statt des Griffs
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `slot_hole` (Langlochgriff) und jeder Zuggriff der Ansicht
+- Prüfpunkt: 6
+- Beleg: `output/konsolidierung-2026-10-12/schlusslauf-claude.md`, „Sonde FD-73“ (Kopf `df6d34031`, `F:\tmp-suche\schlusslauf-df6d3403\SONDE-2` und `SONDE-3`): Druck an derselben Stelle (4300, 630) auf dem rechten Langlochknopf; ohne vorherige Bewegung (SONDE-2) wird der ganze Körper gewählt und verschoben, mit `mouseMove` an denselben Ort und 0,3 s Verweilen (SONDE-3) wird das Langloch gezogen, Griffmaß „18,12 mm“.
+- Ursache: Die Ansicht schärft einen Griff erst beim Überfahren; ein Druck, dem keine Bewegung vorausging, trifft die Körperwahl.
+- Vorschlag: Beim Druck selbst prüfen, ob unter dem Zeiger ein Griff liegt, und ihn dann fassen; Test mit Druck ohne vorherige Bewegung am Langloch und an einem zweiten Griff.
+- Wirkung beim Kunden: Mit Stift oder Touch, und mit der Maus nach einem Sprung ohne Zwischenbewegung, verschiebt der erste Zug den ganzen Körper statt das Langloch; Strg+Z nimmt es zurück.
+- Stand: offen RM-812
+
+### FD-234 Die Sprachfälle der Pakete D1, D2, D7, D9, D11 und D12 erreichen am echten Fenster 44 Flächen nicht
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: keine Zeile: Wege des Prüfstands (FD-101, FD-175)
+- Prüfpunkt: 1, 2
+- Beleg: `output/konsolidierung-2026-10-12/schlusslauf-claude.md`, L3 an `c5666931d` (`F:\tmp-suche\schlusslauf-c5666931\L3-wege`): 44 Wegfunde, darunter 001 D1 `Hilfe/Beispiele` verdeckt (an [3734,34] liegt nichts), 013 D11 `history` vom `HistoryPanel` verdeckt und 14 Kontextmenüzeilen „kein offenes Menü“, 019 D12 `setting.section:*` und `dialog.*` „kein Dialog offen“, 037 `request.send` nach 60 s grau, 073 D2 sechs Grundkörper „weder Knopf noch Menüzeile“, 097 D7 `dialog:sketch_editor_dialog` am Rollanschlag, 103 D9 `print.*` „der Druckdialog ist nicht offen“. Offscreen gehen dieselben Fälle durch; D0, D4, D8 und D10 erreichen nativ jede Fläche.
+- Ursache: Die Wege aus FD-101/175 sind an der Offscreen-Lage gebaut; am echten Fenster (2560 × 1369, andere Leistenbreiten, echte Menüs und Dialoge) fehlen Hinfahren, Öffnen des Menüs oder Dialogs und Rollen.
+- Vorschlag: Je Bauart des Wegfunds einen nativen Fall als Test, die Wege an der echten Lage ausrichten; vor den Phase-3-Paketen beheben, weil diese Sprachfälle dort als Beleg dienen.
+- Wirkung beim Kunden: Kein Produktfehler; an diesen Flächen fehlt der native Beleg der Sprachprüfung.
+- Stand: offen RM-812
+
+### FD-236 Nach *Auf das Bett setzen* ragt der Körper oben aus dem Bild
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `place_on_bed`
+- Prüfpunkt: E4
+- Beleg: Schlusslauf L4 an `d0173380f`, Fall 002 (`F:\tmp-suche\schlusslauf-d0173380\L4-d0\cases\002`, Szene `unter_dem_bett.netz`): `function.json` `spot.frame` [4075, −31, 997, 973] gegen `spot.view` [3413, 92, 2560, 1259], `inside` falsch; `03-uebernommen.png` zeigt den Würfel ohne Oberseite. Schon im finalen Lauf des Funktionsdurchgangs so.
+- Ursache: Die Ansicht folgt dem angehobenen Körper nicht; der Bildausschnitt bleibt der von vorher, als der Würfel unter dem Bett lag.
+- Vorschlag: Nach einer Handlung, die den Körper aus dem Bild schiebt, den Ausschnitt nachführen (wie beim Einfügen), ohne eine vom Nutzer gesetzte Ansicht ungefragt zu verlassen; Test mit dem Fall aus dem Beleg.
+- Wirkung beim Kunden: Wer ein Modell unter dem Bett auf das Bett setzt, sieht danach dessen Oberseite nicht und muss die Ansicht selbst einpassen.
+- Stand: offen RM-812
+
 ## Regressionen aus Fixen nach dem Einfrieren (ab FD-212)
 
 Was ein Fix des eingefrorenen Umfangs kaputt macht, ist kein neuer Fund für
@@ -2779,6 +2815,18 @@ eingefroren“).
 - Vorschlag: Die Zeile trägt die vollständigen Einzelheiten aus der Liste aller Mitglieder getrennt von der Kurzhilfe, und das aufgeklappte Feld liest dort; Kurzhilfe und Vorlesetext bleiben bei fünfzehn.
 - Wirkung beim Kunden: Nach einem Stapelimport von 17 Körpern standen in den aufgeklappten Einzelheiten nur fünfzehn und „… (+2)“; Körper 16 und 17 waren im Prüfbericht nicht mehr zu finden. 0.6.0 nannte dort jeden Körper.
 - Stand: behoben `4617bd1ec`: Mit dem Fix nennen die aufgeklappten Einzelheiten einer Sammelzeile wieder jedes Mitglied (`_DETAILS_ROLE`), Kurzhilfe und Vorlesetext bleiben bei fünfzehn; der Testfall aus dem Beleg ist danach grün, Nachbarn 1191 grün.
+
+### FD-232 Eine Filamentbuchung aus 0.6.0 für einen Körper aus eigenem Rezept wird nach dem Update nicht wiedererkannt
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `usage.review`, `dialog:usage_dialog`
+- Prüfpunkt: 7, V5
+- Beleg: `output/konsolidierung-2026-10-12/review-i-claude.md`, B-2: Der Verbrauchsabdruck desselben Körpers aus eigenem Rezept ist an `v0.6.0`, an welle5 vor FD-212 und an welle5 je ein anderer (`abcd8952…`, `3c2a56dc…`, `0921e442…`); eine Buchung aus 0.6.0 ist damit nie Kandidat. Regression aus dem Formatschritt 52 → 53 (FD-197) und der Abdruckformel aus FD-212.
+- Ursache: Der `si1-`-Abdruck enthält über `StoredInputs.bodies()` die `PartSpec.version` eines eigenen Rezepts, und die hängt seit FD-197/FD-212 von der Formatversion ab.
+- Vorschlag: Für Körper aus eigenem Rezept den Abdruck von 0.6.0 als Vorabdruck führen, wie `verbrauch.md` es für jeden Formelwechsel verlangt.
+- Wirkung beim Kunden: Im Modus *Ohne Rückfrage buchen* hätte 0.6.1 einen in 0.6.0 gebuchten Druck still ein zweites Mal vom Lager abgezogen, im Modus *Nachfragen* ihn als neu angeboten; 0.6.0 selbst war nicht betroffen.
+- Stand: behoben `9138485c1`: Der Buchungsabdruck führt für einen Körper aus eigenem Rezept den Abdruck von 0.6.0 als Vorabdruck (`StoredInputs.bodies_of_060`); belegt mit Projekt und Abdruck aus dem Code von `v0.6.0` (`si1-783938a1…`); `test_filament_usage_own_recipe_060.py` am Stand davor 3 von 3 rot, danach grün (`fix-fd197-claude.md`). Kein Changelog, weil keine Ausgabe den Fehler trug.
 
 ## Nachgetragene Funde aus CI-Fix und Prüfstand (ab FD-213)
 
@@ -2844,3 +2892,15 @@ Behobene Funde aus `output/konsolidierung-2026-10-12/fix-ci-main-claude.md` und
 - Vorschlag: `record_shutdown` nach `leave()`, damit ein sofortiges Ende bei Nachzüglern die Siegelprüfung nicht überspringt.
 - Wirkung beim Kunden: Kein Produktfehler; ein Nachzügler im nativen Lauf endete ohne Namen.
 - Stand: behoben `d5530a736`; der Test am Stand davor rot, danach grün (`test_window_bench`, `test_native_measure_card_cursor`, `test_native_runs`, `test_function_guard` 132 passed); nativer Nachweis mit der Maßkartenfolge im Schlusslauf (Plan Punkt 3, L1).
+
+### FD-235 Ein Sprachfall hing in der Speicherfrage, wenn die Fläche davor einen Entwurf offen ließ
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: keine Zeile: Rückweg des Prüfstands (`tools/function_bench.py`, `FunctionFlow.reset`)
+- Prüfpunkt: 19
+- Beleg: `output/konsolidierung-2026-10-12/schlusslauf-claude.md`: L3 an `c5666931d`, Fall 097 (D7), und L4 an `d0173380f`, Fall 052 (D8 DE), standen modal in „Ungesicherte Änderungen“; Stapel `function_bench.reset` → `MainWindow.open_path` → `_may_discard` → `dialogs.confirm_unsaved`, in 052 nach `finding.action:split_along_line` mit offenem Zeichenmodus. Zwilling von FD-172/FD-173 im Sprachfall.
+- Ursache: `reset` rief vor `open_path` nur `session.forget_changes()`; das verwirft den Stand, nicht die offenen Entwürfe, und `_may_discard` fragt auch nach einem Entwurf.
+- Vorschlag: Vor beiden Rückwegen zur Startszene den Weg von „Verwerfen“ gehen (`_discard_gestures`, dann `forget_changes`).
+- Wirkung beim Kunden: Kein Produktfehler; die Frage ist richtig. Der native Lauf stand bis zur Frist, und die Flächen nach der hängenden fehlten im Beleg.
+- Stand: behoben `84505b539`: `FunctionFlow.discard_previous` vor `open_path` und vor *Datei → Neu*; `tests/test_function_reset_discards.py` mit Attrappe der Speicherfrage am Stand davor 2 rot, danach grün; `test_function_*` samt Wächtern 1 829 passed; nativer Nachweis mit L4 an `d9f7a81f9` im Schlusslauf.
