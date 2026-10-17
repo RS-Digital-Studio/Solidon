@@ -197,7 +197,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4 |
 | [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; Phase 4 |
 | [RM-790 — Ein nativer Abbruch nach Rückgängig bei gezeigter Maßgruppe, einmal gesehen](#rm-790) | Bedienung und Darstellung | 150 Zyklen unter Last ohne Wiederholung; beim nächsten Auftreten Stapel sichern und zuordnen |
-| [RM-812 — Funde des Funktionsdurchgangs für 0.6.2](#rm-812) | Bedienung und Darstellung | für 0.6.2: FD-204 bis FD-211, FD-218 bis FD-226, FD-228 bis FD-230, FD-233, FD-234 und FD-236 bis FD-303 der Funddatei beheben (Umfang eingefroren, Robert 16.10.; Ziel 0.6.2, Robert 17.10.) |
+| [RM-812 — Funde des Funktionsdurchgangs für 0.6.2](#rm-812) | Bedienung und Darstellung | für 0.6.2: FD-204 bis FD-211, FD-218 bis FD-226, FD-228 bis FD-230, FD-233, FD-234 und FD-236 bis FD-323 der Funddatei beheben (Umfang eingefroren, Robert 16.10.; Ziel 0.6.2, Robert 17.10.) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -5959,7 +5959,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   des Griffs), FD-234 (die Sprachfälle erreichen am echten Fenster nicht jede Fläche, 44 in D1,
   D2, D7, D9, D11 und D12 und `orient_for_print` in D8; vor den Phase-3-Paketen beheben),
   FD-236 (nach *Auf das Bett setzen* ragt der Körper oben aus dem Bild),
-  FD-237 (*Spule anlegen* in *Neues Filament* ist grau, ohne zu sagen warum),
+  FD-237 (*Spule anlegen* in *Neues Filament* und *Baustein anlegen* sind grau, ohne zu sagen
+  warum),
   FD-241 (nach einer Auswahl bleibt die rechte Karte auf *Prüfbericht*),
   FD-242 (die Seite *Auswahl* rollt bei gewähltem Körper schon bei 2560 × 1369),
   FD-246 (die Sprachflächen fr und it der Analyseleiste zeigen eine fremde Lage),
@@ -5983,9 +5984,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   FD-287 (das Material der Dichtung steht schon auf dem Projektmaterial, Regel 21),
   FD-293 (*Sperren aufheben und erneut teilen* zeigt keine Teilung),
   FD-294 (graue Befundhandlungen hinter einem Halt zeigen ihre Beschreibung statt eines
-  Sperrgrunds) und
+  Sperrgrunds),
   FD-296 (nach *Senken* öffnet sich ungefragt der Einstellmodus des ursprünglichen
-  Bohrungsschritts), alle übrigen leicht:
+  Bohrungsschritts),
+  FD-314 (*Neues Filament* und *Auswahl als Baustein speichern* zeigen vorn sieben bis zwölf
+  Felder) und
+  FD-317 (das Filament einer Schrift liegt zwei Klicks vom gewählten Körper entfernt), alle
+  übrigen leicht:
   FD-204 (Cura-Profile fehlen im Herstellerscan der Druckfeldgrenzen),
   FD-205 (ein geladenes Merkzeichen weitet die Eingabespanne des Felds),
   FD-206 (ein Hinweis beim Öffnen geht verloren, wenn die erste Auswertung abbricht),
@@ -6050,7 +6055,28 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Einschränkung),
   FD-301 (Felder der Bewegen- und der Schnittleiste tragen keinen Satz),
   FD-302 (der Kriterientext von Prüfpunkt 8 nennt weniger Teile, als die Zuordnung rechnet),
-  FD-303 (drei Wirkungen von *Linie teilen* haben keinen Test).
+  FD-303 (drei Wirkungen von *Linie teilen* haben keinen Test),
+  FD-304 (die Textmessung meldet ein knapp zu breites Wort in einer Liste als ungekürzt),
+  FD-305 (der Satz zur ersten Änderung findet ein Feld hinter *Weitere Werte* zugeklappt nicht),
+  FD-306 (dass Berichtszeilen gewählt gerechnet werden, hält kein Test),
+  FD-307 (eine Einzelzeile mit dem Titel ihrer Bausteingruppe behält die Kurzhilfe des
+  Merkmals),
+  FD-308 (ein Test der Schichtanalyse zählt eine fremde Analyse mit),
+  FD-309 (am Startbildschirm schneidet die Bildanleitung die Beispielkarten an),
+  FD-310 (*print-a-model*, Schritt 5, rahmt nur den Drucker),
+  FD-311 (*housing-with-lid*, Schritt 6, ohne freie Stelle für die Schrittnummer),
+  FD-312 (Filmwerkzeuge und Oberflächenaudit ohne Zeiger-Wächter),
+  FD-313 (Felder in *Neues Filament*, *Zahlen an Maße binden*, Parameterzeile und
+  *Auswahl als Baustein speichern* ohne eigenen Satz),
+  FD-315 (Lagerseite und Ersatzwahl tragen zwei Akzente),
+  FD-316 (in *Neues Filament* stehen Feldkanten versetzt, Übergang von −1 ms),
+  FD-318 (*Zahlen an Maße binden* hält Abstände von 11, 9 und 6 px),
+  FD-319 (Stufe A zählt an der Spule einer Schrift Felder hinter der Klappe als vorn),
+  FD-320 (Website und Handbuch versprechen eine Zeile zum Bereichstest, die vor dem Anlegen
+  fehlt),
+  FD-321 (der Prüfstand nimmt den Bausteinkatalog vor den Vorschaubildern auf),
+  FD-322 (zwei Knöpfe *Abbrechen* beim Lesen der Slicerprofile),
+  FD-323 (vier Wirkungsversprechen zu Filament und Parametern haben keinen Test).
   **Abnahme:** je Fund ein Test, der am Stand davor rot war, und der Stand „behoben `<commit>`“
   in der Funddatei; Kundenwirkung im Changelog der nächsten Version in sechs Sprachen.
 

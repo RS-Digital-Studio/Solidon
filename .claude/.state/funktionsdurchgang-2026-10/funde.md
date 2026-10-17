@@ -2777,11 +2777,11 @@ eingefroren“) und in 0.6.2 behoben (Robert, 17.10.2026). Ihr Registerpunkt ist
 
 - Art: Zwillinge
 - Schwere: mittel
-- Funktion: `dialog:new_filament_dialog`, `filament.colour`, `filament.profile`, `meldung:_pick_colour`
+- Funktion: `dialog:new_filament_dialog`, `filament.colour`, `filament.profile`, `meldung:_pick_colour`, `parts.save`
 - Prüfpunkt: E7
-- Beleg: Schlusslauf L4 an `d9f7a81f9`, Fälle 034–039 (`F:\tmp-suche\schlusslauf-d9f7a81f\L4-d0\cases\034\flaeche-de-filament.colour-bae0b106-dialog.png`, `…meldung__pick_colour-978ff8c9-dialog.png`): *Spule anlegen* grau bei leerem *Name*, ohne Satz und ohne Kurzhilfe; Stufe A `unmeasured` „kein sichtbarer Sperrgrund: grau ohne Kurzhilfe“ an `filament.colour`, `filament.profile` und `meldung:_pick_colour` in allen sechs Sprachen.
-- Ursache: Die Regel aus FD-99 (der graue Hauptknopf nennt das erste Feld, das fehlt) gilt in Operationsdialog, Merkmalfenster und Flächenkarte, nicht im Filamentdialog.
-- Vorschlag: Den grauen Hauptknopf des Filamentdialogs über dieselbe Quelle wie FD-99 begründen („Erst „Name“ eintragen, dann anlegen.“) und die übrigen Dialoge mit grauem Hauptknopf im selben Zug prüfen; Test mit leerem Namen.
+- Beleg: Schlusslauf L4 an `d9f7a81f9`, Fälle 034–039 (`F:\tmp-suche\schlusslauf-d9f7a81f\L4-d0\cases\034\flaeche-de-filament.colour-bae0b106-dialog.png`, `…meldung__pick_colour-978ff8c9-dialog.png`): *Spule anlegen* grau bei leerem *Name*, ohne Satz und ohne Kurzhilfe; Stufe A `unmeasured` „kein sichtbarer Sperrgrund: grau ohne Kurzhilfe“ an `filament.colour`, `filament.profile` und `meldung:_pick_colour` in allen sechs Sprachen. Zwilling in *Auswahl als Baustein speichern* (Nachurteil Runde C3, Prüfer 1b Punkt 25): L4 Fall 034 `cases/034/flaeche-de-parts.save-4b595fac-dialog.png` (SHA256 `8994059f39a6`), Maß *Breite* und alle sechs Stellen sind freigegeben, *Baustein anlegen* ist trotzdem grau, der Grund (Name leer) steht nirgends, Protokoll `unmeasured` „sperrgrund:dialog.accept: Kurzhilfe gesetzt, aber nicht gezeigt“ (die fehlende Aufnahme ist FD-239); das Handbuch (#own-parts) nennt als Sperre nur ein fehlendes Maß oder eine fehlende Stelle.
+- Ursache: Die Regel aus FD-99 (der graue Hauptknopf nennt das erste Feld, das fehlt) gilt in Operationsdialog, Merkmalfenster und Flächenkarte, nicht im Filamentdialog und nicht in *Auswahl als Baustein speichern*.
+- Vorschlag: Den grauen Hauptknopf des Filamentdialogs über dieselbe Quelle wie FD-99 begründen („Erst „Name“ eintragen, dann anlegen.“) und die übrigen Dialoge mit grauem Hauptknopf im selben Zug prüfen, darunter *Auswahl als Baustein speichern* mit dem Grund als Satz unter den Feldern, wie ihn der Katalog für *Baustein als Datei weitergeben …* schon hat; den Handbuchsatz (#own-parts) um den Namen ergänzen; Test mit leerem Namen.
 - Wirkung beim Kunden: Wer eine neue Spule anlegen will, sieht einen grauen Knopf und muss raten, dass der Name fehlt.
 - Stand: offen RM-812
 
@@ -3581,6 +3581,253 @@ Die folgenden Funde (FD-241 bis FD-300) kommen aus den Nachurteilen am Schlussla
 - Beleg: Nachurteil Runde C2a, beide Prüfer (Prüfer 1a, Prüfer 2 C2a-2) am Laufkopf `d9f7a81f9`: Kein Test prüft, dass eine nachträglich geänderte *Lage* den Schnitt verschiebt, ohne ihn zu drehen, dass ein Schwalbenschwanz auch gegen Auseinanderziehen hält, und dass ein einzelner Sechskant gegen Verdrehen hält; die Benennung „1 von 3“ über *Stücke des Laufs* ist ebenfalls ohne Test (Prüfer 1a).
 - Ursache: Die Versprechen der Parametertabelle haben keinen Wächter.
 - Vorschlag: Je Wirkung ein Geometrietest gegen den Korpus (Lageänderung, Formschluss gegen Zug und Drehung, Benennung).
+- Wirkung beim Kunden: Stimmen die Sätze heute, kann ein späterer Umbau sie unbemerkt brechen.
+- Stand: offen RM-812
+
+## Spätreview, Bildanleitungen und Nachurteil C3 (FD-304 bis FD-323, für 0.6.2, RM-812)
+
+Quellen: `output/konsolidierung-2026-10-12/review-spaet-claude.md` (Befunde 1 bis 4, N-3; Stand
+`8e83594e5`, Zeilen hier am Kopf `182e7cb00`), `fix-guides-claude.md` (neue Punkte 2 bis 5, Lauf
+`F:\tmp-suche\guides-claude\voll3-<sprache>` an `4247b38fa`) und `nachurteil-pruefer1b-claude.md`, Runde C3
+(Punkte 23 bis 29, L4 an `d9f7a81f9`, `F:\tmp-suche\schlusslauf-d9f7a81f\L4-d0`). Punkt 25 steht bei FD-237.
+
+### FD-304 Die Textmessung meldet ein knapp zu breites Wort in einer Liste als ungekürzt
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Textmessung des Funktionsprüfstands (tools/function_capture.py, Zeilen in Listen und Bäumen)
+- Prüfpunkt: 9
+- Beleg: Spätreview Befund 1, Sonde P2 (`F:\tmp-suche\rv-spaet\probe_capture_width.txt`): Wort 289 px, Textfläche 282, Zelle 296 → `axis=breite, need_px=295, width_px=296, cut=False`; gewählt 282/279/296 ebenso `False`. Qt zeichnet das Wort mit „…“. Vor dem Fix von FD-110 (`318e7f5d3`) ebenso `False`, als Höhenfall; keine Regression. Rest zu FD-110.
+- Ursache: belegt: Im Umbruchzweig entscheidet die Messung an der gezeichneten Textfläche (`widest > text_width`), rechnet `cut` aber gegen die ganze Zelle (`need_px = widest + margin + symbol`, `width_px = shown`, `tools/function_capture.py:790–800`); ein Wort, das um weniger als Innenrand und Kante (8 bzw. 11 px) zu breit ist, fällt durch.
+- Vorschlag: Im Breitenfall `need_px = widest` gegen `width_px = text_width`; Test mit einem Wort zwischen Textfläche und Zelle.
+- Wirkung beim Kunden: Kein Produktfehler; Prüfpunkt 9 meldet in diesem Fall vollständigen Text, wo der Kunde „…“ liest.
+- Stand: offen RM-812
+
+### FD-305 Der Satz zur ersten Änderung findet ein Feld hinter *Weitere Werte* nicht, solange die Klappe zu ist
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Merkmalfenster, Weg des Wartesatzes über die Klappe *Weitere Werte* (app/ui/panels.py)
+- Prüfpunkt: E7
+- Beleg: Spätreview Befund 2, Sonde P3 (`F:\tmp-suche\rv-spaet\probe_flap.txt`): mit der Hülle `row.more` als `behind` liefert `first_field` `''`, mit dem Inhalt „Erst „Fase“ unter „Weitere Werte“ ändern, dann übernehmen.“ (so reicht es `op_dialog.py:2651`). Heute ohne Kundenwirkung: Nur `resize_hole` hat eine solche Klappe, und vorn steht dort immer ein Feld; deshalb hält der Fund keine Zelle offen. Rest zu FD-99 (`0313cdbfd`).
+- Ursache: belegt: Der Klappenweg reicht die Hülle `row.more` (aus `collapsible`) als `behind` (`app/ui/panels.py:10681–10686`); zugeklappt ist der Inhalt darunter verborgen, und `first_field` findet nie ein Feld.
+- Vorschlag: Den Inhalt der Klappe an der Zeile führen und reichen; Test mit einer Zeile, deren einziges offenes Feld hinter der Klappe liegt.
+- Wirkung beim Kunden: Heute keine; bekommt eine Merkmalzeile ein Feld nur hinter der Klappe, stünde *Übernehmen* grau ohne Satz.
+- Stand: offen RM-812
+
+### FD-306 Dass Berichtszeilen gewählt gerechnet werden, hält kein Test
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: keine Zeile: Wächter der Berichtszeilen (tests/test_report_rows.py zu app/ui/report_rows.py)
+- Prüfpunkt: 9
+- Beleg: Spätreview Befund 3, Mutation M6b: ohne `drawn.state |= QStyle.StateFlag.State_Selected` (`app/ui/report_rows.py:56` am Kopf) bleiben alle sechs Fälle grün; die Reserve fürs Runden verdeckt die 3-px-Auswahlkante. Bei 125 % rechnet die Reserve das Runden, nicht die Kante. Rest zu FD-109 (`318e7f5d3`).
+- Ursache: Kein Fall, in dem nur die Auswahlkante den Unterschied macht.
+- Vorschlag: Ein Fall mit breiter Auswahlkante im Stylesheet, in dem nur die Kante über „…“ entscheidet; die Mutation muss rot werden.
+- Wirkung beim Kunden: Kein Produktfehler; eine spätere Änderung kann gewählte Berichtszeilen wieder kürzen, ohne dass ein Test es merkt.
+- Stand: offen RM-812
+
+### FD-307 Eine Einzelzeile mit dem Titel ihrer Bausteingruppe behält die Kurzhilfe des Merkmals
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: `tree`
+- Prüfpunkt: 9
+- Beleg: Spätreview Befund 4, Mutation M5e (Gruppenkurzhilfe ohne Titel) grün über Objektbaum, Karte, Analyse, Merkmalfenster, Filament und Auswahl: Kein Test hält, dass die Kurzhilfe der Bausteingruppe mit ihrem Titel beginnt. Die Einzelzeile, die den Titel ihrer aufgelösten Gruppe übernimmt (`only.setText(0, group.text(0))`, `app/ui/panels.py:2810`), behält die Kurzhilfe des Merkmals („Sackbohrung 1 · …“); gekürzt stünde „Magnettasche“ nirgends ganz, entgegen dem Changelog 0.6.1 („seine Kurzhilfe nennt ihn ganz“) und `vorderseite.md`. Gekürzt wird eine solche Zeile erst jenseits `LEFT_MAX`. Rest zu FD-20 (`b9993ff5d`).
+- Ursache: belegt: Beim Übernehmen des Gruppentitels wird die Kurzhilfe nicht mitgesetzt.
+- Vorschlag: Die Einzelzeile trägt den übernommenen Titel auch vorn in der Kurzhilfe; Test für Gruppe und Einzelzeile.
+- Wirkung beim Kunden: Wird der Name einer solchen Zeile bei sehr schmaler linker Karte gekürzt, nennt auch die Kurzhilfe ihn nicht.
+- Stand: offen RM-812
+
+### FD-308 Ein Test der Schichtanalyse zählt eine fremde Analyse mit
+
+- Art: Stabilität
+- Schwere: leicht
+- Funktion: keine Zeile: Test tests/test_analysis_ui.py::test_the_layer_analysis_takes_both_limits_from_the_material
+- Prüfpunkt: 19
+- Beleg: Spätreview N-3: im gemischten Lauf (M5e, 547 Fälle) einmal rot mit `seen == [(45.0, 0.84), (45.0, 0.84)]`, die Analyse lief zweimal; allein und dateiweise grün (`F:\tmp-suche\rv-spaet\layer.out`, 282 passed). Mit der Mutation nicht verbunden.
+- Ursache: offen; naheliegend zählt der Fall auch eine Analyse, die vor seinem eigenen Aufruf noch anstand.
+- Vorschlag: Nur Aufrufe nach dem eigenen `_slice_of` zählen oder eine anstehende Analyse vorher abwarten; Gegenprobe mit einer vorher angestoßenen Analyse.
+- Wirkung beim Kunden: Kein Produktfehler; der Fall kann das Tor je nach Reihenfolge rot machen.
+- Stand: offen RM-812
+
+### FD-309 Am Startbildschirm schneidet der Zuschnitt der Bildanleitung die Beispielkarten an
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: keine Zeile: Bildanleitungen (tools/make_guides.py), Schritte am Startbildschirm
+- Prüfpunkt: 19
+- Beleg: `F:\tmp-suche\guides-claude\voll3-de\de\guide-first-part-1.webp` (SHA256 `cea63a79a843`, selbst angesehen): Der Zuschnitt um *Neues Projekt* endet mitten in den Beispielkarten, deren rechte Hälfte und der Rahmen fehlen; `guide-draw-and-pull-1.webp` (`fd9f18205e59`) ähnlich; so schon in 0.6.0. `fix-guides-claude.md`, neuer Punkt 2.
+- Ursache: offen; der Zuschnitt nimmt nur das Ziel, nicht den Inhalt des Startbildschirms.
+- Vorschlag: Ein Schritt am Startbildschirm nimmt dessen Inhalt in den Fokus wie ein offenes Menü; Prüfung, dass keine Karte angeschnitten ist.
+- Wirkung beim Kunden: Das erste Bild der Anleitung zeigt halbe Karten und wirkt unfertig.
+- Stand: offen RM-812
+
+### FD-310 *print-a-model*, Schritt 5, rahmt nur den Drucker, der Satz nennt Drucker und Filament
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: keine Zeile: Bildanleitung print-a-model (tools/make_guides.py, Schritt 5)
+- Prüfpunkt: 19
+- Beleg: `F:\tmp-suche\guides-claude\voll3-de\de\guide-print-a-model-5.webp` (SHA256 `9f43dd5e8da9`, selbst angesehen): Die Nummer 5 zeigt auf das Feld *Drucker*, der Satz sagt „Prüfen Sie oben Drucker und Filament“; so schon in 0.6.0. `fix-guides-claude.md`, neuer Punkt 3.
+- Ursache: Der Schritt hat nur ein Ziel.
+- Vorschlag: Ein zweites Ziel für die Zeile *Filamente* oder den Satz auf den Drucker beschränken.
+- Wirkung beim Kunden: Der Kunde sucht im Bild das Filament, das der Satz nennt.
+- Stand: offen RM-812
+
+### FD-311 *housing-with-lid*, Schritt 6, hat keine freie Stelle für die Schrittnummer
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: keine Zeile: Bildanleitung housing-with-lid (tools/make_guides.py, Schritt 6)
+- Prüfpunkt: 19
+- Beleg: `F:\tmp-suche\guides-claude\voll3-de\de\guide-housing-with-lid-6.webp` (SHA256 `bde425c9950d`, selbst angesehen): Der Ausschnitt schneidet die Auswahlkarte links an, die Nummer 6 steht im linken Rand, ihr Pfeil läuft über den Rest der halb verdeckten Überschrift. `fix-guides-claude.md`, Abschnitt 2 („Rest“) und neuer Punkt 4.
+- Ursache: Rings um den Dialog liegt Text, rechts reicht die angeschnittene Karte in den Rand; der Pfeil nimmt die nächste freie Randstelle.
+- Vorschlag: Der Zuschnitt um einen Dialog über einer Karte nimmt die Karte ganz oder gar nicht (die Regel „ganz im Bild oder ganz draußen“ von `work_rect` auch für `make_guides.framed`).
+- Wirkung beim Kunden: Im Bild liegt der Pfeil über einer abgeschnittenen Überschrift und wirkt unaufgeräumt.
+- Stand: offen RM-812
+
+### FD-312 Die Filmwerkzeuge und das Oberflächenaudit hängen den Zeiger-Wächter nicht auf
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: keine Zeile: Aufnahmewerkzeuge make_video, make_longform_video, make_workshop_videos und run_ui_audit
+- Prüfpunkt: 19
+- Beleg: Am Kopf `182e7cb00`: `tools/make_video.py:3058`, `tools/make_longform_video.py:2301`, `tools/make_workshop_videos.py:3890` und `tools/run_ui_audit.py:519` setzen `apply_theme(app, "dark")` ohne `cursors.install(app)`. `fix-guides-claude.md`, neuer Punkt 5; Zwilling des Fixes `5ffbd9fbe` (make_guides, make_figures, make_web_images).
+- Ursache: Den Zeiger für später entstehende Fenster verteilt nur der Wächter `app.ui.cursors.install`, den diese Werkzeuge nicht aufhängen.
+- Vorschlag: Dieselbe Zeile nach `apply_theme`; den Wächtertest `test_cursors.py::test_every_picture_tool_hangs_up_the_pointer_watcher_after_the_theme` auf alle Werkzeuge mit `apply_theme` ausdehnen.
+- Wirkung beim Kunden: In Filmen und Audits tragen Panels und Leisten den Systempfeil statt des Solidon-Zeigers.
+- Stand: offen RM-812
+
+### FD-313 Felder in *Neues Filament*, *Zahlen an Maße binden*, in der Parameterzeile und in *Auswahl als Baustein speichern* tragen keinen eigenen Satz
+
+- Art: Zwillinge
+- Schwere: leicht
+- Funktion: `filament.colour`, `filament.profile`, `parameters.bind`, `parameters.first.label`, `parts.save`
+- Prüfpunkt: 8, V3
+- Beleg: L4 Fall 034, Stufe A V3 und Prüfpunkt 8 Fund, am Bild bestätigt (Prüfer 1b, Runde C3, Punkt 23): `cases/034/flaeche-de-filament.colour-bae0b106-dialog.png` (SHA256 `106190dc2923`) 9 von 15 Feldern mit Satz, Name und Lagerort nur mit Platzhalter, Farbfeld, Nennfüllung und Restmenge ohne Satz, das Farbfeld ohne Namen; `cases/034/flaeche-de-filament.profile-52662c50-dialog.png` (`56facac57783`) 8 von 14, *Gekauft am*, *Geöffnet am*, *Spulenpreis*, *Notiz* ohne Satz, *Währung* nur mit Platzhalter; `cases/034/flaeche-de-parameters.bind-7614c137-dialog.png` (`acf151103ff3`) 0 von 2, der Ausdruck „@breite / 2“ ohne Beschriftung, Namen und Satz; `cases/034/flaeche-de-parameters.first.label-55b85e42.png` (`5a34730d653c`) Wertfeld *Breite* ohne Beschreibung; `cases/034/flaeche-de-parts.save-4b595fac-dialog.png` (`8994059f39a6`) 11 von 25, *Vorgabe*, *von*, *bis* und die Stellen ohne Satz. Zwilling von FD-78, FD-244 und FD-301.
+- Ursache: offen; diese Dialoge binden keinen Wirkungssatz an ihre Felder.
+- Vorschlag: Je Feld ein Satz als Kurzhilfe und `accessibleDescription`, der Ausdruck in *Zahlen an Maße binden* bekommt Namen und Satz; Wächter über die Felder dieser Dialoge wie `test_form_fields.py`.
+- Wirkung beim Kunden: Was Nennfüllung, Restmenge, ein Ausdruck oder die Grenzen eines Bausteinmaßes bewirken, muss der Kunde raten.
+- Stand: offen RM-812
+
+### FD-314 *Neues Filament* und *Auswahl als Baustein speichern* zeigen vorn sieben bis zwölf Felder
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `filament.colour`, `filament.profile`, `parts.save`
+- Prüfpunkt: E5
+- Beleg: L4 Fall 034, Stufe A E5 Fund, am Bild bestätigt (Prüfer 1b, Runde C3, Punkt 23): `…filament.colour-bae0b106-dialog.png` (`106190dc2923`) vorn Name, Typ, Farbe, Lagerort, Nennfüllung, Haken *Restmenge bekannt* und Restmenge, sieben Felder (erlaubt 4); `…filament.profile-52662c50-dialog.png` (`56facac57783`) dieselben sieben vorn, Stufe A zählt mit den aufgeklappten *Weiteren Angaben* 14; `…parts.save-4b595fac-dialog.png` (`8994059f39a6`) vorn Name, Gruppe, Haken *Breite*, Vorgabe, von, bis und sechs Haken der Stellen, zwölf Felder. Schwere: Prüfer 1b „leicht bis mittel“ für den ganzen Punkt; mittel wie FD-13, FD-42 und FD-63, weil die Grenze von E5 weit überschritten ist.
+- Ursache: offen; die Dialoge teilen ihre Felder nicht nach Vorder- und Rückseite.
+- Vorschlag: Vorn nur, was für die Aufgabe nötig ist (Name, Typ, Farbe; Name und die freigegebenen Maße), der Rest unter *Weitere Angaben* mit Zusammenfassung; Test mit dem Zähler von E5.
+- Wirkung beim Kunden: Wer schnell eine Spule oder einen Baustein anlegen will, sieht ein langes Formular.
+- Stand: offen RM-812
+
+### FD-315 Lagerseite und Ersatzwahl tragen zwei Akzente
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `filament.colour`, `filament.spool`
+- Prüfpunkt: G1
+- Beleg: L4, Prüfer 1b, Runde C3, Punkt 23: `cases/034/flaeche-de-filament.colour-bae0b106.png` (`e7e3e7e33a9e`): Die leere Lagerseite trägt zwei orange Hauptknöpfe *Spule von Hand anlegen* (oben rechts und im leeren Zustand); Fall 040 `cases/040/flaeche-de-filament.spool-33637b79-dialog.png` (`ab23f98822f6`): Die Ersatzwahl trägt einen orangen Hauptknopf „1 — Filament 1“ und dieselbe Zeile orange in der Liste. Stufe A G1 „2 Hauptknöpfe und 2 Akzente“ an beiden Zeilen.
+- Ursache: offen.
+- Vorschlag: Je Fläche ein Hauptknopf; der Knopf im leeren Zustand gewöhnlich, solange oben derselbe steht, in der Ersatzwahl die gewählte Zeile ohne Akzentfarbe; Bild hell und dunkel.
+- Wirkung beim Kunden: Er muss lesen, welcher von zwei gleich betonten Knöpfen gemeint ist.
+- Stand: offen RM-812
+
+### FD-316 In *Neues Filament* stehen Feldkanten versetzt, und die Ladezeile meldet einen Übergang von −1 ms
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `filament.colour`, `filament.profile`
+- Prüfpunkt: G3, G8
+- Beleg: L4 Fall 034, Prüfer 1b, Runde C3, Punkt 23: Stufe A an `filament.colour` „Feldkanten an sechs Stellen versetzt“, an `filament.profile` Feldkanten versetzt, ein Wert nicht rechtsbündig mit Einheit und ein Übergang mit −1 ms an der Ladezeile, in allen sechs Sprachen (`cases/034/flaeche-de-filament.profile-52662c50-dialog.png`, `56facac57783`); die Kantenversätze löst das Bild nicht eindeutig auf.
+- Ursache: offen; ob die negative Dauer ein Fehler der Messung ist, ist nicht geprüft.
+- Vorschlag: Kanten und Ausrichtung am Formular des Dialogs belegen und angleichen; die Dauer von −1 ms an der Messung prüfen (G8 misst nur echte Übergänge).
+- Wirkung beim Kunden: Der Dialog wirkt minimal unruhig.
+- Stand: offen RM-812
+
+### FD-317 Das Filament einer Schrift liegt zwei Klicks vom gewählten Körper entfernt
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `filament.spool`
+- Prüfpunkt: Z3
+- Beleg: L4 Fall 040 `cases/040/flaeche-de-filament.spool-33637b79.png` (`a6575fa16e8d`), Stufe A Z3 Fund mit 2 Wegklicks nach der Auswahl (Menü *Erzeugen* → *Text aufbringen*, dann Klappe *Weitere Einstellungen* zum Feld *Filament*); nach der Wahl des Quaders steht rechts nur *Filament und Druck* für den Körper. Prüfer 1b, Runde C3, Punkt 23. Schwere: „leicht bis mittel“ für den ganzen Punkt; mittel wie FD-268, weil es ein Umweg ist.
+- Ursache: offen.
+- Vorschlag: Das Filament der Schrift vorn im Textdialog oder an der Schrift im Merkmalfenster wählen lassen; Test mit Z3.
+- Wirkung beim Kunden: Wer eine Schrift in einer anderen Farbe will, findet das Feld erst über Menü und Klappe.
+- Stand: offen RM-812
+
+### FD-318 *Zahlen an Maße binden* hält Abstände von 11, 9 und 6 px
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `parameters.bind`
+- Prüfpunkt: G2
+- Beleg: L4 Fall 034 `cases/034/flaeche-de-parameters.bind-7614c137-dialog.png` (`acf151103ff3`): Stufe A G2 „Abstände 11, 9 und 6 px im BindingDialog keine Vielfachen von 4“; am Bild sitzen Rand, Hakenzeile, „0 von 1 Zahlen gewählt“ und Knopfzeile in ungleichen Abständen. Prüfer 1b, Runde C3, Punkt 23. Zwilling von FD-15 und FD-247.
+- Ursache: offen; Layouts ohne gesetzten Abstand.
+- Vorschlag: Abstände aus dem Raster; der G2-Wächter liest den Dialog mit.
+- Wirkung beim Kunden: Der Dialog wirkt minimal unruhig.
+- Stand: offen RM-812
+
+### FD-319 Stufe A zählt an der Spule einer Schrift die Felder hinter der Klappe als vorn
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `filament.spool`
+- Prüfpunkt: E5
+- Beleg: L4 Fall 040 `cases/040/flaeche-de-filament.spool-33637b79-dialog-2.png` (SHA256 `7e910eddf95e`): vorn stehen Text, Schriftgröße und Art, die übrigen 14 Felder unter *Weitere Einstellungen*, das der Weg selbst aufgeklappt hat (`steps`: Klappe auf `field:slot`); über dem ersten Feld unter 25 Wörter. Stufe A zählt 17 Felder vorn und 46 Wörter; die Wörter passen nur mit dem Satz der Ersatzwahl (`…-dialog.png`) dazu (`040/surfaces/filament.spool-33637b79.json#fields,texts`). Prüfer 1b, Runde C3, Punkt 24.
+- Ursache: Die Messung zählt „vorn“ am Zustand nach den Klappenklicks des Wegs und die Wörter über zwei Dialoge.
+- Vorschlag: „vorn“ am Zustand vor den Klappenklicks des Wegs zählen und die Wörter je Dialog; Gegenprobe mit diesem Fall.
+- Wirkung beim Kunden: Kein Produktfehler; E5 meldet einen Fund, den die Fläche nicht hat, und hält die Zellen offen.
+- Stand: offen RM-812
+
+### FD-320 Website und Handbuch versprechen in *Auswahl als Baustein speichern* eine Zeile zum Bereichstest, die vor dem Anlegen fehlt
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `parts.save`
+- Prüfpunkt: 11
+- Beleg: L4 Fall 034 `cases/034/flaeche-de-parts.save-4b595fac-dialog.png` (`8994059f39a6`): Beschreibung, Lizenz und Autor stehen unter *Weitere Einstellungen*, eine Zeile zu den Kombinationen fehlt. Website `funktionen.html#eigene-bausteine`, Bildtext zu `beleg-eigener-baustein.webp`: oben „Name, Gruppe, Beschreibung, Lizenz und Autor“, unten „Bereichstest: 8 Kombinationen“; Handbuch (#own-parts): „Vorher sagt der Dialog, wie viele Kombinationen das sind und wie lange es etwa dauert“. `app/ui/recipe_dialog.py` zeigt die Zeile laut Kommentar (RM-517) nur, solange der Test läuft oder zu viele Maße freigegeben sind. Prüfer 1b, Runde C3, Punkt 26.
+- Ursache: Bild, Bildtext und Handbuch beschreiben den Dialog vor RM-517.
+- Vorschlag: Bild und Bildtext der Website neu erzeugen und den Handbuchsatz auf „während der Prüfung“ stellen, in sechs Sprachen.
+- Wirkung beim Kunden: Der Kunde sucht vor dem Anlegen eine Angabe, die der Dialog dort nicht mehr zeigt.
+- Stand: offen RM-812
+
+### FD-321 Der Prüfstand nimmt den Bausteinkatalog auf, bevor die Vorschaubilder fertig sind
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `parts.save`
+- Prüfpunkt: 11
+- Beleg: L4 Fall 034 `cases/034/flaeche-de-parts.save-4b595fac-dialog-2.png` (SHA256 `e50d53893e77`): Acht von 27 sichtbaren Kacheln (Druckbares Gewinde, Schraubenloch mit Senkung, Gewindebolzen, Schnappverbinder für eine Naht, Schnappverbindung, Profilklemmen-Einlage, Profilklemmschale, Wandhalter) zeigen den Platzhalter, in allen sechs Sprachen dieselben acht; die Vorschaukette (`app/ui/catalog.py`, `_render_pending`) lief noch. Der Bildtext der Website verspricht „jeder mit Vorschau“, am Bild ist das nicht zu belegen. Prüfer 1b, Runde C3, Punkt 27. Zwilling von FD-240 und FD-252.
+- Ursache: Die Aufnahme wartet nicht auf das Ende der Vorschaukette.
+- Vorschlag: Vor der Aufnahme des Katalogs auf das Ende der Vorschaukette warten; Test mit verzögerter Vorschau.
+- Wirkung beim Kunden: Kein Produktfehler belegt; das Versprechen „jeder mit Vorschau“ bleibt am Lauf ungeprüft.
+- Stand: offen RM-812
+
+### FD-322 *Neues Filament* zeigt beim Lesen der Slicerprofile zwei Knöpfe *Abbrechen*
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `filament.profile`
+- Prüfpunkt: 8
+- Beleg: L4 Fall 034 `cases/034/flaeche-de-filament.profile-52662c50-dialog.png` (SHA256 `56facac57783`): einer neben dem Laufbalken (fokussiert, bricht das Lesen ab), einer im Dialogfuß (schließt den Dialog); beide gleich beschriftet. Prüfer 1b, Runde C3, Punkt 28.
+- Ursache: Beide Knöpfe tragen denselben Text.
+- Vorschlag: Den ersten „Lesen abbrechen“ nennen, in allen Sprachen.
+- Wirkung beim Kunden: Er weiß nicht, ob *Abbrechen* das Lesen oder den ganzen Dialog beendet.
+- Stand: offen RM-812
+
+### FD-323 Vier Wirkungsversprechen zu Filament und Parametern haben keinen Test
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: `filament.colour`, `filament.profile`, `filament.spool`, `parameters.first.label`
+- Prüfpunkt: 11
+- Beleg: Prüfer 1b, Runde C3, Punkt 29, am Laufkopf `d9f7a81f9` gesucht: Handbuch #moving „Änderungen im Lager überschreiben keine gespeicherten Projektfarben oder Druckwerte“ und „Die erste [Farbe] zeigt das Bild“ (`filament.colour`, `filament.profile`); #operation-label_text „Der 3MF-Export macht daraus den Farbwechsel, ohne zweite Datei“ für das Filament der Schrift (`filament.spool`); #parameters „Die Vorschlagsliste setzt den richtigen ein“ (Beschriftung gegen Name, `parameters.first.label`). Gefunden nur Nachbarn (Mehrfarbe für die Orca-Familie, Spulenprofile im geschriebenen Profil, Slot der Schrift, Undo eines Parameters). Zwilling von FD-299 und FD-303.
+- Ursache: Die Versprechen haben keinen Wächter.
+- Vorschlag: Je Satz ein Test, der genau diese Wirkung prüft.
 - Wirkung beim Kunden: Stimmen die Sätze heute, kann ein späterer Umbau sie unbemerkt brechen.
 - Stand: offen RM-812
 
