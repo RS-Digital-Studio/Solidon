@@ -82,7 +82,7 @@ it into `website/version.json`.
 - When the chain stops, a function that would add a step behind it no longer opens a dialog with a greyed-out button. The stop and the way on are shown right away.
 - In the check report, the Tab key reaches the offered action, and no scroll area is a separate unnamed stop any more.
 - Double-clicking a dimension change in the history opens that dimension for editing, and a printer or material change opens *Print settings …*.
-- The dimensions column in the object tree shows every dimension in full, uneven ones too; the left card grows a little wider when needed. If there is still not enough room, the name is shortened and its tooltip shows it in full.
+- The dimensions column in the object tree shows every dimension in full; the left card grows wider when needed. Otherwise the name is shortened, and its tooltip shows it in full.
 - Finding rows in the check report show in full, their measurement included, and name each body only once.
 - The parameter bar shows lengths in inches when inches are set. Right-clicking the value field opens *Change …*.
 - The *Create parameter …* dialog explains every field, including the lower and upper bound, and a screen reader names every field.

@@ -2960,10 +2960,11 @@ class ObjectTree(QWidget):
         shared = max(heading, min(needed, free - header.sectionSizeHint(0)))
         header.resizeSection(1, max(0, min(shared, free)))
         # **Und die Karte wird so breit, dass beide stehen, bis LEFT_MAX**
-        # (FD-20). Den Ausschlag gibt das Maß. Der Name eines Körpers zählt nur
-        # mit seinem gewohnten Anteil an der Grundbreite, sonst machte jeder
-        # lange Dateiname die Karte breit — gerechnet an der Grundbreite, nicht
-        # an der jetzigen, sonst wüchse die Karte an sich selbst weiter.
+        # (FD-20), für das Maß und die Merkmalsnamen daneben. Der Name eines
+        # Körpers zählt nur mit seinem gewohnten Anteil an der Grundbreite,
+        # sonst machte jeder lange Dateiname die Karte breit — gerechnet an der
+        # Grundbreite, nicht an der jetzigen, sonst wüchse die Karte an sich
+        # selbst weiter.
         # Merkmalsnamen benennt Solidon selbst, sie zählen ganz: Gedeckelt
         # zählte „Redondeo cóncavo (4)“ nur mit 159 von 173 Punkten, die Karte
         # blieb bei 332, und das Maß daneben bekam den Rest. Gezählt werden die
