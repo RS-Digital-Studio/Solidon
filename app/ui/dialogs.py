@@ -1284,7 +1284,6 @@ class KeyDialog(QDialog):
         self.probe_button.setEnabled(True)
         for kanal in (
             self.probe_button.setToolTip,
-            self.probe_button.setStatusTip,
             self.probe_button.setAccessibleDescription,
         ):
             kanal("")

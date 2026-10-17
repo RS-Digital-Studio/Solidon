@@ -304,7 +304,13 @@ ACTION_MAKERS = frozenset({"QAction", "addAction", "_add_action", "menuAction", 
 
 
 def status_tips_off_actions(sources: Iterable[tuple[str, str]]) -> list[str]:
-    """Jeder ``setStatusTip`` an etwas, das keine Menüaktion ist."""
+    """Jeder ``setStatusTip`` an etwas, das keine Menüaktion ist — gerufen oder gereicht.
+
+    Gefragt wird das Attribut, nicht nur der Aufruf: Die Maßgruppe setzte ihren
+    Sperrgrund über ``for setter in (knopf.setToolTip, knopf.setStatusTip, …)``,
+    der graue Knopf sagte ihn so in der Statuszeile, und der Wächter sah keinen
+    Aufruf (FD-88).
+    """
     found: list[str] = []
     for path, source in sources:
         tree = ast.parse(source)
@@ -316,13 +322,9 @@ def status_tips_off_actions(sources: Iterable[tuple[str, str]]) -> list[str]:
                 for target in targets:
                     made.setdefault(ast.unparse(target), set()).add(maker)
         for node in ast.walk(tree):
-            if not (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "setStatusTip"
-            ):
+            if not (isinstance(node, ast.Attribute) and node.attr == "setStatusTip"):
                 continue
-            receiver = ast.unparse(node.func.value)
+            receiver = ast.unparse(node.value)
             if "action" in receiver.lower() or made.get(receiver, set()) & ACTION_MAKERS:
                 continue
             found.append(f"{path}:{node.lineno} {receiver}")
@@ -351,3 +353,15 @@ def test_a_status_tip_on_a_button_turns_the_guard_red() -> None:
         "    button.setStatusTip('Öffnet eine Datei.')\n"
     )
     assert status_tips_off_actions([("app/ui/sample.py", source)]) == ["app/ui/sample.py:6 button"]
+
+
+def test_a_status_tip_handed_on_as_a_setter_turns_the_guard_red() -> None:
+    """Gegenprobe: Auch als gereichte Methode ist der Statustipp am Knopf rot (FD-88)."""
+    source = (
+        "def build(button, action):\n"
+        "    for setter in (button.setToolTip, button.setStatusTip):\n"
+        "        setter('Grund')\n"
+        "    for setter in (action.setToolTip, action.setStatusTip):\n"
+        "        setter('Grund')\n"
+    )
+    assert status_tips_off_actions([("app/ui/sample.py", source)]) == ["app/ui/sample.py:2 button"]
