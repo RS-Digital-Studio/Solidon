@@ -10645,8 +10645,17 @@ class FeaturePanel(QWidget):
             # dasselbe erste offene Feld und derselbe Satz wie an der Maßgruppe.
             # Ohne Sperrgrund ist grau hier genau das Warten darauf.
             row = next((row for row in self._shown_rows.values() if row.key == self._armed), None)
+            # **Gefragt an der Zeile, nicht am Fenster** (FD-99-Rest): Scharf
+            # gestellt wird, solange die Karte noch verborgen ist, und danach
+            # fragt niemand mehr. Am Fenster gefragt war das Feld dann nicht
+            # sichtbar, und am grauen Knopf stand nur der Titel.
+            flap = (
+                row.more.findChild(QToolButton, "sectionHeading")
+                if row is not None and row.more is not None
+                else None
+            )
             said = (
-                first_change_sentence(row.widgets.values(), self)
+                first_change_sentence(row.widgets.values(), row.box, flap, row.more)
                 if row is not None and entry.offered is not None and not self._apply.isEnabled()
                 else ""
             )
