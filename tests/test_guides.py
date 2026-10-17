@@ -368,6 +368,30 @@ def test_a_menu_path_in_a_step_is_the_one_the_menu_shows(language: str) -> None:
                 assert path in text, f"{language}, {guide.key} Schritt {number}: {path!r}"
 
 
+def test_a_creator_step_points_at_the_selection_card_and_not_at_the_menu() -> None:
+    """Ein Erzeuger steht ohne Auswahl rechts unter *Auswahl*, und dorthin zeigt sein Rahmen.
+
+    Seit RM-735 stehen Grundformen und Schriftzug ohne Auswahl als Knöpfe in der
+    Auswahlkarte (``selection_operations.scene_creators``), und
+    ``guide_targets.area_for`` fragt zuerst den Knopf. Ein Schritt mit Menüweg
+    rahmte deshalb den Knopf rechts, während die Aufnahme links das Menü
+    öffnete: Kein Zuschnitt fasste beides, und ``make_guides`` brach in *Das
+    erste eigene Teil* bei Schritt 2 ab (Probe 16.10.2026).
+    """
+    from app.core.registry import REGISTRY
+    from app.ui.selection_operations import scene_creators
+
+    creators = {spec.name for spec in scene_creators(REGISTRY.all())}
+    for guide in guides.GUIDES:
+        for number, one in enumerate(guide.steps, 1):
+            text = source_text(one.text)
+            for mark in one.marks:
+                kind, _separator, name = mark.target.partition(":")
+                if kind == "operation" and name in creators:
+                    where = f"{guide.key} Schritt {number}: {name}"
+                    assert "→" not in text and "*Auswahl*" in text, where
+
+
 @pytest.mark.parametrize(
     "language", [language for language in available_languages() if language != SOURCE_LANGUAGE]
 )

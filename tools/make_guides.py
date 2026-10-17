@@ -1051,11 +1051,10 @@ def story_first_part(run: GuideRun) -> None:
     guide_targets.widget_for(run.window, "start.new").click()
     run.settle(30)
 
-    box = guide_targets.action_for(run.window, "operation:create_brep_box")
-    _open_menu(run, box)
+    # Rechts unter *Auswahl*, wie der Schritt sagt: Die Aufnahme holt die Seite
+    # nach vorn, und der Klick trifft den Knopf dort (RM-735).
     run.capture(2)
-    _close_menus(run)
-    box.trigger()
+    guide_targets.widget_for(run.window, "operation:create_brep_box").click()
     run.settle(40)
     dialog = run.window._op_dialog
     if dialog is None or not dialog.isVisible():
