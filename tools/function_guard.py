@@ -124,7 +124,14 @@ ALLOWED_CALLS: Final[frozenset[str]] = frozenset(
 #: Aufrufstapel der Wache. Alles andere mit ``_`` an einem fremden Objekt ist
 #: ein Umweg an der Oberfläche vorbei (Konzept §5).
 ALLOWED_PRIVATE: Final[frozenset[str]] = frozenset(
-    {"activation._cached", "discover._remembered_program", "sys._getframe"}
+    {
+        "activation._cached",
+        "discover._remembered_program",
+        "sys._getframe",
+        # Die Rückkehr zur Startszene ist Vorbereitung, nicht die geprüfte
+        # Handlung: der Weg von „Verwerfen“ in der Speicherfrage (FD-235).
+        "self.window._discard_gestures",
+    }
 )
 
 #: Die nativen Läufer (F10, RF10-1). Sie fahren den Prüfstand am echten Fenster
