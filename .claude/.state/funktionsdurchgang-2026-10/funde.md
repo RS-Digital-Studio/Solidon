@@ -3843,6 +3843,18 @@ Quellen: `output/konsolidierung-2026-10-12/review-spaet-claude.md` (Befunde 1 bi
 - Wirkung beim Kunden: Im Handbuch sieht der Griff aus wie eine zweite Markierung; ob der Kunde ihn nach einem Start mit Datei ebenso sieht, ist offen.
 - Stand: offen RM-812
 
+### FD-325 Der Alt-Text des Website-Bilds zum Druckschritt nennt etwas, das das Bild nicht zeigt
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: keine Zeile: Website, Bild `schritt-druck` (`tools/make_web_images.py`, Seiten `index`, `funktionen`, `<sprache>/index`, `<sprache>/features`)
+- Prüfpunkt: 9
+- Beleg: Nativer Endblock 0.6.1 an `2ba3ee78c`, Schritt 5 (Bericht des Schlusslaufs): Der Alt-Text nennt „Brim und längere Mindestzeit je Schicht“, das Bild zeigt Brim und Naht; schon in 0.6.0.
+- Ursache: Der Text folgt einer früheren Fassung des Motivs.
+- Vorschlag: Alt-Text in sechs Sprachen an das Bild anpassen, und ein Wächter, der den Alt-Text der Verkaufsbilder aus derselben Quelle wie das Motiv nimmt.
+- Wirkung beim Kunden: Wer die Seite mit einem Bildschirmleser liest oder das Bild nicht lädt, liest etwas anderes, als das Bild zeigt.
+- Stand: offen RM-812
+
 ## Regressionen aus Fixen nach dem Einfrieren (ab FD-212)
 
 Was ein Fix des eingefrorenen Umfangs kaputt macht, ist kein neuer Fund für
