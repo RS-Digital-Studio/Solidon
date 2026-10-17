@@ -520,7 +520,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
             if not line:
                 self.data["errors"].append("Datei → Neu trägt keinen Namen im Wortschatz")
                 return False
-            self.session.forget_changes()
+            self.discard_previous()
             return self.run_steps(
                 "startbildschirm",
                 [
@@ -537,7 +537,7 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
         if self.scene_key == EMPTY_SCENE and on_start:
             steps = [self.walker.step("start.new")]
         elif path is not None:
-            self.session.forget_changes()
+            self.discard_previous()
             steps = [self.do_step("szene öffnen", lambda: self.window.open_path(path))]
         else:
             self.data["errors"].append(f"Startszene {self.scene_key} fehlt unter {self.scenes}")
@@ -564,6 +564,19 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase, FontP
                 "names": surfaces.scene_names(self.session),
             }
         return ok
+
+    def discard_previous(self) -> None:
+        """Verwirft, was die Phase davor offen ließ — wie „Verwerfen“ in der Speicherfrage.
+
+        Seit FD-101/175 gehen Zeilen ihren Weg und lassen Stand und Entwürfe
+        zurück, etwa den Zeichenmodus nach ``finding.action:split_along_line``.
+        ``forget_changes`` nahm nur den Stand; vor *Datei → Neu* und
+        ``open_path`` fragte ``confirm_unsaved`` dann modal nach dem Entwurf,
+        und der Sprachfall hing (FD-235). Die Antwort „Verwerfen“ geht genau
+        diese zwei Wege der Anwendung (``MainWindow._may_discard``).
+        """
+        self.window._discard_gestures()
+        self.session.forget_changes()
 
     def fault_scene(self, key: str) -> bool:
         """Die eigene Startszene des Fehlfalls, wenn er eine nennt (``fault_case.start_scene``)."""
