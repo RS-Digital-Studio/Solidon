@@ -139,9 +139,9 @@ class ChatPanel(QWidget):
         self.turns = QListWidget(self)
         self.turns.setAccessibleName(tr("Gesprächsverlauf"))
         self.turns.setWordWrap(True)
-        # Gemessen, wie gezeichnet wird, und bei jeder Breite neu: Unter dem
-        # Stylesheet maß Qt die Zeile ohne ihren Innenrand und kürzte die
-        # letzte Zeile auf „…“ — derselbe Fehler wie im Prüfbericht (FD-109).
+        # Gemessen, wie gezeichnet wird, und bei jeder Breite neu: Qt misst
+        # ohne die Auswahlkante und ohne Runden bei 125 % und kürzte so im
+        # Prüfbericht die letzte Zeile auf „…“ (FD-109).
         self.turns.setResizeMode(QListView.ResizeMode.Adjust)
         self.turns.setItemDelegate(WrappedRowDelegate(self.turns))
         self.turns.setAlternatingRowColors(False)
