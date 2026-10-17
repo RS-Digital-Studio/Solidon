@@ -267,6 +267,67 @@ def test_stats_puts_warnings_first_and_the_week_above_the_details(tmp_path: Path
     )
 
 
+def _trend_rows(today: datetime, downloads: tuple[int, int], visits: tuple[int, int]) -> list[dict]:
+    """Besuche und Downloads als (davor, jetzt): davor alles am zehnten Tag zurück, jetzt
+    alles heute; je Besuch ein Aufruf mit eigener Kennung, die Downloads aus denselben. Eine
+    Update-Prüfung am dreizehnten Tag zurück macht den Zeitraum davor vollständig."""
+    minute = timedelta(minutes=1)
+    rows = [stats_row(today - timedelta(days=13), "u", "0.5.0")]
+    for when, loaded, came, tag in (
+        (today - timedelta(days=10), downloads[0], visits[0], "bb"),
+        (today, downloads[1], visits[1], "aa"),
+    ):
+        assert loaded <= came, "jeder Download gehört zu einem Besuch"
+        rows += [stats_row(when + i * minute, "p", "/", "", f"{tag}{i:06d}") for i in range(came)]
+        rows += [
+            stats_row(
+                when + (100 + i) * minute, "d", "Solidon3D-Setup-0.5.0.exe", "", f"{tag}{i:06d}"
+            )
+            for i in range(loaded)
+        ]
+    return rows
+
+
+@pytest.mark.parametrize(
+    ("downloads", "visits", "card", "tone"),
+    [
+        ((10, 11), (20, 21), ("▲+10 %", "+5 %"), ("plus", "info")),
+        ((2, 4), (4, 8), ("+100 %", "+100 %"), (None, None)),
+    ],
+    ids=["an-der-schwelle", "unter-der-masse"],
+)
+def test_card_and_trend_sentence_judge_alike_at_the_threshold(
+    tmp_path: Path,
+    downloads: tuple[int, int],
+    visits: tuple[int, int],
+    card: tuple[str, str],
+    tone: tuple[str | None, str | None],
+) -> None:
+    """Karte und Trendsatz stufen nach derselben Regel ein, auch genau an ihren Grenzen.
+
+    +10 % ist schon deutlich, +5 % nicht; unter der Masse davor (Downloads 3, Besuche 5)
+    gibt es weder Zeichen noch Trendsatz. Weit über der Schwelle (−50 %, +25 %) fiele eine
+    eigene Schwelle der Trendsätze zwischen 10 und 25 % nicht auf (Nachprüfung N1).
+    """
+    page, report = _render(tmp_path, _trend_rows(display_today(), downloads, visits))
+    week = report["now"]["windows"][0]
+    assert (week["before"]["d"], week["now"]["d"]) == downloads, "Voraussetzung: Downloads"
+    assert (week["before"]["visits"], week["now"]["visits"]) == visits, "Voraussetzung: Besuche"
+
+    top = page.split('id="jetzt"')[1].split('id="woche-versionen"')[0]
+    shown = dict(
+        re.findall(r'<h3>([^<]+)</h3>\s*<p class="wert">[\d.]+(<span class="delta.*?)</p>', top)
+    )
+    assert (_shown(shown["Downloads"]), _shown(shown["Besuche"])) == card
+
+    trends = {
+        item["text"].split(" ")[0]: item["tone"]
+        for item in report["findings"]
+        if item["text"].startswith(("Besuche der letzten 7 Tage", "Downloads der letzten 7 Tage"))
+    }
+    assert (trends.get("Downloads"), trends.get("Besuche")) == tone, trends
+
+
 def test_stats_names_the_period_of_each_part_at_a_glance(tmp_path: Path) -> None:
     """„Auf einen Blick“ mischt zwei Zeiträume, und jeder Teil nennt seinen.
 
